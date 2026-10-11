@@ -16,8 +16,8 @@ La página **Archivos** guarda todo lo que se ha subido a LibreFolio, en dos pes
 Aquí encuentras los **avatares** de los usuarios, los **iconos** de los brókeres y cualquier **imagen o documento** compartido por los usuarios. Todos los que tienen una cuenta de LibreFolio pueden verlos.
 
 - Cambia entre la vista de **lista** y de **cuadrícula**: la cuadrícula muestra previsualizaciones de las imágenes.
-- En la lista, haz clic con el botón derecho en un archivo para **Previsualizar**, **Copiar enlace**, **Descargar** o **Eliminar**. Solo puedes eliminar los archivos que hayas subido tú; un administrador puede eliminar cualquiera.
-- **Previsualizar** muestra un PDF en un visor de solo lectura: puedes leerlo, buscarlo y copiar su texto, pero no editarlo, anotarlo ni imprimirlo; para conservar el archivo, usa **Descargar**. Un PDF protegido con contraseña pide su contraseña, que permanece en tu navegador: nunca se envía al servidor ni se guarda, y desaparece en cuanto se cierra la previsualización.
+- En la lista, haz clic con el botón derecho en un archivo para elegir **Vista previa**, **Copiar enlace**, **Descargar** o **Eliminar**. Solo puedes eliminar los archivos que hayas subido tú; un administrador puede eliminar cualquiera.
+- **Vista previa** muestra un PDF en un visor de solo lectura: puedes leerlo, buscarlo y copiar su texto, pero no editarlo, anotarlo ni imprimirlo; para conservar el archivo, usa **Descargar**. Un PDF protegido con contraseña pide su contraseña, que permanece en tu navegador: nunca se envía al servidor ni se guarda, y desaparece en cuanto se cierra la previsualización.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="files" data-name="static-grid" alt="Vista de cuadrícula de Archivos estáticos" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -55,17 +55,17 @@ La columna **Estado** te indica en qué situación está cada archivo:
 2. En **Asignar brókeres**, elige el bróker de cada archivo, o uno para todos con **Asignar todos a**. **Crear nuevo** añade un bróker al momento; si solo puedes editar un bróker, ya está elegido.
 3. Haz clic en **Subir**. Los archivos se almacenan, pero **todavía no se importa nada**.
 
-Para importarlos, abre el [Asistente de importación](../transactions/import/index.md) (**Transacciones** → **Importar**): su paso **Seleccionar archivos** enumera los informes que has subido.
+Para importarlos, abre el [Asistente de importación](../transactions/import/index.md) (**Transacciones** → **Importar**): su paso **Seleccionar** enumera los informes que has subido.
 
 El bróker que elijas solo decide qué cuenta recibe las transacciones. El importador reconoce el formato del archivo por sí mismo, y un mismo plugin de importación puede leer las exportaciones de varios brókeres.
 
 ### ⚙️ Gestionar informes
 
-Haz clic con el botón derecho en un informe para **Previsualizar**, **Descargar** o **Eliminar**, o marca varios para eliminarlos juntos. Eliminar un informe nunca elimina las transacciones ya importadas desde él.
+Haz clic con el botón derecho en un informe para elegir **Vista previa**, **Descargar** o **Eliminar**, o marca varios para eliminarlos juntos. Eliminar un informe nunca elimina las transacciones ya importadas desde él.
 
 ### 🧩 Conjuntos de informes {: #report-sets }
 
-Algunos bancos dividen una cuenta en varias exportaciones: [Danske Bank](../transactions/import/danske-bank.md), por ejemplo, necesita una exportación de movimientos de valores y un extracto de la cuenta de efectivo. Las exportaciones de un banco de este tipo que subes **juntas** forman un **conjunto de informes**, y LibreFolio las importa como una sola, mediante un **archivo combinado** que construye a partir de ellas. La columna **Conjunto de informes** te indica en qué situación está cada archivo (la misma columna aparece en los **Informes subidos** de un bróker):
+Algunos bancos dividen una cuenta en varias exportaciones: [Danske Bank](../transactions/import/danske-bank.md), por ejemplo, necesita una exportación de movimientos de valores y un extracto de la cuenta de efectivo. Las exportaciones de un banco de este tipo que subes **juntas** forman un **conjunto de informes**, y LibreFolio las importa como una sola, mediante un **archivo combinado** que construye a partir de ellas. La columna **Conjunto de informes** te indica en qué situación está cada archivo (la misma columna aparece en los **Informes Cargados** de un bróker):
 
 | Insignia | Significado |
 |:--|:--|
@@ -73,7 +73,7 @@ Algunos bancos dividen una cuenta en varias exportaciones: [Danske Bank](../tran
 | **Incompleto** | Al conjunto aún le falta una exportación requerida: pasa el cursor sobre la insignia para ver cuál. Añádela desde la tarjeta del conjunto en el Asistente de importación, con **Subir el archivo que falta**. |
 | **Combinado** | El archivo que LibreFolio construyó a partir de las exportaciones de un conjunto — el que la importación lee realmente. Pasa el cursor sobre la insignia para ver los archivos a partir de los cuales se construyó y cuáles de ellos se han eliminado desde entonces. |
 | **Usado en un archivo combinado** | Esta exportación pasó a formar parte de un archivo combinado de su conjunto. |
-| **Para recombinar** | El importador ha cambiado desde que se construyó el archivo combinado: analizar el conjunto de nuevo lo reconstruye. |
+| **Por recombinar** | El importador ha cambiado desde que se construyó el archivo combinado: analizar el conjunto de nuevo lo reconstruye. |
 
 Puedes previsualizar, descargar y eliminar estos archivos como cualquier otro informe. Eliminar una exportación de un conjunto deja su archivo combinado en su sitio, pero para importar el conjunto de nuevo primero tienes que volver a subir esa exportación en él.
 
@@ -89,7 +89,7 @@ Ambas pestañas muestran quién subió cada archivo en la columna **Subido por**
 
 - haz clic en el encabezado de la columna para ordenar por quien lo subió;
 - abre su filtro para quedarte solo con los archivos de una o varias personas: márcalas en la lista o búscalas por nombre;
-- un archivo para el que no se registró quién lo subió muestra *Usuario que lo subió no registrado*.
+- un archivo para el que no se registró quién lo subió muestra *Usuario no indicado*.
 
 El filtro también se aplica a la vista de cuadrícula de **Recursos estáticos**. Se guarda en la dirección de la página, así que un marcador o un enlace compartido se abre con el mismo filtro.
 

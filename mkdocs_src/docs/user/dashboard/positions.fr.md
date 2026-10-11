@@ -42,7 +42,7 @@ Que possédez-vous à la date de fin, et comment se porte chaque position ? **Po
 | **Qté** | Actions, unités ou pièces détenues |
 | **Prix** *(masqué)* | Le prix unitaire utilisé : le prix de marché, ou le prix de la dernière transaction lorsqu'il n'y a pas de cotation → [Résolution des prix](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
 | **PRU** *(masqué)* | Prix de revient unitaire, chaque achat au taux de change de sa propre date → [Prix de revient unitaire (PRU)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md) |
-| **Plus ancien lot ouvert** *(masqué)* | Date d'ouverture du plus ancien lot encore ouvert |
+| **Lot ouvert le plus ancien** *(masqué)* | Date d'ouverture du plus ancien lot encore ouvert |
 | **Courtiers** | Le courtier détenant la position |
 
 **Comment l'interpréter**
@@ -81,10 +81,10 @@ Quelles positions ont gagné ou perdu de l'argent au cours de la période, et co
 
 **Métriques affichées**
 
-- **P&L période**, décomposé comme sur la [carte P&L période](kpi-cards.md#card-1-period-pl) en **Variation latente**, **Ventes**, **Dividendes et intérêts** et **Coûts** → [P&L période](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
+- **P&L période**, décomposé comme sur la [carte P&L période](kpi-cards.md#card-1-period-pl) en **Variation non réalisée**, **Ventes**, **Dividendes et intérêts** et **Coûts** → [P&L période](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **Annualisé** — le résultat de la période en taux annuel, sur la durée pendant laquelle la position a été détenue dans la période → [Rendement annualisé net](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md)
-- **Δ1** / **Δ1%** pour les positions ouvertes et, masqués par défaut, **Valeur de début**, **Valeur de fin**, **Plus ancien lot ouvert** et **Statut**
-- **Autres effets de la période** — ce qui n'appartient à aucune position : **Revenus non alloués** et **Coûts non alloués**, enregistrés sans actif, et le **Résidu autre / de rapprochement**
+- **Δ1** / **Δ1%** pour les positions ouvertes et, masqués par défaut, **Valeur Initiale**, **Valeur Finale**, **Lot ouvert le plus ancien** et **Statut**
+- **Autres effets de la période** — ce qui n'appartient à aucune position : **Revenu non alloué** et **Coûts non alloués**, enregistrés sans actif, et **Autre / résidu de réconciliation**
 
 **Comment l'interpréter**
 
@@ -128,7 +128,7 @@ Comment le prix se compare-t-il à ce que vous avez payé, et où en est chaque 
 
 **Métriques affichées**
 
-- **Prix de marché** — en pointillés lorsque LibreFolio l'estime à partir de votre dernière transaction → [Chaîne de prix d'évaluation](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md#valuation-price-chain)
+- **Prix du marché** — en pointillés lorsque LibreFolio l'estime à partir de votre dernière transaction → [Chaîne de prix d'évaluation](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md#valuation-price-chain)
 - **PRU** — une ligne par courtier, et une ligne **Combiné** en pointillés lorsque l'actif est détenu chez plusieurs → [Prix de revient unitaire (PRU)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Bulles** — une par lot long, à son rendement total, parmi les marqueurs de vos transactions et paiements → [Analyse des lots FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
 
@@ -173,7 +173,7 @@ Que valent les lots sélectionnés, et qu'ont-ils rapporté depuis leur ouvertur
 
 **Métriques affichées**
 
-- **Valeur** — **Valeur résiduelle**, **Produit de cession** et **Revenus cumulés** empilés jusqu'à la **Valeur globale**, par rapport à la **Valeur d'ouverture** → [Analyse des lots FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Valeur** — **Valeur résiduelle**, **Produit des ventes** et **Revenus cumulés** empilés jusqu'à la **Valeur globale**, par rapport à la **Valeur d'ouverture** → [Analyse des lots FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
 - **Rendement** — le résultat depuis l'ouverture, en montant (**Abs**) ou en pourcentage (**%**) : un **Rendement agrégé**, plus une ligne par lot lorsque vous en comparez plusieurs
 
 **Comment l'interpréter**
@@ -187,7 +187,7 @@ Toute l'histoire d'un lot. Ouvrez-le avec **Voir le détail du lot** (⋮) ou en
 
 **Métriques affichées**
 
-- **Résumé** — valeur d'ouverture et valeur actuelle, produit de cession, **P&L FIFO**, **P&L total**, **Rendement total**, et **Rendement en liquidités** lorsque le lot a reçu des revenus → [Analyse des lots FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Résumé** — valeur d'ouverture et valeur actuelle, produit de cession, **P&L FIFO**, **P&L total**, **Rendement total**, et **Rendement des revenus** lorsque le lot a reçu des revenus → [Analyse des lots FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
 - **Décomposition nette** — le P&L total moins les frais et impôts alloués au lot → [Coûts et métriques nettes](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)
 - **Conservation actuelle** et **Historique** — où se trouve le lot maintenant, et chaque événement depuis son ouverture
 

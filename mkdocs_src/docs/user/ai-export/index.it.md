@@ -57,23 +57,23 @@ indicatori e periodo; mantengono solo più o meno cronologia. **Completo** può 
 
 ### 📅 Passaggio 4: Imposta il periodo AI
 
-Scegli **3M** (predefinito), **6M**, **1Y** o **Personalizzato** (giorni, settimane, mesi o anni), con fine
+Scegli **3M** (predefinito), **6M**, **1A** o **Personalizzato** (giorni, settimane, mesi o anni), con fine
 alla data di esportazione. Se LibreFolio ha meno cronologia, l'esportazione viene contrassegnata come parziale: non
 inventa mai prezzi né usa quelli futuri.
 
 ### 📝 Passaggio 5: Aggiungi note (solo analisi)
 
-Con **Richiedi analisi**, aggiungi contesto o domande in **Note per l'AI**: un budget mensile, un'allocazione
+Con **Richiedi analisi**, aggiungi contesto o domande in **Note per l’AI**: un budget mensile, un'allocazione
 obiettivo, ciò che ti preoccupa. L'AI le legge come informazioni, non come nuove regole.
 
 ### 📋 Passaggio 6: Copia
 
-Seleziona **Copia AI Export**. Dopo **Preparazione dell'esportazione…**, un messaggio conferma la copia con la sua
+Seleziona **Copia AI Export**. Dopo **Preparazione esportazione…**, un messaggio conferma la copia con la sua
 dimensione stimata.
 
 ??? warning "📏 Prompt lungo — quando il testo è lungo"
 
-    Il pannello mostra prima la **Dimensione finale del prompt** con un avvertimento. Scegli **Usa compatto** per un
+    Il pannello mostra prima la **Dimensione prompt finale** con un avvertimento. Scegli **Usa compatto** per un
     testo più breve (non mostrato su Compatto), oppure **Copia comunque**: le stesse impostazioni copiano poi senza
     chiedere per un po'.
 
@@ -100,7 +100,7 @@ Da sapere:
   senza di esso, la risposta lo dice invece di inventare fonti.
 - Asset, broker, coppie di valute e lotti appaiono come codici brevi (A1, B1, F1, L1) spiegati nel
   testo; all'AI viene chiesto di rispondere con i nomi reali.
-- Un'analisi può suggerire un'ulteriore esportazione in **Dati aggiuntivi LibreFolio**, con l'indicazione di dove
+- Un'analisi può suggerire un'ulteriore esportazione in **Altri dati LibreFolio**, con l'indicazione di dove
   trovarla. Se l'AI la chiede, copia anche quell'esportazione e incollala nella stessa chat.
 
 ---
@@ -126,7 +126,7 @@ Da sapere:
   **Revisione posizione** richiede una posizione nell'asset; **Impatto esposizione FX** richiede liquidità o una
   posizione collegata alla coppia.
 - Un messaggio che termina con *Aggiorna e riprova.*: ricarica la pagina.
-- *L'accesso agli appunti non è disponibile. Controlla i permessi del browser.*: consenti l'accesso agli appunti per
+- *Accesso agli appunti non disponibile. Controlla i permessi del browser.*: consenti l'accesso agli appunti per
   LibreFolio nel tuo browser.
 
 ---

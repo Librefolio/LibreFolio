@@ -4,7 +4,7 @@
 
 Mientras que el [Precio Medio de Compra (PMC)](../weighted-average-cost.md) fusiona cada adquisición de una posición en un promedio continuo, el motor FIFO de LibreFolio realiza un seguimiento de **lotes individuales** — uno por lote de adquisición — a lo largo de todo su ciclo de vida: apertura, cierres parciales, transferencias entre brókeres, desdoblamientos y cierre total final.
 
-Esta página describe la **mecánica** de ese motor: cómo se crean, emparejan y cierran los lotes. El motor FIFO es independiente del feed de precios. Reproduce cantidades, lotes, fragmentos, transferencias y cierres realizados. Los niveles de valoración actuales residen fuera de él: [Resolución de Precios](../portfolio-engine/price-resolution.md) y `LotsAnalysisService` suministran las marcas de referencia/actuales y el comportamiento al coste estimado. Para las **métricas** derivadas de este motor (Retorno Abierto/Total, escalado qbq, asignación de ingresos, un ejemplo práctico), consulte [Análisis de Lotes FIFO](fifo-lot-analysis.md).
+Esta página describe la **mecánica** de ese motor: cómo se crean, emparejan y cierran los lotes. El motor FIFO es independiente del feed de precios. Reproduce cantidades, lotes, fragmentos, transferencias y cierres realizados. Los niveles de valoración actuales residen fuera de él: [Resolución de Precios](../portfolio-engine/price-resolution.md) y `LotsAnalysisService` suministran las marcas de referencia/actuales y el comportamiento al coste estimado. Para las **métricas** derivadas de este motor (Retorno Abierto/Total, escalado qbq, asignación de ingresos, un ejemplo práctico), consulta [Análisis de Lotes FIFO](fifo-lot-analysis.md).
 
 !!! info "Dos motores, dos preguntas"
 
@@ -41,7 +41,7 @@ Un lote avanza ABIERTO → PARCIALMENTE_CERRADO → CERRADO estrictamente hacia 
 
 - **EN_TRÁNSITO** — parte de su cantidad abierta está actualmente en medio de una transferencia entre brókeres
 - **DISTRIBUIDO** — su cantidad abierta está actualmente dividida en más de una ubicación de custodia a la vez
-- **DEGRADADO** — se registró un problema de calidad de datos contra este lote específico (consulte [Calidad de Datos](#data-quality-best-effort-not-all-or-nothing) a continuación)
+- **DEGRADADO** — se registró un problema de calidad de datos contra este lote específico (consulta [Calidad de Datos](#data-quality-best-effort-not-all-or-nothing) a continuación)
 
 ---
 
@@ -81,7 +81,7 @@ $$
 \text{GananciaPérdidaRealizada}_{\text{SHORT}} = \text{CantidadEmparejada} \times (\text{CostoUnitarioDelLote} - \text{PrecioCierre})
 $$
 
-Esta es la razón por la que dos lotes del mismo activo, comprados en diferentes momentos y precios, pueden mostrar resultados realizados muy diferentes aunque luego se emparejen el mismo día al mismo precio — consulte el ejemplo práctico en [Análisis de Lotes FIFO](fifo-lot-analysis.md).
+Esta es la razón por la que dos lotes del mismo activo, comprados en diferentes momentos y precios, pueden mostrar resultados realizados muy diferentes aunque luego se emparejen el mismo día al mismo precio — consulta el ejemplo práctico en [Análisis de Lotes FIFO](fifo-lot-analysis.md).
 
 ---
 
@@ -116,7 +116,7 @@ Este historial de custodia — qué bróker (o en tránsito) mantuvo la cantidad
 
 Si el historial de transacciones contiene algo que el motor no puede resolver completamente — por ejemplo, una transacción de cierre sin un lote abierto correspondiente en ese bróker, o una transferencia cuya etapa emparejada falta — LibreFolio **no** aborta todo el cálculo. Registra el problema específico, marca el(los) lote(s) afectado(s) como degradados y continúa procesando el resto del historial con los mejores datos disponibles.
 
-El resultado general se marca entonces como **completo** o **degradado** en su conjunto, pero los gráficos y tablas construidos sobre un resultado degradado aún se renderizan normalmente para cada lote que **no** fue afectado. Puede ver esto reflejado como un banner de calidad de datos en el panel [Análisis de Lotes FIFO](../../../../user/dashboard/positions.md#fifo-lots-analysis).
+El resultado general se marca entonces como **completo** o **degradado** en su conjunto, pero los gráficos y tablas construidos sobre un resultado degradado aún se renderizan normalmente para cada lote que **no** fue afectado. Puedes ver esto reflejado como un banner de calidad de datos en el panel [Análisis de Lotes FIFO](../../../../user/dashboard/positions.md#fifo-lots-analysis).
 
 ---
 

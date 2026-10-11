@@ -21,6 +21,8 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
     import {tick, untrack} from 'svelte';
     import {goto} from '$app/navigation';
     import {zodiosApi} from '$lib/api';
@@ -513,10 +515,10 @@
             <div class="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none" style="z-index: 1;">
                 <div class="text-center">
                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {$_('brokers.sharing.allocated')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{totalAllocatedPercent.toFixed(1)}%</span>
+                        {$_('brokers.sharing.allocated')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{formatPercent(totalAllocatedPercent, {signed: false, digits: 1, locale: $currentLanguage})}</span>
                     </div>
                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {$_('brokers.sharing.available')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{availablePercent.toFixed(1)}%</span>
+                        {$_('brokers.sharing.available')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{formatPercent(availablePercent, {signed: false, digits: 1, locale: $currentLanguage})}</span>
                     </div>
                     {#if canEditAccess}
                         <button
@@ -569,7 +571,7 @@
                             <div class="min-w-0">
                                 <div class="text-amber-800 dark:text-amber-200 font-medium truncate">{entry.username}</div>
                                 <div class="text-[10px] text-amber-600 dark:text-amber-400">
-                                    {getRoleShortLabel(entry.role)} · {(Math.round(entry.share_percentage * 10000) / 100).toFixed(1)}%
+                                    {getRoleShortLabel(entry.role)} · {formatPercent(Math.round(entry.share_percentage * 10000) / 100, {signed: false, digits: 1, locale: $currentLanguage})}
                                 </div>
                             </div>
                         </button>
@@ -605,7 +607,7 @@
                             <div class="min-w-0">
                                 <div class="text-blue-800 dark:text-blue-200 font-medium truncate">{entry.username}</div>
                                 <div class="text-[10px] text-blue-600 dark:text-blue-400">
-                                    {getRoleShortLabel(entry.role)} · {(Math.round(entry.share_percentage * 10000) / 100).toFixed(1)}%
+                                    {getRoleShortLabel(entry.role)} · {formatPercent(Math.round(entry.share_percentage * 10000) / 100, {signed: false, digits: 1, locale: $currentLanguage})}
                                 </div>
                             </div>
                         </button>
@@ -641,7 +643,7 @@
                             <div class="min-w-0">
                                 <div class="text-gray-700 dark:text-gray-300 font-medium truncate">{entry.username}</div>
                                 <div class="text-[10px] text-gray-500 dark:text-gray-400">
-                                    {getRoleShortLabel(entry.role)} · {(Math.round(entry.share_percentage * 10000) / 100).toFixed(1)}%
+                                    {getRoleShortLabel(entry.role)} · {formatPercent(Math.round(entry.share_percentage * 10000) / 100, {signed: false, digits: 1, locale: $currentLanguage})}
                                 </div>
                             </div>
                         </button>
@@ -829,7 +831,7 @@
                                     }}
                                     class="w-20 px-2 py-1.5 text-sm text-center border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
                                 />
-                                <span class="text-xs text-gray-500">% (max {maxNewShare.toFixed(1)}%)</span>
+                                <span class="text-xs text-gray-500">% (max {formatPercent(maxNewShare, {signed: false, digits: 1, locale: $currentLanguage})})</span>
                             </div>
                         </div>
                     {/if}

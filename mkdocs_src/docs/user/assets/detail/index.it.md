@@ -24,7 +24,7 @@ Disegna uno qualsiasi dei **22 indicatori tecnici**, un altro asset o una coppia
 
 ### 📈 [Grafico interattivo](chart.md)
 
-Lo storico dei prezzi, oppure il **[Rendimento rolling](chart.md#rolling-return)** su una finestra a tua scelta (1W, 1M, 3M, 1Y o una lunghezza personalizzata). Fai zoom, pan e convertilo in un'altra valuta.
+Lo storico dei prezzi, oppure il **[Rendimento mobile](chart.md#rolling-return)** su una finestra a tua scelta (1S, 1M, 3M, 1A o una lunghezza personalizzata). Fai zoom, pan e convertilo in un'altra valuta.
 
 ### ✏️ [Editor dati](data-editor.md)
 

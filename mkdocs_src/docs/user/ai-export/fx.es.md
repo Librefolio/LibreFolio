@@ -8,8 +8,8 @@ sobre el par o sobre lo que significa para lo que tienes. Las opciones y cómo p
 
 ## 📍 Dónde encontrarlo
 
-En la página de detalle de un par, selecciona **exportación IA** en la barra de herramientas de la página. Se abre inicialmente en
-**Análisis del par FX**.
+En la página de detalle de un par, selecciona **Exportación IA** en la barra de herramientas de la página. Se abre inicialmente en
+**Análisis del par de divisas**.
 
 La exportación cubre el par abierto en la página, con el último día del rango de fechas de la página como
 fecha de exportación. Tu exposición tiene en cuenta todos los brókeres que puedas abrir.
@@ -23,8 +23,8 @@ qué fechas cubre: nunca usa tipos de cambio futuros.
 
 | Opción | Qué obtienes |
 | :--- | :--- |
-| **Mercado FX y exposición** | El tipo de cambio actual, un contexto compacto de mercado y temporal, y tu exposición directa al par |
-| **Historial de mercado FX** | Tipos de cambio detallados, rendimientos, volatilidad, indicadores, estados y eventos, con cobertura |
+| **Cambio, evolución y exposición** | El tipo de cambio actual, un contexto compacto de mercado y temporal, y tu exposición directa al par |
+| **Historial y datos técnicos del cambio** | Tipos de cambio detallados, rendimientos, volatilidad, indicadores, estados y eventos, con cobertura |
 
 ---
 
@@ -32,7 +32,7 @@ qué fechas cubre: nunca usa tipos de cambio futuros.
 
 | Análisis | Qué hace la IA |
 | :--- | :--- |
-| **Análisis del par FX** | Analiza la dirección del par, rendimientos, tendencia, impulso, volatilidad y eventos, con contexto macroeconómico con fechas |
+| **Análisis del par de divisas** | Analiza la dirección del par, rendimientos, tendencia, impulso, volatilidad y eventos, con contexto macroeconómico con fechas |
 | **Impacto de la exposición FX** | Describe cómo tu efectivo y posiciones están directamente vinculados al par, sin mirar dentro de los fondos; necesita al menos un vínculo de este tipo |
 
 ---

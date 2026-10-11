@@ -43,11 +43,11 @@ La siguiente tabla desarrolla la fórmula para algunas formas de series. Es arit
 
 | Serie | Rentabilidades $N$ | Días naturales $D$ | $f = 365N/D$ | $\sqrt{f}$ |
 |---|---|---|---|---|
-| Instrumento cotizado solo en días de negociación, año completo | 252 | 365 | 252.0 | 15.87 |
-| Instrumento que cotiza todos los días (cripto), año completo | 365 | 365 | 365.0 | 19.10 |
-| Fondo con precio semanal, año completo | 52 | 365 | 52.0 | 7.21 |
-| Instrumento cotizado en días de negociación, iniciado a mitad de período | 126 | 183 | 251.3 | 15.85 |
-| Serie diaria con huecos | 180 | 365 | 180.0 | 13.42 |
+| Instrumento cotizado solo en días de negociación, año completo | 252 | 365 | 252,0 | 15,87 |
+| Instrumento que cotiza todos los días (cripto), año completo | 365 | 365 | 365,0 | 19,10 |
+| Fondo con precio semanal, año completo | 52 | 365 | 52,0 | 7,21 |
+| Instrumento cotizado en días de negociación, iniciado a mitad de período | 126 | 183 | 251,3 | 15,85 |
+| Serie diaria con huecos | 180 | 365 | 180,0 | 13,42 |
 
 De esas filas se desprenden cuatro lecturas.
 

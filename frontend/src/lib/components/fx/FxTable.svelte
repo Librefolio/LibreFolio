@@ -8,6 +8,7 @@
 <script lang="ts">
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
+    import {deltaPeriodLabel} from '$lib/utils/assetPriceDerived';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
     import {ArrowLeftRight, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
@@ -15,7 +16,7 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {fxProviderBadgeHtml} from '$lib/utils/providerHelpers';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {displayFxDelta, displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {fxProvidersVersion} from '$lib/stores/currencyGraphStore';
 
     // =========================================================================
@@ -106,16 +107,7 @@
     function getDelta(row: FxRow): {abs: number | null; pct: number | null} {
         void inversionVersion;
         if (row.data.length < 2) return {abs: null, pct: null};
-        const first = row.data[0];
-        const last = row.data[row.data.length - 1];
-        if (first.rate === null || last.rate === null || first.rate === 0 || last.rate === 0) return {abs: null, pct: null};
-        const inv = isCardInverted(row.slug);
-        const fv = inv ? 1 / first.rate : first.rate;
-        const lv = inv ? 1 / last.rate : last.rate;
-        return {
-            abs: lv - fv,
-            pct: ((lv - fv) / fv) * 100,
-        };
+        return displayFxDelta(row.data[0].rate, row.data[row.data.length - 1].rate, isCardInverted(row.slug)) ?? {abs: null, pct: null};
     }
 
     function formatDelta(val: number | null, suffix: string = ''): string {
@@ -202,7 +194,7 @@
             },
             {
                 id: 'delta_1D',
-                header: 'Δ 1D',
+                header: () => `Δ ${deltaPeriodLabel('1D', $t)}`,
                 cell: (row) => {
                     const val = row.deltas?.['1D'] ?? null;
                     return {type: 'html', html: `<span class="font-mono ${deltaColorClass(val)}">${formatDeltaPct(val)}</span>`};
@@ -239,7 +231,7 @@
             // Dynamic delta period columns
             ...visiblePeriods.map((p) => ({
                 id: `delta_${p.key}`,
-                header: `Δ ${p.key}`,
+                header: () => `Δ ${deltaPeriodLabel(p.key, $t)}`,
                 cell: (row: FxRow) => {
                     const val = row.deltas?.[p.key] ?? null;
                     return {type: 'html' as const, html: `<span class="font-mono ${deltaColorClass(val)}">${formatDeltaPct(val)}</span>`};

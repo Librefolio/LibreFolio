@@ -69,8 +69,8 @@ Esta sección pone cada activo en la misma escala de daño: sus peores pérdidas
 - **Mal día** — la pérdida promedio en el peor 5% de los días (CVaR al 95%) → [VaR condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
 - **Mal mes** — lo mismo en tramos reales de un mes → [VaR condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
 - **Peor caída** — la caída más profunda desde un máximo; *duró N d* cuenta los días hasta que el activo volvió allí, o hasta el final del periodo → [Caída máxima](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
-- **Por debajo del máximo ahora** — cuánto está por debajo de su nivel más alto en el periodo → [Caída actual](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
-- **Subida hasta el máximo** — la ganancia necesaria para volver allí: estar un 20% por debajo requiere +25% → [Lo que hace falta para recuperarse](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back)
+- **Bajo el máximo** — cuánto está por debajo de su nivel más alto en el periodo → [Caída actual](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
+- **Subida al máximo** — la ganancia necesaria para volver allí: estar un 20% por debajo requiere +25% → [Lo que hace falta para recuperarse](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back)
 
 **Cómo leerlo**
 
@@ -154,10 +154,10 @@ Cuando algo va mal con los datos, la pestaña lo indica una vez, justo debajo de
 
 **Cómo leerlo**
 
-- **El banner de calidad de datos** enumera lo que hay que corregir, cada problema con su acción, como **Sincronizar precios** o **Sincronizar tipos**. Haz clic en él para abrir la lista.
+- **El banner de calidad de datos** enumera lo que hay que corregir, cada problema con su acción, como **Sincronizar** para los precios o **Sincronizar** para los tipos de cambio. Haz clic en él para abrir la lista.
 - **El aviso** debajo nombra los resultados **parciales** y su causa. Un resultado parcial sigue mostrando sus cifras: léelas teniendo en cuenta esa causa.
 - **El banner ámbar propio de una sección** significa que un resultado no se obtuvo en absoluto, a menudo porque el periodo es demasiado corto: elige uno más largo o sincroniza los precios.
-- **¿Qué pasaría si…?** informa de sus propios problemas dentro de su sección.
+- **¿Qué pasa si…?** informa de sus propios problemas dentro de su sección.
 
 ---
 

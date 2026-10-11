@@ -27,7 +27,7 @@ ExtraMOT, EuroTLX) y fondos de inversión cerrados (MIV) — además de fondos d
 - **Tipo**: los ETFs, ETCs y ETNs llegan todos como **ETF** simple. Si sabes qué contiene el fondo,
   refínalo (por ejemplo, **ETF de renta variable** o **ETF de materias primas**): una
   [comprobación posterior frente a los datos del proveedor](../create-edit.md#provider-data-comparison) mantiene tu elección.
-- Los **bonos** obtienen el sector **Bonos gubernamentales** o **Bonos corporativos** (emisores supranacionales:
+- Los **bonos** obtienen el sector **Bonos del Estado** o **Bonos corporativos** (emisores supranacionales:
   **Financieros**) y, cuando se reconoce el emisor, su país — *Estados Unidos de América*
   se convierte en **USA**.
 
@@ -54,7 +54,7 @@ ExtraMOT, EuroTLX) y fondos de inversión cerrados (MIV) — además de fondos d
 ??? note "🧭 MIC de mercado y Plataforma — cuando la página del instrumento no se abre"
 
     Algunos mercados deben indicarse explícitamente. Abre el instrumento en borsaitaliana.it: el código después
-    del ISIN en la dirección de la página es el **MIC de mercado** — en `…/scheda/US912810TU25-ETLX.html` es
+    del ISIN en la dirección de la página es el **MIC del mercado** — en `…/scheda/US912810TU25-ETLX.html` es
     `ETLX`. **Plataforma** solo es necesaria en EuroTLX, donde es `TLX`.
 
     | Mercado | MIC de mercado | Plataforma |
@@ -66,7 +66,7 @@ ExtraMOT, EuroTLX) y fondos de inversión cerrados (MIV) — además de fondos d
     | MIV (fondos de inversión cerrados) | `MIVX` | — |
     | EuroTLX (bonos) | `ETLX` | `TLX` |
 
-    Por ejemplo, el bono del Tesoro de EE. UU. `US912810TU25` en EuroTLX funciona una vez que **MIC de mercado** es
+    Por ejemplo, el bono del Tesoro de EE. UU. `US912810TU25` en EuroTLX funciona una vez que **MIC del mercado** es
     `ETLX` y **Plataforma** es `TLX`; sus precios están en USD.
 
 ## 🧾 Fondos de inversión y NAV

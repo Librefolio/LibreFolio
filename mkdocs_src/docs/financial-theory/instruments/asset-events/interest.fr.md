@@ -35,7 +35,7 @@ Contrairement aux dividendes (qui dépendent des bénéfices de l'entreprise), l
     Où :
 
     - $P$ = principal (investissement initial)
-    - $r$ = taux d'intérêt annuel (ex: 0,04 pour 4%)
+    - $r$ = taux d'intérêt annuel (ex. : 0,04 pour 4 %)
     - $t$ = temps en années
 
     Utilisé pour : les prêts à court terme, certains comptes d'épargne, les bons du Trésor.
@@ -72,7 +72,7 @@ Pour les **obligations à coupon**, les paiements d'intérêts provoquent une r�
 
 ??? example "Cycle de coupon obligataire"
 
-    Une obligation d'une valeur nominale de 1 000 € verse un coupon annuel de 4% semestriellement (20 € tous les 6 mois).
+    Une obligation d'une valeur nominale de 1 000 € verse un coupon annuel de 4 % semestriellement (20 € tous les 6 mois).
 
     - **Jour avant coupon** : Prix pied de coupon 980 €, Intérêts courus 20 € → Prix plein 1 000 €
     - **Date du coupon** : Les intérêts courus sont réinitialisés à 0 €, l'investisseur reçoit 20 € en espèces
@@ -104,7 +104,7 @@ Où :
 
     Où :
 
-    - **Annual Coupon** = total des paiements de coupons par an (ex: 40 € pour une obligation de 4% avec une valeur nominale de 1 000 €)
+    - **Annual Coupon** = total des paiements de coupons par an (ex. : 40 € pour une obligation de 4 % avec une valeur nominale de 1 000 €)
     - **Current Market Price** = ce que vous paieriez pour acheter l'obligation aujourd'hui
 
     Limite : ignore la plus-value ou la perte en capital si l'obligation est détenue jusqu'à l'échéance.
@@ -136,13 +136,13 @@ Où :
 Dans LibreFolio, un événement `INTEREST` (et la transaction de portefeuille correspondante) est enregistré avec :
 
 - **Date** : La date du paiement des intérêts
-- **Amount** : Le montant en espèces reçu
-- **Currency** : La devise du paiement
+- **Montant** : Le montant en espèces reçu
+- **Devise** : La devise du paiement
 
 ### The différence comptable : Intérêt vs Dividende
 Il est crucial de distinguer une transaction d'**Intérêt** d'une transaction de **Dividende** au niveau de la base de données :
 
-1. **Intérêt (basé sur la dette/le rendement)** : Un paiement d'intérêt représente le rendement d'une dette ou de dépôts de liquidités (ex: comptes d'épargne bancaires, prêts P2P ou coupons obligataires). Dans le suivi de portefeuille en partie double, ceux-ci représentent des entrées de fonds (`cash.amount > 0`) où l'actif sous-jacent est optionnel. La transaction en base de données requiert `quantity = 0` car aucune unité de l'actif n'est échangée lors d'un paiement d'intérêt en espèces.
+1. **Intérêt (basé sur la dette/le rendement)** : Un paiement d'intérêt représente le rendement d'une dette ou de dépôts de liquidités (ex. : comptes d'épargne bancaires, prêts P2P ou coupons obligataires). Dans le suivi de portefeuille en partie double, ceux-ci représentent des entrées de fonds (`cash.amount > 0`) où l'actif sous-jacent est optionnel. La transaction en base de données requiert `quantity = 0` car aucune unité de l'actif n'est échangée lors d'un paiement d'intérêt en espèces.
 2. **Dividende (basé sur les fonds propres)** : Un dividende est une distribution versée aux actionnaires. Il nécessite strictement l'existence d'un actif sous-jacent représentatif de fonds propres (l'actif est obligatoire), et le versement dépend directement du nombre d'actions détenues à la date de détachement. Tout comme les intérêts, les dividendes sont des mouvements de trésorerie purs (`quantity = 0`).
 
 Pour les actifs de fournisseurs de type **investissement programmé**, les événements d'intérêt sont générés automatiquement à partir du calendrier d'intérêts configuré et affectent directement le calcul du prix. Pour les obligations cotées, ils servent de marqueurs informatifs.

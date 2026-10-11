@@ -211,7 +211,7 @@ Pour chaque option et la façon dont sa valeur est résolue, consultez le [Guide
 
 ## 💾 Sauvegarde des données {#data-backup}
 
-Toutes vos données (la base de données SQLite, les fichiers téléchargés, les rapports de courtier et les logs) se trouvent dans le dossier `./LibreFolio-data` à côté de `docker-compose.yml`. Sauvegardez ce dossier, en arrêtant d'abord le conteneur pour une copie cohérente.
+Toutes vos données (la base de données SQLite, les fichiers téléversés, les rapports de courtier et les logs) se trouvent dans le dossier `./LibreFolio-data` à côté de `docker-compose.yml`. Sauvegardez ce dossier, en arrêtant d'abord le conteneur pour une copie cohérente.
 
 Pour savoir quoi sauvegarder et comment, consultez la [section Sauvegarde du manuel d'administration](../admin/filesystem.md#backup).
 
@@ -219,7 +219,7 @@ Pour savoir quoi sauvegarder et comment, consultez la [section Sauvegarde du man
 
 ## 🔄 Mise à jour de LibreFolio {#updating}
 
-Les migrations de base de données s'exécutent automatiquement au démarrage du conteneur et sont conçues pour conserver les données existantes, tandis que certaines fonctionnalités, comme la simulation de risque **What if…?**, sont [encore en bêta](../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta) et peuvent changer entre les versions. Effectuez une [sauvegarde](#data-backup) avant de mettre à jour : c'est votre moyen de revenir en arrière en cas de problème.
+Les migrations de base de données s'exécutent automatiquement au démarrage du conteneur et sont conçues pour conserver les données existantes, tandis que certaines fonctionnalités, comme la simulation de risque **Que se passe-t-il si… ?**, sont [encore en bêta](../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta) et peuvent changer entre les versions. Effectuez une [sauvegarde](#data-backup) avant de mettre à jour : c'est votre moyen de revenir en arrière en cas de problème.
 
 - Avec le tag `latest`, vous obtenez toujours la dernière version, avec tous les changements qu'elle apporte.
 - Pour ne mettre à jour que lorsque vous le décidez, épinglez une version au lieu de `latest` : `ghcr.io/librefolio/librefolio:1.1.0` (variante full) ou `ghcr.io/librefolio/librefolio:1.1.0-light` (variante light). Voir [Variantes d'image](#image-variants-full-and-light).

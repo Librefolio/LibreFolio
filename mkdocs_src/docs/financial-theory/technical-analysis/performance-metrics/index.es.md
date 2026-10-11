@@ -44,7 +44,7 @@ Contabilidad por lote: realiza un seguimiento de cada lote de adquisición a lo 
 
 | Métrica / Concepto | Descripción |
 |------------------|-------------|
-| **[Resumen del motor FIFO](fifo-engine/index.md)** | Estados del ciclo de vida del lote, procesamiento cronológico de eventos, emparejamiento FIFO, desdoblamientos y transferencias entre brókers. |
+| **[Resumen del motor FIFO](fifo-engine/index.md)** | Estados del ciclo de vida del lote, procesamiento cronológico de eventos, emparejamiento FIFO, desdoblamientos y transferencias entre brókeres. |
 | **[Análisis de lotes FIFO](fifo-engine/fifo-lot-analysis.md)** | Complemento por lote del PMC: realiza un seguimiento de cada lote de adquisición a lo largo de su propio ciclo de vida, empareja las ventas en orden FIFO y calcula la rentabilidad abierta/total por lote. |
 
 ### 📊 Precio medio de compra (PMC)

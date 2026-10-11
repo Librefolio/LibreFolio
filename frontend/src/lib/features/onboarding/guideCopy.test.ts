@@ -60,7 +60,7 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 
 const SRC = resolve(process.cwd(), 'src');
-const HOST = 'lib/components/onboarding/OnboardingOverlayHost.svelte';
+const HOST = 'lib/features/onboarding/components/OnboardingOverlayHost.svelte';
 const LOCALES = ['en', 'it', 'fr', 'es'] as const;
 
 type Locale = (typeof LOCALES)[number];

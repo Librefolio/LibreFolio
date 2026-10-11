@@ -14,7 +14,7 @@ $$
 
 !!! example
 
-    Si el EUR/USD pasa de 1.10 a 1.14:
+    Si el EUR/USD pasa de 1,10 a 1,14:
 
     $$R = \frac{1.14 - 1.10}{1.10} = 0.0364 = 3.64\%$$
 
@@ -73,7 +73,7 @@ Esto es lo que muestra la [herramienta Medidas](../../user/fx/detail/measures.md
 
 !!! example
 
-    El EUR/USD pasa de 1.10 a 1.14 en 90 días:
+    El EUR/USD pasa de 1,10 a 1,14 en 90 días:
 
     $$R_{annual} = \left(\frac{1.14}{1.10}\right)^{365/90} - 1 = (1.0364)^{4.056} - 1 \approx 15.5\%$$
 
@@ -107,13 +107,13 @@ Esta linealidad es una de las ventajas clave de las rentabilidades logarítmicas
 
 ---
 
-## 🔁 Rentabilidad móvil {: #rolling-return }
+## 🔁 Rendimiento móvil {: #rolling-return }
 
-Una **rentabilidad móvil** es la rentabilidad simple de las secciones anteriores, medida en una ventana que se desplaza a lo largo de la serie: un valor por fecha, cada uno mirando hacia atrás durante el mismo intervalo. Dos funciones de la página de un activo la calculan, y difieren en cómo se cuenta el intervalo — en sesiones o en días naturales. El botón de guía 📖 en la tarjeta de la señal **Rentabilidad móvil** abre esta página.
+Un **rendimiento móvil** es la rentabilidad simple de las secciones anteriores, medida en una ventana que se desplaza a lo largo de la serie: un valor por fecha, cada uno mirando hacia atrás durante el mismo intervalo. Dos funciones de la página de un activo la calculan, y difieren en cómo se cuenta el intervalo — en sesiones o en días naturales. El botón de guía 📖 en la tarjeta de la señal **Rendimiento móvil** abre esta página.
 
 ### 📊 Sobre una ventana de sesiones {: #rolling-return-sessions }
 
-La señal **Rentabilidad móvil** del panel de Señales, en la familia de riesgo, lee la serie de rentabilidades preparada del activo, en la moneda del gráfico: una rentabilidad simple por **sesión**, un día en el que el activo tiene una cotización propia. Un precio almacenado en un fin de semana o un día festivo del mercado que solo repite el cierre anterior no es una sesión. Con $V_t$ el valor en la sesión $t$ y $r_t = V_t / V_{t-1} - 1$, la rentabilidad móvil en una ventana de $w$ sesiones es
+La señal **Rendimiento móvil** del panel de Señales, en la familia de riesgo, lee la serie de rentabilidades preparada del activo, en la moneda del gráfico: una rentabilidad simple por **sesión**, un día en el que el activo tiene una cotización propia. Un precio almacenado en un fin de semana o un día festivo del mercado que solo repite el cierre anterior no es una sesión. Con $V_t$ el valor en la sesión $t$ y $r_t = V_t / V_{t-1} - 1$, el rendimiento móvil en una ventana de $w$ sesiones es
 
 $$
 R_t^{(w)} = \prod_{k=0}^{w-1} \left(1 + r_{t-k}\right) - 1 = \frac{V_t}{V_{t-w}} - 1
@@ -123,13 +123,13 @@ calculada mediante logaritmos, $R_t^{(w)} = \exp\left(\sum_{k=0}^{w-1} \ln(1 + r
 
 ### 🗓️ Sobre una ventana de días naturales {: #rolling-return-calendar }
 
-El modo **Rentabilidad móvil** del gráfico mide cada fecha contra el cierre exactamente $N$ días naturales antes. Con $\hat{P}(d)$ el cierre resuelto del día natural $d$ — el último cierre disponible en o antes de $d$, convertido a la moneda del gráfico, de modo que un fin de semana o un día festivo lee la sesión anterior — la rentabilidad del día $d$ es
+El modo **Rendimiento móvil** del gráfico mide cada fecha contra el cierre exactamente $N$ días naturales antes. Con $\hat{P}(d)$ el cierre resuelto del día natural $d$ — el último cierre disponible en o antes de $d$, convertido a la moneda del gráfico, de modo que un fin de semana o un día festivo lee la sesión anterior — la rentabilidad del día $d$ es
 
 $$
 R^{[N]}(d) = \frac{\hat{P}(d)}{\hat{P}(d - N)} - 1
 $$
 
-Los preajustes **1W**, **1M**, **3M** y **1Y** establecen $N$ en 7, 30, 90 y 365 días; una ventana personalizada cuenta 7 días por semana, 30 por mes y 365 por año. Un punto se deja vacío, nunca se estima, cuando cualquiera de los extremos no tiene un cierre resuelto o tiene un cierre que no es positivo; cuando no se puede calcular ningún punto del rango, el resultado no está disponible. Cada punto informa la fecha de referencia que solicitó y las fechas del precio y del tipo de cambio realmente utilizados — véase el [Gráfico interactivo](../../user/assets/detail/chart.md#rolling-return).
+Los preajustes **1S**, **1M**, **3M** y **1A** establecen $N$ en 7, 30, 90 y 365 días; una ventana personalizada cuenta 7 días por semana, 30 por mes y 365 por año. Un punto se deja vacío, nunca se estima, cuando cualquiera de los extremos no tiene un cierre resuelto o tiene un cierre que no es positivo; cuando no se puede calcular ningún punto del rango, el resultado no está disponible. Cada punto informa la fecha de referencia que solicitó y las fechas del precio y del tipo de cambio realmente utilizados — véase el [Gráfico interactivo](../../user/assets/detail/chart.md#rolling-return).
 
 ### ⚖️ Sesiones o días naturales {: #sessions-or-calendar-days }
 
@@ -142,7 +142,7 @@ Ambas medidas son rentabilidades simples basadas únicamente en el precio: ningu
 | Comparación de dos activos | un $w$ igual puede significar intervalos diferentes | un $N$ igual siempre significa el mismo intervalo |
 | Un día cerrado en cualquiera de los extremos | no puede ocurrir: solo se usan las sesiones | se resuelve al último cierre anterior |
 
-Para comparar una rentabilidad móvil con otra en un intervalo diferente, anualízala con la fórmula CAGR anterior, siendo $d$ el intervalo en días naturales — teniendo en cuenta el error común sobre períodos muy cortos que figura a continuación.
+Para comparar un rendimiento móvil con otro en un intervalo diferente, anualízalo con la fórmula CAGR anterior, siendo $d$ el intervalo en días naturales — teniendo en cuenta el error común sobre períodos muy cortos que figura a continuación.
 
 ---
 

@@ -13,9 +13,14 @@
 import {describe, expect, it} from 'vitest';
 
 import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
 import type {LineDataPoint} from './LineChart.svelte';
 import type {EventMarker} from './PriceChartFull.svelte';
 import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from './calendarReturnWindow';
+import * as calendarReturnWindowModule from './calendarReturnWindow';
 import {
     buildDeltaHtml,
     buildEventScatterGroups,
@@ -379,6 +384,58 @@ describe('calendarReturnWindow', () => {
 
         expect(calendarReturnWindowDays(invalidPreset)).toBeNull();
         expect(calendarReturnWindowDays(invalidUnit)).toBeNull();
+    });
+});
+
+describe('calendarReturnWindow — the window presets are labelled from the catalogues (P, item 8)', () => {
+    // The rolling-return window presets carry English literal labels — '1W', '1M', '3M', '1Y' —
+    // which the asset page prints as they are, so Italian reads «1W» beside a date picker that
+    // reads the catalogue's week. The contract of the cure: a preset is a `count` of a `unit`
+    // (`CalendarReturnWindowUnit`) instead of a label, and the module maps each unit to the
+    // catalogue key of its count message, `CALENDAR_RETURN_UNIT_LABEL_KEYS` — the date picker's
+    // keys, read by the page with `{values: {n: preset.count}}`, so the two say the same thing.
+    // The keys and the windows do not change. The exports are read untyped, so this file compiles
+    // before the cure and after it. Red today: no preset has a count or a unit, and no map exists.
+
+    const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+    const UNITS: readonly CalendarReturnWindowUnit[] = ['weeks', 'months', 'years'];
+    /** The module's exports by name, read untyped: the map does not exist before the cure. */
+    const moduleExports: Record<string, unknown> = {...calendarReturnWindowModule};
+    /** Each preset's own fields, read untyped: the cure trades the literal label for a count and a unit. */
+    const presetFields = CALENDAR_RETURN_PRESETS.map((preset): Record<string, unknown> => ({...preset}));
+
+    /** The value behind a dotted key of a catalogue, if any. */
+    const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+
+    /** Each of `keys` that some catalogue has no string for, with those catalogues: `{}` when all four have all of them. */
+    function catalogueGaps(keys: readonly string[]): Record<string, string[]> {
+        const gaps = keys.map((key) => [key, Object.entries(CATALOGUES).flatMap(([lang, catalogue]) => (typeof leafOf(catalogue, key) === 'string' ? [] : [lang]))] as const);
+        return Object.fromEntries(gaps.filter(([, langs]) => langs.length > 0));
+    }
+
+    it('describes every preset by an integer count and a unit, not by a literal label', () => {
+        const uncounted = presetFields.filter(({count, unit}) => !(Number.isInteger(count) && UNITS.includes(unit as CalendarReturnWindowUnit))).map(({key}) => key);
+        const labelled = presetFields.filter((fields) => 'label' in fields).map(({key}) => key);
+        expect(uncounted, 'presets without an integer count and a unit').toEqual([]);
+        expect(labelled, 'presets that still carry a literal label').toEqual([]);
+    });
+
+    it('counts 1 week, 1 month, 3 months and 1 year, under the same keys and windows', () => {
+        const presets = Object.fromEntries(presetFields.map(({key, count, unit, windowDays}) => [String(key), {count, unit, windowDays}]));
+
+        expect(presets).toEqual({
+            '1w': {count: 1, unit: 'weeks', windowDays: 7},
+            '1m': {count: 1, unit: 'months', windowDays: 30},
+            '3m': {count: 3, unit: 'months', windowDays: 90},
+            '1y': {count: 1, unit: 'years', windowDays: 365},
+        });
+    });
+
+    it('maps each unit to the date picker’s count message, which the four catalogues have', () => {
+        const unitKeys = moduleExports.CALENDAR_RETURN_UNIT_LABEL_KEYS;
+
+        expect(unitKeys, 'CALENDAR_RETURN_UNIT_LABEL_KEYS: unit → catalogue key').toEqual({weeks: 'datePicker.presets.weeks', months: 'datePicker.presets.months', years: 'datePicker.presets.years'});
+        expect(catalogueGaps(Object.values(unitKeys as Record<string, string>)), 'key → the catalogues with no string for it').toEqual({});
     });
 });
 

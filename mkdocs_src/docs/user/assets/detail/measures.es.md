@@ -16,7 +16,7 @@ La herramienta Medida responde a *¿cuánto cambió entre estos dos días?* Elig
 
 **+ Añadir medición** en el encabezado del panel, en cambio, mide todo el gráfico, desde su primer hasta su último punto: práctico en el móvil. El encabezado de cada medida contiene su color y 🗑️ para eliminarla; despliega la medida para cambiar sus fechas.
 
-Las medidas no se guardan: recargar la página vacía el panel. **Precios** y **Rentabilidad móvil** mantienen medidas separadas.
+Las medidas no se guardan: recargar la página vacía el panel. **Precios** y **Rendimiento móvil** mantienen medidas separadas.
 
 ---
 
@@ -26,18 +26,18 @@ La tabla tiene una fila para el activo (una segunda en su propia moneda cuando e
 
 - **Δ Abs** — la diferencia $V_{end} - V_{start}$, en la unidad de la línea.
 - **Δ %** — el cambio $\frac{V_{end} - V_{start}}{V_{start}}$ → [Rentabilidades y tasas de crecimiento](../../../financial-theory/fundamentals/returns.md)
-- **Δ%/yr** — el mismo cambio como tasa anual a lo largo de los $d$ días naturales entre los puntos, $(1 + \Delta\%)^{365/d} - 1$ → [Rentabilidades y tasas de crecimiento](../../../financial-theory/fundamentals/returns.md)
+- **Δ%/año** — el mismo cambio como tasa anual a lo largo de los $d$ días naturales entre los puntos, $(1 + \Delta\%)^{365/d} - 1$ → [Rentabilidades y tasas de crecimiento](../../../financial-theory/fundamentals/returns.md)
 
 La línea de resumen de la medida añade el número de días.
 
 ---
 
-## 📈 En modo Rentabilidad móvil
+## 📈 En modo Rendimiento móvil
 
 Los valores ya son rentabilidades, así que la tabla los compara:
 
-- **Inicio**, **Fin** — la rentabilidad móvil en cada una de las dos fechas.
-- **Δ pp** — Fin menos Inicio, en puntos porcentuales → [Rentabilidad móvil a lo largo de los días naturales](../../../financial-theory/fundamentals/returns.md#rolling-return-calendar)
+- **Inicio**, **Fin** — el rendimiento móvil en cada una de las dos fechas.
+- **Δ pp** — Fin menos Inicio, en puntos porcentuales → [Rendimiento móvil a lo largo de los días naturales](../../../financial-theory/fundamentals/returns.md#rolling-return-calendar)
 - **Días** — los días naturales entre los dos puntos.
 
 ---

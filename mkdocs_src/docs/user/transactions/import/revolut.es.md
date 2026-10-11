@@ -6,13 +6,13 @@
 
 ## 📥 Cómo exportar
 
-Para exportar su historial de transacciones de acciones y criptomonedas desde Revolut:
+Para exportar tu historial de transacciones de acciones y criptomonedas desde Revolut:
 
-1. Abra su **aplicación móvil de Revolut** o inicie sesión a través del cliente web.
-2. Navegue a la pestaña **Invest** (o Stocks/Crypto).
-3. Toque **... (Más)** junto al saldo de su cartera y luego seleccione **Statements**.
-4. Seleccione la cuenta deseada (por ejemplo, la cuenta de Stocks) y toque **Transaction Statement**.
-5. Establezca el intervalo de tiempo, elija **CSV** como formato y exporte. Transfiera el archivo a su ordenador.
+1. Abre tu **aplicación móvil de Revolut** o inicia sesión a través del cliente web.
+2. Navega a la pestaña **Invest** (o Stocks/Crypto).
+3. Toca **... (Más)** junto al saldo de tu cartera y luego selecciona **Statements**.
+4. Selecciona la cuenta deseada (por ejemplo, la cuenta de Stocks) y toca **Transaction Statement**.
+5. Establece el intervalo de tiempo, elige **CSV** como formato y exporta. Transfiere el archivo a tu ordenador.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <!-- [Screenshot Placeholder: Revolut App - Invest Statements selection and CSV export] -->
@@ -22,7 +22,7 @@ Para exportar su historial de transacciones de acciones y criptomonedas desde Re
 
 !!! warning "Cuenta de Trading vs Cuenta Principal"
 
-    Asegúrese de exportar el extracto de la subcuenta de **Invest/Trading**. El extracto de la tarjeta de débito principal de Revolut utiliza un formato de archivo completamente diferente y no puede ser analizado por este plugin.
+    Asegúrate de exportar el extracto de la subcuenta de **Invest/Trading**. El extracto de la tarjeta de débito principal de Revolut utiliza un formato de archivo completamente diferente y no puede ser analizado por este plugin.
 
 ## 📝 Notas
 

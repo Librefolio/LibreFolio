@@ -61,7 +61,7 @@ enregistrés dans LibreFolio, c'est pourquoi vous les définissez ici.
 
 Pour chaque devise dans laquelle vous achetez, définissez :
 
-- Le mode d'ordre : **Par nombre d'unités** ou **Par montant**.
+- Le mode d'ordre : **Par nombre de titres** ou **Par montant**.
 - L'**Incrément** $\Delta$ : chaque ordre proposé est un multiple entier de celui-ci.
   Avec $q$ la taille d'un ordre, en unités ou en montant :
 
@@ -73,7 +73,7 @@ Pour chaque devise dans laquelle vous achetez, définissez :
     entières uniquement. Par montant, $\Delta$ est le plus petit montant que vous pouvez saisir, comme
     $\Delta = 0.01$, et les unités obtenues peuvent être des fractions d'unité.
 
-- Les **Frais d'achat** : une **Part fixe** $f$ plus un **Pourcentage** $r$ du
+- Les **Frais d’achat** : une **Partie fixe** $f$ plus un **Pourcentage** $r$ du
   montant de l'ordre $A$, marge sur le prix incluse. Le **Minimum** $f_{\min}$ et le
   **Maximum** $f_{\max}$ limitent uniquement la part en pourcentage, et un **Maximum** vide
   ne fixe aucune limite supérieure :
@@ -85,7 +85,7 @@ Pour chaque devise dans laquelle vous achetez, définissez :
     Les frais sont prélevés sur chaque ordre, et aucun ordre signifie aucun frais. Ils sont payés
     depuis vos liquidités et ne sont pas investis. Par exemple, avec $r = 0.19\%$,
     $f_{\min} = 1.50$, $f_{\max} = 18$ et aucune part fixe, un ordre de $500$
-    paie $1.50$, un de $2{,}000$ paie $3.80$, et un de $20{,}000$ paie $18$.
+    paie $1.50$, un de $2\,000$ paie $3.80$, et un de $20\,000$ paie $18$.
 
 Chaque courtier a aussi deux réglages qui lui sont propres :
 
@@ -93,8 +93,8 @@ Chaque courtier a aussi deux réglages qui lui sont propres :
   les liquidités propres du courtier plus les nouveaux versements et autres comptes que vous autorisez. Tous
   sont autorisés au départ : vous pouvez exclure une source, plafonner combien en est utilisé là-bas,
   et lui donner une **Priorité** ($0$ = préféré).
-- **Conversion de devise** : **Vous convertissez avant d'acheter** ou
-  **Le courtier convertit lors de l'achat**. Les deux convertissent au taux de l'étape **Change**
+- **Conversion de devise** : **Vous convertissez avant d’acheter** ou
+  **Le courtier convertit à l’achat**. Les deux convertissent au taux de l'étape **Change**
   moins le spread, donc le calcul est identique dans les deux cas : seule la
   façon dont le plan montre la conversion change.
 
@@ -130,8 +130,8 @@ alimente uniquement les cartes et barres d'exposition du résultat, pas le calcu
 
 ### 🔀 Routes
 
-Pour chaque courtier, choisissez les actifs qu'il peut acheter : **Autoriser tout**,
-**Exclure tout**, ou cliquez sur chacun.
+Pour chaque courtier, choisissez les actifs qu'il peut acheter : **Tout autoriser**,
+**Tout exclure**, ou cliquez sur chacun.
 
 Ensuite, uniquement là où vous en avez besoin, définissez des limites sur chaque route. Elles sont mesurées
 comme les ordres de ce courtier, en unités ou en montant. Avec $q$ l'achat de
@@ -173,7 +173,7 @@ $$
 
 Deux actions vous aident à y parvenir :
 
-- **Équilibrer tout** remet à l'échelle chaque cible, en conservant leurs ratios :
+- **Tout équilibrer** remet à l'échelle chaque cible, en conservant leurs ratios :
 
     $$
     w_i' = \frac{w_i}{\sum_j w_j} \cdot 100\%
@@ -257,8 +257,8 @@ et la part d'arrondi de **Non investi** n'est jamais négative. La colonne **Arr
 **Soldes par courtier et devise** montre combien de chaque ligne provient de l'arrondi :
 ≈ marque un chiffre affiché arrondi, comme lorsque la différence exacte n'a pas de forme
 décimale finie (par exemple après une conversion USD → EUR à $1/1.085$), et une différence
-inférieure à la plus petite unité conserve les chiffres dont elle a besoin, comme ≈ −0.0022
-plutôt que ≈ −0.00.
+inférieure à la plus petite unité conserve les chiffres dont elle a besoin, comme ≈ −0,0022
+plutôt que ≈ −0,00.
 
 Lorsque LibreFolio n'a pas de taux pour une paire, l'étape propose **Ajouter la paire** ou
 **Télécharger les taux** : chacun ouvre la fenêtre correspondante de la page Change, et rien
@@ -275,7 +275,7 @@ La stratégie est **Proportionnelle** : uniquement des achats, elle ne vend rien
 Parmi tous les plans d'achat qui respectent vos paramètres, elle choisit le meilleur avec une
 cascade de critères, chacun ne décidant qu'entre les plans encore à égalité sur les précédents :
 
-1. **Proximité avec les cibles (distance L2)** : la plus petite distance
+1. **Proximité des cibles (distance L2)** : la plus petite distance
 
     $$
     D = \sum_i \big(V_i - w_i\,R\big)^2
@@ -288,7 +288,7 @@ cascade de critères, chacun ne décidant qu'entre les plans encore à égalité
     valorisation, au prix de cotation, sans frais ni marge sur le prix. Le carré fait que les
     grands écarts pèsent davantage, et $D$ est mesuré en argent au carré, par exemple EUR².
 
-2. **Argent non investi** : le moins d'argent possible laissé en dehors des actifs,
+2. **Liquidités non investies** : le moins d'argent possible laissé en dehors des actifs,
     $R - \sum_i V_i$.
 
 3. **Priorité des courtiers et des sources** : la plus petite somme des numéros de
@@ -297,7 +297,7 @@ cascade de critères, chacun ne décidant qu'entre les plans encore à égalité
 4. **Coûts explicites (frais, spread, marge)** : le total le plus faible des frais,
     du spread de conversion et de la marge sur le prix, dans la devise de valorisation.
 
-5. **Nombre d'ordres** : le moins d'ordres.
+5. **Nombre d’ordres** : le moins d'ordres.
 
 Un ordre fixe d'actifs et de courtiers départage toute égalité finale, donc une recherche qui
 se termine donne toujours le même plan pour les mêmes données ; une recherche arrêtée par une
@@ -321,7 +321,7 @@ action explicite : **Choisir un courtier existant**, **Depuis vos courtiers**, l
 d'actif ou **Vos actifs**, et **Copier la répartition actuelle**. Dans l'étape **Change**, un taux
 **Auto** est lu depuis LibreFolio dès que l'étape s'ouvre.
 
-Chaque valeur indique sa provenance (**Copiée**, **Manuelle** ou **Modifiée**),
+Chaque valeur indique sa provenance (**Copié**, **Manuel** ou **Modifié**),
 et une copie indique aussi sa date. Une copie ne suit pas sa source pendant que vous
 modifiez, et une copie que vous avez modifiée peut être restaurée.
 
@@ -334,13 +334,13 @@ utiliser les copies précédentes.
 ### ⏳ Pendant le calcul
 
 Pendant que la requête est active, le planificateur affiche **Calcul en cours** et
-la configuration est verrouillée. **Arrêter l'attente** arrête seulement l'attente : le serveur
+la configuration est verrouillée. **Arrêter l’attente** arrête seulement l'attente : le serveur
 peut terminer malgré tout, et cette réponse est ignorée.
 
 Si vous modifiez le brouillon après un résultat, une bannière **Résultat non à jour**
 apparaît : les valeurs précédentes peuvent encore être consultées, mais elles ne décrivent
-plus le brouillon actuel. Depuis la bannière, **Retour au récapitulatif** revient à
-la dernière étape, et **Ignorer le résultat précédent** supprime l'ancien résultat et vous y amène aussi.
+plus le brouillon actuel. Depuis la bannière, **Retour à Récapitulatif** revient à
+la dernière étape, et **Abandonner le résultat précédent** supprime l'ancien résultat et vous y amène aussi.
 
 ## 📊 Lire le résultat {: #reading-the-result }
 
@@ -360,7 +360,7 @@ Un calcul se termine par l'un de ces résultats :
 
 | Résultat | Ce que cela signifie |
 |---|---|
-| **Plan disponible** | Un plan qui respecte toutes les contraintes. Un second badge indique ce qu'il vaut. **Optimalité prouvée** : le solveur a prouvé, dans sa petite marge de calcul (qui augmente avec les montants), qu'aucun meilleur plan n'existe, objectif par objectif dans l'ordre de l'étape **Stratégie**, et la vérification exacte du plan correspond à ses nombres. **Optimalité non prouvée** : le solveur a atteint sa limite de temps ou de nœuds, ou ses propres nombres ne correspondent pas à la vérification exacte du plan ; c'est alors le meilleur plan trouvé, mais il n'est pas prouvé qu'il soit le meilleur. |
+| **Plan disponible** | Un plan qui respecte toutes les contraintes. Un second badge indique ce qu'il vaut. **Optimum prouvé** : le solveur a prouvé, dans sa petite marge de calcul (qui augmente avec les montants), qu'aucun meilleur plan n'existe, objectif par objectif dans l'ordre de l'étape **Stratégie**, et la vérification exacte du plan correspond à ses nombres. **Optimalité non prouvée** : le solveur a atteint sa limite de temps ou de nœuds, ou ses propres nombres ne correspondent pas à la vérification exacte du plan ; c'est alors le meilleur plan trouvé, mais il n'est pas prouvé qu'il soit le meilleur. |
 | **Aucune opération** | Avec les liquidités que vous avez choisies, aucun achat ne satisfait les contraintes : le plan consiste à ne rien faire. Aucun ordre, aucun change de devises et aucun financement. |
 | **Infaisable avec ces contraintes** | Marqué **Infaisabilité prouvée** : aucune combinaison ne satisfait toutes les contraintes dures ensemble. Les contraintes impliquées sont listées (chaque **Achat obligatoire**, et les liquidités pouvant atteindre les courtiers), chacune avec un lien vers l'étape où vous pouvez la modifier. Le planificateur ne choisit pas laquelle assouplir, et aucun plan partiel n'est montré comme valide. |
 | **Aucun plan dans les limites** | Le solveur n'a trouvé aucun plan avant d'atteindre sa limite. Ce n'est pas une preuve qu'il n'en existe aucun. Une recherche plus légère aide : moins d'actifs ou de routes, un **Achat maximum** plus bas, ou un **Incrément** plus grand. |
@@ -369,7 +369,7 @@ Un calcul se termine par l'un de ces résultats :
 | **Scénario non pris en charge** | Ce n'est pas une erreur dans vos données : l'outil ne gère pas encore ce cas. |
 
 Chaque plan affiché a été revérifié en arithmétique décimale exacte,
-indépendamment du solveur : c'est le badge **Vérifié en décimal**. Un dernier
+indépendamment du solveur : c'est le badge **Vérifié en Decimal**. Un dernier
 badge indique comment la recherche s'est terminée : **Terminé** (le solveur a terminé sa recherche
 de lui-même), **Limite de temps**, ou **Limite de nœuds**. Lorsqu'un plan a été trouvé mais que la recherche
 s'est arrêtée à une limite, un avertissement ajoute qu'un meilleur plan peut exister ; le résultat
@@ -398,9 +398,9 @@ Sous le résultat, un plan est présenté dans cet ordre :
    après le plan, avec sa valeur idéale $w_i\,R$, sa valeur après le plan
    $V_i$, l'écart par rapport à l'idéal $V_i - w_i\,R$, et la valeur achetée.
 3. **Plan opérationnel** : les étapes à suivre, dans l'ordre. D'abord les liquidités
-   (**Liquidités disponibles**, **Virement**, **Dépôt**), puis les changes de devises
+   (**Liquidités disponibles**, **Transfert**, **Versement**), puis les changes de devises
    que vous faites vous-même, puis un tableau d'ordres par courtier, avec
-   l'**Instruction** à saisir chez le courtier, le **Prix**, le **Montant de l'ordre**,
+   l'**Instruction** à saisir chez le courtier, le **Prix**, le **Montant de l’ordre**,
    et les **Frais**. Une conversion que le courtier fait lui-même lors de l'achat
    n'a pas de nombre : elle apparaît au-dessus des ordres de ce courtier comme une
    **Conversion automatique**. Cette section n'est affichée que lorsque le plan a
@@ -428,10 +428,10 @@ Cliquez sur un ordre, ou sur son bouton **Détail**, pour ouvrir son détail : l
 la quantité économique, les prix utilisés (prix source, prix médian et prix appliqué
 avec la marge sur le prix), le débit de liquidités et les frais, les conversions qui le paient, et
 la priorité, la limite et les minimums de sa route.
-**Afficher la provenance** liste l'origine de chaque valeur, **Copiée** ou **Manuelle**,
+**Afficher la provenance** liste l'origine de chaque valeur, **Copié** ou **Manuel**,
 avec la date et l'heure de la copie ou de votre saisie.
 
-**Preuve et temps**, en haut du résultat, ouvre **Preuve et solveur** et y fait défiler.
+**Preuve et durées**, en haut du résultat, ouvre **Preuve et solveur** et y fait défiler.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="tools" data-name="pac-result-proof" alt="La section Preuve et solveur : les badges Résultat, Preuve et Arrêt ; la valeur exacte de chaque objectif, dans l'ordre, avec le bris d'égalité final ; le tableau des Étapes du solveur ; les Temps backend ; et Où le temps a été passé, une barre des phases du calcul">

@@ -75,7 +75,7 @@ This skill is intentionally **high-level and durable**. For the current contract
 - **User docs** — `mkdocs_src/docs/user/settings/preferences.en.md` (*Onboarding and guides*).
 - **Reference code** — `frontend/src/lib/features/onboarding/` (guide controller, catalog,
   anchors), `frontend/src/lib/stores/app/onboarding.svelte.ts` (progress and stored replays),
-  `frontend/src/lib/components/onboarding/` (overlay host, coachmark, Settings replay section),
+  `frontend/src/lib/features/onboarding/components/` (overlay host, coachmark, Settings replay section),
   `backend/app/services/onboarding_service.py` (flow registry and versions).
 - **Reference tests** — `frontend/e2e/onboarding-guides.spec.ts` with
   `frontend/e2e/fixtures/onboarding-accounts.ts`, and `frontend/e2e/onboarding-tour.spec.ts`.

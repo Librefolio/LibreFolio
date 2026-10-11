@@ -238,12 +238,12 @@ Recherchez et liez une transaction existante pour créer des opérations appari�
     <img class="gallery-img" data-category="transactions" data-name="picker-modal" alt="Modale du sélecteur de transaction">
 </div>
 
-### ✂️ Confirmation de fractionnement
+### ✂️ Confirmation de division
 
-Lors de la liaison de transactions avec des quantités non concordantes, le système propose un fractionnement — en prévisualisant le résultat avant confirmation.
+Lors de la liaison de transactions avec des quantités non concordantes, le système propose une division — en prévisualisant le résultat avant confirmation.
 
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="transactions" data-name="action-modal" alt="Modale de fractionnement de transaction">
+    <img class="gallery-img" data-category="transactions" data-name="action-modal" alt="Modale de division de transaction">
 </div>
 
 ### 🔀 Fusionner / Promouvoir
@@ -256,7 +256,7 @@ Fusionnez les opérations liées en une seule transaction consolidée.
 
 ### 🗑️ Supprimer la paire liée
 
-La suppression d'une transaction faisant partie d'une paire liée ouvre l'**espace de travail groupé de suppression** : la paire est présentée comme une seule ligne repliée pré-marquée pour suppression, et une indication de fractionnement vous permet de supprimer une seule branche au lieu des deux.
+La suppression d'une transaction faisant partie d'une paire liée ouvre l'**espace de travail groupé de suppression** : la paire est présentée comme une seule ligne repliée pré-marquée pour suppression, et une indication de division vous permet de supprimer une seule branche au lieu des deux.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="transactions" data-name="bulk-delete-pair-modal" alt="Espace de travail groupé de suppression avec une paire liée marquée pour suppression">
@@ -423,7 +423,7 @@ La boîte de dialogue de partage avec le message suggéré de la plateforme, les
 
 ### 📂 Ressources statiques
 
-Gérez vos fichiers téléchargés sur mobile.
+Gérez vos fichiers téléversés sur mobile.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="files" data-name="static-tab" alt="Onglet Fichiers statiques">

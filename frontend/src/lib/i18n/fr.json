@@ -322,7 +322,7 @@
       "rankHint": "Rang de recherche web (métarecherche sur plusieurs moteurs) — le premier résultat est la correspondance la plus probable"
     },
     "comparison": {
-      "title": "Comparaison des donnees du fournisseur",
+      "title": "Comparaison des données du fournisseur",
       "description": "Le fournisseur a renvoye des valeurs differentes. Examinez et choisissez lesquelles accepter.",
       "currentValue": "Valeur actuelle",
       "providerValue": "Valeur du fournisseur",
@@ -637,7 +637,7 @@
       "corporate_action": "Il manque le coût unitaire hérité (PRU) : saisissez le coût d’une seule unité, pas le total, pour importer cette ligne.",
       "scalable_unreadable_rows": "{count, plural, one {# ligne n’a pas pu être lue et n’a pas été importée} other {# lignes n’ont pas pu être lues et n’ont pas été importées}} : il manque la date, le montant, la devise, la quantité ou le titre.",
       "scalable_fee_in_amount": "{count, plural, one {# opération contient} other {# opérations contiennent}} les frais dans le montant, comme l’écrivait l’exportateur LibreFolio 1.0.0 : le montant reste celui du fichier, sans frais séparés. Exportez à nouveau avec l’exportateur 1.0.1 ou ultérieur pour voir les frais à part.",
-      "scalable_fees_unknown": "{count, plural, one {# ligne est arrivée} other {# lignes sont arrivées}} sans le détail des frais et des taxes : le montant est celui qu’affiche Scalable, sans frais ni taxes séparés. Exportez à nouveau avec l’option qui inclut les frais et les taxes pour les obtenir.",
+      "scalable_fees_unknown": "{count, plural, one {# ligne est arrivée} other {# lignes sont arrivées}} sans le détail des frais et des impôts : le montant est celui qu’affiche Scalable, sans frais ni impôts séparés. Exportez à nouveau avec l’option qui inclut les frais et les impôts pour les obtenir.",
       "scalable_open_partial": "{count, plural, one {# ordre est exécuté en partie et encore ouvert : il n’est pas encore importé et arrivera exécuté avec un export ultérieur.} other {# ordres sont exécutés en partie et encore ouverts : ils ne sont pas encore importés et arriveront exécutés avec un export ultérieur.}}",
       "scalable_reversal": "{count, plural, one {# ligne annule une opération déjà enregistrée et n’a pas été importée.} other {# lignes annulent des opérations déjà enregistrées et n’ont pas été importées.}} Vérifiez les opérations annulées et corrigez-les à la main.",
       "scalable_not_imported": "{count, plural, one {# ligne n’a pas été importée} other {# lignes n’ont pas été importées}} : transferts de titres, opérations sur titres et types que LibreFolio ne lit pas encore. Ajoutez-les à la main si elles déplacent des titres ou des espèces.",
@@ -677,8 +677,8 @@
       "groupTradesHint": "Enregistrés comme dépôt ou retrait car le fichier ne donne ni quantité ni instrument. S'il s'agissait d'un achat ou d'une vente, corrigez-les maintenant.",
       "groupSplits": "Montants qui en regroupent plusieurs",
       "groupSplitsHint": "Le fichier donne un seul montant pour une opération qui en contient plusieurs : prix du titre, coupon couru, commissions. Si vous avez la contre-valeur nette, vous pouvez la ventiler ici ; sinon, gardez la ligne telle quelle.",
-      "groupCharges": "Frais et taxes sans instrument",
-      "groupChargesHint": "Frais ou taxes sur opérations sur titres que le fichier ne rattache à aucun instrument. Affectez-les au bon titre, ou gardez-les tels quels s'ils concernent le compte.",
+      "groupCharges": "Frais et impôts sans instrument",
+      "groupChargesHint": "Frais ou impôts sur opérations sur titres que le fichier ne rattache à aucun instrument. Affectez-les au bon titre, ou gardez-les tels quels s'ils concernent le compte.",
       "assetNone": "Aucun instrument (frais du courtier)",
       "reset": "Restaurer",
       "resetHint": "Remet la ligne telle qu’elle a été lue dans le fichier, en annulant la réponse donnée ici.",
@@ -1013,11 +1013,11 @@
     "discardChangesWarning": "Vous avez des modifications non enregistrées pour ce courtier. Voulez-vous les annuler ?",
     "loadFailed": "Échec du chargement du courtier",
     "importFiles": "Fichiers d'Importation",
-    "showImportHistory": "Rapports Téléchargés",
+    "showImportHistory": "Rapports téléversés",
     "viewInTransactions": "Voir dans les Transactions",
     "viewInTransactionsHint": "Ouvrir la page Transactions filtrée par ce courtier et les filtres actuels",
     "noImportFiles": "Aucun fichier d'importation",
-    "uploadHint": "Téléchargez des rapports de courtier pour importer des transactions",
+    "uploadHint": "Téléversez des rapports de courtier pour importer des transactions",
     "manageFiles": "Gérer tous les fichiers",
     "sharing": {
       "title": "Partager le Courtier",
@@ -1296,7 +1296,7 @@
     "areaFillDesc": "Dégradé sous la ligne",
     "gridLines": "Lignes de Grille",
     "gridLinesDesc": "Grille horizontale en pointillés",
-    "staleGradient": "Dégradé Données Anciennes",
+    "staleGradient": "Dégradé données obsolètes",
     "staleGradientDesc": "Estomper les anciennes données",
     "overlaySignals": "Signaux Superposés",
     "noSignals": "Aucun signal superposé configuré. Ajoutez-en un ci-dessous.",
@@ -1402,7 +1402,8 @@
       "price": "Axe des prix ({currency})",
       "signal": "Axe {name}",
       "volume": "Axe des volumes"
-    }
+    },
+    "yAxisAuto": "Auto"
   },
   "common": {
     "addMeasure": "Ajouter une mesure",
@@ -1592,7 +1593,7 @@
     "realizedSalesTooltip": "Gain ou perte réalisé sur les ventes de la période, calculé par rapport au prix de revient unitaire.",
     "income": "Dividendes et intérêts",
     "incomeTooltip": "Revenus perçus sur la période via dividendes, intérêts ou coupons.",
-    "feesAndTaxes": "Frais et taxes",
+    "feesAndTaxes": "Frais et impôts",
     "feesLabel": "Commissions",
     "taxesLabel": "Impôts",
     "feesAndTaxesTooltip": "Commissions et impôts enregistrés comme transactions séparées.\n\n🏦 Commissions : {fees}\n🏛️ Impôts : {taxes}",
@@ -1771,7 +1772,13 @@
     "emptyMessage": "Aucune donnée. Utilisez 'Ajouter une ligne' ou 'Importer CSV' pour en ajouter.",
     "editorTipDesktop": "Double-cliquez sur le graphique pour aller à cette date",
     "editorTipMobile": "Appui long sur le graphique pour aller à cette date",
-    "saveFailed": "Échec de l’enregistrement : {error}"
+    "saveFailed": "Échec de l’enregistrement : {error}",
+    "status": {
+      "original": "Original",
+      "edited": "Modifié",
+      "deleted": "Supprimé",
+      "appended": "Nouveau"
+    }
   },
   "datePicker": {
     "presets": {
@@ -1779,7 +1786,11 @@
       "mtd": "MTD",
       "qtd": "QTD",
       "ytd": "YTD",
-      "max": "Tout"
+      "max": "Tout",
+      "days": "{n}J",
+      "weeks": "{n}S",
+      "months": "{n}M",
+      "years": "{n}A"
     },
     "from": "Du",
     "to": "Au",
@@ -1838,7 +1849,7 @@
     "fxBannerContext": "pour les événements dividendes/cash"
   },
   "fileStatus": {
-    "uploaded": "Téléchargé",
+    "uploaded": "Téléversé",
     "parsed": "Analysé",
     "failed": "Échoué"
   },
@@ -2140,7 +2151,7 @@
     "defaultCurrencyHint": "Devise utilisée par défaut pour les nouvelles transactions et calculs",
     "themeHint": "Choisissez votre thème préféré",
     "category": "Catégorie",
-    "avatarHint": "Cliquez pour télécharger une photo de profil",
+    "avatarHint": "Cliquez pour téléverser une photo de profil",
     "selectAvatar": "Sélectionner un Avatar",
     "global": {
       "scheduler": {
@@ -2395,7 +2406,7 @@
     },
     "costBasisOverride": {
       "tooltip": "Override du prix de revient unitaire. Si vide, calculé automatiquement à partir des achats lors de la sauvegarde. Remplacer pour Exit Tax, héritage ou règles fiscales particulières. Utilisez le sélecteur Total/Par unité ci-dessous pour choisir comment saisir ce montant.",
-      "warningAdjustment": "Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Si ces parts n’ont rien coûté (un fractionnement ou un don), saisissez 0."
+      "warningAdjustment": "Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Saisissez ce que ces parts ont coûté : 0 pour une division d’actions, le coût de base d’origine du donateur pour un don."
     },
     "wacPreview": {
       "calculating": "Calcul en cours...",
@@ -2595,8 +2606,8 @@
     "pendingUploadsMessage": "Vous avez des fichiers sélectionnés pour le téléversement. Voulez-vous les abandonner?",
     "filesToUpload": "Fichiers à téléverser",
     "editImage": "Modifier l'image",
-    "editAvatar": "Télécharger l'avatar",
-    "cropAndUpload": "Recadrer et télécharger",
+    "editAvatar": "Téléverser l'avatar",
+    "cropAndUpload": "Recadrer et téléverser",
     "aspectRatio": "Format",
     "outputSize": "Sortie",
     "outputPreset": "Préréglage de sortie",
@@ -2607,8 +2618,8 @@
     "crop": "Recadrer",
     "editFile": "Modifier le fichier",
     "rename": "Renommer",
-    "renameAndUpload": "Renommer et télécharger",
-    "editIcon": "Télécharger l'icône",
+    "renameAndUpload": "Renommer et téléverser",
+    "editIcon": "Téléverser l'icône",
     "scale": "Échelle",
     "selectAsset": "Sélectionner une Image",
     "existingFiles": "Existants",
@@ -3013,7 +3024,7 @@
         },
         "performance_flows": {
           "display": "Performance et flux du portefeuille",
-          "description": "Performance, contributeurs, flux, revenus, frais, taxes et rapprochement."
+          "description": "Performance, contributeurs, flux, revenus, frais, impôts et rapprochement."
         },
         "technical_summary": {
           "display": "Synthèse technique du portefeuille",
@@ -3784,8 +3795,8 @@
           "truncation": "Déclaré sur {declared} jours, appliqué sur {applied} : le cône répond à la question la plus courte."
         },
         "replayTotal": "Cette composition aurait terminé la période à {percent} {amount}",
-        "shockShowDetail": "Afficher le choc par compartiment",
-        "shockHideDetail": "Masquer le choc par compartiment",
+        "shockShowDetail": "Afficher le choc par catégorie",
+        "shockHideDetail": "Masquer le choc par catégorie",
         "shockTotal": "Ce scénario déplacerait le périmètre de {percent} {amount}",
         "shockCoverage": "Seuls {percent} du périmètre ont pu être classés : le total ne parle que de cette part.",
         "replayPeriod": "Période",

@@ -14,7 +14,7 @@ $$
 
 !!! example
 
-    Se EUR/USD passa da 1.10 a 1.14:
+    Se EUR/USD passa da 1,10 a 1,14:
 
     $$R = \frac{1.14 - 1.10}{1.10} = 0.0364 = 3.64\%$$
 
@@ -73,7 +73,7 @@ Questo è ciò che visualizza lo [strumento Misure](../../user/fx/detail/measure
 
 !!! example
 
-    EUR/USD passa da 1.10 a 1.14 in 90 giorni:
+    EUR/USD passa da 1,10 a 1,14 in 90 giorni:
 
     $$R_{annual} = \left(\frac{1.14}{1.10}\right)^{365/90} - 1 = (1.0364)^{4.056} - 1 \approx 15.5\%$$
 
@@ -98,7 +98,7 @@ Questa linearità è uno dei principali vantaggi dei rendimenti logaritmici nell
 | **Annualizzazione** | $(1+R)^{365/d} - 1$ | $r \times 365/d$ |
 | **Rendimenti di portafoglio** | La somma ponderata funziona ✅ | La somma ponderata non funziona ❌ |
 | **Serie temporali** | Non additivo ❌ | Additivo ✅ |
-| **Interpretazione** | "Ho guadagnato il 5%" | "Il tasso di crescita logaritmico era 0.0488" |
+| **Interpretazione** | "Ho guadagnato il 5%" | "Il tasso di crescita logaritmico era 0,0488" |
 
 !!! tip "Quando usare quale?"
 
@@ -107,13 +107,13 @@ Questa linearità è uno dei principali vantaggi dei rendimenti logaritmici nell
 
 ---
 
-## 🔁 Rendimento rolling {: #rolling-return }
+## 🔁 Rendimento mobile {: #rolling-return }
 
-Un **rendimento rolling** è il rendimento semplice delle sezioni precedenti, misurato su una finestra mobile lungo la serie: un valore per data, ciascuno dei quali guarda indietro sullo stesso intervallo. Due funzionalità della pagina di un asset lo calcolano, e differiscono nel modo in cui viene contato l'intervallo — in sedute o in giorni di calendario. Il pulsante guida 📖 sulla scheda del segnale **Rolling Return** apre questa pagina.
+Un **rendimento mobile** è il rendimento semplice delle sezioni precedenti, misurato su una finestra mobile lungo la serie: un valore per data, ciascuno dei quali guarda indietro sullo stesso intervallo. Due funzionalità della pagina di un asset lo calcolano, e differiscono nel modo in cui viene contato l'intervallo — in sedute o in giorni di calendario. Il pulsante guida 📖 sulla scheda del segnale **Rendimento mobile** apre questa pagina.
 
 ### 📊 Su una finestra di sedute {: #rolling-return-sessions }
 
-Il segnale **Rolling Return** del pannello Segnali, nella famiglia di rischio, legge la serie preparata dei rendimenti dell'asset, nella valuta del grafico: un rendimento semplice per **seduta**, un giorno in cui l'asset ha una quotazione propria. Un prezzo memorizzato in un fine settimana o in un giorno festivo di mercato che ripete solo la chiusura precedente non è una seduta. Con $V_t$ il valore alla seduta $t$ e $r_t = V_t / V_{t-1} - 1$, il rendimento rolling su una finestra di $w$ sedute è
+Il segnale **Rendimento mobile** del pannello Segnali, nella famiglia di rischio, legge la serie preparata dei rendimenti dell'asset, nella valuta del grafico: un rendimento semplice per **seduta**, un giorno in cui l'asset ha una quotazione propria. Un prezzo memorizzato in un fine settimana o in un giorno festivo di mercato che ripete solo la chiusura precedente non è una seduta. Con $V_t$ il valore alla seduta $t$ e $r_t = V_t / V_{t-1} - 1$, il rendimento mobile su una finestra di $w$ sedute è
 
 $$
 R_t^{(w)} = \prod_{k=0}^{w-1} \left(1 + r_{t-k}\right) - 1 = \frac{V_t}{V_{t-w}} - 1
@@ -123,13 +123,13 @@ calcolato tramite logaritmi, $R_t^{(w)} = \exp\left(\sum_{k=0}^{w-1} \ln(1 + r_{
 
 ### 🗓️ Su una finestra di giorni di calendario {: #rolling-return-calendar }
 
-La modalità **Rolling Return** del grafico misura ogni data rispetto alla chiusura esattamente $N$ giorni di calendario prima. Con $\hat{P}(d)$ la chiusura determinata del giorno di calendario $d$ — l'ultima chiusura disponibile a o prima di $d$, convertita nella valuta del grafico, in modo che un fine settimana o un giorno festivo legga la seduta precedente — il rendimento nel giorno $d$ è
+La modalità **Rendimento mobile** del grafico misura ogni data rispetto alla chiusura esattamente $N$ giorni di calendario prima. Con $\hat{P}(d)$ la chiusura determinata del giorno di calendario $d$ — l'ultima chiusura disponibile a o prima di $d$, convertita nella valuta del grafico, in modo che un fine settimana o un giorno festivo legga la seduta precedente — il rendimento nel giorno $d$ è
 
 $$
 R^{[N]}(d) = \frac{\hat{P}(d)}{\hat{P}(d - N)} - 1
 $$
 
-Le preimpostazioni **1W**, **1M**, **3M** e **1Y** impostano $N$ a 7, 30, 90 e 365 giorni; una finestra personalizzata conta 7 giorni a settimana, 30 al mese e 365 all'anno. Un punto viene lasciato vuoto, mai stimato, quando una delle estremità non ha una chiusura determinata o una chiusura non positiva; quando nessun punto dell'intervallo può essere calcolato, il risultato non è disponibile. Ogni punto riporta la data di riferimento richiesta e le date del prezzo e del tasso di cambio effettivamente utilizzati — vedi il [Grafico interattivo](../../user/assets/detail/chart.md#rolling-return).
+Le preimpostazioni **1S**, **1M**, **3M** e **1A** impostano $N$ a 7, 30, 90 e 365 giorni; una finestra personalizzata conta 7 giorni a settimana, 30 al mese e 365 all'anno. Un punto viene lasciato vuoto, mai stimato, quando una delle estremità non ha una chiusura determinata o una chiusura non positiva; quando nessun punto dell'intervallo può essere calcolato, il risultato non è disponibile. Ogni punto riporta la data di riferimento richiesta e le date del prezzo e del tasso di cambio effettivamente utilizzati — vedi il [Grafico interattivo](../../user/assets/detail/chart.md#rolling-return).
 
 ### ⚖️ Sedute o giorni di calendario {: #sessions-or-calendar-days }
 
@@ -142,7 +142,7 @@ Entrambe le misure sono rendimenti semplici solo sul prezzo: nessuna aggiunge di
 | Confronto tra due asset | uguale $w$ può significare intervalli diversi | uguale $N$ significa sempre lo stesso intervallo |
 | Un giorno di mercato chiuso a una delle estremità | non può verificarsi: si usano solo le sedute | ricondotto all'ultima chiusura precedente |
 
-Per confrontare un rendimento rolling con uno su un intervallo diverso, annualizzalo con la formula CAGR sopra, dove $d$ è l'intervallo in giorni di calendario — tenendo presente la trappola sui periodi molto brevi di seguito.
+Per confrontare un rendimento mobile con uno su un intervallo diverso, annualizzalo con la formula CAGR sopra, dove $d$ è l'intervallo in giorni di calendario — tenendo presente la trappola sui periodi molto brevi di seguito.
 
 ---
 
@@ -172,6 +172,6 @@ Per un approfondimento su come funzionano queste metriche, perché differiscono 
 
 ## ⚠️ Insidie
 
-1. **Periodi molto brevi**: annualizzare un rendimento di 3 giorni può produrre cifre fuorvianti (ad es., un movimento dello 0.1% in 3 giorni → 12.5% annualizzato)
+1. **Periodi molto brevi**: annualizzare un rendimento di 3 giorni può produrre cifre fuorvianti (ad es., un movimento dello 0,1% in 3 giorni → 12,5% annualizzato)
 2. **Prezzi negativi**: i rendimenti logaritmici non sono definiti per valori negativi — non è un problema per i tassi di cambio
 3. **Frequenza di capitalizzazione**: il CAGR presuppone la capitalizzazione continua; gli strumenti del mondo reale possono capitalizzare giornalmente, mensilmente o trimestralmente

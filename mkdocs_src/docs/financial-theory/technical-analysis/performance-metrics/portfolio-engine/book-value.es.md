@@ -2,7 +2,7 @@
 
 ## 💡 ¿Qué es el Valor contable?
 
-**El Valor contable** representa el coste contable histórico de su cartera: coste base abierto más reservas de efectivo y valor contable en tránsito. No fluctúa con los precios de mercado y es distinto de [Resolución de precios](price-resolution.md).
+**El Valor contable** representa el coste contable histórico de tu cartera: coste base abierto más reservas de efectivo y valor contable en tránsito. No fluctúa con los precios de mercado y es distinto de [Resolución de precios](price-resolution.md).
 
 ---
 

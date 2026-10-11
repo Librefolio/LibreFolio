@@ -1,6 +1,6 @@
 # 📊 Grafici
 
-Sotto le schede KPI, il grafico **Crescita del portafoglio** e il pannello **Allocazione asset** mostrano dove è stato il tuo portafoglio e di cosa è composto. Entrambi seguono l'intervallo temporale e il filtro broker della Dashboard, e la pagina di un broker li mostra per quel solo broker.
+Sotto le schede KPI, il grafico **Crescita del portafoglio** e il pannello **Allocazione Patrimoniale** mostrano dove è stato il tuo portafoglio e di cosa è composto. Entrambi seguono l'intervallo temporale e il filtro broker della Dashboard, e la pagina di un broker li mostra per quel solo broker.
 
 ---
 
@@ -30,14 +30,14 @@ Il grafico ricorda la tua ultima vista, inclusa la sotto-vista P&L, in questo br
 | Elemento | Colore | Significato |
 |---------|-------|---------|
 | Area — **Valore di acquisto** | Blu | Quanto ti sono costate le posizioni che detieni (costo medio × quantità) |
-| Area — **Returns** | Smeraldo | Rendimenti detenuti come liquidità (dividendi, interessi, plusvalenze realizzate non ancora reinvestite) |
-| Area — **Capital** | Grigio-verde | Depositi non ancora investiti, detenuti come liquidità |
+| Area — **Rendimento** | Smeraldo | Rendimenti detenuti come liquidità (dividendi, interessi, plusvalenze realizzate non ancora reinvestite) |
+| Area — **Capitale** | Grigio-verde | Depositi non ancora investiti, detenuti come liquidità |
 | Linea — **[Valore netto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Verde scuro pieno | Valore totale del portafoglio ai prezzi di mercato correnti |
 | Linea — **[Capitale versato](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Grigio tratteggiato | Capitale esterno netto conferito nel tempo |
 
-**Il divario tra le due linee è il tuo Total P&L**: ogni guadagno mai ottenuto (non realizzato, realizzato, interessi e dividendi) meno commissioni e imposte. Il tooltip mostra entrambe le linee, il Total P&L in verde o rosso e la ripartizione: **Assets at Cost** (l'area blu, inclusi gli asset che si spostano tra i tuoi broker), **Returns** e **Capital**.
+**Il divario tra le due linee è il tuo P&L Totale**: ogni guadagno mai ottenuto (non realizzato, realizzato, interessi e dividendi) meno commissioni e imposte. Il tooltip mostra entrambe le linee, il P&L Totale in verde o rosso e la ripartizione: **Costo degli asset** (l'area blu, inclusi gli asset che si spostano tra i tuoi broker), **Rendimento** e **Capitale**.
 
-**Gli asset valutati al loro prezzo di acquisto**, come i prestiti P2P senza un prezzo live, mantengono il NAV vicino al Valore di acquisto, quindi il divario può essere sottile: leggi il **Total P&L** nel tooltip.
+**Gli asset valutati al loro prezzo di acquisto**, come i prestiti P2P senza un prezzo live, mantengono il NAV vicino al Valore di acquisto, quindi il divario può essere sottile: leggi il **P&L Totale** nel tooltip.
 
 🔗 **Teoria**: [Capitale versato & Total P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) · [Cash Decomposition](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
 
@@ -55,7 +55,7 @@ Il divario tra MWRR e TWRR è l'[effetto timing](../../financial-theory/technica
 
 ### 💰 P&L — il denaro che hai guadagnato {: #pnl-mode }
 
-**P&L** traccia il tuo **Total P&L** (NAV meno capitale versato): quanto denaro ha effettivamente guadagnato il portafoglio dall'inizio. Lo zoom non fa ripartire il conteggio da zero.
+**P&L** traccia il tuo **P&L Totale** (NAV meno capitale versato): quanto denaro ha effettivamente guadagnato il portafoglio dall'inizio. Lo zoom non fa ripartire il conteggio da zero.
 
 Un secondo interruttore, in alto a sinistra nel grafico, sceglie come disegnarlo (solo icone su un grafico stretto):
 
@@ -63,7 +63,7 @@ Un secondo interruttore, in alto a sinistra nel grafico, sceglie come disegnarlo
 |------|---------------|------------------------|
 | **Linea** | P&L accumulato come singola linea | Come si è mosso il mio risultato nel tempo? |
 | **Candele** | Una candela per periodo, da un giorno a un anno | Quanto è stata ampia l'oscillazione all'interno di ogni periodo? |
-| **Entrate** | Barre della liquidità che si è effettivamente mossa | Da dove è arrivato il denaro e quanto mi è costato? |
+| **Proventi** | Barre della liquidità che si è effettivamente mossa | Da dove è arrivato il denaro e quanto mi è costato? |
 
 #### Linea — P&L accumulato {: #pnl-line }
 
@@ -76,15 +76,24 @@ Un secondo interruttore, in alto a sinistra nel grafico, sceglie come disegnarlo
   </div>
 </div>
 
-**Linee per broker.** Con due o più broker nell'ambito, ciascun broker ottiene una linea tratteggiata e una riga nel tooltip con la sua quota del totale; le quote sommano al totale ogni giorno. Una quota non è la performance del broker stesso: il denaro in transito conta per il broker da cui è partito, quindi la linea di un broker può saltare in una data di trasferimento. Con un solo broker, o sulla pagina di un broker, viene disegnato solo il totale.
+**Linee per broker.** Con due o più broker nell'ambito, ciascun broker ottiene una linea tratteggiata e una riga nel tooltip con la sua quota del totale; le quote sommano al totale ogni giorno. La linea di un broker è il P&L prodotto mentre il valore si trovava presso quel broker: spostare denaro o titoli fra due dei tuoi broker non è né un guadagno né una perdita, quindi nessuna linea salta quando arriva un trasferimento.
+
+- **In transito** — finché il trasferimento non arriva, il valore e le sue variazioni di prezzo o di tasso di cambio restano al broker da cui è partito.
+- **Quote di proprietà diverse** — quando i due broker hanno [quote di proprietà](../brokers/sharing.md) diverse, la linea che riceve conserva un gradino nel giorno di arrivo: lo stesso gradino che mostra il totale.
+- **Nessun valore nel giorno di arrivo** — se il titolo non ha ancora un prezzo, o manca un tasso di cambio, il salto resta: nessun valore viene inventato.
+- **Broker fuori dalla vista** — sulla pagina di un broker, o con il filtro broker attivo, i titoli inviati a un broker fuori dalla vista, o ricevuti da esso, contano come capitale al loro valore di mercato di quel giorno, non come guadagno o perdita; il denaro conta come un deposito o un prelievo. Lo stesso vale per la metà che resta quando l'altro broker di un trasferimento viene eliminato.
+
+Con un solo broker, o sulla pagina di un broker, viene disegnato solo il totale.
+
+🔗 **Teoria**: [Trasferimenti interni nelle linee per broker](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
 
 #### Candele — l'oscillazione all'interno del periodo {: #pnl-candles }
 
 Ogni periodo della [larghezza che scegli](#pnl-width) diventa una **candela** fatta di valori di P&L, non di prezzi. La sua **chiusura** è esattamente il Total P&L che la vista **Linea** mostra per quel giorno.
 
 <div class="lf-screenshot-carousel" style="margin: 1.5rem 0 2.5rem 0;">
-  <div class="lf-screenshot-carousel-item is-active chart-crop-container" alt="Il grafico della crescita del portafoglio in modalità P&L, vista Candele a 3D: le candele sintetiche di P&L, i pulsanti di larghezza da 3D a 6M nell'angolo in alto a destra del grafico, le etichette dei periodi sull'asse e la dicitura Synthetic sotto il grafico">
-     <img class="gallery-img" data-category="dashboard" data-name="growth-pnl-candles" alt="Il grafico della crescita del portafoglio in modalità P&L, vista Candele a 3D: le candele sintetiche di P&L, i pulsanti di larghezza da 3D a 6M nell'angolo in alto a destra del grafico, le etichette dei periodi sull'asse e la dicitura Synthetic sotto il grafico">
+  <div class="lf-screenshot-carousel-item is-active chart-crop-container" alt="Il grafico della crescita del portafoglio in modalità P&L, vista Candele a 3G: le candele sintetiche di P&L, i pulsanti di larghezza da 3G a 6M nell'angolo in alto a destra del grafico, le etichette dei periodi sull'asse e la dicitura Synthetic sotto il grafico">
+     <img class="gallery-img" data-category="dashboard" data-name="growth-pnl-candles" alt="Il grafico della crescita del portafoglio in modalità P&L, vista Candele a 3G: le candele sintetiche di P&L, i pulsanti di larghezza da 3G a 6M nell'angolo in alto a destra del grafico, le etichette dei periodi sull'asse e la dicitura Synthetic sotto il grafico">
   </div>
 </div>
 
@@ -98,15 +107,15 @@ Aspettati anche:
 - **Corpi sottili, ombre lunghe** — apertura e chiusura sono di solito vicine mentre l'intervallo sommato è ampio.
 - **Lacune** — un giorno in cui un asset detenuto non poteva essere valutato non ha candela, invece di una stimata.
 
-Il tooltip fornisce il periodo, **Open**, **Close**, **High** e **Low**, più una riga per broker quando due o più sono nell'ambito.
+Il tooltip fornisce il periodo, **Apertura**, **Chiusura**, **Massimo** e **Minimo**, più una riga per broker quando due o più sono nell'ambito.
 
-#### Entrate — la liquidità che si è effettivamente mossa {: #pnl-income }
+#### Proventi — la liquidità che si è effettivamente mossa {: #pnl-income }
 
-**Entrate** mette da parte le valutazioni e traccia i tuoi flussi di cassa reali. Ogni barra è la **somma** dei flussi del suo periodo, in massimo tre colonne:
+**Proventi** mette da parte le valutazioni e traccia i tuoi flussi di cassa reali. Ogni barra è la **somma** dei flussi del suo periodo, in massimo tre colonne:
 
 | Colonna | Barre | Cosa rappresenta |
 |--------|------|--------------------|
-| Entrate e costi | **Dividendo** · **Interesse** sopra lo zero, **Commissioni e imposte** sotto lo zero | Ciò che il portafoglio ti ha pagato e ciò che l'attività ti è costata |
+| Proventi e costi | **Dividendo** · **Interesse** sopra lo zero, **Costi e imposte** sotto lo zero | Ciò che il portafoglio ti ha pagato e ciò che l'attività ti è costata |
 | Depositi | **Deposito** | Denaro fresco che hai versato (i prelievi non vengono disegnati) |
 | Acquisti | **Valore di acquisto**, in due zone: **Nuovo capitale** in basso, **Reinvestito** sopra | Ciò che hai speso per gli acquisti, suddiviso per provenienza del denaro |
 
@@ -128,21 +137,21 @@ Come leggerlo:
 
     Le barre sono un **flusso**: ciò che hai speso per gli acquisti in ciascun periodo. La riga **Valore di acquisto** della [scheda Patrimonio netto](kpi-cards.md#card-3-net-worth) è un **livello**: quanto ti sono costate le posizioni che detieni ancora alla data finale. Le vendite e gli acquisti precedenti contano nel KPI ma non hanno una barra.
 
-#### Larghezza delle candele — da 1D a 1Y {: #pnl-width }
+#### Larghezza delle candele — da 1G a 1A {: #pnl-width }
 
-In **Candele** e **Entrate**, i pulsanti nell'angolo in alto a destra del grafico, da **1D** a **1Y**, impostano quanto tempo copre una candela, o un gruppo di barre. Il grafico mostra comunque l'intero intervallo, e lo zoom non cambia mai la larghezza.
+In **Candele** e **Proventi**, i pulsanti nell'angolo in alto a destra del grafico, da **1G** a **1A**, impostano quanto tempo copre una candela, o un gruppo di barre. Il grafico mostra comunque l'intero intervallo, e lo zoom non cambia mai la larghezza.
 
-- **Periodi di calendario.** **1W** va da lunedì a domenica, **1M** è un mese di calendario, **3M** un trimestre, **6M** un semestre, **1Y** un anno; **3D** e **2W** sono blocchi fissi di giorni.
+- **Periodi di calendario.** **1S** va da lunedì a domenica, **1M** è un mese di calendario, **3M** un trimestre, **6M** un semestre, **1A** un anno; **3G** e **2S** sono blocchi fissi di giorni.
 - **Etichette dell'asse.** Ogni etichetta indica l'inizio del suo periodo, anche se l'intervallo lo copre solo in parte; mesi e anni compaiono solo dove cambiano, e le etichette affollate si inclinano o si diradano.
-- **Vengono offerte solo le larghezze** che si adattano al grafico e all'intervallo; **Entrate** parte da **1W**.
-- **Da dove inizia.** **Candele** prende la larghezza più fine disponibile; **Entrate** si apre su **1M**, o sulla larghezza più vicina disponibile, ogni volta che vi entri. Ricaricare la pagina reimposta la larghezza.
+- **Vengono offerte solo le larghezze** che si adattano al grafico e all'intervallo; **Proventi** parte da **1S**.
+- **Da dove inizia.** **Candele** prende la larghezza più fine disponibile; **Proventi** si apre su **1M**, o sulla larghezza più vicina disponibile, ogni volta che vi entri. Ricaricare la pagina reimposta la larghezza.
 - **I periodi parziali sono attenuati.** Un periodo in cui l'intervallo inizia a metà, o un ultimo periodo tagliato corto da un intervallo che termina nel passato, viene disegnato attenuato, e il suo tooltip dice *Partial: N of M days*. Altrimenti, il periodo in corso viene disegnato per intero, con *In progress: N of M days*.
 
 ---
 
 ## 🥧 Pannello Allocazione {: #allocation-panel }
 
-Il pannello **Allocazione asset** mostra come è suddiviso il tuo portafoglio, oggi e nel tempo. Scegli una dimensione con le schede **By Type**, **By Sector** e **Geographic**, e una vista con i due pulsanti nell'angolo in alto a destra: il grafico a torta per **Now**, il grafico ad area per **History**.
+Il pannello **Allocazione Patrimoniale** mostra come è suddiviso il tuo portafoglio, oggi e nel tempo. Scegli una dimensione con le schede **Per Tipo**, **Per Settore** e **Geografica**, e una vista con i due pulsanti nell'angolo in alto a destra: il grafico a torta per **Attuale**, il grafico ad area per **Storico**.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-alloc" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active alloc-crop-container" data-title="Per tipo (attuale)" alt="Allocazione per tipo — Attuale">
@@ -169,23 +178,23 @@ Il pannello **Allocazione asset** mostra come è suddiviso il tuo portafoglio, o
 
 | Scheda | Cosa mostra |
 |-----|--------------|
-| **By Type** | Cos'è ciascuna posizione — il suo [asset type](../../financial-theory/instruments/asset-types/index.md), come Stock, ETF, Bond, Fund o Crypto — più **Liquidity** per la tua liquidità. I sottotipi contano con la loro [famiglia](../../financial-theory/instruments/asset-types/index.md#families-and-subtypes), ad esempio un **Equity ETF** con gli altri tuoi ETF. |
-| **By Sector** | Settore industriale: 💻 Technology, 🏦 Financials, 💊 Health Care, ecc. |
-| **Geographic** | Dove sono investiti i tuoi asset, paese per paese, secondo la distribuzione geografica di ciascun asset |
+| **Per Tipo** | Cos'è ciascuna posizione — il suo [tipo di asset](../../financial-theory/instruments/asset-types/index.md), come Azione, ETF, Obbligazione, Fondo o Cripto — più **Liquidità** per la tua liquidità. I sottotipi contano con la loro [famiglia](../../financial-theory/instruments/asset-types/index.md#families-and-subtypes), ad esempio un **ETF azionario** con gli altri tuoi ETF. |
+| **Per Settore** | Settore industriale: 💻 Tecnologia, 🏦 Finanziari, 💊 Sanità, ecc. |
+| **Geografica** | Dove sono investiti i tuoi asset, paese per paese, secondo la distribuzione geografica di ciascun asset |
 
 ### 🕰️ Now e History
 
-- **Now** — l'allocazione nell'ultimo giorno dell'intervallo selezionato: un grafico ad anello per **By Type** e **By Sector**, una mappa del mondo per **Geographic**. Passa il mouse su una fetta o un paese per la sua percentuale e il suo importo. Per tipo, il grafico ad anello può avere [due anelli](#allocation-type-rings).
-- **History** — un grafico ad area impilata al 100% di come è cambiata l'allocazione nel tempo, utile per vedere il ribilanciamento. Per tipo, ogni famiglia è un'area; passando il mouse su una data si elencano i suoi sottotipi, come *Generic ETF* e *Equity ETF*.
+- **Attuale** — l'allocazione nell'ultimo giorno dell'intervallo selezionato: un grafico ad anello in **Per Tipo** e **Per Settore**, una mappa del mondo in **Geografica**. Passa il mouse su una fetta o un paese per la sua percentuale e il suo importo. Per tipo, il grafico ad anello può avere [due anelli](#allocation-type-rings).
+- **Storico** — un grafico ad area impilata al 100% di come è cambiata l'allocazione nel tempo, utile per vedere il ribilanciamento. Per tipo, ogni famiglia è un'area; passando il mouse su una data si elencano i suoi sottotipi, come *ETF generico* e *ETF azionario*.
 
 Il pannello ricorda la vista e la scheda in questo browser, per ciascun utente, e le condivide con le pagine dei broker.
 
 ### 🍩 Due anelli per tipo {: #allocation-type-rings }
 
-Non appena detieni un asset con un sottotipo, come un **Equity ETF** o **Real estate crowdfunding**, il grafico ad anello della vista **Now** di **By Type** disegna due anelli:
+Non appena detieni un asset con un sottotipo, come un **ETF azionario** o **Crowdfunding immobiliare**, il grafico ad anello della vista **Attuale** di **Per Tipo** disegna due anelli:
 
-- **Anello interno** — una fetta per famiglia, con la sua icona dove c'è spazio: tutti i tuoi ETF (l'**ETF** generico e ogni sottotipo) insieme, **Crowdfund** con **Real estate crowdfunding**, e ogni altro tipo, **Liquidity** inclusa, per conto proprio. Queste sono le famiglie che il [menu Type](../assets/create-edit.md#choosing-the-asset-type) dell'asset raggruppa.
-- **Anello esterno** — più sottile e distanziato, divide ciascuna famiglia che contiene un sottotipo nei suoi membri, in sfumature del colore della famiglia, con didascalia dove c'è spazio. Il membro generico si legge *Generic ETF* o *Generic Crowdfund*.
+- **Anello interno** — una fetta per famiglia, con la sua icona dove c'è spazio: tutti i tuoi ETF (l'**ETF** generico e ogni sottotipo) insieme, **Crowdfunding** con **Crowdfunding immobiliare**, e ogni altro tipo, **Liquidità** inclusa, per conto proprio. Queste sono le famiglie che il [menu Tipo](../assets/create-edit.md#choosing-the-asset-type) dell'asset raggruppa.
+- **Anello esterno** — più sottile e distanziato, divide ciascuna famiglia che contiene un sottotipo nei suoi membri, in sfumature del colore della famiglia, con didascalia dove c'è spazio. Il membro generico si legge *ETF generico* o *Crowdfunding generico*.
 - **Passa il mouse** su una fetta per la sua quota e il suo importo; sull'anello esterno, un'ultima riga che inizia con **↳** indica la quota dell'intera famiglia.
 - **La legenda** elenca solo le famiglie: cliccandone una si nascondono le sue fette su entrambi gli anelli.
 
@@ -193,7 +202,7 @@ Senza alcun sottotipo, il grafico ad anello resta a un solo anello.
 
 ### 💵 La liquidità come Liquidity
 
-La tua liquidità è la fetta **Liquidity** di **By Type** e **By Sector**; la mappa **Geographic** la esclude, poiché la liquidità non appartiene a nessun paese. Con il filtro broker attivo, il pannello mostra solo gli asset e la liquidità dei broker selezionati.
+La tua liquidità è la fetta **Liquidità** di **Per Tipo** e **Per Settore**; la mappa **Geografica** la esclude, poiché la liquidità non appartiene a nessun paese. Con il filtro broker attivo, il pannello mostra solo gli asset e la liquidità dei broker selezionati.
 
 ---
 

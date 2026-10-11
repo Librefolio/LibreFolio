@@ -14,8 +14,8 @@ par leurs noms : il n'y a rien à mapper à la main.
 
 1. **Préparez le fichier.** Enregistrez-le au format `.csv` (depuis Excel, enregistrez une copie au format CSV). Sa première ligne nomme les
    colonnes, comme dans la [référence des colonnes](#column-reference) ; les autres colonnes sont ignorées.
-2. **Téléchargez-le** dans l'**[Assistant d'importation](how-to.md)** et affectez-le à son courtier.
-3. **Vérifiez le plugin** dans **Sélectionner les fichiers** : si **CSV générique** n'est pas déjà sélectionné, choisissez-le dans
+2. **Téléversez-le** dans l'**[Assistant d'importation](how-to.md)** et affectez-le à son courtier.
+3. **Vérifiez le plugin** dans **Sélectionner** : si **CSV générique** n'est pas déjà sélectionné, choisissez-le dans
    la colonne **Plugin** du fichier.
 4. **Analyser et vérifier.** Chaque ligne devient une transaction.
 
@@ -29,10 +29,10 @@ par leurs noms : il n'y a rien à mapper à la main.
 ### 🧯 Si quelque chose ne va pas
 
 - **« required column 'date' not found »** (ou `type`) : la première ligne ne contient pas cette colonne, ou la nomme
-  différemment. Ajoutez-la, ou renommez la colonne avec un nom accepté, et téléchargez à nouveau le fichier.
+  différemment. Ajoutez-la, ou renommez la colonne avec un nom accepté, et téléversez à nouveau le fichier.
 - **Une ligne manque** : les lignes que LibreFolio ne peut pas lire — un type inconnu, une date dans un format inconnu,
   une `currency` vide — sont ignorées et listées parmi les avertissements de l'étape **Analyser** ; les lignes avec
-  un signe incorrect apparaissent comme des problèmes de validation. Corrigez-les dans le fichier et téléchargez-le à nouveau.
+  un signe incorrect apparaissent comme des problèmes de validation. Corrigez-les dans le fichier et téléversez-le à nouveau.
 - **L'espace de travail groupé demande un coût sur une ligne `ADJUSTMENT`** : saisissez le coût d'**une** unité,
   et non la valeur totale de la position.
 

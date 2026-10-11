@@ -34,7 +34,7 @@ Ejemplos de importación: las instantáneas `patrimonio` de Intesa Sanpaolo usan
 
 !!! note "Promover a Transferencia"
 
-    Dos filas de `ADJUSTMENT` con **cantidades opuestas**, **mismo activo** y **brókeres diferentes** pueden ser **promovidas** a un par de Transferencia de Activos. Esto es útil cuando inicialmente registró ajustes separados y posteriormente desea vincularlos como una transferencia.
+    Dos filas de `ADJUSTMENT` con **cantidades opuestas**, **mismo activo** y **brókeres diferentes** pueden ser **promovidas** a un par de Transferencia de Activos. Esto es útil cuando inicialmente registraste ajustes separados y posteriormente deseas vincularlos como una transferencia. Ninguna de las dos filas puede estar vinculada a un evento del activo, por ejemplo un desdoblamiento: una transferencia no puede llevar ese vínculo, así que LibreFolio no sugiere ni acepta esa promoción.
 
 ---
 
@@ -42,13 +42,15 @@ Ejemplos de importación: las instantáneas `patrimonio` de Intesa Sanpaolo usan
 
 Los ajustes con cantidad positiva **incrementan** el recuento de lotes (FIFO). El coste base de los lotes creados mediante ajustes depende de si se proporciona una **Anulación del coste base (Cost Basis Override)**:
 
-- **Con anulación**: el valor especificado se utiliza como el **costo de adquisición por unidad** (PMC — Precio Medio de Compra)
-- **Sin anulación**: el lote se crea con costo cero (adquisición gratuita — p. ej. regalos, airdrops)
+- **Con anulación**: el valor especificado se utiliza como el **coste de adquisición por unidad** (PMC — Precio Medio de Compra); una anulación de **cero** registra una adquisición gratuita, como un airdrop
+- **Sin anulación**: el lote FIFO se abre a coste cero, pero el coste medio (PMC) trata el coste como **desconocido**, no gratuito: las unidades se suman a la posición sin coste, su PMC queda incompleto hasta que se cierra la posición, el Panel muestra su coste medio y su P&L no realizado como no disponibles, y un aviso de calidad de datos nombra el activo (ver [Anulación del coste base](../../technical-analysis/performance-metrics/weighted-average-cost.md#cost-basis-override))
+
+Un ajuste positivo no se puede guardar sin un coste base: introduce uno, o elige **Auto**, que guarda el coste medio de la posición a la que se suman las unidades (cero si todavía no tiene ninguna). Dos tipos de filas pueden seguir sin él: un ajuste vinculado a un **desdoblamiento**, que Auto guarda sin coste base porque el desdoblamiento conserva el coste ya mantenido y lo reparte sobre la nueva cantidad, y las filas guardadas antes de que el coste base fuera obligatorio.
 
 !!! info "Valor por unidad"
 
     La Anulación del coste base es el costo promedio **por una sola unidad** del activo.
-    Para obtener el costo total del bloque transferido, multiplique por la cantidad:
+    Para obtener el costo total del bloque transferido, multiplica por la cantidad:
 
     $$\text{Costo total} = \text{PMP} \times \text{cantidad}$$
 
@@ -62,7 +64,7 @@ Esto registra capital en especie, no P&L: el ajuste crea o modifica lotes, pero 
 
 !!! tip "Más información"
 
-    Para ver la fórmula completa, ejemplos y casos especiales, consulte la página dedicada:
+    Para ver la fórmula completa, ejemplos y casos especiales, consulta la página dedicada:
     **[📊 Precio Medio de Compra (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)**
 
 ??? note "✏️ Cuándo Anular Manualmente"
@@ -79,7 +81,7 @@ Esto registra capital en especie, no P&L: el ajuste crea o modifica lotes, pero 
 
     !!! warning "Responsabilidad del Usuario"
 
-        Al anular manualmente el coste base, el usuario es responsable de la exactitud del valor. LibreFolio no valida los montos de anulación frente a las reglas fiscales; consulte a un asesor fiscal para obtener orientación específica de su jurisdicción.
+        Al anular manualmente el coste base, el usuario es responsable de la exactitud del valor. LibreFolio no valida los montos de anulación frente a las reglas fiscales; consulta a un asesor fiscal para obtener orientación específica de tu jurisdicción.
 
 ---
 
@@ -88,4 +90,4 @@ Esto registra capital en especie, no P&L: el ajuste crea o modifica lotes, pero 
 - 📊 **[Precio Medio de Compra (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Cómo se calcula el coste base automático
 - 🔄 **[Transferencia de Activos](transfer.md)** — Dos ajustes vinculados pueden promoverse a una transferencia
 - 🛒 **[Compra y Venta](buy-sell.md)** — Transacciones estándar de activos con efectivo
-- 💰 **[Comisión e Impuesto](fee.md)** — Correcciones solo de efectivo (use Comisión/Impuesto en lugar de Ajuste)
+- 💰 **[Comisión e Impuesto](fee.md)** — Correcciones solo de efectivo (usa Comisión/Impuesto en lugar de Ajuste)

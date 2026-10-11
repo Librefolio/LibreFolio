@@ -33,7 +33,7 @@ En modo **Precios**, los eventos aparecen como marcadores en el [gráfico de pre
 
 ## ⚙️ De dónde vienen los eventos
 
-- **De un proveedor**, en cada sincronización: dividendos y desdoblamientos de [Yahoo Finance](../providers/yahoo-finance.md), dividendos de [justETF](../providers/justetf.md), y de [Inversión Programada](../providers/scheduled-investment.md) los pagos de intereses y la liquidación final al vencimiento de **Generar Cupón**, más los eventos listados en su calendario (**Añadir Evento** en el formulario del activo).
+- **De un proveedor**, en cada sincronización: dividendos y desdoblamientos de [Yahoo Finance](../providers/yahoo-finance.md), dividendos de [justETF](../providers/justetf.md), y de [Inversión Programada](../providers/scheduled-investment.md) los pagos de intereses y la liquidación final al vencimiento de **Generar Cupón**, más los eventos listados en su calendario (**Agregar Evento** en el formulario del activo).
 - **De ti**: en la pestaña **Eventos** del [Editor de Datos](data-editor.md), uno a uno o desde un archivo CSV, o con **Nuevo evento** en el campo **Evento Vinculado** de una transacción.
 
 Una sincronización actualiza los eventos del proveedor y nunca toca los tuyos. Un evento de un proveedor es de solo lectura en el editor, y si lo eliminas, solo se mantiene así hasta que el proveedor lo vuelva a enviar: para cambiar los eventos de una Inversión Programada, edita su calendario.

@@ -28,15 +28,15 @@ Quanto denaro hanno prodotto i tuoi investimenti nel periodo selezionato? La sch
 
 - **P&L periodo** — il numero grande: $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net flows}$, dove i flussi netti sono il capitale che hai spostato dentro o fuori → [P&L periodo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **La riga sotto di esso** — per esempio `+91,31 € (+16,36%)`: di quanto si è mosso il tuo P&L totale da ieri (pannello sottostante)
-- **Variazione latente** — come si è mossa, nel periodo, la plusvalenza o minusvalenza latente delle tue posizioni, incluso l'effetto del tasso di cambio → [Valore contabile](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+- **Variazione non realizzata** — come si è mossa, nel periodo, la plusvalenza o minusvalenza latente delle tue posizioni, incluso l'effetto del tasso di cambio → [Valore contabile](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 - **Vendite** — la plusvalenza o minusvalenza realizzata delle vendite del periodo, rispetto al prezzo medio di carico (PMC) delle unità vendute → [prezzo medio di carico (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Dividendi e interessi** — dividendi, cedole e interessi P2P ricevuti → [Dividendo e interesse](../../financial-theory/instruments/transaction-types/dividend-interest.md)
-- **Commissioni e imposte** — commissioni e imposte registrate come transazioni; passa il cursore sulla riga per vedere la ripartizione → [Commissione e imposta](../../financial-theory/instruments/transaction-types/fee.md)
+- **Costi e imposte** — commissioni e imposte registrate come transazioni; passa il cursore sulla riga per vedere la ripartizione → [Commissione e imposta](../../financial-theory/instruments/transaction-types/fee.md)
 
 **Come leggerla**
 
 - **Verde è un guadagno, rosso una perdita** — e un deposito o un prelievo non è né l'uno né l'altra.
-- **Le quattro righe spiegano il numero grande.** Ciò che non riescono a vedere, come asset che si spostano tra due tuoi broker nel primo o nell'ultimo giorno, finisce nel **Residuo Altro / di riconciliazione** della [vista Performance](positions.md#performance).
+- **Le quattro righe spiegano il numero grande.** Ciò che non riescono a vedere, come asset che si spostano tra due tuoi broker nel primo o nell'ultimo giorno, finisce nell'**Altro / residuo di riconciliazione** della [vista Performance](positions.md#performance).
 - **La barra più lunga** è la riga che ha mosso di più il tuo risultato.
 
 ??? info "📏 La riga sotto il numero grande — come viene calcolata"
@@ -52,7 +52,7 @@ Quanto denaro hanno prodotto i tuoi investimenti nel periodo selezionato? La sch
 
 ### 💱 Variazione latente per valuta {: #unrealized-change-by-currency }
 
-Passa il cursore su **Variazione latente** per suddividerla per la valuta in cui sono quotati i tuoi asset — qui con l'euro come valuta di visualizzazione:
+Passa il cursore su **Variazione non realizzata** per suddividerla per la valuta in cui sono quotati i tuoi asset — qui con l'euro come valuta di visualizzazione:
 
 | Riga | Cosa mostra |
 |-----|---------------|
@@ -68,7 +68,7 @@ C'è una riga 📈 per ogni valuta, euro incluso, e una riga 💱 per ogni valut
 
     - 📈 **Asset in USD**: (550 − 500) × 0,75 = **+37,50 €** — il tuo ETF ha guadagnato il 10% in dollari;
     - 💱 **Tasso USD → EUR**: 500 × 0,75 − 400 = **−25,00 €** — il dollaro ha perso valore rispetto all'euro;
-    - insieme, la **Variazione latente**: 550 × 0,75 − 400 = **+12,50 €**.
+    - insieme, la **Variazione non realizzata**: 550 × 0,75 − 400 = **+12,50 €**.
 
 🔗 **Teoria**: [Variazione latente per valuta](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md#unrealized-change-by-currency) — le formule dietro ogni riga
 
@@ -124,7 +124,7 @@ Quanto vale il tuo portafoglio alla fine del periodo, e quanto ha guadagnato da 
 - **Valore di mercato** — quanto valgono, ai prezzi di mercato, gli asset che detieni → [NAV / Patrimonio netto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
 - **Valore di acquisto** — quanto ti sono costate le posizioni che detieni ancora, ogni acquisto al tasso di cambio della propria data → [Valore contabile](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 - **Liquidità** — la liquidità presso i tuoi broker; passa il cursore per separare il capitale versato dai rendimenti che hai ottenuto → [Pool di liquidità](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
-- **Capitale versato (Periodo)** — depositi meno prelievi nel periodo, verde a destra e rosso a sinistra; passa il cursore per vedere i totali → [Capitale versato](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
+- **Capitale versato nel periodo** — depositi meno prelievi nel periodo, verde a destra e rosso a sinistra; passa il cursore per vedere i totali → [Capitale versato](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 
 $$
 \text{Total P}\&\text{L} = \text{Net Worth} - \text{Capital put in since the start}

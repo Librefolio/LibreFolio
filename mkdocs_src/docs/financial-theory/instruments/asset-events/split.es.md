@@ -47,14 +47,14 @@ Donde $P$ es el precio por acción y $Q$ es la cantidad de acciones.
 
 !!! example "Ejemplo: desdoblamiento 4:1 de Apple (agosto de 2020)"
 
-    - **Antes del desdoblamiento**: 100 acciones × $500 = $50,000 valor total
-    - **Después del desdoblamiento**: 400 acciones × $125 = $50,000 valor total
+    - **Antes del desdoblamiento**: 100 acciones × $500 = $50.000 valor total
+    - **Después del desdoblamiento**: 400 acciones × $125 = $50.000 valor total
     - **Cambio de precio**: −75% (pero el valor de la posición no cambia)
 
 !!! example "Ejemplo: desdoblamiento inverso 1:10"
 
-    - **Antes**: 1,000 acciones × $0.50 = $500 valor total
-    - **Después**: 100 acciones × $5.00 = $500 valor total
+    - **Antes**: 1.000 acciones × $0,50 = $500 valor total
+    - **Después**: 100 acciones × $5,00 = $500 valor total
     - **Razón**: La empresa desea subir el precio de la acción por encima de los requisitos mínimos de cotización de la bolsa
 
 ---
@@ -70,7 +70,7 @@ Donde $P$ es el precio por acción y $Q$ es la cantidad de acciones.
 
 ### Desdoblamientos inversos
 
-- **Cumplimiento de cotización**: Las bolsas requieren precios mínimos de las acciones (por ejemplo, $1.00 en NASDAQ)
+- **Cumplimiento de cotización**: Las bolsas requieren precios mínimos de las acciones (por ejemplo, $1,00 en NASDAQ)
 - **Percepción institucional**: Algunos fondos tienen requisitos de precio mínimo
 - **A menudo una señal de advertencia**: Los desdoblamientos inversos suelen asociarse con empresas en dificultades
 
@@ -88,9 +88,9 @@ Por ejemplo, si Apple costaba $100 antes de un desdoblamiento 4:1, el precio his
 
 En LibreFolio, un evento `SPLIT` se registra con:
 
-- **Date**: La fecha efectiva del desdoblamiento
-- **Amount**: El ratio del desdoblamiento (por ejemplo, `2` para un desdoblamiento 2:1, `0.1` para un desdoblamiento inverso 1:10)
-- **Notes**: Descripción opcional (por ejemplo, "desdoblamiento directo 4:1")
+- **Fecha**: La fecha efectiva del desdoblamiento
+- **Importe**: El ratio del desdoblamiento (por ejemplo, `2` para un desdoblamiento 2:1, `0.1` para un desdoblamiento inverso 1:10)
+- **Notas**: Descripción opcional (por ejemplo, "desdoblamiento directo 4:1")
 
 Los eventos de desdoblamiento aparecen como **marcadores en el gráfico** y ayudan a explicar discontinuidades repentinas de precio. Cuando se utilizan **precios ajustados** de proveedores como Yahoo Finance, el desdoblamiento ya está incluido en los datos de precios.
 

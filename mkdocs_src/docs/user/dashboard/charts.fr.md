@@ -1,6 +1,6 @@
 # 📊 Graphiques
 
-Sous les cartes KPI, le graphique **Croissance du portefeuille** et le panneau **Allocation d'actifs** montrent l'évolution passée de votre portefeuille et sa composition. Tous deux suivent la plage temporelle et le filtre de courtier du Tableau de bord, et la page d'un courtier les affiche pour ce courtier uniquement.
+Sous les cartes KPI, le graphique **Croissance du portefeuille** et le panneau **Allocation Patrimoniale** montrent l'évolution passée de votre portefeuille et sa composition. Tous deux suivent la plage temporelle et le filtre de courtier du Tableau de bord, et la page d'un courtier les affiche pour ce courtier uniquement.
 
 ---
 
@@ -35,7 +35,7 @@ Le graphique mémorise votre dernière vue, sous-vue P&L incluse, dans ce naviga
 | Ligne — **[Valeur nette](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Vert foncé plein | Valeur totale du portefeuille aux prix de marché actuels |
 | Ligne — **[Capital versé](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Gris pointillé | Capital externe net apporté au fil du temps |
 
-**L'écart entre les deux lignes correspond à votre P&L total** : tous les gains accumulés (latents, réalisés, intérêts et dividendes) moins les frais et les impôts. L'infobulle affiche les deux lignes, le P&L total en vert ou en rouge, et la décomposition : **Actifs au coût d'achat** (l'aire bleue, actifs circulant entre vos courtiers inclus), **Rendements** et **Capital**.
+**L'écart entre les deux lignes correspond à votre P&L total** : tous les gains accumulés (latents, réalisés, intérêts et dividendes) moins les frais et les impôts. L'infobulle affiche les deux lignes, le P&L total en vert ou en rouge, et la décomposition : **Coût des actifs** (l'aire bleue, actifs circulant entre vos courtiers inclus), **Rendements** et **Capital**.
 
 **Les actifs valorisés à leur prix d'achat**, comme les prêts P2P sans prix live de marché, maintiennent la NAV proche du coût d'achat, si bien que l'écart peut être mince : lisez le **P&L total** dans l'infobulle.
 
@@ -76,15 +76,24 @@ Un second bouton, en haut à gauche du graphique, choisit le mode de tracé (ic�
   </div>
 </div>
 
-**Lignes par courtier.** Avec deux courtiers ou plus dans le périmètre, chaque courtier dispose d'une ligne pointillée et d'une ligne d'infobulle indiquant sa part du total ; les parts s'additionnent au total chaque jour. Une part ne correspond pas à la performance propre du courtier : l'argent en transit est compté pour le courtier qu'il a quitté, si bien qu'une ligne de courtier peut faire un bond à la date d'un virement. Avec un seul courtier, ou sur la page d'un courtier, seul le total est tracé.
+**Lignes par courtier.** Avec deux courtiers ou plus dans le périmètre, chaque courtier dispose d'une ligne pointillée et d'une ligne d'infobulle indiquant sa part du total ; les parts s'additionnent au total chaque jour. La ligne d'un courtier est le P&L généré pendant que la valeur se trouvait chez ce courtier : déplacer de l'argent ou des titres entre deux de vos courtiers n'est ni un gain ni une perte, donc aucune ligne ne fait de bond à l'arrivée d'un transfert.
+
+- **En transit** — jusqu'à l'arrivée du transfert, la valeur et ses variations de prix ou de taux de change restent au courtier qu'elle a quitté.
+- **Parts de propriété différentes** — lorsque les deux courtiers ont des [parts de propriété](../brokers/sharing.md) différentes, la ligne qui reçoit garde une marche le jour de l'arrivée : la même marche que celle du total.
+- **Aucune valeur le jour de l'arrivée** — si le titre n'a pas encore de prix, ou s'il manque un taux de change, le bond reste : aucune valeur n'est inventée.
+- **Courtiers hors de la vue** — sur la page d'un courtier, ou avec le filtre de courtiers activé, les titres envoyés à un courtier hors de la vue, ou reçus de celui-ci, comptent comme du capital à leur valeur de marché ce jour-là, et non comme un gain ou une perte ; l'argent compte comme un dépôt ou un retrait. Il en va de même pour la moitié restante lorsque l'autre courtier d'un transfert est supprimé.
+
+Avec un seul courtier, ou sur la page d'un courtier, seul le total est tracé.
+
+🔗 **Théorie** : [Transferts internes dans les lignes par courtier](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
 
 #### Bougies — la variation à l'intérieur de la période {: #pnl-candles }
 
 Chaque période de la [largeur que vous choisissez](#pnl-width) devient une **bougie** constituée de valeurs de P&L, et non de prix. Sa **clôture** correspond exactement au P&L total que la vue **Ligne** affiche pour ce jour.
 
 <div class="lf-screenshot-carousel" style="margin: 1.5rem 0 2.5rem 0;">
-  <div class="lf-screenshot-carousel-item is-active chart-crop-container" alt="Le graphique Croissance du portefeuille en mode P&L, vue Bougies à 3D : les bougies P&L synthétiques, les boutons de largeur de 3D à 6M dans le coin supérieur droit du graphique, les étiquettes de période sur l'axe, et la légende Synthétique sous le graphique">
-     <img class="gallery-img" data-category="dashboard" data-name="growth-pnl-candles" alt="Le graphique Croissance du portefeuille en mode P&L, vue Bougies à 3D : les bougies P&L synthétiques, les boutons de largeur de 3D à 6M dans le coin supérieur droit du graphique, les étiquettes de période sur l'axe, et la légende Synthétique sous le graphique">
+  <div class="lf-screenshot-carousel-item is-active chart-crop-container" alt="Le graphique Croissance du portefeuille en mode P&L, vue Bougies à 3J : les bougies P&L synthétiques, les boutons de largeur de 3J à 6M dans le coin supérieur droit du graphique, les étiquettes de période sur l'axe, et la légende Synthétique sous le graphique">
+     <img class="gallery-img" data-category="dashboard" data-name="growth-pnl-candles" alt="Le graphique Croissance du portefeuille en mode P&L, vue Bougies à 3J : les bougies P&L synthétiques, les boutons de largeur de 3J à 6M dans le coin supérieur droit du graphique, les étiquettes de période sur l'axe, et la légende Synthétique sous le graphique">
   </div>
 </div>
 
@@ -120,7 +129,7 @@ Comment le lire :
 
 - **Nouveau capital ou réinvesti.** Un achat dépense d'abord les rendements déjà détenus sous forme de liquidités chez ce courtier (**Réinvesti**, en vert comme dans **Abs**) ; le reste est du **Nouveau capital** (bleu). Les ventes ne sont jamais tracées.
 - **Les signes sont conservés.** Une correction négative sur un dividende passé réduit la barre de dividende ; les frais et les impôts restent en dessous de zéro.
-- **Cela correspond aux KPI.** Pour les mêmes dates et courtiers, **Dividende** et **Intérêt** correspondent exactement à la ligne **Dividendes et intérêt** de la [carte P&L période](kpi-cards.md#card-1-period-pl).
+- **Cela correspond aux KPI.** Pour les mêmes dates et courtiers, **Dividende** et **Intérêt** correspondent exactement à la ligne **Dividendes et intérêts** de la [carte P&L période](kpi-cards.md#card-1-period-pl).
 - **Une seule entrée de légende.** Les deux zones d'achat sont nommées **Coût d'achat** : un clic masque les deux, ainsi que l'aire **Abs** du même nom.
 - **Taux de change manquants.** Un montant qui ne peut pas être converti à sa date est omis, et non compté comme zéro ; la [bannière de qualité des données](index.md#data-quality-banner) le signale.
 
@@ -128,13 +137,13 @@ Comment le lire :
 
     Les barres sont un **flux** : ce que vous avez dépensé pour vos achats à chaque période. La ligne **Coût d'achat** de la [carte Valeur nette](kpi-cards.md#card-3-net-worth) est un **niveau** : ce que les positions que vous détenez encore vous ont coûté à la date de fin. Les ventes et les achats antérieurs comptent dans le KPI mais n'ont pas de barre.
 
-#### Largeur des bougies — de 1D à 1Y {: #pnl-width }
+#### Largeur des bougies — de 1J à 1A {: #pnl-width }
 
-Dans **Bougies** et **Revenus**, les boutons dans le coin supérieur droit du graphique, de **1D** à **1Y**, définissent la durée couverte par une bougie, ou un groupe de barres. Le graphique affiche toujours toute la plage, et le zoom ne modifie jamais la largeur.
+Dans **Bougies** et **Revenus**, les boutons dans le coin supérieur droit du graphique, de **1J** à **1A**, définissent la durée couverte par une bougie, ou un groupe de barres. Le graphique affiche toujours toute la plage, et le zoom ne modifie jamais la largeur.
 
-- **Périodes calendaires.** **1W** va du lundi au dimanche, **1M** est un mois calendaire, **3M** un trimestre, **6M** un semestre, **1Y** une année ; **3D** et **2W** sont des blocs de jours fixes.
+- **Périodes calendaires.** **1S** va du lundi au dimanche, **1M** est un mois calendaire, **3M** un trimestre, **6M** un semestre, **1A** une année ; **3J** et **2S** sont des blocs de jours fixes.
 - **Étiquettes de l'axe.** Chaque étiquette nomme le début de sa période, même si la plage ne la couvre que partiellement ; les mois et les années n'apparaissent que là où ils changent, et les étiquettes trop serrées s'inclinent ou s'espacent.
-- **Seules les largeurs qui tiennent dans le graphique et dans la plage** sont proposées ; **Revenus** démarre à **1W**.
+- **Seules les largeurs qui tiennent dans le graphique et dans la plage** sont proposées ; **Revenus** démarre à **1S**.
 - **Où cela commence.** **Bougies** prend la largeur la plus fine disponible ; **Revenus** s'ouvre sur **1M**, ou la largeur disponible la plus proche, chaque fois que vous y accédez. Le rechargement de la page réinitialise la largeur.
 - **Les périodes partielles sont atténuées.** Une période qui a déjà commencé lorsque la plage démarre, ou une dernière période écourtée par une plage se terminant dans le passé, est tracée en atténué, et son infobulle indique *Partiel : N jours sur M*. Sinon, la période en cours est tracée entièrement, avec *En cours : N jours sur M*.
 
@@ -142,7 +151,7 @@ Dans **Bougies** et **Revenus**, les boutons dans le coin supérieur droit du gr
 
 ## 🥧 Panneau d'allocation {: #allocation-panel }
 
-Le panneau **Allocation d'actifs** montre comment votre portefeuille est réparti, aujourd'hui et dans le temps. Choisissez une dimension avec les onglets **Par type**, **Par secteur** et **Géographique**, et une vue avec les deux boutons dans le coin supérieur droit : le camembert pour **Maintenant**, le graphique en aires pour **Historique**.
+Le panneau **Allocation Patrimoniale** montre comment votre portefeuille est réparti, aujourd'hui et dans le temps. Choisissez une dimension avec les onglets **Par type**, **Par secteur** et **Géographique**, et une vue avec les deux boutons dans le coin supérieur droit : le camembert pour **Actuel**, le graphique en aires pour **Historique**.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-alloc" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active alloc-crop-container" data-title="Par type (actuel)" alt="Allocation par type — Actuel">
@@ -175,16 +184,16 @@ Le panneau **Allocation d'actifs** montre comment votre portefeuille est répart
 
 ### 🕰️ Maintenant et Historique
 
-- **Maintenant** — l'allocation au dernier jour de la plage sélectionnée : un donut pour **Par type** et **Par secteur**, une carte du monde pour **Géographique**. Survolez une part ou un pays pour obtenir son pourcentage et son montant. Par type, le donut peut avoir [deux anneaux](#allocation-type-rings).
+- **Actuel** — l'allocation au dernier jour de la plage sélectionnée : un donut pour **Par type** et **Par secteur**, une carte du monde pour **Géographique**. Survolez une part ou un pays pour obtenir son pourcentage et son montant. Par type, le donut peut avoir [deux anneaux](#allocation-type-rings).
 - **Historique** — un graphique en aires empilées à 100 % montrant l'évolution de l'allocation dans le temps, pratique pour visualiser le rééquilibrage. Par type, chaque famille est une aire ; survoler une date liste ses sous-types, tels que *ETF générique* et *ETF actions*.
 
 Le panneau mémorise la vue et l'onglet dans ce navigateur, pour chaque utilisateur, et les partage avec les pages des courtiers.
 
 ### 🍩 Deux anneaux par type {: #allocation-type-rings }
 
-Dès que vous détenez un actif doté d'un sous-type, comme un **ETF actions** ou un **Crowdfunding immobilier**, le donut **Maintenant** de **Par type** dessine deux anneaux :
+Dès que vous détenez un actif doté d'un sous-type, comme un **ETF actions** ou un **Crowdfunding immobilier**, le donut **Actuel** de **Par type** dessine deux anneaux :
 
-- **Anneau intérieur** — une part par famille, avec son icône là où elle tient : tous vos ETF (l'**ETF** générique et chaque sous-type) ensemble, **Crowdfund** avec **Crowdfunding immobilier**, et tout autre type, y compris **Liquidités**, isolément. Ce sont les familles que le [menu Type](../assets/create-edit.md#choosing-the-asset-type) de l'actif regroupe.
+- **Anneau intérieur** — une part par famille, avec son icône là où elle tient : tous vos ETF (l'**ETF** générique et chaque sous-type) ensemble, **Crowdfunding** avec **Crowdfunding immobilier**, et tout autre type, y compris **Liquidités**, isolément. Ce sont les familles que le [menu Type](../assets/create-edit.md#choosing-the-asset-type) de l'actif regroupe.
 - **Anneau extérieur** — plus fin et détaché, il divise chaque famille contenant un sous-type en ses membres, dans des nuances de la couleur de la famille, légendés là où il y a de la place. Le membre générique affiche *ETF générique* ou *Crowdfund générique*.
 - **Survolez** une part pour obtenir sa proportion et son montant ; sur l'anneau extérieur, une dernière ligne commençant par **↳** donne la part de toute la famille.
 - **La légende** liste uniquement les familles : cliquer sur l'une d'elles masque ses parts sur les deux anneaux.
