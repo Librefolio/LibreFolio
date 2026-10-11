@@ -13,4 +13,6 @@ Modules:
 
 * ``average_cost`` — average cost of positions: historical cost in the report and asset
   currencies, the pool after every movement, and the conversions that could not be made.
+* ``native_cash`` — every broker's cash in the currencies it was recorded in: the balances,
+  their value in the report currency on any day, and the period flows by type and position.
 """
