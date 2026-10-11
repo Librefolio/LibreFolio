@@ -1160,6 +1160,9 @@ const NORMALIZED_RATIO_FIELDS = new Set([
 const SIGNED_NORMALIZED_RATIO_FIELDS = new Set(['current_drawdown_ratio', 'maximum_drawdown_ratio']);
 const UNBOUNDED_NORMALIZED_RATIO_FIELDS = new Set(['remaining_to_peak_ratio', 'distance_to_min_ratio', 'distance_to_max_ratio']);
 const MONETARY_RESIDUAL_FIELDS = new Set(['period_other_result', 'reconciliation_diff', 'residual']);
+/** Leaves whose value names a payload field (`unavailable[].field`, `missing_fields`), not free text. */
+const FIELD_REFERENCE_KEYS: ReadonlySet<string> = new Set(['field', 'missing_fields']);
+
 const PUBLIC_RATIO_FIELD_NAMES: Readonly<Record<string, string>> = {
     portfolio_weight_ratio: 'portfolio_weight_percent',
     technical_normalized_weight_ratio: 'technical_normalized_weight_percent',
@@ -1243,6 +1246,8 @@ function isMonetaryResidualPath(path: string): boolean {
 
 function genericLeaf(path: string, value: unknown, directory: EntityDirectory, diagnostics: MutableSnapshotFormatDiagnostics, semantics: PromptNumberSemantics = {}): string {
     const key = finalPathKey(path);
+    // A field reference names a column by the same public name the column is printed with.
+    if (FIELD_REFERENCE_KEYS.has(key) && typeof value === 'string' && PUBLIC_RATIO_FIELD_NAMES[value]) return PUBLIC_RATIO_FIELD_NAMES[value];
     if (key === 'asset_id' || key.endsWith('_asset_id')) return assetRef(value, directory);
     if (key === 'broker_id' || key.endsWith('_broker_id')) return brokerRef(value, directory);
     if (key === 'asset_ids') return assetRef(value, directory);
