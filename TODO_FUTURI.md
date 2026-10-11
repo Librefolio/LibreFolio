@@ -2191,3 +2191,14 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   ampio.
 - Test di equivalenza sui piani esistenti e oracolo sui casi con vendite (Rebalancer), dove le conversioni in entrambi i
   versi sono più frequenti.
+
+
+## Code reordering
+Data di aggiunta: 9 Ottobre 2026 · **Status**: ⏳ IN ATTESA — da fare con urgenza · **Priorità**: Media
+Il progetto è crescuto tantissimo, e sia il backend sia il frontend hanno file di centinaia di righe. La manutenzione è più difficile, e la leggibilità cala. Il developer propone di **riordinare i file** in più moduli,
+Ristrutturando la struttura delle cartelle, fattorizzando le funzioni comuni, e separando le classi e le funzioni in più file. Questo aiuta a trovare più facilmente il codice, a ridurre i conflitti di merge, e a migliorare la navigazione del progetto.
+Un primo esempio è riprodurre la stessa struttura di cartelle per i plugin  di asset, forex e transazioni in signal e il neo nato tools, così da avere un layout coerente.
+Un altro esempio è separare le funzioni di utilità in moduli dedicati, invece di avere tutto in un unico file di servizio.
+La cartella utils è cresciuta tantissimo e vale la pena fare un analisi per capire se alcune funzioni possono essere spostate in moduli più specifici, o se abbia senso creare dei service layer in tal senso.
+
+Discorso simile da fare anche per il frontend, dove i componenti sono cresciuti e vanno raggruppati in cartelle più piccole e coerenti, con nomi chiari e significativi.
