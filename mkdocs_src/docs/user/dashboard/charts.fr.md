@@ -76,7 +76,16 @@ Un second bouton, en haut à gauche du graphique, choisit le mode de tracé (ic�
   </div>
 </div>
 
-**Lignes par courtier.** Avec deux courtiers ou plus dans le périmètre, chaque courtier dispose d'une ligne pointillée et d'une ligne d'infobulle indiquant sa part du total ; les parts s'additionnent au total chaque jour. Une part ne correspond pas à la performance propre du courtier : l'argent en transit est compté pour le courtier qu'il a quitté, si bien qu'une ligne de courtier peut faire un bond à la date d'un virement. Avec un seul courtier, ou sur la page d'un courtier, seul le total est tracé.
+**Lignes par courtier.** Avec deux courtiers ou plus dans le périmètre, chaque courtier dispose d'une ligne pointillée et d'une ligne d'infobulle indiquant sa part du total ; les parts s'additionnent au total chaque jour. La ligne d'un courtier est le P&L généré pendant que la valeur se trouvait chez ce courtier : déplacer de l'argent ou des titres entre deux de vos courtiers n'est ni un gain ni une perte, donc aucune ligne ne fait de bond à l'arrivée d'un transfert.
+
+- **En transit** — jusqu'à l'arrivée du transfert, la valeur et ses variations de prix ou de taux de change restent au courtier qu'elle a quitté.
+- **Parts de propriété différentes** — lorsque les deux courtiers ont des [parts de propriété](../brokers/sharing.md) différentes, la ligne qui reçoit garde une marche le jour de l'arrivée : la même marche que celle du total.
+- **Aucune valeur le jour de l'arrivée** — si le titre n'a pas encore de prix, ou s'il manque un taux de change, le bond reste : aucune valeur n'est inventée.
+- **Courtiers hors de la vue** — sur la page d'un courtier, ou avec le filtre de courtiers activé, les titres envoyés à un courtier hors de la vue, ou reçus de celui-ci, comptent comme du capital à leur valeur de marché ce jour-là, et non comme un gain ou une perte ; l'argent compte comme un dépôt ou un retrait. Il en va de même pour la moitié restante lorsque l'autre courtier d'un transfert est supprimé.
+
+Avec un seul courtier, ou sur la page d'un courtier, seul le total est tracé.
+
+🔗 **Théorie** : [Transferts internes dans les lignes par courtier](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
 
 #### Bougies — la variation à l'intérieur de la période {: #pnl-candles }
 

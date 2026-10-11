@@ -23,7 +23,7 @@ Comprender los eventos de activos es esencial para un análisis de precios preci
 | Concepto | Eventos | Transacciones |
 |---------|--------|-------------|
 | **Alcance** | Global — afecta al activo | Personal — afecta a la cartera de un usuario |
-| **Ejemplo** | "Apple declaró un dividendo de $0.25 el 2024-05-10" | "Recibí $12.50 de mis 50 acciones de AAPL" |
+| **Ejemplo** | "Apple declaró un dividendo de $0,25 el 2024-05-10" | "Recibí $12,50 de mis 50 acciones de AAPL" |
 | **Efecto en el gráfico** | Marcador en el gráfico de precios | No visible en el gráfico de precios |
 | **Quién los crea** | Proveedor (automático) o usuario (manual) | Importación desde reportes del bróker (BRIM) |
 

@@ -25,13 +25,13 @@ En la **fecha ex-dividendo**, el precio de la acción cae teóricamente el **imp
 
 !!! example "Example"
 
-    **Apple (AAPL)** cotiza a $180.00. Un dividendo trimestral de $0.25 entra en fecha ex-dividendo.
+    **Apple (AAPL)** cotiza a $180,00. Un dividendo trimestral de $0,25 entra en fecha ex-dividendo.
 
-    - **Antes del cierre de la fecha ex**: $180.00
-    - **Apertura de la fecha ex** (teórica): $179.75
-    - **Diferencia**: −$0.25 (= importe del dividendo)
+    - **Antes del cierre de la fecha ex**: $180,00
+    - **Apertura de la fecha ex** (teórica): $179,75
+    - **Diferencia**: −$0,25 (= importe del dividendo)
 
-    En la práctica, las fuerzas del mercado pueden hacer que el precio de apertura real difiera, pero la bolsa **ajusta el precio de referencia** a la baja exactamente en $0.25.
+    En la práctica, las fuerzas del mercado pueden hacer que el precio de apertura real difiera, pero la bolsa **ajusta el precio de referencia** a la baja exactamente en $0,25.
 
 ---
 

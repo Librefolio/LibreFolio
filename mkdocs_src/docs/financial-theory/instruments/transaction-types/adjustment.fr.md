@@ -43,7 +43,7 @@ Exemples issus des imports : les instantanés `patrimonio` d'Intesa Sanpaolo uti
 Les ajustements avec une quantité positive **augmentent** le nombre de lots (FIFO). Le prix de revient pour les lots créés par ajustement dépend de la présence d'un **Forçage du coût de base (Cost Basis Override)** :
 
 - **Avec forçage** : la valeur spécifiée est utilisée comme **coût d'acquisition unitaire** (Prix de Revient Unitaire — PRU)
-- **Sans forçage** : le lot est créé avec un coût nul (acquisition gratuite — ex: dons, airdrops)
+- **Sans forçage** : le lot est créé avec un coût nul (acquisition gratuite — ex. : dons, airdrops)
 
 !!! info "Valeur unitaire"
 

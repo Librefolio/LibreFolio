@@ -149,7 +149,7 @@ Gli importatori senza etichetta sono ben testati e affidabili per i formati che 
     </a>
     <a href="scalable/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="../../../static/icons/brokers/scalable.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon di Scalable Capital">
+    <img src="../../../../static/icons/brokers/scalable.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon di Scalable Capital">
     <span class="card-title" style="margin: 0;">Scalable Capital</span>
     </div>
     <span class="card-desc">🔬 Alpha · conto broker (il CSV di Scalable o l'esportatore LibreFolio) e conto overnight (esportatore), come due broker</span>

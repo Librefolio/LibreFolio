@@ -1,4 +1,4 @@
-# <img src="../../../../static/cssscraper.png" alt=""> Scraper CSS
+# <img src="../../../../../static/cssscraper.png" alt=""> Scraper CSS
 
 Le Scraper CSS lit le prix d'un actif depuis n'importe quelle page web publique, à l'aide d'un sélecteur CSS qui pointe
 vers le nombre. Utilisez-le lorsqu'aucun autre fournisseur ne couvre l'instrument. Dans la liste **Fournisseur**, il est

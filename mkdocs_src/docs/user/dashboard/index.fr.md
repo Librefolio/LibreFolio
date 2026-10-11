@@ -5,7 +5,7 @@ Le Tableau de bord est le **centre de commandement de votre portefeuille** — u
 <div class="lf-screenshot-carousel" data-carousel="carousel-dashboard-main" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
   <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vue principale (absolue)" alt="Tableau de bord — Mode absolu">
   <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📈 Vue principale (pourcentage)" alt="Tableau de bord — Mode pourcentage">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Répartition" alt="Tableau de bord — Répartition">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Allocation" alt="Tableau de bord — Répartition">
 </div>
 
 ## 🗂️ Disposition à onglets

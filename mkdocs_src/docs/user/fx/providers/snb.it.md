@@ -2,7 +2,7 @@
 
 Il provider **Banca Nazionale Svizzera (SNB)** pubblica tassi di cambio **medi mensili** per il franco svizzero (CHF), recuperati dal portale dati pubblico della SNB. È una fonte stabile e autorevole per asset denominati in CHF.
 
-!!! warning "Monthly data only — no daily rates"
+!!! warning "Solo dati mensili — nessun tasso giornaliero"
 
     La SNB **non** offre un set di dati con tassi giornalieri: ogni valore è la **media di un mese di calendario**, registrato il **1° di quel mese**. Nelle catene di conversione un tasso viene calcolato solo nelle date in cui **tutti** i provider coinvolti hanno dati, quindi passando attraverso la SNB si ottiene un punto al mese. Se hai bisogno di tassi CHF giorno per giorno, usa un altro provider (es. ECB o FED) per la coppia.
 

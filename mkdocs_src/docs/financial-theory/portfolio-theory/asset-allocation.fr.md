@@ -12,9 +12,9 @@ Un **objectif à long terme** basé sur votre tolérance au risque, votre horizo
 
 | Profil | Actions | Obligations | Actifs alternatifs | Liquidités |
 |---------|--------|-------|-------------|------|
-| Agressif (horizon long) | 80-90% | 5-15% | 5-10% | 0-5% |
-| Équilibré | 50-60% | 30-40% | 5-10% | 5% |
-| Prudent (horizon court) | 20-30% | 50-60% | 5-10% | 10-20% |
+| Agressif (horizon long) | 80-90 % | 5-15 % | 5-10 % | 0-5 % |
+| Équilibré | 50-60 % | 30-40 % | 5-10 % | 5 % |
+| Prudent (horizon court) | 20-30 % | 50-60 % | 5-10 % | 10-20 % |
 
 La SAA est revue peu fréquemment (annuellement ou lors de changements de vie majeurs).
 
@@ -59,7 +59,7 @@ Au fil du temps, les mouvements de prix des actifs entraînent une **dérive** d
 | Méthode | Déclencheur | Avantages | Inconvénients |
 |--------|---------|------|------|
 | **Calendrier** | Calendrier fixe (mensuel, trimestriel) | Simple, prévisible | Peut déclencher des transactions inutiles |
-| **Seuil** | Quand l'allocation dérive de X% | Transactions uniquement si nécessaire | Nécessite un suivi |
+| **Seuil** | Quand l'allocation dérive de X % | Transactions uniquement si nécessaire | Nécessite un suivi |
 | **Hybride** | Vérification calendrier, transaction si dépassement de seuil | Le meilleur des deux | Légèrement plus complexe |
 
 ### 📐 Bonus de Rééquilibrage

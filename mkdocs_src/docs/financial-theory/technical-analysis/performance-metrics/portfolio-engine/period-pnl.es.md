@@ -85,14 +85,14 @@ $$
 
     | Día | Valor en USD | $r_{USD}$ | MV en EUR | $E^{\text{asset}}$ | $E^{\text{fx}}$ | $\mathrm{UGL}$ |
     |-----|-------|-----------|---------------|--------------------|-----------------|----------------|
-    | $t_0$ | 520 USD | 0.78 | 405.60 | $(520-500) \times 0.78 = 15.60$ | $500 \times 0.78 - 400 = -10.00$ | 5.60 |
-    | $t_1$ | 550 USD | 0.75 | 412.50 | $(550-500) \times 0.75 = 37.50$ | $500 \times 0.75 - 400 = -25.00$ | 12.50 |
+    | $t_0$ | 520 USD | 0,78 | 405,60 | $(520-500) \times 0.78 = 15.60$ | $500 \times 0.78 - 400 = -10.00$ | 5,60 |
+    | $t_1$ | 550 USD | 0,75 | 412,50 | $(550-500) \times 0.75 = 37.50$ | $500 \times 0.75 - 400 = -25.00$ | 12,50 |
 
     $$
     \Delta E^{\text{asset}} = +21.90, \qquad \Delta E^{\text{fx}} = -15.00, \qquad \Delta\mathrm{UGL} = +6.90 \text{ EUR}
     $$
 
-    El ETF ganó en dólares (+€21.90), el dólar perdió terreno frente al euro (−€15.00): juntos, los +€6.90 del P&L no realizado del período.
+    El ETF ganó en dólares (+€21,90), el dólar perdió terreno frente al euro (−€15,00): juntos, los +€6,90 del P&L no realizado del período.
 
 ---
 
@@ -118,9 +118,9 @@ El rendimiento anualizado del período fija el inicio de su ventana en la fecha 
 
 ## 📝 Ejemplo
 
-- NAV en $t_0$: €27,000
-- Aumento de la línea base de capital en el período: €1,000
-- NAV en $t_1$: €33,000
+- NAV en $t_0$: €27.000
+- Aumento de la línea base de capital en el período: €1.000
+- NAV en $t_1$: €33.000
 
 $$
 \mathrm{PnL} = 33\,000 - 27\,000 - 1\,000 = +5\,000 \text{ EUR}

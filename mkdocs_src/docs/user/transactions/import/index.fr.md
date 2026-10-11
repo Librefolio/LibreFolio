@@ -16,112 +16,112 @@ Les importateurs sans étiquette sont bien testés et fiables pour les formats q
 <div class="grid cards" style="margin-top: 1.5rem; margin-bottom: 2rem;">
     <a href="ibkr/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="https://www.interactivebrokers.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon IBKR">
+            <img src="https://www.interactivebrokers.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon d'IBKR">
             <span class="card-title" style="margin: 0;">Interactive Brokers</span>
         </div>
         <span class="card-desc">🧪 Bêta · Rapport de transactions au format CSV depuis une Flex Query</span>
     </a>
     <a href="degiro/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="https://www.degiro.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Degiro">
+            <img src="https://www.degiro.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Degiro">
             <span class="card-title" style="margin: 0;">Degiro</span>
         </div>
         <span class="card-desc">L'export du relevé de compte au format CSV</span>
     </a>
     <a href="etoro/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="https://www.etoro.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon eToro">
+            <img src="https://www.etoro.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon d'eToro">
             <span class="card-title" style="margin: 0;">eToro</span>
         </div>
         <span class="card-desc">🧪 Bêta · Relevé de compte au format CSV</span>
     </a>
     <a href="directa/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="https://www.directa.it/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Directa SIM">
+            <img src="https://www.directa.it/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Directa SIM">
             <span class="card-title" style="margin: 0;">Directa SIM</span>
         </div>
         <span class="card-desc">Historique des transactions, aux formats CSV ou XLSX</span>
     </a>
     <a href="schwab/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="https://www.schwab.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Charles Schwab">
+            <img src="https://www.schwab.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Charles Schwab">
             <span class="card-title" style="margin: 0;">Charles Schwab</span>
         </div>
         <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
     </a>
     <a href="revolut/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="https://assets.revolut.com/assets/favicons/favicon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Revolut">
+            <img src="https://assets.revolut.com/assets/favicons/favicon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Revolut">
             <span class="card-title" style="margin: 0;">Revolut</span>
         </div>
         <span class="card-desc">🧪 Bêta · Relevé de compte au format CSV</span>
     </a>
     <a href="coinbase/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="https://www.coinbase.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Coinbase">
+            <img src="https://www.coinbase.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Coinbase">
             <span class="card-title" style="margin: 0;">Coinbase</span>
         </div>
         <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV (crypto)</span>
     </a>
     <a href="freetrade/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Freetrade">
+            <img src="https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Freetrade">
             <span class="card-title" style="margin: 0;">Freetrade</span>
         </div>
         <span class="card-desc">🧪 Bêta · Relevé de transactions au format CSV</span>
     </a>
     <a href="finpension/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="https://www.finpension.ch/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Finpension">
+            <img src="https://www.finpension.ch/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Finpension">
             <span class="card-title" style="margin: 0;">Finpension</span>
         </div>
         <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
     </a>
     <a href="trading212/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="https://www.trading212.com/favicon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Trading212">
+            <img src="https://www.trading212.com/favicon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Trading212">
             <span class="card-title" style="margin: 0;">Trading212</span>
         </div>
         <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
     </a>
     <a href="avanza/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://avanza.se/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Avanza">
+    <img src="https://avanza.se/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon d'Avanza">
     <span class="card-title" style="margin: 0;">Avanza</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
     </a>
     <a href="bux/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://bux.com/it/wp-content/themes/vo-theme/assets/images/favicon/favicon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon BUX">
+    <img src="https://bux.com/it/wp-content/themes/vo-theme/assets/images/favicon/favicon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de BUX">
     <span class="card-title" style="margin: 0;">BUX</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
     </a>
     <a href="disnat/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://disnat.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Disnat">
+    <img src="https://disnat.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Disnat">
     <span class="card-title" style="margin: 0;">Disnat</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
     </a>
     <a href="investengine/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://www.investengine.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon InvestEngine">
+    <img src="https://www.investengine.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon d'InvestEngine">
     <span class="card-title" style="margin: 0;">InvestEngine</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
     </a>
     <a href="rabobank/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Rabobank">
+    <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Rabobank">
     <span class="card-title" style="margin: 0;">Rabobank</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
     </a>
     <a href="fineco/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://finecobank.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Fineco">
+    <img src="https://finecobank.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Fineco">
     <span class="card-title" style="margin: 0;">Fineco</span>
     </div>
     <span class="card-desc">🧪 Bêta · L'export au format CSV « Movimenti Dossier Titoli »</span>
@@ -149,7 +149,7 @@ Les importateurs sans étiquette sont bien testés et fiables pour les formats q
     </a>
     <a href="scalable/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="../../../static/icons/brokers/scalable.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Scalable Capital">
+    <img src="../../../../static/icons/brokers/scalable.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Scalable Capital">
     <span class="card-title" style="margin: 0;">Scalable Capital</span>
     </div>
     <span class="card-desc">🔬 Alpha · compte courtier (le CSV de Scalable ou l'exportateur LibreFolio) et compte overnight (exportateur), comme deux courtiers distincts</span>
@@ -163,35 +163,35 @@ Les importateurs sans étiquette sont bien testés et fiables pour les formats q
     </a>
     <a href="xtb/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://www.xtb.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon XTB">
+    <img src="https://www.xtb.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de XTB">
     <span class="card-title" style="margin: 0;">XTB</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
     </a>
     <a href="parqet/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://parqet.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Parqet">
+    <img src="https://parqet.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Parqet">
     <span class="card-title" style="margin: 0;">Parqet</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
     </a>
     <a href="saxo/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://home.saxo/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Saxo">
+    <img src="https://home.saxo/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Saxo">
     <span class="card-title" style="margin: 0;">Saxo</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
     </a>
     <a href="swissquote/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://www.swissquote.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Swissquote">
+    <img src="https://www.swissquote.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Swissquote">
     <span class="card-title" style="margin: 0;">Swissquote</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
     </a>
     <a href="bitvavo/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://bitvavo.com/favicon-32x32.png?v=7ba51b544a17c10de8defa086df79917" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Bitvavo">
+    <img src="https://bitvavo.com/favicon-32x32.png?v=7ba51b544a17c10de8defa086df79917" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Bitvavo">
     <span class="card-title" style="margin: 0;">Bitvavo</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV (crypto)</span>
@@ -205,28 +205,28 @@ Les importateurs sans étiquette sont bien testés et fiables pour les formats q
     </a>
     <a href="relai/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://relai.app/app/uploads/2023/06/cropped-App-icon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Relai">
+    <img src="https://relai.app/app/uploads/2023/06/cropped-App-icon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Relai">
     <span class="card-title" style="margin: 0;">Relai</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV (crypto)</span>
     </a>
     <a href="cointracking/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://cointracking.info/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon CoinTracking">
+    <img src="https://cointracking.info/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de CoinTracking">
     <span class="card-title" style="margin: 0;">CoinTracking</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV (crypto)</span>
     </a>
     <a href="delta/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://www.google.com/s2/favicons?domain=delta.app&amp;sz=64" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Delta">
+    <img src="https://www.google.com/s2/favicons?domain=delta.app&amp;sz=64" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Delta">
     <span class="card-title" style="margin: 0;">Delta</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV (crypto)</span>
     </a>
     <a href="investimental/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://www.investimental.ro/wp-content/themes/investimental/img/favicon/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Investimental">
+    <img src="https://www.investimental.ro/wp-content/themes/investimental/img/favicon/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon d'Investimental">
     <span class="card-title" style="margin: 0;">Investimental</span>
     </div>
     <span class="card-desc">🧪 Bêta · Historique des transactions au format CSV</span>
