@@ -28,7 +28,7 @@
 | K | `phases/25_taxonomySelect/` (step 23 e verifica d'archivio) | K-1 … K-26 |
 | P | `phases/30_wacUnification/`, `phases/39_autoCostNoPosition/` | P-1 … P-11 |
 | I | `phases/20_performanceCharts/`, `19_yieldOnCost/`, `24_privacyGlobal/` | I-01 … I-12 |
-| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-44 |
+| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-45 |
 
 In fondo: le voci del backlog del coordinatore **tracciate altrove** e quelle **chiuse alla verifica del 09/10**.
 
@@ -352,7 +352,10 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
     e il suo indice con la sezione Security (M, lotto 8); Sharpe e Sortino, la cui formula del tasso privo di rischio
     esiste solo in inglese (Q) — ✅ chiusa: in it/fr/es la formula porta `^{1/f}` da `647475999` (lotto 11 di M,
     treno 29), verificato il 10/10 (Risk e coordinatore);
-  - dal treno 27: `user/tools/index` e `user/tools/pac-allocator/index`, nel nav ma solo EN (D); `user/transactions/form`
+  - dal treno 27: `user/tools/index` e `user/tools/pac-allocator/index`, nel nav ma solo EN (D) — ✅ chiuse: it/fr/es
+    esistono da `647475999` (lotto 11 di M, treno 29), dopo l'ultima modifica EN `29103f95b` (verificato l'11/10, D e
+    coordinatore); restano solo le due etichette del pulsante di ritorno in it e fr, nella scansione 5.4 di M;
+    `user/transactions/form`
     e `user/dashboard/index` (Q, S23); `developer/dev_workflow` (N);
   - dal treno 26: le otto pagine EN riscritte da K senza IT/FR/ES (`financial-theory/instruments/asset-types/{index,etfs,real-estate}`,
     `user/assets/{create-edit,index,detail/index}`, `user/dashboard/index`, `user/transactions/import/how-to`);
@@ -569,6 +572,10 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   blocca l'header) e `frameGrowthChart` in `gallery.spec.ts` (legge `visible` come «ha visto la cima»: sicuro solo su
   una pagina appena caricata). Portarli sugli aiuti condivisi, con un giro della gallery come prova. Il triage è nel
   piano [ReleaseGallery](../27_releaseImages/plan-phase00ReleaseGallery.prompt.md), passo 25.
+- **C-45 · Il picker del 💡 vede solo le transazioni caricate** — basso, **da verificare** (test-author di P, lotto 42,
+  11/10). Il picker dei suggerimenti del Bulk cerca i candidati fra le transazioni che la pagina ha caricato, mentre il
+  contatore del 💡 li conta dal backend (`/promote-suggest`): un candidato su un broker non caricato verrebbe contato ma
+  non comparirebbe nel picker. Prima un rosso che lo dimostri, poi la cura.
 
 ## Tracciate altrove
 
