@@ -8,9 +8,9 @@ attivato — secondo una pianificazione.
 
 ## 🔄 Sincronizza tutte le coppie
 
-1. Nella [pagina FX](index.md), scegli il periodo nel selettore di date. Seleziona **Tutto** per l'intera
+1. Nella [pagina FX](index.md), scegli il periodo nel selettore di date. Seleziona **Tutti** per l'intera
    cronologia.
-2. Clicca su **Sincronizza tutto**. La finestra **Sincronizza tassi FX** elenca ogni coppia con un
+2. Clicca su **Sinc. Tutto**. La finestra **Sincronizza tassi FX** elenca ogni coppia con un
    provider: le coppie con soli tassi manuali non hanno nulla da scaricare.
 3. Clicca su **Avvia sincronizzazione**.
 
@@ -56,7 +56,7 @@ attivato — secondo una pianificazione.
 
 ??? tip "🕰️ Cronologia più vecchia mancante — quando il grafico di una coppia inizia più tardi del previsto"
 
-    Una coppia che aggiungi con un provider scarica da sola l'intera cronologia. Se il grafico di una coppia più vecchia inizia più tardi della cronologia del provider, imposta il periodo nella pagina FX su **Tutto** e clicca una volta su **Sincronizza tutto**: LibreFolio scarica tutto ciò che i provider pubblicano, fino a oggi.
+    Una coppia che aggiungi con un provider scarica da sola l'intera cronologia. Se il grafico di una coppia più vecchia inizia più tardi della cronologia del provider, imposta il periodo nella pagina FX su **Tutti** e clicca una volta su **Sinc. Tutto**: LibreFolio scarica tutto ciò che i provider pubblicano, fino a oggi.
 
 ---
 

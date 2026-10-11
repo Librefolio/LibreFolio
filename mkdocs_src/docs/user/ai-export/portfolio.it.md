@@ -9,7 +9,7 @@ performance, su un piano di investimento ricorrente o sulle tue minusvalenze fis
 ## 📍 Dove trovarlo
 
 Nella **Dashboard**, seleziona **AI Export** nella barra degli strumenti, accanto a **Aggiorna**. Si apre inizialmente su
-**Piano di investimento ricorrente**.
+**Pianificazione PAC**.
 
 L'esportazione segue la [Dashboard](../dashboard/index.md):
 
@@ -26,8 +26,8 @@ con una quota superiore allo 0%.
 
 | Scelta | Cosa ottieni |
 | :--- | :--- |
-| **Panoramica e storico del portafoglio** | Posizioni, liquidità, allocazioni, performance, flussi, reddito, costi registrati, un riepilogo FIFO economico, un contesto di mercato compatto per asset e drawdown |
-| **Storico degli asset del portafoglio** | Prezzi dettagliati, rendimenti, indicatori, stati ed eventi per ogni asset che possiedi, con copertura |
+| **Portafoglio e andamento** | Posizioni, liquidità, allocazioni, performance, flussi, reddito, costi registrati, un riepilogo FIFO economico, un contesto di mercato compatto per asset e drawdown |
+| **Storico Asset del portafoglio** | Prezzi dettagliati, rendimenti, indicatori, stati ed eventi per ogni asset che possiedi, con copertura |
 
 ---
 
@@ -35,10 +35,10 @@ con una quota superiore allo 0%.
 
 | Analisi | Cosa fa l'AI |
 | :--- | :--- |
-| **Piano di investimento ricorrente** | Pianifica investimenti ricorrenti condizionali a partire dai tuoi dati, chiedendo solo ciò che manca |
-| **Ribilanciamento del portafoglio** | Confronta la tua allocazione con gli obiettivi che fornisci e delinea percorsi di ribilanciamento condizionali |
-| **Performance del portafoglio e driver di mercato** | Spiega il tuo risultato e ricerca driver di mercato con riferimenti temporali per ogni asset che possiedi: usa un'AI in grado di cercare sul web |
-| **Strategie di compensazione delle minusvalenze** | Esplora come le minusvalenze fiscali disponibili o in scadenza potrebbero compensare le plusvalenze, usando i tuoi lotti FIFO |
+| **Pianificazione PAC** | Pianifica investimenti ricorrenti condizionali a partire dai tuoi dati, chiedendo solo ciò che manca |
+| **Ribilanciamento portafoglio** | Confronta la tua allocazione con gli obiettivi che fornisci e delinea percorsi di ribilanciamento condizionali |
+| **Performance e cause di mercato** | Spiega il tuo risultato e ricerca driver di mercato con riferimenti temporali per ogni asset che possiedi: usa un'AI in grado di cercare sul web |
+| **Strategie per compensare minusvalenze** | Esplora come le minusvalenze fiscali disponibili o in scadenza potrebbero compensare le plusvalenze, usando i tuoi lotti FIFO |
 
 ??? note "📅 Piano di investimento ricorrente — cosa ti chiederà l'AI"
 

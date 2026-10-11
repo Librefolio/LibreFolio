@@ -4,7 +4,7 @@ Esta sección documenta los modelos financieros, convenciones y definiciones uti
 
 ## 📖 Resumen
 
-Los cálculos financieros precisos son fundamentales para un rastreador de carteras. LibreFolio implementa convenciones financieras estándar para garantizar la coherencia con los informes de los brókers y los datos del mundo real. Esta sección está organizada en cuatro áreas temáticas.
+Los cálculos financieros precisos son fundamentales para un rastreador de carteras. LibreFolio implementa convenciones financieras estándar para garantizar la coherencia con los informes de los brókeres y los datos del mundo real. Esta sección está organizada en cuatro áreas temáticas.
 
 ## 🗺️ Mapa Conceptual
 

@@ -202,17 +202,17 @@ description: Libre para entender, libre para actuar. LibreFolio reúne todas tus
   <!-- Análisis en profundidad 2: Brokers -->
   <div class="deep-dive reverse">
     <div class="deep-dive-content">
-      <h2>Integración con brókers</h2>
+      <h2>Integración con brókeres</h2>
       <p>Importa datos <b>directamente</b> desde los archivos de informe de tu bróker usando plugins dedicados.</p>
     </div>
     <div class="deep-dive-image">
       <div class="screenshot-container">
-          <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista de brókers"
+          <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista de brókeres"
                style="width: 100%; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
       </div>
     </div>
     <div class="deep-dive-actions">
-      <a href="user/transactions/import/" class="lf-btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">Ver todos los brókers compatibles &rarr;</a>
+      <a href="user/transactions/import/" class="lf-btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem;">Ver todos los brókeres compatibles &rarr;</a>
     </div>
   </div>
 
@@ -334,7 +334,7 @@ description: Libre para entender, libre para actuar. LibreFolio reúne todas tus
               <a href="user/transactions/import/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
                 <div class="provider-info">
-                  <h4>Importación de brókers</h4>
+                  <h4>Importación de brókeres</h4>
                   <p><b>Sube y procesa</b> los archivos de exportación de tu bróker <b>en segundos</b> usando analizadores inteligentes impulsados por la comunidad.</p>
                 </div>
               </a>
@@ -437,7 +437,7 @@ description: Libre para entender, libre para actuar. LibreFolio reúne todas tus
             </div>
             <div class="lf-fit-cell-content">
               <h4>Espacio de trabajo completo para la cartera</h4>
-              <p>Reúne brókers, activos, divisas y carteras en una vista estructurada.</p>
+              <p>Reúne brókeres, activos, divisas y carteras en una vista estructurada.</p>
             </div>
           </div>
         </article>
@@ -577,7 +577,7 @@ description: Libre para entender, libre para actuar. LibreFolio reúne todas tus
             </div>
             <div class="lf-fit-cell-content">
               <h4>Arquitectura abierta y ampliable</h4>
-              <p>Añade brókers, proveedores, divisas y flujos de trabajo a medida que el proyecto crece.</p>
+              <p>Añade brókeres, proveedores, divisas y flujos de trabajo a medida que el proyecto crece.</p>
             </div>
           </div>
         </article>

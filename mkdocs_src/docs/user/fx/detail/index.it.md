@@ -7,7 +7,7 @@ Clicca su una coppia FX nella [lista FX](../index.md) per aprire la sua pagina: 
 ## 🗺️ La pagina in breve
 
 - **Intestazione** — ⇄ scambia la direzione della coppia e la scheda corrispondente nella lista si aggiorna di conseguenza (se ci sono modifiche non salvate nell'editor dei tassi, LibreFolio chiede prima conferma); ← torna alla lista.
-- **Barra degli strumenti** — il periodo, l'ultimo tasso con la relativa variazione e i pulsanti **AI Export**, **Providers**, **Sync** e **Reload**. **Reload** rilegge i tassi memorizzati; **Sync** scarica quelli nuovi, vedi [Sincronizzazione](../sync.md).
+- **Barra degli strumenti** — il periodo, l'ultimo tasso con la relativa variazione e i pulsanti **AI Export**, **Provider**, **Sincronizza** e **Ricarica**. **Ricarica** rilegge i tassi memorizzati; **Sincronizza** scarica quelli nuovi, vedi [Sincronizzazione](../sync.md).
 - **Sotto** — il pannello **Segnali** compresso, il grafico, poi il pannello **Misure** compresso.
 
 ---
@@ -32,11 +32,11 @@ Aggiungi, modifica o elimina singoli tassi, oppure importane molti in una volta 
 
 ### ⚙️ [Configurazione provider](provider.md)
 
-**Providers** cambia da dove provengono i tassi: il provider, i percorsi di backup e le catene.
+**Provider** cambia da dove provengono i tassi: il provider, i percorsi di backup e le catene.
 
 ### 🧠 AI Export
 
-**AI Export** prepara un'istantanea della coppia, oppure una richiesta **FX Pair Analysis** o **FX Exposure Impact**, da incollare in un assistente AI. FX Exposure Impact conta solo la liquidità e le posizioni detenute direttamente nelle valute della coppia: non guarda all'interno dei fondi. Vedi [FX AI Export](../../ai-export/fx.md).
+**AI Export** prepara un'istantanea della coppia, oppure una richiesta **Analisi della coppia FX** o **Impatto esposizione FX**, da incollare in un assistente AI. Impatto esposizione FX conta solo la liquidità e le posizioni detenute direttamente nelle valute della coppia: non guarda all'interno dei fondi. Vedi [FX AI Export](../../ai-export/fx.md).
 
 ---
 

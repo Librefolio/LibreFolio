@@ -64,7 +64,7 @@ questo le imposti qui.
 
 Per ogni valuta in cui acquisti, imposta:
 
-- La modalità d'ordine: **Per numero di unità** o **Per importo**.
+- La modalità d'ordine: **Per numero di quote** o **Per importo**.
 - L'**Incremento** $\Delta$: ogni ordine proposto è un multiplo intero di
   esso. Con $q$ la dimensione di un ordine, in unità o come importo:
 
@@ -72,7 +72,7 @@ Per ogni valuta in cui acquisti, imposta:
     q = k\,\Delta, \qquad k = 0, 1, 2, \dots
     $$
 
-    Per numero di unità, $\Delta$ è un numero intero: $\Delta = 1$ significa
+    Per numero di quote, $\Delta$ è un numero intero: $\Delta = 1$ significa
     solo unità intere. Per importo, $\Delta$ è il più piccolo importo che puoi
     inserire, come $\Delta = 0.01$, e le unità che ottieni possono essere
     frazioni di unità.
@@ -100,8 +100,8 @@ Ogni broker ha anche due impostazioni proprie:
   che consenti. Tutti sono consentiti all'inizio: puoi escludere una fonte,
   limitare quanto ne viene usato lì e assegnarle una **Priorità** ($0$ =
   preferita).
-- **Conversione di valuta**: **Converti tu prima di acquistare** o
-  **Il Broker converte quando acquisti**. Entrambe convertono al tasso del
+- **Conversione di valuta**: **Converti tu prima di comprare** o
+  **Converte il Broker quando compri**. Entrambe convertono al tasso del
   passo **FX** meno lo spread, quindi il calcolo è lo stesso in entrambi i
   casi: cambia solo il modo in cui il piano mostra la conversione.
 
@@ -181,7 +181,7 @@ $$
 
 Due azioni ti aiutano ad arrivarci:
 
-- **Bilancia tutti** ridimensiona ogni obiettivo, mantenendo i loro rapporti:
+- **Bilancia tutto** ridimensiona ogni obiettivo, mantenendo i loro rapporti:
 
     $$
     w_i' = \frac{w_i}{\sum_j w_j} \cdot 100\%
@@ -189,11 +189,11 @@ Due azioni ti aiutano ad arrivarci:
 
     Se sono tutti $0$, ogni asset riceve una parte uguale. L'arrotondamento
     mantiene il totale esattamente a $100\%$. Per cambiare solo alcune righe,
-    **Bilancia a 100%** su una riga dà a quell'asset ciò che manca, o toglie
-    l'eccesso, e **Bilancia le righe selezionate a 100%** ridimensiona solo le
+    **Bilancia al 100%** su una riga dà a quell'asset ciò che manca, o toglie
+    l'eccesso, e **Bilancia le righe selezionate al 100%** ridimensiona solo le
     righe che spunti.
 
-- **Copia distribuzione attuale** legge quanto ciascuno di questi asset pesa
+- **Copia la distribuzione attuale** legge quanto ciascuno di questi asset pesa
   oggi nei broker che spunti, contando solo questi asset e non la liquidità.
   Con $H_i$ il valore di mercato dell'asset $i$ detenuto lì oggi:
 
@@ -309,10 +309,10 @@ ancora in parità su quelli precedenti:
     o margine sul prezzo. Elevare al quadrato fa pesare di più gli scarti
     grandi, e $D$ è misurato in unità monetarie al quadrato, per esempio EUR².
 
-2. **Denaro non investito**: il minimo denaro lasciato fuori dagli asset,
+2. **Liquidità non investita**: il minimo denaro lasciato fuori dagli asset,
     $R - \sum_i V_i$.
 
-3. **Priorità del broker e della fonte**: la somma più piccola dei numeri di
+3. **Priorità di Broker e fonti**: la somma più piccola dei numeri di
     **Priorità** degli ordini e delle fonti di liquidità che il piano usa.
 
 4. **Costi espliciti (commissioni, spread, margine)**: il totale più basso di
@@ -341,7 +341,7 @@ da completare e offre **Calcola piano**.
 Il pianificatore funziona senza alcun broker o asset registrato: tutto può
 essere digitato. Quando preferisci partire dai tuoi dati LibreFolio, li copi con
 un'azione esplicita: **Scegli Broker esistente**, **Dai tuoi Broker**, la
-ricerca asset o **I tuoi Asset**, e **Copia distribuzione attuale**. Nel passo
+ricerca asset o **I tuoi Asset**, e **Copia la distribuzione attuale**. Nel passo
 **FX**, un tasso **Auto** viene letto da LibreFolio non appena il passo si apre.
 
 Ogni valore mostra da dove proviene (**Copiato**, **Manuale** o **Modificato**),
@@ -351,7 +351,7 @@ modifichi, e una copia che hai modificato può essere ripristinata.
 Quando premi **Calcola piano**, il pianificatore legge di nuovo da LibreFolio i
 prezzi, i tassi e i saldi che hai copiato e non hai modificato. I valori che hai
 digitato o modificato restano come sono. Se quella lettura fallisce, non viene
-calcolato nulla: puoi **Riprovare**, o **Calcolare con i dati copiati** per usare
+calcolato nulla: puoi scegliere **Riprova**, o **Calcola con i dati copiati** per usare
 le copie precedenti.
 
 ### ⏳ Mentre calcola
@@ -385,16 +385,16 @@ Un calcolo termina con uno di questi esiti:
 
 | Esito | Cosa significa |
 |---|---|
-| **Piano disponibile** | Un piano che rispetta ogni vincolo. Un secondo badge dice quanto vale. **Ottimale dimostrato**: il solver ha dimostrato, entro il suo piccolo margine di calcolo (che cresce con gli importi), che non esiste un piano migliore, obiettivo per obiettivo nell'ordine del passo **Strategia**, e la verifica esatta del piano corrisponde ai suoi numeri. **Ottimalità non dimostrata**: il solver ha raggiunto il suo limite di tempo o di nodi, oppure i suoi stessi numeri non corrispondono alla verifica esatta del piano; è quindi il miglior piano trovato, ma non è dimostrato che sia il migliore. |
+| **Piano disponibile** | Un piano che rispetta ogni vincolo. Un secondo badge dice quanto vale. **Ottimo dimostrato**: il solver ha dimostrato, entro il suo piccolo margine di calcolo (che cresce con gli importi), che non esiste un piano migliore, obiettivo per obiettivo nell'ordine del passo **Strategia**, e la verifica esatta del piano corrisponde ai suoi numeri. **Ottimalità non dimostrata**: il solver ha raggiunto il suo limite di tempo o di nodi, oppure i suoi stessi numeri non corrispondono alla verifica esatta del piano; è quindi il miglior piano trovato, ma non è dimostrato che sia il migliore. |
 | **Nessuna operazione** | Con la liquidità che hai scelto, nessun acquisto soddisfa i vincoli: il piano è non fare nulla. Nessun ordine, nessun cambio di valuta e nessun finanziamento. |
-| **Non ammissibile con questi vincoli** | Contrassegnato **Inammissibilità dimostrata**: nessuna combinazione soddisfa insieme tutti i vincoli rigidi. I vincoli coinvolti sono elencati (ogni **Acquisto obbligatorio**, e la liquidità che può raggiungere i broker), ciascuno con un link al passo dove puoi modificarlo. Il pianificatore non sceglie quale allentare, e nessun piano parziale viene mostrato come valido. |
+| **Infattibile con questi vincoli** | Contrassegnato **Infattibilità dimostrata**: nessuna combinazione soddisfa insieme tutti i vincoli rigidi. I vincoli coinvolti sono elencati (ogni **Acquisto obbligatorio**, e la liquidità che può raggiungere i broker), ciascuno con un link al passo dove puoi modificarlo. Il pianificatore non sceglie quale allentare, e nessun piano parziale viene mostrato come valido. |
 | **Nessun piano entro i limiti** | Il solver non ha trovato alcun piano prima di raggiungere il suo limite. Questa non è una prova che non ne esista nessuno. Una ricerca più leggera aiuta: meno asset o route, un **Acquisto massimo** più basso, o un **Incremento** maggiore. |
-| **Servono più dati** | Manca qualcosa. La tua bozza è intatta, e nessun asset viene rimosso silenziosamente: aggiungi il dato mancante o rimuovi tu l'asset. |
+| **Servono altri dati** | Manca qualcosa. La tua bozza è intatta, e nessun asset viene rimosso silenziosamente: aggiungi il dato mancante o rimuovi tu l'asset. |
 | **Input non valido** | Alcuni dati non sono validi. |
 | **Scenario non supportato** | Non è un errore nei tuoi dati: lo strumento non gestisce ancora questo caso. |
 
 Ogni piano mostrato è stato verificato di nuovo in aritmetica decimale esatta,
-indipendentemente dal solver: questo è il badge **Verificato in decimale**. Un
+indipendentemente dal solver: questo è il badge **Verificato in Decimal**. Un
 ultimo badge dice come è terminata la ricerca: **Completato** (il solver ha
 terminato la sua ricerca da solo), **Limite di tempo** o **Limite di nodi**.
 Quando è stato trovato un piano ma la ricerca si è fermata a un limite, un
@@ -440,14 +440,14 @@ Sotto l'esito, un piano è disposto in questo ordine:
    piano.
 5. **Saldi per broker e valuta**: come si muove ogni saldo di cassa, e cosa
    resta.
-6. **Dimostrazione e solver**: come è stato stabilito l'esito. I badge di esito,
+6. **Prova e solver**: come è stato stabilito l'esito. I badge di esito,
    dimostrazione e arresto, il valore esatto di ogni obiettivo, le fasi del
    solver e le tempistiche backend.
 
 **Allocazione per Asset** e **Piano operativo** sono già aperti; le altre
 sezioni si aprono su richiesta, e **Espandi tutto** / **Comprimi tutto** le apre
-o le chiude insieme. Senza un piano (**Non ammissibile con questi vincoli** o
-**Nessun piano entro i limiti**), **Dimostrazione e solver** è l'unica sezione,
+o le chiude insieme. Senza un piano (**Infattibile con questi vincoli** o
+**Nessun piano entro i limiti**), **Prova e solver** è l'unica sezione,
 e i valori principali mostrano solo il riquadro **Calcolo**.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
@@ -462,7 +462,7 @@ limite e i minimi della sua route. **Mostra provenienza** elenca da dove
 proviene ogni valore, **Copiato** o **Manuale**, con la data e l'ora della copia
 o del tuo inserimento.
 
-**Dimostrazione e tempistiche**, in alto nel risultato, apre **Dimostrazione e
+**Prova e tempi**, in alto nel risultato, apre **Prova e
 solver** e scorre fino a essa.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">

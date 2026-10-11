@@ -10,19 +10,19 @@ Partagez un courtier avec les personnes qui en ont besoin — un partenaire, un 
 
 ## ➕ Partager un courtier
 
-Ouvrez le panneau de partage à l'aide du bouton de partage sur la carte du courtier, ou via **Partager le courtier** dans la barre d'outils du courtier (cela ouvre l'onglet **Info**). Seul un Propriétaire peut le modifier ; tous les autres le voient en lecture seule.
+Ouvrez le panneau de partage à l'aide du bouton de partage sur la carte du courtier, ou via **Partager le courtier** dans la barre d'outils du courtier (cela ouvre l'onglet **Infos**). Seul un Propriétaire peut le modifier ; tous les autres le voient en lecture seule.
 
 1. Cliquez sur **+** (**Ajouter un utilisateur**) et trouvez la personne **par nom d'utilisateur**.
-2. Choisissez le **Rôle** et, pour un Propriétaire, le **% de propriété**. Cliquez ensuite sur **Ajouter un utilisateur**.
+2. Choisissez le **Rôle** et, pour un Propriétaire, le **% Propriété**. Cliquez ensuite sur **Ajouter un utilisateur**.
 3. Cliquez sur **Enregistrer la configuration**. Rien ne change avant cela : jusque-là, **↺ Réinitialiser** remet la liste dans son état d'origine.
 
 ??? note "✏️ Modifier ou retirer quelqu'un — et quand un enregistrement est refusé"
 
-    Cliquez sur la pastille d'une personne pour modifier son **Rôle** ou son **% de propriété**, ou pour **Retirer l'accès** ; cliquez sur **Confirmer**, puis sur **Enregistrer la configuration**.
+    Cliquez sur la pastille d'une personne pour modifier son **Rôle** ou son **% Propriété**, ou pour **Supprimer l'Accès** ; cliquez sur **Confirmer**, puis sur **Enregistrer la configuration**.
 
-    Un enregistrement est refusé s'il devait laisser le courtier **sans Propriétaire** — le dernier Propriétaire ne peut donc être ni retiré ni rétrogradé — ou si les parts totalisent **plus de 100 %** (le panneau affiche l'avertissement *Le total de la propriété dépasse 100 %*).
+    Un enregistrement est refusé s'il devait laisser le courtier **sans Propriétaire** — le dernier Propriétaire ne peut donc être ni retiré ni rétrogradé — ou si les parts totalisent **plus de 100 %** (le panneau affiche l'avertissement *La propriété totale dépasse 100%*).
 
-    Modifications non enregistrées : la boîte de dialogue ouverte depuis la liste des courtiers demande confirmation avant de se fermer, mais dans l'onglet **Info**, passer à un autre onglet les abandonne.
+    Modifications non enregistrées : la boîte de dialogue ouverte depuis la liste des courtiers demande confirmation avant de se fermer, mais dans l'onglet **Infos**, passer à un autre onglet les abandonne.
 
 ---
 

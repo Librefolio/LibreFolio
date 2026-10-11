@@ -60,7 +60,7 @@ Los valores medidos anteriores son consistentes con el caso idealizado: para $n$
 
 Una cartera puede reportar dos cifras de concentración diferentes en el mismo momento, y ninguna es incorrecta. Lo que cambia es **qué cuenta como una posición**.
 
-Supongamos que el mismo instrumento se mantiene en dos brókers, con un 6% y un 4% de la cartera.
+Supongamos que el mismo instrumento se mantiene en dos brókeres, con un 6% y un 4% de la cartera.
 
 - Si se cuenta **por posición**, contribuye con $0.06^2 + 0.04^2 = 0.0052$.
 - Si se cuentan **por instrumento**, las posiciones primero se suman para dar un 10%, lo que contribuye con $0.10^2 = 0.0100$.
@@ -69,7 +69,7 @@ La diferencia es exactamente $2 w_1 w_2$, que siempre es positiva. Así que el e
 
 !!! info "Dos preguntas, no dos respuestas"
 
-    *¿Cuán concentrado estoy por posición?* y *¿cuán concentrado estoy por instrumento?* son preguntas diferentes, y una cartera repartida entre brókers las responde de forma distinta por construcción. El enfoque por instrumento es el que coincide con la exposición de mercado: el mismo fondo mantenido en dos cuentas es una sola apuesta, sin importar en cuántas filas aparezca.
+    *¿Cuán concentrado estoy por posición?* y *¿cuán concentrado estoy por instrumento?* son preguntas diferentes, y una cartera repartida entre brókeres las responde de forma distinta por construcción. El enfoque por instrumento es el que coincide con la exposición de mercado: el mismo fondo mantenido en dos cuentas es una sola apuesta, sin importar en cuántas filas aparezca.
 
     Cuando dos cifras no coinciden, lo que hay que establecer es qué granularidad contó cada una — no cuál es la correcta.
 

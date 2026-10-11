@@ -6,11 +6,11 @@ Cliquez sur un actif dans la [page Actifs](../index.md) pour ouvrir sa propre pa
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Page de détail d'un actif" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-La page comporte deux onglets : **Vue d'ensemble**, décrit ci-dessous, et **Risques & Scénarios**.
+La page comporte deux onglets : **Vue d'ensemble**, décrit ci-dessous, et **Risque et scénarios**.
 
 !!! info "Bêta"
 
-    L'onglet **Risques & Scénarios** est encore en bêta : il s'ouvre avec la mention *L'analyse des risques est en bêta.* et n'est pas encore couvert par cette documentation.
+    L'onglet **Risque et scénarios** est encore en bêta : il s'ouvre avec la mention *L'analyse des risques est en version bêta.* et n'est pas encore couvert par cette documentation.
 
 ---
 
@@ -36,7 +36,7 @@ Cliquez sur deux points du graphique pour lire la variation entre eux.
 
 ### 🗂️ [Classification](classification.md)
 
-La répartition par secteur et par pays, dans le panneau **Métadonnées & Classification**.
+La répartition par secteur et par pays, dans le panneau **Métadonnées et classification**.
 
 ### 📅 [Événements](events.md)
 

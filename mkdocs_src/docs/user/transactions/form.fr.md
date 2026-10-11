@@ -20,7 +20,7 @@ Le formulaire de transaction ajoute ou modifie une transaction — ou une paire 
 1. Choisissez le **Type**, puis le **Courtier** si ce n'est pas déjà défini.
 2. Remplissez la section **Obligatoire** : la **Date**, l'**Actif** et sa quantité lorsque le type en comporte une, ainsi que le montant en espèces.
 3. Ouvrez la section **Facultatif** pour les **Étiquettes**, une **Description** ou, sur les dividendes, intérêts et ajustements, un **Événement lié**.
-4. Cliquez sur **Appliquer** pour placer la ligne dans l'espace de travail ; **Tout enregistrer** dans l'espace de travail l'enregistre.
+4. Cliquez sur **Appliquer** pour placer la ligne dans l'espace de travail ; **Enregistrer Tout** dans l'espace de travail l'enregistre.
 
 Quelques règles permettent de saisir rapidement :
 
@@ -36,7 +36,7 @@ Quelques règles permettent de saisir rapidement :
     - **Auto** — LibreFolio le calcule comme un [prix de revient unitaire (PRU)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md) ; appuyez sur **⚡ Valider maintenant** pour le voir.
     - **Manuel** — vous le saisissez.
 
-    En **Auto**, la moyenne est prise chez le courtier émetteur d'un transfert, ou chez le courtier propre à l'ajustement. Si ce courtier n'a aucune autre transaction sur l'actif jusqu'à la date d'arrivée des unités, il n'y a rien à moyenner, et le coût est de 0 par conception : si ces unités ont bien eu un coût, ouvrez la transaction plus tard et saisissez leur coût en **Manuel**. En **Manuel**, le champ ne peut pas rester vide : LibreFolio signale la ligne et n'enregistre rien tant que vous ne le remplissez pas ou ne passez pas en **Auto**. Ne saisissez 0 que pour des unités qui n'ont vraiment rien coûté, comme les nouvelles actions d'une division ; pour un don, saisissez le coût d'origine du donateur. Si un taux de change est manquant, le lien **Synchroniser les taux de change** le récupère.
+    En **Auto**, la moyenne est prise chez le courtier émetteur d'un transfert, ou chez le courtier propre à l'ajustement. Si ce courtier n'a aucune autre transaction sur l'actif jusqu'à la date d'arrivée des unités, il n'y a rien à moyenner, et le coût est de 0 par conception : si ces unités ont bien eu un coût, ouvrez la transaction plus tard et saisissez leur coût en **Manuel**. En **Manuel**, le champ ne peut pas rester vide : LibreFolio signale la ligne et n'enregistre rien tant que vous ne le remplissez pas ou ne passez pas en **Auto**. Ne saisissez 0 que pour des unités qui n'ont vraiment rien coûté, comme les nouvelles actions d'une division ; pour un don, saisissez le coût d'origine du donateur. Si un taux de change est manquant, le lien **Synchroniser les taux FX** le récupère.
 
 ---
 
@@ -60,7 +60,7 @@ Le [guide de théorie financière](../../financial-theory/instruments/transactio
 
 ### 🔗 Transactions appariées {: #composite-transactions }
 
-Une opération appariée est enregistrée comme deux transactions liées, que le formulaire affiche comme une seule, avec un côté **Depuis** et un côté **Vers**. Chaque côté a sa propre date, et la flèche **Inverser les côtés** inverse le sens.
+Une opération appariée est enregistrée comme deux transactions liées, que le formulaire affiche comme une seule, avec un côté **De** et un côté **À**. Chaque côté a sa propre date, et la flèche **Inverser les côtés** inverse le sens.
 
 | Type | Ce qu'il enregistre | Théorie |
 |------|-----------------|--------|

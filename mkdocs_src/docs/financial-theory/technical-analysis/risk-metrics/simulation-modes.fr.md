@@ -131,7 +131,7 @@ La seconde propriété est celle à emporter dans tout ce qui suit : la distribu
 
 ## 🎲 Deux façons de tirer le même modèle {: #sampling-strategies }
 
-La **Stratégie d'échantillonnage** offerte avec la courbe normale — et uniquement avec elle — se choisit entre **Monte Carlo** et **quasi-Monte Carlo**. C'est un choix sur la façon dont les nombres aléatoires sont produits, et sur rien d'autre. Le bootstrap n'a pas un tel choix : il tire toujours les débuts de ses blocs à partir d'un générateur pseudo-aléatoire amorcé.
+La **Stratégie d'échantillonnage** offerte avec la courbe normale — et uniquement avec elle — se choisit entre **Monte-Carlo** et **Quasi-Monte-Carlo**. C'est un choix sur la façon dont les nombres aléatoires sont produits, et sur rien d'autre. Le bootstrap n'a pas un tel choix : il tire toujours les débuts de ses blocs à partir d'un générateur pseudo-aléatoire amorcé.
 
 !!! warning "Deux entrées ne sont pas deux modèles"
 

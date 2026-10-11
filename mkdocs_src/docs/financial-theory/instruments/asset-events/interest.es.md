@@ -135,9 +135,9 @@ Donde:
 
 En LibreFolio, un evento `INTEREST` (y la transacción de cartera correspondiente) se registra con:
 
-- **Date**: La fecha del pago de intereses
-- **Amount**: El monto en efectivo recibido
-- **Currency**: La moneda del pago
+- **Fecha**: La fecha del pago de intereses
+- **Importe**: El monto en efectivo recibido
+- **Divisa**: La moneda del pago
 
 ### The diferencia contable: Interés vs. Dividendo
 Es fundamental distinguir entre una transacción de **Interés** y una de **Dividendo** a nivel de base de datos:

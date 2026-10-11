@@ -94,7 +94,7 @@ Il tuo conto titoli ha più di due anni? Una seconda esportazione, la **Lista mo
 
 - **Alcune righe richiedono il tuo aiuto** nel passaggio **Correzioni** della procedura guidata ([come funziona](how-to.md#only-when-needed)):
     - operazioni senza quantità, e rimborsi di fondi: scegli il tipo, il titolo e la quantità;
-    - operazioni il cui importo può includere interessi maturati e commissioni: aggiungili sotto **Separare il prezzo dagli oneri?**, dalla tua nota informativa;
+    - operazioni il cui importo può includere interessi maturati e commissioni: aggiungili sotto **Vuoi separare il prezzo dagli oneri?**, dalla tua nota informativa;
     - oneri che non nominano alcun titolo: assegnateli, o tienili sul conto.
 - **I titoli sono abbinati per nome.** L'esportazione dei titoli non fornisce l'ISIN: abbina ogni titolo nel pannello **Risolvi asset** di [Riepilogo](how-to.md#review).
 - **Importi come scritti**, nella valuta di ciascuna riga, senza conversione. Le date sono le date dell'operazione.

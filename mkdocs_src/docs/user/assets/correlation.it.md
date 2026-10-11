@@ -50,7 +50,7 @@ Questa sezione risponde a *quali di questi si muovono insieme?* — per individu
 **Come leggerla**
 
 - **Un quadrato per coppia**: blu quando i due asset si muovono insieme, rosso quando si muovono in direzioni opposte, pallido quando si muovono in modo indipendente. Passa il mouse o toccalo per il valore a parole.
-- **Parti dalle due liste**: **Le più simili** nomina le coppie che sono quasi la stessa esposizione, **Quelle che compensano** le coppie che si attutiscono a vicenda. Una lista vuota è già di per sé un risultato. Clicca una coppia per trovarla nella matrice.
+- **Parti dalle due liste**: **I più simili** nomina le coppie che sono quasi la stessa esposizione, **Quelli che si compensano** le coppie che si attutiscono a vicenda. Una lista vuota è già di per sé un risultato. Clicca una coppia per trovarla nella matrice.
 - **Un trattino non è uno zero**: non è stato possibile misurare la coppia — storico troppo breve, o un prezzo che non si è mai mosso.
 - **I pulsanti di ordinamento** riorganizzano la matrice; non cambiano mai un valore.
 
@@ -66,17 +66,17 @@ Questa sezione mette ogni asset sulla stessa scala del danno: le sue perdite peg
 
 **Strumenti mostrati**
 
-- **Giorno negativo** — la perdita media nei giorni peggiori, il 5% peggiore (CVaR al 95%) → [VaR condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
-- **Mese negativo** — la stessa cosa su periodi reali di un mese → [VaR condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
-- **Caduta peggiore** — il calo più profondo da un picco; *durata N d* conta i giorni fino a quando l'asset è tornato lì, o fino alla fine del periodo → [Drawdown massimo](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
-- **Sotto il picco ora** — quanto sta sotto il suo livello più alto nel periodo → [Drawdown attuale](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
-- **Risalita al picco** — il guadagno necessario per tornarci: il 20% sotto richiede +25% → [Cosa serve per tornare](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back)
+- **Giornata storta** — la perdita media nei giorni peggiori, il 5% peggiore (CVaR al 95%) → [VaR condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
+- **Mese storto** — la stessa cosa su periodi reali di un mese → [VaR condizionale](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
+- **Peggior discesa** — il calo più profondo da un picco; *durata N d* conta i giorni fino a quando l'asset è tornato lì, o fino alla fine del periodo → [Drawdown massimo](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
+- **Sotto il massimo** — quanto sta sotto il suo livello più alto nel periodo → [Drawdown attuale](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
+- **Risalita al massimo** — il guadagno necessario per tornarci: il 20% sotto richiede +25% → [Cosa serve per tornare](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back)
 
 **Come leggerla**
 
 - **Ogni colonna è il suo orizzonte**, da un giorno all'intero periodo: confronta gli asset lungo una colonna, non sommare mai i valori tra colonne.
 - **Non è una classifica**: la tabella si apre nell'ordine della tua selezione. Clicca il titolo di una colonna per ordinarla, o passaci il mouse per sapere cosa misura.
-- **Su un periodo breve**, **Giorno negativo** e **Mese negativo** possono restare vuoti mentre le colonne del drawdown sono riempite: richiedono più storico.
+- **Su un periodo breve**, **Giornata storta** e **Mese storto** possono restare vuoti mentre le colonne del drawdown sono riempite: richiedono più storico.
 
 ---
 
@@ -91,7 +91,7 @@ Questa sezione mette il rischio contro la ricompensa — quanto ha oscillato ogn
 **Strumenti mostrati**
 
 - **Volatilità** — quanto hanno oscillato i rendimenti, su base annua → [Volatilità](../../financial-theory/technical-analysis/risk-metrics/volatility.md)
-- **Rend. ann.** — il *rendimento medio annuo*: il rendimento medio del periodo, rapportato a un anno → [Annualizzazione osservata](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md)
+- **Rend. annuo** — il *rendimento medio annuo*: il rendimento medio del periodo, rapportato a un anno → [Annualizzazione osservata](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md)
 - **Sortino** — il rendimento guadagnato per unità di oscillazione al ribasso → [Indice di Sortino](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md)
 - **Sharpe** — il rendimento guadagnato per unità di volatilità → [Indice di Sharpe](../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md)
 - **Beta** — con un benchmark: quanto si è mosso l'asset quando si è mosso il benchmark → [Beta e rendimento attivo](../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md#interpretation)
@@ -150,14 +150,14 @@ Quando qualcosa non va nei dati, la scheda lo dice una volta, subito sotto la sc
 
 **Strumenti mostrati**
 
-- **Qualità dei dati** — prezzi e tassi di cambio mancanti o obsoleti, e i risultati che rendono parziali → [Qualità dei dati](../../financial-theory/technical-analysis/risk-metrics/data-quality.md)
+- **Qualità dati** — prezzi e tassi di cambio mancanti o obsoleti, e i risultati che rendono parziali → [Qualità dei dati](../../financial-theory/technical-analysis/risk-metrics/data-quality.md)
 
 **Come leggerla**
 
-- **Il banner di qualità dei dati** elenca cosa correggere, ogni problema con la sua azione, come **Sincronizza prezzi** o **Sincronizza tassi**. Cliccalo per aprire l'elenco.
+- **Il banner di qualità dei dati** elenca cosa correggere, ogni problema con la sua azione, come **Sincronizza** per i prezzi o **Sincronizza** per i tassi. Cliccalo per aprire l'elenco.
 - **L'avviso** sotto di esso nomina i risultati **parziali** e la loro causa. Un risultato parziale mostra comunque le sue cifre: leggile tenendo presente quella causa.
 - **Un banner ambra proprio di una sezione** significa che un risultato non è tornato affatto, spesso perché il periodo è troppo breve: scegline uno più lungo, o sincronizza i prezzi.
-- **E se…?** segnala i suoi problemi all'interno della sua sezione.
+- **Cosa succede se…?** segnala i suoi problemi all'interno della sua sezione.
 
 ---
 

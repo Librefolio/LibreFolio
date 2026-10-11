@@ -8,7 +8,7 @@ Esporta un asset, con la sua cronologia di mercato e, se lo detieni, la tua posi
 ## 📍 Dove si trova
 
 Nella pagina di dettaglio di un asset, seleziona **AI Export** nella barra degli strumenti della pagina. Si apre inizialmente su
-**Analisi di mercato dell'asset**.
+**Analisi dell'Asset**.
 
 L'esportazione copre l'asset aperto nella pagina, nella valuta mostrata dalla pagina, con l'ultimo giorno
 dell'intervallo di date della pagina come data di esportazione. La tua posizione comprende ogni broker che puoi aprire.
@@ -19,8 +19,8 @@ dell'intervallo di date della pagina come data di esportazione. La tua posizione
 
 | Scelta | Cosa ottieni |
 | :--- | :--- |
-| **Posizione e cronologia di mercato (completa)** | Le tue posizioni nell'asset (costo, valore, P&L, performance, lotti FIFO), un contesto di mercato compatto e il drawdown |
-| **Solo cronologia di mercato (senza posizioni)** | Prezzi, rendimenti, indicatori, stati, eventi e drawdown, senza le tue posizioni |
+| **Posizione e andamento (completo)** | Le tue posizioni nell'asset (costo, valore, P&L, performance, lotti FIFO), un contesto di mercato compatto e il drawdown |
+| **Solo andamento di mercato (senza posizioni)** | Prezzi, rendimenti, indicatori, stati, eventi e drawdown, senza le tue posizioni |
 
 ---
 
@@ -28,8 +28,8 @@ dell'intervallo di date della pagina come data di esportazione. La tua posizione
 
 | Analisi | Cosa fa l'AI |
 | :--- | :--- |
-| **Revisione della posizione** | Esamina il valore, il costo, il P&L, i broker e i lotti della tua posizione, con il contesto di mercato; richiede una posizione nell'asset |
-| **Analisi di mercato dell'asset** | Analizza la cronologia dei prezzi, i rendimenti, il trend, il momentum, la volatilità, il drawdown e gli eventi |
+| **Revisione posizione** | Esamina il valore, il costo, il P&L, i broker e i lotti della tua posizione, con il contesto di mercato; richiede una posizione nell'asset |
+| **Analisi dell'Asset** | Analizza la cronologia dei prezzi, i rendimenti, il trend, il momentum, la volatilità, il drawdown e gli eventi |
 
 ---
 

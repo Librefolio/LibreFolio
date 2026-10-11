@@ -10,7 +10,7 @@ Los indicadores cuentan **sesiones**, no días naturales: una sesión es un día
     son indicadores de solo cierre y funcionan tanto en activos como en tipos de cambio FX (EMA, SMA, KAMA, MACD, RSI, ROC, PPO, RSI Estocástico y Bandas de Bollinger).
     Los indicadores que requieren máximo, mínimo o volumen son exclusivos de activos
     y se declaran como no disponibles cuando esos campos no existen. La familia
-    **Risk** también es exclusiva de activos: no se generan lecturas de riesgo móvil
+    **Riesgo** también es exclusiva de activos: no se generan lecturas de riesgo móvil
     para pares de divisas.
 
 ---

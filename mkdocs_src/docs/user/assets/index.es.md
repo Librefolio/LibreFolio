@@ -24,7 +24,7 @@ Los activos son compartidos por todos en este LibreFolio: tus transacciones deci
 
 Abre **Activos** en la barra lateral, luego:
 
-- **Elige un diseño** — los dos botones junto a **Añadir activo** alternan entre tarjetas con un pequeño gráfico (**Vista de cuadrícula**) y una tabla ordenable (**Vista de tabla**). Tu elección se recuerda en este navegador.
+- **Elige un diseño** — los dos botones junto a **Agregar Activo** alternan entre tarjetas con un pequeño gráfico (**Vista de cuadrícula**) y una tabla ordenable (**Vista de tabla**). Tu elección se recuerda en este navegador.
 - **Elige el período** — el rango de fechas establece el período de los gráficos de las tarjetas y del cambio que muestran. En la tabla, las columnas **Δ** dan el cambio en un día y en cada período, de 1S a 5A, que quepa dentro del rango.
 - **Filtrar** — escribe en **Buscar activos...** para filtrar por nombre, y elige una o más monedas y tipos en los dos menús; la ✕ borra la búsqueda y ambos menús.
 - **Mostrar activos archivados** — la lista comienza mostrando solo los **Activos**: activa **Inactivos** para añadir los archivados, o desactiva **Activos** para ver solo esos.
@@ -46,16 +46,16 @@ Ambos diseños dividen la lista en hasta tres paneles, cada uno con su recuento;
 | Panel | Qué contiene |
 |---|---|
 | **Tus activos** | Activos mantenidos ahora en un bróker que posees |
-| **Activos de otros usuarios** | Activos mantenidos ahora solo por otros usuarios — en brókers que no posees |
-| **Seguidos** | Activos que ahora no mantiene nadie — nunca comprados o ya vendidos, mantenidos en el radar |
+| **Activos de otros usuarios** | Activos mantenidos ahora solo por otros usuarios — en brókeres que no posees |
+| **Observados** | Activos que ahora no mantiene nadie — nunca comprados o ya vendidos, mantenidos en el radar |
 
-Lo que cuenta es la posición **hoy**: cuando vendes toda tu posición, el activo pasa a *Activos de otros usuarios* si alguien más aún lo mantiene, y a *Seguidos* en caso contrario. Los brókers compartidos contigo como **Editor** o **Lector** cuentan como brókers de otros usuarios, y una posición reducida a un remanente insignificante cuenta como no mantenida.
+Lo que cuenta es la posición **hoy**: cuando vendes toda tu posición, el activo pasa a *Activos de otros usuarios* si alguien más aún lo mantiene, y a *Observados* en caso contrario. Los brókeres compartidos contigo como **Editor** o **Lector** cuentan como brókeres de otros usuarios, y una posición reducida a un remanente insignificante cuenta como no mantenida.
 
 En la vista de tabla, cada panel es una tabla con sus propias páginas; cambiar el tamaño, mover u ocultar una columna se aplica a las tres.
 
 ## 🔄 Mantener los precios actualizados
 
-- **Sincronizar todo** abre una ventana donde **Iniciar sincronización** descarga los últimos precios de cada activo que tenga un proveedor; **Recargar todo** recarga la lista desde lo que LibreFolio ha almacenado. En la pestaña **[Correlación](correlation.md)**, se convierten en **Sincronizar selección**, que también descarga los tipos de cambio que convierten los activos seleccionados, y **Recargar todo**, que recalcula todos los análisis.
+- **Sinc. Todo** abre una ventana donde **Iniciar sincronización** descarga los últimos precios de cada activo que tenga un proveedor; **Recargar todo** recarga la lista desde lo que LibreFolio ha almacenado. En la pestaña **[Correlación](correlation.md)**, se convierten en **Sinc. selección**, que también descarga los tipos de cambio que convierten los activos seleccionados, y **Recargar todo**, que recalcula todos los análisis.
 - **Precios en vivo** — mientras esta página o la página de un activo esté abierta y el rango de fechas termine hoy, los precios se actualizan solos de vez en cuando. Un precio se vuelve verde cuando ha subido desde la actualización anterior, rojo cuando ha bajado; cuando el mercado está cerrado, ves el último cierre, sin color.
 - **En segundo plano**, el servidor actualiza los precios según una programación que establece tu administrador ([Planificador de datos de mercado](../../admin/settings.md#market-data-scheduler)). El Panel muestra los precios almacenados.
 
@@ -72,7 +72,7 @@ En la tabla, marca varias filas para **Sincronizar**, **Recargar** o **Eliminar*
 
 ??? warning "🗑️ Cuando un activo no se puede eliminar"
 
-    Un activo no se elimina mientras **cualquier** transacción lo utilice, incluso una en un bróker que no puedes ver. El resultado muestra cuántas transacciones lo utilizan, con un enlace **Transacciones** filtrado por ese activo. Esa página muestra solo los brókers a los que puedes acceder, por lo que puede listar menos transacciones que el recuento.
+    Un activo no se elimina mientras **cualquier** transacción lo utilice, incluso una en un bróker que no puedes ver. El resultado muestra cuántas transacciones lo utilizan, con un enlace **Transacciones** filtrado por ese activo. Esa página muestra solo los brókeres a los que puedes acceder, por lo que puede listar menos transacciones que el recuento.
 
 ## 🧭 Funcionalidades
 

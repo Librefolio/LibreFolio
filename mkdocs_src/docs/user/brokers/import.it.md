@@ -6,7 +6,7 @@ La scheda **Transazioni** di un broker elenca tutte le sue transazioni, dalla pi
     <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Scheda Transazioni del broker">
 </div>
 
-Sopra l'elenco trovi **Report caricati**, **Visualizza in Transazioni** e il selettore di colonne. I proprietari e gli editor hanno anche **Importa** e **Aggiungi transazione**.
+Sopra l'elenco trovi **Report caricati**, **Vedi in Transazioni** e il selettore di colonne. I proprietari e gli editor hanno anche **Importa** e **Aggiungi transazione**.
 
 ---
 
@@ -23,7 +23,7 @@ Nulla viene salvato prima di **Salva tutto**: fino ad allora puoi aggiungere alt
 ## 🔎 Aprire, modificare o eliminare transazioni
 
 - **Fai doppio clic** su una riga per aprirla in sola lettura.
-- Per modificare, clonare o eliminare righe, fai clic su **Visualizza in Transazioni**: si apre la pagina [Transazioni](../transactions/index.md), filtrata su questo broker e sui filtri di colonna che hai impostato qui.
+- Per modificare, clonare o eliminare righe, fai clic su **Vedi in Transazioni**: si apre la pagina [Transazioni](../transactions/index.md), filtrata su questo broker e sui filtri di colonna che hai impostato qui.
 
 ---
 
@@ -48,7 +48,7 @@ La stessa procedura guidata si apre dalla voce **Importa** nella pagina [Transaz
 
 **Report caricati** apre i file dei report memorizzati per questo broker:
 
-- **Carica** file CSV o Excel: vengono assegnati a questo broker ed elencati nel passo **Seleziona file** della procedura guidata. I file che carichi insieme formano un unico set — è così che vengono importate le banche che dividono un conto su più esportazioni, come Danske Bank.
+- **Carica** file CSV o Excel: vengono assegnati a questo broker ed elencati nel passo **Seleziona File** della procedura guidata. I file che carichi insieme formano un unico set — è così che vengono importate le banche che dividono un conto su più esportazioni, come Danske Bank.
 - **Anteprima** o **Elimina** un file. L'eliminazione di un report non elimina mai le transazioni importate da esso.
 - Controlla i badge **Stato** e **Set di report** di ciascun file — vedi [Set di report](../files/index.md#report-sets).
 - **Gestisci tutti i file** apre la pagina [File e caricamenti](../files/index.md#broker-reports), filtrata su questo broker.

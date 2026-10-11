@@ -1,6 +1,6 @@
 # 🔌 Fournisseurs
 
-Un fournisseur maintient les prix d'un actif à jour pour vous : le prix du jour, son historique et, pour certains, des détails tels que le type ou le secteur. Chaque actif a au plus un fournisseur : choisissez un résultat de **Recherche en ligne** pour le connecter, ou configurez-le vous-même dans **Attribution du fournisseur** — voir [Créer et modifier](../create-edit.md).
+Un fournisseur maintient les prix d'un actif à jour pour vous : le prix du jour, son historique et, pour certains, des détails tels que le type ou le secteur. Chaque actif a au plus un fournisseur : choisissez un résultat de **Rechercher en Ligne** pour le connecter, ou configurez-le vous-même dans **Attribution du fournisseur** — voir [Créer et modifier](../create-edit.md).
 
 <div class="grid cards" style="margin-top: 1.5rem; margin-bottom: 2rem;">
     <a href="yahoo-finance/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
@@ -67,7 +67,7 @@ Les **détails** sont le type, la devise, la description et les données similai
 - **Un prix affiché uniquement sur une page web** → **CSS Scraper**.
 - **Un compte d'épargne, un dépôt à terme, un prêt P2P ou une obligation suivis par leurs intérêts** →
   **Investissement programmé**.
-- **Rien ne correspond ?** Cochez **Aucun fournisseur** et saisissez les prix vous-même dans l'[Éditeur de données](../detail/data-editor.md).
+- **Rien ne correspond ?** Cochez **Pas de Fournisseur** et saisissez les prix vous-même dans l'[Éditeur de données](../detail/data-editor.md).
 
 ## 🔗 Voir aussi
 

@@ -32,10 +32,10 @@ La page **Courtiers** affiche une carte par courtier, avec sa valeur (**NAV**) d
 ??? info "⚙️ Les champs facultatifs — à quoi sert chacun"
 
     - **Description** — vos propres notes.
-    - **Plugin d'importation par défaut** — l'importateur que l'[Assistant d'importation](../transactions/import/index.md) propose pour les fichiers de ce courtier.
-    - **URL du portail** — le site web du courtier, ouvert depuis la page du courtier. L'icône du courtier est, dans cet ordre : votre **URL d'icône personnalisée** ; l'icône du **Plugin d'importation par défaut**, lorsque cet importateur est conçu pour ce courtier ; l'icône du site web ; l'icône d'un importateur générique comme le CSV générique ; sinon une mallette.
-    - **Compte ouvert** et **Compte actif** — la date d'ouverture du compte, et s'il est toujours ouvert. Un courtier fermé apparaît en grisé dans la liste.
-    - **Options de trading** — **Autoriser l'achat à effet de levier** et **Autoriser la vente à découvert**, expliquées dans [Options de trading](info.md#trading-options).
+    - **Plugin d'Import par Défaut** — l'importateur que l'[Assistant d'importation](../transactions/import/index.md) propose pour les fichiers de ce courtier.
+    - **URL du portail** — le site web du courtier, ouvert depuis la page du courtier. L'icône du courtier est, dans cet ordre : votre **URL de l'Icône Personnalisée** ; l'icône du **Plugin d'Import par Défaut**, lorsque cet importateur est conçu pour ce courtier ; l'icône du site web ; l'icône d'un importateur générique comme le CSV générique ; sinon une mallette.
+    - **Date d'Ouverture du Compte** et **Compte actif** — la date d'ouverture du compte, et s'il est toujours ouvert. Un courtier fermé apparaît en grisé dans la liste.
+    - **Options de trading** — **Autoriser l'Achat avec Levier** et **Autoriser la Vente à Découvert (Short)**, expliquées dans [Options de trading](info.md#trading-options).
     - **Soldes initiaux** (uniquement lors de la création) — votre trésorerie de départ. LibreFolio enregistre un **Dépôt** par devise, **daté d'aujourd'hui** : si l'argent était présent plus tôt, modifiez la date de ces dépôts sur la page [Transactions](../transactions/index.md).
 
 ??? warning "🏷️ « Un courtier nommé … existe déjà » — quand cela apparaît"
@@ -58,7 +58,7 @@ La page **Courtiers** affiche une carte par courtier, avec sa valeur (**NAV**) d
 La barre d'outils en haut s'applique à chaque onglet :
 
 - la **plage de dates** et la **Devise** des chiffres ;
-- **Modifier**, **Partager le courtier** (ouvre l'onglet **Info**) et **Actualiser** ;
+- **Modifier**, **Partager le courtier** (ouvre l'onglet **Infos**) et **Actualiser** ;
 - **Export IA**, qui copie dans votre presse-papiers une invite prête à l'emploi concernant ce courtier — voir [Export IA du courtier](../ai-export/broker.md).
 
 En dessous, cinq onglets :
@@ -67,7 +67,7 @@ En dessous, cinq onglets :
 2. **Positions** — ce que vous détenez chez ce courtier (ci-dessous).
 3. **Risque** — l'analyse des risques du Tableau de bord, limitée à ce courtier (voir [Onglet Risque du Tableau de bord](../dashboard/index.md#risk-tab)).
 4. **Transactions** — le registre du courtier, les saisies manuelles, les importations et les rapports importés (voir [Transactions du courtier](import.md)).
-5. **Info** — les détails du compte, les options de trading et le partage (voir [Configuration et Info](info.md)).
+5. **Infos** — les détails du compte, les options de trading et le partage (voir [Configuration et Info](info.md)).
 
 ---
 

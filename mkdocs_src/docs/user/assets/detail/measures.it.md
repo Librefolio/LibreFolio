@@ -16,7 +16,7 @@ Lo strumento Misure risponde alla domanda: *quanto è cambiato tra questi due gi
 
 Il pulsante **+ Aggiungi misura** nell'intestazione del pannello, invece, misura l'intero grafico, dal primo all'ultimo punto: comodo sul telefono. L'intestazione di ogni misura contiene il suo colore e 🗑️ per rimuoverla; espandi la misura per modificarne le date.
 
-Le misure non vengono salvate: ricaricare la pagina svuota il pannello. **Prezzi** e **Rendimento rolling** mantengono misure separate.
+Le misure non vengono salvate: ricaricare la pagina svuota il pannello. **Prezzi** e **Rendimento mobile** mantengono misure separate.
 
 ---
 
@@ -24,7 +24,7 @@ Le misure non vengono salvate: ricaricare la pagina svuota il pannello. **Prezzi
 
 La tabella ha una riga per l'asset (una seconda riga nella sua valuta quando il grafico è convertito) e una per ogni linea tracciata sull'asse dei prezzi, come un asset di confronto o una media mobile. Accanto ai valori **Inizio** e **Fine**:
 
-- **Δ Ass.** — la differenza $V_{end} - V_{start}$, nell'unità della linea.
+- **Δ Ass** — la differenza $V_{end} - V_{start}$, nell'unità della linea.
 - **Δ %** — la variazione $\frac{V_{end} - V_{start}}{V_{start}}$ → [Rendimenti e tassi di crescita](../../../financial-theory/fundamentals/returns.md)
 - **Δ%/anno** — la stessa variazione come tasso annuo sui $d$ giorni di calendario tra i punti, $(1 + \Delta\%)^{365/d} - 1$ → [Rendimenti e tassi di crescita](../../../financial-theory/fundamentals/returns.md)
 
@@ -32,7 +32,7 @@ La riga di riepilogo della misura aggiunge il numero di giorni.
 
 ---
 
-## 📈 In modalità Rendimento rolling
+## 📈 In modalità Rendimento mobile
 
 I valori sono già rendimenti, quindi la tabella li confronta:
 

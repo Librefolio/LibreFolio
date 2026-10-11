@@ -25,7 +25,7 @@ se abre como una aplicación nativa, desde su propio icono, sin necesidad de una
 ### 🤖 Android (Chrome / Edge)
 
 1. Abre LibreFolio en Chrome o Edge.
-2. Abre el menú **Ayuda y soporte** (❓, arriba a la derecha) y toca **Instalar aplicación**.
+2. Abre el menú **Ayuda y soporte** (❓, arriba a la derecha) y toca **Instalar App**.
 3. Confirma con **Instalar**: LibreFolio aparece en tu pantalla de inicio.
 
 ¿No aparece el diálogo de instalación? Usa el menú **⋮** del navegador → **Instalar aplicación** o **Añadir a pantalla de inicio**.
@@ -36,19 +36,19 @@ se abre como una aplicación nativa, desde su propio icono, sin necesidad de una
 2. Toca el botón **Compartir** (cuadrado con flecha).
 3. Desplázate hacia abajo, toca **Añadir a pantalla de inicio** y luego **Añadir**.
 
-iOS no tiene diálogo de instalación: en un iPhone o iPad, **Instalar aplicación** en el menú Ayuda y soporte muestra estas instrucciones en su lugar.
+iOS no tiene diálogo de instalación: en un iPhone o iPad, **Instalar App** en el menú Ayuda y soporte muestra estas instrucciones en su lugar.
 
 ### 💻 Escritorio (Chrome / Edge)
 
 1. Abre LibreFolio en Chrome o Edge.
-2. Haz clic en **Instalar aplicación** en el menú **Ayuda y soporte**, o en el icono de instalación (⊕) de la barra de direcciones.
+2. Haz clic en **Instalar App** en el menú **Ayuda y soporte**, o en el icono de instalación (⊕) de la barra de direcciones.
 3. LibreFolio se abre en su propia ventana.
 
 ---
 
 ## 🌐 HTTP vs HTTPS
 
-| Dirección | Instalar como aplicación | Diálogo de instalación desde **Instalar aplicación** |
+| Dirección | Instalar como aplicación | Diálogo de instalación desde **Instalar App** |
 |---|---|---|
 | `https://…` (Tailscale, proxy inverso) | ✅ | ✅ |
 | `http://localhost` | ✅ | ✅ |
@@ -70,8 +70,8 @@ iOS no tiene diálogo de instalación: en un iPhone o iPad, **Instalar aplicaci�
 
 | Problema | Solución |
 |---------|----------|
-| **Instalar aplicación** no está en el menú | Ya estás en la aplicación instalada: el elemento está oculto allí |
-| **Instalar aplicación** muestra una sugerencia en lugar de instalar | El navegador no ofreció una opción de instalación: comprueba que usas HTTPS (o `localhost`), o que la aplicación no esté ya instalada, y luego sigue la sugerencia |
+| **Instalar App** no está en el menú | Ya estás en la aplicación instalada: el elemento está oculto allí |
+| **Instalar App** muestra una sugerencia en lugar de instalar | El navegador no ofreció una opción de instalación: comprueba que usas HTTPS (o `localhost`), o que la aplicación no esté ya instalada, y luego sigue la sugerencia |
 | iOS: no aparece **Añadir a pantalla de inicio** | Abre la página en **Safari** y busca esa opción en su menú **Compartir** |
 | La aplicación no se actualiza | Cierra y vuelve a abrir la aplicación — siempre carga la última versión desde tu servidor |
 | Se cerró la sesión tras una actualización | Inicia sesión de nuevo — reiniciar el servidor puede cerrar todas las sesiones |

@@ -23,7 +23,7 @@ La tassonomia ha **due livelli**. La maggior parte dei tipi è autonoma; due di 
 | ![](../../../static/icons/asset-types/bond.png){: width="32" } | **Obbligazione** | `BOND` | Titoli a reddito fisso che rappresentano un prestito a un mutuatario (governativo o societario). | [📖](bonds.md) |
 | ![](../../../static/icons/asset-types/crypto.png){: width="32" } | **Cripto** | `CRYPTO` | Valute digitali e token (Bitcoin, Ethereum, ecc.). | [📖](crypto.md) |
 | ![](../../../static/icons/asset-types/fund.png){: width="32" } | **Fondo** | `FUND` | Fondi comuni di investimento e altri fondi di investimento gestiti professionalmente. | [📖](mutual-fund.md) |
-| ![](../../../static/icons/asset-types/crowdfunding.png){: width="32" } | **Crowdfund** | `CROWDFUND` | Prestiti di crowdfunding peer-to-peer e business, spesso valutati tramite pagamenti programmati di interessi — il membro generico della [famiglia Crowdfunding](#crowdfunding-family). | [📖](real-estate.md) |
+| ![](../../../static/icons/asset-types/crowdfunding.png){: width="32" } | **Crowdfunding** | `CROWDFUND` | Prestiti di crowdfunding peer-to-peer e business, spesso valutati tramite pagamenti programmati di interessi — il membro generico della [famiglia Crowdfunding](#crowdfunding-family). | [📖](real-estate.md) |
 | ![](../../../static/icons/asset-types/hold.png){: width="32" } | **Asset detenuto** | `HOLD` | Asset senza prezzatura automatica di mercato: arte, oggetti da collezione, quote di società non quotate. | — |
 | ![](../../../static/icons/asset-types/commodity.png){: width="32" } | **Materie prime** | `COMMODITY` | Beni fisici e le loro esposizioni dirette: oro, petrolio, prodotti agricoli. | [📖](commodities.md) |
 | ![](../../../static/icons/asset-types/real-estate.png){: width="32" } | **Immobiliare** | `REAL_ESTATE` | Esposizione immobiliare: REIT e altri veicoli immobiliari quotati. | [📖](real-estate.md#three-ways-to-hold-property) |
@@ -68,7 +68,7 @@ Lo strumento stesso è descritto nella pagina [ETF](etfs.md).
 
 | | Tipo | Codice | Contiene | Confluisce in |
 |:---:|:---|:---|:---|:---|
-| ![](../../../static/icons/asset-types/crowdfunding.png){: width="32" } | **Crowdfund** | `CROWDFUND` | Prestiti P2P e business — il membro generico | `CROWDFUND` (sé stesso) |
+| ![](../../../static/icons/asset-types/crowdfunding.png){: width="32" } | **Crowdfunding** | `CROWDFUND` | Prestiti P2P e business — il membro generico | `CROWDFUND` (sé stesso) |
 | ![](../../../static/icons/asset-types/crowdfunding-real-estate.png){: width="32" } | **Crowdfunding immobiliare** | `CROWDFUND_REAL_ESTATE` | Prestiti garantiti da progetti immobiliari | `REAL_ESTATE` |
 
 Entrambi sono descritti nella pagina [P2P / Crowdfunding](real-estate.md).

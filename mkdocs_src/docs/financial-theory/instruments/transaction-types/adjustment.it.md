@@ -40,7 +40,7 @@ Esempi dalle importazioni: gli snapshot `patrimonio` di Intesa Sanpaolo usano `A
 
 ## 📐 Impatto sul Costo di Carico
 
-Le rettifiche con quantità positiva **aumentano** la quantità dei lotti (FIFO). Il costo di carico per i lotti creati tramite rettifica dipende dalla presenza di un **Cost Basis Override**:
+Le rettifiche con quantità positiva **aumentano** la quantità dei lotti (FIFO). Il costo di carico per i lotti creati tramite rettifica dipende dalla presenza di un **Override costo medio**:
 
 - **Con override**: il valore specificato viene utilizzato come **costo di acquisizione per unità** (PMC — Prezzo Medio di Carico); un override pari a **zero** registra un'acquisizione gratuita, come un airdrop
 - **Senza override**: il lotto FIFO si apre a costo zero, ma il costo medio (PMC) considera il costo **sconosciuto**, non gratuito: le unità entrano nella posizione senza costo, il suo PMC resta incompleto finché la posizione non viene chiusa, la Dashboard mostra il suo costo medio e il P&L latente come non disponibili, e un avviso di qualità dei dati indica l'asset (vedi [Override del costo di carico](../../technical-analysis/performance-metrics/weighted-average-cost.md#cost-basis-override))

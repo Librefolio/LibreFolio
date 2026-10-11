@@ -25,7 +25,7 @@ Cambia con **Abs** / **%** nell'angolo in alto a sinistra del grafico; la pagina
 | **Zoom** | Rotella del mouse | Pinch |
 | **Pan** | Clicca e trascina | Trascina con due dita (un dito scorre la pagina) |
 
-- **Periodo**: le preimpostazioni da **1W** a **2Y**, **YTD** e **Tutto**, oppure **Personalizzato** (un numero di giorni,
+- **Periodo**: le preimpostazioni da **1W** a **2Y**, **YTD** e **Tutti**, oppure **Personalizzato** (un numero di giorni,
   settimane, mesi o anni indietro da oggi); clicca sulle date per sceglierle su un calendario. Altre preimpostazioni
   compaiono quando la barra degli strumenti ha spazio. Le pagine della stessa scheda del browser condividono il periodo.
 - Su un periodo lungo il grafico raggruppa i tassi per settimana o mese e mostra un badge **Settimanale** o
@@ -34,7 +34,7 @@ Cambia con **Abs** / **%** nell'angolo in alto a sinistra del grafico; la pagina
 
 ??? info "📅 Storico più corto del periodo — quando il grafico inizia più tardi"
 
-    Un banner mostra la data da cui i dati sono disponibili. **Sync** può recuperare tassi più vecchi, se il
+    Un banner mostra la data da cui i dati sono disponibili. **Sincronizza** può recuperare tassi più vecchi, se il
     provider li pubblica; altrimenti inseriscili nell'[editor dati](data-editor.md).
 
 ---

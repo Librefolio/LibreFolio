@@ -13,7 +13,7 @@ lista mantiene le proprie impostazioni: modificare i grafici FX non tocca mai i 
   impostazioni personalizzate di ogni grafico della lista, comprese le pagine di dettaglio, e la
   finestra te lo segnala.
 - 🎯 **Per un singolo grafico** — fai clic su ⚙️ su una scheda. La finestra si intitola
-  **Impostazioni grafico (Locali)**, e le sue impostazioni si applicano solo a quel grafico.
+  **Impostazioni Grafico (Locale)**, e le sue impostazioni si applicano solo a quel grafico.
 
 !!! note "Le pagine di dettaglio usano pannelli inline"
 
@@ -50,14 +50,14 @@ le modifiche.
 
 | Impostazione | Cosa fa |
 |---------|--------------|
-| **Colori della linea di base** | Verde sopra, rosso sotto l'inizio del periodo |
-| **Riempimento dell'area** | Gradiente sotto la linea |
-| **Linee della griglia** | Griglia orizzontale tratteggiata |
-| **Gradiente obsoleto** | Atenua i giorni senza un nuovo valore, che ripetono uno precedente |
+| **Colori Riferimento** | Verde sopra, rosso sotto l'inizio del periodo |
+| **Riempimento Area** | Gradiente sotto la linea |
+| **Griglia** | Griglia orizzontale tratteggiata |
+| **Gradiente Dati Vecchi** | Atenua i giorni senza un nuovo valore, che ripetono uno precedente |
 
 ### 📏 Intervalli degli assi
 
-**Scala dell'asse Y** ha una riga per ogni asse del grafico: l'asse principale (il tasso, o la
+**Scala Asse Y** ha una riga per ogni asse del grafico: l'asse principale (il tasso, o la
 percentuale nella vista %) e una per ogni scala di indicatore, come l'**asse RSI**. Gli indicatori
 che condividono una scala condividono una riga.
 

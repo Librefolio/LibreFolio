@@ -20,8 +20,8 @@ Se LibreFolio dispone di tassi solo per una parte del periodo scelto, l'esportaz
 
 | Scelta | Cosa ottieni |
 | :--- | :--- |
-| **Mercato FX ed esposizione** | Il tasso corrente, un contesto compatto di mercato e tempistiche, e la tua esposizione diretta alla coppia |
-| **Storico del mercato FX** | Tassi dettagliati, rendimenti, volatilità, indicatori, stati ed eventi, con copertura |
+| **Cambio, andamento ed esposizione** | Il tasso corrente, un contesto compatto di mercato e tempistiche, e la tua esposizione diretta alla coppia |
+| **Storico e dati tecnici del cambio** | Tassi dettagliati, rendimenti, volatilità, indicatori, stati ed eventi, con copertura |
 
 ---
 
@@ -30,7 +30,7 @@ Se LibreFolio dispone di tassi solo per una parte del periodo scelto, l'esportaz
 | Analisi | Cosa fa l'IA |
 | :--- | :--- |
 | **Analisi della coppia FX** | Analizza la direzione, i rendimenti, il trend, il momentum, la volatilità e gli eventi della coppia, con un contesto macro datato |
-| **Impatto dell'esposizione FX** | Descrive come la tua liquidità e le tue posizioni sono direttamente collegate alla coppia, senza guardare all'interno dei fondi; richiede almeno un collegamento di questo tipo |
+| **Impatto esposizione FX** | Descrive come la tua liquidità e le tue posizioni sono direttamente collegate alla coppia, senza guardare all'interno dei fondi; richiede almeno un collegamento di questo tipo |
 
 ---
 

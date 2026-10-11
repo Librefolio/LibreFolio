@@ -18,7 +18,7 @@ La scheda **Posizioni** mostra ciò che possiedi, quanto ha guadagnato ciascuna 
 ## 🎛️ Scegliere una vista
 
 - **Portafoglio / Periodo** alterna tra [Posizioni](#holdings) e [Performance](#performance); **Tabella / Mappa** (le due icone) tra una tabella e un grafico.
-- **L'icona a forma di occhio** (in Tabella) mostra, nasconde o riordina le colonne; **Ripristina layout** le ripristina. **Vedi tutto →** apre la pagina Asset.
+- **L'icona a forma di occhio** (in Tabella) mostra, nasconde o riordina le colonne; **Ripristina layout** le ripristina. **Vedi tutte →** apre la pagina Asset.
 - **Per approfondire una posizione**, apri il suo menu **⋮** in una tabella, oppure fai clic con il tasto destro su di essa in qualsiasi vista: **Analizza Lotti** apre l'[Analisi Lotti FIFO](#fifo-lots-analysis) qui sotto, **Vedi Asset** la pagina dell'asset.
 
 LibreFolio ricorda le tue scelte.
@@ -41,7 +41,7 @@ Cosa possiedi alla data finale, e come sta andando ciascuna posizione? **Portafo
 | **Valore** / **Peso** | Quanto vale la posizione, e la sua quota del tuo Patrimonio Netto, liquidità inclusa |
 | **Qtà** | Azioni, unità o monete possedute |
 | **Prezzo** *(nascosta)* | Il prezzo unitario utilizzato: il prezzo di mercato, oppure il prezzo dell'ultimo scambio quando non c'è una quotazione → [Risoluzione del prezzo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
-| **PMC (Prezzo Medio di Carico)** *(nascosta)* | Il prezzo medio di acquisto per unità, ogni acquisto al tasso di cambio della propria data → [Prezzo Medio di Carico (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md) |
+| **PMC** *(nascosta)* | Il prezzo medio di acquisto per unità, ogni acquisto al tasso di cambio della propria data → [Prezzo Medio di Carico (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md) |
 | **Lotto aperto più vecchio** *(nascosta)* | La data di apertura del lotto più vecchio ancora aperto |
 | **Broker** | Il broker che detiene la posizione |
 
@@ -49,7 +49,7 @@ Cosa possiedi alla data finale, e come sta andando ciascuna posizione? **Portafo
 
 - **Il Peso conta la liquidità**, quindi le righe sommano a meno del 100% quando detieni liquidità.
 - **Il PMC mantiene il tasso di cambio di ogni acquisto**, mentre il Valore usa quello della data finale: il P&L latente include ciò che il tasso ha fatto da allora.
-- **Nella Mappa**, i riquadri sono raggruppati per broker e tipo di asset; la dimensione è il valore, il colore il P&L %. Scorri per fare zoom, trascina per spostarti, e **Reset zoom** (↺) mostra di nuovo tutto.
+- **Nella Mappa**, i riquadri sono raggruppati per broker e tipo di asset; la dimensione è il valore, il colore il P&L %. Scorri per fare zoom, trascina per spostarti, e **Reimposta zoom** (↺) mostra di nuovo tutto.
 
 ??? info "➖ Celle vuote — quando manca un valore"
 
@@ -81,10 +81,10 @@ Quali posizioni hanno guadagnato o perso denaro nel periodo, e come? **Periodo**
 
 **Metriche mostrate**
 
-- **P&L periodo**, suddiviso come nella [scheda P&L periodo](kpi-cards.md#card-1-period-pl) in **Variazione latente**, **Vendite**, **Dividendi & interessi** e **Costi** → [P&L periodo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
+- **P&L periodo**, suddiviso come nella [scheda P&L periodo](kpi-cards.md#card-1-period-pl) in **Variazione non realizzata**, **Vendite**, **Dividendi e interessi** e **Costi** → [P&L periodo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **Annualizzato** — il risultato del periodo come tasso annuo, sul tempo in cui la posizione è stata detenuta nel periodo → [Rendimento annualizzato netto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md)
 - **Δ1** / **Δ1%** per le posizioni aperte e, nascosti per impostazione predefinita, **Valore Iniziale**, **Valore Finale**, **Lotto aperto più vecchio** e **Stato**
-- **Altri Effetti di Periodo** — ciò che non appartiene a nessuna posizione: **Reddito non allocato** e **Costi non allocati**, registrati senza un asset, e il **Residuo Altro / riconciliazione**
+- **Altri effetti del periodo** — ciò che non appartiene a nessuna posizione: **Reddito non allocato** e **Costi non allocati**, registrati senza un asset, e l'**Altro / residuo di riconciliazione**
 
 **Come leggerla**
 
@@ -129,7 +129,7 @@ Come si confronta il prezzo con quanto hai pagato, e dove si colloca ciascun lot
 **Metriche mostrate**
 
 - **Prezzo di Mercato** — tratteggiato dove LibreFolio lo stima dal tuo ultimo scambio → [Catena di valutazione del prezzo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md#valuation-price-chain)
-- **PMC** — una linea per broker, e una linea **Combinata** tratteggiata quando l'asset è presso diversi → [Prezzo Medio di Carico (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
+- **PMC** — una linea per broker, e una linea tratteggiata **Combinato** quando l'asset è presso diversi → [Prezzo Medio di Carico (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Bolle** — una per lotto long, al suo rendimento totale, tra i marcatori delle tue transazioni e dei tuoi pagamenti → [Analisi Lotto FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
 
 **Come leggerlo**
@@ -158,13 +158,13 @@ Ogni lotto con le sue cifre, seguendo il filtro e la selezione del pannello.
 
 **Metriche mostrate**
 
-- **Data di Apertura**, **P&L Totale**, **Rendimento totale**, **Annualizzato**, **Valore Attuale**, **Quantità Aperta** e **Custodia**, con una riga **Totali** → [Analisi Lotto FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Data apertura**, **P&L Totale**, **Rendimento totale**, **Annualizzato**, **Valore Attuale**, **Quantità Aperta** e **Custodia**, con una riga **Totali** → [Analisi Lotto FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
 - **Reddito** quando un lotto ha ricevuto del reddito, e **Commissioni**, **Imposte**, **P&L Netto** e **Rendimento netto** quando un lotto sopporta dei costi → [Costi e metriche nette](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)
 
 **Come leggerla**
 
 - **Fai clic** su una riga per selezionarla, **fai doppio clic** per trovarla nella timeline; il colore della riga è il broker di apertura.
-- **Il menu ⋮** offre **Vedi dettaglio lotto**, **Vai al lotto nel Gantt**, **Vai alla transazione di apertura** e **Copia identificatore del lotto** — un riferimento stabile, comodo per l'assistenza.
+- **Il menu ⋮** offre **Visualizza dettaglio lotto**, **Vai al lotto nel Gantt**, **Vai alla transazione di apertura** e **Copia identificativo lotto** — un riferimento stabile, comodo per l'assistenza.
 - **Altre colonne**, come **Valore di Apertura**, attendono dietro l'icona a forma di occhio.
 
 ### 💰 4. Confronto Valore / Rendimento
@@ -173,7 +173,7 @@ Quanto valgono i lotti selezionati, e quanto hanno guadagnato dall'apertura? Sen
 
 **Metriche mostrate**
 
-- **Valore** — **Valore residuo**, **Ricavato dalle vendite** e **Reddito cumulato** impilati fino al **Valore complessivo**, rispetto al **Valore di apertura** → [Analisi Lotto FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Valore** — **Valore residuo**, **Incassi da vendite** e **Proventi cumulati** impilati fino al **Valore complessivo**, rispetto al **Valore di apertura** → [Analisi Lotto FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
 - **Rendimento** — il risultato dall'apertura, in denaro (**Abs**) o in percentuale (**%**): un **Rendimento aggregato**, più una linea per lotto quando ne confronti diversi
 
 **Come leggerlo**
@@ -183,12 +183,12 @@ Quanto valgono i lotti selezionati, e quanto hanno guadagnato dall'apertura? Sen
 
 ### 🧾 5. Dettaglio Lotto
 
-L'intera storia di un lotto. Aprilo con **Vedi dettaglio lotto** (⋮) oppure facendo clic sulla sua cella **Custodia**.
+L'intera storia di un lotto. Aprilo con **Visualizza dettaglio lotto** (⋮) oppure facendo clic sulla sua cella **Custodia**.
 
 **Metriche mostrate**
 
-- **Riepilogo** — valore di apertura e attuale, ricavato, **P&L FIFO**, **P&L Totale**, **Rendimento totale**, e **Cash yield** quando il lotto ha ricevuto reddito → [Analisi Lotto FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
-- **Ripartizione netta** — il P&L totale meno le commissioni e le imposte allocate al lotto → [Costi e metriche nette](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)
+- **Riepilogo** — valore di apertura e attuale, ricavato, **P&L FIFO**, **P&L Totale**, **Rendimento totale**, e **Rendimento da proventi** quando il lotto ha ricevuto reddito → [Analisi Lotto FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Scomposizione netta** — il P&L totale meno le commissioni e le imposte allocate al lotto → [Costi e metriche nette](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)
 - **Custodia Attuale** e **Storico** — dove si trova ora il lotto, e ogni evento dalla sua apertura
 
 **Come leggerlo**

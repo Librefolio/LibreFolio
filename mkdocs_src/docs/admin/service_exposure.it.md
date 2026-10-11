@@ -193,7 +193,7 @@ Un subnet router fa parte dell'infrastruttura della tua rete: se l'hai saltato, 
 
 !!! warning "🔐 Prima di rendere pubblico il servizio"
 
-    Con Funnel, chiunque su internet può aprire la tua pagina di accesso a LibreFolio. Crea prima il tuo account: il primo account registrato diventa l'amministratore. Dopodiché, le registrazioni restano aperte (**Enable Registration**, `enable_registration`, è attivo per impostazione predefinita): disattivalo nelle **Impostazioni globali** se non vuoi che estranei si registrino (vedi [Impostazioni globali](settings.md)).
+    Con Funnel, chiunque su internet può aprire la tua pagina di accesso a LibreFolio. Crea prima il tuo account: il primo account registrato diventa l'amministratore. Dopodiché, le registrazioni restano aperte (**Abilita Registrazione**, `enable_registration`, è attivo per impostazione predefinita): disattivalo nelle **Impostazioni globali** se non vuoi che estranei si registrino (vedi [Impostazioni globali](settings.md)).
 
 1. Visita la pagina [Access Controls](https://login.tailscale.com/admin/acls) nella console di amministrazione Tailscale.
 2. Clicca il pulsante **Add node attribute**.

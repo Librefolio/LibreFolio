@@ -1,6 +1,6 @@
 # 🛡️ Manuale di amministrazione
 
-Questo manuale è destinato a chi installa ed esegue LibreFolio. La maggior parte delle operazioni di amministrazione avviene dalla riga di comando, tramite variabili d'ambiente o nella scheda **Admin** delle impostazioni dell'app.
+Questo manuale è destinato a chi installa ed esegue LibreFolio. La maggior parte delle operazioni di amministrazione avviene dalla riga di comando, tramite variabili d'ambiente o nella scheda **Amministrazione** delle impostazioni dell'app.
 
 ---
 
@@ -29,20 +29,20 @@ Quando un amministratore accede, LibreFolio controlla su GitHub se è disponibil
     <img class="gallery-img" data-category="auth" data-name="update-available-modal" alt="Modale di aggiornamento disponibile con versione corrente e più recente">
 </div>
 
-- **Ricordamelo più tardi** chiude la finestra fino a un accesso successivo.
+- **Ricordamelo dopo** chiude la finestra fino a un accesso successivo.
 - **Salta questa versione** interrompe la richiesta automatica per quella versione; una più recente viene annunciata
   di nuovo.
 - Una versione viene annunciata solo quando la sua immagine Docker può essere scaricata, e la finestra attende che
   nessun'altra finestra o guida sia aperta.
 - Senza accesso a Internet, il controllo automatico fallisce silenziosamente: nessun errore, nessun banner.
-- Per controllare subito, usa **Controlla aggiornamenti** nel
+- Per controllare subito, usa **Verifica aggiornamenti** nel
   [changelog](../user/settings/about.md#changelog-modal): segnala gli errori e anche le versioni che
   hai saltato.
 
 ??? note "👥 Altri utenti — quando qualcuno che non è un amministratore esegue il controllo"
 
     Per gli utenti che non sono amministratori, non viene eseguito alcun controllo all'accesso. Se uno di loro esegue
-    **Controlla aggiornamenti** ed esiste una versione più recente, la
+    **Verifica aggiornamenti** ed esiste una versione più recente, la
     finestra di dialogo **Aggiornamento disponibile — contatta un amministratore** elenca gli amministratori, con i loro
     indirizzi e-mail quando disponibili, così sanno a chi rivolgersi.
 

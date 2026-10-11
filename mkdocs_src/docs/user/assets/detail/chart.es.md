@@ -15,7 +15,7 @@ _Última actualización: 2026-10-08_
 Los dos botones situados encima del gráfico eligen lo que este dibuja:
 
 - **Precios** — el historial de precios, con los [eventos](events.md) del activo como marcadores.
-- **Rentabilidad móvil** — para cada fecha, la variación del precio en una ventana que tú eliges ([más abajo](#rolling-return)).
+- **Rendimiento móvil** — para cada fecha, la variación del precio en una ventana que tú eliges ([más abajo](#rolling-return)).
 
 La página siempre se abre en **Precios**.
 
@@ -58,13 +58,13 @@ Cómo interpretarla:
 
 ### 📅 Rango de fechas
 
-El rango de fechas de la barra de herramientas de la página establece las fechas en pantalla: **1S**, **1M**, **3M**, **6M**, **1A**, **2A**, **YTD**, **MAX** o **Personalizado** con un calendario. Cuando hay espacio libre en la barra, aparecen más preajustes (3A, 5A, 10A, WTD, MTD, QTD). El rango que elijas se mantiene en las páginas de Panel, bróker, activo y FX de la misma pestaña del navegador.
+El rango de fechas de la barra de herramientas de la página establece las fechas en pantalla: **1S**, **1M**, **3M**, **6M**, **1A**, **2A**, **YTD**, **Todo** o **Personalizado** con un calendario. Cuando hay espacio libre en la barra, aparecen más preajustes (3A, 5A, 10A, WTD, MTD, QTD). El rango que elijas se mantiene en las páginas de Panel, bróker, activo y FX de la misma pestaña del navegador.
 
 En un rango largo, el gráfico puede agrupar los días en semanas o meses para seguir siendo legible: una insignia **Semanal** o **Mensual** en su esquina superior izquierda lo indica.
 
 ### 💱 Convertir a otra divisa
 
-**Convertir a**, junto al precio, muestra el gráfico en otra divisa, con una línea 💱 discontinua para el precio en la divisa propia del activo. El menú enumera las divisas a las que pueden llegar tus pares FX; **Crear par FX…** en su parte inferior añade un par que falte. Las rentabilidades móviles también se calculan en la divisa elegida.
+**Convertir a**, junto al precio, muestra el gráfico en otra divisa, con una línea 💱 discontinua para el precio en la divisa propia del activo. El menú enumera las divisas a las que pueden llegar tus pares FX; **Crear forex…** en su parte inferior añade un par que falte. Las rentabilidades móviles también se calculan en la divisa elegida.
 
 ??? note "💱 Cuando falta un tipo de cambio"
 
@@ -83,9 +83,9 @@ En modo **Precios**, los botones de la esquina superior izquierda del gráfico a
 
 Los tres botones de la esquina superior derecha del gráfico:
 
-- **📏 Añadir medida** — compara dos puntos: consulta [Medidas](measures.md). **Precios** y **Rentabilidad móvil** mantienen medidas independientes.
+- **📏 Añadir medida** — compara dos puntos: consulta [Medidas](measures.md). **Precios** y **Rendimiento móvil** mantienen medidas independientes.
 - **✏️ Editar precios y eventos** — abre el [Editor de datos](data-editor.md), solo en modo **Precios**.
-- **⚙️ Estética** — **Relleno de área**, **Colores de línea base** (verde por encima del valor inicial, o por encima de cero en %, rojo por debajo), **Líneas de cuadrícula**, **Degradado de datos obsoletos** (atenúa los puntos cuyo precio o tipo de cambio se arrastra desde un día anterior) y **Escala del eje Y** (**Automática**, **Incluir 0** o límites **personalizados**). Las velas japonesas desactivan el relleno de área, los colores de línea base y el degradado de datos obsoletos.
+- **⚙️ Estética** — **Relleno de área**, **Colores de Referencia** (verde por encima del valor inicial, o por encima de cero en %, rojo por debajo), **Líneas de cuadrícula**, **Degradado Datos Antiguos** (atenúa los puntos cuyo precio o tipo de cambio se arrastra desde un día anterior) y **Escala Eje Y** (**Auto**, **Incluir 0** o **Personalizado**, con límites propios). Las velas japonesas desactivan el relleno de área, los colores de línea base y el degradado de datos obsoletos.
 
 Estos ajustes y tus señales se recuerdan para este activo, en este navegador. Para cambiarlos de una vez para todos los activos, usa **Configuración** en la [página de Activos](../index.md): consulta [Ajustes del gráfico](../../fx/chart-settings.md).
 

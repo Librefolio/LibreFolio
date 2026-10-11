@@ -215,11 +215,11 @@ Donde:
 - $\text{EligibleQty}_i(D)$ = cantidad del lote $i$ abierta en el **bróker pagador** en $D-1$ (la cantidad que salió de ese bróker en tránsito aún cuenta como originada allí)
 - solo los lotes LONG participan en el denominador
 
-La regla D-1 mantiene intacto el día de registro: una compra realizada *en* la fecha del ingreso no devenga esa distribución, y un lote vendido el día anterior tampoco. Los lotes elegibles más grandes reciben una porción mayor; los lotes mantenidos en otros brókers, o que aún no son (o ya no son) elegibles, no reciben nada.
+La regla D-1 mantiene intacto el día de registro: una compra realizada *en* la fecha del ingreso no devenga esa distribución, y un lote vendido el día anterior tampoco. Los lotes elegibles más grandes reciben una porción mayor; los lotes mantenidos en otros brókeres, o que aún no son (o ya no son) elegibles, no reciben nada.
 
 !!! warning "Cambiado en FIFO v5"
 
-    Las versiones anteriores utilizaban la fecha del ingreso en sí misma con todos los brókers ($\text{OpenQty}_i(t)$ sobre cada lote). El motor actual utiliza la elegibilidad D-1 limitada al bróker pagador. Si ningún lote es elegible, el ingreso se mantiene como **ingreso huérfano a nivel de activo** (nunca se descarta, nunca se asigna al lote equivocado).
+    Las versiones anteriores utilizaban la fecha del ingreso en sí misma con todos los brókeres ($\text{OpenQty}_i(t)$ sobre cada lote). El motor actual utiliza la elegibilidad D-1 limitada al bróker pagador. Si ningún lote es elegible, el ingreso se mantiene como **ingreso huérfano a nivel de activo** (nunca se descarta, nunca se asigna al lote equivocado).
 
 !!! tip "Regla de conservación"
 

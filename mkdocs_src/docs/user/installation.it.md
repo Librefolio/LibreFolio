@@ -219,7 +219,7 @@ Per cosa salvare e come, vedi la [sezione Backup del Manuale di amministrazione]
 
 ## 🔄 Aggiornare LibreFolio {#updating}
 
-Le migrazioni del database vengono eseguite automaticamente all'avvio del container e sono progettate per conservare i dati esistenti, mentre alcune funzionalità, come la simulazione di rischio **What if…?**, sono [ancora in beta](../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta) e possono cambiare tra una versione e l'altra. Fai un [backup](#data-backup) prima di aggiornare: è il modo per tornare indietro se qualcosa va storto.
+Le migrazioni del database vengono eseguite automaticamente all'avvio del container e sono progettate per conservare i dati esistenti, mentre alcune funzionalità, come la simulazione di rischio **Cosa succede se…?**, sono [ancora in beta](../financial-theory/technical-analysis/risk-metrics/simulation-modes.md#why-beta) e possono cambiare tra una versione e l'altra. Fai un [backup](#data-backup) prima di aggiornare: è il modo per tornare indietro se qualcosa va storto.
 
 - Con il tag `latest` ottieni sempre la release più recente, insieme a qualsiasi cambiamento che essa comporta.
 - Per aggiornare solo quando decidi tu, fissa una versione invece di `latest`: `ghcr.io/librefolio/librefolio:1.1.0` (variante full) o `ghcr.io/librefolio/librefolio:1.1.0-light` (variante light). Vedi [Varianti dell'immagine](#image-variants-full-and-light).

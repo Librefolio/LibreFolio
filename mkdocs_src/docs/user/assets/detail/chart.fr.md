@@ -36,7 +36,7 @@ où $P$ est la dernière clôture connue ce jour-là, dans la devise du graphiqu
 Choisissez $N$ avec le contrôle **Fenêtre** à côté des deux boutons :
 
 - **1W**, **1M**, **3M**, **1Y** — 7, 30, 90 et 365 jours.
-- **Personnalisé** — un nombre entier avec **W**, **M** ou **Y**, compté comme 7, 30 et 365 jours : `3M` correspond à 90 jours.
+- **Personnalisé** — un nombre entier avec **S**, **M** ou **A**, compté comme 7, 30 et 365 jours : `3M` correspond à 90 jours.
 - **?** ouvre cette section du manuel.
 
 La fenêtre peut être plus longue que les dates affichées à l'écran : LibreFolio va chercher les prix plus anciens dont il a besoin. Elle est mémorisée pour cet actif, dans ce navigateur.
@@ -85,7 +85,7 @@ Les trois boutons en haut à droite du graphique :
 
 - **📏 Ajouter une mesure** — comparez deux points : voir [Mesures](measures.md). **Prix** et **Rendement glissant** conservent des mesures distinctes.
 - **✏️ Modifier les prix et événements** — ouvre l'[Éditeur de données](data-editor.md), en mode **Prix** uniquement.
-- **⚙️ Esthétique** — **Remplissage d'aire**, **Couleurs de référence** (vert au-dessus de la valeur de départ, ou au-dessus de zéro en %, rouge en dessous), **Lignes de grille**, **Dégradé des valeurs obsolètes** (atténue les points dont le prix ou le taux de change est reporté depuis un jour antérieur) et **Échelle de l'axe Y** (**Auto**, **Inclure 0** ou limites **Personnalisées**). Les chandeliers désactivent le remplissage d'aire, les couleurs de référence et le dégradé des valeurs obsolètes.
+- **⚙️ Esthétique** — **Remplissage**, **Couleurs de référence** (vert au-dessus de la valeur de départ, ou au-dessus de zéro en %, rouge en dessous), **Lignes de grille**, **Dégradé Données Anciennes** (atténue les points dont le prix ou le taux de change est reporté depuis un jour antérieur) et **Échelle Axe Y** (**Auto**, **Inclure 0** ou **Personnalisé**, avec vos propres limites). Les chandeliers désactivent le remplissage d'aire, les couleurs de référence et le dégradé des valeurs obsolètes.
 
 Ces paramètres et vos signaux sont mémorisés pour cet actif, dans ce navigateur. Pour les modifier pour tous les actifs à la fois, utilisez **Paramètres** sur la [page Actifs](../index.md) : voir [Paramètres du graphique](../../fx/chart-settings.md).
 

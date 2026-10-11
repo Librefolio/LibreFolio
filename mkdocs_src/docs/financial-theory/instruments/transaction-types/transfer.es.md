@@ -4,7 +4,7 @@
     <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Formulario de transacción — TRANSFER">
 </div>
 
-Las **transferencias de activos** mueven valores entre cuentas de brókers **sin realizar una venta**. La posición sale de un bróker y llega a otro; no hay intercambio de efectivo y, en la mayoría de las jurisdicciones, esto no es un evento fiscal.
+Las **transferencias de activos** mueven valores entre cuentas de brókeres **sin realizar una venta**. La posición sale de un bróker y llega a otro; no hay intercambio de efectivo y, en la mayoría de las jurisdicciones, esto no es un evento fiscal.
 
 ---
 
@@ -47,7 +47,7 @@ Una Transferencia se guarda como dos filas `TRANSFER`, una por bróker, cada una
 | **Separar par** (desvincular) | Transferencia → dos Ajustes independientes |
 | **Promover** (vincular) | Dos Ajustes → Transferencia |
 
-**Restricciones de promoción**: mismo activo, diferentes brókers, cantidades opuestas, y ninguna de las dos filas vinculada a un evento del activo (un desdoblamiento, por ejemplo), ya que una transferencia no puede llevar ese vínculo.
+**Restricciones de promoción**: mismo activo, diferentes brókeres, cantidades opuestas, y ninguna de las dos filas vinculada a un evento del activo (un desdoblamiento, por ejemplo), ya que una transferencia no puede llevar ese vínculo.
 
 ---
 

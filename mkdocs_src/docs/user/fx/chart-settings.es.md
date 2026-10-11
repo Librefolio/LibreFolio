@@ -46,20 +46,20 @@ haces clic en **Aplicar**; **Cancelar** pregunta antes de descartar tus cambios.
 
 | Configuración | Qué hace |
 |---------|--------------|
-| **Colores de línea base** | Verde por encima, rojo por debajo del inicio del periodo |
+| **Colores de Referencia** | Verde por encima, rojo por debajo del inicio del periodo |
 | **Relleno de área** | Degradado bajo la línea |
 | **Líneas de cuadrícula** | Cuadrícula discontinua horizontal |
-| **Degradado obsoleto** | Atenúa los días sin un valor nuevo, que repiten uno anterior |
+| **Degradado Datos Antiguos** | Atenúa los días sin un valor nuevo, que repiten uno anterior |
 
 ### 📏 Rangos de ejes
 
-La **Escala del eje Y** tiene una fila para cada eje del gráfico: el eje principal (el tipo de cambio, o el porcentaje
+La **Escala Eje Y** tiene una fila para cada eje del gráfico: el eje principal (el tipo de cambio, o el porcentaje
 en la vista %) y una para cada escala de indicador, como el **eje RSI**. Los indicadores que comparten una
 escala comparten una fila.
 
 - **Auto** ajusta los datos en ese eje.
 - **Incluir 0** ajusta los datos y también muestra el cero.
-- **Personalizado** usa los valores **Mín.** y **Máx.** que escribas.
+- **Personalizado** usa los valores **Mín** y **Máx** que escribas.
 
 Las vistas **Abs** y **%** mantienen rangos separados: cambia la vista previa a **%** para ajustar el
 del porcentaje.

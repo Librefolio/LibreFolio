@@ -38,7 +38,7 @@ backend/data/
 
 ### 🗃️ `sqlite/`
 
-- 📄 `app.db` contiene todos los datos estructurados: usuarios, brókers, transacciones, activos, precios, tipos de cambio y configuración.
+- 📄 `app.db` contiene todos los datos estructurados: usuarios, brókeres, transacciones, activos, precios, tipos de cambio y configuración.
 - 📎 `app.db-wal` y `app.db-shm` son los archivos de trabajo de SQLite (modo WAL), esperados mientras el servidor está en ejecución: nunca copies `app.db` por sí solo mientras el servidor está activo.
 - 🔒 `app.db.post-migration.lock` es un archivo vacío que se usa al inicio: déjalo en su sitio. Un archivo llamado `app.db.pre-<fix>-<UTC time>.bak` es una copia que se conserva tras una [corrección posterior a la migración](cli_tools.md#post-migration-fixes) fallida: elimínalo cuando ya no lo necesites.
 

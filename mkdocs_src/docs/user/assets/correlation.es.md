@@ -69,8 +69,8 @@ Esta sección pone cada activo en la misma escala de daño: sus peores pérdidas
 - **Mal día** — la pérdida promedio en el peor 5% de los días (CVaR al 95%) → [VaR condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
 - **Mal mes** — lo mismo en tramos reales de un mes → [VaR condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
 - **Peor caída** — la caída más profunda desde un máximo; *duró N d* cuenta los días hasta que el activo volvió allí, o hasta el final del periodo → [Caída máxima](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
-- **Por debajo del máximo ahora** — cuánto está por debajo de su nivel más alto en el periodo → [Caída actual](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
-- **Subida hasta el máximo** — la ganancia necesaria para volver allí: estar un 20% por debajo requiere +25% → [Lo que hace falta para recuperarse](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back)
+- **Bajo el máximo** — cuánto está por debajo de su nivel más alto en el periodo → [Caída actual](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
+- **Subida al máximo** — la ganancia necesaria para volver allí: estar un 20% por debajo requiere +25% → [Lo que hace falta para recuperarse](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back)
 
 **Cómo leerlo**
 
@@ -134,7 +134,7 @@ Esta sección responde a la pregunta *¿cómo atravesó cada uno de estos un epi
 
 **Cómo leerlo**
 
-- **Elige un Preajuste**, como la *Crisis Financiera Global*, o define el **Periodo**, y luego pulsa **Ejecutar repetición**. Cambiar la selección o las fechas de la página borra el resultado.
+- **Elige un Preajuste**, como la *Crisis Financiera Global*, o define el **Periodo**, y luego pulsa **Ejecutar reproducción**. Cambiar la selección o las fechas de la página borra el resultado.
 - **La tabla** muestra la **Rentabilidad** de cada activo, con los peores primero, con una barra: roja para una pérdida, verde para una ganancia. No hay total: una selección no tiene ponderaciones que sumar.
 - **Los activos sin precios en los extremos del periodo** se excluyen y se listan encima de la tabla, con el motivo. Cuando es posible, un botón repite el periodo más corto en el que todos tienen precios.
 
@@ -154,17 +154,17 @@ Cuando algo va mal con los datos, la pestaña lo indica una vez, justo debajo de
 
 **Cómo leerlo**
 
-- **El banner de calidad de datos** enumera lo que hay que corregir, cada problema con su acción, como **Sincronizar precios** o **Sincronizar tipos**. Haz clic en él para abrir la lista.
+- **El banner de calidad de datos** enumera lo que hay que corregir, cada problema con su acción, como **Sincronizar** para los precios o **Sincronizar** para los tipos de cambio. Haz clic en él para abrir la lista.
 - **El aviso** debajo nombra los resultados **parciales** y su causa. Un resultado parcial sigue mostrando sus cifras: léelas teniendo en cuenta esa causa.
 - **El banner ámbar propio de una sección** significa que un resultado no se obtuvo en absoluto, a menudo porque el periodo es demasiado corto: elige uno más largo o sincroniza los precios.
-- **¿Qué pasaría si…?** informa de sus propios problemas dentro de su sección.
+- **¿Qué pasa si…?** informa de sus propios problemas dentro de su sección.
 
 ---
 
 ## 🔎 Conviene saber {: #reading-the-numbers }
 
 - **Un periodo para todos los activos.** Cada cifra cubre los mismos días para cada activo seleccionado, de modo que las filas se pueden comparar. Un activo con un historial más corto acorta ese periodo para todos ellos, y sus cifras cambian: esto es esperable → [Calidad de datos](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#alignment-what-missing-data-actually-costs)
-- **Una única divisa.** Las rentabilidades se miden en tu **Divisa predeterminada**, definida en [Preferencias](../settings/preferences.md) (la predeterminada de la instancia si nunca elegiste una), incluidos los movimientos de los tipos de cambio.
+- **Una única divisa.** Las rentabilidades se miden en tu **Moneda predeterminada**, definida en [Preferencias](../settings/preferences.md) (la predeterminada de la instancia si nunca elegiste una), incluidos los movimientos de los tipos de cambio.
 - **Un guion no es un cero.** La cifra no se pudo medir para ese activo en este periodo; pasa el cursor o toca para leer el motivo.
 - **Otra página, otra cifra.** Otra página u otra selección mide en días diferentes: compara cifras solo si cubren el mismo periodo.
 

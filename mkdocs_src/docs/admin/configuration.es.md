@@ -37,7 +37,7 @@ el mismo ejemplo como `.env`.
 | `PREVIEW_CACHE_MAX_MB` | `50` | Memoria, en MB, de la caché de vistas previas de imágenes en cada proceso del servidor. |
 
 Los archivos `.env` antiguos aún pueden contener `PORTFOLIO_BASE_CURRENCY`: LibreFolio lo ignora, y los nuevos
-usuarios parten de la **Divisa predeterminada** en [Configuración global](settings.md).
+usuarios parten de la **Moneda predeterminada** en [Configuración global](settings.md).
 
 ??? info "🔒 HTTPS y proxies inversos — la cookie de sesión"
 

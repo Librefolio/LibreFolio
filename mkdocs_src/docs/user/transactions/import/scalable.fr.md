@@ -90,7 +90,7 @@ Créez deux [courtiers](../../brokers/index.md), un par compte — par exemple *
 | le compte-titres | **Scalable Capital compte-titres** | ![Logo de Scalable avec un badge de graphique bleu, l'icône de l'importateur Scalable Capital compte-titres](../../../static/icons/brokers/scalable-broker.png){: width="48" } |
 | le compte rémunéré | **Scalable Capital compte rémunéré** | ![Logo de Scalable avec un badge tirelire orange, l'icône de l'importateur Scalable Capital compte rémunéré](../../../static/icons/brokers/scalable-deposit.png){: width="48" } |
 
-Le courtier affiche alors l'icône de l'importateur de lui-même : un courtier sans icône propre affiche l'icône de son plugin d'import par défaut, avant l'icône du site web de son **URL du portail**, donc laissez **URL d'icône personnalisée** vide.
+Le courtier affiche alors l'icône de l'importateur de lui-même : un courtier sans icône propre affiche l'icône de son plugin d'import par défaut, avant l'icône du site web de son **URL du portail**, donc laissez **URL de l'Icône Personnalisée** vide.
 
 ---
 
@@ -102,9 +102,9 @@ Si un fichier atterrit dans le mauvais courtier, l'assistant d'importation le si
 
 ### 🔁 Virements entre vos deux comptes {: #transfers }
 
-L'argent que vous déplacez entre le compte-titres et le compte rémunéré apparaît dans les deux fichiers : un **Retrait** dans l'un et un **Dépôt** dans l'autre, le même jour et pour le même montant. Fusionnez chaque paire en un seul **Virement** : l'espace de travail groupé de la page [Transactions](../index.md) suggère les paires, et demande confirmation avant **Tout enregistrer** si vous ne les avez pas examinées.
+L'argent que vous déplacez entre le compte-titres et le compte rémunéré apparaît dans les deux fichiers : un **Retrait** dans l'un et un **Dépôt** dans l'autre, le même jour et pour le même montant. Fusionnez chaque paire en un seul **Virement** : l'espace de travail groupé de la page [Transactions](../index.md) suggère les paires, et demande confirmation avant **Enregistrer Tout** si vous ne les avez pas examinées.
 
-- **Fichiers importés ensemble** : les deux moitiés se retrouvent dans l'espace de travail, où une bannière verte, *Transactions complémentaires détectées*, propose de **Fusionner** chaque paire — ou toutes en une fois, avec **Fusionner tout (N)**.
+- **Fichiers importés ensemble** : les deux moitiés se retrouvent dans l'espace de travail, où une bannière verte, *Transactions complémentaires détectées*, propose de **Fusionner** chaque paire — ou toutes en une fois, avec **Tout fusionner (N)**.
 - **Fichiers importés à des moments différents** : lorsque vous importez le second fichier, l'espace de travail trouve les moitiés déjà enregistrées et affiche le bouton 💡 : cliquez dessus pour les ajouter, puis **Fusionner** chaque paire depuis la bannière. Pour les virements enregistrés depuis longtemps, vous pouvez également cocher les lignes de virement des deux courtiers sur la page **Transactions** et cliquer sur **Modifier** : la bannière apparaît dans l'espace de travail.
 
 Vous pouvez aussi lier une paire manuellement : cochez ses deux lignes sur la page **Transactions** et cliquez sur **🔗 Promouvoir la paire**.
@@ -137,7 +137,7 @@ Dans tous les cas, n'importez jamais le même fichier dans deux courtiers : ses 
 | `Security transfer`, `Corporate action` et autres types | Non importés : une [notice](#notices) les liste |
 
 - **Seules les lignes exécutées** sont importées : une notice compte les autres.
-- **Les titres** arrivent avec leur ISIN et leur nom : associez chacun à vos actifs à l'étape **Vérification** de l'assistant d'importation (voir [Association d'actifs](index.md#asset-mapping)).
+- **Les titres** arrivent avec leur ISIN et leur nom : associez chacun à vos actifs à l'étape **Révision** de l'assistant d'importation (voir [Association d'actifs](index.md#asset-mapping)).
 - **Chaque description se termine par l'identifiant de transaction** : `· id …` depuis l'exportateur, suivi de `· ref …` lorsque la ligne a une référence ; `· ref …` depuis le CSV de Scalable. Les frais et l'impôt d'une transaction commencent par `Order fee ·` et `Tax ·`. L'identifiant distingue deux mouvements identiques et permet à un nouvel export de reconnaître les lignes déjà importées.
 - **Tags** : `import` et `scalable`.
 - **Les montants sont copiés** depuis le fichier, jamais recalculés ni convertis — un dividende ou un intérêt brut est la somme de deux de ses colonnes — et la devise provient de chaque ligne.
@@ -146,7 +146,7 @@ Dans tous les cas, n'importez jamais le même fichier dans deux courtiers : ses 
 
 ## 🔔 Ce que LibreFolio vous signale {: #notices }
 
-À l'étape **Analyse**, les notices de l'importateur (⚠️) vous indiquent ce qu'il a omis ou lu d'une manière méritant vérification, chacune avec ses lignes :
+À l'étape **Analyser**, les notices de l'importateur (⚠️) vous indiquent ce qu'il a omis ou lu d'une manière méritant vérification, chacune avec ses lignes :
 
 - **Non exécutées** — les lignes en attente, annulées, expirées ou rejetées ne sont pas importées ; un ordre exécuté plus tard arrivera avec le prochain export.
 - **Exécutées en partie** — les ordres exécutés en partie et encore ouverts ne sont pas encore importés : ils arriveront, exécutés, avec un export ultérieur.

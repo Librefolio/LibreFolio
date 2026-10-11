@@ -6,13 +6,13 @@ La pestaña **Transacciones** de un bróker enumera todas sus transacciones, las
     <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Pestaña Transacciones del bróker">
 </div>
 
-Por encima de la lista encontrarás **Informes subidos**, **Ver en Transacciones** y el selector de columnas. Los propietarios y editores también disponen de **Importar** y **Añadir transacción**.
+Por encima de la lista encontrarás **Informes Cargados**, **Ver en Transacciones** y el selector de columnas. Los propietarios y editores también disponen de **Importar** y **Agregar Transacción**.
 
 ---
 
 ## ➕ Añadir una transacción
 
-1. Haz clic en **Añadir transacción**. El espacio de trabajo de transacciones se abre en un formulario **Nueva transacción**, con este bróker ya seleccionado.
+1. Haz clic en **Agregar Transacción**. El espacio de trabajo de transacciones se abre en un formulario **Nueva transacción**, con este bróker ya seleccionado.
 2. Elige el **Tipo** y completa los campos obligatorios — consulta [Formulario de transacción](../transactions/form.md).
 3. Haz clic en **Aplicar** para colocar la fila en el espacio de trabajo, y luego en **Guardar todo** para escribirla.
 
@@ -31,7 +31,7 @@ No se guarda nada antes de **Guardar todo**: hasta entonces puedes añadir más 
 
 **Importar** abre el espacio de trabajo junto con el **Asistente de importación** (BRIM, el módulo de importación de informes del bróker). El asistente lee los archivos exportados por tu bróker, te permite revisar cada fila y entrega el resultado al espacio de trabajo: no se escribe nada hasta **Guardar todo**.
 
-- 📥 **[Importar desde bróker](../transactions/import/index.md)** — brókers y formatos compatibles.
+- 📥 **[Importar desde bróker](../transactions/import/index.md)** — brókeres y formatos compatibles.
 - 🧙 **[Cómo importar transacciones](../transactions/import/how-to.md)** — el asistente, paso a paso.
 
 El mismo asistente se abre desde **Importar** en la página [Transacciones](../transactions/index.md).
@@ -46,10 +46,10 @@ El mismo asistente se abre desde **Importar** en la página [Transacciones](../t
 
 ## 🗂️ Informes subidos
 
-**Informes subidos** abre los archivos de informes almacenados para este bróker:
+**Informes Cargados** abre los archivos de informes almacenados para este bróker:
 
-- **Subir** archivos CSV o Excel: se asignan a este bróker y aparecen en el paso **Seleccionar archivos** del asistente. Los archivos que subes juntos forman un conjunto — así se importan bancos que dividen una cuenta en varias exportaciones, como Danske Bank.
-- **Previsualizar** o **Eliminar** un archivo. Eliminar un informe nunca elimina las transacciones importadas de él.
+- **Subir** archivos CSV o Excel: se asignan a este bróker y aparecen en el paso **Seleccionar** del asistente. Los archivos que subes juntos forman un conjunto — así se importan bancos que dividen una cuenta en varias exportaciones, como Danske Bank.
+- Pulsa **Vista previa** o **Eliminar** en un archivo. Eliminar un informe nunca elimina las transacciones importadas de él.
 - Comprueba las insignias **Estado** y **Conjunto de informes** de cada archivo — consulta [Conjuntos de informes](../files/index.md#report-sets).
 - **Gestionar todos los archivos** abre la página [Archivos y subidas](../files/index.md#broker-reports), filtrada por este bróker.
 

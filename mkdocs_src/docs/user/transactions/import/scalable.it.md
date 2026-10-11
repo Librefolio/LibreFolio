@@ -83,7 +83,7 @@ Attieniti a una sola fonte per conto. Le descrizioni che LibreFolio scrive diffe
 
 ## ⚙️ Configurare i due broker {: #set-up }
 
-Crea due [broker](../../brokers/index.md), uno per conto — per esempio *Scalable broker* e *Scalable overnight account* — e scegli il **Plugin di importazione predefinito** di ciascuno:
+Crea due [broker](../../brokers/index.md), uno per conto — per esempio *Scalable broker* e *Scalable overnight account* — e scegli il **Plugin di Import Predefinito** di ciascuno:
 
 | Broker per | Plugin di importazione predefinito | Icona |
 |:--|:--|:--:|
@@ -104,7 +104,7 @@ Se un file finisce nel broker sbagliato, la procedura guidata te lo dice subito 
 
 Il denaro che sposti tra il conto broker e il conto deposito appare in entrambi i file: un **Prelievo** in un broker e un **Deposito** nell'altro, nello stesso giorno e per lo stesso importo. Unisci ogni coppia in un unico **Giroconto**: il workspace bulk della pagina [Transazioni](../index.md) suggerisce le coppie, e chiede prima di **Salva tutto** se non le hai esaminate.
 
-- **File importati insieme**: le due metà si incontrano nel workspace, dove un banner verde, *Transazioni complementari rilevate*, offre di **Unisci** ogni coppia — o tutte insieme, con **Unisci tutto (N)**.
+- **File importati insieme**: le due metà si incontrano nel workspace, dove un banner verde, *Transazioni complementari rilevate*, offre di **Unisci** ogni coppia — o tutte insieme, con **Unisci tutti (N)**.
 - **File importati in momenti diversi**: quando importi il secondo file, il workspace trova le metà già salvate e mostra il pulsante 💡: cliccalo per aggiungerle, poi **Unisci** ogni coppia dal banner. Per trasferimenti salvati molto tempo prima, puoi anche selezionare le righe di trasferimento di entrambi i broker nella pagina **Transazioni** e cliccare **Modifica**: il banner appare nel workspace.
 
 Puoi anche collegare una coppia manualmente: seleziona le sue due righe nella pagina **Transazioni** e clicca **🔗 Promuovi coppia**.
@@ -146,7 +146,7 @@ In ogni caso, non importare mai lo stesso file in due broker: le sue transazioni
 
 ## 🔔 Cosa ti dice LibreFolio {: #notices }
 
-Nel passaggio **Analisi**, gli avvisi dell'importatore (⚠️) ti dicono cosa ha escluso o letto in un modo che vale la pena verificare, ciascuno con le sue righe:
+Nel passaggio **Analizza**, gli avvisi dell'importatore (⚠️) ti dicono cosa ha escluso o letto in un modo che vale la pena verificare, ciascuno con le sue righe:
 
 - **Non eseguite** — le righe in sospeso, annullate, scadute o rifiutate non vengono importate; un ordine eseguito in seguito arriva con la prossima esportazione.
 - **Eseguite in parte** — gli ordini eseguiti in parte e ancora aperti non vengono ancora importati: arrivano, eseguiti, con un'esportazione successiva.

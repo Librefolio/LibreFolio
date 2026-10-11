@@ -69,7 +69,7 @@ e un **Deposito** per il saldo di cassa quando non è zero, tutto alla data dell
 - **Filtra su Operazioni titoli.** Senza quel filtro, ogni pagamento con carta o bonifico del
   periodo compare negli avvisi come riga ignorata.
 - **Lo stesso titolo, due nomi.** L'elenco movimenti indica un titolo solamente in testo libero, mentre
-  l'istantanea fornisce il suo ISIN. Associa entrambi allo stesso asset nel pannello **Resolve Assets** di
+  l'istantanea fornisce il suo ISIN. Associa entrambi allo stesso asset nel pannello **Risolvi Asset** di
   [Revisione](how-to.md#review).
 - **Importi come scritti.** I movimenti mantengono la valuta della loro colonna **Valuta**, e l'istantanea
   è in euro: nulla viene convertito.
