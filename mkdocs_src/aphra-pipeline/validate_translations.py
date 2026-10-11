@@ -1270,12 +1270,12 @@ def check_latex(
                 ),
             ))
 
-    # Inline math ($...$) — avoid display math, currency ($0.25 / 500 $), bash vars (${VAR})
-    # Uses finditer to have access to surrounding context for suffix-currency detection
-    _INLINE_RE = re.compile(r'(?<![\\\$])\$(?!\$)(.+?)(?<![\\\$])\$(?!\$)')
+    # Inline math ($...$) as pymdownx.arithmatex reads it with smart_dollar (the site's default): the
+    # opening $ is not followed by a space, the closing $ not preceded by one, and the content holds no
+    # unescaped $. So "500 $" or "0,25 $ et 1,50 $" never opens a formula, while "day 3 $A$" does: the
+    # former suffix-currency rule (a digit before the $) dropped such formulas from one side only.
+    _INLINE_RE = re.compile(r"(?<![\\$])\$(?![\s$])((?:\\.|[^\\$\n])+?)(?<![\s\\])\$(?!\$)")
     _NON_MATH_CONTENT_RE = re.compile(r'^[\d,.]|^\{')  # prefix currency or bash var
-    # Suffix currency: $ preceded by digit+optional-space (e.g. "500 $" or "500$")
-    _SUFFIX_CURRENCY_CTX_RE = re.compile(r'\d\s?$')
     # Markdown bold/italic markup leaked between two $ signs — not real math
     _MARKDOWN_MARKUP_RE = re.compile(r'\*\*|\*|__')
 
@@ -1286,10 +1286,6 @@ def check_latex(
             content = m.group(1)
             # Filter: content starts with digit/comma (prefix currency like $0.25) or { (bash var)
             if _NON_MATH_CONTENT_RE.match(content.strip()):
-                continue
-            # Filter: text before opening $ ends with digit or digit+space (suffix currency like "500 $")
-            before = text[:m.start()]
-            if _SUFFIX_CURRENCY_CTX_RE.search(before):
                 continue
             # Filter: content contains markdown bold/italic markers (leaked between two currency $ signs)
             if _MARKDOWN_MARKUP_RE.search(content):
