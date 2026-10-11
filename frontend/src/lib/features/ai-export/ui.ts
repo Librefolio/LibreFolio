@@ -58,9 +58,9 @@ export function buildAiExportMenuLabels(t: AiExportTranslate, compatibility: AiE
             periodLabel: t('aiExport.period'),
             periodHelp: t('aiExport.periodHelp'),
             periodPresetLabels: {
-                '3m': '3M',
-                '6m': '6M',
-                '1y': '1Y',
+                '3m': t('datePicker.presets.months', {values: {n: 3}}),
+                '6m': t('datePicker.presets.months', {values: {n: 6}}),
+                '1y': t('datePicker.presets.years', {values: {n: 1}}),
                 custom: t('aiExport.periodCustom'),
             },
             periodUnitLabels: {
