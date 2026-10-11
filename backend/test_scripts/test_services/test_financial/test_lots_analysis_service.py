@@ -18,7 +18,7 @@ setup_test_database()
 from sqlalchemy import delete, event
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import IssueCode
 from backend.app.services.lots_analysis_service import get_lots_analysis
@@ -1764,3 +1764,76 @@ async def test_price_history_real_quote_wins_but_trade_fills_later_gap(session, 
     # After the sale: the trade is the most recent observation -> fills with 130, flagged estimate.
     assert points[date(2025, 2, 3)].market_price == Decimal("130")
     assert points[date(2025, 2, 3)].estimated is True
+
+
+@pytest.mark.asyncio
+async def test_an_asset_without_a_rate_to_the_target_currency_is_degraded_never_valued_in_its_own_currency(session, test_user, broker):
+    """B3a: a VND asset, quoted and bought in VND, analysed in EUR with no VND/EUR rate or route.
+
+    Every VND amount is unknown in EUR. The service used to put the native figures in the EUR
+    fields -- 26 000 VND per share shown as 26 000 EUR, the 2 500 000 VND purchase counted as
+    2 500 000 EUR -- and report nothing. It must instead leave empty what needs the missing rate
+    and say why: VND/EUR in ``missing_fx_pairs`` (the BUY date among its dates), the
+    MISSING_FX_MARKET issue the portfolio banner raises for an unconfigured pair, and DEGRADED.
+
+    The absence of the pair is owned, not assumed. ``fx_rates`` and ``fx_conversion_routes`` are
+    global and store a pair alphabetically (EUR/VND): both are emptied for it inside this test's
+    transaction, which the ``session`` fixture rolls back -- the ``_own_fx_rate`` contract. A
+    neighbour's committed rate would matter even if years old: the FX service backward-fills
+    without limit.
+    """
+    stamp = str(utcnow().timestamp()).replace(".", "")
+    vnd_asset = Asset(display_name=f"LotsVND_{stamp}", identifier_ticker=f"LVND{stamp[-4:]}", currency="VND", asset_type=AssetType.STOCK)
+    session.add(vnd_asset)
+    await session.flush()
+    base, quote = sorted(("VND", "EUR"))
+    await session.execute(delete(FxRate).where(FxRate.base == base, FxRate.quote == quote))
+    await session.execute(delete(FxConversionRoute).where(FxConversionRoute.base == base, FxConversionRoute.quote == quote))
+
+    buy_date = date(2025, 6, 9)
+    date_to = date(2025, 6, 13)
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=vnd_asset.id, type=TransactionType.BUY, date=buy_date, quantity=Decimal("100"), amount=Decimal("-2500000"), currency="VND"),
+            PriceHistory(asset_id=vnd_asset.id, date=buy_date, close=Decimal("25000"), currency="VND", source_plugin_key="TEST"),
+            PriceHistory(asset_id=vnd_asset.id, date=date(2025, 6, 12), close=Decimal("26000"), currency="VND", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=vnd_asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date_to,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "PRICE_HISTORY", "PERFORMANCE_HISTORY"],
+    )
+
+    # Presence first: the BUY opened this asset's only lot, and the analysis covers its five days.
+    window = [buy_date + timedelta(days=offset) for offset in range((date_to - buy_date).days + 1)]
+    assert result.lots is not None and len(result.lots) == 1
+    lot = result.lots[0]
+    assert (lot.opening_date, lot.original_quantity) == (buy_date, Decimal("100"))
+    assert result.performance_history is not None
+    assert [point.date for point in result.performance_history] == window
+
+    # Reported: the status, the pair with the BUY date, the issue.
+    assert result.calculation_status == "DEGRADED"
+    assert result.data_quality is not None
+    missing_dates = {item.pair: item.dates for item in result.data_quality.missing_fx_pairs}
+    assert buy_date in missing_dates.get("VND/EUR", []), f"missing_fx_pairs={result.data_quality.missing_fx_pairs}"
+    # The banner names a pair by its slug: both codes sorted, joined by a dash (_normalize_fx_pair_slug).
+    market_issue_pairs = [issue.affected_fx_pairs for issue in result.data_quality.issues if issue.code == IssueCode.MISSING_FX_MARKET]
+    assert any("EUR-VND" in pairs for pairs in market_issue_pairs), f"issues={result.data_quality.issues}"
+
+    # Never valued in VND as if it were EUR: no figure, no point, no performance.
+    assert (lot.open_value, lot.pnl, lot.total_pnl) == (None, None, None)
+    assert result.value_history is not None
+    assert [(point.date, point.open_value) for point in result.value_history if point.lot_id == lot.lot_id] == []
+    assert result.price_history is not None
+    assert [(point.date, point.market_price) for point in result.price_history if point.lot_id == lot.lot_id] == []
+    assert [(point.date, point.roi, point.twrr) for point in result.performance_history] == [(day, None, None) for day in window]

@@ -70,7 +70,7 @@ Top-level fields always present:
 | `asset_id` | Requested asset |
 | `target_currency` | Final response currency |
 | `quote_base_quantity` | Asset qbq, needed by frontend price/WAC axis |
-| `calculation_status` | `COMPLETE`, `DEGRADED`, or `FAILED` (public global status; an empty-but-valid analysis is `COMPLETE`). A `COMPLETE` engine run becomes `DEGRADED` when a requested WAC line misses a conversion or a cost basis (see [WAC Lines](#wac-lines)) |
+| `calculation_status` | `COMPLETE`, `DEGRADED`, or `FAILED` (public global status; an empty-but-valid analysis is `COMPLETE`). A `COMPLETE` engine run becomes `DEGRADED` when a conversion is missing — in a WAC line or in any other figure of the analysis — or a WAC line misses a cost basis (see [FX Conversion](#fx-conversion) and [WAC Lines](#wac-lines)) |
 | `calculation_metadata` | Broker scope, selection, requested/computed date bounds, generation date |
 | `data_quality` | FIFO/data-quality issues mapped to UI-friendly DTOs |
 | `economic_allocation_groups` | 3-level economic audit (income + FEE/TAX) mapped from the engine, `None` unless `LOT_SUMMARY` requested |
@@ -106,18 +106,20 @@ High-level flow:
 4. Collect needed FX pairs with `_collect_fx_needs()` / `_collect_performance_fx_needs()`, then batch-load rates through `_FxRateResolver`.
 5. Extract the engine's **economic stage** outputs — income, FEE/TAX and net metrics — with `_extract_income_outputs()` and `_extract_cost_outputs()` (allocation itself happens inside the engine, not here).
 6. Build one qbq-aware resolver series with `build_asset_price_series()`; feed both valuation maps and price-history lines from it.
-7. When `BROKER_WAC_HISTORY` or `CUMULATIVE_WAC_HISTORY` is requested, compute the average-cost lines with one `compute_average_costs()` call and add their gaps — missing rates, unknown costs — to `data_quality` (see [WAC Lines](#wac-lines)).
+7. When `BROKER_WAC_HISTORY` or `CUMULATIVE_WAC_HISTORY` is requested, compute the average-cost lines with one `compute_average_costs()` call (see [WAC Lines](#wac-lines)); their gaps — missing rates, unknown costs — are reported in step 9.
 8. Emit only requested DTO sections.
+9. Once every builder has run, report the gaps once, for the whole analysis: `_report_gaps()` adds to `data_quality` the WAC lines' gaps and every conversion `_FxRateResolver` could not make (see [FX Conversion](#fx-conversion)).
 
 Step 1's broker scope comes from `_get_scope_broker_ids()`: every broker the user can access, in any role, intersected with `broker_ids` when given. No owner share is applied anywhere in the analysis — quantities, values and P&L are each broker's full figures, unlike the portfolio summary, which scales an OWNER's brokers by their `share_percentage`. The lot modal says so next to its quantities (`brokers.lots.modal.absoluteQuantityTooltip`).
 
-### 💱 FX Conversion
+### 💱 FX Conversion {: #fx-conversion }
 
 `_FxRateResolver` is thin prefetch + conversion helper:
 
 - `need(currency, as_of_date)` registers required pairs
 - `load(session)` calls `convert_bulk(...)` once
-- `convert(amount, currency, as_of_date)` applies date-specific conversion into `target_currency`
+- `convert(amount, currency, as_of_date)` applies date-specific conversion into `target_currency`; a conversion it cannot make — a non-`None` amount in a currency other than the target, with no loaded rate for that `(currency, date)` — returns `None` and is recorded
+- `missing_pairs()` returns the recorded misses as `WACMissingPairInfo(pair, dates)`, one entry per `FROM/TO` pair with its dates sorted
 
 Service converts:
 
@@ -127,7 +129,30 @@ Service converts:
 - dividend / interest cash flows
 - performance-history external flows
 
+**No native fallback.** Apart from the transitional amounts below, a figure that needs a missing rate is never computed from the unconverted amount — it is `None`, or it has no point:
+
+- **Daily valuation**: a mark whose rate is missing leaves that day unvalued, like a `MISSING` mark — `market_prices[date]` is `None` and the day has no price-history point. Only `estimated_mode` (an asset with no price at all) values an open lot at cost on such a day; see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback).
+- **Value and return histories** (`_lot_value_basis()` and `_lot_snapshot_on_date()`, shared by both builders): a lot whose original cost — or, for a SHORT, its proceeds — has no rate gets no point; a LONG lot's series stops the day before the first closure whose proceeds have no rate (`_closure_proceeds_prefix()` returns the converted prefix and that date). Same rule as the [WAC Lines](#wac-lines): a point that cannot be computed is omitted.
+- **Performance history**: a BUY amount, an ADJUSTMENT-in's money (`_adjustment_native_cost()` / `_adjustment_cash_flow_cost()`) or a SELL closure's proceeds without a rate set `invalid_external_flow_from`: ROI and TWRR are `None` from that date.
+- **Lot summary**: `total_value` (when the proceeds have no rate), `pnl`, `market_pnl`, `total_pnl`, `cash_yield`, `total_return`, `net_total_pnl`, `net_total_return` and `annualized_return` are `None` when one of their inputs has no rate (`_known_realized_pnl()`, `_known_cumulative_proceeds()`), and the estimated-at-cost branch values no lot without a converted cost.
+
+!!! warning "Transitional native fallback"
+
+    These amounts still take the native amount when their rate is missing; each such missing rate is recorded
+    and reported all the same:
+
+    - the four required `LotSummarySchema` fields `original_cost`, `opening_unit_price`, `realized_pnl` and
+      `cumulative_proceeds` (`_converted_realized_pnl()` / `_converted_cumulative_proceeds()`);
+    - `GanttSegmentSchema.unit_price`;
+    - the target amounts of the income / FEE / TAX economic events — from which `asset_income`, `allocated_fees`
+      and `allocated_taxes` derive — and the BUY / SELL target amounts that weight the FEE / TAX allocation
+      (`_converted_external_amount()`).
+
+The misses are reported once, after every builder: `_report_gaps()` merges `missing_pairs()` with the WAC lines' gaps into `data_quality` (see [WAC Lines](#wac-lines)), and any of them turns a `COMPLETE` run `DEGRADED`. Only what is returned is converted, so the report holds no gap of a figure nobody reads: event rows (`_build_lot_event_rows()`) are built only when `CUSTODY_HISTORY` or `EVENT_HISTORY` is requested, and the daily valuation covers every history day only for the value, return, price and performance histories — a `LOT_SUMMARY` alone values just the last day, the only one it reads.
+
 The WAC lines do not go through `_FxRateResolver`: `compute_average_costs()` converts each acquisition itself, at its own date.
+
+**Known limit (pre-existing).** The engine's `_close_position_piece()` (`fifo_lot_engine.py`) computes a closure's realized P&L from the sale's unit price minus the lot's, and its proceeds from the sale's unit price, with no conversion: a lot opened in one currency and closed by a sale in another mixes the two currencies, and the service converts the closure with the lot's currency.
 
 ### ⚠️ qbq Scaling Gotcha
 
@@ -241,9 +266,10 @@ counterpart minus costs.
 
 !!! note "`net_metrics_status`"
 
-    Every processed lot is emitted with `net_metrics_status = "AVAILABLE"`. Because a missing FX rate falls
-    back to the native amount, the net of an existing lot is always mathematically determined, so no path
-    currently emits `"UNAVAILABLE"`.
+    Every processed lot is emitted with `net_metrics_status = "AVAILABLE"`; `"UNAVAILABLE"` is reserved for a
+    lot in a degraded economic pool, and no path currently emits it. A missing FX rate is not reported through
+    this status: the net figures that need the rate are `None`, like every other figure that needs it, and the
+    pair goes to `data_quality` (see [FX Conversion](#fx-conversion), including its transitional exceptions).
 
 ### 🧺 Orphans & conservation
 
@@ -259,14 +285,14 @@ data-quality issue. The engine guarantees, per pool, `Σ allocated + orphan == c
 
 ---
 
-## 🧮 Estimated-at-Cost Fallback
+## 🧮 Estimated-at-Cost Fallback {: #estimated-at-cost-fallback }
 
 When no asset-system quote exists (`price_lookup.latest() is None`), service enters `estimated_mode` and emits a `CURRENT_PRICE_ASSUMED_AT_COST` data-quality warning for the analysis window.
 
-If the unified resolver returns `MISSING` for an open LONG lot, the service values the remaining quantity at residual cost:
+If the latest mark is `None` for an open LONG lot — the unified resolver returns `MISSING`, or the mark's rate is missing — the service values the remaining quantity at residual cost, provided the cost itself converts (`opening_value`, the original cost converted at the opening date, is not `None`; otherwise the lot is not valued):
 
 ```python
-open_value = (opening_value or Decimal("0")) * lot.open_quantity / lot.original_quantity
+open_value = opening_value * lot.open_quantity / lot.original_quantity
 value_source = "ESTIMATED_AT_COST"
 market_pnl = Decimal("0")
 ```
@@ -275,11 +301,11 @@ Implications:
 
 - `LotSummarySchema.value_source = "ESTIMATED_AT_COST"` only on the true missing-mark fallback branch
 - `open_value` still exists for crowdfunding / unquoted assets
-- `total_value`, `total_pnl`, `cash_yield`, `total_return` remain usable
+- `total_value`, `total_pnl`, `cash_yield`, `total_return` remain usable, as long as the proceeds and realized P&L they read convert (see [FX Conversion](#fx-conversion))
 - `relative_return` stays `None` because no true market/reference comparison exists
 - data quality report adds `CURRENT_PRICE_ASSUMED_AT_COST`
 
-If the resolver can derive a TRADE-origin mark from transactions, `market_prices[date]` is not `None`: valuation uses that mark, while the price-history point carries `estimated=True`. For history builders, the cost fallback appears in `_build_value_history()` and `_build_return_history()` when `market_price is None` but lot is still open.
+If the resolver can derive a TRADE-origin mark from transactions, `market_prices[date]` is not `None`: valuation uses that mark, while the price-history point carries `estimated=True`. For history builders, the cost fallback lives in `_lot_snapshot_on_date()`, shared by `_build_value_history()` and `_build_return_history()`: in `estimated_mode`, a day whose `market_price is None` values a still-open LONG lot at cost; outside `estimated_mode`, that day has no point.
 
 ---
 
@@ -330,11 +356,11 @@ The report currency is the analysis `target_currency`, with `asset_leg=False`. E
 
 `_average_cost_points(line, history_dates)` emits `(date, wac, pool_qty)` for each history date from the line's first movement on, reading `line.state_at(date)`: `wac` is `unit_cost_report` (per single unit, in the target currency), `pool_qty` the pool's quantity. **A date on which the pool lacks part of its cost has no point** — a missing conversion or an acquisition without cost basis — so the chart shows a gap rather than a wrong average. `_trim_dates()` then cuts the points to the displayed range.
 
-`_report_average_cost_gaps(data_quality, lines, target_currency, asset)` puts in the response what the lines could not compute, through the same `DerivedViewsBuilder.build_data_quality_report()` as the Dashboard banner:
+`_report_gaps(data_quality, lines, conversion_gaps, target_currency, asset)` puts in the response what the lines could not compute, merged with every other conversion the analysis could not make (`conversion_gaps = fx_resolver.missing_pairs()`, see [FX Conversion](#fx-conversion)). It runs once, after every builder, through the same `DerivedViewsBuilder.build_data_quality_report()` as the Dashboard banner:
 
-- **Missing conversions** (report leg): `data_quality.missing_fx_pairs` receives one `WACMissingPairInfo(pair, dates)` per pair, and `data_quality.issues` the `MISSING_FX_MARKET` / `MISSING_FX_RATES` issues derived from them, given the configured and real-provider pair sets of `load_configured_fx_pair_sets()`;
+- **Missing conversions** (the lines' report leg plus `conversion_gaps`): `data_quality.missing_fx_pairs` receives one `WACMissingPairInfo(pair, dates)` per pair, its dates merged across sources, and `data_quality.issues` the `MISSING_FX_MARKET` / `MISSING_FX_RATES` issues derived from them, given the configured and real-provider pair sets of `load_configured_fx_pair_sets()`;
 - **Acquisitions of unknown cost** (`unknown_cost_movement_ids` on any line): one `MISSING_COST_BASIS` issue for the analysed asset, built with `missing_cost_basis_assets=[(asset.id, asset.display_name)]` — the same issue as the portfolio banner;
-- `calculation_status` turns from `COMPLETE` to `DEGRADED` when a line misses a rate **or** a cost basis: the gap is isolable.
+- `calculation_status` turns from `COMPLETE` to `DEGRADED` when a line misses a rate or a cost basis, **or** any other conversion of the analysis is missing: the gap is isolable.
 
 In the panel, the issues appear in `LotDataQualityBanner`, grouped by code and without call-to-action buttons.
 
@@ -347,7 +373,7 @@ Key builders:
 - `_build_lot_summaries()` — scalar lot rows for table/modal
 - `_build_gantt_segments()` — custody fragments
 - `_build_lot_event_rows()` — full lot chronology
-- `_build_value_history()` — continues closed lots to `date_to` via `_lot_history_end_date(..., extend_closed=True)`
+- `_build_value_history()` — continues closed lots to `date_to` via `_lot_history_end_date(..., extend_closed=True)`, unless a rate is missing (see [FX Conversion](#fx-conversion))
 - `_build_return_history()` — same continuity rule, plus `relative_return`
 - `_build_price_history()` — truncates at closure date, no post-close points
 - `_build_broker_wac_history()` / `_build_cumulative_wac_history()` — WAC points read from the average-cost lines via `_average_cost_points()` (see [WAC Lines](#wac-lines))
