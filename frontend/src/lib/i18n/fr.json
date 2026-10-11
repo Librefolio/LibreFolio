@@ -322,7 +322,7 @@
       "rankHint": "Rang de recherche web (métarecherche sur plusieurs moteurs) — le premier résultat est la correspondance la plus probable"
     },
     "comparison": {
-      "title": "Comparaison des donnees du fournisseur",
+      "title": "Comparaison des données du fournisseur",
       "description": "Le fournisseur a renvoye des valeurs differentes. Examinez et choisissez lesquelles accepter.",
       "currentValue": "Valeur actuelle",
       "providerValue": "Valeur du fournisseur",
@@ -1013,11 +1013,11 @@
     "discardChangesWarning": "Vous avez des modifications non enregistrées pour ce courtier. Voulez-vous les annuler ?",
     "loadFailed": "Échec du chargement du courtier",
     "importFiles": "Fichiers d'Importation",
-    "showImportHistory": "Rapports Téléchargés",
+    "showImportHistory": "Rapports téléversés",
     "viewInTransactions": "Voir dans les Transactions",
     "viewInTransactionsHint": "Ouvrir la page Transactions filtrée par ce courtier et les filtres actuels",
     "noImportFiles": "Aucun fichier d'importation",
-    "uploadHint": "Téléchargez des rapports de courtier pour importer des transactions",
+    "uploadHint": "Téléversez des rapports de courtier pour importer des transactions",
     "manageFiles": "Gérer tous les fichiers",
     "sharing": {
       "title": "Partager le Courtier",
@@ -1402,7 +1402,8 @@
       "price": "Axe des prix ({currency})",
       "signal": "Axe {name}",
       "volume": "Axe des volumes"
-    }
+    },
+    "yAxisAuto": "Auto"
   },
   "common": {
     "addMeasure": "Ajouter une mesure",
@@ -1771,7 +1772,13 @@
     "emptyMessage": "Aucune donnée. Utilisez 'Ajouter une ligne' ou 'Importer CSV' pour en ajouter.",
     "editorTipDesktop": "Double-cliquez sur le graphique pour aller à cette date",
     "editorTipMobile": "Appui long sur le graphique pour aller à cette date",
-    "saveFailed": "Échec de l’enregistrement : {error}"
+    "saveFailed": "Échec de l’enregistrement : {error}",
+    "status": {
+      "original": "Original",
+      "edited": "Modifié",
+      "deleted": "Supprimé",
+      "appended": "Nouveau"
+    }
   },
   "datePicker": {
     "presets": {
@@ -1779,7 +1786,10 @@
       "mtd": "MTD",
       "qtd": "QTD",
       "ytd": "YTD",
-      "max": "Tout"
+      "max": "Tout",
+      "weeks": "{n}S",
+      "months": "{n}M",
+      "years": "{n}A"
     },
     "from": "Du",
     "to": "Au",
@@ -1838,7 +1848,7 @@
     "fxBannerContext": "pour les événements dividendes/cash"
   },
   "fileStatus": {
-    "uploaded": "Téléchargé",
+    "uploaded": "Téléversé",
     "parsed": "Analysé",
     "failed": "Échoué"
   },
@@ -2140,7 +2150,7 @@
     "defaultCurrencyHint": "Devise utilisée par défaut pour les nouvelles transactions et calculs",
     "themeHint": "Choisissez votre thème préféré",
     "category": "Catégorie",
-    "avatarHint": "Cliquez pour télécharger une photo de profil",
+    "avatarHint": "Cliquez pour téléverser une photo de profil",
     "selectAvatar": "Sélectionner un Avatar",
     "global": {
       "scheduler": {
@@ -2595,8 +2605,8 @@
     "pendingUploadsMessage": "Vous avez des fichiers sélectionnés pour le téléversement. Voulez-vous les abandonner?",
     "filesToUpload": "Fichiers à téléverser",
     "editImage": "Modifier l'image",
-    "editAvatar": "Télécharger l'avatar",
-    "cropAndUpload": "Recadrer et télécharger",
+    "editAvatar": "Téléverser l'avatar",
+    "cropAndUpload": "Recadrer et téléverser",
     "aspectRatio": "Format",
     "outputSize": "Sortie",
     "outputPreset": "Préréglage de sortie",
@@ -2607,8 +2617,8 @@
     "crop": "Recadrer",
     "editFile": "Modifier le fichier",
     "rename": "Renommer",
-    "renameAndUpload": "Renommer et télécharger",
-    "editIcon": "Télécharger l'icône",
+    "renameAndUpload": "Renommer et téléverser",
+    "editIcon": "Téléverser l'icône",
     "scale": "Échelle",
     "selectAsset": "Sélectionner une Image",
     "existingFiles": "Existants",

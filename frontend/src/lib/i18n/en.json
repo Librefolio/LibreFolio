@@ -1402,7 +1402,8 @@
       "price": "Price axis ({currency})",
       "signal": "{name} axis",
       "volume": "Volume axis"
-    }
+    },
+    "yAxisAuto": "Auto"
   },
   "common": {
     "addMeasure": "Add measurement",
@@ -1771,7 +1772,13 @@
     "emptyMessage": "No data. Use 'Add Row' or 'Import CSV' to add data.",
     "editorTipDesktop": "Double-click on the chart to jump to that date",
     "editorTipMobile": "Long-press on the chart to jump to that date",
-    "saveFailed": "Failed to save: {error}"
+    "saveFailed": "Failed to save: {error}",
+    "status": {
+      "original": "Original",
+      "edited": "Edited",
+      "deleted": "Deleted",
+      "appended": "New"
+    }
   },
   "datePicker": {
     "presets": {
@@ -1779,7 +1786,10 @@
       "mtd": "MTD",
       "qtd": "QTD",
       "ytd": "YTD",
-      "max": "All"
+      "max": "All",
+      "weeks": "{n}W",
+      "months": "{n}M",
+      "years": "{n}Y"
     },
     "from": "From",
     "to": "To",

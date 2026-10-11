@@ -1402,7 +1402,8 @@
       "price": "Asse dei prezzi ({currency})",
       "signal": "Asse {name}",
       "volume": "Asse dei volumi"
-    }
+    },
+    "yAxisAuto": "Auto"
   },
   "common": {
     "addMeasure": "Aggiungi misura",
@@ -1771,7 +1772,13 @@
     "emptyMessage": "Nessun dato. Usa 'Aggiungi riga' o 'Importa CSV' per aggiungerne.",
     "editorTipDesktop": "Doppio clic sul grafico per saltare a quella data",
     "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data",
-    "saveFailed": "Salvataggio non riuscito: {error}"
+    "saveFailed": "Salvataggio non riuscito: {error}",
+    "status": {
+      "original": "Originale",
+      "edited": "Modificato",
+      "deleted": "Eliminato",
+      "appended": "Nuovo"
+    }
   },
   "datePicker": {
     "presets": {
@@ -1779,7 +1786,10 @@
       "mtd": "MTD",
       "qtd": "QTD",
       "ytd": "YTD",
-      "max": "Tutti"
+      "max": "Tutti",
+      "weeks": "{n}S",
+      "months": "{n}M",
+      "years": "{n}A"
     },
     "from": "Dal",
     "to": "Al",

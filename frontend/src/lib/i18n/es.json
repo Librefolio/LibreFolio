@@ -322,7 +322,7 @@
       "rankHint": "Posición en la búsqueda web (metabúsqueda en varios motores) — el primer resultado es la coincidencia más probable"
     },
     "comparison": {
-      "title": "Comparacion de datos del proveedor",
+      "title": "Comparación de datos del proveedor",
       "description": "El proveedor devolvio valores diferentes. Revise y elija cuales aceptar.",
       "currentValue": "Valor actual",
       "providerValue": "Valor del proveedor",
@@ -447,7 +447,7 @@
     "step2Title": "Seleccionar",
     "step3Title": "Analizar",
     "step4Title": "Revisión",
-    "globalBroker": "Broker para subidas",
+    "globalBroker": "Bróker para subidas",
     "brokerRequired": "Broker obligatorio",
     "selectedCount": "{n} archivo(s) seleccionado(s) de {b} broker(s)",
     "pluginLabel": "Plugin",
@@ -1402,7 +1402,8 @@
       "price": "Eje de precios ({currency})",
       "signal": "Eje {name}",
       "volume": "Eje de volúmenes"
-    }
+    },
+    "yAxisAuto": "Auto"
   },
   "common": {
     "addMeasure": "Añadir medida",
@@ -1505,7 +1506,7 @@
     "tags": "Etiquetas",
     "addRow": "Añadir fila",
     "clearSelection": "Borrar selección",
-    "syncFxRates": "Sincronizar tasas FX",
+    "syncFxRates": "Sincronizar tipos de cambio",
     "currentPrice": "Precio Actual",
     "linkedEvent": "Evento Vinculado",
     "resetAllChanges": "Restablecer todo",
@@ -1771,7 +1772,13 @@
     "emptyMessage": "Sin datos. Usa 'Agregar fila' o 'Importar CSV' para agregar.",
     "editorTipDesktop": "Doble clic en el gráfico para ir a esa fecha",
     "editorTipMobile": "Mantén presionado en el gráfico para ir a esa fecha",
-    "saveFailed": "No se pudo guardar: {error}"
+    "saveFailed": "No se pudo guardar: {error}",
+    "status": {
+      "original": "Original",
+      "edited": "Modificado",
+      "deleted": "Eliminado",
+      "appended": "Nuevo"
+    }
   },
   "datePicker": {
     "presets": {
@@ -1779,7 +1786,10 @@
       "mtd": "MTD",
       "qtd": "QTD",
       "ytd": "YTD",
-      "max": "Todo"
+      "max": "Todo",
+      "weeks": "{n}S",
+      "months": "{n}M",
+      "years": "{n}A"
     },
     "from": "Desde",
     "to": "Hasta",
@@ -1922,7 +1932,7 @@
       "resultDeleted": "eliminado ({n} tasas)"
     },
     "rateNotAvailable": "Tipo de cambio no disponible",
-    "rate": "Tasa",
+    "rate": "Tipo de cambio",
     "card": {
       "manualOnly": "Par solo manual",
       "syncFromProvider": "Sincronizar las tasas desde el proveedor"
@@ -1930,7 +1940,7 @@
     "loadFailed": "No se pudieron cargar los pares FX"
   },
   "fxDetail": {
-    "editRates": "Editar tasas",
+    "editRates": "Editar tipos de cambio",
     "loadingRates": "Cargando tasas...",
     "noData": "No hay datos de tasas disponibles para este rango.",
     "syncRates": "Sincronizar tasas",
@@ -2282,7 +2292,7 @@
     "promoteSuggest": {
       "detected": "Transacciones complementarias detectadas:",
       "bannerMore": "y {n} más...",
-      "merge": "Combinar",
+      "merge": "Unir",
       "deltaLabel": "Máx Δ días",
       "rowRef": "Fila #{n}",
       "mergeAll": "Unir todos ({n})",
@@ -2493,11 +2503,11 @@
       "alreadyPaired": "La transacción ya está vinculada a otra transacción",
       "noPromoteRule": "Ninguna regla de promoción corresponde a estos dos tipos de transacción",
       "wacFxUnavailable": "❌ Cálculo PMC fallido.",
-      "wacFxUnavailableSyncLink": "Sincronizar tasas FX",
+      "wacFxUnavailableSyncLink": "Sincronizar tipos de cambio",
       "wacFxUnavailableOrManual": "o cambia al modo manual.",
       "costBasisRequired": "❌ <b>{type}</b> con cantidad positiva requiere un coste base. Use el modo <b>Auto</b> (PMC) o introduzca un valor <b>manual</b>.",
       "pairDeleteIncomplete": "Transacción vinculada: eliminar esta fila requiere eliminar también su contraparte (transacción n.º {partnerId}). Si la contraparte está en un bróker que no puedes editar, pide a su propietario que la elimine.",
-      "pairQuantityMismatch": "Una transferencia debe sacar de un broker la misma cantidad que ingresa en el otro (encontradas {qtyA} y {qtyB})",
+      "pairQuantityMismatch": "Una transferencia debe sacar de un bróker la misma cantidad que ingresa en el otro (encontradas {qtyA} y {qtyB})",
       "pairAssetMismatch": "Los dos lados de una transferencia deben ser el mismo activo"
     },
     "pydantic": {
@@ -2566,7 +2576,7 @@
     "upload": "Subir",
     "title": "Archivos",
     "staticResources": "Recursos Estáticos",
-    "brokerReports": "Informes de Broker",
+    "brokerReports": "Informes del bróker",
     "noFiles": "Ningún archivo subido",
     "fileName": "Nombre del Archivo",
     "fileSize": "Tamaño",
@@ -2588,7 +2598,7 @@
     "selectBroker": "Seleccionar Broker",
     "chooseBroker": "-- Elegir broker --",
     "assignAll": "Asignar todos a",
-    "assignBrokers": "Asignar Brokers",
+    "assignBrokers": "Asignar brókeres",
     "file": "archivo",
     "confirmCloseWithPendingFiles": "Tienes archivos seleccionados para subir. ¿Estás seguro de que quieres cancelar?",
     "pendingUploads": "Subidas pendientes",
