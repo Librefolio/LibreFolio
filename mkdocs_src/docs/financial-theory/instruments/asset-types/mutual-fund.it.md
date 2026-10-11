@@ -13,7 +13,7 @@ Un **fondo comune di investimento** è un veicolo di investimento gestito profes
 | **Valuta** | Denominato nella valuta di base del fondo |
 | **Dividendi** | Può distribuire (fondi a distribuzione) o reinvestire (fondi ad accumulazione) |
 | **Commissioni** | Commissione di gestione (TER), commissioni di ingresso/uscita |
-| **Provider tipici** | Yahoo Finance, Manuale |
+| **Provider tipici** | Yahoo Finance, Borsa Italiana, o prezzi inseriti manualmente nell'[editor dati](../../../user/assets/detail/data-editor.md) |
 
 ---
 

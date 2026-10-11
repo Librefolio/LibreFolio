@@ -12,7 +12,7 @@ The **Other** asset type is a catch-all category for any asset class not covered
 | **Pricing** | Manual entry or any compatible provider |
 | **Currency** | Any ISO 4217 currency |
 | **Income** | Depends on the specific asset |
-| **Typical providers** | Manual, CSS Scraper |
+| **Typical providers** | CSS Scraper, or prices entered by hand in the [Data Editor](../../../user/assets/detail/data-editor.md) |
 
 ---
 
@@ -33,7 +33,7 @@ The **Other** asset type is a catch-all category for any asset class not covered
 
 For assets without a public price feed:
 
-1. Use the **Manual** provider and enter prices via the [Data Editor](../../../user/assets/detail/data-editor.md)
+1. Tick **No Provider** for the asset and enter the prices yourself in the [Data Editor](../../../user/assets/detail/data-editor.md)
 2. Or use the **CSS Scraper** provider to extract prices from a website
 3. Record buy/sell transactions as usual via broker imports
 

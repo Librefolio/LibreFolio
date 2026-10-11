@@ -13,7 +13,7 @@ Las **criptomonedas** son activos digitales que utilizan tecnología criptográf
 | **Moneda** | Generalmente cotizadas en USD, pero negociables frente a muchos pares de fiat y cripto |
 | **Dividendos** | Ninguno para la mayoría (algunos tokens de DeFi ofrecen recompensas por staking) |
 | **Volatilidad** | Significativamente más alta que los activos tradicionales |
-| **Proveedores típicos** | Yahoo Finance (ej. `BTC-USD`), Manual |
+| **Proveedores típicos** | Yahoo Finance (ej. `BTC-USD`), o precios introducidos a mano en el [Editor de datos](../../../user/assets/detail/data-editor.md) |
 
 ---
 
