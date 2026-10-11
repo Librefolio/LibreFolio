@@ -25,7 +25,7 @@ Gli asset sono condivisi da tutti su questo LibreFolio: sono le tue transazioni 
 Apri **Asset** nella barra laterale, poi:
 
 - **Scegli un layout** — i due pulsanti accanto a **Aggiungi asset** consentono di alternare tra schede con un piccolo grafico (**Vista griglia**) e una tabella ordinabile (**Vista tabella**). La tua scelta viene ricordata in questo browser.
-- **Scegli il periodo** — l'intervallo di date imposta il periodo dei grafici delle schede e della variazione che mostrano. Nella tabella, le colonne **Δ** indicano la variazione su un giorno e su ciascun periodo, da 1W a 5Y, che rientra nell'intervallo.
+- **Scegli il periodo** — l'intervallo di date imposta il periodo dei grafici delle schede e della variazione che mostrano. Nella tabella, le colonne **Δ** indicano la variazione su un giorno e su ciascun periodo, da 1S a 5A, che rientra nell'intervallo.
 - **Filtra** — digita in **Cerca asset...** per filtrare per nome e scegli una o più valute e tipi nei due menu; la ✕ cancella la ricerca ed entrambi i menu.
 - **Mostra asset archiviati** — l'elenco parte con i soli asset **Attivi**: attiva **Inattivi** per aggiungere quelli archiviati, oppure disattiva **Attivi** per vedere solo quelli.
 

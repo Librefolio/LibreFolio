@@ -25,7 +25,7 @@ Les actifs sont partagés par toutes les personnes de ce LibreFolio : vos transa
 Ouvrez **Actifs** dans la barre latérale, puis :
 
 - **Choisissez une disposition** — les deux boutons à côté de **Ajouter un actif** basculent entre des cartes avec un petit graphique (**Vue grille**) et un tableau triable (**Vue tableau**). Votre choix est mémorisé dans ce navigateur.
-- **Choisissez la période** — la plage de dates définit la période des graphiques des cartes et de la variation qu’elles affichent. Dans le tableau, les colonnes **Δ** donnent la variation sur un jour et sur chaque période, de 1W à 5Y, qui tient dans la plage.
+- **Choisissez la période** — la plage de dates définit la période des graphiques des cartes et de la variation qu’elles affichent. Dans le tableau, les colonnes **Δ** donnent la variation sur un jour et sur chaque période, de 1S à 5A, qui tient dans la plage.
 - **Filtrer** — saisissez dans **Rechercher des actifs...** pour filtrer par nom, et choisissez une ou plusieurs devises et types dans les deux menus ; le ✕ efface la recherche et les deux menus.
 - **Afficher les actifs archivés** — au départ, la liste n’affiche que les actifs **Actif** : activez **Inactif** pour ajouter les archivés, ou désactivez **Actif** pour ne voir que ceux-là.
 
