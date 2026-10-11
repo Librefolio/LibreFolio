@@ -57,7 +57,7 @@ indicatori e periodo; mantengono solo più o meno cronologia. **Completo** può 
 
 ### 📅 Passaggio 4: Imposta il periodo AI
 
-Scegli **3M** (predefinito), **6M**, **1Y** o **Personalizzato** (giorni, settimane, mesi o anni), con fine
+Scegli **3M** (predefinito), **6M**, **1A** o **Personalizzato** (giorni, settimane, mesi o anni), con fine
 alla data di esportazione. Se LibreFolio ha meno cronologia, l'esportazione viene contrassegnata come parziale: non
 inventa mai prezzi né usa quelli futuri.
 
