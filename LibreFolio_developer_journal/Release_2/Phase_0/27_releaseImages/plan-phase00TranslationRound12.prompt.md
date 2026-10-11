@@ -572,7 +572,15 @@
 > - Audits: masked pairs 624/624; coverage complete (235 nav entries per language); copied numbers and attributes as in batch 15; glossary scan 227 → 214 hits (the decided terms; the restored «Card dei KPI» first added one — aligned to the glossary and the page, «Schede KPI», and es «Efecto Timing en el MWRR» like its page); label scan 399 → 370 rows (user/admin pages 151 → 133, all decided; one new theory row, «tasa» = frequency, kept); «usted» scan 46 → 18, all excluded classes (nouns «ajuste», «importe», «cierre», «Despliegue»; the neutral «ustedes»); stamp audit 178 pairs, port check 0; hook proof PROOF_OK (6,581 → 0).
 > - Commit by commit (`b16_stages.py`, `b16_build_snapshots.py`, read-only on the repo): six commits, 142 paths (= `git status`); the doc edits come from scripts with explicit edit lists, and their replay on HEAD in commit order equals the worktree for all 126 files; 9 translations change in two commits, their intermediate contents in `release-pipeline/b16_commit_stages/` (SHA256SUMS). The state after each of C2–C5, checked alone (`b16_stage_states_check.py`): validate 0/0, diff 624/624, dry-run nothing pending.
 
-### 8. ⏳ Next: the final round after F, and what waits
+### 8. ✅ Batch 17: T's durations — on train 40 (`ab7fe324e`), 2026-10-11
+
+> Coordinator 22:28: batch 16 merged as `91be6a321` (commits `7c66234a7`…`5b22b06f1`); train 40 brings T's train 39, which localizes the last hard-coded durations with `datePicker.presets.*` (`c7b49085f`): the tables' «Δ» columns through `deltaPeriodLabel` (`frontend/src/lib/utils/assetPriceDerived.ts:126`, plus `datePicker.presets.days` for the fixed day column: it «1G», fr «1J», es «1D») and the AI Export period (`features/ai-export/ui.ts:60–63`: «3M», «6M», «1A» in it/fr/es).
+
+**8.1 ✅ The 7 held lines** — 2026-10-11 (`release-pipeline/scripts/b17_durations_t.py`, translation only, no stamp)
+> **Note implementazione**: of the 7 lines held in 7.2, the Spanish ones (`user/assets/index.es.md:28`, `user/fx/index.es.md:26`) and the French/Spanish AI Export line already read «1S…5A» / «1A». Changed: `user/assets/index` it/fr «1W…5Y» → «1S…5A», `user/fx/index.it.md:27` likewise, `user/ai-export/index.it.md:60` «**1Y**» → «**1A**»; and `user/fx/index.fr.md:26`, which paraphrased the columns («de 1 semaine à 5 ans») where the English quotes them, → «de 1S à 5A». The duration token scan leaves only «Treasury 10Y», a bond's name. No page quotes the fixed «Δ 1D» column (the English says «over one day»).
+> - Gates (lane 6158, load 14): `translate-validate` 0 errors, 0 warnings; `translate-diff` 624/624; dry-run nothing pending; strict build 0 WARNING/ERROR, 0 ⚠️/❌, 2,988 asset URLs; `check-links` 95; asset scan 0 broken in 4 languages; `git diff --check` clean; ports 6158/6168 free.
+
+### 9. ⏳ Next: the final round after F, and what waits
 
 1. F-5's English pages when their train comes: `portfolio-engine/deposited-capital`, `book-value`, the «FX on cash» line of `positions.en.md:87`/`kpi-cards.en.md:39`. Detectors first, then by hand or the pipeline.
 2. Gallery, next remote run: the PAC shots (5.9, «Gallery»).
