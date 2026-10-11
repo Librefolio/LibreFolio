@@ -2586,6 +2586,8 @@
             assetB: b.fields.asset_id,
             qtyA: Number(a.fields.quantity ?? 0),
             qtyB: Number(b.fields.quantity ?? 0),
+            eventA: a.fields.asset_event_id ?? null,
+            eventB: b.fields.asset_event_id ?? null,
         };
     }
 
@@ -2772,6 +2774,7 @@
                 asset_id: o.fields.asset_id,
                 amount: Number(signedCash?.amount ?? 0) || null,
                 quantity: Number(signedQty ?? 0) || null,
+                asset_event_id: o.fields.asset_event_id ?? null,
             };
         });
         const key = JSON.stringify(inputs);
