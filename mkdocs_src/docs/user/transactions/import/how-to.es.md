@@ -45,7 +45,7 @@ barra de progreso muestra únicamente los pasos de la importación actual.
 ### 📤 Paso 1: Subir
 
 Arrastra tus informes al asistente, o haz clic para elegirlos (CSV o XLSX), y asigna cada uno a
-su bróker — o todos a la vez con **Broker para subidas**. Un bróker que falte puede crearse
+su bróker — o todos a la vez con **Bróker para subidas**. Un bróker que falte puede crearse
 desde la misma lista (**Crear nuevo**).
 
 - Cada informe que subes se conserva: para reutilizar uno, salta este paso con **Siguiente: Seleccionar**.

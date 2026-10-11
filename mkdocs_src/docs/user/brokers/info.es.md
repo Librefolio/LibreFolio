@@ -56,11 +56,11 @@ Para dar acceso a alguien:
 
 Guarda antes de cambiar de pestaña: en la pestaña Info, los cambios sin guardar se descartan sin preguntar.
 
-En **Tu acceso** también puedes **Abandonar el bróker**, o **Cambiar a visor** si eres un Editor. Los roles y las cuotas de propiedad se explican en [Uso compartido del bróker](sharing.md).
+En **Tu acceso** también puedes **Abandonar el bróker**, o **Cambiar a lector** si eres un Editor. Los roles y las cuotas de propiedad se explican en [Uso compartido del bróker](sharing.md).
 
 ---
 
 ## 🔗 Relacionado
 
-- 🧠 **[Exportación IA del bróker](../ai-export/broker.md)** — **Exportar IA** se encuentra en la barra de herramientas del bróker y funciona desde todas las pestañas.
+- 🧠 **[Exportación IA del bróker](../ai-export/broker.md)** — **Exportación IA** se encuentra en la barra de herramientas del bróker y funciona desde todas las pestañas.
 - 🏦 **[Brókeres](index.md)** — crear un bróker y sus campos opcionales.

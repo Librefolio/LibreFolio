@@ -22,7 +22,7 @@ La pagina si apre sempre su **Prezzi**.
 ### 🗓️ Finestra del Rendimento mobile {: #rolling-return }
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="Grafico dell'asset in modalità Rendimento rolling con la finestra 1Y e un asset di confronto" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="Grafico dell'asset in modalità Rendimento mobile con la finestra 1A e un asset di confronto" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 Questa vista risponde alla domanda *quanto si è mosso il prezzo sulla finestra, a ogni data?* Ogni punto confronta la chiusura di quel giorno con la chiusura esattamente $N$ giorni di calendario prima:
@@ -31,11 +31,11 @@ $$
 R(d) = \frac{P(d)}{P(d-N)} - 1
 $$
 
-dove $P$ è l'ultima chiusura nota in quel giorno, nella valuta del grafico → [Rendimento rolling su giorni di calendario](../../../financial-theory/fundamentals/returns.md#rolling-return-calendar).
+dove $P$ è l'ultima chiusura nota in quel giorno, nella valuta del grafico → [Rendimento mobile su giorni di calendario](../../../financial-theory/fundamentals/returns.md#rolling-return-calendar).
 
 Scegli $N$ con il controllo **Finestra** accanto ai due pulsanti:
 
-- **1W**, **1M**, **3M**, **1Y** — 7, 30, 90 e 365 giorni.
+- **1S**, **1M**, **3M**, **1A** — 7, 30, 90 e 365 giorni.
 - **Personalizzato** — un numero intero con **S**, **M** o **A**, contati come 7, 30 e 365 giorni: `3M` corrisponde a 90 giorni.
 - **?** apre questa sezione del manuale.
 
@@ -45,7 +45,7 @@ Come leggerlo:
 
 - **Sopra zero**, il prezzo è più alto di $N$ giorni prima; **sotto zero**, più basso.
 - **Passa il mouse su un punto**: ↩ indica la data con cui viene confrontato; 📅 e 💱 indicano le date del prezzo e dei tassi di cambio effettivamente utilizzati, quando uno dei due è più vecchio.
-- **[Confronti tra asset](signals.md#data-comparison)** diventano anch'essi rendimenti rolling, con la stessa finestra e la stessa valuta.
+- **[Confronti tra asset](signals.md#data-comparison)** diventano anch'essi rendimenti mobili, con la stessa finestra e la stessa valuta.
 - **Solo prezzo**: dividendi, interessi e le tue transazioni non sono inclusi.
 
 ??? note "🧩 Lacune e linee corte — quando lo storico è incompleto"
@@ -58,13 +58,13 @@ Come leggerlo:
 
 ### 📅 Intervallo di date
 
-L'intervallo di date nella barra degli strumenti della pagina imposta le date visualizzate: **1W**, **1M**, **3M**, **6M**, **1Y**, **2Y**, **YTD**, **MAX**, oppure **Personalizzato** con un calendario. Se c'è spazio sulla barra, compaiono altri preset (3Y, 5Y, 10Y, WTD, MTD, QTD). L'intervallo che scegli ti segue nelle pagine dashboard, broker, asset e FX della stessa scheda del browser.
+L'intervallo di date nella barra degli strumenti della pagina imposta le date visualizzate: **1S**, **1M**, **3M**, **6M**, **1A**, **2A**, **YTD**, **Tutti**, oppure **Personalizzato** con un calendario. Se c'è spazio sulla barra, compaiono altri preset (3A, 5A, 10A, WTD, MTD, QTD). L'intervallo che scegli ti segue nelle pagine dashboard, broker, asset e FX della stessa scheda del browser.
 
 Su un intervallo lungo il grafico può raggruppare i giorni in settimane o mesi per restare leggibile: un badge **Settimanale** o **Mensile** in alto a sinistra lo indica.
 
 ### 💱 Converti in un'altra valuta
 
-**Converti in**, accanto al prezzo, mostra il grafico in un'altra valuta, con una linea 💱 tratteggiata per il prezzo nella valuta propria dell'asset. Il menu elenca le valute raggiungibili dalle tue coppie FX; **Crea forex…** in fondo aggiunge una coppia mancante. Anche i rendimenti rolling vengono calcolati nella valuta scelta.
+**Converti in**, accanto al prezzo, mostra il grafico in un'altra valuta, con una linea 💱 tratteggiata per il prezzo nella valuta propria dell'asset. Il menu elenca le valute raggiungibili dalle tue coppie FX; **Crea forex…** in fondo aggiunge una coppia mancante. Anche i rendimenti mobili vengono calcolati nella valuta scelta.
 
 ??? note "💱 Quando manca un tasso di cambio"
 
@@ -85,7 +85,7 @@ I tre pulsanti in alto a destra del grafico:
 
 - **📏 Aggiungi misura** — confronta due punti: vedi [Misure](measures.md). **Prezzi** e **Rendimento mobile** mantengono misure separate.
 - **✏️ Modifica prezzi ed eventi** — apre l'[Editor dati](data-editor.md), solo in modalità **Prezzi**.
-- **⚙️ Estetica** — **Riempimento area**, **Colori Riferimento** (verde sopra il valore iniziale, o sopra zero in %, rosso sotto), **Griglia**, **Gradiente Dati Vecchi** (attenua i punti il cui prezzo o tasso di cambio è mantenuto da un giorno precedente) e **Scala asse Y** (**Auto**, **Includi 0** o **Personalizzato**, con limiti a scelta). Le candele disattivano Riempimento area, Colori Riferimento e Gradiente Dati Vecchi.
+- **⚙️ Estetica** — **Riempimento area**, **Colori Riferimento** (verde sopra il valore iniziale, o sopra zero in %, rosso sotto), **Griglia**, **Gradiente dati obsoleti** (attenua i punti il cui prezzo o tasso di cambio è mantenuto da un giorno precedente) e **Scala asse Y** (**Auto**, **Includi 0** o **Personalizzato**, con limiti a scelta). Le candele disattivano Riempimento area, Colori Riferimento e Gradiente dati obsoleti.
 
 Queste impostazioni e i tuoi segnali vengono ricordati per questo asset, in questo browser. Per modificarli contemporaneamente per tutti gli asset, usa **Impostazioni** nella [pagina Assets](../index.md): vedi [Impostazioni grafico](../../fx/chart-settings.md).
 
