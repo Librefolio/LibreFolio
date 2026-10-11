@@ -185,6 +185,14 @@ export function signedCashAmount(cash: CashValue | null | undefined, rule: TypeR
 //  Field-level equality — type-aware normalization
 // =============================================================================
 
+/** A cost basis `{code, amount}`, or null when there is none: missing, or with an empty or
+ *  blank amount — what the form sends while the field is left empty. */
+function costBasisValue(value: unknown): CashValue | null {
+    if (!value || typeof value !== 'object') return null;
+    const costBasis = value as CashValue;
+    return String(costBasis.amount ?? '').trim() ? costBasis : null;
+}
+
 /** Compare two field values with type-aware normalization.
  *  Prevents spurious diffs from format differences ("0.1" vs "0.100000"). */
 export function fieldEq(key: string, a: unknown, b: unknown): boolean {
@@ -201,8 +209,17 @@ export function fieldEq(key: string, a: unknown, b: unknown): boolean {
         return ca.code === cb.code && exactDecimalEqual(ca.amount, cb.amount);
     }
     // String fields: normalize empty/null/undefined → ""
-    if (key === 'description' || key === 'cost_basis_override') {
+    if (key === 'description') {
         return (a || '') === (b || '');
+    }
+    // Cost basis: no value, or an empty or blank amount, means "no cost basis"; otherwise
+    // compare the code strictly and the amount as an exact decimal string, like cash.
+    if (key === 'cost_basis_override') {
+        const ca = costBasisValue(a);
+        const cb = costBasisValue(b);
+        if (!ca && !cb) return true;
+        if (!ca || !cb) return false;
+        return ca.code === cb.code && exactDecimalEqual(ca.amount, cb.amount);
     }
     // Tags: compare sorted arrays
     if (key === 'tags') {

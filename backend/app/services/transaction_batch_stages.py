@@ -575,6 +575,11 @@ async def apply_promotes(
             )
             continue
 
+        rule_issues = _promoted_state_issues(context, original_index, target_type, transaction_a, transaction_b)
+        if rule_issues:
+            context.issues.extend(rule_issues)
+            continue
+
         transaction_a.type = target_type
         transaction_b.type = target_type
         transaction_a.related_transaction_id = transaction_b.id
@@ -604,6 +609,44 @@ async def apply_promotes(
                 status="success",
             )
         )
+
+
+def _promoted_state_issues(
+    context: TransactionBatchContext,
+    original_index: int,
+    target_type: TransactionType,
+    transaction_a: Transaction,
+    transaction_b: Transaction,
+) -> list[TXValidationIssue]:
+    """Business-rule issues of the two rows as they would be once promoted.
+
+    A promote changes the type of two rows, so both must satisfy the rules of the new
+    type like any created or updated row; a row linked to an asset event, for example,
+    cannot become a TRANSFER. Nothing is changed when an issue is returned.
+    """
+    issues: list[TXValidationIssue] = []
+    for transaction in (transaction_a, transaction_b):
+        cash = Currency(code=transaction.currency, amount=transaction.amount) if transaction.currency else None
+        rule_errors = validate_transaction_business_rules(
+            tx_type=target_type,
+            asset_id=transaction.asset_id,
+            quantity=transaction.quantity,
+            cash=cash,
+            asset_event_id=transaction.asset_event_id,
+            cost_basis_mode=None,
+        )
+        for rule_error in rule_errors:
+            issues.append(
+                TXValidationIssue(
+                    operation="promote",
+                    index=original_index,
+                    ref_id=transaction.id if transaction.id in context.existing_by_id else None,
+                    error=rule_error.message(),
+                    code=rule_error.type,
+                    params=(dict(rule_error.context) if rule_error.context else None),
+                )
+            )
+    return issues
 
 
 def _resolve_promote_pair(

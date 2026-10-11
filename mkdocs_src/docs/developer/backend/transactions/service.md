@@ -149,9 +149,14 @@ transactions. A create request uses `link_uuid` only as transient correlation:
 `Transaction` has no persisted `link_uuid` column. The durable relationship is
 `A.related_transaction_id = B.id` and `B.related_transaction_id = A.id`.
 
-`_validate_linked_pair()` requires equal pair types, distinct brokers for
-`TRANSFER` and `CASH_TRANSFER`, and allows an intra-broker `FX_CONVERSION`. Pair
-description and tags are checked separately by
+`_validate_linked_pair()` requires equal pair types (`pairTypeMismatch`), distinct
+brokers for `TRANSFER` and `CASH_TRANSFER` (`pairSameBroker`), and allows an
+intra-broker `FX_CONVERSION`. A `TRANSFER` pair must also move one asset
+(`pairAssetMismatch`, params `assetA`/`assetB`) by exactly opposite quantities,
+compared as `Decimal` (`pairQuantityMismatch`, params `qtyA`/`qtyB`): what leaves one
+broker arrives at the other, and no unit is created or lost. The first rule that
+fails is the group's only issue, on operation `create` at the first leg's index, and
+the two rows stay unlinked. Pair description and tags are checked separately by
 `_validate_pair_description_tags()`.
 
 ---

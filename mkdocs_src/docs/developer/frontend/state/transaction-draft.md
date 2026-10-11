@@ -121,27 +121,45 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
 
 * **The green banner** (`promote-suggest-banner`) lists `bannerSuggestions`: pairs of standalone
   rows that are both in the workspace — two new rows, two saved rows, or a new row and a saved one
-  (`mixedPromotePairs`). The two dates are at most *Max Δ days* apart (`maxDeltaDays`, 0–14),
-  `findPromoteMatch` finds a rule, and a cash transfer's amounts cancel (`cashAmountsCancel`). It
-  shows the first five pairs, the paying row first when both rows carry cash.
+  (`mixedPromotePairs`). The two dates are at most *Max Δ days* apart (`maxDeltaDays`, 0–14), and
+  `findPromoteMatch` finds a rule on the context `buildPromoteCtx` reads from the two rows: its
+  broker, currency, asset and quantity constraints hold — the quantities exactly opposite for an
+  asset transfer — and the target type accepts the rows' event links (`eventA`/`eventB`, each
+  row's `asset_event_id`). No promote target accepts one, so a row linked to an asset event, such
+  as an `ADJUSTMENT` linked to a split, is never offered. The two sides must also cancel exactly:
+  a cash transfer's amounts (`cashAmountsCancel`), and an asset transfer's quantities of one asset
+  (`assetQuantitiesCancel`, in `promoteSuggest.ts`). Both helpers give each value the sign its
+  type implies, then compare the decimal strings exactly, as the backend compares `Decimal`s: a
+  relative tolerance of 1e-9 would let a one-cent difference through above about 10 million, a
+  pair the backend refuses. It shows the first five pairs, the paying row first when both rows
+  carry cash. `executePromote` asks `findPromoteMatch` again before it promotes, so its refusals
+  hold for every promote of the workspace: **Merge**, **Merge all**, and the selection toolbar's
+  promote button (`selectedForPromote`, `promote-toolbar-confirm`), which also asks
+  `cashAmountsCancel` of a cash transfer.
 * **The 💡 button** (`tx-bulk-suggest-import`, and the row action `suggest`) lists
   `importableSuggestions`: saved transactions that `POST /transactions/promote-suggest` proposes as
   the other half of a row, and that are not in the workspace yet. The search runs debounced on the
   standalone saved rows and on the new rows that have a type, a broker, a date and an amount or a
-  quantity, asked about under a negative id (`newRowSuggestId`). The 💡 opens
-  `TransactionPickerModal` on those candidates; once one is added, the banner offers the pair.
+  quantity, asked about under a negative id (`newRowSuggestId`). Each input also carries the row's
+  `asset_event_id` (`TXPromoteSuggestInput`, where `null` or `0` means not linked): the backend
+  skips, for a linked row, every rule whose target type refuses the link — today all of them, so
+  the row gets an empty list — and never returns a saved row linked to an event as a candidate for
+  such a rule, so the 💡 never offers a pair that an event link would keep from merging. The 💡
+  opens `TransactionPickerModal` on those candidates; once one is added, the banner offers the pair.
 * **Merge** (`promote-suggest-link-<idx>`) promotes one pair: `executePromote` at once, or
   `PromoteMergeModal` first when the two rows differ in description or tags.
-* **Merge all (N)** (`promote-suggest-merge-all`, when the banner holds more than one pair) opens
-  `PromoteAllModal.svelte` (`promote-all-modal`), which asks one `PromoteAllStrategy` for every
+* **Merge all (N)** (`promote-suggest-merge-all`, when `mergeAllPairs` holds more than one pair)
+  opens `PromoteAllModal.svelte` (`promote-all-modal`), which asks one `PromoteAllStrategy` for every
   pair, `merge` preselected at each opening: `left` (*All left*, the description and tags of the
   row the banner lists first), `right` (*All right*, those of the other row) or `merge` (*Combine*:
   `mergeStrings` of the two descriptions and `mergeTagSets` of the tags, `PromoteMergeModal`'s
-  default). `mergeAllSuggestions` then walks the banner's pairs and passes the chosen values to
-  `executePromote` where a pair differs in description or tags. It skips a pair whose rows no
-  longer match a rule, and a pair with a row that an earlier pair has merged (`isPaired`): when
-  two suggestions share a row, the row is merged once, so *N* counts suggestions, not the pairs
-  that will be merged.
+  default). `mergeAllPairs` is the banner's pairs in their order (all of them, not only the five
+  shown), without any pair that shares a row with an earlier one: when two suggestions share a
+  row, only the first is kept and the row is merged once. *N*, and the count the dialog shows, is
+  `mergeAllPairs.length`: the pairs to merge, not the suggestions. `mergeAllSuggestions` then walks
+  `mergeAllPairs` and passes the chosen values to `executePromote` where a pair differs in
+  description or tags; it skips a pair whose rows no longer match a rule, or with a row already
+  merged (`isPaired`).
 * **The save gate.** `requestCommit` first counts the suggestions nobody looked at
   (`unseenSuggestionCount`): the 💡 candidates until the picker has been opened once
   (`suggestPickerSeen`), and the banner's pairs until a click lands anywhere in the banner
