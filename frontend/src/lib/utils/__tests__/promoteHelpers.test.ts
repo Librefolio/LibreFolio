@@ -135,6 +135,58 @@ describe('cashAmountsCancel — representation independence', () => {
     });
 });
 
+describe('cashAmountsCancel — exact at large magnitudes', () => {
+    // The backend promotes two cash rows to a CASH_TRANSFER only when their amounts are exactly
+    // opposite: it compares decimals, and refuses anything else with `noPromoteRule`. A float
+    // comparison with a relative tolerance of 1e-9 stops seeing a cent at about 10 million
+    // (0.01 / 10 000 000 = 1e-9), so the editor would propose a pair the save then refuses.
+    // A cent is a cent at any magnitude: the answer must be exact, as in `assetQuantitiesCancel`.
+    // The true cases are the other half of the contract: exactness must not lose a pair that
+    // differs only in how it is written.
+
+    // --- true cases: exactly opposite -----------------------------------
+
+    it('returns true for -10000000.00 vs 10000000.00 (exact at 10 million)', () => {
+        expect(cashAmountsCancel(op('-10000000.00'), op('10000000.00'), resolve)).toBe(true);
+    });
+
+    it('returns true for -10000000 vs 10000000.000 (representation-only zeros)', () => {
+        expect(cashAmountsCancel(op('-10000000'), op('10000000.000'), resolve)).toBe(true);
+    });
+
+    it('returns true for -1234567890123.45 vs 1234567890123.45 (exact at 1.2 trillion)', () => {
+        expect(cashAmountsCancel(op('-1234567890123.45'), op('1234567890123.45'), resolve)).toBe(true);
+    });
+
+    it('returns true for a normalised (DB) CASH_OUT 10000000.00 and CASH_IN 10000000.00 (exact at 10 million)', () => {
+        const withdrawal = op('10000000.00', 'CASH_OUT'); // stored as a magnitude
+        const deposit = op('10000000.00', 'CASH_IN');
+        expect(cashAmountsCancel(withdrawal, deposit, resolve)).toBe(true);
+    });
+
+    // --- false cases: one cent apart ------------------------------------
+
+    it('returns false for -10000000.00 vs 10000000.01 (one cent at 10 million)', () => {
+        expect(cashAmountsCancel(op('-10000000.00'), op('10000000.01'), resolve)).toBe(false);
+    });
+
+    it('returns false for -123456789.12 vs 123456789.13 (one cent at 123 million)', () => {
+        expect(cashAmountsCancel(op('-123456789.12'), op('123456789.13'), resolve)).toBe(false);
+    });
+
+    it('returns false for -1234567890123.45 vs 1234567890123.46 (one cent at 1.2 trillion)', () => {
+        // Here a double steps by 2^-12 (about 0.00024): as Numbers the gap reads 0.010009765625,
+        // not 0.01. Only a decimal comparison sees the cent as it was written.
+        expect(cashAmountsCancel(op('-1234567890123.45'), op('1234567890123.46'), resolve)).toBe(false);
+    });
+
+    it('returns false for a normalised (DB) CASH_OUT 10000000.00 and CASH_IN 10000000.01 (one cent at 10 million)', () => {
+        const withdrawal = op('10000000.00', 'CASH_OUT'); // stored as a magnitude
+        const deposit = op('10000000.01', 'CASH_IN');
+        expect(cashAmountsCancel(withdrawal, deposit, resolve)).toBe(false);
+    });
+});
+
 /**
  * mergeStrings / mergeTagSets — pure field-merge helpers used by PromoteMergeModal to pre-fill
  * the resolved description and tags when two rows are merged into a promoted pair.

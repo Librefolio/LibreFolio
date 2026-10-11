@@ -5,7 +5,7 @@
  * without a Svelte component context.
  */
 
-import {signedCashAmount, type CashValue} from './txPayloadHelpers';
+import {applySign, buildSignedCash, exactDecimalEqual, exactDecimalSign, type CashValue} from './txPayloadHelpers';
 import type {TypeRule} from '$lib/stores/transactions/transactionTypeStore';
 
 /** Minimal shape required by cashAmountsCancel (subset of PendingOp).
@@ -24,26 +24,30 @@ export type TypeRuleResolver = (type: string) => TypeRule;
  * prevents false positives between unrelated transactions that only share
  * type and date proximity but have different amounts.
  *
- * Both sides are canonicalised through `signedCashAmount` first, so the answer is the same
- * whether a row came from the import pool (already signed) or from the database (normalised
- * to a magnitude by the edit form). Comparing the stored strings instead made a DEPOSIT of
- * +11 and a WITHDRAWAL of -11 read as +11 and +11: the pairing worked during an import and
- * never worked between two saved transactions.
+ * Both sides first take the sign their type implies (`buildSignedCash`, the canonicalisation
+ * `signedCashAmount` applies too), so the answer is the same whether a row came from the import
+ * pool (already signed) or from the database (normalised to a magnitude by the edit form).
+ * Comparing the stored strings instead made a DEPOSIT of +11 and a WITHDRAWAL of -11 read as
+ * +11 and +11: the pairing worked during an import and never worked between two saved
+ * transactions.
  *
  * `resolveRule` is a required parameter on purpose: a caller that does not have the type
  * cannot ask this question correctly, and should not be able to ask it at all.
  *
- * Uses floating-point epsilon relative to the larger absolute value to
- * handle decimal strings that lose precision when parsed as Number.
+ * The comparison is exact decimal arithmetic on the strings, as the backend's is and as
+ * `assetQuantitiesCancel` does for quantities. The former floating-point tolerance (relative,
+ * 1e-9) let a one-cent difference through above about 10 million: the editor proposed a pair
+ * the backend then refused.
  */
 export function cashAmountsCancel(a: CashCancelable, b: CashCancelable, resolveRule: TypeRuleResolver): boolean {
-    const numA = signedCashAmount(a.fields.cash, resolveRule(a.fields.type));
-    const numB = signedCashAmount(b.fields.cash, resolveRule(b.fields.type));
-    if (numA === null || numB === null) return false;
-    const maxAbs = Math.max(Math.abs(numA), Math.abs(numB));
-    if (maxAbs === 0) return false;
-    // Exact cancellation: sum must be 0 within floating-point epsilon
-    return Math.abs(numA + numB) / maxAbs < 1e-9;
+    const signedAmount = (row: CashCancelable) => buildSignedCash(row.fields.cash, resolveRule(row.fields.type).cashSign)?.amount ?? null;
+    const amountA = signedAmount(a);
+    const amountB = signedAmount(b);
+    if (amountA === null || amountB === null) return false;
+    const signA = exactDecimalSign(amountA);
+    const signB = exactDecimalSign(amountB);
+    if (signA === null || signB === null || signA === 0 || signA !== -signB) return false;
+    return exactDecimalEqual(applySign(amountA, 'positive'), applySign(amountB, 'positive'));
 }
 
 /**

@@ -933,6 +933,11 @@ class TXPromoteSuggestInput(StrictModel):
     asset_id: Optional[int] = None
     amount: Optional[SafeDecimal] = None
     quantity: Optional[SafeDecimal] = None
+    asset_event_id: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Asset event the row is linked to; None or 0 = not linked. A linked row gets no candidate from a rule whose target type does not accept an event link.",
+    )
 
 
 class TXPromoteSuggestCandidate(StrictModel):
