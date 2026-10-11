@@ -1,6 +1,6 @@
 ---
 name: tool-plugin
-description: Create or extend a LibreFolio atomic Tool plugin in backend/app/services/tool_plugins/. Covers Pydantic contracts, isolated execution, compiled UI binding, diagnostics and generated codecs.
+description: "Create or extend a LibreFolio atomic Tool plugin in backend/app/services/tool_plugins/. Covers Pydantic contracts, isolated execution, compiled UI binding, diagnostics and generated codecs."
 ---
 
 # Atomic Tool plugins
