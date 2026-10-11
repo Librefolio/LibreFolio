@@ -390,6 +390,16 @@ describe('isSplitTransition', () => {
         expect(isSplitTransition({quantity: 10, unitPrice: 5}, {quantity: 20, unitPrice: 0})).toBe(false);
     });
 
+    it('is false when a unit price is unknown (null: no FX rate) on either side or both, even where the known notional would match', () => {
+        // Control: with both prices known, this transition is a clean 2:1 split (10×10 = 20×5).
+        expect(isSplitTransition({quantity: 10, unitPrice: 10}, {quantity: 20, unitPrice: 5})).toBe(true);
+
+        expect(isSplitTransition({quantity: 10, unitPrice: null}, {quantity: 20, unitPrice: 5})).toBe(false);
+        expect(isSplitTransition({quantity: 10, unitPrice: 10}, {quantity: 20, unitPrice: null})).toBe(false);
+        // Two unknown prices multiply into two zero notionals, which match: only the price guard stops this reading as a split.
+        expect(isSplitTransition({quantity: 10, unitPrice: null}, {quantity: 20, unitPrice: null})).toBe(false);
+    });
+
     it('is true when quantity changes but notional is preserved', () => {
         // 10×10 = 100 == 20×5 → a clean 2:1 split.
         expect(isSplitTransition({quantity: 10, unitPrice: 10}, {quantity: 20, unitPrice: 5})).toBe(true);
@@ -429,6 +439,29 @@ describe('inferredTransitionKind', () => {
     it('falls back to TRANSFER when quantity is unchanged and it is not a split', () => {
         const kind = inferredTransitionKind({quantity: 10, unitPrice: 5, startMs: 100}, {quantity: 10, unitPrice: 5, startMs: 200}, undefined);
         expect(kind).toBe('TRANSFER');
+    });
+
+    it('calls a quantity increase an adjustment in, not a split, when a unit price is unknown', () => {
+        // Control: with both prices known, the same 10 → 20 transition is a split.
+        expect(inferredTransitionKind({quantity: 10, unitPrice: 10, startMs: 100}, {quantity: 20, unitPrice: 5, startMs: 200}, undefined)).toBe('SPLIT');
+
+        expect(inferredTransitionKind({quantity: 10, unitPrice: null, startMs: 100}, {quantity: 20, unitPrice: 5, startMs: 200}, undefined)).toBe('ADJUSTMENT_IN');
+        expect(inferredTransitionKind({quantity: 10, unitPrice: 10, startMs: 100}, {quantity: 20, unitPrice: null, startMs: 200}, undefined)).toBe('ADJUSTMENT_IN');
+        expect(inferredTransitionKind({quantity: 10, unitPrice: null, startMs: 100}, {quantity: 20, unitPrice: null, startMs: 200}, undefined)).toBe('ADJUSTMENT_IN');
+    });
+
+    it('calls a quantity decrease a sale, not a split, when a unit price is unknown', () => {
+        // Control: with both prices known, the same 20 → 10 transition is a reverse split (20×5 = 10×10).
+        expect(inferredTransitionKind({quantity: 20, unitPrice: 5, startMs: 100}, {quantity: 10, unitPrice: 10, startMs: 200}, undefined)).toBe('SPLIT');
+
+        expect(inferredTransitionKind({quantity: 20, unitPrice: null, startMs: 100}, {quantity: 10, unitPrice: 10, startMs: 200}, undefined)).toBe('SELL');
+        expect(inferredTransitionKind({quantity: 20, unitPrice: 5, startMs: 100}, {quantity: 10, unitPrice: null, startMs: 200}, undefined)).toBe('SELL');
+        expect(inferredTransitionKind({quantity: 20, unitPrice: null, startMs: 100}, {quantity: 10, unitPrice: null, startMs: 200}, undefined)).toBe('SELL');
+    });
+
+    it('still prefers a known transfer date when a unit price is unknown', () => {
+        expect(inferredTransitionKind({quantity: 10, unitPrice: null, startMs: 100}, {quantity: 20, unitPrice: null, startMs: 200}, new Set([200]))).toBe('TRANSFER');
+        expect(inferredTransitionKind({quantity: 20, unitPrice: 5, startMs: 100}, {quantity: 10, unitPrice: null, startMs: 200}, new Set([200]))).toBe('TRANSFER');
     });
 });
 
