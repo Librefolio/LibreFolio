@@ -109,7 +109,7 @@ Le premier démarrage construit l'interface web et la documentation, cela prend 
 
 ### 👤 6. Créer votre compte
 
-Ouvrez LibreFolio dans votre navigateur et choisissez **S'inscrire ici** sous le formulaire de connexion : le premier compte enregistré devient l'administrateur. Pour gérer les utilisateurs depuis le terminal, voir [Outils en ligne de commande](cli_tools.md).
+Ouvrez LibreFolio dans votre navigateur et choisissez **Inscrivez-vous ici** sous le formulaire de connexion : le premier compte enregistré devient l'administrateur. Pour gérer les utilisateurs depuis le terminal, voir [Outils en ligne de commande](cli_tools.md).
 
 ---
 

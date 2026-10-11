@@ -14,7 +14,7 @@ Si LibreFolio te ayuda a gestionar mejor tus inversiones, considera apoyar el de
 
 Cada donación —por pequeña que sea— ayuda a cubrir las herramientas de desarrollo, la infraestructura de pruebas y motiva la mejora continua.
 
-Dentro de LibreFolio, el mismo enlace del café está junto a botones que comparten el proyecto en X, Reddit, Facebook, Instagram y TikTok con un mensaje ya preparado: los encuentras en **Configuración → Acerca de**, en **Apoya a LibreFolio**, y en la ventana emergente de donación que aparece de vez en cuando después de iniciar sesión. Consulta [Apoya a LibreFolio en la aplicación](../user/settings/about.md#support-librefolio) para ver cómo funciona el uso compartido — nunca se publica nada por ti.
+Dentro de LibreFolio, el mismo enlace del café está junto a botones que comparten el proyecto en X, Reddit, Facebook, Instagram y TikTok con un mensaje ya preparado: los encuentras en **Configuración → Acerca de**, en **Apoya LibreFolio**, y en la ventana emergente de donación que aparece de vez en cuando después de iniciar sesión. Consulta [Apoya a LibreFolio en la aplicación](../user/settings/about.md#support-librefolio) para ver cómo funciona el uso compartido — nunca se publica nada por ti.
 
 ---
 

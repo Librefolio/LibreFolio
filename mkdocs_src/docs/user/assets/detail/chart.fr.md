@@ -2,7 +2,7 @@
 
 Le graphique est le cœur de la page d'un actif : l'historique des prix, ou l'ampleur de la variation du prix sur une fenêtre glissante. Faites défiler pour zoomer, glissez pour vous déplacer et survolez un point pour afficher ses valeurs.
 
-_Dernière mise à jour : 2026-10-08_
+_Dernière mise à jour : 2026-10-11_
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Graphique des prix de l'actif" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -22,7 +22,7 @@ La page s'ouvre toujours sur **Prix**.
 ### 🗓️ Fenêtre du rendement glissant {: #rolling-return }
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="Graphique de l'actif en mode Rendement glissant, avec la fenêtre 1Y et un actif de comparaison" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="Graphique de l'actif en mode Rendement glissant, avec la fenêtre 1A et un actif de comparaison" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 Cette vue répond à la question : *de combien le prix a varié sur la fenêtre, à chaque date ?* Chaque point compare la clôture de ce jour avec la clôture exactement $N$ jours calendaires plus tôt :
@@ -35,8 +35,8 @@ où $P$ est la dernière clôture connue ce jour-là, dans la devise du graphiqu
 
 Choisissez $N$ avec le contrôle **Fenêtre** à côté des deux boutons :
 
-- **1W**, **1M**, **3M**, **1Y** — 7, 30, 90 et 365 jours.
-- **Personnalisé** — un nombre entier avec **W**, **M** ou **Y**, compté comme 7, 30 et 365 jours : `3M` correspond à 90 jours.
+- **1S**, **1M**, **3M**, **1A** — 7, 30, 90 et 365 jours.
+- **Personnalisé** — un nombre entier avec **S**, **M** ou **A**, compté comme 7, 30 et 365 jours : `3M` correspond à 90 jours.
 - **?** ouvre cette section du manuel.
 
 La fenêtre peut être plus longue que les dates affichées à l'écran : LibreFolio va chercher les prix plus anciens dont il a besoin. Elle est mémorisée pour cet actif, dans ce navigateur.
@@ -58,7 +58,7 @@ Comment l'interpréter :
 
 ### 📅 Plage de dates
 
-La plage de dates dans la barre d'outils de la page définit les dates affichées à l'écran : **1W**, **1M**, **3M**, **6M**, **1Y**, **2Y**, **YTD**, **MAX**, ou **Personnalisé** avec un calendrier. S'il reste de la place sur la barre, d'autres préréglages apparaissent (3Y, 5Y, 10Y, WTD, MTD, QTD). La plage que vous choisissez vous suit sur les pages Tableau de bord, courtier, actif et FX du même onglet de navigateur.
+La plage de dates dans la barre d'outils de la page définit les dates affichées à l'écran : **1S**, **1M**, **3M**, **6M**, **1A**, **2A**, **YTD**, **Tout**, ou **Personnalisé** avec un calendrier. S'il reste de la place sur la barre, d'autres préréglages apparaissent (3A, 5A, 10A, WTD, MTD, QTD). La plage que vous choisissez vous suit sur les pages Tableau de bord, courtier, actif et FX du même onglet de navigateur.
 
 Sur une plage longue, le graphique peut regrouper les jours en semaines ou en mois pour rester lisible : un badge **Hebdomadaire** ou **Mensuel** en haut à gauche l'indique.
 
@@ -85,7 +85,7 @@ Les trois boutons en haut à droite du graphique :
 
 - **📏 Ajouter une mesure** — comparez deux points : voir [Mesures](measures.md). **Prix** et **Rendement glissant** conservent des mesures distinctes.
 - **✏️ Modifier les prix et événements** — ouvre l'[Éditeur de données](data-editor.md), en mode **Prix** uniquement.
-- **⚙️ Esthétique** — **Remplissage d'aire**, **Couleurs de référence** (vert au-dessus de la valeur de départ, ou au-dessus de zéro en %, rouge en dessous), **Lignes de grille**, **Dégradé des valeurs obsolètes** (atténue les points dont le prix ou le taux de change est reporté depuis un jour antérieur) et **Échelle de l'axe Y** (**Auto**, **Inclure 0** ou limites **Personnalisées**). Les chandeliers désactivent le remplissage d'aire, les couleurs de référence et le dégradé des valeurs obsolètes.
+- **⚙️ Esthétique** — **Remplissage**, **Couleurs de référence** (vert au-dessus de la valeur de départ, ou au-dessus de zéro en %, rouge en dessous), **Lignes de grille**, **Dégradé données obsolètes** (atténue les points dont le prix ou le taux de change est reporté depuis un jour antérieur) et **Échelle Axe Y** (**Auto**, **Inclure 0** ou **Personnalisé**, avec vos propres limites). Les chandeliers désactivent le remplissage d'aire, les couleurs de référence et le dégradé des valeurs obsolètes.
 
 Ces paramètres et vos signaux sont mémorisés pour cet actif, dans ce navigateur. Pour les modifier pour tous les actifs à la fois, utilisez **Paramètres** sur la [page Actifs](../index.md) : voir [Paramètres du graphique](../../fx/chart-settings.md).
 

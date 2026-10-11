@@ -20,15 +20,15 @@ sa [page de détail](detail/index.md).
 
 ### 🔀 Cartes ou tableau
 
-- Le bouton de bascule d'affichage à côté de **Ajouter une paire** permet de passer entre les cartes et le tableau ; LibreFolio se souvient de votre
+- Le bouton de bascule d'affichage à côté de **Ajouter Paire** permet de passer entre les cartes et le tableau ; LibreFolio se souvient de votre
   choix.
 - Dans le tableau, les colonnes **Δ** affichent la variation sur le dernier jour, sur la période sélectionnée et, pour les périodes longues,
-  de 1 semaine à 5 ans. Le bouton **Colonnes** permet d'ajouter des colonnes masquées, telles que les **Fournisseurs** de chaque paire.
+  de 1S à 5A. Le bouton **Colonnes** permet d'ajouter des colonnes masquées, telles que les **Fournisseurs** de chaque paire.
 - Sélectionnez des lignes pour agir sur plusieurs paires à la fois, ou faites un clic droit sur une ligne.
 
 ### 🔍 Filtrer par devise
 
-Choisissez une devise dans **Filtrer par devise** pour ne lister que ses paires, et une **Seconde devise** pour réduire
+Choisissez une devise dans **Filtrer devise** pour ne lister que ses paires, et une **Deuxième devise** pour réduire
 la liste à une seule paire ; ✕ efface les deux.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
@@ -39,7 +39,7 @@ la liste à une seule paire ; ✕ efface les deux.
 
 - Le sélecteur de **période** en haut définit la plage de chaque graphique et variation ; en vue cartes,
   **Abs** / **%** affiche toutes les cartes sous forme de taux ou de variation en %.
-- **Synchroniser tout** télécharge les nouveaux taux ([Synchronisation](sync.md)) ; **Recharger tout** relit les taux
+- **Sync. Tout** télécharge les nouveaux taux ([Synchronisation](sync.md)) ; **Recharger tout** relit les taux
   stockés. Le bouton **Paramètres** permet de définir l'apparence de chaque carte ([Paramètres du graphique](chart-settings.md)).
 - Sur une carte, ⇄ inverse la direction affichée (USD → EUR au lieu de EUR → USD) ; les boutons en bas
   ouvrent ses propres paramètres du graphique, permettent de la **synchroniser** ou de la **recharger**, ou de la supprimer.

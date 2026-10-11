@@ -25,7 +25,7 @@ Gli asset sono condivisi da tutti su questo LibreFolio: sono le tue transazioni 
 Apri **Asset** nella barra laterale, poi:
 
 - **Scegli un layout** — i due pulsanti accanto a **Aggiungi asset** consentono di alternare tra schede con un piccolo grafico (**Vista griglia**) e una tabella ordinabile (**Vista tabella**). La tua scelta viene ricordata in questo browser.
-- **Scegli il periodo** — l'intervallo di date imposta il periodo dei grafici delle schede e della variazione che mostrano. Nella tabella, le colonne **Δ** indicano la variazione su un giorno e su ciascun periodo, da 1W a 5Y, che rientra nell'intervallo.
+- **Scegli il periodo** — l'intervallo di date imposta il periodo dei grafici delle schede e della variazione che mostrano. Nella tabella, le colonne **Δ** indicano la variazione su un giorno e su ciascun periodo, da 1S a 5A, che rientra nell'intervallo.
 - **Filtra** — digita in **Cerca asset...** per filtrare per nome e scegli una o più valute e tipi nei due menu; la ✕ cancella la ricerca ed entrambi i menu.
 - **Mostra asset archiviati** — l'elenco parte con i soli asset **Attivi**: attiva **Inattivi** per aggiungere quelli archiviati, oppure disattiva **Attivi** per vedere solo quelli.
 
@@ -46,16 +46,16 @@ Entrambi i layout dividono l'elenco in un massimo di tre pannelli, ciascuno con 
 | Pannello | Che cosa contiene |
 |---|---|
 | **I tuoi asset** | Asset detenuti attualmente in un broker di tua proprietà |
-| **Asset di altri utenti** | Asset detenuti attualmente solo da altri utenti — in broker che non possiedi |
+| **Asset degli altri utenti** | Asset detenuti attualmente solo da altri utenti — in broker che non possiedi |
 | **Osservati** | Asset che attualmente non sono detenuti da nessuno — mai acquistati o già venduti, tenuti sotto osservazione |
 
-Ciò che conta è la posizione **oggi**: quando vendi tutta la tua posizione, l'asset passa a *Asset di altri utenti* se qualcun altro lo detiene ancora, e a *Osservati* altrimenti. I broker condivisi con te come **Editor** o **Visualizzatore** contano come broker di altri utenti, e una posizione ridotta a un residuo trascurabile conta come non detenuta.
+Ciò che conta è la posizione **oggi**: quando vendi tutta la tua posizione, l'asset passa a *Asset degli altri utenti* se qualcun altro lo detiene ancora, e a *Osservati* altrimenti. I broker condivisi con te come **Editor** o **Visualizzatore** contano come broker di altri utenti, e una posizione ridotta a un residuo trascurabile conta come non detenuta.
 
 Nella vista tabella ogni pannello è una tabella con le proprie pagine; ridimensionare, spostare o nascondere una colonna vale per tutte e tre.
 
 ## 🔄 Mantenere i prezzi aggiornati
 
-- **Sincronizza tutto** apre una finestra in cui **Avvia sincronizzazione** scarica gli ultimi prezzi di ogni asset che ha un provider; **Ricarica tutto** ricarica l'elenco da ciò che LibreFolio ha memorizzato. Nella scheda **[Correlazione](correlation.md)** diventano **Sincronizza selezione**, che scarica anche i tassi di cambio che convertono gli asset selezionati, e **Ricarica tutto**, che ricalcola ogni analisi.
+- **Sinc. Tutto** apre una finestra in cui **Avvia sincronizzazione** scarica gli ultimi prezzi di ogni asset che ha un provider; **Ricarica tutto** ricarica l'elenco da ciò che LibreFolio ha memorizzato. Nella scheda **[Correlazione](correlation.md)** diventano **Sinc. selezione**, che scarica anche i tassi di cambio che convertono gli asset selezionati, e **Ricarica tutto**, che ricalcola ogni analisi.
 - **Prezzi live** — mentre questa pagina o la pagina di un asset è aperta e l'intervallo di date termina oggi, i prezzi si aggiornano da soli ogni tanto. Un prezzo diventa verde quando è salito rispetto all'aggiornamento precedente, rosso quando è sceso; quando il mercato è chiuso vedi l'ultima chiusura, senza colore.
 - **In background**, il server aggiorna i prezzi secondo una pianificazione impostata dal tuo amministratore ([Scheduler dei dati di mercato](../../admin/settings.md#market-data-scheduler)). La dashboard mostra i prezzi memorizzati.
 

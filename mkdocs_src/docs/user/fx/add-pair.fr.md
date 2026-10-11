@@ -3,7 +3,7 @@
 Une paire indique à LibreFolio d'où provient le taux de change entre deux devises : un fournisseur
 de banque centrale, une chaîne de fournisseurs, ou des taux que vous saisissez vous-même.
 
-Cliquez sur **Ajouter une paire** sur la [page FX](index.md). La même fenêtre s'ouvre depuis le
+Cliquez sur **Ajouter Paire** sur la [page FX](index.md). La même fenêtre s'ouvre depuis le
 tableau de bord, depuis une page d'actif et depuis l'étape Change de l'allocateur PAC.
 
 ---
@@ -23,7 +23,7 @@ peuvent produire ce taux :
 
 - 🔗 **Conversion directe (1 étape)** — un fournisseur publie la paire ;
 - 🔀 **Conversion en chaîne** — passe par d'autres devises, regroupées par nombre d'étapes ;
-- 🚫 **Non utilisable** — fournisseurs qui ne peuvent pas atteindre cette paire.
+- 🚫 **Non utilisables** — fournisseurs qui ne peuvent pas atteindre cette paire.
 
 Filtrez avec la zone de recherche (fournisseur, devise ou pays), puis cliquez sur une route pour
 l'ajouter.

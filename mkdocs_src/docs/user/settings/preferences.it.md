@@ -35,8 +35,8 @@ Ogni campo mantiene il proprio stato:
 - Modifica un campo e questo mostra **Salva** e **Annulla**; l'intestazione offre **Salva Tutto** e **Annulla Tutto**
   per ogni campo modificato.
 - Quando un valore salvato differisce dal **valore predefinito dell'istanza** (impostato dal tuo amministratore in
-  [Impostazioni Globali](../../admin/settings.md)), appare un pulsante arancione **Ripristina Predefinito**: riporta
-  il valore predefinito nel campo, pronto per essere salvato. **Ripristina Tutto ai Predefiniti** lo fa per ogni
+  [Impostazioni Globali](../../admin/settings.md)), appare un pulsante arancione **Ripristina**: riporta
+  il valore predefinito nel campo, pronto per essere salvato. **Ripristina Tutto** lo fa per ogni
   campo.
 
 ---
@@ -44,8 +44,8 @@ Ogni campo mantiene il proprio stato:
 ## 🧭 Primo utilizzo e guide {: #onboarding-and-guides }
 
 La categoria **Primo utilizzo** elenca ogni guida, raggruppata per dove appare. Ognuna mostra il suo
-stato — **In Attesa**, **Completata** o **Saltata** — e la versione che hai visto.
-**Nuova versione da visualizzare** significa che un contenuto aggiornato è in attesa: la guida ricomincia la prossima volta che
+stato — **In Attesa**, **Completato** o **Saltato** — e la versione che hai visto.
+**Nuova versione da vedere** significa che un contenuto aggiornato è in attesa: la guida ricomincia la prossima volta che
 la raggiungi.
 
 | Gruppo | Guide |
@@ -60,7 +60,7 @@ la raggiungi.
 ### 🔁 Ripetere una guida
 
 - **Configurazione iniziale** e **Tour rapido** — **Ripeti** le avvia subito.
-- Qualsiasi altra guida — **Ripeti al prossimo avvio** la prepara: si avvia la prossima volta che apri la sua
+- Qualsiasi altra guida — **Ripeti al prossimo ingresso** la prepara: si avvia la prossima volta che apri la sua
   pagina, modulo, procedura guidata o workspace. **Annulla attivazione** la riporta indietro.
 - **Ripeti tutto** prepara ogni guida e apre prima la pagina di Benvenuto.
 
@@ -129,7 +129,7 @@ non rivelano mai l'ordine di grandezza. Copre:
 - **[Posizioni](../dashboard/positions.md)** e
   **[Analisi Lotti FIFO](../dashboard/positions.md#fifo-lots-analysis)** — ogni importo tranne i
   prezzi per unità, nelle tabelle, nel modale Dettaglio Lotto e nei grafici, e le quantità che possiedi
-  (la colonna **Qty** delle Posizioni, le quantità dei lotti). Un lotto parzialmente chiuso mostra la sua quota aperta, per
+  (la colonna **Qtà** delle Posizioni, le quantità dei lotti). Un lotto parzialmente chiuso mostra la sua quota aperta, per
   esempio `••• (60%)`.
 - **Transazioni** — l'importo in denaro di ogni transazione.
 - **[Allocatore PAC](../tools/pac-allocator/index.md#reading-the-result)** — ogni importo e
@@ -141,7 +141,7 @@ I numeri che non indicano **quanto possiedi** rimangono leggibili, così puoi co
 
 - la **valuta** di ogni importo nascosto, le **percentuali** (rendimenti, pesi, quote di allocazione,
   rendimento sul costo) e i **tassi FX**;
-- i **prezzi per unità** — prezzi di mercato, le colonne **Prezzo** e **Costo Medio** delle Posizioni, i
+- i **prezzi per unità** — prezzi di mercato, le colonne **Prezzo** e **PMC** delle Posizioni, i
   prezzi dei lotti e le linee di prezzo del grafico PMC / Prezzo di Mercato;
 - **conteggi, date e nomi**, e **eventi dell'asset** come un dividendo o uno split, che descrivono
   l'asset piuttosto che il tuo portafoglio;

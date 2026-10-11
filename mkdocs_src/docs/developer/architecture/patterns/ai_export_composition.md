@@ -383,6 +383,52 @@ references and that its answer must use display names. Domain Notes are fixed pe
 domain (`AI_EXPORT_DOMAIN_NOTES`): for example, FX rates are quote currency per one
 unit of base currency, and direct FX exposure is not look-through exposure.
 
+### 🗂️ Snapshot Data Tables {: #snapshot-data-tables }
+
+`snapshotDataRenderer.ts` renders a component compactly when its envelope has schema
+version 1 and its component version is listed for it in `COMPACT_COMPONENT_VERSIONS`
+(version 1 alone for a component without an entry); any other version renders as
+`PAYLOAD YAML FALLBACK`. A backend version bump whose payload the compact renderer
+still prints must be added to that map in the same change, or the component silently
+falls back to YAML.
+
+The generic compact renderer (`renderGenericPayload()`), used by every component
+without a dedicated technical renderer — the lot and FIFO components included —
+prints a `null` leaf as the literal `null`, which the format preamble declares as
+`null=explicitly unavailable`. A table column that is empty or `null` in every row is
+removed, and the renderer diagnostics count it in `empty_columns_removed`, and also in
+`empty_parent_columns_removed` when it is the parent of nested columns: an amount
+object that is `null` in some rows sits next to the `.code` / `.amount` columns of
+the rows that have it, and those columns read `null` in the other rows. A `null` is
+therefore visible only when another row of the same table has a value. SUMMARY rows —
+the payload's scalar fields outside its tables, in a `field|value` table — are never
+removed, so a fact that must survive a table whose values are all `null` belongs in a
+scalar field.
+
+That is the role of `unavailable_amount_lot_count` in `asset.lot_detail`,
+`portfolio.fifo_lots` and `broker.fifo_lots`: always present, 0 included, it counts
+the lots with at least one amount that cannot be valued in the target currency (a
+missing FX rate). Those amounts are `null` — never 0, never the native amount. When
+every lot's amount is unknown, its column is removed and the count is the trace.
+
+The FIFO summaries (`portfolio.fifo_summary`, `broker.fifo_summary`) are strict too:
+an Asset's original cost, residual cost basis, proceeds, realized P&L, income, fees,
+taxes, total P&L and net total P&L are `null` as soon as one lot's part is unknown (a
+missing FX rate, or no market value), and so is `total_residual_cost_basis`. Only the
+market-value totals — open value, unrealized P&L, potential gain and loss — keep
+summing the open lots that have them, with their coverage stated in
+`value_coverage_status`, `valued_open_lot_count` and `unavailable_open_lot_count`.
+
+The generic compact renderer prints ratio fields under public names:
+`PUBLIC_RATIO_FIELD_NAMES`, applied by `genericFieldName()` to SUMMARY rows and table
+columns, turns `portfolio_weight_ratio` into `portfolio_weight_percent`,
+`coverage_ratio` into `coverage_percent`, and so on. A value that references a payload
+field — a key in `FIELD_REFERENCE_KEYS`: a `field` leaf, as in `asset.position_scope`
+`portfolio_role.unavailable[].field`, or an item of `missing_fields`, as in
+`coverage.omitted[].missing_fields` — goes through the same map, so it names the
+column as the prompt shows it; free text such as `reason` is never rewritten, and the
+backend payload keeps the canonical codes.
+
 ## 📋 Manifests
 
 `dataset_manifest` records what was actually composed:

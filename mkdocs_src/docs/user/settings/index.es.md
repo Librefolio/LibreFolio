@@ -1,6 +1,6 @@
 # ⚙️ Configuración
 
-El panel de Configuración de LibreFolio le permite personalizar la aplicación y, si es administrador, gestionar la configuración global.
+El panel de Configuración de LibreFolio te permite personalizar la aplicación y, si eres administrador, gestionar la configuración global.
 
 La configuración se divide en cuatro pestañas:
 
@@ -13,5 +13,5 @@ La configuración se divide en cuatro pestañas:
 
 ## 🔗 Relacionados
 
-- 🏦 **[Brókers](../brokers/index.md)** — Gestionar sus cuentas de bróker
+- 🏦 **[Brókeres](../brokers/index.md)** — Gestionar tus cuentas de bróker
 - 👥 **[Multiusuario y Compartir](../brokers/sharing.md)** — Invitar a colaboradores y gestionar el acceso

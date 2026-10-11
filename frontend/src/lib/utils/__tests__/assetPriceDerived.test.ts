@@ -6,7 +6,7 @@
  */
 import {describe, expect, it} from 'vitest';
 
-import {computeDerivedPriceState, computePeriodDelta, DELTA_PERIODS} from '../assetPriceDerived';
+import {computeDerivedPriceState, computePeriodDelta, DELTA_PERIODS, deltaPeriodLabel} from '../assetPriceDerived';
 
 describe('computePeriodDelta', () => {
     it('computes a simple positive delta over a period', () => {
@@ -114,5 +114,61 @@ describe('computeDerivedPriceState', () => {
         const result = computeDerivedPriceState(prices);
         expect(result.deltaAbs).toBeNull();
         expect(result.deltaPercent).toBeNull();
+    });
+});
+
+describe('deltaPeriodLabel — a Δ period is labelled from the catalogues (T, duration labels)', () => {
+    // The Δ columns of the asset and FX tables print their period's key, `Δ 1D` or `Δ 3M`: English unit
+    // letters in every language. The contract is the date picker's and the rolling window's: a
+    // `<n><D|W|M|Y>` key reads `datePicker.presets.days`, `.weeks`, `.months` or `.years` with its count
+    // as `n` — the catalogues carry the reader's unit letter (1G, 1S, 1A in Italian) — and a key the helper
+    // does not recognise comes back unchanged, never as a marker or a guess.
+    //
+    // Observed without reading a language, through a marker `t`: a label taken from the catalogue reads
+    // as a marker of its key and values (`⟦datePicker.presets.months n=3⟧`).
+    //
+    // Red today: `deltaPeriodLabel` does not exist.
+
+    type Translate = (key: string, options?: {values?: Record<string, string | number>}) => string;
+
+    /** How a label reads through the marker `t`: `⟦key⟧`, or `⟦key n=3⟧` for a message given values. */
+    const marked = (key: string, values: Record<string, string | number> = {}): string => `⟦${[key, ...Object.entries(values).map(([name, value]) => `${name}=${value}`)].join(' ')}⟧`;
+
+    /** A `t` that reads every key as its marker, with the values it is given. */
+    const markerT: Translate = (key, options) => marked(key, options?.values);
+
+    /** The label each DELTA_PERIODS key must read: its unit's catalogue key, its count as n. */
+    const EXPECTED: Record<(typeof DELTA_PERIODS)[number]['key'], string> = {
+        '1W': marked('datePicker.presets.weeks', {n: 1}),
+        '1M': marked('datePicker.presets.months', {n: 1}),
+        '3M': marked('datePicker.presets.months', {n: 3}),
+        '6M': marked('datePicker.presets.months', {n: 6}),
+        '1Y': marked('datePicker.presets.years', {n: 1}),
+        '2Y': marked('datePicker.presets.years', {n: 2}),
+        '3Y': marked('datePicker.presets.years', {n: 3}),
+        '5Y': marked('datePicker.presets.years', {n: 5}),
+    };
+
+    it('labels every DELTA_PERIODS key from datePicker.presets.weeks, months or years, its count as n', () => {
+        const labels = Object.fromEntries(DELTA_PERIODS.map(({key}) => [key, deltaPeriodLabel(key, markerT)]));
+
+        expect(labels).toEqual(EXPECTED);
+    });
+
+    it('reads a count of more than one digit whole', () => {
+        expect({'10Y': deltaPeriodLabel('10Y', markerT), '12M': deltaPeriodLabel('12M', markerT)}).toEqual({
+            '10Y': marked('datePicker.presets.years', {n: 10}),
+            '12M': marked('datePicker.presets.months', {n: 12}),
+        });
+    });
+
+    it('labels 1D — the period of the fixed Δ column, outside DELTA_PERIODS — from datePicker.presets.days, its count as n', () => {
+        expect(deltaPeriodLabel('1D', markerT)).toBe(marked('datePicker.presets.days', {n: 1}));
+    });
+
+    it('returns a key it does not recognise unchanged: empty, not a period, an unknown unit, a count that is not whole, no count', () => {
+        const keys = ['', 'abc', '1Q', '1.5M', 'M'];
+
+        expect(Object.fromEntries(keys.map((key) => [key, deltaPeriodLabel(key, markerT)]))).toEqual(Object.fromEntries(keys.map((key) => [key, key])));
     });
 });

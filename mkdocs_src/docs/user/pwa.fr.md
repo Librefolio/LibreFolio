@@ -25,7 +25,7 @@ il s'ouvre comme une application native, depuis sa propre icône, sans passer pa
 ### 🤖 Android (Chrome / Edge)
 
 1. Ouvrez LibreFolio dans Chrome ou Edge.
-2. Ouvrez le menu **Aide et support** (❓, en haut à droite) et appuyez sur **Installer l'application**.
+2. Ouvrez le menu **Aide et support** (❓, en haut à droite) et appuyez sur **Installer l'App**.
 3. Confirmez avec **Installer** : LibreFolio apparaît sur votre écran d'accueil.
 
 Pas de boîte de dialogue d'installation ? Utilisez le menu **⋮** du navigateur → **Installer l'application** ou **Ajouter à l'écran d'accueil**.
@@ -36,20 +36,20 @@ Pas de boîte de dialogue d'installation ? Utilisez le menu **⋮** du navigateu
 2. Appuyez sur le bouton **Partager** (carré avec une flèche).
 3. Faites défiler vers le bas, appuyez sur **Sur l'écran d'accueil**, puis sur **Ajouter**.
 
-iOS n'a pas de boîte de dialogue d'installation : sur un iPhone ou un iPad, **Installer l'application** dans le menu Aide et support affiche
+iOS n'a pas de boîte de dialogue d'installation : sur un iPhone ou un iPad, **Installer l'App** dans le menu Aide et support affiche
 ces instructions à la place.
 
 ### 💻 Ordinateur (Chrome / Edge)
 
 1. Ouvrez LibreFolio dans Chrome ou Edge.
-2. Cliquez sur **Installer l'application** dans le menu **Aide et support**, ou sur l'icône d'installation (⊕) dans la barre d'adresse.
+2. Cliquez sur **Installer l'App** dans le menu **Aide et support**, ou sur l'icône d'installation (⊕) dans la barre d'adresse.
 3. LibreFolio s'ouvre dans sa propre fenêtre.
 
 ---
 
 ## 🌐 HTTP vs HTTPS
 
-| Adresse | Installation comme application | Boîte de dialogue d'installation depuis **Installer l'application** |
+| Adresse | Installation comme application | Boîte de dialogue d'installation depuis **Installer l'App** |
 |---|---|---|
 | `https://…` (Tailscale, proxy inverse) | ✅ | ✅ |
 | `http://localhost` | ✅ | ✅ |
@@ -71,8 +71,8 @@ ces instructions à la place.
 
 | Problème | Solution |
 |---------|----------|
-| **Installer l'application** n'est pas dans le menu | Vous êtes déjà dans l'application installée : l'élément y est masqué |
-| **Installer l'application** affiche une indication au lieu d'installer | Le navigateur n'a pas proposé d'installation : vérifiez que vous utilisez HTTPS (ou `localhost`), ou que l'application n'est pas déjà installée, puis suivez l'indication |
+| **Installer l'App** n'est pas dans le menu | Vous êtes déjà dans l'application installée : l'élément y est masqué |
+| **Installer l'App** affiche une indication au lieu d'installer | Le navigateur n'a pas proposé d'installation : vérifiez que vous utilisez HTTPS (ou `localhost`), ou que l'application n'est pas déjà installée, puis suivez l'indication |
 | iOS : l'option **Sur l'écran d'accueil** est absente | Ouvrez la page dans **Safari** et cherchez dans son menu **Partager** |
 | L'application ne se met pas à jour | Fermez et rouvrez l'application — elle charge toujours la dernière version depuis votre serveur |
 | Déconnecté après une mise à jour | Reconnectez-vous — un redémarrage du serveur peut mettre fin à toutes les sessions |

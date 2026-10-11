@@ -52,11 +52,11 @@ Este fenómeno se denomina **pull to par**:
 
 !!! example "Ejemplo: Bono Cupón Cero"
 
-    Un bono cupón cero con valor nominal de $1,000 adquirido por $850:
+    Un bono cupón cero con valor nominal de $1.000 adquirido por $850:
 
     - **En la compra**: Precio = $850 (descuento)
-    - **Al vencimiento**: El inversor recibe $1,000
-    - **Rendimiento implícito**: $150 ($1,000 − $850)
+    - **Al vencimiento**: El inversor recibe $1.000
+    - **Rendimiento implícito**: $150 ($1.000 − $850)
     - Sin pagos de intereses intermedios; todo el retorno proviene de la liquidación al vencimiento
 
 ---
@@ -83,10 +83,10 @@ Una vez que se registra un evento de liquidación al vencimiento en LibreFolio:
 
 En LibreFolio, se registra un evento `MATURITY_SETTLEMENT` con:
 
-- **Date**: La fecha de vencimiento
-- **Amount**: El valor nominal / importe del principal devuelto
-- **Currency**: La moneda de la liquidación
-- **Notes**: Descripción opcional (ej., "Bono del Tesoro a 10 años vencido")
+- **Fecha**: La fecha de vencimiento
+- **Importe**: El valor nominal / importe del principal devuelto
+- **Divisa**: La moneda de la liquidación
+- **Notas**: Descripción opcional (ej., "Bono del Tesoro a 10 años vencido")
 
 Para el proveedor **Scheduled Investment**, la fecha de vencimiento se configura en la configuración del proveedor. La fórmula de cálculo de precios reconoce que no ocurre más devengo después del vencimiento:
 

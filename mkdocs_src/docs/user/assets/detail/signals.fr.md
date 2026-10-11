@@ -76,7 +76,7 @@ Les périodes comptent des **séances**, les jours où l'actif a été coté : u
     <img class="gallery-img" data-category="assets" data-name="detail-signals-drawdown" alt="Carte de signal Repli avec l'interrupteur d'historique complet">
 </div>
 
-La carte **Repli sous le sommet** a une case à cocher **Historique complet**, activée par défaut : la baisse est mesurée depuis le prix le plus haut de tout l'historique de l'actif, même des années avant les dates affichées. Décochez-la pour une vue plus rapide, mesurée depuis le prix le plus haut dans les dates affichées.
+La carte **Repli depuis le sommet** a une case à cocher **Historique complet**, activée par défaut : la baisse est mesurée depuis le prix le plus haut de tout l'historique de l'actif, même des années avant les dates affichées. Décochez-la pour une vue plus rapide, mesurée depuis le prix le plus haut dans les dates affichées.
 
 ---
 

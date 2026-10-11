@@ -35,7 +35,7 @@ Cliquez sur 🗑️ sur une ligne, ou sélectionnez des lignes et cliquez sur la
 
 ### 💾 Enregistrer vos modifications
 
-Vos modifications apparaissent sur le graphique sous forme de ligne **Aperçu** violette. **Enregistrer (N)** les écrit toutes ; **Abandonner** les abandonne. Un taux doit être supérieur à zéro : un taux nul, négatif ou vide est ignoré.
+Vos modifications apparaissent sur le graphique sous forme de ligne **Aperçu** violette. **Enregistrer (N)** les écrit toutes ; **Annuler** les abandonne. Un taux doit être supérieur à zéro : un taux nul, négatif ou vide est ignoré.
 
 !!! warning "Les données synchronisées écrasent les modifications manuelles"
 
@@ -47,7 +47,7 @@ Vos modifications apparaissent sur le graphique sous forme de ligne **Aperçu** 
 
 ### 🔓 Ouvrir la fenêtre d'import
 
-1. Dans l'éditeur, cliquez sur **Importer un CSV**.
+1. Dans l'éditeur, cliquez sur **Importer CSV**.
 2. Dans **Importer des données CSV**, déposez un fichier `.csv` ou `.txt`, ou collez le texte dans la zone.
 3. Vérifiez le sens en haut, puis cliquez sur **Importer (N)**.
 

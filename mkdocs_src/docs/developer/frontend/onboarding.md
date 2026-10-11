@@ -89,10 +89,10 @@ Frontend paths below are relative to `frontend/src/`.
 | `lib/features/onboarding/guideAnchors.svelte.ts` | Anchor registry and the `guideAnchor` action |
 | `lib/features/onboarding/appBootstrap.svelte.ts` | Bootstrap loads and the Welcome redirect rule |
 | `lib/features/onboarding/onboardingRouteSettlement.ts` | Applies the redirect, or starts the tour, once per settled route |
-| `lib/components/onboarding/OnboardingOverlayHost.svelte` | Presentation table of every step; renders the intro scene or the single coachmark |
-| `lib/components/onboarding/OnboardingCoachmark.svelte` | Measures the anchor; spotlight, pointer, panel placement, waiting and stalled states |
-| `lib/components/onboarding/OnboardingReplaySection.svelte` | The replay list in Settings |
-| `lib/components/onboarding/DeferredAppPopups.svelte` | Holds automatic popups while a guide runs |
+| `lib/features/onboarding/components/OnboardingOverlayHost.svelte` | Presentation table of every step; renders the intro scene or the single coachmark |
+| `lib/features/onboarding/components/OnboardingCoachmark.svelte` | Measures the anchor; spotlight, pointer, panel placement, waiting and stalled states |
+| `lib/features/onboarding/components/OnboardingReplaySection.svelte` | The replay list in Settings |
+| `lib/features/onboarding/components/DeferredAppPopups.svelte` | Holds automatic popups while a guide runs |
 | `routes/(app)/welcome/+page.svelte` | The Welcome route, rendering `WelcomePage.svelte` and `WelcomeForm.svelte` |
 
 Each of these singletons resets its in-memory state when the signed-in account changes, through
@@ -498,7 +498,7 @@ test, and provides `deleteDisposableUser()` to remove it at the end.
 | `frontend/src/lib/features/onboarding/guideCopy.test.ts` | No step text announces another guide |
 | `frontend/src/lib/features/onboarding/onboardingRouteSettlement.test.ts` | Welcome redirect or tour start, exactly once |
 | `frontend/src/routes/(app)/layout.gate.test.ts` | The layout gate follows the bootstrap |
-| `frontend/src/lib/components/onboarding/*.test.ts` | Coachmark geometry and stalls, intro scene, replay section, deferred popups, Welcome |
+| `frontend/src/lib/features/onboarding/components/*.test.ts` | Coachmark geometry and stalls, intro scene, replay section, deferred popups, Welcome |
 | `frontend/e2e/onboarding-guides.spec.ts` | Broker, FX and Asset guides walked to completion on desktop and mobile; pause and resume across routes; positions across tabs and logout |
 | `frontend/e2e/onboarding-tour.spec.ts` | Intro-tour order and Transactions overview geometry, scroll clearance, the Import and Bulk step interplay |
 

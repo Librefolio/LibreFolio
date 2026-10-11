@@ -53,4 +53,4 @@ flowchart LR
     muy irregular. A menudo se utiliza con un $N$ más largo, o se pasa a través de un promedio
     móvil adicional, cuando se necesita una lectura de impulso más limpia.
 
-:material-link: [Rate of change (technology) on Wikipedia](https://en.wikipedia.org/wiki/Momentum_(technical_analysis)){ target="_blank" }
+:material-link: [Tasa de variación (análisis técnico) en Wikipedia](https://en.wikipedia.org/wiki/Momentum_(technical_analysis)){ target="_blank" }

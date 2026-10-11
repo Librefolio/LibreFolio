@@ -12,7 +12,7 @@
     import {auth} from '$lib/stores/app/auth';
     import {isAuthenticated} from '$lib/stores/app/auth';
     import {appBootstrap} from '$lib/features/onboarding/appBootstrap.svelte';
-    import OnboardingBootstrapBlock from '$lib/components/onboarding/OnboardingBootstrapBlock.svelte';
+    import OnboardingBootstrapBlock from '$lib/features/onboarding/components/OnboardingBootstrapBlock.svelte';
     import {_} from '$lib/i18n';
     import {Coffee} from 'lucide-svelte';
     import {page} from '$app/stores';

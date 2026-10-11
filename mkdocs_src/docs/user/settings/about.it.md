@@ -9,7 +9,7 @@ La scheda **Informazioni** mostra:
 - La **versione** attuale di LibreFolio
 - La **licenza** (AGPL-3.0)
 - I link al **repository GitHub** e alla **documentazione**
-- Una scheda **Supporta LibreFolio** con il link del caffè e i pulsanti di condivisione — vedi [Supporta LibreFolio](#support-librefolio) più sotto
+- Una scheda **Sostieni LibreFolio** con il link del caffè e i pulsanti di condivisione — vedi [Supporta LibreFolio](#support-librefolio) più sotto
 - Una griglia di **informazioni di sistema** (versione di Python, sistema operativo, modalità di distribuzione — Docker o locale — browser, viewport, tema e lingua) con un pulsante **copia per la segnalazione** che raccoglie questi dettagli in una segnalazione di bug pronta da incollare
 - I **plugin installati**: elenchi comprimibili dei provider di prezzi degli asset, dei provider di tassi FX, dei plugin di importazione dai broker e degli indicatori di segnale rilevati all'avvio, seguiti dalla **Diagnostica plugin**
 
@@ -17,11 +17,11 @@ La scheda **Informazioni** mostra:
 
 ## ❤️ Supporta LibreFolio {: #support-librefolio }
 
-La scheda **Supporta LibreFolio** offre due modi per aiutare il progetto:
+La scheda **Sostieni LibreFolio** offre due modi per aiutare il progetto:
 
-- **Buy Me a Coffee** apre la pagina Buy Me a Coffee del progetto in una nuova scheda. Lo stesso link si trova
+- **Offrimi un Caffè** apre la pagina Buy Me a Coffee del progetto in una nuova scheda. Lo stesso link si trova
   nell'intestazione della pagina (l'icona del caffè, con la sua etichetta sugli schermi più larghi) e nel
-  menu **Guida e supporto**.
+  menu **Aiuto e Supporto**.
 - Sotto **Oppure condividi**, un pulsante per ogni social network: **X**, **Reddit**, **Facebook**,
   **Instagram** e **TikTok**.
 
@@ -83,11 +83,11 @@ nell'intestazione di uno strumento aperto.
 
 Apri **Diagnostica degli strumenti** per caricare uno snapshot del processo server che ha risposto:
 
-- l'**Ambito dello snapshot** e l'**identificatore del processo API**;
-- lo **Snapshot del pool di esecuzione**: se il pool è disponibile, i job attivi, in coda, in attesa,
+- l'**Ambito dell'istantanea** e l'**identificatore del processo API**;
+- l'**Istantanea del pool di esecuzione**: se il pool è disponibile, i job attivi, in coda, in attesa,
   completati e falliti, e le corsie degradate;
 - gli **Strumenti caricati in questo processo API**, ciascuno con nome, codice e versione del contratto, e
-  gli eventuali **Errori di rilevamento**;
+  gli eventuali **Errori di discovery**;
 - i **Limiti effettivi della piattaforma**, in un pannello comprimibile a parte.
 
 Lo snapshot descrive un singolo processo server, non l'intera istanza, e non si aggiorna da solo:
@@ -137,7 +137,7 @@ Un controllo avviato qui ti dice sempre com'è andata:
 - Se esiste una release più recente e sei un **admin**, la modale **Nuova versione disponibile** si apre
   subito, sopra il changelog: versione attuale e più recente affiancate, con **Come aggiornare**
   (la [guida all'aggiornamento](../installation.md#updating)) e **Note di rilascio su GitHub**. Puoi
-  chiuderla con **Ricordamelo più tardi** (ti verrà ricordato al prossimo accesso) o
+  chiuderla con **Ricordamelo dopo** (ti verrà ricordato al prossimo accesso) o
   **Salta questa versione** (il controllo automatico non chiede più per quella release; un controllo avviato
   qui la mostra comunque). Gli admin vengono anche verificati automaticamente all'accesso — vedi
   [Notifiche di aggiornamento](../../admin/index.md#update-notifications) per il flusso lato admin.

@@ -110,7 +110,7 @@ $$
 dS_t = \mu S_t \, dt + \sigma S_t \, dW_t
 $$
 
-où $\mu$ est la dérive, $\sigma$ la volatilité et $W_t$ un mouvement brownien, par lequel le hasard entre. Chaque actif simulé part de 1.0, donc sa trajectoire est un facteur de croissance plutôt qu'un prix, et il est avancé jour après jour jusqu'à atteindre l'horizon.
+où $\mu$ est la dérive, $\sigma$ la volatilité et $W_t$ un mouvement brownien, par lequel le hasard entre. Chaque actif simulé part de 1,0, donc sa trajectoire est un facteur de croissance plutôt qu'un prix, et il est avancé jour après jour jusqu'à atteindre l'horizon.
 
 Les actifs ne sont pas simulés séparément puis additionnés. Ils sont assemblés en un processus unique dont les chocs sont liés par **une seule matrice de corrélation**, de sorte qu'un mouvement d'un actif arrive accompagné des mouvements qu'implique son co-mouvement mesuré.
 
@@ -131,7 +131,7 @@ La seconde propriété est celle à emporter dans tout ce qui suit : la distribu
 
 ## 🎲 Deux façons de tirer le même modèle {: #sampling-strategies }
 
-La **Stratégie d'échantillonnage** offerte avec la courbe normale — et uniquement avec elle — se choisit entre **Monte Carlo** et **quasi-Monte Carlo**. C'est un choix sur la façon dont les nombres aléatoires sont produits, et sur rien d'autre. Le bootstrap n'a pas un tel choix : il tire toujours les débuts de ses blocs à partir d'un générateur pseudo-aléatoire amorcé.
+La **Stratégie d'échantillonnage** offerte avec la courbe normale — et uniquement avec elle — se choisit entre **Monte-Carlo** et **Quasi-Monte-Carlo**. C'est un choix sur la façon dont les nombres aléatoires sont produits, et sur rien d'autre. Le bootstrap n'a pas un tel choix : il tire toujours les débuts de ses blocs à partir d'un générateur pseudo-aléatoire amorcé.
 
 !!! warning "Deux entrées ne sont pas deux modèles"
 

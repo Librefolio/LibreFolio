@@ -61,7 +61,7 @@ El indicador de seguridad de la conexión en la parte inferior de la barra later
 
 ### 👋 Configuración de bienvenida
 
-La página de Bienvenida de primera ejecución, donde un nuevo usuario confirma el idioma y la moneda predeterminada y puede añadir una foto de perfil antes de empezar.
+La página de Bienvenida de primera ejecución, donde un nuevo usuario confirma el idioma y la divisa predeterminada y puede añadir una foto de perfil antes de empezar.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="👋 Configuración de bienvenida">
@@ -483,14 +483,14 @@ Arrastra y suelta o explora para subir archivos. Las imágenes abren el editor d
 
 ---
 
-## 🏦 Brókers
+## 🏦 Brókeres
 
-### 📋 Lista de brókers
+### 📋 Lista de brókeres
 
 Todas tus cuentas de bróker en una sola vista.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista de brókers">
+    <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista de brókeres">
 </div>
 
 ### 🔍 Detalle del bróker
@@ -1039,12 +1039,12 @@ El paso Liquidez con efectivo de un bróker, una nueva aportación y una cuenta 
     <img class="gallery-img" data-category="tools" data-name="pac-step-liquidity" alt="💶 PAC — Liquidez">
 </div>
 
-### 🏦 PAC — Brókers
+### 🏦 PAC — Brókeres
 
 El editor de bróker con modo de orden, incremento, comisiones y modo de conversión.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-category="tools" data-name="pac-step-brokers" alt="🏦 PAC — Brókers">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-brokers" alt="🏦 PAC — Brókeres">
 </div>
 
 ### 💼 PAC — Activos

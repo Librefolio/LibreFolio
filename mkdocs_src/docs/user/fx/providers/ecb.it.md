@@ -26,5 +26,5 @@ Le valute che la BCE non pubblica più, come il lev bulgaro (BGN, sostituito dal
 
 ## 📝 Note Importanti
 
-- **Formato delle quotazioni**: I tassi sono espressi come l'importo di valuta estera per 1 EUR (es. 1 EUR = 1.08 USD). LibreFolio normalizza automaticamente questo tasso in base alla valuta di base del tuo portafoglio.
+- **Formato delle quotazioni**: I tassi sono espressi come l'importo di valuta estera per 1 EUR (es. 1 EUR = 1,08 USD). LibreFolio normalizza automaticamente questo tasso in base alla valuta di base del tuo portafoglio.
 - **Nessun dato nei fine settimana**: La BCE non pubblica tassi di sabato, domenica o nei giorni festivi ufficiali della BCE (es. Venerdì Santo, Lunedì di Pasqua, Natale). LibreFolio manterrà il tasso dell'ultimo giorno lavorativo disponibile per le valutazioni durante il fine settimana.

@@ -672,12 +672,12 @@ Grafico dei prezzi interattivo con intervallo di date e interruttore valuta. Pas
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-chart-candlestick" data-title="🕯️ Candele" alt="Grafico di dettaglio asset — Candele">
 </div>
 
-### 🗓️ Rendimento rolling
+### 🗓️ Rendimento mobile
 
-Il grafico dell'asset in modalità Rendimento rolling con finestra 1A e un asset di confronto.
+Il grafico dell'asset in modalità Rendimento mobile con finestra 1A e un asset di confronto.
 
 <div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="🗓️ Rendimento rolling">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="🗓️ Rendimento mobile">
 </div>
 
 ### 📡 Overlay segnali

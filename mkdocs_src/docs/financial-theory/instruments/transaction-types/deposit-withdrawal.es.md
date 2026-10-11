@@ -32,7 +32,7 @@ Matiz para la importación desde el bróker: una exportación de solo valores pu
 
 !!! tip "Más información"
 
-    Consulte **[📈 Rendimientos y Tasas de Crecimiento](../../fundamentals/returns.md)** para conocer las fórmulas y la metodología.
+    Consulta **[📈 Rendimientos y Tasas de Crecimiento](../../fundamentals/returns.md)** para conocer las fórmulas y la metodología.
 
 ---
 

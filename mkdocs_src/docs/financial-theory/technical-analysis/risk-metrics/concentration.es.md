@@ -60,7 +60,7 @@ Los valores medidos anteriores son consistentes con el caso idealizado: para $n$
 
 Una cartera puede reportar dos cifras de concentración diferentes en el mismo momento, y ninguna es incorrecta. Lo que cambia es **qué cuenta como una posición**.
 
-Supongamos que el mismo instrumento se mantiene en dos brókers, con un 6% y un 4% de la cartera.
+Supongamos que el mismo instrumento se mantiene en dos brókeres, con un 6% y un 4% de la cartera.
 
 - Si se cuenta **por posición**, contribuye con $0.06^2 + 0.04^2 = 0.0052$.
 - Si se cuentan **por instrumento**, las posiciones primero se suman para dar un 10%, lo que contribuye con $0.10^2 = 0.0100$.
@@ -69,7 +69,7 @@ La diferencia es exactamente $2 w_1 w_2$, que siempre es positiva. Así que el e
 
 !!! info "Dos preguntas, no dos respuestas"
 
-    *¿Cuán concentrado estoy por posición?* y *¿cuán concentrado estoy por instrumento?* son preguntas diferentes, y una cartera repartida entre brókers las responde de forma distinta por construcción. El enfoque por instrumento es el que coincide con la exposición de mercado: el mismo fondo mantenido en dos cuentas es una sola apuesta, sin importar en cuántas filas aparezca.
+    *¿Cuán concentrado estoy por posición?* y *¿cuán concentrado estoy por instrumento?* son preguntas diferentes, y una cartera repartida entre brókeres las responde de forma distinta por construcción. El enfoque por instrumento es el que coincide con la exposición de mercado: el mismo fondo mantenido en dos cuentas es una sola apuesta, sin importar en cuántas filas aparezca.
 
     Cuando dos cifras no coinciden, lo que hay que establecer es qué granularidad contó cada una — no cuál es la correcta.
 
@@ -99,7 +99,7 @@ Eso es defendible — el efectivo es genuinamente una posición no concentrada, 
 
 ## 💡 Interpretación {: #interpretation }
 
-Lea las dos cifras como un par, en este orden:
+Lee las dos cifras como un par, en este orden:
 
 1. **Activos efectivos frente al número real de posiciones.** La dirección de la diferencia determina su significado: **por debajo** del recuento, las ponderaciones están desequilibradas y unas pocas posiciones sostienen la cartera sin importar cuántas filas tenga; **por encima**, el exceso es efectivo, y no dice nada sobre cómo se reparten las ponderaciones.
 2. **Ratio de diversificación.** Un valor cercano a 1 significa que las posiciones se mueven como una sola, y que el reparto aportó poco. Cuanto más por encima de 1, más se compensan unas posiciones con otras.
@@ -118,7 +118,7 @@ Ninguna de las dos cifras dice nada sobre **qué** posiciones impulsan el riesgo
 
 !!! warning "Tener en cuenta la correlación no significa mirar hacia adelante"
 
-    El ratio de diversificación depende de volatilidades y correlaciones estimadas sobre una ventana, y estas cambian — normalmente en la dirección menos conveniente, ya que las correlaciones tienden a subir en mercados de estrés. Un ratio cómodo medido durante un período tranquilo es una medición de ese período. Consulte [Calidad de datos](data-quality.md) para conocer la ventana sobre la que se calculó cada resultado.
+    El ratio de diversificación depende de volatilidades y correlaciones estimadas sobre una ventana, y estas cambian — normalmente en la dirección menos conveniente, ya que las correlaciones tienden a subir en mercados de estrés. Un ratio cómodo medido durante un período tranquilo es una medición de ese período. Consulta [Calidad de datos](data-quality.md) para conocer la ventana sobre la que se calculó cada resultado.
 
 !!! warning "La concentración no es automáticamente un defecto"
 

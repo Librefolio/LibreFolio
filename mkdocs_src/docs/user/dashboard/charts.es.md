@@ -1,6 +1,6 @@
 # 📊 Gráficos
 
-Debajo de las tarjetas KPI, el gráfico de **Crecimiento de la Cartera** y el panel de **Asignación de Activos** muestran dónde ha estado tu cartera y de qué está compuesta. Ambos siguen el rango temporal y el filtro de brókeres del Panel, y la página de un bróker los muestra solo para ese bróker.
+Debajo de las tarjetas KPI, el gráfico de **Crecimiento de la Cartera** y el panel de **Asignación de activos** muestran dónde ha estado tu cartera y de qué está compuesta. Ambos siguen el rango temporal y el filtro de brókeres del Panel, y la página de un bróker los muestra solo para ese bróker.
 
 ---
 
@@ -30,12 +30,12 @@ El gráfico recuerda tu última vista, incluida la subvista de P&L, en este nave
 | Elemento | Color | Significado |
 |---------|-------|---------|
 | Área — **Coste de Compra** | Azul | Lo que te costaron las posiciones que mantienes (coste medio × cantidad) |
-| Área — **Rentabilidades** | Esmeralda | Rentabilidades mantenidas como efectivo (dividendos, intereses, ganancias realizadas aún no reinvertidas) |
+| Área — **Rendimiento** | Esmeralda | Rentabilidades mantenidas como efectivo (dividendos, intereses, ganancias realizadas aún no reinvertidas) |
 | Área — **Capital** | Verde grisáceo | Depósitos aún no invertidos, mantenidos como efectivo |
 | Línea — **[Valor neto (NAV)](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Verde oscuro continua | Valor total de la cartera a los precios de mercado actuales |
 | Línea — **[Capital Depositado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Gris discontinua | Capital externo neto aportado a lo largo del tiempo |
 
-**La brecha entre las dos líneas es tu P&L Total**: cada ganancia obtenida alguna vez (no realizada, realizada, intereses y dividendos) menos comisiones e impuestos. La información emergente muestra ambas líneas, el P&L Total en verde o rojo, y el desglose: **Activos a Coste** (el área azul, incluidos los activos que se mueven entre tus brókeres), **Rentabilidades** y **Capital**.
+**La brecha entre las dos líneas es tu P&L Total**: cada ganancia obtenida alguna vez (no realizada, realizada, intereses y dividendos) menos comisiones e impuestos. La información emergente muestra ambas líneas, el P&L Total en verde o rojo, y el desglose: **Coste de los activos** (el área azul, incluidos los activos que se mueven entre tus brókeres), **Rendimiento** y **Capital**.
 
 **Los activos valorados a su precio de compra**, como los préstamos P2P sin precio de mercado en vivo, mantienen el NAV cerca del Coste de Compra, por lo que la brecha puede ser estrecha: lee el **P&L Total** en la información emergente.
 
@@ -76,7 +76,16 @@ Un segundo interruptor, en la parte superior izquierda del área de trazado, eli
   </div>
 </div>
 
-**Líneas de bróker.** Con dos o más brókeres en el ámbito, cada bróker recibe una línea discontinua y una fila en la información emergente con su parte del total; las partes suman el total cada día. Una parte no es el rendimiento propio del bróker: el dinero en tránsito cuenta para el bróker del que salió, por lo que la línea de un bróker puede dar un salto en la fecha de una transferencia. Con un solo bróker, o en la página de un bróker, solo se dibuja el total.
+**Líneas de bróker.** Con dos o más brókeres en el ámbito, cada bróker recibe una línea discontinua y una fila en la información emergente con su parte del total; las partes suman el total cada día. La línea de un bróker es el P&L generado mientras el valor estaba en ese bróker: mover dinero o títulos entre dos de tus brókeres no es ni una ganancia ni una pérdida, así que ninguna línea da un salto cuando llega una transferencia.
+
+- **En tránsito** — hasta que llega la transferencia, el valor y sus variaciones de precio o de tipo de cambio se quedan en el bróker del que salió.
+- **Porcentajes de propiedad distintos** — cuando los dos brókeres tienen [porcentajes de propiedad](../brokers/sharing.md) distintos, la línea que recibe conserva un escalón el día de la llegada: el mismo escalón que muestra el total.
+- **Sin valor el día de la llegada** — si el título todavía no tiene precio, o falta un tipo de cambio, el salto se queda: no se inventa ningún valor.
+- **Brókeres fuera de la vista** — en la página de un bróker, o con el filtro de bróker activado, los títulos enviados a un bróker fuera de la vista, o recibidos de él, cuentan como capital a su valor de mercado de ese día, no como ganancia o pérdida; el dinero cuenta como un depósito o un retiro. Lo mismo vale para la mitad que queda cuando se elimina el otro bróker de una transferencia.
+
+Con un solo bróker, o en la página de un bróker, solo se dibuja el total.
+
+🔗 **Teoría**: [Transferencias internas en las líneas de bróker](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
 
 #### Velas — la oscilación dentro del período {: #pnl-candles }
 
@@ -106,9 +115,9 @@ La información emergente da el período, **Apertura**, **Cierre**, **Máximo** 
 
 | Columna | Barras | Qué representa |
 |--------|------|--------------------|
-| Ingresos y costes | **Dividendo** · **Interés** por encima de cero, **Comisiones e impuestos** por debajo | Lo que la cartera te pagó, y lo que te costó la actividad |
+| Ingresos y costes | **Dividendo** · **Interés** por encima de cero, **Costes e impuestos** por debajo | Lo que la cartera te pagó, y lo que te costó la actividad |
 | Depósitos | **Depósito** | Dinero nuevo que aportaste (los retiros no se dibujan) |
-| Compras | **Coste de Compra**, en dos zonas: **Capital nuevo** abajo, **Reinvertido** arriba | Lo que gastaste en compras, dividido según de dónde vino el dinero |
+| Compras | **Coste de Compra**, en dos zonas: **Nuevo capital** abajo, **Reinvertido** arriba | Lo que gastaste en compras, dividido según de dónde vino el dinero |
 
 <div class="lf-screenshot-carousel" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active chart-crop-container" alt="El gráfico Crecimiento de la Cartera en modo P&L, vista Ingresos a 1M: grupos mensuales de barras para Interés, Costes e impuestos por debajo de cero, Depósito y Coste de compra">
@@ -118,7 +127,7 @@ La información emergente da el período, **Apertura**, **Cierre**, **Máximo** 
 
 Cómo leerlo:
 
-- **Capital nuevo o reinvertido.** Una compra gasta primero las rentabilidades ya mantenidas como efectivo en ese bróker (**Reinvertido**, verde como en **Abs**); el resto es **Capital nuevo** (azul). Las ventas nunca se dibujan.
+- **Capital nuevo o reinvertido.** Una compra gasta primero las rentabilidades ya mantenidas como efectivo en ese bróker (**Reinvertido**, verde como en **Abs**); el resto es **Nuevo capital** (azul). Las ventas nunca se dibujan.
 - **Los signos se conservan.** Una corrección negativa sobre un dividendo pasado reduce la barra del dividendo; las comisiones e impuestos permanecen por debajo de cero.
 - **Coincide con los KPI.** Para las mismas fechas y brókeres, **Dividendo** e **Interés** suman exactamente la fila **Dividendos e intereses** de la [tarjeta de P&L período](kpi-cards.md#card-1-period-pl).
 - **Una entrada de leyenda.** Ambas zonas de compra se llaman **Coste de Compra**: un clic oculta las dos, y también el área de **Abs** del mismo nombre.
@@ -142,7 +151,7 @@ En **Velas** e **Ingresos**, los botones de la esquina superior derecha del áre
 
 ## 🥧 Panel de Asignación {: #allocation-panel }
 
-El panel de **Asignación de Activos** muestra cómo se reparte tu cartera, hoy y a lo largo del tiempo. Elige una dimensión con las pestañas **Por Tipo**, **Por Sector** y **Geográfica**, y una vista con los dos botones de la esquina superior derecha: el gráfico circular para **Ahora**, el gráfico de áreas para **Historial**.
+El panel de **Asignación de activos** muestra cómo se reparte tu cartera, hoy y a lo largo del tiempo. Elige una dimensión con las pestañas **Por Tipo**, **Por Sector** y **Geográfica**, y una vista con los dos botones de la esquina superior derecha: el gráfico circular para **Actual**, el gráfico de áreas para **Historial**.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-alloc" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active alloc-crop-container" data-title="Por tipo (actual)" alt="Asignación por tipo — Actual">
@@ -175,14 +184,14 @@ El panel de **Asignación de Activos** muestra cómo se reparte tu cartera, hoy 
 
 ### 🕰️ Ahora e Historial
 
-- **Ahora** — la asignación en el último día del rango seleccionado: un gráfico de anillo para **Por Tipo** y **Por Sector**, un mapa mundial para **Geográfica**. Pasa el cursor sobre una porción o un país para ver su porcentaje e importe. Por tipo, el anillo puede tener [dos anillos](#allocation-type-rings).
+- **Actual** — la asignación en el último día del rango seleccionado: un gráfico de anillo para **Por Tipo** y **Por Sector**, un mapa mundial para **Geográfica**. Pasa el cursor sobre una porción o un país para ver su porcentaje e importe. Por tipo, el anillo puede tener [dos anillos](#allocation-type-rings).
 - **Historial** — un gráfico de áreas apiladas al 100% de cómo cambió la asignación a lo largo del tiempo, práctico para ver el rebalanceo. Por tipo, cada familia es un área; al pasar el cursor sobre una fecha se listan sus subtipos, como *ETF genérico* y *ETF de Renta Variable*.
 
 El panel recuerda la vista y la pestaña en este navegador, para cada usuario, y las comparte con las páginas de brókeres.
 
 ### 🍩 Dos anillos por tipo {: #allocation-type-rings }
 
-En cuanto mantienes un activo con un subtipo, como un **ETF de Renta Variable** o **Crowdfunding inmobiliario**, el anillo de **Ahora** de **Por Tipo** dibuja dos anillos:
+En cuanto mantienes un activo con un subtipo, como un **ETF de Renta Variable** o **Crowdfunding inmobiliario**, el anillo de **Actual** de **Por Tipo** dibuja dos anillos:
 
 - **Anillo interior** — una porción por familia, con su icono donde cabe: todos tus ETF (el **ETF** genérico y todos los subtipos) juntos, **Crowdfunding** con **Crowdfunding inmobiliario**, y todos los demás tipos, **Liquidez** incluida, por separado. Estas son las familias que agrupa el [menú de Tipo](../assets/create-edit.md#choosing-the-asset-type) del activo.
 - **Anillo exterior** — más fino y separado, divide cada familia que contiene un subtipo en sus miembros, en tonalidades del color de la familia, con rótulo donde hay espacio. El miembro genérico se lee *ETF genérico* o *Crowdfunding genérico*.

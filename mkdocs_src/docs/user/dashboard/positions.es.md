@@ -36,12 +36,12 @@ LibreFolio recuerda tus elecciones.
 | **Activo** | El activo, con su icono de tipo |
 | **Δ1** / **Δ1%** | Movimiento de hoy del P&L no realizado a la cantidad de hoy, en dinero y en % del valor de ayer |
 | **P&L no realizado** / **P&L %** | Valor actual menos lo que costó la posición abierta, en dinero y en % de ese coste → [Valor contable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md) |
-| **Anualizada** | Rentabilidad compuesta anual desde la primera transacción, ingresos y comisiones incluidos → [Rentabilidad anualizada neta](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md) |
+| **Anualizado** | Rentabilidad compuesta anual desde la primera transacción, ingresos y comisiones incluidos → [Rentabilidad anualizada neta](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md) |
 | **YOC** | Los dividendos e intereses del último año por unidad, frente a su precio medio → [Rendimiento sobre coste](#yield-on-cost-yoc) |
 | **Valor** / **Peso** | Lo que vale la posición y su parte de tu patrimonio neto, efectivo incluido |
-| **Cantidad** | Acciones, unidades o monedas en posesión |
+| **Cant.** | Acciones, unidades o monedas en posesión |
 | **Precio** *(oculto)* | El precio unitario utilizado: el precio de mercado, o el precio de la última operación cuando no hay cotización → [Resolución de precios](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
-| **Precio medio de compra (PMC)** *(oculto)* | Precio medio de compra por unidad, cada compra al tipo de cambio de su propia fecha → [Precio medio de compra (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md) |
+| **PMC** *(oculto)* | Precio medio de compra por unidad, cada compra al tipo de cambio de su propia fecha → [Precio medio de compra (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md) |
 | **Lote abierto más antiguo** *(oculto)* | Fecha de apertura del lote más antiguo que sigue abierto |
 | **Brókeres** | El bróker que mantiene la posición |
 
@@ -54,7 +54,7 @@ LibreFolio recuerda tus elecciones.
 ??? info "➖ Celdas vacías — cuando falta un valor"
 
     - **`—` en P&L no realizado, P&L % o Precio medio de compra (PMC)**: el activo no tiene ningún precio, o parte de lo que pagaste es desconocida — un tipo de cambio faltante en una fecha de compra, o una transferencia o ajuste sin coste base. El [banner de calidad de datos](index.md#data-quality-banner) indica qué corregir.
-    - **Δ1** y **Δ1%** necesitan un precio de mercado; **Anualizada** necesita una posición lo bastante antigua para que una tasa anual signifique algo.
+    - **Δ1** y **Δ1%** necesitan un precio de mercado; **Anualizado** necesita una posición lo bastante antigua para que una tasa anual signifique algo.
 
 ### 💸 Rendimiento sobre coste (YOC) {: #yield-on-cost-yoc }
 
@@ -81,10 +81,10 @@ LibreFolio recuerda tus elecciones.
 
 **Métricas mostradas**
 
-- **P&L período**, dividido como en la [Tarjeta P&L período](kpi-cards.md#card-1-period-pl) en **Cambio no realizado**, **Ventas**, **Dividendos e intereses** y **Costes** → [P&L período](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
-- **Anualizada** — el resultado del período como tasa anual, durante el tiempo que la posición se mantuvo en el período → [Rentabilidad anualizada neta](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md)
+- **P&L período**, dividido como en la [Tarjeta P&L período](kpi-cards.md#card-1-period-pl) en **Variación no realizada**, **Ventas**, **Dividendos e intereses** y **Costes** → [P&L período](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
+- **Anualizado** — el resultado del período como tasa anual, durante el tiempo que la posición se mantuvo en el período → [Rentabilidad anualizada neta](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md)
 - **Δ1** / **Δ1%** para posiciones abiertas y, ocultos por defecto, **Valor inicial**, **Valor final**, **Lote abierto más antiguo** y **Estado**
-- **Otros efectos del período** — lo que no pertenece a ninguna posición: **Ingresos no asignados** y **Costes no asignados**, registrados sin un activo, y el **Residual de otros / conciliación**
+- **Otros efectos del período** — lo que no pertenece a ninguna posición: **Ingreso no asignado** y **Costes no asignados**, registrados sin un activo, y el **Otro / residuo de conciliación**
 
 **Cómo leerlo**
 
@@ -129,7 +129,7 @@ Elige **Analizar lotes** en una posición y el panel se abre debajo, para los br
 **Métricas mostradas**
 
 - **Precio de mercado** — discontinuo donde LibreFolio lo estima a partir de tu última operación → [Cadena de precios de valoración](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md#valuation-price-chain)
-- **Precio medio de compra (PMC)** — una línea por bróker, y una línea **Combinada** discontinua cuando el activo está en varios → [Precio medio de compra (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
+- **PMC** — una línea por bróker, y una línea discontinua **Combinado** cuando el activo está en varios → [Precio medio de compra (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Burbujas** — una por lote largo, en su rentabilidad total, entre los marcadores de tus transacciones y pagos → [Análisis de lotes FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
 
 **Cómo leerlo**
@@ -158,13 +158,13 @@ Cada lote con sus cifras, siguiendo el filtro y la selección del panel.
 
 **Métricas mostradas**
 
-- **Fecha de apertura**, **P&L total**, **Rentabilidad total**, **Anualizada**, **Valor actual**, **Cantidad abierta** y **Custodia**, con una fila de **Totales** → [Análisis de lotes FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
-- **Ingresos** cuando un lote recibió alguno, y **Comisiones**, **Impuestos**, **P&L neto** y **Rentabilidad neta** cuando un lote soporta costes → [Costes y métricas netas](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)
+- **Fecha de apertura**, **P&L total**, **Rendimiento total**, **Anualizado**, **Valor actual**, **Cantidad abierta** y **Custodia**, con una fila de **Totales** → [Análisis de lotes FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Ingresos** cuando un lote recibió alguno, y **Comisiones**, **Impuestos**, **P&L neto** y **Rendimiento neto** cuando un lote soporta costes → [Costes y métricas netas](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)
 
 **Cómo leerlo**
 
 - **Haz clic** en una fila para seleccionarla, **haz doble clic** para encontrarla en la línea de tiempo; el color de la fila es el bróker de apertura.
-- **El menú ⋮** ofrece **Ver detalle del lote**, **Ir al lote en Gantt**, **Ir a la transacción de apertura** y **Copiar identificador del lote** — una referencia estable, útil para soporte.
+- **El menú ⋮** ofrece **Ver detalle del lote**, **Ir al lote en el Gantt**, **Ir a la transacción de apertura** y **Copiar identificador del lote** — una referencia estable, útil para soporte.
 - **Más columnas**, como **Valor de apertura**, esperan detrás del icono del ojo.
 
 ### 💰 4. Comparación de valor / rentabilidad
@@ -173,8 +173,8 @@ Cada lote con sus cifras, siguiendo el filtro y la selección del panel.
 
 **Métricas mostradas**
 
-- **Valor** — **Valor residual**, **Ingresos por venta** e **Ingresos acumulados** apilados hasta el **Valor integral**, frente al **Valor de apertura** → [Análisis de lotes FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
-- **Rentabilidad** — el resultado desde la apertura, en dinero (**Abs**) o porcentaje (**%**): una **Rentabilidad agregada**, más una línea por lote cuando comparas varios
+- **Valor** — **Valor residual**, **Ingresos por ventas** e **Ingresos acumulados** apilados hasta el **Valor global**, frente al **Valor de apertura** → [Análisis de lotes FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Rentabilidad** — el resultado desde la apertura, en dinero (**Abs**) o porcentaje (**%**): un **Rendimiento agregado**, más una línea por lote cuando comparas varios
 
 **Cómo leerlo**
 
@@ -187,7 +187,7 @@ Toda la historia de un lote. Ábrelo con **Ver detalle del lote** (⋮) o hacien
 
 **Métricas mostradas**
 
-- **Resumen** — valor de apertura y actual, ingresos por venta, **P&L FIFO**, **P&L total**, **Rentabilidad total**, y **Rentabilidad en efectivo** cuando el lote recibió ingresos → [Análisis de lotes FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
+- **Resumen** — valor de apertura y actual, ingresos por venta, **P&L FIFO**, **P&L total**, **Rendimiento total**, y **Rendimiento por ingresos** cuando el lote recibió ingresos → [Análisis de lotes FIFO](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)
 - **Desglose neto** — el P&L total menos las comisiones e impuestos asignados al lote → [Costes y métricas netas](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#costs-and-net-metrics)
 - **Custodia actual** e **Historial** — dónde está el lote ahora, y cada evento desde su apertura
 

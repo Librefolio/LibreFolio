@@ -4,7 +4,7 @@
     <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Formulario de transacción — TRANSFER">
 </div>
 
-Las **transferencias de activos** mueven valores entre cuentas de brókers **sin realizar una venta**. La posición sale de un bróker y llega a otro; no hay intercambio de efectivo y, en la mayoría de las jurisdicciones, esto no es un evento fiscal.
+Las **transferencias de activos** mueven valores entre cuentas de brókeres **sin realizar una venta**. La posición sale de un bróker y llega a otro; no hay intercambio de efectivo y, en la mayoría de las jurisdicciones, esto no es un evento fiscal.
 
 ---
 
@@ -34,20 +34,20 @@ Escenarios comunes:
 
     Al transferir activos, se debe preservar el **costo base original**. La transferencia en sí misma no es un evento fiscal en la mayoría de las jurisdicciones (aunque las reglas varían). LibreFolio permite una **anulación del costo base** opcional en el lado receptor.
 
-    Consulte **[📊 Precio Medio de Compra (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** para saber cómo se calcula el costo base automático.
+    Consulta **[📊 Precio Medio de Compra (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** para saber cómo se calcula el coste base automático.
 
 ---
 
 ## 🔀 Relación con Ajustes
 
-Internamente, una Transferencia se compone de dos entradas de Ajuste. LibreFolio admite:
+Una Transferencia se guarda como dos filas `TRANSFER`, una por bróker, cada una vinculada a la otra mediante `related_transaction_id`. Separar el par convierte las dos filas en `ADJUSTMENT` independientes, y promover dos Ajustes las vuelve a convertir en una Transferencia:
 
 | Operación | Resultado |
 |-----------|--------|
 | **Separar par** (desvincular) | Transferencia → dos Ajustes independientes |
-| **Promocionar** (vincular) | Dos Ajustes → Transferencia |
+| **Promover** (vincular) | Dos Ajustes → Transferencia |
 
-**Restricciones de Promote**: mismo activo, diferentes brókers, cantidades opuestas.
+**Restricciones de promoción**: mismo activo, diferentes brókeres, cantidades opuestas, y ninguna de las dos filas vinculada a un evento del activo (un desdoblamiento, por ejemplo), ya que una transferencia no puede llevar ese vínculo.
 
 ---
 
