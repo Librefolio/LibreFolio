@@ -76,7 +76,16 @@ Un secondo interruttore, in alto a sinistra nel grafico, sceglie come disegnarlo
   </div>
 </div>
 
-**Linee per broker.** Con due o più broker nell'ambito, ciascun broker ottiene una linea tratteggiata e una riga nel tooltip con la sua quota del totale; le quote sommano al totale ogni giorno. Una quota non è la performance del broker stesso: il denaro in transito conta per il broker da cui è partito, quindi la linea di un broker può saltare in una data di trasferimento. Con un solo broker, o sulla pagina di un broker, viene disegnato solo il totale.
+**Linee per broker.** Con due o più broker nell'ambito, ciascun broker ottiene una linea tratteggiata e una riga nel tooltip con la sua quota del totale; le quote sommano al totale ogni giorno. La linea di un broker è il P&L prodotto mentre il valore si trovava presso quel broker: spostare denaro o titoli fra due dei tuoi broker non è né un guadagno né una perdita, quindi nessuna linea salta quando arriva un trasferimento.
+
+- **In transito** — finché il trasferimento non arriva, il valore e le sue variazioni di prezzo o di tasso di cambio restano al broker da cui è partito.
+- **Quote di proprietà diverse** — quando i due broker hanno [quote di proprietà](../brokers/sharing.md) diverse, la linea che riceve conserva un gradino nel giorno di arrivo: lo stesso gradino che mostra il totale.
+- **Nessun valore nel giorno di arrivo** — se il titolo non ha ancora un prezzo, o manca un tasso di cambio, il salto resta: nessun valore viene inventato.
+- **Broker fuori dalla vista** — sulla pagina di un broker, o con il filtro broker attivo, i titoli inviati a un broker fuori dalla vista, o ricevuti da esso, contano come capitale al loro valore di mercato di quel giorno, non come guadagno o perdita; il denaro conta come un deposito o un prelievo. Lo stesso vale per la metà che resta quando l'altro broker di un trasferimento viene eliminato.
+
+Con un solo broker, o sulla pagina di un broker, viene disegnato solo il totale.
+
+🔗 **Teoria**: [Trasferimenti interni nelle linee per broker](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
 
 #### Candele — l'oscillazione all'interno del periodo {: #pnl-candles }
 
