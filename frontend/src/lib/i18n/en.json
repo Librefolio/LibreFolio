@@ -340,7 +340,8 @@
       "balanceRow": "Balance to 100%",
       "balanceSelected": "Balance selected rows",
       "deleteSelected": "Delete selected rows",
-      "deleteConfirmMessage": "Delete {n} entries from this distribution?"
+      "deleteConfirmMessage": "Delete {n} entries from this distribution?",
+      "weightPercent": "Weight %"
     },
     "showInactive": "Inactive",
     "edit": {

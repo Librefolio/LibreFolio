@@ -340,7 +340,8 @@
       "balanceRow": "Bilancia al 100%",
       "balanceSelected": "Bilancia righe selezionate",
       "deleteSelected": "Elimina righe selezionate",
-      "deleteConfirmMessage": "Eliminare {n} voci da questa distribuzione?"
+      "deleteConfirmMessage": "Eliminare {n} voci da questa distribuzione?",
+      "weightPercent": "Peso %"
     },
     "showInactive": "Inattivi",
     "edit": {
