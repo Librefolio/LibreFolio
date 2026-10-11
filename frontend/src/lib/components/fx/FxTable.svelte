@@ -8,6 +8,7 @@
 <script lang="ts">
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
+    import {deltaPeriodLabel} from '$lib/utils/assetPriceDerived';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
     import {ArrowLeftRight, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
@@ -193,7 +194,7 @@
             },
             {
                 id: 'delta_1D',
-                header: 'Δ 1D',
+                header: () => `Δ ${deltaPeriodLabel('1D', $t)}`,
                 cell: (row) => {
                     const val = row.deltas?.['1D'] ?? null;
                     return {type: 'html', html: `<span class="font-mono ${deltaColorClass(val)}">${formatDeltaPct(val)}</span>`};
@@ -230,7 +231,7 @@
             // Dynamic delta period columns
             ...visiblePeriods.map((p) => ({
                 id: `delta_${p.key}`,
-                header: `Δ ${p.key}`,
+                header: () => `Δ ${deltaPeriodLabel(p.key, $t)}`,
                 cell: (row: FxRow) => {
                     const val = row.deltas?.[p.key] ?? null;
                     return {type: 'html' as const, html: `<span class="font-mono ${deltaColorClass(val)}">${formatDeltaPct(val)}</span>`};

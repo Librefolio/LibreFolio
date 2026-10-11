@@ -10,6 +10,7 @@
     import {goto} from '$app/navigation';
     import {onMount} from 'svelte';
     import {_ as t} from '$lib/i18n';
+    import {deltaPeriodLabel} from '$lib/utils/assetPriceDerived';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
     import {Merge, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
@@ -233,7 +234,7 @@
             },
             {
                 id: 'delta_1D',
-                header: 'Δ 1D',
+                header: () => `Δ ${deltaPeriodLabel('1D', $t)}`,
                 cell: (row) => {
                     const val = row.deltas?.['1D'] ?? null;
                     return {
@@ -249,7 +250,7 @@
             // Dynamic Δ multi-period columns
             ...visiblePeriods.map((period) => ({
                 id: `delta_${period.key}`,
-                header: `Δ ${period.key}`,
+                header: () => `Δ ${deltaPeriodLabel(period.key, $t)}`,
                 cell: (row: AssetRow) => {
                     const val = row.deltas?.[period.key] ?? null;
                     return {
