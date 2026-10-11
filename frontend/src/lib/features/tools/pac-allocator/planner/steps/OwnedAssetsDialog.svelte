@@ -71,10 +71,7 @@
     const scopeById = $derived(new Map((scope ?? []).map((broker) => [broker.id, broker])));
     const owned = $derived(load.data ? ownedAssets(load.data) : {rows: [], unresolved: 0});
     /** Brokers with a lower role stay listed, disabled, never dropped in silence (N18). */
-    const brokerOptions = $derived<SelectOption[]>([
-        {value: '', label: $t('tools.pacAllocator.planner.ownedAssets.allBrokers', {default: 'All Brokers'})},
-        ...(scope ?? []).map((broker) => ({value: String(broker.id), label: broker.name, disabled: !broker.selectable})),
-    ]);
+    const brokerOptions = $derived<SelectOption[]>([{value: '', label: $t('tools.pacAllocator.planner.ownedAssets.allBrokers', {default: 'All Brokers'})}, ...(scope ?? []).map((broker) => ({value: String(broker.id), label: broker.name, disabled: !broker.selectable}))]);
     const visible = $derived(brokerFilter === '' ? owned.rows : owned.rows.filter((row) => row.brokerIds.includes(Number(brokerFilter))));
     const pickable = $derived(visible.filter((row) => !inPlan(row.asset.source_asset_id)));
     const picked = $derived(pickable.filter((row) => !excluded.includes(row.asset.source_asset_id)));
@@ -151,7 +148,10 @@
             <div>
                 <p class={LABEL_ROW}>
                     {$t('tools.pacAllocator.planner.ownedAssets.brokers', {default: 'Broker'})}
-                    <HelpTip label={$t('tools.pacAllocator.planner.ownedAssets.brokers', {default: 'Broker'})} help={$t('tools.pacAllocator.planner.ownedAssets.brokersHelp', {default: 'The list shows the Assets with an open position today in the chosen Broker, or in all your Brokers. It starts on the Broker of the plan when the plan has exactly one.'})} />
+                    <HelpTip
+                        label={$t('tools.pacAllocator.planner.ownedAssets.brokers', {default: 'Broker'})}
+                        help={$t('tools.pacAllocator.planner.ownedAssets.brokersHelp', {default: 'The list shows the Assets with an open position today in the chosen Broker, or in all your Brokers. It starts on the Broker of the plan when the plan has exactly one.'})}
+                    />
                 </p>
                 <div class="w-full sm:w-72">
                     <SimpleSelect
@@ -170,7 +170,10 @@
 
             {#if owned.unresolved > 0}
                 <div class={NOTICE.warning} data-testid="{testid}-unresolved">
-                    {$t('tools.pacAllocator.planner.ownedAssets.unresolved', {default: '{count, plural, one {# position could not be matched to its Asset or Broker and is not listed.} other {# positions could not be matched to their Asset or Broker and are not listed.}}', values: {count: owned.unresolved}})}
+                    {$t('tools.pacAllocator.planner.ownedAssets.unresolved', {
+                        default: '{count, plural, one {# position could not be matched to its Asset or Broker and is not listed.} other {# positions could not be matched to their Asset or Broker and are not listed.}}',
+                        values: {count: owned.unresolved},
+                    })}
                 </div>
             {/if}
 
@@ -192,7 +195,11 @@
                     {@const already = inPlan(assetId)}
                     {@const checked = !already && !excluded.includes(assetId)}
                     <li data-testid="{testid}-asset" data-asset-id={assetId} data-in-plan={already ? 'true' : 'false'} data-selected={checked ? 'true' : 'false'}>
-                        <label class="flex items-center gap-3 rounded-lg border p-3 transition-colors {checked ? 'border-libre-green bg-libre-green/10 dark:bg-libre-green/20' : 'border-gray-200 dark:border-gray-700'} {already ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-libre-green'}">
+                        <label
+                            class="flex items-center gap-3 rounded-lg border p-3 transition-colors {checked ? 'border-libre-green bg-libre-green/10 dark:bg-libre-green/20' : 'border-gray-200 dark:border-gray-700'} {already
+                                ? 'cursor-not-allowed opacity-60'
+                                : 'cursor-pointer hover:border-libre-green'}"
+                        >
                             <input type="checkbox" class="rounded border-gray-300 text-libre-green focus:ring-libre-green" {checked} disabled={already} data-testid="{testid}-check" onchange={(event) => toggle(assetId, event.currentTarget.checked)} />
                             <AssetIcon iconUrl={row.asset.icon_url} assetType={row.asset.asset_class} altText="" size="sm" />
                             <span class="min-w-0 flex-1">

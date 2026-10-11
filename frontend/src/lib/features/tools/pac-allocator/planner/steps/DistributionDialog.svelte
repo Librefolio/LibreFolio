@@ -71,59 +71,61 @@
         return parts.join(' ');
     }
 
-    const columns = $derived.by((): ColumnDef<DistributionRow>[] => withHelpCues<DistributionRow>([
-        {
-            id: 'asset',
-            header: () => $t('tools.pacAllocator.planner.routing.asset', {default: 'Asset'}),
-            type: 'text',
-            filterable: false,
-            width: 280,
-            minWidth: 180,
-            getValue: (row) => row.label,
-            cell: (row) => {
-                const asset = draft.asset(row.assetKey);
-                return {type: 'custom', component: AssetNameCell, props: {label: row.label, iconUrl: asset?.iconUrl ?? null, assetType: asset?.assetClass.toUpperCase() ?? null}};
+    const columns = $derived.by((): ColumnDef<DistributionRow>[] =>
+        withHelpCues<DistributionRow>([
+            {
+                id: 'asset',
+                header: () => $t('tools.pacAllocator.planner.routing.asset', {default: 'Asset'}),
+                type: 'text',
+                filterable: false,
+                width: 280,
+                minWidth: 180,
+                getValue: (row) => row.label,
+                cell: (row) => {
+                    const asset = draft.asset(row.assetKey);
+                    return {type: 'custom', component: AssetNameCell, props: {label: row.label, iconUrl: asset?.iconUrl ?? null, assetType: asset?.assetClass.toUpperCase() ?? null}};
+                },
             },
-        },
-        {
-            id: 'bar',
-            header: '',
-            type: 'custom',
-            sortable: false,
-            filterable: false,
-            width: 160,
-            minWidth: 80,
-            cell: (row) =>
-                row.weightPercent === null
-                    ? ''
-                    : {
-                          type: 'html',
-                          html: `<div data-testid="${testid}-bar" data-asset-key="${escapeHtml(row.assetKey)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700"><div class="h-full rounded-full bg-libre-green" style="width: ${Math.min(100, (percentNumber(row.weightPercent) / maxWeight) * 100)}%"></div></div>`,
-                      },
-        },
-        {
-            id: 'weight',
-            header: () => $t('tools.pacAllocator.planner.distribution.weight', {default: 'Weight'}),
-            headerTooltip: weightHelp,
-            type: 'number',
-            filterable: false,
-            align: 'right',
-            width: 120,
-            minWidth: 100,
-            getValue: (row) => (row.weightPercent === null ? -1 : Number(row.weightPercent)),
-            cell: (row) => (row.weightPercent === null ? '—' : formatPlannerPercentUnits(row.weightPercent)),
-        },
-        {
-            id: 'valuation',
-            header: () => $t('tools.pacAllocator.planner.distribution.valuation', {default: 'Valuation'}),
-            type: 'text',
-            filterable: false,
-            width: 260,
-            minWidth: 160,
-            getValue: (row) => valuation(row),
-            cell: (row) => valuation(row),
-        },
-    ]));
+            {
+                id: 'bar',
+                header: '',
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                width: 160,
+                minWidth: 80,
+                cell: (row) =>
+                    row.weightPercent === null
+                        ? ''
+                        : {
+                              type: 'html',
+                              html: `<div data-testid="${testid}-bar" data-asset-key="${escapeHtml(row.assetKey)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700"><div class="h-full rounded-full bg-libre-green" style="width: ${Math.min(100, (percentNumber(row.weightPercent) / maxWeight) * 100)}%"></div></div>`,
+                          },
+            },
+            {
+                id: 'weight',
+                header: () => $t('tools.pacAllocator.planner.distribution.weight', {default: 'Weight'}),
+                headerTooltip: weightHelp,
+                type: 'number',
+                filterable: false,
+                align: 'right',
+                width: 120,
+                minWidth: 100,
+                getValue: (row) => (row.weightPercent === null ? -1 : Number(row.weightPercent)),
+                cell: (row) => (row.weightPercent === null ? '—' : formatPlannerPercentUnits(row.weightPercent)),
+            },
+            {
+                id: 'valuation',
+                header: () => $t('tools.pacAllocator.planner.distribution.valuation', {default: 'Valuation'}),
+                type: 'text',
+                filterable: false,
+                width: 260,
+                minWidth: 160,
+                getValue: (row) => valuation(row),
+                cell: (row) => valuation(row),
+            },
+        ]),
+    );
 
     async function read(): Promise<void> {
         if (selected.length === 0) {

@@ -92,43 +92,45 @@
         return {help: OBJECTIVE_HELP_FALLBACKS[code] ? $t(`${PLANNER_KEY}.objectiveHelp.${code}`, {default: OBJECTIVE_HELP_FALLBACKS[code]}) : '', math: false};
     }
 
-    const stageColumns = $derived.by((): ColumnDef<Stage>[] => withHelpCues<Stage>([
-        {
-            id: 'objective',
-            header: () => $t(`${KEY}.objective`, {default: 'Objective'}),
-            type: 'custom',
-            sortable: false,
-            filterable: false,
-            pinned: 'left',
-            minWidth: 200,
-            cell: (stage) => cell({type: 'label', text: objectiveName(stage.objective_code), sequence: stage.ordinal, testid: 'pac-planner-solver-stage', attrs: {'data-objective': stage.objective_code, 'data-status': stage.status}}),
-        },
-        {
-            id: 'status',
-            header: () => $t(`${KEY}.status`, {default: 'Status'}),
-            headerTooltip: help('status'),
-            type: 'text',
-            sortable: false,
-            filterable: false,
-            cell: (stage) => ({type: 'badge', text: $t(`${KEY}.statuses.${stage.status}`, {default: STATUS_FALLBACKS[stage.status]}), variant: STATUS_VARIANTS[stage.status]}),
-        },
-        ...(scopes.length > 1
-            ? [
-                  {
-                      id: 'scope',
-                      header: () => $t(`${KEY}.scope`, {default: 'Scope'}),
-                      type: 'text',
-                      sortable: false,
-                      filterable: false,
-                      cell: (stage: Stage) => scopeText(stage.scope),
-                  } satisfies ColumnDef<Stage>,
-              ]
-            : []),
-        numberColumn('primal', $t(`${KEY}.primal`, {default: 'Primal'}), (stage) => ({type: 'solver', value: stage.primal, unit: stage.unit, digits}), help('primal')),
-        numberColumn('dual', $t(`${KEY}.dual`, {default: 'Dual'}), (stage) => ({type: 'solver', value: stage.dual, unit: stage.unit, digits}), help('dual')),
-        numberColumn('absoluteGap', $t(`${KEY}.absoluteGap`, {default: 'Abs. gap'}), (stage) => ({type: 'solver', value: stage.absolute_gap, unit: stage.unit, digits}), help('absoluteGap')),
-        numberColumn('relativeGap', $t(`${KEY}.relativeGap`, {default: 'Rel. gap'}), (stage) => formatPlannerPlainDecimal(stage.relative_gap), help('relativeGap')),
-    ]));
+    const stageColumns = $derived.by((): ColumnDef<Stage>[] =>
+        withHelpCues<Stage>([
+            {
+                id: 'objective',
+                header: () => $t(`${KEY}.objective`, {default: 'Objective'}),
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                pinned: 'left',
+                minWidth: 200,
+                cell: (stage) => cell({type: 'label', text: objectiveName(stage.objective_code), sequence: stage.ordinal, testid: 'pac-planner-solver-stage', attrs: {'data-objective': stage.objective_code, 'data-status': stage.status}}),
+            },
+            {
+                id: 'status',
+                header: () => $t(`${KEY}.status`, {default: 'Status'}),
+                headerTooltip: help('status'),
+                type: 'text',
+                sortable: false,
+                filterable: false,
+                cell: (stage) => ({type: 'badge', text: $t(`${KEY}.statuses.${stage.status}`, {default: STATUS_FALLBACKS[stage.status]}), variant: STATUS_VARIANTS[stage.status]}),
+            },
+            ...(scopes.length > 1
+                ? [
+                      {
+                          id: 'scope',
+                          header: () => $t(`${KEY}.scope`, {default: 'Scope'}),
+                          type: 'text',
+                          sortable: false,
+                          filterable: false,
+                          cell: (stage: Stage) => scopeText(stage.scope),
+                      } satisfies ColumnDef<Stage>,
+                  ]
+                : []),
+            numberColumn('primal', $t(`${KEY}.primal`, {default: 'Primal'}), (stage) => ({type: 'solver', value: stage.primal, unit: stage.unit, digits}), help('primal')),
+            numberColumn('dual', $t(`${KEY}.dual`, {default: 'Dual'}), (stage) => ({type: 'solver', value: stage.dual, unit: stage.unit, digits}), help('dual')),
+            numberColumn('absoluteGap', $t(`${KEY}.absoluteGap`, {default: 'Abs. gap'}), (stage) => ({type: 'solver', value: stage.absolute_gap, unit: stage.unit, digits}), help('absoluteGap')),
+            numberColumn('relativeGap', $t(`${KEY}.relativeGap`, {default: 'Rel. gap'}), (stage) => formatPlannerPlainDecimal(stage.relative_gap), help('relativeGap')),
+        ]),
+    );
 
     const TABLE_PROPS = {
         enableSorting: false,

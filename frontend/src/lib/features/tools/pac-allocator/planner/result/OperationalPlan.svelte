@@ -64,65 +64,65 @@
         return $t(`${KEY}.fundingDetail`, {default: '{reason} · priority {priority}', values: {reason, priority: String(route.priority)}});
     }
 
-    const orderColumns = $derived.by((): ColumnDef<PacOrderRow>[] => withHelpCues<PacOrderRow>([
-        {
-            id: 'asset',
-            header: () => $t('tools.pacAllocator.planner.result.assets.asset', {default: 'Asset'}),
-            type: 'custom',
-            sortable: false,
-            filterable: false,
-            pinned: 'left',
-            minWidth: 180,
-            cell: (order) => cell({type: 'asset', assetId: order.asset_id, label: assetLabel(order.asset_id), asset: draft.asset(order.asset_id) ?? null, sequence: order.sequence, orderId: order.order_id, testid: 'pac-planner-plan-order'}),
-        },
-        {
-            id: 'instruction',
-            header: () => $t(`${KEY}.instruction`, {default: 'Instruction'}),
-            headerTooltip: () => $t(`${KEY}.instructionHelp`, {default: 'What to enter in the order at the Broker.'}),
-            type: 'custom',
-            sortable: false,
-            filterable: false,
-            minWidth: 160,
-            cell: (order) => cell({type: 'instruction', order, digits, autoConversion: paidByAutomaticConversion(order)}),
-        },
-        {
-            id: 'midPrice',
-            header: () => $t(`${KEY}.midPrice`, {default: 'Price'}),
-            headerTooltip: () => $t(`${KEY}.midPriceHelp`, {default: 'The Asset price used by the calculation, before the price margin.'}),
-            type: 'number',
-            sortable: false,
-            filterable: false,
-            align: 'right',
-            minWidth: 110,
-            cell: (order) => cell({type: 'price', price: order.mid_price, digits}),
-        },
-        {
-            id: 'cashDebit',
-            header: () => $t(`${KEY}.cashDebit`, {default: 'Order amount'}),
-            headerTooltip: () => $t(`${KEY}.cashDebitHelp`, {default: 'What the order takes from the Broker cash: the price plus the price margin set in the Routing step, fees excluded.'}),
-            type: 'number',
-            sortable: false,
-            filterable: false,
-            align: 'right',
-            minWidth: 120,
-            cell: (order) => cell({type: 'money', amount: order.cash_debit.amount, currency: order.cash_debit.currency, digits}),
-        },
-        {
-            id: 'fee',
-            header: () => $t(`${KEY}.fee`, {default: 'Fee'}),
-            headerTooltip: () => $t(`${KEY}.feeHelp`, {default: 'The Broker fee for this order, from the fees set in the Brokers step.'}),
-            type: 'number',
-            sortable: false,
-            filterable: false,
-            align: 'right',
-            minWidth: 100,
-            cell: (order) => cell({type: 'money', amount: order.fee.amount, currency: order.fee.currency, digits}),
-        },
-    ]));
+    const orderColumns = $derived.by((): ColumnDef<PacOrderRow>[] =>
+        withHelpCues<PacOrderRow>([
+            {
+                id: 'asset',
+                header: () => $t('tools.pacAllocator.planner.result.assets.asset', {default: 'Asset'}),
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                pinned: 'left',
+                minWidth: 180,
+                cell: (order) => cell({type: 'asset', assetId: order.asset_id, label: assetLabel(order.asset_id), asset: draft.asset(order.asset_id) ?? null, sequence: order.sequence, orderId: order.order_id, testid: 'pac-planner-plan-order'}),
+            },
+            {
+                id: 'instruction',
+                header: () => $t(`${KEY}.instruction`, {default: 'Instruction'}),
+                headerTooltip: () => $t(`${KEY}.instructionHelp`, {default: 'What to enter in the order at the Broker.'}),
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                minWidth: 160,
+                cell: (order) => cell({type: 'instruction', order, digits, autoConversion: paidByAutomaticConversion(order)}),
+            },
+            {
+                id: 'midPrice',
+                header: () => $t(`${KEY}.midPrice`, {default: 'Price'}),
+                headerTooltip: () => $t(`${KEY}.midPriceHelp`, {default: 'The Asset price used by the calculation, before the price margin.'}),
+                type: 'number',
+                sortable: false,
+                filterable: false,
+                align: 'right',
+                minWidth: 110,
+                cell: (order) => cell({type: 'price', price: order.mid_price, digits}),
+            },
+            {
+                id: 'cashDebit',
+                header: () => $t(`${KEY}.cashDebit`, {default: 'Order amount'}),
+                headerTooltip: () => $t(`${KEY}.cashDebitHelp`, {default: 'What the order takes from the Broker cash: the price plus the price margin set in the Routing step, fees excluded.'}),
+                type: 'number',
+                sortable: false,
+                filterable: false,
+                align: 'right',
+                minWidth: 120,
+                cell: (order) => cell({type: 'money', amount: order.cash_debit.amount, currency: order.cash_debit.currency, digits}),
+            },
+            {
+                id: 'fee',
+                header: () => $t(`${KEY}.fee`, {default: 'Fee'}),
+                headerTooltip: () => $t(`${KEY}.feeHelp`, {default: 'The Broker fee for this order, from the fees set in the Brokers step.'}),
+                type: 'number',
+                sortable: false,
+                filterable: false,
+                align: 'right',
+                minWidth: 100,
+                cell: (order) => cell({type: 'money', amount: order.fee.amount, currency: order.fee.currency, digits}),
+            },
+        ]),
+    );
 
-    const orderActions = $derived.by((): RowAction<PacOrderRow>[] => [
-        {id: 'detail', icon: Eye, label: () => $t(`${KEY}.detail`, {default: 'Detail'}), onClick: (order) => onorder(order), testid: 'pac-planner-plan-order-detail'},
-    ]);
+    const orderActions = $derived.by((): RowAction<PacOrderRow>[] => [{id: 'detail', icon: Eye, label: () => $t(`${KEY}.detail`, {default: 'Detail'}), onClick: (order) => onorder(order), testid: 'pac-planner-plan-order-detail'}]);
 </script>
 
 {#snippet pair(action: PacConversion)}
