@@ -28,7 +28,7 @@ from typing import Literal, Optional
 import structlog
 from sqlalchemy import and_, func, or_, select
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, UserRole
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency as CurrencySchema
 from backend.app.schemas.portfolio import (
     DataQualityIssue,
@@ -47,6 +47,7 @@ from backend.app.services.financial_math.average_cost import (
     compute_average_costs,
     cost_movement_from_transaction,
 )
+from backend.app.services.financial_math.native_cash import NativeCash, cash_movement_from_transaction, compute_native_cash, effective_share
 from backend.app.services.fx import convert_bulk
 from backend.app.services.price_resolver import AssetPriceSeries, build_asset_price_series
 from backend.app.services.settings_service import get_effective_base_currency
@@ -648,6 +649,7 @@ class DailyStateBuilder:
         asset_types: dict[int, str],
         asset_currencies: dict[int, str],
         average_costs: Mapping[tuple[int, int], AverageCost],
+        native_cash: NativeCash,
         target_currency: str,
         date_from: date_type,
         date_to: date_type,
@@ -669,6 +671,9 @@ class DailyStateBuilder:
         self.asset_currencies = asset_currencies
         # Average cost of every position, keyed (asset_id, broker_id): see build_cost_positions().
         self.average_costs = average_costs
+        # Every broker's cash in its own currencies (financial_math.native_cash): revalues
+        # foreign cash on each rate-change day, see _revalue_foreign_cash().
+        self.native_cash = native_cash
         self.target_currency = target_currency
         self.date_from = date_from
         self.date_to = date_to
@@ -788,12 +793,6 @@ class DailyStateBuilder:
         K: dict[int, Decimal] = defaultdict(lambda: zero)  # capital pool per broker
         R: dict[int, Decimal] = defaultdict(lambda: zero)  # returns pool per broker
         W: Decimal = zero  # withdrawn returns (global, exits system)
-        # Period accumulators for contribution (only frame txs counted)
-        per_realized: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
-        per_income: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
-        per_fees_taxes: dict[tuple[int, int], Decimal] = defaultdict(lambda: zero)
-        unalloc_income: dict[int, Decimal] = defaultdict(lambda: zero)
-        unalloc_fees: dict[int, Decimal] = defaultdict(lambda: zero)
         # Position state snapshots
         position_states_start: list[DailyPositionState] = []
         position_states_end: list[DailyPositionState] = []
@@ -804,14 +803,20 @@ class DailyStateBuilder:
 
         # ── 5. PRE-FRAME: [date_from, frame_start) — accounting only ──
         # Process all transaction days before frame_start: update cash, qty, cost pools, ECF.
-        # No market evaluation, no DailyPortfolioState emission.
-        preframe_tx_dates = sorted(d for d in (set(cash_deltas.keys()) | set(position_txs_by_date.keys()) | set(ecf_by_date.keys()) | internal_flow_dates) if d < self.frame_start)
+        # No market evaluation, no DailyPortfolioState emission. A day the rate of a held
+        # foreign currency changes is replayed too: its cash is revalued.
+        preframe_fx_days = set(self.native_cash.rate_change_days(None, self.frame_start - timedelta(days=1)))
+        preframe_tx_dates = sorted(d for d in (set(cash_deltas.keys()) | set(position_txs_by_date.keys()) | set(ecf_by_date.keys()) | internal_flow_dates | preframe_fx_days) if d < self.frame_start)
         for day in preframe_tx_dates:
             cumulative_cash += cash_deltas.get(day, zero)
             cumulative_ecf += ecf_by_date.get(day, zero)
             for bid in all_broker_ids:
                 cumulative_cash_by_broker[bid] += cash_deltas_by_broker.get((day, bid), zero)
                 cumulative_ecf_by_broker[bid] += ecf_by_date_by_broker.get((day, bid), zero)
+            # Exchange result on foreign cash: after the day's cash, before its pool rules
+            if day in preframe_fx_days:
+                for exchange_result in self._revalue_foreign_cash(day, cumulative_cash_by_broker, K, R):
+                    cumulative_cash += exchange_result
             # Pre-frame 3-pool per-broker: process all tx types
             for ctxn in all_txs_by_date.get(day, []):
                 tx = ctxn.tx
@@ -913,6 +918,9 @@ class DailyStateBuilder:
         for d in internal_flow_dates:
             if d >= self.frame_start:
                 dirty_days.add(d)
+        # A rate change of a held foreign currency revalues its cash
+        frame_fx_days = set(self.native_cash.rate_change_days(self.frame_start, self.date_to))
+        dirty_days.update(frame_fx_days)
         for interval in self.in_transit_intervals:
             if interval.start_date >= self.frame_start:
                 dirty_days.add(interval.start_date)
@@ -983,17 +991,21 @@ class DailyStateBuilder:
             cumulative_cash += cash_deltas.get(current, zero)
             for bid in all_broker_ids:
                 cumulative_cash_by_broker[bid] += cash_deltas_by_broker.get((current, bid), zero)
+            # Exchange result on foreign cash: after the day's cash, before its pool rules
+            if current in frame_fx_days:
+                for exchange_result in self._revalue_foreign_cash(current, cumulative_cash_by_broker, K, R):
+                    cumulative_cash += exchange_result
 
             # Batch 2 — per-day BUY funding split accumulator (see
             # AcquisitionFundingContribution), reset every day like external_cash_flow.
             day_acq_from_k = zero
             day_acq_from_r = zero
 
-            # 4b. Unified per-transaction loop: cost pool + 3-pool + period accumulators
+            # 4b. Unified per-transaction loop: cost pool + 3-pool
             # Single pass: for each tx, in additions-first order:
             #   1. Replay the position's next average-cost step (BUY adds, SELL removes cost)
             #   2. Update 3-pool (K, R) with the historical cost a reduction gave up
-            #   3. Update period accumulators (realized, income, fees)
+            # Period flows by type and position come from the native cash, sales from realized_sales.
             ecf_today = ecf_by_date.get(current, zero)
             cumulative_ecf += ecf_today
             for bid in all_broker_ids:
@@ -1064,12 +1076,9 @@ class DailyStateBuilder:
                                 K[bid] += R[bid]
                                 R[bid] = zero
 
-                        # Period accumulator: realized gain/loss
-                        if amount_target is not None:
-                            per_realized[key] += amount_target - sell_cb_target
-                        continue  # skip generic 3-pool/accumulator below
+                        continue  # skip the generic 3-pool rules below
 
-                # ── 3-pool per-broker + period accumulators for non-SELL txs ──
+                # ── 3-pool per-broker for non-SELL txs ──
                 if amount_target is None:
                     continue
 
@@ -1095,22 +1104,12 @@ class DailyStateBuilder:
                     # flip its sign to match the original tx.amount instead of re-querying.
                     signed_amount_target = amount_target if tx.amount >= 0 else -amount_target
                     R[bid] += signed_amount_target
-                    # Period accumulator
-                    if tx.asset_id:
-                        per_income[(tx.asset_id, tx.broker_id)] += signed_amount_target
-                    else:
-                        unalloc_income[tx.broker_id] += signed_amount_target
 
                 elif tx.type in (TransactionType.FEE, TransactionType.TAX):
                     R[bid] -= amount_target
                     if R[bid] < zero:
                         K[bid] += R[bid]
                         R[bid] = zero
-                    # Period accumulator
-                    if tx.asset_id:
-                        per_fees_taxes[(tx.asset_id, tx.broker_id)] += amount_target
-                    else:
-                        unalloc_fees[tx.broker_id] += amount_target
 
                 elif tx.type == TransactionType.BUY and tx.asset_id:
                     from_r = min(amount_target, max(R[bid], zero))
@@ -1330,11 +1329,7 @@ class DailyStateBuilder:
             daily_states=states,
             position_states_start=position_states_start,
             position_states_end=position_states_end,
-            per_realized=dict(per_realized),
-            per_income=dict(per_income),
-            per_fees_taxes=dict(per_fees_taxes),
-            unalloc_income=dict(unalloc_income),
-            unalloc_fees=dict(unalloc_fees),
+            native_cash=self.native_cash,
             end_state=EngineEndState(
                 cumulative_cash=cumulative_cash,
                 cumulative_ecf=cumulative_ecf,
@@ -1491,6 +1486,33 @@ class DailyStateBuilder:
         if converted is None:
             self._missing_fx[f"{from_ccy}/{self.target_currency}"].add(dt)
         return converted
+
+    def _revalue_foreign_cash(self, day: date_type, cash_by_broker: dict[int, Decimal], capital_pool: dict[int, Decimal], returns_pool: dict[int, Decimal]) -> list[Decimal]:
+        """Revalue every broker's foreign cash at the rate of ``day``; return each exchange result booked.
+
+        The replay holds each cash movement at the rate of its own date. The native cash holds
+        the balances in their own currencies, valued at the rate of ``day``: the difference is
+        the exchange result on cash. It goes to the broker's cash and returns pool; a loss larger
+        than the returns comes out of capital, as a FEE does. The capital baseline never moves:
+        an exchange result is a result, not a contribution.
+        """
+        zero = Decimal("0")
+        values = self.native_cash.value_at(day)
+        booked: list[Decimal] = []
+        for broker_id in sorted(self.native_cash.foreign_cash_broker_ids):
+            value = values.get(broker_id)
+            if value is None:
+                continue
+            exchange_result = value - cash_by_broker.get(broker_id, zero)
+            if exchange_result == 0:
+                continue
+            cash_by_broker[broker_id] = cash_by_broker.get(broker_id, zero) + exchange_result
+            returns_pool[broker_id] = returns_pool.get(broker_id, zero) + exchange_result
+            if returns_pool[broker_id] < zero:
+                capital_pool[broker_id] = capital_pool.get(broker_id, zero) + returns_pool[broker_id]
+                returns_pool[broker_id] = zero
+            booked.append(exchange_result)
+        return booked
 
     def _market_value_for(
         self,
@@ -1830,12 +1852,10 @@ class PortfolioCalculationResult:
     # Position snapshots for exposure + contribution views
     position_states_start: list[DailyPositionState] = field(default_factory=list)
     position_states_end: list[DailyPositionState] = field(default_factory=list)
-    # Period accumulators for contribution (populated during frame loop)
-    per_realized: dict[tuple[int, int], Decimal] = field(default_factory=dict)
-    per_income: dict[tuple[int, int], Decimal] = field(default_factory=dict)
-    per_fees_taxes: dict[tuple[int, int], Decimal] = field(default_factory=dict)
-    unalloc_income: dict[int, Decimal] = field(default_factory=dict)
-    unalloc_fees: dict[int, Decimal] = field(default_factory=dict)
+    # Every broker's cash in its own currencies (financial_math.native_cash): balances, values
+    # and the period flows by type and position. None when calculate() returns early, with
+    # no broker or no transaction in scope.
+    native_cash: NativeCash | None = None
     # End state for cache forward extension
     end_state: EngineEndState | None = None
     # Metadata
@@ -2491,7 +2511,7 @@ class PortfolioCalculationEngine:
         # F2 — ownership scaling: an OWNER's share scales the broker's contribution
         # (0% is valid and contributes nothing). EDITOR/VIEWER rows always carry
         # share 0 by schema rule but must still see full data → scale 1 for them.
-        broker_shares = {a.broker_id: (a.share_percentage if a.share_percentage is not None else Decimal("1")) if a.role == UserRole.OWNER else Decimal("1") for a in accesses}
+        broker_shares = {a.broker_id: effective_share(a.role, a.share_percentage) for a in accesses}
 
         # ── 3. Load ALL transactions for scope brokers ──
         tx_stmt = select(Transaction).where(Transaction.broker_id.in_(scope_broker_ids)).order_by(Transaction.date, Transaction.id)
@@ -2685,6 +2705,15 @@ class PortfolioCalculationEngine:
                 if series.has_observations:
                     mark_series[aid] = series
 
+        # ── 10c. Native cash of every broker: balances in their own currencies, valued at each
+        # day's rate, and the period flows; each movement at its broker's share ──
+        native_cash = await compute_native_cash(
+            self.db,
+            [movement for movement in (cash_movement_from_transaction(ctxn.tx, share=ctxn.share) for ctxn in classification.classified if ctxn.tx.date <= actual_to) if movement is not None],
+            report_currency=target_currency,
+            rates_until=actual_to,
+        )
+
         # ── 11. Build daily states ──
         builder = DailyStateBuilder(
             classified_txs=classification.classified,
@@ -2697,6 +2726,7 @@ class PortfolioCalculationEngine:
             asset_types=asset_types,
             asset_currencies=asset_currencies,
             average_costs=average_costs,
+            native_cash=native_cash,
             target_currency=target_currency,
             date_from=actual_from,
             date_to=actual_to,
