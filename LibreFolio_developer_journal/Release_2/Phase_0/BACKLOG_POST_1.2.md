@@ -148,11 +148,20 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   `html-asset-depth` segnala.
 - **M-3 · L'audit degli stamp come opzione di `translate-validate`** — basso; insieme alla scansione delle coppie
   mascherate (i tre script stanno fuori dal repo).
-- **M-4 · Lo spazio insecabile della tipografia francese** — medio; M, 11/10: solo se la decisione non entra nella 1.2.
-- **M-5 · La virgola decimale nelle formule** — basso; M, 11/10.
+- ✅ **M-4 · Lo spazio insecabile della tipografia francese** — nella 1.2, decisione del developer dell'11/10: un hook
+  di build, `mkdocs_src/hooks/fr_typography.py`, nel lotto 15 di M (checkpoint B). Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
+  sezione «6.1».
+- **M-5 · La virgola decimale nelle formule** — basso; M, 11/10. Per la 1.2 restano col punto (decisione del developer
+  dell'11/10).
 - **M-6 · Il `../` di `srcset` e `poster` in `html-attr-mismatch`** — minimo; docs-writer di M, 11/10.
 - **M-7 · La guida dei plugin BRIM e le favicon locali** — minimo; docs-writer di M, 11/10. Pagina EN: la prende chi
   riscrive la guida dei plugin BRIM.
+- **M-8 · Le etichette della UI nelle pagine di teoria** — basso; M, 11/10: il 5.4 ha lasciato fuori 248 righe nelle
+  pagine di teoria (scansione finale), dove il grassetto segna concetti e non citazioni. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
+  sezione «6.3».
+- **M-9 · Il confronto etichette–catalogo come controllo di `translate-validate`** — basso; M, 11/10: oggi è uno script
+  fuori dal repo (`b15_ui_label_scan.py`) che appaia per posizione grassetti e corsivi con il catalogo EN. Dettagli:
+  [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «6.3».
 
 ## Q · Documentazione e onboarding (21, 32)
 
