@@ -21,8 +21,8 @@ Una **acción** (o participación / capital) representa la propiedad parcial de 
 
 1. **Determinación de precios**: Las acciones se negocian en bolsas públicas durante el horario de mercado. El precio refleja la oferta y la demanda.
 2. **Dividendos**: Las empresas pueden distribuir una parte de los beneficios a los accionistas. Esto crea un [Evento de Dividendo](../asset-events/dividend.md) en la fecha ex-dividendo.
-3. **Plusvalías**: La diferencia entre el precio de compra y el de venta determina tu ganancia o pérdida. Consulte [Tributación](../../fundamentals/taxation.md).
-4. **Desdoblamientos**: Una empresa puede dividir sus acciones para mejorar la liquidez. Un desdoblamiento 4:1 significa que cada acción se convierte en 4 acciones al ¼ del precio. Consulte [Evento de desdoblamiento](../asset-events/split.md).
+3. **Plusvalías**: La diferencia entre el precio de compra y el de venta determina tu ganancia o pérdida. Consulta [Tributación](../../fundamentals/taxation.md).
+4. **Desdoblamientos**: Una empresa puede dividir sus acciones para mejorar la liquidez. Un desdoblamiento 4:1 significa que cada acción se convierte en 4 acciones al ¼ del precio. Consulta [Evento de desdoblamiento](../asset-events/split.md).
 
 ---
 

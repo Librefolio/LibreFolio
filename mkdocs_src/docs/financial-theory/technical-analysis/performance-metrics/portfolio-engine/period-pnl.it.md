@@ -85,14 +85,14 @@ $$
 
     | Giorno | Valore in USD | $r_{USD}$ | MV in EUR | $E^{\text{asset}}$ | $E^{\text{fx}}$ | $\mathrm{UGL}$ |
     |-----|-------|-----------|---------------|--------------------|-----------------|----------------|
-    | $t_0$ | 520 USD | 0.78 | 405.60 | $(520-500) \times 0.78 = 15.60$ | $500 \times 0.78 - 400 = -10.00$ | 5.60 |
-    | $t_1$ | 550 USD | 0.75 | 412.50 | $(550-500) \times 0.75 = 37.50$ | $500 \times 0.75 - 400 = -25.00$ | 12.50 |
+    | $t_0$ | 520 USD | 0,78 | 405,60 | $(520-500) \times 0.78 = 15.60$ | $500 \times 0.78 - 400 = -10.00$ | 5,60 |
+    | $t_1$ | 550 USD | 0,75 | 412,50 | $(550-500) \times 0.75 = 37.50$ | $500 \times 0.75 - 400 = -25.00$ | 12,50 |
 
     $$
     \Delta E^{\text{asset}} = +21.90, \qquad \Delta E^{\text{fx}} = -15.00, \qquad \Delta\mathrm{UGL} = +6.90 \text{ EUR}
     $$
 
-    L'ETF ha guadagnato in dollari (+€21.90), il dollaro ha perso terreno rispetto all'euro (−€15.00): insieme, i +€6.90 della variazione del P&L latente del periodo.
+    L'ETF ha guadagnato in dollari (+€21,90), il dollaro ha perso terreno rispetto all'euro (−€15,00): insieme, i +€6,90 della variazione del P&L latente del periodo.
 
 ---
 
@@ -118,9 +118,9 @@ Il rendimento annualizzato del periodo limita l'inizio della propria finestra al
 
 ## 📝 Esempio
 
-- NAV a $t_0$: €27,000
-- Incremento della baseline di capitale nel periodo: €1,000
-- NAV a $t_1$: €33,000
+- NAV a $t_0$: €27.000
+- Incremento della baseline di capitale nel periodo: €1.000
+- NAV a $t_1$: €33.000
 
 $$
 \mathrm{PnL} = 33\,000 - 27\,000 - 1\,000 = +5\,000 \text{ EUR}

@@ -43,11 +43,11 @@ Le tableau ci-dessous applique la formule à quelques formes de séries. Il s'ag
 
 | Série | Rendements $N$ | Jours calendaires $D$ | $f = 365N/D$ | $\sqrt{f}$ |
 |---|---|---|---|---|
-| Instrument coté uniquement les jours de bourse, année complète | 252 | 365 | 252.0 | 15.87 |
-| Instrument coté tous les jours (crypto), année complète | 365 | 365 | 365.0 | 19.10 |
-| Fonds valorisé hebdomadairement, année complète | 52 | 365 | 52.0 | 7.21 |
-| Instrument coté les jours de bourse, démarré en milieu de période | 126 | 183 | 251.3 | 15.85 |
-| Série quotidienne avec des lacunes | 180 | 365 | 180.0 | 13.42 |
+| Instrument coté uniquement les jours de bourse, année complète | 252 | 365 | 252,0 | 15,87 |
+| Instrument coté tous les jours (crypto), année complète | 365 | 365 | 365,0 | 19,10 |
+| Fonds valorisé hebdomadairement, année complète | 52 | 365 | 52,0 | 7,21 |
+| Instrument coté les jours de bourse, démarré en milieu de période | 126 | 183 | 251,3 | 15,85 |
+| Série quotidienne avec des lacunes | 180 | 365 | 180,0 | 13,42 |
 
 Quatre lectures découlent de ces lignes.
 

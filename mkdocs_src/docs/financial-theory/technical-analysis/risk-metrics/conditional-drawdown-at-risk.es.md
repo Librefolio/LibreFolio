@@ -36,12 +36,12 @@ La normalización anterior es $\alpha T$: una cantidad **fija** determinada por 
 
     | Observaciones $T$ | $\alpha T$ al 95% | ¿Número entero? | Diferencia relativa |
     |---|---|---|---|
-    | 740 | 37.00 | sí | **0.00000%** |
-    | 745 | 37.25 | no | $-0.03817\%$ |
-    | 750 | 37.50 | no | $-0.02528\%$ |
-    | 760 | 38.00 | sí | **0.00000%** |
-    | 800 | 40.00 | sí | **0.00000%** |
-    | 1000 | 50.00 | sí | **0.00000%** |
+    | 740 | 37,00 | sí | **0,00000%** |
+    | 745 | 37,25 | no | $-0.03817\%$ |
+    | 750 | 37,50 | no | $-0.02528\%$ |
+    | 760 | 38,00 | sí | **0,00000%** |
+    | 800 | 40,00 | sí | **0,00000%** |
+    | 1000 | 50,00 | sí | **0,00000%** |
 
     Las diferencias son fracciones de un porcentaje. Eso es precisamente lo que hace que el atajo sea duradero: una cifra equivocada por tres centésimas de un porcentaje parece un redondeo, no una fórmula diferente.
 

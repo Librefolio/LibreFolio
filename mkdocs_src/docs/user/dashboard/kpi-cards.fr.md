@@ -47,7 +47,7 @@ Combien d'argent vos investissements ont-ils généré sur la période sélectio
     \Delta = \text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}} \qquad \text{percentage} = \frac{\Delta}{\left|\text{Total P}\&\text{L}_{\text{yesterday}}\right|} \times 100
     $$
 
-    - **Le signe et la couleur suivent la variation**, même lorsque le P&L total est une perte : de `-558.10 €` à `-466.79 €`, la ligne affiche `+91.31 € (+16.36%)` — votre perte a diminué de 16.36 %.
+    - **Le signe et la couleur suivent la variation**, même lorsque le P&L total est une perte : de `-558.10 €` à `-466.79 €`, la ligne affiche `+91.31 € (+16.36%)` — votre perte a diminué de 16,36 %.
     - **Il faut deux jours d'historique** ; le pourcentage est omis lorsque le P&L total d'hier est exactement nul, et un jour sans variation affiche `0.00%`.
 
 ### 💱 Variation non réalisée par devise {: #unrealized-change-by-currency }

@@ -86,7 +86,7 @@ Dans LibreFolio, un événement `MATURITY_SETTLEMENT` est enregistré avec :
 - **Date** : La date d'échéance
 - **Montant** : La valeur nominale / le montant du principal restitué
 - **Devise** : La devise du règlement
-- **Notes** : Description optionnelle (ex: "Obligation du Trésor 10Y arrivée à échéance")
+- **Notes** : Description optionnelle (ex. : "Obligation du Trésor 10Y arrivée à échéance")
 
 Pour le fournisseur **Scheduled Investment**, la date d'échéance est configurée dans les paramètres du fournisseur. La formule de calcul du prix reconnaît qu'aucun cumul supplémentaire n'a lieu après l'échéance :
 

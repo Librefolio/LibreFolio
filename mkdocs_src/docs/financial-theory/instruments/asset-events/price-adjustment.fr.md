@@ -16,7 +16,7 @@ Ces événements sont particulièrement pertinents pour les actifs qui n'ont pas
 |----------|--------|-------------|
 | **Dépréciation** | Négatif | Réduction de la valeur comptable due à une dépréciation |
 | **Mark-to-market** | +/− | Réévaluation périodique pour refléter la juste valeur actuelle |
-| **Décote (Haircut)** | Négatif | Réduction forcée (ex: lors d'une restructuration de dette) |
+| **Décote (Haircut)** | Négatif | Réduction forcée (ex. : lors d'une restructuration de dette) |
 | **Réévaluation** | Positif | Révision à la hausse de la juste valeur après des événements positifs |
 | **Ajustement de la NAV** | +/− | Correction de la Valeur Liquidative pour les fonds fermés |
 
@@ -75,7 +75,7 @@ Dans LibreFolio, un événement `PRICE_ADJUSTMENT` est enregistré avec :
 - **Date** : La date d'effet de l'ajustement
 - **Montant** : Le changement algébrique (positif pour les augmentations, négatif pour les diminutions)
 - **Devise** : La devise de l'ajustement
-- **Notes** : Description de la raison (ex: "Dépréciation partielle due au défaut de l'émetteur")
+- **Notes** : Description de la raison (ex. : "Dépréciation partielle due au défaut de l'émetteur")
 
 Pour le fournisseur **Scheduled Investment**, les ajustements de prix font partie de la formule principale :
 

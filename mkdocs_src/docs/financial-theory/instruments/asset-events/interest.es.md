@@ -35,7 +35,7 @@ A diferencia de los dividendos (que dependen de los beneficios de la empresa), l
     Donde:
 
     - $P$ = principal (inversión inicial)
-    - $r$ = tasa de interés anual (ej. 0.04 para el 4%)
+    - $r$ = tasa de interés anual (ej. 0,04 para el 4%)
     - $t$ = tiempo en años
 
     Utilizado para: préstamos a corto plazo, algunas cuentas de ahorro, letras del tesoro.

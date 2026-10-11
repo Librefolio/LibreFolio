@@ -28,7 +28,7 @@ Scénarios courants :
 
 - Déplacement d'actions d'un courtier à un autre
 - Héritage d'actifs
-- Contributions en nature vers un type de compte différent (ex: ISA, 401k)
+- Contributions en nature vers un type de compte différent (ex. : ISA, 401k)
 
 !!! info "Préservation du prix de revient"
 

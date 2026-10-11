@@ -91,7 +91,7 @@ Per ogni valuta in cui acquisti, imposta:
     nessuna commissione. Viene pagata dalla tua liquidità e non viene
     investita. Per esempio, con $r = 0.19\%$, $f_{\min} = 1.50$,
     $f_{\max} = 18$ e nessuna parte fissa, un ordine di $500$ paga $1.50$, uno
-    di $2{,}000$ paga $3.80$, e uno di $20{,}000$ paga $18$.
+    di $2.000$ paga $3.80$, e uno di $20.000$ paga $18$.
 
 Ogni broker ha anche due impostazioni proprie:
 
