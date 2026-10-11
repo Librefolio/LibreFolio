@@ -96,6 +96,17 @@ class _PerformanceSourceContext:
     tx_by_id: dict[int, Transaction]
 
 
+@dataclass(frozen=True, slots=True)
+class _LotValueBasis:
+    """What a lot's value series needs, in the target currency."""
+
+    original_cost: Decimal
+    # A short's cumulative proceeds; 0 for a long, whose proceeds come from its closures.
+    short_proceeds: Decimal
+    last_date: date_type
+    proceeds_by_day: dict[date_type, Decimal]
+
+
 class _PriceHistoryLookup:
     def __init__(self, prices: Sequence[PriceHistory]) -> None:
         self._rows = sorted((row for row in prices if row.close is not None), key=lambda row: row.date)
@@ -129,6 +140,7 @@ class _FxRateResolver:
         self._seen: set[tuple[str, date_type]] = set()
         self._loaded: set[tuple[str, date_type]] = set()
         self._rates: dict[tuple[str, date_type], Decimal] = {}
+        self._missing: dict[str, set[date_type]] = defaultdict(set)
 
     def need(self, currency: str | None, as_of_date: date_type) -> None:
         if not currency or currency == self.target_currency:
@@ -160,8 +172,13 @@ class _FxRateResolver:
             return amount
         rate = self._rates.get((currency, as_of_date))
         if rate is None:
+            self._missing[f"{currency}/{self.target_currency}"].add(as_of_date)
             return None
         return amount * rate
+
+    def missing_pairs(self) -> list[WACMissingPairInfo]:
+        """Every conversion asked for and not made, one entry per pair, as the data-quality report lists them."""
+        return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(self._missing.items())]
 
 
 # Key of the average-cost line that pools every broker in scope (the cumulative WAC line).
@@ -374,7 +391,10 @@ class LotsAnalysisService:
                     message_params={"asset_id": asset_id, "date_from": computed_from.isoformat(), "date_to": actual_to.isoformat()},
                 )
             )
-        active_price_dates = history_dates if self._needs_market_series(normalized_analyses) else [actual_to]
+        # The histories read every day's price, the summary only the last one: value no other day, so the
+        # report never holds the gap of a day nobody reads.
+        daily_series = any(analysis in normalized_analyses for analysis in (LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.PRICE_HISTORY, LotAnalysisType.PERFORMANCE_HISTORY))
+        active_price_dates = history_dates if daily_series else ([actual_to] if LotAnalysisType.LOT_SUMMARY in normalized_analyses else [])
         quote_base_quantity = normalize_quote_base_quantity(asset.quote_base_quantity)
         # The unified price resolver is the SINGLE valuation brain for this asset: fed the
         # asset-system price rows AND every observed trade (BUY/SELL + priced ADJUSTMENT carryover)
@@ -385,7 +405,8 @@ class LotsAnalysisService:
         # with the portfolio engine — no legacy market-only map. Each native mark is converted to
         # the target currency at *its own valuation date* (per-day FX, never frozen at the
         # observation date); ``None`` marks a day the resolver has no observation for (genuine
-        # MISSING), where downstream falls back to opening cost.
+        # MISSING), or whose price cannot be converted: that day is not valued, never at the native
+        # price. Downstream only the estimated-at-cost mode (no price at all) falls back to cost.
         price_series = build_asset_price_series(
             price_rows=[(row.date, row.close, row.currency) for row in prices],
             transactions=transactions,
@@ -401,9 +422,9 @@ class LotsAnalysisService:
                 market_prices[current_date] = None
                 continue
             converted = fx_resolver.convert(mark.unit_price, mark.currency, current_date)
-            value = converted if converted is not None else mark.unit_price
-            market_prices[current_date] = value
-            estimated_market_prices[current_date] = (value, mark.estimated)
+            market_prices[current_date] = converted
+            if converted is not None:
+                estimated_market_prices[current_date] = (converted, mark.estimated)
         average_cost_lines: dict[int | str, AverageCost] = {}
         if LotAnalysisType.BROKER_WAC_HISTORY in normalized_analyses or LotAnalysisType.CUMULATIVE_WAC_HISTORY in normalized_analyses:
             average_cost_lines = await self._compute_average_cost_lines(
@@ -412,7 +433,6 @@ class LotsAnalysisService:
                 asset_currency=asset.currency,
                 target_currency=target_currency,
             )
-            await self._report_average_cost_gaps(data_quality, average_cost_lines, target_currency, asset)
 
         lots = None
         if LotAnalysisType.LOT_SUMMARY in normalized_analyses:
@@ -436,13 +456,16 @@ class LotsAnalysisService:
         if LotAnalysisType.GANTT_TOPOLOGY in normalized_analyses:
             gantt_segments = self._build_gantt_segments(engine_result.fragment_intervals, selected_ids, lots_by_id, fx_resolver)
 
-        lot_events = self._build_lot_event_rows(
-            engine_result=engine_result,
-            selected_ids=selected_ids,
-            tx_by_id=tx_by_id,
-            fx_resolver=fx_resolver,
-            lots_by_id=lots_by_id,
-        )
+        # Event rows are built only when returned: the report holds no gap of a figure nobody asked for.
+        lot_events: list[LotTimelineEventSchema] = []
+        if LotAnalysisType.CUSTODY_HISTORY in normalized_analyses or LotAnalysisType.EVENT_HISTORY in normalized_analyses:
+            lot_events = self._build_lot_event_rows(
+                engine_result=engine_result,
+                selected_ids=selected_ids,
+                tx_by_id=tx_by_id,
+                fx_resolver=fx_resolver,
+                lots_by_id=lots_by_id,
+            )
 
         custody_history = None
         if LotAnalysisType.CUSTODY_HISTORY in normalized_analyses:
@@ -552,12 +575,16 @@ class LotsAnalysisService:
         if LotAnalysisType.LOT_SUMMARY in normalized_analyses and engine_result.economic_allocation_groups:
             economic_allocation_groups = self._map_economic_groups(engine_result.economic_allocation_groups)
 
+        # Every builder has converted what it needed: report, once, what could not be converted or costed.
+        conversion_gaps = fx_resolver.missing_pairs()
+        await self._report_gaps(data_quality, average_cost_lines, conversion_gaps, target_currency, asset)
+
         return LotsAnalysisResponse(
             asset_id=asset_id,
             target_currency=target_currency,
             quote_base_quantity=quote_base_quantity,
-            # A gap in the average-cost lines (a missing rate or cost basis) is isolable: DEGRADED.
-            calculation_status=("DEGRADED" if engine_result.analysis_status == "COMPLETE" and any(line.has_missing_report_fx or line.unknown_cost_movement_ids for line in average_cost_lines.values()) else engine_result.analysis_status),
+            # A gap (a missing rate or cost basis) is isolable: DEGRADED.
+            calculation_status=("DEGRADED" if engine_result.analysis_status == "COMPLETE" and (conversion_gaps or any(line.has_missing_report_fx or line.unknown_cost_movement_ids for line in average_cost_lines.values())) else engine_result.analysis_status),
             calculation_metadata=LotsAnalysisMetadata(
                 broker_ids=scope_broker_ids,
                 selected_lot_ids=selected_ids if selected_lot_ids is not None else None,
@@ -848,17 +875,27 @@ class LotsAnalysisService:
         positions.append(CostPosition(key=_ALL_BROKERS, asset_currency=asset_currency, movements=tuple(all_movements)))
         return await compute_average_costs(self.db, positions, report_currency=target_currency, asset_leg=False)
 
-    async def _report_average_cost_gaps(self, data_quality: DataQualityReport, lines: dict[int | str, AverageCost], target_currency: str, asset: Asset) -> None:
-        """Put what the average-cost lines could not compute in the data quality, as the portfolio banner does.
+    async def _report_gaps(
+        self,
+        data_quality: DataQualityReport,
+        lines: dict[int | str, AverageCost],
+        conversion_gaps: Sequence[WACMissingPairInfo],
+        target_currency: str,
+        asset: Asset,
+    ) -> None:
+        """Put what the analysis could not compute in the data quality, as the portfolio banner does.
 
-        Conversions that could not be made become ``missing_fx_pairs`` (pair and dates) and their FX
-        issues; an acquisition without a known cost becomes a ``MISSING_COST_BASIS`` issue.
+        Conversions that could not be made — by the average-cost lines and by every other figure of the
+        analysis — become ``missing_fx_pairs`` (pair and dates, merged) and their FX issues; an
+        acquisition without a known cost becomes a ``MISSING_COST_BASIS`` issue.
         """
         dates_by_pair: dict[str, set[date_type]] = defaultdict(set)
         for line in lines.values():
             for missing in line.missing:
                 if missing.leg == "report":
                     dates_by_pair[missing.pair].update(missing.dates)
+        for gap in conversion_gaps:
+            dates_by_pair[gap.pair].update(gap.dates)
         unknown_cost = any(line.unknown_cost_movement_ids for line in lines.values())
         if not dates_by_pair and not unknown_cost:
             return
@@ -946,11 +983,17 @@ class LotsAnalysisService:
                 continue
             tx_type = str(getattr(tx.type, "value", tx.type))
             if tx_type == "BUY":
-                cash_flows.append(CashFlowInput(date=tx.date, amount=-self._converted_external_amount(abs(tx.amount), tx.currency or asset_currency, tx.date, fx_resolver)))
+                buy_amount = fx_resolver.convert(abs(tx.amount), tx.currency or asset_currency, tx.date)
+                if buy_amount is None:
+                    invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)
+                else:
+                    cash_flows.append(CashFlowInput(date=tx.date, amount=-buy_amount))
                 continue
-            if tx_type == "ADJUSTMENT" and tx.quantity > 0:
+            if tx_type == "ADJUSTMENT" and tx.quantity > 0 and self._adjustment_native_cost(tx, asset_currency) is not None:
                 adjustment_cost = self._adjustment_cash_flow_cost(tx=tx, asset_currency=asset_currency, fx_resolver=fx_resolver)
-                if adjustment_cost not in (None, Decimal("0")):
+                if adjustment_cost is None:
+                    invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)
+                elif adjustment_cost != Decimal("0"):
                     cash_flows.append(CashFlowInput(date=tx.date, amount=-adjustment_cost))
 
         for closure in sorted(context.engine_result.closures, key=lambda row: (row.close_date, row.transaction_id, row.lot_id)):
@@ -960,7 +1003,10 @@ class LotsAnalysisService:
             tx = context.tx_by_id.get(closure.transaction_id)
             if lot is None or tx is None or lot.direction != "LONG" or tx.broker_id not in scope_set:
                 continue
-            proceeds = fx_resolver.convert(closure.proceeds, lot.currency or asset_currency, closure.close_date) or closure.proceeds
+            proceeds = fx_resolver.convert(closure.proceeds, lot.currency or asset_currency, closure.close_date)
+            if proceeds is None:
+                invalid_external_flow_from = closure.close_date if invalid_external_flow_from is None else min(invalid_external_flow_from, closure.close_date)
+                continue
             cash_flows.append(CashFlowInput(date=closure.close_date, amount=proceeds))
 
         seen_external_transfers: set[tuple[int, str]] = set()
@@ -1269,40 +1315,45 @@ class LotsAnalysisService:
                 for fragment in engine_result.active_fragments(lot_id=lot_id)
             ]
             converted_proceeds = self._converted_cumulative_proceeds(lot, closures_by_lot.get(lot_id, []), fx_resolver)
+            known_proceeds = self._known_cumulative_proceeds(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date)
             opening_unit_price = fx_resolver.convert(lot.opening_unit_price, lot.currency, lot.opening_date)
             raw_reference_price, raw_reference_currency, reference_date, reference_price_source = self._opening_reference_price(lot, price_lookup, quote_base_quantity)
             reference_unit_price = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
             realized_pnl = self._converted_realized_pnl(lot, closures_by_lot.get(lot_id, []), fx_resolver)
+            known_realized_pnl = self._known_realized_pnl(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             asset_income = income_by_lot.get(lot_id, Decimal("0"))
-            opening_value = converted_original_cost if converted_original_cost is not None else lot.original_cost
+            # Every derived figure reads converted amounts only: a missing rate leaves it unknown,
+            # never computed from the native cost, proceeds or realized P&L.
+            opening_value = converted_original_cost
             open_value = total_value = pnl = relative_return = None
             market_pnl: Decimal | None = None
             value_source: str | None = None
             if latest_market_price is not None:
                 value_source = "MARKET_PRICE"
                 open_value = compute_holding_value(lot.open_quantity, latest_market_price, quote_base_quantity)
-                proceeds = converted_proceeds or Decimal("0")
-                if lot.direction == "LONG":
-                    total_value = open_value + proceeds
-                    pnl = total_value - (converted_original_cost or Decimal("0"))
-                else:
-                    total_value = proceeds - open_value
-                    pnl = total_value
-                market_pnl = pnl - realized_pnl
+                if known_proceeds is not None:
+                    if lot.direction == "LONG":
+                        total_value = open_value + known_proceeds
+                        pnl = total_value - opening_value if opening_value is not None else None
+                    else:
+                        total_value = known_proceeds - open_value
+                        pnl = total_value
+                if pnl is not None and known_realized_pnl is not None:
+                    market_pnl = pnl - known_realized_pnl
                 if reference_unit_price not in (None, Decimal("0")):
                     relative_return = (latest_market_price / reference_unit_price) - Decimal("1")
-            elif estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0"):
+            elif estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0") and opening_value is not None:
                 # No current price: value the open portion at cost. Market P&L is 0 until a real price exists.
                 value_source = "ESTIMATED_AT_COST"
-                open_value = (opening_value or Decimal("0")) * lot.open_quantity / lot.original_quantity
-                proceeds = converted_proceeds or Decimal("0")
-                total_value = open_value + proceeds
-                pnl = total_value - (converted_original_cost or Decimal("0"))
+                open_value = opening_value * lot.open_quantity / lot.original_quantity
                 market_pnl = Decimal("0")
+                if known_proceeds is not None:
+                    total_value = open_value + known_proceeds
+                    pnl = total_value - opening_value
             total_pnl = None
-            if market_pnl is not None:
-                total_pnl = market_pnl + realized_pnl + asset_income
+            if market_pnl is not None and known_realized_pnl is not None:
+                total_pnl = market_pnl + known_realized_pnl + asset_income
             cash_yield = None
             total_return = None
             if opening_value is not None and opening_value > Decimal("0"):
@@ -1373,6 +1424,7 @@ class LotsAnalysisService:
         return out
 
     def _converted_realized_pnl(self, lot: FifoLot, closures: Sequence[LotClosure], fx_resolver: _FxRateResolver) -> Decimal:
+        # Native fallback kept only for the required ``realized_pnl`` field, until B3b makes it optional.
         if not closures:
             return Decimal("0")
         total = Decimal("0")
@@ -1381,7 +1433,18 @@ class LotsAnalysisService:
             total += converted if converted is not None else closure.realized_pnl
         return total
 
+    def _known_realized_pnl(self, lot: FifoLot, closures: Sequence[LotClosure], fx_resolver: _FxRateResolver) -> Decimal | None:
+        """Realized P&L in the target currency; None when a closure has no rate."""
+        total = Decimal("0")
+        for closure in closures:
+            converted = fx_resolver.convert(closure.realized_pnl, lot.currency, closure.close_date)
+            if converted is None:
+                return None
+            total += converted
+        return total
+
     def _converted_cumulative_proceeds(self, lot: FifoLot, closures: Sequence[LotClosure], fx_resolver: _FxRateResolver) -> Decimal:
+        # Native fallback kept only for the required ``cumulative_proceeds`` field, until B3b makes it optional.
         if lot.direction == "SHORT":
             converted = fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date)
             return converted if converted is not None else lot.cumulative_proceeds
@@ -1389,6 +1452,18 @@ class LotsAnalysisService:
         for closure in closures:
             converted = fx_resolver.convert(closure.proceeds, lot.currency, closure.close_date)
             total += converted if converted is not None else closure.proceeds
+        return total
+
+    def _known_cumulative_proceeds(self, lot: FifoLot, closures: Sequence[LotClosure], fx_resolver: _FxRateResolver) -> Decimal | None:
+        """Cumulative proceeds in the target currency; None when they, or one closure's, have no rate."""
+        if lot.direction == "SHORT":
+            return fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date)
+        total = Decimal("0")
+        for closure in closures:
+            converted = fx_resolver.convert(closure.proceeds, lot.currency, closure.close_date)
+            if converted is None:
+                return None
+            total += converted
         return total
 
     def _build_gantt_segments(
@@ -1641,49 +1716,28 @@ class LotsAnalysisService:
         points: list[LotValueHistoryPoint] = []
         for lot_id in selected_ids:
             lot = lots_by_id[lot_id]
-            last_date = self._lot_history_end_date(lot, closures_by_lot.get(lot_id, []), history_dates[-1], extend_closed=True)
-            proceeds_by_day = self._closure_proceeds_prefix(lot, closures_by_lot.get(lot_id, []), fx_resolver)
-            converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost
-            converted_short_proceeds = fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date) or lot.cumulative_proceeds
+            basis = self._lot_value_basis(lot, closures_by_lot.get(lot_id, []), history_dates[-1], fx_resolver)
+            if basis is None:
+                continue
             income_prefix = income_prefix_by_lot.get(lot_id, {})
             fees_prefix = fees_prefix_by_lot.get(lot_id, {})
             taxes_prefix = taxes_prefix_by_lot.get(lot_id, {})
-            estimated_unit_value = converted_original_cost / lot.original_quantity if lot.original_quantity != Decimal("0") else Decimal("0")
             fragments = fragments_by_lot.get(lot_id, [])
             for current_date in history_dates:
-                if current_date < lot.opening_date or current_date > last_date:
+                if current_date < lot.opening_date or current_date > basis.last_date:
                     continue
-                market_price = market_prices.get(current_date)
-                if market_price is None:
-                    open_quantity = self._open_quantity_on_date(fragments, current_date)
-                    if open_quantity == Decimal("0"):
-                        open_value = Decimal("0")
-                        proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
-                        if lot.direction == "LONG":
-                            total_value = open_value + proceeds
-                            pnl = total_value - converted_original_cost
-                        else:
-                            proceeds = converted_short_proceeds
-                            total_value = proceeds - open_value
-                            pnl = total_value
-                    elif estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0"):
-                        open_value = open_quantity * estimated_unit_value
-                        proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
-                        total_value = open_value + proceeds
-                        pnl = total_value - converted_original_cost
-                    else:
-                        continue
-                else:
-                    open_value, proceeds, total_value, pnl = self._value_snapshot_on_date(
-                        lot=lot,
-                        fragments=fragments,
-                        proceeds_by_day=proceeds_by_day,
-                        market_price=market_price,
-                        current_date=current_date,
-                        converted_original_cost=converted_original_cost,
-                        converted_short_proceeds=converted_short_proceeds,
-                        quote_base_quantity=quote_base_quantity,
-                    )
+                snapshot = self._lot_snapshot_on_date(
+                    lot=lot,
+                    fragments=fragments,
+                    basis=basis,
+                    market_price=market_prices.get(current_date),
+                    current_date=current_date,
+                    estimated_mode=estimated_mode,
+                    quote_base_quantity=quote_base_quantity,
+                )
+                if snapshot is None:
+                    continue
+                open_value, proceeds, total_value, pnl = snapshot
                 income = self._prefix_value_on_date(income_prefix, current_date)
                 allocated_fees = self._prefix_value_on_date(fees_prefix, current_date)
                 allocated_taxes = self._prefix_value_on_date(taxes_prefix, current_date)
@@ -1694,7 +1748,7 @@ class LotsAnalysisService:
                         open_value=open_value,
                         proceeds=proceeds,
                         total_value=total_value,
-                        original_cost=converted_original_cost,
+                        original_cost=basis.original_cost,
                         pnl=pnl,
                         income=income,
                         allocated_fees=allocated_fees,
@@ -1726,57 +1780,40 @@ class LotsAnalysisService:
             lot = lots_by_id[lot_id]
             raw_reference_price, raw_reference_currency, reference_date, reference_price_source = self._opening_reference_price(lot, price_lookup, quote_base_quantity)
             converted_reference = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
-            last_date = self._lot_history_end_date(lot, closures_by_lot.get(lot_id, []), history_dates[-1], extend_closed=True)
-            proceeds_by_day = self._closure_proceeds_prefix(lot, closures_by_lot.get(lot_id, []), fx_resolver)
-            converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost
-            converted_short_proceeds = fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date) or lot.cumulative_proceeds
+            basis = self._lot_value_basis(lot, closures_by_lot.get(lot_id, []), history_dates[-1], fx_resolver)
+            if basis is None:
+                continue
             income_prefix = income_prefix_by_lot.get(lot_id, {})
             fees_prefix = fees_prefix_by_lot.get(lot_id, {})
             taxes_prefix = taxes_prefix_by_lot.get(lot_id, {})
-            estimated_unit_value = converted_original_cost / lot.original_quantity if lot.original_quantity != Decimal("0") else Decimal("0")
             fragments = fragments_by_lot.get(lot_id, [])
             for current_date in history_dates:
-                if current_date < lot.opening_date or current_date > last_date:
+                if current_date < lot.opening_date or current_date > basis.last_date:
                     continue
                 market_price = market_prices.get(current_date)
+                snapshot = self._lot_snapshot_on_date(
+                    lot=lot,
+                    fragments=fragments,
+                    basis=basis,
+                    market_price=market_price,
+                    current_date=current_date,
+                    estimated_mode=estimated_mode,
+                    quote_base_quantity=quote_base_quantity,
+                )
+                if snapshot is None:
+                    continue
+                _open_value, _proceeds, total_value, _pnl = snapshot
                 relative_return = None
-                if market_price is None:
-                    open_quantity = self._open_quantity_on_date(fragments, current_date)
-                    if open_quantity == Decimal("0"):
-                        open_value = Decimal("0")
-                        proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
-                        if lot.direction == "LONG":
-                            total_value = open_value + proceeds
-                        else:
-                            proceeds = converted_short_proceeds
-                            total_value = proceeds - open_value
-                    elif estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0"):
-                        open_value = open_quantity * estimated_unit_value
-                        proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
-                        total_value = open_value + proceeds
-                    else:
-                        continue
-                else:
-                    open_value, proceeds, total_value, _pnl = self._value_snapshot_on_date(
-                        lot=lot,
-                        fragments=fragments,
-                        proceeds_by_day=proceeds_by_day,
-                        market_price=market_price,
-                        current_date=current_date,
-                        converted_original_cost=converted_original_cost,
-                        converted_short_proceeds=converted_short_proceeds,
-                        quote_base_quantity=quote_base_quantity,
-                    )
-                    if converted_reference not in (None, Decimal("0")):
-                        relative_return = (market_price / converted_reference) - Decimal("1")
+                if market_price is not None and converted_reference not in (None, Decimal("0")):
+                    relative_return = (market_price / converted_reference) - Decimal("1")
                 income = self._prefix_value_on_date(income_prefix, current_date)
                 allocated_fees = self._prefix_value_on_date(fees_prefix, current_date)
                 allocated_taxes = self._prefix_value_on_date(taxes_prefix, current_date)
                 total_return = None
                 net_total_return = None
-                if converted_original_cost != Decimal("0"):
-                    total_return = ((total_value + income) / converted_original_cost) - Decimal("1")
-                    net_total_return = ((total_value + income - allocated_fees - allocated_taxes) / converted_original_cost) - Decimal("1")
+                if basis.original_cost != Decimal("0"):
+                    total_return = ((total_value + income) / basis.original_cost) - Decimal("1")
+                    net_total_return = ((total_value + income - allocated_fees - allocated_taxes) / basis.original_cost) - Decimal("1")
                 points.append(
                     LotReturnHistoryPoint(
                         lot_id=lot_id,
@@ -1915,18 +1952,85 @@ class LotsAnalysisService:
             return lot.opening_date
         return max(closure.close_date for closure in closures)
 
+    def _lot_value_basis(self, lot: FifoLot, closures: Sequence[LotClosure], history_end: date_type, fx_resolver: _FxRateResolver) -> _LotValueBasis | None:
+        """The converted cost, proceeds and last date of a lot's value series; None when the cost has no rate.
+
+        Without its cost (or, for a short, its proceeds) in the target currency the lot gets no point: its P&L
+        would mix currencies. A long lot's series stops the day before the first closure whose proceeds have
+        no rate. Same rule as the average-cost lines: a point that cannot be computed is omitted.
+        """
+        original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date)
+        short_proceeds = fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date) if lot.direction == "SHORT" else Decimal("0")
+        if original_cost is None or short_proceeds is None:
+            return None
+        last_date = self._lot_history_end_date(lot, closures, history_end, extend_closed=True)
+        proceeds_by_day, proceeds_unknown_from = self._closure_proceeds_prefix(lot, closures, fx_resolver)
+        if lot.direction == "LONG" and proceeds_unknown_from is not None:
+            last_date = min(last_date, proceeds_unknown_from - timedelta(days=1))
+        return _LotValueBasis(original_cost=original_cost, short_proceeds=short_proceeds, last_date=last_date, proceeds_by_day=proceeds_by_day)
+
+    def _lot_snapshot_on_date(
+        self,
+        *,
+        lot: FifoLot,
+        fragments: Sequence[FragmentInterval],
+        basis: _LotValueBasis,
+        market_price: Decimal | None,
+        current_date: date_type,
+        estimated_mode: bool,
+        quote_base_quantity: int,
+    ) -> tuple[Decimal, Decimal, Decimal, Decimal] | None:
+        """(open value, proceeds, total value, P&L) of a lot on a day; None when that day cannot be valued.
+
+        With a market price, the open quantity at that price. Without one, a fully closed lot is worth its
+        proceeds and an asset with no price at all is estimated at cost; any other day is not valued.
+        """
+        if market_price is not None:
+            return self._value_snapshot_on_date(
+                lot=lot,
+                fragments=fragments,
+                proceeds_by_day=basis.proceeds_by_day,
+                market_price=market_price,
+                current_date=current_date,
+                converted_original_cost=basis.original_cost,
+                converted_short_proceeds=basis.short_proceeds,
+                quote_base_quantity=quote_base_quantity,
+            )
+        open_quantity = self._open_quantity_on_date(fragments, current_date)
+        if open_quantity == Decimal("0"):
+            open_value = Decimal("0")
+            if lot.direction == "LONG":
+                proceeds = self._prefix_value_on_date(basis.proceeds_by_day, current_date)
+                total_value = open_value + proceeds
+                return open_value, proceeds, total_value, total_value - basis.original_cost
+            total_value = basis.short_proceeds - open_value
+            return open_value, basis.short_proceeds, total_value, total_value
+        if estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0"):
+            open_value = open_quantity * (basis.original_cost / lot.original_quantity)
+            proceeds = self._prefix_value_on_date(basis.proceeds_by_day, current_date)
+            total_value = open_value + proceeds
+            return open_value, proceeds, total_value, total_value - basis.original_cost
+        return None
+
     def _closure_proceeds_prefix(
         self,
         lot: FifoLot,
         closures: Sequence[LotClosure],
         fx_resolver: _FxRateResolver,
-    ) -> dict[date_type, Decimal]:
+    ) -> tuple[dict[date_type, Decimal], date_type | None]:
+        """Cumulative converted proceeds by close date, and the first close date whose proceeds have no rate.
+
+        From that date the lot's value is unknown: the prefix stops there instead of adding unconverted money.
+        """
         running = Decimal("0")
         out: dict[date_type, Decimal] = {}
         for closure in sorted(closures, key=lambda item: (item.close_date, item.transaction_id, item.lot_id)):
-            running += fx_resolver.convert(closure.proceeds, lot.currency, closure.close_date) or closure.proceeds
+            converted = fx_resolver.convert(closure.proceeds, lot.currency, closure.close_date)
+            if converted is None:
+                return out, closure.close_date
+            running += converted
             out[closure.close_date] = running
-        return out
+        return out, None
 
     def _prefix_value_on_date(self, values_by_date: dict[date_type, Decimal], query_date: date_type) -> Decimal:
         if not values_by_date:
@@ -1954,7 +2058,17 @@ class LotsAnalysisService:
         as_of_date: date_type,
         fx_resolver: _FxRateResolver,
     ) -> Decimal:
+        # Native fallback kept for the economic events and the trade weights only, until B3b withholds
+        # them per lot; the missing rate is already recorded by the resolver and reported.
         return fx_resolver.convert(amount, currency, as_of_date) or amount
+
+    def _adjustment_native_cost(self, tx: Transaction, asset_currency: str) -> tuple[Decimal, str] | None:
+        """The money an ADJUSTMENT-in brought from outside, in its own currency; None for a quantity-only correction."""
+        if tx.cost_basis_override not in (None, Decimal("0")):
+            return tx.quantity * tx.cost_basis_override, tx.cost_basis_currency or asset_currency
+        if tx.amount != Decimal("0"):
+            return abs(tx.amount), tx.currency or asset_currency
+        return None
 
     def _adjustment_cash_flow_cost(
         self,
@@ -1963,12 +2077,16 @@ class LotsAnalysisService:
         asset_currency: str,
         fx_resolver: _FxRateResolver,
     ) -> Decimal | None:
-        if tx.cost_basis_override not in (None, Decimal("0")):
-            total_cost = tx.quantity * tx.cost_basis_override
-            return self._converted_external_amount(total_cost, tx.cost_basis_currency or asset_currency, tx.date, fx_resolver)
-        if tx.amount != Decimal("0"):
-            return self._converted_external_amount(abs(tx.amount), tx.currency or asset_currency, tx.date, fx_resolver)
-        return None
+        """That money in the target currency.
+
+        None when there is no money, or when its rate is missing: callers tell the two apart with
+        ``_adjustment_native_cost``.
+        """
+        native_cost = self._adjustment_native_cost(tx, asset_currency)
+        if native_cost is None:
+            return None
+        amount, currency = native_cost
+        return fx_resolver.convert(amount, currency, tx.date)
 
     def _trim_dates(self, rows: Sequence, start_date: date_type, end_date: date_type) -> list:
         return [row for row in rows if start_date <= row.date <= end_date]
