@@ -26,8 +26,10 @@ import signal
 import subprocess
 import sys
 import time
+from html import unescape
 from pathlib import Path
 from typing import Optional
+from urllib.parse import unquote, urlsplit
 
 try:
     import argcomplete
@@ -776,48 +778,72 @@ def _check_admonition_empty_lines():
         print()
 
 
-def _check_image_paths_in_built_site():
-    """Check that all <img src> paths in built HTML resolve to existing files.
+_ASSET_TAG = re.compile(r"<(img|source|video|audio|a)\b([^>]*)>", re.IGNORECASE)
+_ASSET_ATTR = re.compile(r"""(?<![\w-])(src|srcset|poster|href)\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.IGNORECASE)
+_FILE_NAME = re.compile(r"\.[A-Za-z0-9]{1,5}$")
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 
-    Scans the built site for relative image paths under static/icons/ and
-    verifies each one exists on disk.  Prints a visible warning if broken.
+
+def _relative_asset_urls(page_html: str):
+    """Yield (tag, attribute, url) for each relative URL of a file in a built page.
+
+    `<img>`/`<source>` `src`/`srcset`, `<video>` `src`/`poster`, `<audio>` `src`, and `<a href>` to a file that is not
+    a page. External, root-absolute, fragment-only and `data:` URLs are left out, and so are HTML comments.
     """
-    site_dir = PROJECT_ROOT / "mkdocs_src" / "site"
-    if not site_dir.exists():
-        return
-
-    img_re = re.compile(r'<img[^>]+src="([^"]+)"')
-    broken = []
-
-    for html_file in sorted(site_dir.rglob("*.html")):
-        html_dir = html_file.parent
-        content = html_file.read_text(errors="ignore")
-        for match in img_re.finditer(content):
-            src = match.group(1)
-            # Only check relative paths to static/icons
-            if src.startswith(("http://", "https://", "data:", "/")) or "static/icons" not in src:
+    for tag_m in _ASSET_TAG.finditer(_HTML_COMMENT.sub("", page_html)):
+        tag = tag_m.group(1).lower()
+        for attr_m in _ASSET_ATTR.finditer(tag_m.group(2)):
+            attr = attr_m.group(1).lower()
+            if (attr == "href") != (tag == "a"):
                 continue
-            resolved = (html_dir / src).resolve()
-            if not resolved.exists():
-                rel_html = html_file.relative_to(site_dir)
-                broken.append((str(rel_html), src))
+            value = unescape(attr_m.group(2) if attr_m.group(2) is not None else attr_m.group(3))
+            urls = [c.split()[0] for c in value.split(",") if c.strip()] if attr == "srcset" else [value]
+            for url in urls:
+                parts = urlsplit(url)
+                if parts.scheme or parts.netloc or url.startswith(("/", "#")) or not parts.path:
+                    continue
+                if tag == "a" and (not _FILE_NAME.search(parts.path) or parts.path.lower().endswith((".html", ".htm"))):
+                    continue
+                yield tag, attr, url
+
+
+def _check_asset_paths_in_built_site(site_dir: Path | None = None) -> list[tuple[str, str, str, str]]:
+    """Check that every relative URL of a file in the built site resolves to a file.
+
+    Each URL is resolved from its page's folder as a browser does (query and fragment dropped, percent-decoded); a
+    folder URL needs an index.html, and nothing may resolve outside the site. MkDocs rewrites Markdown images and
+    links, not raw HTML: a translated page is built one folder deeper (site/<lang>/...) and the language folders hold
+    no files, so a raw-HTML path copied from the English breaks there. Returns the broken URLs as
+    (page, tag, attribute, url) after printing them, or the count verified.
+    """
+    site_dir = (site_dir or PROJECT_ROOT / "mkdocs_src" / "site").resolve()
+    if not site_dir.is_dir():
+        return []
+
+    broken = []
+    checked = 0
+    for html_file in sorted(site_dir.rglob("*.html")):
+        page_html = html_file.read_text(encoding="utf-8", errors="ignore")
+        for tag, attr, url in _relative_asset_urls(page_html):
+            checked += 1
+            target = (html_file.parent / unquote(urlsplit(url).path)).resolve()
+            inside = target == site_dir or site_dir in target.parents
+            if not inside or not (target.is_file() or (target / "index.html").is_file()):
+                broken.append((html_file.relative_to(site_dir).as_posix(), tag, attr, url))
 
     if broken:
         print()
-        print(Colors.warning(
-            f"⚠️  {len(broken)} broken icon path(s) found in built site:"
-            ))
-        for html_path, img_src in broken[:20]:
-            print(f"  ❌ {html_path}")
-            print(f"     → {img_src}")
+        print(Colors.error(f"❌ {len(broken)} broken asset URL(s) in the built site:"))
+        for page, tag, attr, url in broken[:20]:
+            print(f"  ❌ {page}")
+            print(f"     <{tag} {attr}> → {url}")
         if len(broken) > 20:
             print(f"  ... and {len(broken) - 20} more")
-        print(Colors.info(
-            "  Fix: use Markdown image syntax ![](path) instead of raw <img> for path auto-adjustment."
-            ))
+        print(Colors.info("  Fix: a translated page is built one folder deeper (site/<lang>/...): a raw-HTML path copied from the" " English needs one more '../' (translate-validate reports such copies as html-asset-depth)."))
         print()
     else:
-        print(Colors.success("✅ All static icon paths in built site verified"))
+        print(Colors.success(f"✅ All {checked} relative asset URL(s) in the built site resolve"))
+    return broken
 
 
 def cmd_mkdocs_video(args):
@@ -856,8 +882,8 @@ def cmd_mkdocs_build(args):
     # into a failure. Measured before enabling: the tree builds strict-clean with
     # zero warnings, so this adds a gate without importing pre-existing debt.
     result = run_pipenv(["mkdocs", "build", "--strict", "-f", "mkdocs_src/mkdocs.yml"])
-    if result == 0:
-        _check_image_paths_in_built_site()
+    if result == 0 and _check_asset_paths_in_built_site():
+        return 1
     return result
 
 
