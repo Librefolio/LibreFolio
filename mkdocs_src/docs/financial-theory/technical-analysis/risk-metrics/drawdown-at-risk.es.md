@@ -66,7 +66,7 @@ Interprétela como *cuánto por debajo del pico lo suele encontrar un mal día*,
 
 !!! warning "Silenciosa más allá del umbral"
 
-    La medida se detiene en el límite de la cola de caídas. Si las caídas más allá de él son ligeramente más profundas o catastróficamente más profundas es información que no lleva, y ningún nivel de confianza la recupera. Use la [caída en riesgo condicional](conditional-drawdown-at-risk.md) para la profundidad.
+    La medida se detiene en el límite de la cola de caídas. Si las caídas más allá de él son ligeramente más profundas o catastróficamente más profundas es información que no lleva, y ningún nivel de confianza la recupera. Usa la [caída en riesgo condicional](conditional-drawdown-at-risk.md) para la profundidad.
 
 !!! warning "Las observaciones de caída no son independientes entre sí"
 

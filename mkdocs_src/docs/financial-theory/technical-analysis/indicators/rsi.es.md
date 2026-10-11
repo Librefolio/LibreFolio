@@ -52,7 +52,7 @@ La normalización $100 - 100/(1+RS)$ es una sigmoide monótonamente creciente qu
 
 ## 🎛️ Equivalente en Procesamiento de Señales — Ciclo de Trabajo / Indicador de Saturación
 
-Imagine dividir la señal de variación de precio $\Delta P[n]$ en sus componentes rectificados de media onda positiva y negativa, y luego aplicar un filtro de paso bajo a cada una. El RSI es la **relación entre la envolvente positiva y la envolvente total**, reescalada a $[0, 100]$.
+Imagina dividir la señal de variación de precio $\Delta P[n]$ en sus componentes rectificados de media onda positiva y negativa, y luego aplicar un filtro de paso bajo a cada una. El RSI es la **relación entre la envolvente positiva y la envolvente total**, reescalada a $[0, 100]$.
 
 En términos de sistemas de control, es un **detector de saturación**: cuando la salida del sistema (precio) se ha movido en una dirección durante demasiado tiempo, el RSI indica que el actuador (mercado) ha alcanzado su límite de saturación. Como cualquier oscilador en un bucle de retroalimentación, cuanto más lejos esté del equilibrio, más fuerte será la fuerza restauradora; lo que explica la propiedad de reversión a la media que explotan los traders.
 

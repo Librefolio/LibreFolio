@@ -53,7 +53,7 @@ $$
 
 ## 📊 Cuándo usar Ajustes de Precio
 
-Use `PRICE_ADJUSTMENT` cuando:
+Usa `PRICE_ADJUSTMENT` cuando:
 
 - ✅ El valor razonable del activo cambie sin una transacción de mercado
 - ✅ Necesite registrar un ajuste a la baja o deterioro

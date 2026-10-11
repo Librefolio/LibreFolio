@@ -88,7 +88,7 @@ Vale la pena separar la beta de la correlación, porque se confunden fácilmente
 
 !!! warning "Cada cifra aquí hereda su índice de referencia"
 
-    La beta, el rendimiento activo, el error de seguimiento y el ratio de información se miden todos *contra* una serie de comparación. Cambie la serie y todas ellas cambian, sin que nada de la cartera haya cambiado. Una cifra relativa citada sin nombrar contra qué se midió está incompleta. Véase [Selección de índice de referencia](benchmark-selection.md).
+    La beta, el rendimiento activo, el error de seguimiento y el ratio de información se miden todos *contra* una serie de comparación. Cambia la serie y todas ellas cambian, sin que nada de la cartera haya cambiado. Una cifra relativa citada sin nombrar contra qué se midió está incompleta. Véase [Selección de índice de referencia](benchmark-selection.md).
 
 !!! warning "La beta ve una línea recta, sobre una sola ventana"
 
