@@ -31,7 +31,7 @@ La página **Brókers** muestra una tarjeta por cada bróker, con su valor (**NA
 
     - **Descripción** — tus propias notas.
     - **Plugin de importación predeterminado** — el importador que el [Asistente de importación](../transactions/import/index.md) propone para los archivos de este bróker.
-    - **URL del portal** — el sitio web del bróker, que se abre desde la página del bróker. Su icono se usa cuando no configuras una **URL de icono personalizado**.
+    - **URL del portal** — el sitio web del bróker, que se abre desde la página del bróker. El icono del bróker es, en este orden: tu **URL de icono personalizado**; el icono del **Plugin de importación predeterminado**, cuando ese importador está hecho para este bróker; el icono del sitio web; el icono de un importador genérico como el CSV genérico; si no, un maletín.
     - **Cuenta abierta** y **Cuenta activa** — cuándo se abrió la cuenta y si sigue abierta. Un bróker cerrado aparece atenuado en la lista.
     - **Opciones de trading** — **Permitir compra apalancada** y **Permitir venta en corto**, explicadas en [Opciones de trading](info.md#trading-options).
     - **Saldos iniciales** (solo al crear) — tu efectivo inicial. LibreFolio registra un **Depósito** por divisa, **con fecha de hoy**: si el dinero ya estaba ahí antes, cambia la fecha de esos depósitos en la página [Transacciones](../transactions/index.md).
