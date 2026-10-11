@@ -39,13 +39,17 @@
 
 **Not archived (still active / paused):**
 
+> **L'indice unico del backlog dopo la 1.2** è [`../Phase_0/BACKLOG_POST_1.2.md`](../Phase_0/BACKLOG_POST_1.2.md)
+> (dall'11/10): una riga per voce col rimando ai dettagli. Lo popolano il coordinatore e i workstream, ognuno nella sua
+> sezione, e il coordinatore lo riconcilia a ogni treno.
+
 > Regola del developer (10/10, nella pulizia delle chat prima della 1.2): «non voglio archiviare i loro plan in
 > …/Phase_0/ voglio solo archiviare le chat». Le cartelle qui sotto restano in `Phase_0` anche da chiuse.
 - `../Phase_0/02_riskfolioIntegration/` — Risk Analysis: resta in `Phase_0` per decisione del developer (D382, 09/10); il suo README elenca il lavoro aperto (A1–A6, B1–B3, B6–B8; chiuse A7, B4, B5) e, dal treno 31, la guida «Ripartire da qui» per la prossima release.
 - `../Phase_0/09_feedbackJobs/` — backlog strutturale P4 ereditato dall'audit 08, reperti e review visiva (attivo: si pesca da lì al prossimo round).
 - `../Phase_0/13_pacAllocator/` — allocatore PAC (workstream D), in chiusura per la 1.2.
 - `../Phase_0/16_toolPlatform/` — piattaforma dei Tool, insieme alla 13.
-- `../Phase_0/21_onboarding/` — onboarding: aspetta la review manuale C7 del developer.
+- `../Phase_0/21_onboarding/` — onboarding: la review manuale C7 è chiusa (developer, 11/10; treno 36). Restano le voci 2–7 di «Cosa resta aperto», per dopo la 1.2; la cartella resta per decisione del developer (09/10).
 - `../Phase_0/27_releaseImages/` — immagini di rilascio, gallery e pipeline (workstream M).
 - `../Phase_0/32_docsEnglish12/` — documentazione inglese della 1.2 (workstream Q): chiusa con S24 (treno 31); le traduzioni sono nel lotto 11 di M, gli 8 scatti dei portali nel 38 (C-43).
 - `../Phase_0/37_brimScalable/` — plugin BRIM Scalable Capital (workstream S): integrato nel treno 30, piano chiuso nel treno 31; restano le traduzioni delle sue pagine (secondo giro di M).

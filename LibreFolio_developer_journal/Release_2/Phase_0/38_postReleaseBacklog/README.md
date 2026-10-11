@@ -8,6 +8,9 @@
 >
 > Non contiene le voci aperte delle cartelle che restano in `Phase_0/` (02, 09, 13, 16, 21, 27, 32, 37): vivono
 > lì. Il developer, il 09/10, sulle voci dopo la 1.2: «si a tutto, dopo».
+>
+> **L'indice unico** di tutto il lavoro dopo la 1.2, cartelle comprese, è [`../BACKLOG_POST_1.2.md`](../BACKLOG_POST_1.2.md)
+> (dall'11/10): una riga per voce, col rimando ai dettagli. Questo file resta il dettaglio delle voci N, O, L, K, P, I e C.
 
 ## Regole
 
