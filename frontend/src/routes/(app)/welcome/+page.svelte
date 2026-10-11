@@ -5,7 +5,7 @@
     import {waitLocale} from 'svelte-i18n';
     import {_, locale, type SupportedLocale} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import WelcomePage from '$lib/components/onboarding/WelcomePage.svelte';
+    import WelcomePage from '$lib/features/onboarding/components/WelcomePage.svelte';
     import {onboardingApi} from '$lib/features/onboarding/onboardingApi';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import type {WelcomeCopy, WelcomeDraft} from '$lib/features/onboarding/welcome';

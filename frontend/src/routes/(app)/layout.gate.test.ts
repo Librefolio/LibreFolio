@@ -113,10 +113,10 @@ vi.mock('$lib/api', () => ({zodiosApi: {get_system_info_api_v1_system_info_get: 
 vi.mock('$lib/components/layout/Sidebar.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/components/layout/Header.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/components/ui/feedback/ToastContainer.svelte', () => ({default: mocks.noopComponent}));
-vi.mock('$lib/components/onboarding/OnboardingBootstrapBlock.svelte', () => ({default: mocks.noopComponent}));
-vi.mock('$lib/components/onboarding/OnboardingBootstrapBanner.svelte', () => ({default: mocks.noopComponent}));
-vi.mock('$lib/components/onboarding/OnboardingOverlayHost.svelte', () => ({default: mocks.noopComponent}));
-vi.mock('$lib/components/onboarding/DeferredAppPopups.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/onboarding/components/OnboardingBootstrapBlock.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/onboarding/components/OnboardingBootstrapBanner.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/onboarding/components/OnboardingOverlayHost.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/onboarding/components/DeferredAppPopups.svelte', () => ({default: mocks.noopComponent}));
 
 import {cleanup, render, screen, within} from '$test/component';
 import {assertEffectsRun} from '$test/runes.svelte';
