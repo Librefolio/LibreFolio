@@ -56,7 +56,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
-    import {apiResultsToCanonicalFxDataPoints, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {apiResultsToCanonicalFxDataPoints, displayFxDelta, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
@@ -287,11 +287,7 @@
 
     let deltaPercent = $derived.by(() => {
         if (chartData.length < 2) return null;
-        const first = chartData[0].rate;
-        const last = chartData[chartData.length - 1].rate;
-        if (first === null || last === null || first === 0 || last === 0) return null;
-        const pct = ((last - first) / first) * 100;
-        return inverted ? -pct : pct;
+        return displayFxDelta(chartData[0].rate, chartData[chartData.length - 1].rate, inverted)?.pct ?? null;
     });
 
     function fxPointToLineDataPoint(point: FxDataPoint, inverted: boolean): LineDataPoint {

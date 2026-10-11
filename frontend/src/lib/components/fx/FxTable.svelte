@@ -15,7 +15,7 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {fxProviderBadgeHtml} from '$lib/utils/providerHelpers';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {displayFxDelta, displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {fxProvidersVersion} from '$lib/stores/currencyGraphStore';
 
     // =========================================================================
@@ -106,16 +106,7 @@
     function getDelta(row: FxRow): {abs: number | null; pct: number | null} {
         void inversionVersion;
         if (row.data.length < 2) return {abs: null, pct: null};
-        const first = row.data[0];
-        const last = row.data[row.data.length - 1];
-        if (first.rate === null || last.rate === null || first.rate === 0 || last.rate === 0) return {abs: null, pct: null};
-        const inv = isCardInverted(row.slug);
-        const fv = inv ? 1 / first.rate : first.rate;
-        const lv = inv ? 1 / last.rate : last.rate;
-        return {
-            abs: lv - fv,
-            pct: ((lv - fv) / fv) * 100,
-        };
+        return displayFxDelta(row.data[0].rate, row.data[row.data.length - 1].rate, isCardInverted(row.slug)) ?? {abs: null, pct: null};
     }
 
     function formatDelta(val: number | null, suffix: string = ''): string {
