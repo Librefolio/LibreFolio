@@ -286,6 +286,15 @@ def utils_translation_validator(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Translation validator tests", verbose=verbose)
 
 
+def utils_docs_fr_typography(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the MkDocs hook that applies French typography to the French pages at build time."""
+    print_section("Utils: Docs French Typography")
+    print_info("Testing: mkdocs_src/hooks/fr_typography.py (typeset, typeset_html, on_page_content, on_nav), its registration in mkdocs_src/mkdocs.yml")
+    print_info("Tests: U+00A0/U+202F before : ; ? ! %, a currency, inside « », thousand groups, never inserted; text only (attributes, comments, code, formulas, raw text untouched); French pages and TOC, French nav labels; a page rendered in memory")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_fr_typography.py", test_names)
+    return run_command(cmd, "Docs French typography tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -507,6 +516,18 @@ Tests for utility modules and helper functions:
         # redirected in every test): no DB, no server, no network, never opens the repo's
         # docs or translation cache, no writes outside tmp_path. Reads mkdocs_src/mkdocs.yml
         # (the site configuration the anchors are rendered with).
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-fr-typography",
+        utils_docs_fr_typography,
+        name="Docs French Typography",
+        desc="The fr_typography MkDocs hook turns the plain whitespace already standing before : (U+00A0), before ; ? ! and % and before a currency symbol after a digit (U+202F), inside « » (U+00A0) and between thousand groups (U+202F) into non-breaking spaces and never inserts one; a : ; ? or ! counts only before whitespace, the end of the text, closing punctuation or an entity, and a year is not joined to the next number; it reads text only: tags and attributes (a quoted > included) and comments pass through byte for byte, code, pre, kbd, samp, var, svg, math and arithmatex formulas are skipped with nesting counted, script, style, textarea and the other raw-text elements up to their end tag (a <!-- inside them opens no comment); it acts on the pages whose source is French (file.locale fr as mkdocs-static-i18n sets it, never the English fallback) and their table of contents at every level, and in the French build on the French navigation labels once mkdocs-static-i18n has put them in; mkdocs.yml registers it, and a French page rendered with the site's Markdown extensions keeps its code, formulas, diagram and attributes",
+        # Strings in memory, the hook loaded by path. Reads mkdocs_src/mkdocs.yml: the hook's
+        # registration, and the site configuration MkDocs loads (plugins and hooks) to render one
+        # page in memory (Page.render, no build) and to dispatch on_nav on navigations built in
+        # the test. No DB, no server, no network, no writes.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")
