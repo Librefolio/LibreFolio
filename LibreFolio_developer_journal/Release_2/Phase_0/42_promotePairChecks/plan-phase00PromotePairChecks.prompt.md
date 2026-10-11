@@ -536,3 +536,173 @@ suo rosso prima. Base: worktree a `f6a5a2fcc`, pulita. Corsia 6161.
     es portano ancora la frase vecchia, per la parte B di M;
   - sul sito restano 39 errori: 30 in `deposited-capital`, 6 in `dashboard/charts`, e i 3 noti di `adjustment` dal
     lotto 42.
+
+## 8. Mini-lotto dai reperti dell'audit di M (11/10)
+
+- Decisione del coordinator (11/10): il developer è fuori e gli ha delegato le cose ragionevoli.
+- Base: `41ddc61cb` (treno 37), pulita. Corsia 6161.
+- I cataloghi i18n sono di P per queste voci, fino al checkpoint.
+
+**Integrazione del seguito (§7):** C-46…C-48 sono entrati come `bdec709d2`, con il merge `b5a71de01` (treno 37). Nel 38
+sono ✅; le righe del CHANGELOG sono scritte dal coordinator.
+
+- **8.1 `BrokerCard`, la percentuale** ✅ (11/10). Oggi è `toFixed(2)%`, quindi «0.00%» in tutte le lingue. Va curata come il
+  `DistributionEditor` (treno 32): `formatPercent` con `locale: $currentLanguage`.
+  > **Il perimetro, cioè «la card o la pagina del broker»**. I siti sono 8:
+  > - `BrokerCard.svelte:157`: il P/L in percentuale fra parentesi;
+  > - `routes/(app)/brokers/[id]/+page.svelte:457` e `:481`: il badge della propria quota, `broker-quota-badge`;
+  > - `BrokerSharingPanel.svelte`, che è nella pagina del broker: assegnato `:516`, disponibile `:519`, le quote delle
+  >   righe `:572`, `:608` e `:644`, e il suggerimento «max» `:832`.
+  >
+  > Restano **fuori**, e li segnalo al coordinator:
+  > - i componenti della Dashboard che la pagina del broker riusa (`KpiSection`: 7 siti senza `locale`), perché sono
+  >   condivisi con la Dashboard;
+  > - gli assi dei grafici (`LotWacPriceChart:1604`), che di proposito tengono la forma fissa (vedi il commento di
+  >   `formatPercent`).
+  >
+  > Nella v1.1.0 c'erano già tutti e 8.
+  >
+  > **Rossi** (test-author): 11 test, di cui 9 rossi e 2 controlli in inglese verdi, nei soli file registrati.
+  > - `BrokerCard.test.ts`: il controllo inglese, il francese al montaggio, e il cambio en → fr → en sul posto.
+  > - `BrokerSharingPanel.test.ts`: il controllo inglese di tutti i siti; assegnato/disponibile; le colonne owners,
+  >   editors e viewers; il suggerimento «max».
+  > - `e2e/brokers/brokers-detail.spec.ts` (`front-broker detail`): la pagina aperta in francese, e il cambio en → fr
+  >   sul posto, con un broker proprio al 45,67 %.
+  > - Il valore atteso si calcola sempre con `Intl` nello stesso ambiente. Chromium e Node scrivono tutti e due U+00A0.
+  >   Atteso «12,34 %», trovato «12.34%».
+  >
+  > **⚠️ Fuori pista** (dal test-author): la card e la pagina sono componenti legacy, e una lettura di
+  > `$currentLanguage` dentro un helper chiamato dal template compila in `$.untrack`, quindi non si aggiorna al cambio
+  > di lingua. Per questo la cura scrive `$currentLanguage` nell'espressione del template; `formatSharePercentage`
+  > riceve la lingua come parametro.
+  >
+  > **Cura**:
+  > - `BrokerCard`: `formatPercent(…, {scale: 100, signed: false, locale: $currentLanguage})`;
+  > - `BrokerSharingPanel` (6 siti) e il badge della pagina: `formatPercent(<il valore arrotondato come prima>,
+  >   {signed: false, digits: 1, locale: $currentLanguage})`. Le cifre e gli arrotondamenti non cambiano, e in inglese
+  >   il testo è identico.
+  >
+  > **Gate** (corsia 6161):
+  > - `front build --debug` OK, `front check` 0/0, prettier pulito;
+  > - `component-unit` 2966/2966;
+  > - E2E: `front-broker detail` 37/37, `front-broker list` 9/9, `front-user broker-sharing` 17/17,
+  >   `front-portfolio privacy-masking` 18/18;
+  > - `front-broker broker-unit` 53/53, `core-unit` 3676/3676, `gate-i18n-usage` 195/195;
+  > - `i18n audit` 4339 chiavi complete; `check-orphans` pulito; porte 6161 e 6171 libere.
+  >
+  > **A margine**: il suggerimento `% (max …)` di `BrokerSharingPanel:832` ha «max» scritto nel codice, quindi in
+  > spagnolo non diventa «máx.». Fuori dal perimetro: lo segnalo.
+- **8.2 es `pairQuantityMismatch`** ✅ (11/10): «un broker» diventa «un bróker», con `dev.py i18n update` (una riga di
+  `es.json`). Niente rosso: è testo. La chiave è nata nel lotto 42, nella 1.2, quindi non serve una riga di CHANGELOG.
+  > **A margine**: in `es.json` «broker» senza accento resta in 47 chiavi (39 al singolare, 9 al plurale), contro 175
+  > «bróker» e 48 «brókeres». Alcune sono nomi propri, come Interactive Brokers. Fuori dal perimetro: lo segnalo.
+- **8.3 es «Tasa(s)» dove il glossario dice «tipo de cambio»** ✅ (11/10). La lista è arrivata dal coordinator: il file
+  dei revisori di M, fuori dal repo (`release-pipeline/runs/b15/b15_catalog_vs_glossary.tsv`).
+
+**Il lotto cresce** (coordinator, 11/10, sui difetti dei revisori di M). Sono **fuori**, e li decide il developer, gli
+altri conflitti di terminologia della lista e «Exportar IA» / «Export AI»: non si toccano. Se il lotto si allunga, prima
+1, 2 e 8.
+
+Il glossario (`aphra-pipeline/glossaries/glossary.json`) dice: exchange rate = es «tipo de cambio»; broker = es
+«bróker»; broker report = es «informe del bróker». Per upload, merge e combine non ha voci.
+
+Fatti l'11/10, solo cataloghi, con `dev.py i18n update` (script `/tmp/libreFolio_items3to7.py`, che rilegge ogni valore
+dopo l'aggiornamento). Niente rossi, perché sono testi:
+- **3, es «tipo de cambio»**:
+  - `fx.rate`: «Tasa» → «Tipo de cambio»;
+  - `fxDetail.editRates`: «Editar tasas» → «Editar tipos de cambio»;
+  - `common.syncFxRates` e `transactions.errors.wacFxUnavailableSyncLink`: «Sincronizar tasas FX» → «Sincronizar tipos de
+    cambio».
+- **4, es «bróker»**:
+  - `uploads.assignBrokers`: «Asignar Brokers» → «Asignar brókeres»;
+  - `uploads.brokerReports`: «Informes de Broker» → «Informes del bróker», come dice il glossario;
+  - `importWizard.globalBroker`: «Broker para subidas» → «Bróker para subidas».
+- **5, accenti** in `assets.comparison.title`: fr «Comparaison des donnees du fournisseur» → «… données …»; es
+  «Comparacion de datos del proveedor» → «Comparación …».
+- **6, fr upload → «téléverser»**: il glossario non ha un termine per upload. Ho cambiato le 8 chiavi in cui l'inglese
+  dice *upload*, e il download resta «télécharger»:
+  - `brokers.showImportHistory`: «Rapports téléversés»;
+  - `brokers.uploadHint`: «Téléversez des rapports…»;
+  - `fileStatus.uploaded`: «Téléversé»;
+  - `settings.avatarHint`: «Cliquez pour téléverser…»;
+  - `uploads.editAvatar`: «Téléverser l'avatar»;
+  - `uploads.cropAndUpload`: «Recadrer et téléverser»;
+  - `uploads.renameAndUpload`: «Renommer et téléverser»;
+  - `uploads.editIcon`: «Téléverser l'icône».
+- **7, es Merge ≠ Combine**: `transactions.promoteSuggest.merge` «Combinar» → «Unir», come già il resto della famiglia
+  Merge («Unir todos ({n})», «Unir {n} pares»). `mergeAllCombine` resta «Combinar».
+- **8, etichette inglesi scritte nel codice** ✅ (11/10): i badge di stato di `DataEditor.svelte`, «Auto/Min/Max» di
+  `ChartAestheticsSection.svelte`, i preset di `DateRangePicker.svelte`. Il rosso è dal test-author; la cura riusa
+  `common.status`, `common.min` e `common.max` e aggiunge `dataEditor.status.*`, `chartSettings.yAxisAuto` e
+  `datePicker.presets.{weeks,months,years}` con `{n}`.
+  > **Rossi** (test-author, 11/10): 9 rossi, 3 per componente, nei soli file registrati.
+  > - `DataEditor.test.ts` (`:799-921`), `ChartSignalsSection.test.ts` (`:555-648`, che ha già un blocco
+  >   `ChartAestheticsSection`) e `DateRangePicker.test.ts` (`:1032-1194`).
+  > - Il metodo non asserisce testo tradotto: si monta in una lingua finta, `qaa`, in cui ogni chiave appare come
+  >   marcatore (`⟦key⟧`, oppure `⟦key n={n}⟧`). Un'etichetta presa dal catalogo mostra il suo marcatore; un letterale
+  >   scritto nel codice mostra se stesso.
+  > - Un test per file controlla che le chiavi esistano nei 4 cataloghi.
+  > - Le etichette che già usavano il catalogo fanno da controlli; i testid e le chiavi dei preset non cambiano.
+  >
+  > **Cura**:
+  > - `DataEditor`: l'intestazione è `$t('common.status')`; opzioni del filtro e badge usano la stessa mappa statica
+  >   `STATUS_LABEL_KEYS` → `dataEditor.status.{original,edited,deleted,appended}`.
+  > - `ChartAestheticsSection`: `chartSettings.yAxisAuto`, `common.min` e `common.max`.
+  > - `DateRangePicker`: `datePicker.presets.{weeks,months,years}` con `{n}`. Le tre liste dei preset sono ora
+  >   `$derived`, quindi seguono il cambio di lingua sul posto, YTD e MAX compresi.
+  >
+  > **Chiavi nuove** (`dev.py i18n add`), in en / it / fr / es:
+  > - `dataEditor.status.original`: Original / Originale / Original / Original;
+  > - `dataEditor.status.edited`: Edited / Modificato / Modifié / Modificado;
+  > - `dataEditor.status.deleted`: Deleted / Eliminato / Supprimé / Eliminado;
+  > - `dataEditor.status.appended`: New / Nuovo / Nouveau / Nuevo;
+  > - `chartSettings.yAxisAuto`: Auto in tutte e 4;
+  > - `datePicker.presets.weeks`: `{n}W` / `{n}S` / `{n}S` / `{n}S`;
+  > - `datePicker.presets.months`: `{n}M` in tutte e 4;
+  > - `datePicker.presets.years`: `{n}Y` / `{n}A` / `{n}A` / `{n}A`.
+  >
+  > Le lettere coincidono con quelle di «Personalizzato» (`datePicker.granularity.*Short`: W/M/Y in inglese, S/M/A in
+  > it/fr/es), come chiede il coordinator.
+  >
+  > **Gate** (corsia 6161):
+  > - `component-unit` 2975/2975, `core-unit` 3676/3676;
+  > - E2E: `toolbar-width-sweep` 15/15, `dashboard` 27/27, `fx-list` 12/12, `fx-editor` 4/4, `fx-settings` 3/3,
+  >   `asset-detail` 31/31, `asset-data-editor` 26/26, `front-broker detail` 37/37;
+  > - `gate-i18n-usage` 195/195; `i18n audit` 4347 chiavi complete e 0 inutilizzate; `check-orphans` pulito; porte
+  >   libere.
+  >
+  > **⚠️ Fuori pista** (coordinator, 11/10, dalla preparazione di M): c'è un terzo punto,
+  > `charts/calendarReturnWindow.ts`, con `1W 1M 3M 1Y`, la «Finestra» del rendimento mobile nella pagina dell'asset.
+  > Va localizzato con gli stessi tasti.
+  > - **Rossi** (test-author):
+  >   - 3 unitari in `priceChartHelpers.test.ts` (`core-unit`, `:390-440`): manca `count` o `unit`, oppure manca
+  >     `CALENDAR_RETURN_UNIT_LABEL_KEYS`;
+  >   - 1 E2E in `asset-detail.spec.ts` (`:7914-7969`): in italiano atteso `["1S","1M","3M","1A"]`, ricevuto
+  >     `["1W","1M","3M","1Y"]`. Il valore atteso viene da `it.json`; c'è anche il controllo in inglese.
+  > - **Cura**:
+  >   - i preset hanno `count` e `unit` al posto di `label`;
+  >   - il modulo esporta la mappa statica `CALENDAR_RETURN_UNIT_LABEL_KEYS` → `datePicker.presets.{weeks,months,years}`;
+  >   - la pagina dell'asset scrive `$t(CALENDAR_RETURN_UNIT_LABEL_KEYS[preset.unit], {values: {n: preset.count}})`;
+  >   - chiavi, `windowDays` e testid restano gli stessi. Prettier ha solo spezzato l'import, che si era allungato.
+  > - **Gate**: `front check` 0/0; `core-unit` 3679/3679; `component-unit` 2975/2975; `asset-detail` 32/32;
+  >   `i18n audit` 4347; `check-orphans` pulito; porte libere.
+  > - Nella v1.1.0 questo modulo non c'era.
+  >
+  > ✅ (11/10) per tutti e tre i punti.
+  >
+  > **A margine** (dal test-author): restano in inglese altre etichette di `DataEditor`, fuori dalla lista del
+  > coordinator. Sono l'intestazione «Date», i contatori «modified/deleted/new», un `aria-label` e «Reset layout».
+  > Le segnalo.
+
+**Chiusura del mini-lotto** (11/10). I punti 1–8 sono fatti: CHECKPOINT READY al coordinator, poi FROZEN.
+- **CHANGELOG** (proposte, verificate sul tag v1.1.0):
+  - 8.1 c'era già nella v1.1.0;
+  - i punti 3–6 c'erano già nella v1.1.0, tranne `fx.rate`, nata nella 1.2;
+  - per il punto 7 il conflitto è nato nella 1.2, con l'opzione Combine;
+  - il punto 8 c'era già nella v1.1.0, tranne `calendarReturnWindow`, nato nella 1.2;
+  - per il punto 2 non serve una riga.
+- **Lasciato a dopo la 1.2**, con le righe proposte per la sezione P dell'indice:
+  - P-13: le percentuali dei componenti condivisi della Dashboard (`KpiSection`: 7 siti senza `locale`);
+  - P-14: «broker» senza accento in altre 46 chiavi di `es.json`, nomi propri esclusi;
+  - P-15: altre etichette inglesi scritte nel codice, cioè in `DataEditor` «Date», i contatori, un `aria-label` e
+    «Reset layout», e in `BrokerSharingPanel` «max».

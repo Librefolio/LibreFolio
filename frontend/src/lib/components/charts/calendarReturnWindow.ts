@@ -1,14 +1,21 @@
 import {daysBetween} from '$lib/utils/dateOnly';
 
 export const CALENDAR_RETURN_PRESETS = [
-    {key: '1w', label: '1W', windowDays: 7},
-    {key: '1m', label: '1M', windowDays: 30},
-    {key: '3m', label: '3M', windowDays: 90},
-    {key: '1y', label: '1Y', windowDays: 365},
+    {key: '1w', count: 1, unit: 'weeks', windowDays: 7},
+    {key: '1m', count: 1, unit: 'months', windowDays: 30},
+    {key: '3m', count: 3, unit: 'months', windowDays: 90},
+    {key: '1y', count: 1, unit: 'years', windowDays: 365},
 ] as const;
 
 export type CalendarReturnPresetKey = (typeof CALENDAR_RETURN_PRESETS)[number]['key'];
 export type CalendarReturnWindowUnit = 'weeks' | 'months' | 'years';
+
+/** Catalog keys of a preset's label, `{n}` + the reader's unit letter: the date picker's presets use the same ones. */
+export const CALENDAR_RETURN_UNIT_LABEL_KEYS: Record<CalendarReturnWindowUnit, string> = {
+    weeks: 'datePicker.presets.weeks',
+    months: 'datePicker.presets.months',
+    years: 'datePicker.presets.years',
+};
 
 export interface CalendarReturnWindowSelection {
     kind: 'preset' | 'custom';

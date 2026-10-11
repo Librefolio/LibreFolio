@@ -213,16 +213,22 @@
     // Preset Definitions
     // =========================================================================
 
-    const presets: {key: QuickPreset; label: string; months?: number; weeks?: number; years?: number}[] = [
-        {key: '1W', label: '1W', weeks: 1},
-        {key: '1M', label: '1M', months: 1},
-        {key: '3M', label: '3M', months: 3},
-        {key: '6M', label: '6M', months: 6},
-        {key: '1Y', label: '1Y', years: 1},
-        {key: '2Y', label: '2Y', years: 2},
+    // Labels follow the interface language: the unit letter of a count-based preset is the reader's
+    // (1W/1Y in English, 1S/1A in Italian, French and Spanish); the keys stay the same everywhere.
+    const weeksLabel = (n: number) => $_('datePicker.presets.weeks', {values: {n}});
+    const monthsLabel = (n: number) => $_('datePicker.presets.months', {values: {n}});
+    const yearsLabel = (n: number) => $_('datePicker.presets.years', {values: {n}});
+
+    let presets: {key: QuickPreset; label: string; months?: number; weeks?: number; years?: number}[] = $derived([
+        {key: '1W', label: weeksLabel(1), weeks: 1},
+        {key: '1M', label: monthsLabel(1), months: 1},
+        {key: '3M', label: monthsLabel(3), months: 3},
+        {key: '6M', label: monthsLabel(6), months: 6},
+        {key: '1Y', label: yearsLabel(1), years: 1},
+        {key: '2Y', label: yearsLabel(2), years: 2},
         {key: 'YTD', label: $_('datePicker.presets.ytd')},
         {key: 'MAX', label: $_('datePicker.presets.max')},
-    ];
+    ]);
 
     /**
      * Whether a quick preset is drawn: all of them, except those the caller leaves out. Applied
@@ -238,17 +244,17 @@
     // decides how many of each to render, only to fill leftover space that would otherwise stay
     // empty, never as the cause of an extra line wrap.
     // Duration pool — extends the core year progression (Block A).
-    const durationFillPresets: {key: QuickPreset; label: string; years: number}[] = [
-        {key: '3Y', label: '3Y', years: 3},
-        {key: '5Y', label: '5Y', years: 5},
-        {key: '10Y', label: '10Y', years: 10},
-    ];
+    let durationFillPresets: {key: QuickPreset; label: string; years: number}[] = $derived([
+        {key: '3Y', label: yearsLabel(3), years: 3},
+        {key: '5Y', label: yearsLabel(5), years: 5},
+        {key: '10Y', label: yearsLabel(10), years: 10},
+    ]);
     // Period pool — extends the "start of period to today" family alongside YTD (Block B).
-    const periodFillPresets: {key: QuickPreset; label: string}[] = [
+    let periodFillPresets: {key: QuickPreset; label: string}[] = $derived([
         {key: 'MTD', label: $_('datePicker.presets.mtd')},
         {key: 'QTD', label: $_('datePicker.presets.qtd')},
         {key: 'WTD', label: $_('datePicker.presets.wtd')},
-    ];
+    ]);
 
     const granularityOptions: {value: Granularity; labelKey: string; shortKey: string}[] = [
         {value: 'days', labelKey: 'datePicker.granularity.days', shortKey: 'datePicker.granularity.daysShort'},
