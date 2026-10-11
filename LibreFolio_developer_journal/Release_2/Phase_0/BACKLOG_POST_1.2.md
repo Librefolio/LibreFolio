@@ -198,9 +198,15 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
 - **T-P2.2 · I file grandi del backend, divisi per cuciture** — medio; T, 11/10. L'evaluator del PAC,
   `portfolio_service`, le transazioni, `broker_service`, `price_store`, i router, gli schemi. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «P2.2».
-- **T-BU2 · `cache_utils` e `decimal_utils` fuori da `utils/`** — medio-basso; T, 11/10. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione
-  «P2.3».
+- **T-BU1+BU2 · `utils/` del backend: gli aiuti di dominio, `cache_utils` e `decimal_utils`** — medio-basso, in attesa
+  della decisione D-P7; T, 11/10; coordinatore, opzione A (11/10). BU1 non va prima della 1.2: `sector_fin_utils`,
+  `geo_utils` e `identifier_utils` sono importati da `schemas/assets.py:58-60` e da `db/models.py:36`, e nei servizi
+  rovescerebbero lo strato; `currency_utils` aspetta `services/fx/` (PL4, dopo F). D-P7: gli aiuti puri di dominio in
+  `backend/app/domain/`, senza I/O, oppure in `utils/` con la regola scritta che `utils` non importa servizi.
+  Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «P2.3» e «Treno 38 e decisioni dopo B3b».
 - **T-FE2…FE11 · Il frontend a cartelle per funzionalità** — da basso ad alto; T, 11/10. FE8 dopo P; FE6 e FE7 dopo F.
+  Comprende due cose trovate con FE1 e con le durate: la copia di `DELTA_PERIODS` nella pagina FX
+  (`routes/(app)/fx/+page.svelte:159`) e l'albero di `developer/frontend/index.md`, che non ha `lib/features/`.
   Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «P2.4».
 - **T-TS1 · I test del backend specchiati sul codice** — alto, solo se lo si vuole (D-P5); T, 11/10. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «P2.5».

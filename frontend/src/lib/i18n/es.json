@@ -1787,6 +1787,7 @@
       "qtd": "QTD",
       "ytd": "YTD",
       "max": "Todo",
+      "days": "{n}D",
       "weeks": "{n}S",
       "months": "{n}M",
       "years": "{n}A"

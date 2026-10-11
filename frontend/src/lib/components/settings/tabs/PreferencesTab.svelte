@@ -16,7 +16,7 @@
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
-    import OnboardingReplaySection from '$lib/components/onboarding/OnboardingReplaySection.svelte';
+    import OnboardingReplaySection from '$lib/features/onboarding/components/OnboardingReplaySection.svelte';
 
     // Category definitions
     interface Category {

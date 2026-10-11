@@ -67,7 +67,7 @@ detail pages, and the risk panel of the Assets page start their display currency
 
 ### 🧭 OnboardingReplaySection
 
-`OnboardingReplaySection.svelte` (in `frontend/src/lib/components/onboarding/`) is the
+`OnboardingReplaySection.svelte` (in `frontend/src/lib/features/onboarding/components/`) is the
 **Onboarding** category of `PreferencesTab`
 (`{id: 'onboarding', icon: Compass, labelKey: 'onboarding.settings.category'}`). The tab renders
 it when that category is selected and in the *All Settings* view (no category selected). It lists
