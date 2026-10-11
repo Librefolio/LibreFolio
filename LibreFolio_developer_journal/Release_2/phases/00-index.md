@@ -50,9 +50,10 @@
 - `../Phase_0/13_pacAllocator/` — allocatore PAC (workstream D), in chiusura per la 1.2.
 - `../Phase_0/16_toolPlatform/` — piattaforma dei Tool, insieme alla 13.
 - `../Phase_0/21_onboarding/` — onboarding: la review manuale C7 è chiusa (developer, 11/10; treno 36). Restano le voci 2–7 di «Cosa resta aperto», per dopo la 1.2; la cartella resta per decisione del developer (09/10).
-- `../Phase_0/27_releaseImages/` — immagini di rilascio, gallery e pipeline (workstream M).
+- `../Phase_0/27_releaseImages/` — immagini di rilascio, gallery e pipeline (workstream M): il lotto 14, parte A (terzo giro, immagini delle traduzioni, controlli della build e del validatore, audit della guida tradotta), è nel treno 37; la parte B e il giro finale dopo F sono per la 1.2.
 - `../Phase_0/32_docsEnglish12/` — documentazione inglese della 1.2 (workstream Q): chiusa con S24 (treno 31); le traduzioni sono nel lotto 11 di M, gli 8 scatti dei portali nel 38 (C-43).
 - `../Phase_0/37_brimScalable/` — plugin BRIM Scalable Capital (workstream S): integrato nel treno 30, piano chiuso nel treno 31; restano le traduzioni delle sue pagine (secondo giro di M).
 - `../Phase_0/38_postReleaseBacklog/` — backlog dopo la 1.2: i residui delle cartelle archiviate il 09/10 e il backlog del coordinatore.
-- `../Phase_0/41_brokerPnlFlows/` — P&L per broker senza salti ai trasferimenti (workstream I): l'engine è entrato nel treno 32, le card dei broker (H) nel treno 35; la rivalutazione della cassa in valuta (F) è in corso per la 1.2.
-- `../Phase_0/42_promotePairChecks/` — i controlli delle coppie promosse (workstream P): chiuso, integrato nel treno 34; il compito a lato `DistributionEditor` nel treno 32; residui → 38 (C-46…C-48).
+- `../Phase_0/41_brokerPnlFlows/` — P&L per broker senza salti ai trasferimenti (workstream I): l'engine è entrato nel treno 32, le card dei broker (H) nel treno 35; la rivalutazione della cassa in valuta (F) è approvata (11/10) e in corso per la 1.2.
+- `../Phase_0/42_promotePairChecks/` — i controlli delle coppie promosse (workstream P): chiuso, integrato nel treno 34; il compito a lato `DistributionEditor` nel treno 32; C-46…C-48 nel treno 37; le voci rimaste nella sezione P dell'indice post-1.2.
+- `../Phase_0/43_financialMathHome/` — casa unica della matematica finanziaria e riordino del codice (workstream T): il piano e B1, B2, B3a nel treno 37; per la 1.2 B3b, PL3, BU1, FE1 e T-1 dopo F.
