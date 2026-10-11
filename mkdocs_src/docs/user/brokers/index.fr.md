@@ -8,6 +8,8 @@ Un **courtier** est l'un de vos comptes — dans une société de courtage, une 
 
 La page **Courtiers** affiche une carte par courtier, avec sa valeur (**NAV**) dans la devise choisie dans **Devise** en haut de la page. Cliquez sur une carte pour ouvrir le courtier.
 
+**Gain/Perte** est la NAV moins le capital entré dans le courtier : vos dépôts moins vos retraits, plus le coût des titres que vous avez apportés sans liquidités, plus ce que vous avez transféré depuis vos autres courtiers moins ce que vous leur avez transféré, chaque mouvement étant valorisé le jour de son arrivée. Ainsi, déplacer de l'argent ou des titres entre deux de vos courtiers n'est pas un gain sur une carte et une perte sur l'autre, et tant qu'un transfert est en transit, sa valeur reste sur la carte du courtier qui l'a envoyé. Le pourcentage entre parenthèses est le gain rapporté à ce capital : il affiche 0.00% lorsque ce capital est nul ou négatif, par exemple lorsque le courtier a envoyé plus qu'il n'a reçu. → [Transferts internes](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
+
 !!! note "Les courtiers partagés affichent votre part"
 
     Sur un courtier que vous copossédez, les valeurs de sa carte et de son onglet **Vue d'ensemble** sont **mises à l'échelle selon votre part de propriété** : un Propriétaire à 50 % voit la moitié du compte. Les Éditeurs et les Lecteurs voient toujours les montants complets. Voir [Partage de courtier](sharing.md).
