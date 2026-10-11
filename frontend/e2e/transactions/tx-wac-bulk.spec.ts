@@ -12,7 +12,7 @@
  * Mock data contract: e2e_test_user has OWNER/EDITOR on Interactive Brokers + Directa SIM.
  * Apple (AAPL) is a known asset with price history.
  */
-import {expect, test, type Page} from '../fixtures/playwright';
+import {expect, test, type Page, type Request} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
@@ -661,5 +661,196 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         expect(await pendingDots.count()).toBeGreaterThan(0);
         const dotText = await pendingDots.first().textContent();
         expect(dotText?.trim()).toBe('●');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// WB11 — a saved manual cost basis is not a change
+// ---------------------------------------------------------------------------
+//
+// A saved row with a cost basis opens in the editor in MANUAL mode, its cost basis
+// rebuilt as a fresh object. Left untouched it is not a change: Save stays disabled
+// and no validate or commit carries an update for it. Comparing that cost basis by
+// reference instead of by value marks every such row edited — Save enabled on an
+// editor nobody touched, and each row sent back as a no-op update.
+//
+// The rows are owned: a broker and an asset created here, two ADJUSTMENTs with a
+// positive quantity (the side that carries a cost basis) committed through the API,
+// all deleted at the end whatever the outcome. Two rows, so the editor opens on its
+// grid without a form on top: every validation recorded is the editor's own.
+
+const API = '/api/v1';
+
+type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
+/** Every id the test created, recorded the moment it exists so cleanup never depends on an assertion. */
+type Owned = {brokerIds: number[]; assetIds: number[]; transactionIds: number[]};
+type CostBasis = {code: string; amount: string};
+/** The saved rows under test: ids to select them in the table, descriptions only this test knows to find them in the grid. */
+type OwnedManualRows = {brokerId: number; transactionIds: number[]; descriptions: string[]};
+/** A `/transactions/validate` or `/transactions/commit` request, reduced to the updates it carried. */
+type SentBatch = {path: string; updates: Array<Record<string, unknown>>};
+
+async function jsonFrom<T>(response: HttpResponse, purpose: string): Promise<T> {
+    expect(response.ok(), `${purpose}: HTTP ${response.status()} ${await response.text()}`).toBeTruthy();
+    return (await response.json()) as T;
+}
+
+/**
+ * An owned broker and asset holding two saved ADJUSTMENTs, each with a cost basis.
+ * The ledger is read back, so the premise — a saved cost basis on every row — is
+ * checked rather than assumed.
+ */
+async function createOwnedManualRows(page: Page, owned: Owned): Promise<OwnedManualRows> {
+    const suffix = uniqueSuffix();
+    const brokerName = `WB11 broker ${suffix}`;
+    const brokers = await jsonFrom<{results: Array<{broker_id: number | null; name: string; success: boolean}>}>(await page.request.post(`${API}/brokers`, {data: [{name: brokerName, opened_at: '2020-01-01'}]}), 'create owned broker');
+    const broker = brokers.results.find((item) => item.name === brokerName);
+    if (!broker?.success || typeof broker.broker_id !== 'number') throw new Error(`Broker creation failed: ${JSON.stringify(brokers)}`);
+    const brokerId = broker.broker_id;
+    owned.brokerIds.push(brokerId);
+
+    const assetName = `WB11 asset ${suffix}`;
+    const assets = await jsonFrom<{results: Array<{asset_id: number | null; display_name: string; success: boolean}>}>(await page.request.post(`${API}/assets`, {data: [{display_name: assetName, currency: 'EUR', asset_type: 'STOCK'}]}), 'create owned asset');
+    const asset = assets.results.find((item) => item.display_name === assetName);
+    if (!asset?.success || typeof asset.asset_id !== 'number') throw new Error(`Asset creation failed: ${JSON.stringify(assets)}`);
+    const assetId = asset.asset_id;
+    owned.assetIds.push(assetId);
+
+    const rows: Array<{description: string; date: string; quantity: string; cost_basis_override: CostBasis}> = [
+        {description: `WB11 a ${suffix}`, date: '2024-01-02', quantity: '5', cost_basis_override: {code: 'EUR', amount: '10'}},
+        {description: `WB11 b ${suffix}`, date: '2024-01-03', quantity: '3', cost_basis_override: {code: 'EUR', amount: '12.5'}},
+    ];
+    const creates = rows.map((row) => ({broker_id: brokerId, asset_id: assetId, type: 'ADJUSTMENT', ...row}));
+    const committed = await jsonFrom<{committed: boolean; issues?: unknown; results: Array<{operation: string; ids?: number[]}>}>(await page.request.post(`${API}/transactions/commit`, {data: {creates}}), 'commit owned ADJUSTMENTs');
+    const ids = committed.results.filter((result) => result.operation === 'create').flatMap((result) => result.ids ?? []);
+    owned.transactionIds.push(...ids);
+    expect(committed.committed, `owned ADJUSTMENTs rolled back: ${JSON.stringify(committed.issues ?? [])}`).toBe(true);
+    expect(ids, 'the commit created exactly the owned ADJUSTMENTs').toHaveLength(rows.length);
+
+    const saved = await jsonFrom<Array<{id: number; description?: string | null; cost_basis_override?: CostBasis | null}>>(await page.request.get(`${API}/transactions?${ids.map((id) => `ids=${id}`).join('&')}`), 'read owned ADJUSTMENTs');
+    for (const row of rows) {
+        const tx = saved.find((item) => item.description === row.description);
+        expect(tx?.cost_basis_override?.code, `premise: "${row.description}" is saved with its cost basis`).toBe(row.cost_basis_override.code);
+        expect(Number(tx?.cost_basis_override?.amount), `premise: "${row.description}" is saved with its cost basis`).toBe(Number(row.cost_basis_override.amount));
+    }
+    return {brokerId, transactionIds: ids, descriptions: rows.map((row) => row.description)};
+}
+
+/** Delete exactly the ids this test created, and say what could not be deleted. */
+async function cleanupOwned(page: Page, owned: Owned): Promise<string[]> {
+    const failures: string[] = [];
+    const attempt = async (label: string, action: () => Promise<void>) => {
+        try {
+            await action();
+        } catch (error) {
+            failures.push(`${label}: ${String(error)}`);
+        }
+    };
+    // Leave the page first: an editor still open on the rows goes with it, unsaved.
+    await attempt('leave the page', async () => {
+        await page.goto('about:blank');
+    });
+    if (owned.transactionIds.length > 0) {
+        await attempt(`transactions ${owned.transactionIds.join(', ')}`, async () => {
+            const result = await jsonFrom<{committed: boolean}>(await page.request.post(`${API}/transactions/commit`, {data: {creates: [], updates: [], deletes: owned.transactionIds}}), 'delete owned transactions');
+            expect(result.committed).toBe(true);
+        });
+    }
+    for (const brokerId of owned.brokerIds) {
+        await attempt(`broker ${brokerId}`, async () => {
+            const result = await jsonFrom<{results: Array<{id: number; success: boolean}>}>(await page.request.delete(`${API}/brokers?ids=${brokerId}&force=true`), 'delete owned broker');
+            expect(result.results.find((item) => item.id === brokerId)?.success).toBe(true);
+        });
+    }
+    for (const assetId of owned.assetIds) {
+        await attempt(`asset ${assetId}`, async () => {
+            const result = await jsonFrom<{results: Array<{asset_id: number; success: boolean}>}>(await page.request.delete(`${API}/assets?asset_ids=${assetId}`), 'delete owned asset');
+            expect(result.results.find((item) => item.asset_id === assetId)?.success).toBe(true);
+        });
+    }
+    return failures;
+}
+
+/** Run `body` on owned saved rows with a manual cost basis, then delete them, the asset and the broker whatever the outcome. */
+async function withOwnedManualRows(page: Page, body: (rows: OwnedManualRows) => Promise<void>): Promise<void> {
+    const owned: Owned = {brokerIds: [], assetIds: [], transactionIds: []};
+    let passed = false;
+    try {
+        await body(await createOwnedManualRows(page, owned));
+        passed = true;
+    } finally {
+        const failures = await cleanupOwned(page, owned);
+        // A red keeps its own error; on a green, a cleanup that failed is a red of its own.
+        if (passed) expect(failures, 'every cleanup operation is scoped to ids this test created').toEqual([]);
+        else if (failures.length > 0) console.warn(`[WB11] cleanup after a failure left behind: ${failures.join('; ')}`);
+    }
+}
+
+/**
+ * Open the owned rows in the bulk editor the way a user does: select them in the
+ * table narrowed to the owned broker, then the toolbar's Edit. More than one
+ * selected row opens the editor on its grid, with no form on top.
+ */
+async function openRowsInBulkEditor(page: Page, rows: OwnedManualRows) {
+    await navigateTo(page, `/transactions?broker_id=${rows.brokerId}`);
+    const transactionsPage = page.getByTestId('transactions-page');
+    await expect(transactionsPage).toBeVisible({timeout: 10_000});
+    await waitForSettled(transactionsPage, 20_000);
+    for (const id of rows.transactionIds) {
+        const checkbox = page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${id}`);
+        await expect(checkbox).toBeVisible({timeout: 10_000});
+        await checkbox.click();
+        await expect(checkbox).toHaveAttribute('data-state', 'checked');
+    }
+    const edit = page.getByTestId('toolbar-action-edit');
+    await expect(edit).toBeEnabled({timeout: 5_000});
+    await edit.click();
+    await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+}
+
+test.describe('BulkModal saved manual cost basis', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('WB11 — saved rows with a manual cost basis open unchanged: Save stays disabled and no update is sent', async ({page}) => {
+        await withOwnedManualRows(page, async (saved) => {
+            // Every batch the page sends, armed before the editor opens: an untouched row belongs in none of them.
+            const sent: SentBatch[] = [];
+            const record = (request: Request) => {
+                if (request.method() !== 'POST') return;
+                const path = new URL(request.url()).pathname;
+                if (path !== `${API}/transactions/validate` && path !== `${API}/transactions/commit`) return;
+                sent.push({path, updates: ((request.postDataJSON() ?? {}) as {updates?: Array<Record<string, unknown>>}).updates ?? []});
+            };
+            const root = page.getByTestId('tx-bulk-modal-root');
+            const gridRows = page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]');
+            page.on('request', record);
+            try {
+                await openRowsInBulkEditor(page, saved);
+                // Premise: the grid holds exactly the saved rows, each in MANUAL mode with its cost basis — the state under test.
+                for (const description of saved.descriptions) {
+                    const row = gridRows.filter({hasText: description});
+                    await expect(row).toHaveCount(1, {timeout: 5_000});
+                    await expect(row.getByTestId('tx-bulk-cost-basis-manual')).toBeVisible();
+                }
+                await expect(gridRows).toHaveCount(saved.descriptions.length);
+                // Premise: the toolbar that would offer Reset all is on screen, and no form opened on top of the grid.
+                await expect(page.getByTestId('tx-bulk-add-row')).toBeVisible();
+                await expect(page.getByTestId('tx-form-modal')).toBeHidden();
+                // Settled: the editor validated what it opened (a fresh editor counts from zero) and nothing is queued behind it.
+                await expect(root).not.toHaveAttribute('data-validate-runs', '0', {timeout: 25_000});
+                await waitForSettled(root, 25_000);
+            } finally {
+                page.off('request', record);
+            }
+            expect(sent.length, 'premise: the editor sent the validation it ran').toBeGreaterThan(0);
+
+            // Nothing was edited: nothing to save, nothing to reset, no update on the wire.
+            await expect.soft(page.getByTestId('tx-bulk-commit'), 'Save stays disabled once the editor has settled on untouched saved rows').toBeDisabled();
+            await expect.soft(page.getByTestId('tx-bulk-reset-all'), 'no untouched saved row counts as edited').toBeHidden();
+            const ownUpdates = sent.flatMap((batch) => batch.updates.filter((update) => saved.transactionIds.includes(update.id as number)).map((update) => ({path: batch.path, ...update})));
+            expect.soft(ownUpdates, `no validate or commit carries an update for the untouched rows ${saved.transactionIds.join(', ')}`).toEqual([]);
+        });
     });
 });

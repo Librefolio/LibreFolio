@@ -213,6 +213,48 @@ async def create_standalone_tx(
     return data["results"][0]["ids"][0]
 
 
+async def create_split_event(client: httpx.AsyncClient, asset_id: int, event_date: str, ratio: str, currency: str = "USD") -> int:
+    """Create a manual SPLIT AssetEvent (value = ratio, e.g. "2" for 2:1) and return its id.
+
+    Same approach as ``create_split_event`` in test_portfolio_wac.py: upsert the manual event,
+    then read it back by asset and date to learn its id.
+    """
+    resp = await client.post(
+        f"{API_BASE}/assets/events",
+        json=[{"asset_id": asset_id, "events": [{"date": event_date, "type": "SPLIT", "value": {"code": currency, "amount": ratio}}]}],
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 200, f"Event upsert failed: {resp.status_code}: {resp.text}"
+    query_resp = await client.post(
+        f"{API_BASE}/assets/events/query",
+        json=[{"asset_id": asset_id, "date_range": {"start": event_date, "end": event_date}}],
+        timeout=TIMEOUT,
+    )
+    assert query_resp.status_code == 200, f"Event query failed: {query_resp.status_code}: {query_resp.text}"
+    split_events = [event for item in query_resp.json()["items"] if item["asset_id"] == asset_id for event in item["events"] if event["type"] == "SPLIT"]
+    assert len(split_events) == 1, f"Expected 1 SPLIT event on asset {asset_id} at {event_date}, got {query_resp.json()}"
+    return split_events[0]["id"]
+
+
+async def describe_transactions(client: httpx.AsyncClient, tx_ids: list[int]) -> str:
+    """Read the rows back by id and render the fields a pair check looks at, for a failure message."""
+    resp = await client.get(
+        f"{API_BASE}/transactions",
+        params={"ids": tx_ids},
+        timeout=TIMEOUT,
+    )
+    assert resp.status_code == 200, f"Read back of {tx_ids} failed: {resp.text}"
+    by_id = {tx["id"]: tx for tx in resp.json()}
+    rendered = []
+    for tx_id in tx_ids:
+        tx = by_id.get(tx_id)
+        if tx is None:
+            rendered.append(f"id={tx_id} not found")
+            continue
+        rendered.append(f"id={tx_id} broker_id={tx['broker_id']} type={tx['type']} quantity={tx['quantity']} asset_id={tx['asset_id']} asset_event_id={tx['asset_event_id']} related_transaction_id={tx['related_transaction_id']} cost_basis_override={tx['cost_basis_override']}")
+    return "; ".join(rendered)
+
+
 # ============================================================================
 # B1 — SPLIT VIA BATCH PIPELINE
 # ============================================================================
@@ -1096,6 +1138,292 @@ class TestBatchPromote:
             assert Decimal(new_cost["amount"]) == Decimal("10"), f"New receiver {new_id}: expected cost basis EUR 10, got {new_cost}"
             print_success("Promote saved+new with cost basis → linked TRANSFER pair ✓")
 
+    async def test_transfer_pair_create_unbalanced_quantities_is_rejected(self):
+        """TRANSFER pair create -3 on A / +5 on B under one link_uuid → pairQuantityMismatch, not committed.
+
+        This is what the bulk editor sends after promoting two new ADJUSTMENTs (-3 / +5): it promotes
+        them locally, giving both the type TRANSFER and one shared link_uuid, so the backend only sees
+        a plain TRANSFER pair create.
+        """
+        print_section("B2.13 — TRANSFER pair create with unbalanced quantities → pairQuantityMismatch")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "PairQtyA")
+            broker_b = await create_broker(client, "PairQtyB")
+            asset_id = await get_or_create_asset(client)
+
+            # A: +10 (the helper adds its USD 50 cost basis), enough units for the outgoing -3
+            await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="10",
+                tx_date="2026-03-01",
+            )
+
+            link_uuid = str(uuid.uuid4())
+            resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": broker_a,
+                            "asset_id": asset_id,
+                            "type": "TRANSFER",
+                            "date": "2026-03-02",
+                            "quantity": "-3",
+                            "link_uuid": link_uuid,
+                        },
+                        {
+                            "broker_id": broker_b,
+                            "asset_id": asset_id,
+                            "type": "TRANSFER",
+                            "date": "2026-03-02",
+                            "quantity": "5",
+                            "link_uuid": link_uuid,
+                            # The receiver carries its cost basis: the cost basis is not the issue here
+                            "cost_basis_override": {"code": "EUR", "amount": "10"},
+                        },
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            if data["committed"]:
+                new_ids = [tx_id for r in data["results"] if r["operation"] == "create" for tx_id in r["ids"]]
+                rows = await describe_transactions(client, new_ids)
+                pytest.fail(
+                    f"TRANSFER pair create -3 on broker {broker_a} / +5 on broker {broker_b} (link_uuid {link_uuid}) was committed (issues={data['issues']}): persisted {rows}. Broker {broker_b} gains 5 while broker {broker_a} loses 3; expected committed=false with a pairQuantityMismatch issue"
+                )
+            assert any(i.get("code") == "pairQuantityMismatch" for i in data["issues"]), f"Expected pairQuantityMismatch: {data}"
+            print_success("TRANSFER pair create -3 / +5 → pairQuantityMismatch ✓")
+
+    async def test_transfer_pair_create_different_assets_is_rejected(self):
+        """TRANSFER pair create asset X -3 on A / asset Y +3 on B under one link_uuid → pairAssetMismatch, not committed."""
+        print_section("B2.14 — TRANSFER pair create across two assets → pairAssetMismatch")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "PairAssetA")
+            broker_b = await create_broker(client, "PairAssetB")
+            asset_x = await get_or_create_asset(client, "PairAssetX")
+            asset_y = await get_or_create_asset(client, "PairAssetY")
+
+            # A: +10 of X (the helper adds its USD 50 cost basis), enough units for the outgoing -3
+            await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_x,
+                quantity="10",
+                tx_date="2026-03-01",
+            )
+
+            link_uuid = str(uuid.uuid4())
+            resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": broker_a,
+                            "asset_id": asset_x,
+                            "type": "TRANSFER",
+                            "date": "2026-03-02",
+                            "quantity": "-3",
+                            "link_uuid": link_uuid,
+                        },
+                        {
+                            "broker_id": broker_b,
+                            "asset_id": asset_y,
+                            "type": "TRANSFER",
+                            "date": "2026-03-02",
+                            "quantity": "3",
+                            "link_uuid": link_uuid,
+                            # The receiver carries its cost basis: the cost basis is not the issue here
+                            "cost_basis_override": {"code": "EUR", "amount": "10"},
+                        },
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            if data["committed"]:
+                new_ids = [tx_id for r in data["results"] if r["operation"] == "create" for tx_id in r["ids"]]
+                rows = await describe_transactions(client, new_ids)
+                pytest.fail(
+                    f"TRANSFER pair create asset {asset_x} -3 on broker {broker_a} / asset {asset_y} +3 on broker {broker_b} (link_uuid {link_uuid}) was committed (issues={data['issues']}): persisted {rows}. Asset {asset_x} leaves broker {broker_a} while asset {asset_y} appears on broker {broker_b}; expected committed=false with a pairAssetMismatch issue"
+                )
+            assert any(i.get("code") == "pairAssetMismatch" for i in data["issues"]), f"Expected pairAssetMismatch: {data}"
+            print_success("TRANSFER pair create X -3 / Y +3 → pairAssetMismatch ✓")
+
+    async def test_promote_split_linked_adjustment_is_rejected(self):
+        """Promote saved ADJUSTMENT(-10) + saved SPLIT-linked ADJUSTMENT(+10) → eventTypeIncompatible on the promote, not committed.
+
+        Business rule 9 forbids an asset_event_id on a TRANSFER: a promote must not turn an
+        event-linked ADJUSTMENT into an event-linked TRANSFER.
+        """
+        print_section("B2.15 — Promote of a SPLIT-linked ADJUSTMENT → eventTypeIncompatible")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "PromSplitA")
+            broker_b = await create_broker(client, "PromSplitB")
+            asset_id = await get_or_create_asset(client)
+            split_date = "2026-03-10"
+
+            # A: +10 (the helper adds its USD 50 cost basis), the units the outgoing -10 gives
+            await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="10",
+                tx_date="2026-03-01",
+            )
+            # B: +10 before the split, then the 2:1 split realized as an ADJUSTMENT +10 linked to the event
+            await create_standalone_tx(
+                client,
+                broker_b,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="10",
+                tx_date="2026-03-01",
+            )
+            event_id = await create_split_event(client, asset_id, split_date, "2")
+            # Manual cost basis, not "auto": auto deliberately stores no cost basis on a SPLIT-linked row,
+            # and the promoted receiver would then be refused with costBasisRequired, which is not the
+            # subject here. With a cost basis the only problem left is the event link on a TRANSFER.
+            split_resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": broker_b,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": split_date,
+                            "quantity": "10",
+                            "asset_event_id": event_id,
+                            "cost_basis_mode": "manual",
+                            "cost_basis_override": {"code": "EUR", "amount": "10"},
+                        },
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert split_resp.status_code == 200, split_resp.text
+            split_data = split_resp.json()
+            assert split_data["committed"] is True, f"SPLIT-linked ADJUSTMENT(+10) on broker {broker_b} not committed: {split_data}"
+            split_ids = [tx_id for r in split_data["results"] if r["operation"] == "create" and r["index"] == 0 for tx_id in r["ids"]]
+            assert len(split_ids) == 1, f"Expected one id for create 0, got {split_ids}: {split_data}"
+            split_adj_id = split_ids[0]
+            # A: the outgoing -10, on the split date
+            id_minus = await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="-10",
+                tx_date=split_date,
+            )
+
+            # Precondition: the +10 really is a saved ADJUSTMENT linked to the SPLIT event, with its cost basis
+            pre_resp = await client.get(
+                f"{API_BASE}/transactions",
+                params={"ids": [split_adj_id]},
+                timeout=TIMEOUT,
+            )
+            assert pre_resp.status_code == 200, pre_resp.text
+            split_row = {tx["id"]: tx for tx in pre_resp.json()}.get(split_adj_id)
+            assert split_row is not None, f"Saved SPLIT-linked row {split_adj_id} not found: {pre_resp.json()}"
+            assert split_row["type"] == "ADJUSTMENT", f"Row {split_adj_id}: expected ADJUSTMENT before the promote, got {split_row}"
+            assert split_row["asset_event_id"] == event_id, f"Row {split_adj_id}: expected asset_event_id={event_id} before the promote, got {split_row}"
+            assert split_row["cost_basis_override"] is not None, f"Row {split_adj_id}: expected its manual cost basis before the promote, got {split_row}"
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={"promotes": [{"id_a": id_minus, "id_b": split_adj_id}]},
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            if data["committed"]:
+                rows = await describe_transactions(client, [id_minus, split_adj_id])
+                pytest.fail(
+                    f"Promote of saved ADJUSTMENT(-10) id={id_minus} + SPLIT-linked ADJUSTMENT(+10) id={split_adj_id} (SPLIT event {event_id}) was committed (issues={data['issues']}): {rows}. The event-linked ADJUSTMENT became an event-linked TRANSFER; expected committed=false with an eventTypeIncompatible issue on operation promote"
+                )
+            assert any(i.get("code") == "eventTypeIncompatible" and i.get("operation") == "promote" for i in data["issues"]), f"Expected eventTypeIncompatible on operation promote: {data}"
+            print_success("Promote of a SPLIT-linked ADJUSTMENT → eventTypeIncompatible ✓")
+
+    async def test_promote_saved_new_unbalanced_quantities_is_refused(self):
+        """Control: promote saved ADJUSTMENT(-3) + new ADJUSTMENT(+5) → noPromoteRule, not committed.
+
+        The backend already refuses a saved+new promote whose quantities do not cancel
+        (the TRANSFER promote rule wants opposite quantities), although the editor proposes it.
+        """
+        print_section("B2.16 — Promote saved+new with unbalanced quantities → noPromoteRule")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "PromUnbalA")
+            broker_b = await create_broker(client, "PromUnbalB")
+            asset_id = await get_or_create_asset(client)
+
+            # A: +10 (the helper adds its USD 50 cost basis), then the outgoing -3
+            await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="10",
+                tx_date="2026-03-01",
+            )
+            id_minus = await create_standalone_tx(
+                client,
+                broker_a,
+                "ADJUSTMENT",
+                asset_id=asset_id,
+                quantity="-3",
+                tx_date="2026-03-02",
+            )
+
+            new_uuid = str(uuid.uuid4())
+            resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": broker_b,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": "2026-03-02",
+                            "quantity": "5",
+                            "link_uuid": new_uuid,
+                            "cost_basis_override": {"code": "EUR", "amount": "10"},
+                        },
+                    ],
+                    "promotes": [{"id_a": id_minus, "link_uuid_b": new_uuid}],
+                },
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            assert data["committed"] is False, f"Promote of saved ADJUSTMENT(-3) id={id_minus} + new ADJUSTMENT(+5) was committed: {data}"
+            assert any(i.get("code") == "noPromoteRule" and i.get("operation") == "promote" for i in data["issues"]), f"Expected noPromoteRule on operation promote: {data}"
+
+            # Nothing persisted: the saved -3 is still a standalone ADJUSTMENT
+            rows_resp = await client.get(
+                f"{API_BASE}/transactions",
+                params={"ids": [id_minus]},
+                timeout=TIMEOUT,
+            )
+            assert rows_resp.status_code == 200, rows_resp.text
+            saved = {tx["id"]: tx for tx in rows_resp.json()}.get(id_minus)
+            assert saved is not None, f"Saved row {id_minus} not found after the refused promote: {rows_resp.json()}"
+            assert saved["type"] == "ADJUSTMENT", f"Saved row {id_minus}: expected ADJUSTMENT after the refused promote, got {saved}"
+            assert saved["related_transaction_id"] is None, f"Saved row {id_minus}: expected no partner after the refused promote, got {saved}"
+            print_success("Promote saved+new with unbalanced quantities → noPromoteRule ✓")
+
 
 # ============================================================================
 # B3 — PROMOTE-SUGGEST
@@ -1379,3 +1707,141 @@ class TestPromoteSuggest:
         assert captured["count"] == 501
         assert result == {"results": {}}
         print_success("Suggest accepts >500 inputs (no cap) ✓")
+
+    async def test_suggest_never_offers_an_event_linked_candidate(self):
+        """A saved ADJUSTMENT linked to an asset event is never offered as the other half of a TRANSFER; its unlinked twin is.
+
+        D2 (lot 42): no promote target accepts an asset-event link (TRANSFER, CASH_TRANSFER and
+        FX_CONVERSION are all event_compatible=False), so a SPLIT-linked +5 can never be merged with a
+        -5: the editor refuses the pair and the commit refuses the promote with eventTypeIncompatible
+        (B2.15). Offering it is a dead end. The unlinked twin (same broker, day, quantity and cost
+        basis: the link is the one difference) is the control the answer must keep.
+        """
+        print_section("B3.8 — Suggest never offers an event-linked candidate")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "SugEvtCandA")
+            broker_b = await create_broker(client, "SugEvtCandB")
+            asset_id = await get_or_create_asset(client)
+            day = "2026-03-10"
+            event_id = await create_split_event(client, asset_id, day, "2")
+
+            # B: the +5 linked to the SPLIT, with the USD 50 cost basis create_standalone_tx gives its twin below
+            linked_resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {
+                            "broker_id": broker_b,
+                            "asset_id": asset_id,
+                            "type": "ADJUSTMENT",
+                            "date": day,
+                            "quantity": "5",
+                            "asset_event_id": event_id,
+                            "cost_basis_mode": "manual",
+                            "cost_basis_override": {"code": "USD", "amount": "50"},
+                        },
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+            assert linked_resp.status_code == 200, linked_resp.text
+            linked_data = linked_resp.json()
+            assert linked_data["committed"] is True, f"SPLIT-linked ADJUSTMENT(+5) on broker {broker_b} not committed: {linked_data}"
+            linked_ids = [tx_id for r in linked_data["results"] if r["operation"] == "create" and r["index"] == 0 for tx_id in r["ids"]]
+            assert len(linked_ids) == 1, f"Expected one id for create 0, got {linked_ids}: {linked_data}"
+            linked_id = linked_ids[0]
+            # B: the unlinked twin, same day and quantity
+            twin_id = await create_standalone_tx(client, broker_b, "ADJUSTMENT", asset_id=asset_id, quantity="5", tx_date=day)
+
+            # Precondition: the +5 really is saved linked to the SPLIT, and its twin unlinked
+            pre_resp = await client.get(f"{API_BASE}/transactions", params={"ids": [linked_id, twin_id]}, timeout=TIMEOUT)
+            assert pre_resp.status_code == 200, pre_resp.text
+            saved = {tx["id"]: tx for tx in pre_resp.json()}
+            assert saved.get(linked_id, {}).get("asset_event_id") == event_id, f"Row {linked_id}: expected asset_event_id={event_id} before the suggest, got {saved.get(linked_id)}"
+            assert twin_id in saved and saved[twin_id]["asset_event_id"] is None, f"Row {twin_id}: expected no asset_event_id before the suggest, got {saved.get(twin_id)}"
+
+            resp = await client.post(
+                f"{API_BASE}/transactions/promote-suggest",
+                params={"tolerance_days": 7},
+                json=[{"id": -1, "type": "ADJUSTMENT", "broker_id": broker_a, "date": day, "asset_id": asset_id, "quantity": "-5"}],
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, resp.text
+            candidate_ids = [c["id"] for c in resp.json()["results"].get("-1", [])]
+            assert twin_id in candidate_ids, f"Control: the unlinked ADJUSTMENT(+5) id={twin_id} on broker {broker_b} must be offered to a new ADJUSTMENT(-5) on broker {broker_a}; candidates {candidate_ids}"
+            if linked_id in candidate_ids:
+                rows = await describe_transactions(client, [linked_id, twin_id])
+                pytest.fail(
+                    f"promote-suggest offered the SPLIT-linked ADJUSTMENT(+5) id={linked_id} (SPLIT event {event_id}) as the other half of a new ADJUSTMENT(-5) on broker {broker_a}: candidates {candidate_ids}; rows {rows}. No promote target accepts an asset-event link (D2, lot 42), so this pair can never be merged; expected the unlinked twin id={twin_id} and not the linked row"
+                )
+            print_success("Suggest offers the unlinked twin, never the event-linked +5 ✓")
+
+    async def test_suggest_gives_an_event_linked_input_no_candidate(self):
+        """An input linked to an asset event gets no candidate; the same input without the link still finds the +5.
+
+        asset_event_id is the new optional field of TXPromoteSuggestInput (D2, lot 42): the bulk editor
+        sends each row's link, and a row linked to an event, which no promote target accepts, is not
+        offered a pair it can never take. Without the field the answer is today's (control): the new
+        field is backward compatible.
+        """
+        print_section("B3.9 — Suggest: an event-linked input gets no candidate")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "SugEvtInA")
+            broker_b = await create_broker(client, "SugEvtInB")
+            asset_id = await get_or_create_asset(client)
+            day = "2026-03-10"
+            event_id = await create_split_event(client, asset_id, day, "2")
+            # B: a saved, unlinked +5, the other half of a -5 on A
+            plus_id = await create_standalone_tx(client, broker_b, "ADJUSTMENT", asset_id=asset_id, quantity="5", tx_date=day)
+            minus_five = {"id": -1, "type": "ADJUSTMENT", "broker_id": broker_a, "date": day, "asset_id": asset_id, "quantity": "-5"}
+
+            # (i) Control, without the field: the +5 is offered, as today
+            control = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=[minus_five], timeout=TIMEOUT)
+            assert control.status_code == 200, control.text
+            control_ids = [c["id"] for c in control.json()["results"].get("-1", [])]
+            assert plus_id in control_ids, f"Control: ADJUSTMENT(+5) id={plus_id} on broker {broker_b} must be offered to an unlinked ADJUSTMENT(-5) on broker {broker_a}; candidates {control_ids}"
+
+            # (ii) The same -5, linked to the SPLIT: nothing to offer
+            linked = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=[{**minus_five, "asset_event_id": event_id}], timeout=TIMEOUT)
+            if linked.status_code != 200:
+                pytest.fail(
+                    f"promote-suggest answered HTTP {linked.status_code} to an input carrying asset_event_id={event_id}: {linked.text}. asset_event_id is the new optional field of TXPromoteSuggestInput (D2, lot 42); today the StrictModel does not declare it, so the key is refused as an extra field (422)"
+                )
+            linked_ids = [c["id"] for c in linked.json()["results"].get("-1", [])]
+            assert linked_ids == [], f"An ADJUSTMENT(-5) linked to SPLIT event {event_id} was offered candidates {linked_ids} (the unlinked +5 is id={plus_id}): no promote target accepts an asset-event link, so a linked input gets no candidate"
+            print_success("Suggest: an event-linked input gets no candidate, the unlinked one still finds the +5 ✓")
+
+    async def test_suggest_treats_a_null_or_zero_asset_event_id_as_unlinked(self):
+        """asset_event_id null or 0 means "not linked": the answer is exactly the one given without the field.
+
+        The contract of the new optional field (D2, lot 42): None is an unlinked row, and 0 is the
+        editor's unlink sentinel (an update's asset_event_id=0, txPayloadHelpers). Either leaves the
+        answer as it is today, with the unlinked +5 offered.
+        """
+        print_section("B3.10 — Suggest: asset_event_id null or 0 = not linked")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "SugEvtNullA")
+            broker_b = await create_broker(client, "SugEvtNullB")
+            asset_id = await get_or_create_asset(client)
+            day = "2026-03-10"
+            plus_id = await create_standalone_tx(client, broker_b, "ADJUSTMENT", asset_id=asset_id, quantity="5", tx_date=day)
+            minus_five = {"id": -1, "type": "ADJUSTMENT", "broker_id": broker_a, "date": day, "asset_id": asset_id, "quantity": "-5"}
+
+            # Control, without the field
+            control = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=[minus_five], timeout=TIMEOUT)
+            assert control.status_code == 200, control.text
+            control_ids = sorted(c["id"] for c in control.json()["results"].get("-1", []))
+            assert plus_id in control_ids, f"Control: ADJUSTMENT(+5) id={plus_id} on broker {broker_b} must be offered to an unlinked ADJUSTMENT(-5) on broker {broker_a}; candidates {control_ids}"
+
+            for unlinked in (None, 0):
+                resp = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 7}, json=[{**minus_five, "asset_event_id": unlinked}], timeout=TIMEOUT)
+                if resp.status_code != 200:
+                    pytest.fail(
+                        f"promote-suggest answered HTTP {resp.status_code} to an input carrying asset_event_id={unlinked!r}: {resp.text}. asset_event_id is the new optional field of TXPromoteSuggestInput (D2, lot 42), where None and 0 mean not linked; today the StrictModel does not declare it, so the key is refused as an extra field (422)"
+                    )
+                ids = sorted(c["id"] for c in resp.json()["results"].get("-1", []))
+                assert ids == control_ids, f"asset_event_id={unlinked!r} must mean not linked: candidates {ids}, without the field {control_ids}"
+            print_success("Suggest: asset_event_id null or 0 answers as without the field ✓")

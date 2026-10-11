@@ -171,7 +171,9 @@ class TransactionService:
 
         Rules:
         - Both items must share the same `type` (no mixing e.g. TRANSFER + SELL).
-        - TRANSFER requires distinct brokers (same-broker TRANSFER is a no-op).
+        - TRANSFER requires distinct brokers (same-broker TRANSFER is a no-op), one
+          asset, and exactly opposite quantities: what leaves one broker arrives at
+          the other, no unit is created or lost.
         - FX_CONVERSION intra-broker is allowed (multi-currency account use case).
         - CASH_TRANSFER requires distinct brokers (same-broker is a no-op).
 
@@ -189,6 +191,18 @@ class TransactionService:
                 f"TRANSFER requires distinct brokers (both on broker {a.broker_id})",
                 "pairSameBroker",
                 {"brokerId": a.broker_id},
+            )
+        if a.type == TransactionType.TRANSFER and a.asset_id != b.asset_id:
+            return (
+                f"TRANSFER pair must move one asset (got assets {a.asset_id} and {b.asset_id})",
+                "pairAssetMismatch",
+                {"assetA": a.asset_id, "assetB": b.asset_id},
+            )
+        if a.type == TransactionType.TRANSFER and (a.quantity is None or b.quantity is None or a.quantity != -b.quantity):
+            return (
+                f"TRANSFER pair must move the same quantity out and in (got {a.quantity} and {b.quantity})",
+                "pairQuantityMismatch",
+                {"qtyA": str(a.quantity), "qtyB": str(b.quantity)},
             )
         if a.type == TransactionType.CASH_TRANSFER and a.broker_id == b.broker_id:
             return (
@@ -795,25 +809,30 @@ class TransactionService:
         results: Dict[int, List[TXPromoteSuggestCandidate]] = {}
 
         for inp in inputs:
-            # Determine complementary types from promote_from rules
-            complementary: list[tuple[TransactionType, list]] = []
+            # Determine complementary types from promote_from rules. A row linked to an asset event
+            # can only become a type that accepts the link: apply_promotes refuses any other
+            # (`eventTypeIncompatible`), so neither side of a suggestion may carry one.
+            linked_input = bool(inp.asset_event_id)
+            complementary: list[tuple[TransactionType, list, bool]] = []
             for _pair_type, meta in TX_TYPE_METADATA.items():
                 if meta.promote_from is None:
+                    continue
+                if linked_input and not meta.event_compatible:
                     continue
                 for rule in meta.promote_from:
                     if inp.type.value == rule.type_a:
                         comp_type = TransactionType(rule.type_b)
-                        complementary.append((comp_type, rule.field_constraints))
+                        complementary.append((comp_type, rule.field_constraints, meta.event_compatible))
                     elif inp.type.value == rule.type_b:
                         comp_type = TransactionType(rule.type_a)
-                        complementary.append((comp_type, rule.field_constraints))
+                        complementary.append((comp_type, rule.field_constraints, meta.event_compatible))
 
             if not complementary:
                 results[inp.id] = []
                 continue
 
             # Query DB: standalone TX with complementary type, date ±tolerance, accessible broker
-            comp_types = list({ct for ct, _ in complementary})
+            comp_types = list({ct for ct, _, _ in complementary})
             lo = inp.date - timedelta(days=tolerance_days)
             hi = inp.date + timedelta(days=tolerance_days)
 
@@ -835,11 +854,14 @@ class TransactionService:
             candidates: list[TXPromoteSuggestCandidate] = []
             for row in rows:
                 matched = False
-                for comp_type, constraints in complementary:
-                    if row.type == comp_type:
-                        if self._check_promote_constraints(inp_candidate, row, constraints):
-                            matched = True
-                            break
+                for comp_type, constraints, accepts_event in complementary:
+                    if row.type != comp_type:
+                        continue
+                    if row.asset_event_id is not None and not accepts_event:
+                        continue
+                    if self._check_promote_constraints(inp_candidate, row, constraints):
+                        matched = True
+                        break
                 if matched:
                     candidates.append(
                         TXPromoteSuggestCandidate(

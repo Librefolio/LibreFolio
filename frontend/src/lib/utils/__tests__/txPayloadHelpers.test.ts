@@ -284,6 +284,18 @@ describe('fieldEq', () => {
         {key: 'cash', a: cash('EUR', '1.5'), b: cash('USD', '1.5'), expected: false},
         {key: 'cash', a: null, b: null, expected: true},
         {key: 'cash', a: null, b: cash('EUR', '0'), expected: false},
+        // Cost basis is money too, compared by value on fresh objects: the same code and the
+        // same exact decimal are no change, and an object without an amount means "no cost
+        // basis" exactly like null and undefined.
+        {key: 'cost_basis_override', a: cash('EUR', '10'), b: cash('EUR', '10.000000'), expected: true},
+        {key: 'cost_basis_override', a: cash('EUR', '10'), b: cash('EUR', '10'), expected: true},
+        {key: 'cost_basis_override', a: cash('EUR', '10'), b: cash('EUR', '11'), expected: false},
+        {key: 'cost_basis_override', a: cash('EUR', '10'), b: cash('USD', '10'), expected: false},
+        {key: 'cost_basis_override', a: null, b: null, expected: true},
+        {key: 'cost_basis_override', a: null, b: undefined, expected: true},
+        {key: 'cost_basis_override', a: null, b: cash('EUR', '10'), expected: false},
+        {key: 'cost_basis_override', a: cash('EUR', ''), b: null, expected: true},
+        {key: 'cost_basis_override', a: cash('EUR', '  '), b: null, expected: true},
         {key: 'description', a: '', b: null, expected: true},
         {key: 'description', a: 'hello', b: 'hello', expected: true},
         {key: 'description', a: 'hello', b: 'world', expected: false},
@@ -462,6 +474,28 @@ describe('buildUpdateDiff', () => {
         const diff = buildUpdateDiff(baseFields({tags: ['new']}), baseOriginal({tags: []}), rule() as any, rule() as any);
         expect(diff.tags).toEqual(['new']);
     });
+
+    // A saved row with a cost basis opens in manual mode, its cost basis rebuilt as a fresh
+    // object (TransactionBulkModal's fieldsFromTx): the draft never shares the saved row's
+    // reference, so only a comparison by value can tell that the row was left untouched.
+    // REQUIRED_POSITIVE is the mock's ADJUSTMENT: a cost basis is allowed when quantity > 0.
+    const adjustmentRule = rule({quantityRule: 'free', cashField: 'forbidden'});
+    const manualDraft = (override: CashValue) => baseFields({type: 'REQUIRED_POSITIVE', quantity: '5', cash: null, cost_basis_mode: 'manual', cost_basis_override: override});
+    const savedRow = (override: CashValue) => baseOriginal({type: 'REQUIRED_POSITIVE', quantity: '5', cash: null, cost_basis_override: override});
+
+    it.each([
+        ['a representation-only difference', '10', '10.000000'],
+        ['an equal copy', '10', '10'],
+    ])('does not emit a manual cost basis equal to the saved one by value (%s)', (_label, draftAmount, savedAmount) => {
+        const diff = buildUpdateDiff(manualDraft(cash('EUR', draftAmount)), savedRow(cash('EUR', savedAmount)), adjustmentRule as any, adjustmentRule as any);
+        expect(diff).toStrictEqual({id: 99});
+    });
+
+    it('emits a manual cost basis that really changed, as the new value', () => {
+        const changed = cash('EUR', '11');
+        const diff = buildUpdateDiff(manualDraft(changed), savedRow(cash('EUR', '10.000000')), adjustmentRule as any, adjustmentRule as any);
+        expect(diff).toStrictEqual({id: 99, cost_basis_override: changed});
+    });
 });
 
 // =============================================================================
@@ -484,6 +518,19 @@ describe('diffDualItem', () => {
         expect(diff.date).toBe('2024-06-02');
         // broker_id is NOT patchable — should not appear
         expect(diff.broker_id).toBeUndefined();
+    });
+
+    it.each([
+        ['a representation-only difference', '10', '10.000000'],
+        ['an equal copy', '10', '10'],
+    ])('returns only {id} for a manual TRANSFER receiver whose cost basis equals the saved one by value (%s)', (_label, draftAmount, savedAmount) => {
+        // The receiving leg exactly as FormModal's collectDualUpdates diffs it: built by
+        // buildDualCreatePayloads from the draft, then compared with the saved receiver row.
+        const override = cash('EUR', draftAmount);
+        const [, receiver] = buildDualCreatePayloads('transfer_asset', baseFields({type: 'TRANSFER', quantity: '5', cash: null, cost_basis_mode: 'manual', cost_basis_override: override}), {broker_id: 2}, 'uuid-same-cost');
+        expect(receiver.cost_basis_override, 'premise: the manual receiver carries the draft cost basis').toEqual(override);
+        const savedReceiver = baseOriginal({id: 202, broker_id: 2, type: 'TRANSFER', date: String(receiver.date), quantity: String(receiver.quantity), cash: null, cost_basis_override: cash('EUR', savedAmount)});
+        expect(diffDualItem(receiver, savedReceiver, 'manual')).toStrictEqual({id: 202});
     });
 });
 

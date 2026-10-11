@@ -34,7 +34,7 @@ Imported examples: Intesa Sanpaolo `patrimonio` snapshots use positive `ADJUSTME
 
 !!! note "Promote to Transfer"
 
-    Two `ADJUSTMENT` rows with **opposite quantities**, **same asset**, and **different brokers** can be **promoted** to an Asset Transfer pair. This is useful when you initially recorded separate adjustments and later want to link them as a transfer.
+    Two `ADJUSTMENT` rows with **opposite quantities**, **same asset**, and **different brokers** can be **promoted** to an Asset Transfer pair. This is useful when you initially recorded separate adjustments and later want to link them as a transfer. Neither row may be linked to an asset event, a split for instance: a transfer cannot carry that link, so LibreFolio neither suggests nor accepts such a promote.
 
 ---
 
@@ -43,8 +43,10 @@ Imported examples: Intesa Sanpaolo `patrimonio` snapshots use positive `ADJUSTME
 Adjustments with positive quantity **increase** the lot count (FIFO). The cost basis
 for adjustment-created lots depends on whether a **Cost Basis Override** is provided:
 
-- **With override**: the specified value is used as the **per-unit acquisition cost** (WAC — Weighted Average Cost)
-- **Without override**: the lot is created with zero cost (free acquisition — e.g. gifts, airdrops)
+- **With override**: the specified value is used as the **per-unit acquisition cost** (WAC — Weighted Average Cost); an override of **zero** records a free acquisition, such as an airdrop
+- **Without override**: the FIFO lot opens at zero cost, but the average cost (WAC) treats the cost as **unknown**, not free: the units join the position without a cost, its WAC stays incomplete until the position is closed, the Dashboard shows its average cost and unrealized P&L as unavailable, and a data-quality warning names the asset (see [Cost Basis Override](../../technical-analysis/performance-metrics/weighted-average-cost.md#cost-basis-override))
+
+A positive adjustment cannot be saved without a cost basis: enter one, or choose **Auto**, which stores the average cost of the position the units join (zero if it holds none yet). Two kinds of rows can still lack one: an adjustment linked to a **split**, which Auto saves without one because the split keeps the cost already held and spreads it over the new quantity, and rows saved before the cost basis became mandatory.
 
 !!! info "Per-unit value"
 

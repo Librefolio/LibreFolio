@@ -31,6 +31,7 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/components/transactions/import/ReportSetCard.test.ts",
            "src/lib/components/transactions/modals/ParseDetailModal.test.ts",
            "src/lib/utils/transactions/bulkTodos.test.ts",
+           "src/lib/stores/transactions/transactionTypeStore.test.ts",
            "src/routes/(app)/transactions/filterState.test.ts"]
     print(f"\n{Colors.BLUE}Running: TX Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
@@ -624,7 +625,7 @@ def populate_registry(registry: dict) -> None:
         "tx-bulk-promote-cost-basis",
         front_tx_bulk_promote_cost_basis,
         name="TX Bulk Promote Cost Basis Tests",
-        desc="d7c148564 in the bulk editor, owned asset and brokers: a promoted TRANSFER receiver without a cost basis refuses the whole batch with costBasisRequired — PC1 new receiver (Manual, empty) + saved sender via the selection toolbar → create issue; PC2 saved receiver (SPLIT-linked, Auto: stored without a cost basis) + new sender via the banner link → promote issue with ref_id; PC3 «Merge all» with a valid cash pair → the one create issue; each checks the commit answer against the sent request, that nothing was written, and that the refused-save issue jumps to the pair's row only; PC4 the banner offers a new +5 only the saved −5 it cancels, never the saved −3 beside it (nothing saved)",
+        desc="d7c148564 in the bulk editor, owned asset and brokers: a promoted TRANSFER receiver without a cost basis refuses the whole batch with costBasisRequired — PC1 new receiver (Manual, empty) + saved sender via the selection toolbar → create issue; PC3 «Merge all» with a valid cash pair → the one create issue; each checks the commit answer against the sent request, that nothing was written, and that the refused-save issue jumps to the pair's row only; PC4 the banner offers a new +5 only the saved −5 it cancels, never the saved −3 beside it (nothing saved). Lot 42 (D2, a row linked to an asset event is never promoted): PC2 a saved SPLIT-linked receiver beside a new sender → no banner, no selection promote; PC2b the linked receiver outside the editor → the 💡 offers only its unlinked twin; PC2c the linked receiver inside → the editor sends its asset_event_id and the 💡 offers it nothing",
         tests="transactions/tx-bulk-promote-cost-basis.spec.ts",
     )
     add_test(cat, "tx-fx-implied-rate", front_tx_fx_implied_rate, name="TX FX Implied Rate Tests", desc="FX implied rate in banner suffix + FormModal marker + semantic ordering", tests="transactions/tx-fx-implied-rate.spec.ts")
