@@ -26,16 +26,7 @@
     });
 </script>
 
-<div
-    class={summary.missing.length > 0 ? NOTICE.warning : NOTICE.info}
-    role="status"
-    data-testid={testid}
-    data-prices={summary.prices}
-    data-fx={summary.fx}
-    data-cash={summary.cash}
-    data-unchanged={summary.unchanged}
-    data-missing={summary.missing.length}
->
+<div class={summary.missing.length > 0 ? NOTICE.warning : NOTICE.info} role="status" data-testid={testid} data-prices={summary.prices} data-fx={summary.fx} data-cash={summary.cash} data-unchanged={summary.unchanged} data-missing={summary.missing.length}>
     <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span class={BADGE.neutral} data-testid="{testid}-stamp"><RefreshCw size={12} aria-hidden="true" />{stamp}</span>
         <span>{$t(`${KEY}.summary`, {default: 'Copied data read again from LibreFolio: {changes}.', values: {changes}})}</span>

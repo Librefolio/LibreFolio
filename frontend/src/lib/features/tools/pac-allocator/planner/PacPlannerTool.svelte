@@ -357,7 +357,8 @@
                         <HelpTip
                             label={$t(`${PLANNER_KEY}.routing.intro`, {default: 'What each Broker can buy'})}
                             help={$t(`${PLANNER_KEY}.routing.introHelp`, {
-                                default: 'For each Broker, click an Asset to allow or exclude it: in green, the plan may propose buying it there. The limits are measured like the orders of that Broker, in units or as an amount. Empty fields restrict nothing: fill them only when you need a constraint.',
+                                default:
+                                    'For each Broker, click an Asset to allow or exclude it: in green, the plan may propose buying it there. The limits are measured like the orders of that Broker, in units or as an amount. Empty fields restrict nothing: fill them only when you need a constraint.',
                             })}
                             testid="pac-planner-routing-help"
                         />

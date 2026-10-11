@@ -246,15 +246,7 @@
                 {@const manual = fx?.manual ?? false}
                 {@const rate = fx?.rate.trim() ?? ''}
                 {@const status = readState(pair)}
-                <section
-                    class={CARD}
-                    data-testid="pac-planner-fx-pair"
-                    data-pair={pair}
-                    data-purpose={draft.fxPurpose(pair)}
-                    data-mode={manual ? 'manual' : 'auto'}
-                    data-rate={rate === '' ? 'missing' : 'set'}
-                    data-read={status}
-                >
+                <section class={CARD} data-testid="pac-planner-fx-pair" data-pair={pair} data-purpose={draft.fxPurpose(pair)} data-mode={manual ? 'manual' : 'auto'} data-rate={rate === '' ? 'missing' : 'set'} data-read={status}>
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <h3 class="flex flex-wrap items-center gap-1.5 font-semibold text-gray-900 dark:text-gray-100" data-testid="pac-planner-fx-pair-title">
                             <CurrencyCode code={base} />
@@ -352,14 +344,7 @@
 </div>
 
 {#if adding}
-    <FxPairAddModal
-        bind:open={addOpen}
-        initialBase={adding.base}
-        initialQuote={adding.quote}
-        oncreated={afterCreation(adding.pair)}
-        onsynced={afterDownload(adding.pair)}
-        onclose={() => (adding = null)}
-    />
+    <FxPairAddModal bind:open={addOpen} initialBase={adding.base} initialQuote={adding.quote} oncreated={afterCreation(adding.pair)} onsynced={afterDownload(adding.pair)} onclose={() => (adding = null)} />
 {/if}
 
 {#if syncing}
