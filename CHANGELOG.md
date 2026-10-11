@@ -81,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The help of the AI Export detail levels gives the time buckets of the slower indicators too (84, 28 and 14 days), next to those of prices (30, 14 and 7).
 - **AI Export values a lot at its opening date with the asset's quote base.** In the Asset export, a lot's opening market value multiplied the quoted price by the quantity without the asset's quote base, so a bond quoted per 100 of nominal came out 100 times too large. It is now computed like every other valuation. Present since v1.1.0.
 - **The lot detail of the Asset export is a compact table again.** Since v1.1.0 it came out as a YAML block about four times longer, where brokers appeared as internal numbers instead of the B1, B2… references of the directory. It is now a table like the other sections, with the same data. Present since v1.1.0.
+- **AI Export names the portfolio weight consistently.** When an asset's portfolio weight was unavailable, the Asset export listed it as `portfolio_weight_ratio` while showing it as `portfolio_weight_percent`; both now use the public name. Present since v1.1.0.
 
 #### 📥 Imports and transaction editing
 
@@ -209,6 +210,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Broker percentages follow your language.** The gain or loss percentage on a broker's card, your share on the broker page and the shares in its sharing panel always used a dot as the decimal separator; they now follow the interface language (12,34 % in French).
 - Spanish and French wording: in Spanish exchange rates are *tipos de cambio* and brokers *bróker*/*brókeres*; in French an upload is *téléverser* (*télécharger* stays for downloads); *données* and *Comparación* get their accents.
 - **More of the interface follows your language.** The date range presets use the interface's unit letters (*1S*, *1A* in Italian, French and Spanish), as does the rolling return's window on the asset page, and the data editor's status column and badges and the chart settings' *Auto*, *Min* and *Max*, which were always in English, are translated.
+- **Period labels follow your language.** The AI Export period buttons and the Δ columns of the Assets and FX tables were in English whatever the interface language; they now use the reader's letters, as the date picker does (Δ 1G, Δ 1S… in Italian). Present since v1.1.0.
 - In **Admin › Global Settings**, the scheduler switch is named in every language, and the history sync times are described as running in the scheduler's timezone, not the server's.
 - The sign-in page no longer offers *Register here* once an administrator has closed registration; the refusal used to come only after the form was filled in.
 - The account creation date in **Settings › Profile** follows the app's language instead of the browser's, also after a language change.
