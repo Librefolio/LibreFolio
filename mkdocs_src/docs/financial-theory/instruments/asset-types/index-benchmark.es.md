@@ -37,7 +37,7 @@ LibreFolio ofrece dos tipos de benchmarks:
 
 ### 📊 Índices de referencia reales (comparación de activos)
 
-Compare el gráfico de su activo frente a otro activo real (por ejemplo, compare su acción frente al ETF del S&P 500). Esto utiliza la superposición de señales de **Comparación de Activos**.
+Compara el gráfico de tu activo frente a otro activo real (por ejemplo, compara tu acción frente al ETF del S&P 500). Esto utiliza la superposición de señales de **Comparación de Activos**.
 
 ### 🎯 Benchmarks Sintéticos
 

@@ -96,7 +96,7 @@ Cuando múltiples transacciones ocurren en la misma fecha:
 
 ## 🔄 Anulación del coste base {: #cost-basis-override }
 
-Para transferencias y ajustes, LibreFolio admite una **anulación del coste base**: un coste unitario, en una moneda de su elección, que representa el coste histórico de las unidades que entran. Una transferencia o ajuste que añade cantidad necesita una: el formulario de transacción lo requiere.
+Para transferencias y ajustes, LibreFolio admite una **anulación del coste base**: un coste unitario, en una moneda de tu elección, que representa el coste histórico de las unidades que entran. Una transferencia o ajuste que añade cantidad necesita una: el formulario de transacción lo requiere.
 
 **Cuando se establece (modo manual):**
 
@@ -120,7 +120,7 @@ $$
 
 !!! tip "Modo automático en la interfaz"
 
-    En el formulario de transacción, el interruptor **Auto** calcula el valor cuando usted valida: la vista previa muestra el PMC sugerido y las transacciones de las que proviene, cada una con su efecto.
+    En el formulario de transacción, el interruptor **Auto** calcula el valor cuando validas: la vista previa muestra el PMC sugerido y las transacciones de las que proviene, cada una con su efecto.
 
 ??? example "Ejemplo 4: Transferencia en modo automático — el coste sigue a las unidades"
 

@@ -2,7 +2,7 @@
 
 ## 💡 ¿Qué es el NAV?
 
-El **Valor Liquidativo Neto (NAV)** es la valoración total de mercado de su cartera en un punto en el tiempo $t$. Responde a: *"¿Cuánto vale la cartera en este momento?"*
+El **Valor Liquidativo Neto (NAV)** es la valoración total de mercado de tu cartera en un punto en el tiempo $t$. Responde a: *"¿Cuánto vale la cartera en este momento?"*
 
 ---
 

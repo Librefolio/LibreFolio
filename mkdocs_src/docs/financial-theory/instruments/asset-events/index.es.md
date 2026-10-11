@@ -49,7 +49,7 @@ Los eventos pueden añadirse manualmente a través del **Editor de Datos** o med
 
 ## 📈 Marcadores de Eventos en el Gráfico
 
-Los eventos aparecen como **marcadores en forma de diamante de colores** (◆) en el gráfico de precios interactivo. Cada tipo de evento tiene un color distinto. Pase el cursor sobre un marcador para ver los detalles completos (fecha, tipo, valor, moneda, notas).
+Los eventos aparecen como **marcadores en forma de diamante de colores** (◆) en el gráfico de precios interactivo. Cada tipo de evento tiene un color distinto. Pasa el cursor sobre un marcador para ver los detalles completos (fecha, tipo, valor, moneda, notas).
 
 Hacer doble clic en un marcador de evento mientras el Editor de Datos está abierto **desplazará la vista directamente a la fila de ese evento** en la pestaña de Eventos.
 
