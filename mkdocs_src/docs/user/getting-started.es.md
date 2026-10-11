@@ -42,13 +42,13 @@ Después de registrarte, vuelves a la página de inicio de sesión. Inicia sesi�
 
 La primera vez que inicias sesión, LibreFolio abre una página de **Bienvenida** antes del panel:
 
-- 🌍 Revisa **Idioma** y **Moneda predeterminada**: comienzan con los valores predeterminados de tu administrador.
+- 🌍 Revisa **Idioma** y **Divisa predeterminada**: comienzan con los valores predeterminados de tu administrador.
 - 🖼️ Añade una **foto de perfil** si quieres — de lo contrario, se muestran tus iniciales.
 - ✅ Haz clic en **Continuar** para guardar, o en **Omitir la configuración permanentemente** para mantener la configuración actual.
 - 🚪 ¿Necesitas salir? **Cerrar sesión** está en la esquina superior derecha.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="La página de Bienvenida de la primera ejecución: el bloque de foto de perfil con el avatar de iniciales y Elegir imagen, Idioma y Moneda predeterminada prellenados, la nota de que tu preferencia de tema se mantiene sin cambios, y Omitir configuración permanentemente y Continuar" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="La página de Bienvenida de la primera ejecución: el bloque de foto de perfil con el avatar de iniciales y Elegir imagen, Idioma y Divisa predeterminada prellenados, la nota de que tu preferencia de tema se mantiene sin cambios, y Omitir configuración permanentemente y Continuar" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 Después sigue una breve animación de bienvenida y, luego, el **Recorrido rápido** comienza por sí solo — haz clic en **Iniciar recorrido** para empezar de inmediato, o en **✕** para omitirlo. El recorrido muestra dónde está cada cosa: el botón de menú y, después, **Panel**, **Transacciones**, **Brókeres**, **FX**, **Activos**, **Herramientas** y **Configuración**. Solo señala: nunca abre un formulario ni crea datos.
@@ -153,6 +153,6 @@ Ahora que tu cartera está poblada, puedes:
 
 - 🤝 **[Comparte tu bróker](brokers/sharing.md)** — Da acceso a familiares o asesores.
 - 💱 **[Configura los tipos de cambio](fx/index.md)** — Configura la conversión de divisa para carteras multidivisa.
-- ⚙️ **[Personaliza tus preferencias](settings/preferences.md)** — Ajusta tu idioma, moneda predeterminada y tema. Los administradores también gestionan la **[Configuración global](../admin/settings.md)** de todo el sistema.
+- ⚙️ **[Personaliza tus preferencias](settings/preferences.md)** — Ajusta tu idioma, divisa predeterminada y tema. Los administradores también gestionan la **[Configuración global](../admin/settings.md)** de todo el sistema.
 - 🧭 **[Repite la configuración de bienvenida o los recorridos guiados](settings/preferences.md#onboarding-and-guides)** — Revisa la pantalla de bienvenida, el recorrido rápido o la guía de importación en cualquier momento desde Configuración → Preferencias.
 - 📱 **[Instala LibreFolio como aplicación](pwa.md)** — Ponlo en la pantalla de inicio de tu teléfono o en su propia ventana de escritorio.

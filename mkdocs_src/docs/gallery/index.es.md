@@ -32,7 +32,7 @@
     - **Multimedia y Carga**: Recorte/edición de imágenes, selector de activos, renombrado de archivos
     - **Tipos de Cambio**: Pares de divisas, gráficos, sincronización, editor de datos, importación CSV
     - **Activos**: Seguimiento de acciones, ETF, bonos, criptomonedas con gráficos, señales, medidas y clasificación
-    - **Análisis de riesgo**: Matriz de correlación, comparación de pérdidas, riesgo/rentabilidad frente a un índice de referencia, reproducción histórica y simulación
+    - **Análisis de riesgo**: Matriz de correlación, comparación de pérdidas, riesgo/rentabilidad frente a un índice de referencia, repetición histórica y simulación
     - **Herramientas**: Catálogo de cálculos independientes, con el asignador PAC
 
 ## 🌍 Soporte de Idiomas

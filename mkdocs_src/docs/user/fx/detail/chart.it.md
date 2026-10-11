@@ -25,7 +25,7 @@ Cambia con **Abs** / **%** nell'angolo in alto a sinistra del grafico; la pagina
 | **Zoom** | Rotella del mouse | Pinch |
 | **Pan** | Clicca e trascina | Trascina con due dita (un dito scorre la pagina) |
 
-- **Periodo**: le preimpostazioni da **1W** a **2Y**, **YTD** e **Tutti**, oppure **Personalizzato** (un numero di giorni,
+- **Periodo**: le preimpostazioni da **1S** a **2A**, **YTD** e **Tutti**, oppure **Personalizzato** (un numero di giorni,
   settimane, mesi o anni indietro da oggi); clicca sulle date per sceglierle su un calendario. Altre preimpostazioni
   compaiono quando la barra degli strumenti ha spazio. Le pagine della stessa scheda del browser condividono il periodo.
 - Su un periodo lungo il grafico raggruppa i tassi per settimana o mese e mostra un badge **Settimanale** o

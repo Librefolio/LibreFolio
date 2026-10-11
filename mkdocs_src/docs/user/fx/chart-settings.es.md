@@ -49,7 +49,7 @@ haces clic en **Aplicar**; **Cancelar** pregunta antes de descartar tus cambios.
 | **Colores de Referencia** | Verde por encima, rojo por debajo del inicio del periodo |
 | **Relleno de área** | Degradado bajo la línea |
 | **Líneas de cuadrícula** | Cuadrícula discontinua horizontal |
-| **Degradado Datos Antiguos** | Atenúa los días sin un valor nuevo, que repiten uno anterior |
+| **Degradado datos obsoletos** | Atenúa los días sin un valor nuevo, que repiten uno anterior |
 
 ### 📏 Rangos de ejes
 

@@ -8,7 +8,7 @@ sobre el par o sobre lo que significa para lo que tienes. Las opciones y cómo p
 
 ## 📍 Dónde encontrarlo
 
-En la página de detalle de un par, selecciona **Exportar IA** en la barra de herramientas de la página. Se abre inicialmente en
+En la página de detalle de un par, selecciona **Exportación IA** en la barra de herramientas de la página. Se abre inicialmente en
 **Análisis del par de divisas**.
 
 La exportación cubre el par abierto en la página, con el último día del rango de fechas de la página como

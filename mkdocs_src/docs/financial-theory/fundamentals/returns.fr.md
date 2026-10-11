@@ -129,7 +129,7 @@ $$
 R^{[N]}(d) = \frac{\hat{P}(d)}{\hat{P}(d - N)} - 1
 $$
 
-Les préréglages **1W**, **1M**, **3M** et **1Y** fixent $N$ à 7, 30, 90 et 365 jours ; une fenêtre personnalisée compte 7 jours par semaine, 30 par mois et 365 par an. Un point est laissé vide, jamais estimé, lorsqu'une des extrémités n'a pas de clôture résolue ou a une clôture qui n'est pas positive ; lorsqu'aucun point de la plage ne peut être calculé, le résultat est indisponible. Chaque point indique la date de référence demandée et les dates du prix et du taux de change réellement utilisés — voir le [Graphique interactif](../../user/assets/detail/chart.md#rolling-return).
+Les préréglages **1S**, **1M**, **3M** et **1A** fixent $N$ à 7, 30, 90 et 365 jours ; une fenêtre personnalisée compte 7 jours par semaine, 30 par mois et 365 par an. Un point est laissé vide, jamais estimé, lorsqu'une des extrémités n'a pas de clôture résolue ou a une clôture qui n'est pas positive ; lorsqu'aucun point de la plage ne peut être calculé, le résultat est indisponible. Chaque point indique la date de référence demandée et les dates du prix et du taux de change réellement utilisés — voir le [Graphique interactif](../../user/assets/detail/chart.md#rolling-return).
 
 ### ⚖️ Séances ou jours calendaires {: #sessions-or-calendar-days }
 

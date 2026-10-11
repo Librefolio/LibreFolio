@@ -41,7 +41,7 @@ Vous les importez donc **ensemble** : LibreFolio les lit comme un seul **lot de 
     <img class="gallery-img" data-category="brokers" data-name="import-report-set-pairing" alt="Détail Parse du lot : Matching securities ↔ cash, avec les puces de résultat et les raisons avec leur nombre de lignes" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Les fichiers importés ensemble depuis la page [Fichiers](../../files/index.md#broker-reports) ou les **Rapports Téléchargés** d'un courtier forment eux aussi un lot de rapports.
+Les fichiers importés ensemble depuis la page [Fichiers](../../files/index.md#broker-reports) ou les **Rapports téléversés** d'un courtier forment eux aussi un lot de rapports.
 
 Les exports importés avec une version de LibreFolio antérieure à 1.2 ne font partie d'aucun lot de rapports et ne peuvent pas être lus seuls : l'assistant d'importation garde **Analyser** désactivé tant que l'un d'eux est sélectionné. Importez à nouveau tous les exports du lot ensemble, en une seule fois, puis sélectionnez ce lot ; les anciennes copies peuvent être supprimées.
 

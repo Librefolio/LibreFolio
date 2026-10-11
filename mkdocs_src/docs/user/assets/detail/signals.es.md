@@ -59,7 +59,7 @@ Cada línea de una tarjeta, y cada zona de indicadores como el RSI, tiene su pro
 ### ⚠️ Riesgo
 
 - [Caída bajo el pico](../../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md) — cuánto está el precio por debajo de su pico acumulado ([histórico completo](#drawdown-full-history))
-- [Rentabilidad móvil](../../../financial-theory/fundamentals/returns.md#rolling-return-sessions) — rentabilidad solo de precio sobre una ventana móvil
+- [Rendimiento móvil](../../../financial-theory/fundamentals/returns.md#rolling-return-sessions) — rentabilidad solo de precio sobre una ventana móvil
 - [Volatilidad móvil](../../../financial-theory/technical-analysis/risk-metrics/volatility.md) — volatilidad anualizada sobre una ventana móvil
 - [Ratio de Sharpe móvil](../../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md) — exceso de rentabilidad por unidad de volatilidad sobre una ventana móvil
 - [Beta móvil](../../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md) — con qué fuerza sigue el activo a un activo de comparación que elijas
@@ -76,7 +76,7 @@ Los periodos se cuentan en **sesiones**, los días en que el activo cotizó: una
     <img class="gallery-img" data-category="assets" data-name="detail-signals-drawdown" alt="Tarjeta de señal de caída con la casilla de histórico completo">
 </div>
 
-La tarjeta **Drawdown desde el máximo** tiene una casilla **Historial completo**, activada por defecto: la caída se mide desde el precio más alto de todo el histórico del activo, incluso años antes de las fechas en pantalla. Desmárcala para una vista más rápida, medida desde el precio más alto dentro de las fechas en pantalla.
+La tarjeta **Caída desde el máximo** tiene una casilla **Historial completo**, activada por defecto: la caída se mide desde el precio más alto de todo el histórico del activo, incluso años antes de las fechas en pantalla. Desmárcala para una vista más rápida, medida desde el precio más alto dentro de las fechas en pantalla.
 
 ---
 
@@ -89,7 +89,7 @@ El menú **Comparación de datos** añade:
 
 **Sincronizar** (🔄) en una tarjeta de Comparación de activos descarga los precios de ese activo para las fechas del gráfico, junto con los tipos de cambio que lo convierten, para los pares que existan. Cuando el par falta, un ⚠️ ámbar en la tarjeta lo crea; cuando faltan sus tipos, un 🔄 ámbar los sincroniza.
 
-En el modo [Rentabilidad móvil](chart.md#rolling-return) solo permanece la Comparación de activos: cada activo comparado se convierte en una rentabilidad móvil, con la misma ventana y divisa. Las demás señales se ocultan, no se eliminan, y vuelven en el modo **Precios**.
+En el modo [Rendimiento móvil](chart.md#rolling-return) solo permanece la Comparación de activos: cada activo comparado se convierte en un rendimiento móvil, con la misma ventana y divisa. Las demás señales se ocultan, no se eliminan, y vuelven en el modo **Precios**.
 
 ---
 

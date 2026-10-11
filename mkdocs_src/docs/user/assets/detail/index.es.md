@@ -50,7 +50,7 @@ Dividendos, desdoblamientos, interés y otros eventos del activo, dibujados como
 - **El activo** — un punto (verde activo, rojo archivado), su nombre, tipo y divisa, un enlace **Transacciones (N)** cuando tiene alguna transacción, su proveedor (o **✏️ Manual**), y un enlace a su página web: la que definiste en el activo o, si no, la del proveedor.
 - **‹ n/N ›** — el activo anterior o siguiente, manteniendo las mismas fechas (consulta el panel de abajo).
 - **Rango de fechas** y **Convertir a** — el periodo y la divisa del [gráfico](chart.md).
-- **Exportar IA** — copia los datos del activo para un asistente de IA ([Exportación IA de un activo](../../ai-export/asset.md)).
+- **Exportación IA** — copia los datos del activo para un asistente de IA ([Exportación IA de un activo](../../ai-export/asset.md)).
 - **Editar** (✏️) — abre el formulario del activo ([Crear y editar](../create-edit.md)).
 - **Sincronizar** (🔄) — descarga los últimos precios, junto con los de los activos comparados y los tipos de cambio que necesita el gráfico; se muestra como **Recalcular** para una inversión programada. No está disponible para un activo sin proveedor ni para uno archivado.
 - **Recargar** (↻) — recarga los datos de la página a partir de lo que LibreFolio tiene almacenado.

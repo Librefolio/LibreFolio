@@ -1,6 +1,6 @@
 # 📊 Gráficos
 
-Debajo de las tarjetas KPI, el gráfico de **Crecimiento de la Cartera** y el panel de **Asignación Patrimonial** muestran dónde ha estado tu cartera y de qué está compuesta. Ambos siguen el rango temporal y el filtro de brókeres del Panel, y la página de un bróker los muestra solo para ese bróker.
+Debajo de las tarjetas KPI, el gráfico de **Crecimiento de la Cartera** y el panel de **Asignación de activos** muestran dónde ha estado tu cartera y de qué está compuesta. Ambos siguen el rango temporal y el filtro de brókeres del Panel, y la página de un bróker los muestra solo para ese bróker.
 
 ---
 
@@ -151,7 +151,7 @@ En **Velas** e **Ingresos**, los botones de la esquina superior derecha del áre
 
 ## 🥧 Panel de Asignación {: #allocation-panel }
 
-El panel de **Asignación Patrimonial** muestra cómo se reparte tu cartera, hoy y a lo largo del tiempo. Elige una dimensión con las pestañas **Por Tipo**, **Por Sector** y **Geográfica**, y una vista con los dos botones de la esquina superior derecha: el gráfico circular para **Actual**, el gráfico de áreas para **Historial**.
+El panel de **Asignación de activos** muestra cómo se reparte tu cartera, hoy y a lo largo del tiempo. Elige una dimensión con las pestañas **Por Tipo**, **Por Sector** y **Geográfica**, y una vista con los dos botones de la esquina superior derecha: el gráfico circular para **Actual**, el gráfico de áreas para **Historial**.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-alloc" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active alloc-crop-container" data-title="Por tipo (actual)" alt="Asignación por tipo — Actual">
