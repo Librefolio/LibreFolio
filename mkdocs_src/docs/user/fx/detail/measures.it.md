@@ -14,7 +14,7 @@ variazione in % e il tasso annuo.
 ### 📏 Passaggio 1: Attiva la modalità di misura
 
 Fai clic su 📏 (**Aggiungi misura**) in alto a destra del grafico. Il pannello **Misure** sotto il grafico
-si apre e mostra **Attivo — fai clic sul grafico**.
+si apre e mostra **Attiva — clicca sul grafico**.
 
 ### 📍 Passaggio 2: Fai clic sul punto iniziale
 
@@ -35,7 +35,7 @@ La misura viene aggiunta e la modalità di misura si disattiva. Le due date veng
 
 Ogni misura è una scheda che mostra le sue date, la variazione in % e il numero di giorni di calendario;
 puoi anche impostare il colore e lo stile della sua linea. Espandila per cambiare le date e vedere
-**Inizio**, **Fine**, **Δ Assoluto**, **Δ %** e **Δ%/anno** per la coppia FX e per ogni serie sovrapposta sullo stesso asse.
+**Inizio**, **Fine**, **Δ Ass**, **Δ %** e **Δ%/anno** per la coppia FX e per ogni serie sovrapposta sullo stesso asse.
 
 **Δ%/anno** è il tasso annuo (CAGR), con $d$ i giorni di calendario tra le due date:
 

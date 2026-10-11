@@ -12,7 +12,7 @@ Chaque type, avec son effet sur le prix et sa page théorique :
 - 📈 **Intérêt** (`INTEREST`) — intérêt payé par une obligation, un prêt ou un dépôt ; la valeur baisse du montant payé → [📖](../../../financial-theory/instruments/asset-events/interest.md)
 - ✂️ **Division** (`SPLIT`) — les unités sont divisées ; leur nombre change, pas la valeur totale → [📖](../../../financial-theory/instruments/asset-events/split.md)
 - 📊 **Ajustement de prix** (`PRICE_ADJUSTMENT`) — un changement de valeur sans espèces, à la hausse ou à la baisse : une dépréciation, une décote, une revalorisation → [📖](../../../financial-theory/instruments/asset-events/price-adjustment.md)
-- 🏁 **Règlement à l'échéance** (`MATURITY_SETTLEMENT`) — l'actif atteint son échéance et rembourse son capital ; sa valeur cesse de changer → [📖](../../../financial-theory/instruments/asset-events/maturity-settlement.md)
+- 🏁 **Règlement à Échéance** (`MATURITY_SETTLEMENT`) — l'actif atteint son échéance et rembourse son capital ; sa valeur cesse de changer → [📖](../../../financial-theory/instruments/asset-events/maturity-settlement.md)
 
 Les codes entre parenthèses sont ceux qu'attend un [import CSV](data-editor.md#import-from-csv).
 
@@ -33,7 +33,7 @@ En mode **Prix**, les événements apparaissent sous forme de marqueurs sur le [
 
 ## ⚙️ D'où viennent les événements
 
-- **D'un fournisseur**, à chaque synchronisation : les dividendes et divisions de [Yahoo Finance](../providers/yahoo-finance.md), les dividendes de [justETF](../providers/justetf.md), et, depuis l'[investissement programmé](../providers/scheduled-investment.md), les paiements d'intérêt et le règlement final à l'échéance de **Generate Coupon**, plus les événements listés dans le calendrier de l'investissement programmé (**Ajouter un événement** dans le formulaire de l'actif).
+- **D'un fournisseur**, à chaque synchronisation : les dividendes et divisions de [Yahoo Finance](../providers/yahoo-finance.md), les dividendes de [justETF](../providers/justetf.md), et, depuis l'[investissement programmé](../providers/scheduled-investment.md), les paiements d'intérêt et le règlement final à l'échéance de **Générer Coupon**, plus les événements listés dans le calendrier de l'investissement programmé (**Ajouter un événement** dans le formulaire de l'actif).
 - **De vous** : dans l'onglet **Événements** de l'[éditeur de données](data-editor.md), un par un ou depuis un fichier CSV, ou avec **Nouvel événement** dans le champ **Événement lié** d'une transaction.
 
 Une synchronisation actualise les événements du fournisseur et ne touche jamais aux vôtres. Un événement d'un fournisseur est en lecture seule dans l'éditeur, et sa suppression ne dure que jusqu'à ce que le fournisseur le renvoie : pour modifier les événements d'un investissement programmé, modifiez son calendrier.

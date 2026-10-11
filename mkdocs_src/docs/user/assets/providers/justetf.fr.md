@@ -15,7 +15,7 @@ Il fournit en outre la description de chaque fonds ainsi que sa répartition par
 
 ## ✏️ Le configurer
 
-**Search Online** le configure pour vous. Manuellement, dans **Attribution du fournisseur** :
+**Rechercher en Ligne** le configure pour vous. Manuellement, dans **Attribution du fournisseur** :
 
 1. Choisissez **JustETF** comme **Fournisseur**.
 2. Saisissez l'**ISIN** du fonds, par exemple `IE00B4L5Y983` (iShares Core MSCI World).

@@ -9,7 +9,7 @@ tout le monde peut les lire, seuls les administrateurs peuvent les modifier.
 
 ### 🔓 1. Déverrouiller l'onglet
 
-Ouvrez **Paramètres** (icône d'engrenage dans la barre latérale), puis l'onglet **Admin** : son panneau
+Ouvrez **Paramètres** (icône d'engrenage dans la barre latérale), puis l'onglet **Administration** : son panneau
 **Paramètres globaux** regroupe les paramètres par catégorie. Cliquez sur l'**icône de cadenas** (🔒) dans l'en-tête pour le déverrouiller.
 Seuls les administrateurs (superusers) disposent du cadenas ; tous les autres obtiennent une vue en lecture seule.
 
@@ -19,9 +19,9 @@ Seuls les administrateurs (superusers) disposent du cadenas ; tous les autres ob
 
 ### 💾 2. Modifier et enregistrer
 
-- Rien n'est écrit tant que vous ne cliquez pas sur **Enregistrer** à côté d'un paramètre, ou sur **Tout enregistrer** dans l'en-tête.
-  **Défaire** et **Tout défaire** rétablissent les valeurs enregistrées.
-- **Réinitialiser par défaut** et **Tout réinitialiser par défaut** remplissent les valeurs par défaut, prêtes à être enregistrées.
+- Rien n'est écrit tant que vous ne cliquez pas sur **Enregistrer** à côté d'un paramètre, ou sur **Enregistrer Tout** dans l'en-tête.
+  **Rétablir** et **Annuler Tout** rétablissent les valeurs enregistrées.
+- **Réinitialiser** et **Réinitialiser Tout** remplissent les valeurs par défaut, prêtes à être enregistrées.
 - Les valeurs enregistrées s'appliquent immédiatement, sans redémarrage.
 
 ??? note "🔒 Verrouillage avec des modifications non enregistrées — quand une boîte de dialogue demande d'abord"
@@ -48,9 +48,9 @@ Seuls les administrateurs (superusers) disposent du cadenas ; tous les autres ob
 |---|---|---|---|
 | ⏳ Session | **Durée de session** | 24 heures | Combien de temps les utilisateurs restent connectés. Raccourcissez-la sur les appareils partagés ; une nouvelle valeur s'applique à partir de la prochaine connexion de chaque utilisateur. |
 | 🛡️ Sécurité | **Activer l'inscription** | Activé | Permet à de nouvelles personnes de s'inscrire. Désactivez cet interrupteur une fois que tout le monde a un compte, surtout si l'instance est accessible depuis internet. Le premier compte d'une nouvelle instance peut toujours être créé. |
-| 🛡️ Sécurité | **Exiger la vérification par e-mail** | Désactivé | Pas encore actif : l'envoi d'e-mails est une fonctionnalité prévue, donc l'interrupteur est en lecture seule et marqué **Bientôt disponible**. |
+| 🛡️ Sécurité | **Vérification Email Requise** | Désactivé | Pas encore actif : l'envoi d'e-mails est une fonctionnalité prévue, donc l'interrupteur est en lecture seule et marqué **Bientôt**. |
 | 🔄 Tâche de mise à jour | **Planificateur activé** | Activé | Active ou désactive les mises à jour automatiques des prix et des taux de change : voir [Planificateur de données de marché](#market-data-scheduler). |
-| 🧠 Mémoire | **Taille maximale des fichiers téléversés** | 10 Mo | Le plus gros fichier que les utilisateurs peuvent téléverser, rapports de courtiers inclus. Augmentez-la si un gros export est refusé. |
+| 🧠 Mémoire | **Taille Max Téléversement** | 10 Mo | Le plus gros fichier que les utilisateurs peuvent téléverser, rapports de courtiers inclus. Augmentez-la si un gros export est refusé. |
 | 🌍 Valeurs par défaut | **Devise par défaut** | `EUR` | La devise dans laquelle les nouveaux utilisateurs déclarent leurs opérations. |
 | 🌍 Valeurs par défaut | **Langue par défaut** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` ou 🇪🇸 `es`. |
 | 🌍 Valeurs par défaut | **Thème par défaut** | `auto` | ☀️ `light`, 🌙 `dark`, ou 🖥️ `auto`, qui suit l'appareil. |
@@ -65,15 +65,15 @@ affiche leur langue et leur devise pré-remplies. Modifier une valeur par défau
 
 Le planificateur maintient les prix et les taux de change à jour tout seul, même quand personne n'est connecté :
 
-- 💰 **Rafraîchissement du prix actuel** — toutes les quelques minutes, le dernier prix de chaque actif actif qui dispose
+- 💰 **Actualisation des Prix Courants** — toutes les quelques minutes, le dernier prix de chaque actif actif qui dispose
   d'un fournisseur de prix.
-- 📊 **Synchronisation de l'historique** — aux jours et heures que vous choisissez, les prix quotidiens de ces actifs et les
-  taux de chaque paire FX disposant d'un fournisseur, sur l'**Horizon de rétrospection**, pour combler tout manque. Les paires
+- 📊 **Synchronisation Historique** — aux jours et heures que vous choisissez, les prix quotidiens de ces actifs et les
+  taux de chaque paire FX disposant d'un fournisseur, sur l'**Horizon de récupération**, pour combler tout manque. Les paires
   avec uniquement des taux manuels sont ignorées.
 
 ### ⚙️ Configurer la planification
 
-Déverrouillez l'onglet, ouvrez **Tâche de mise à jour** et cliquez sur **Configurer…** dans la ligne **Configuration de la planification**.
+Déverrouillez l'onglet, ouvrez **Tâche de mise à jour** et cliquez sur **Configurer…** dans la ligne **Configuration du Planning**.
 La boîte de dialogue possède son propre bouton **Enregistrer**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
@@ -83,10 +83,10 @@ La boîte de dialogue possède son propre bouton **Enregistrer**.
 | Champ | Valeur par défaut | Ce qu'il définit |
 |---|---|---|
 | **Fuseau horaire** | `UTC` | Le fuseau horaire des heures et des jours ci-dessous ; l'horloge UTC du serveur est affichée à côté. |
-| **Rafraîchir toutes les** | 10 minutes | La fréquence de rafraîchissement des prix actuels, de 1 à 1440 minutes. |
-| **Heures de synchronisation** | `06:00`, `23:00` | Quand la synchronisation de l'historique s'exécute ; **Ajouter une heure** ajoute un créneau. |
+| **Actualiser toutes les** | 10 minutes | La fréquence de rafraîchissement des prix actuels, de 1 à 1440 minutes. |
+| **Heures de synchronisation** | `06:00`, `23:00` | Quand la synchronisation de l'historique s'exécute ; **Ajouter un horaire** ajoute un créneau. |
 | **Jours de synchronisation** | Lun au Sam | Les jours de la synchronisation de l'historique. |
-| **Horizon de rétrospection** | 14 jours | Combien de jours passés chaque synchronisation de l'historique vérifie, de 1 à 365. |
+| **Horizon de récupération** | 14 jours | Combien de jours passés chaque synchronisation de l'historique vérifie, de 1 à 365. |
 
 Conservez au moins une heure et un jour. Astuce : une synchronisation de l'historique après la clôture des marchés (par exemple
 `22:00`) obtient les données les plus complètes.
@@ -119,9 +119,9 @@ lire l'état et le journal.
 ## 🗄️ Caches du serveur {: #server-caches }
 
 Pour rester rapide, LibreFolio garde en mémoire les réponses récentes des fournisseurs et les résultats calculés. Le
-panneau **État des caches**, à la fin de la catégorie **Mémoire**, liste chaque cache avec sa
+panneau **État du cache**, à la fin de la catégorie **Mémoire**, liste chaque cache avec sa
 **Taille / Max** et son **TTL** (combien de temps une entrée est conservée). Cliquez sur un en-tête de colonne pour trier ;
-**Rafraîchir** met à jour les chiffres.
+**Actualiser** met à jour les chiffres.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="settings" data-name="cache-panel" alt="Panneau des caches du serveur dans les Paramètres globaux (catégorie Mémoire)">

@@ -58,10 +58,10 @@ Les photos de profil s'ouvrent avec **Avatar**, les icônes de courtier avec **I
 
 ## ✅ Confirmer ou annuler
 
-- **Recadrer et téléverser** enregistre l'image et l'utilise. Sur la page Fichiers, **Recadrer** l'ajoute plutôt à la liste de téléversement
+- **Recadrer et télécharger** enregistre l'image et l'utilise. Sur la page Fichiers, **Recadrer** l'ajoute plutôt à la liste de téléversement
   (**Restaurer l'original** ↺ ramène l'original), et **Téléverser** envoie la liste.
 - **Annuler** ou **✕** ferme l'outil — après demande, si vous avez des modifications non enregistrées
-  (**Abandonner et fermer**). Depuis le sélecteur d'image, vous revenez au sélecteur.
+  (**Annuler et Fermer**). Depuis le sélecteur d'image, vous revenez au sélecteur.
 
 ??? info "📄 Fichiers non image — sur la page Fichiers"
 

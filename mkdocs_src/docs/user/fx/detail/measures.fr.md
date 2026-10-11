@@ -14,7 +14,7 @@ variation, la variation en % et le taux annuel.
 ### 📏 Étape 1 : Activer le mode de mesure
 
 Cliquez sur 📏 (**Ajouter une mesure**) en haut à droite du graphique. Le panneau **Mesures** sous le
-graphique s'ouvre et affiche **Actif — cliquez sur le graphique**.
+graphique s'ouvre et affiche **Active — cliquez sur le graphique**.
 
 ### 📍 Étape 2 : Cliquer sur le point de départ
 

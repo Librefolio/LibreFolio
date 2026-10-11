@@ -2,7 +2,7 @@
 
 Este manual está dirigido a las personas que instalan y ejecutan LibreFolio. La mayor parte de la
 administración se realiza desde la línea de comandos, mediante variables de entorno o en la
-pestaña **Admin** de configuración de la aplicación.
+pestaña **Administración** de configuración de la aplicación.
 
 ---
 
@@ -35,7 +35,7 @@ la más reciente lado a lado, con un enlace **Cómo actualizar** a la
     <img class="gallery-img" data-category="auth" data-name="update-available-modal" alt="Modal de actualización disponible con la versión actual y la más reciente">
 </div>
 
-- **Recordarme más tarde** cierra la ventana hasta un inicio de sesión posterior.
+- **Recordármelo más tarde** cierra la ventana hasta un inicio de sesión posterior.
 - **Omitir esta versión** detiene el aviso automático para esa versión; se volverá a anunciar una
   más reciente.
 - Una versión se anuncia solo cuando su imagen de Docker se puede descargar, y la ventana espera
@@ -49,7 +49,7 @@ la más reciente lado a lado, con un enlace **Cómo actualizar** a la
 
     Para los usuarios que no son administradores, no se ejecuta ninguna comprobación al iniciar sesión. Si uno de ellos ejecuta
     **Buscar actualizaciones** y existe una versión más reciente, el
-    diálogo **Actualización disponible — contactar con un administrador** muestra una lista de los administradores, con sus
+    diálogo **Actualización disponible — contacta a un administrador** muestra una lista de los administradores, con sus
     direcciones de correo electrónico cuando estén disponibles, para que sepan a quién preguntar.
 
 ---
@@ -86,6 +86,6 @@ Reinicia LibreFolio (con Docker Compose: `docker compose up -d`). Mantén la cla
 quien la conozca puede falsificar una sesión.
 
 Los workers de un único `./dev.py server --workers …` comparten una clave entre sí por sí solos. La duración
-de una sesión es la **Duración de la sesión** en
+de una sesión es la **Duración de Sesión** en
 [Configuración global](settings.md). Para más detalles, consulta la página para desarrolladores
 [Arquitectura de seguridad](../developer/architecture/security.md).

@@ -10,7 +10,7 @@ L'onglet **Profil** gère votre **identité** dans LibreFolio — qui vous êtes
 
 L'onglet s'ouvre **verrouillé** : les champs sont en lecture seule tant que vous n'avez pas cliqué sur le bouton ✏️ **crayon** dans l'en-tête. Cela évite les modifications accidentelles. Si vous verrouillez à nouveau l'onglet alors que des modifications ne sont pas enregistrées, une boîte de dialogue de confirmation vous demande si vous souhaitez les abandonner.
 
-Lorsque l'onglet est déverrouillé, chaque champ modifié affiche ses propres boutons **enregistrer** / **annuler**, et l'en-tête propose **tout enregistrer** et **tout annuler** pour les actions groupées.
+Lorsque l'onglet est déverrouillé, chaque champ modifié affiche ses propres boutons **enregistrer** / **annuler**, et l'en-tête propose **Enregistrer Tout** et **Annuler Tout** pour les actions groupées.
 
 ## 🖼️ Avatar
 
@@ -28,8 +28,8 @@ L'avatar est enregistré immédiatement et est utilisé dans toute l'application
 
 ## ✏️ Nom d'utilisateur, e-mail et date de création
 
-- Les champs **Nom d'utilisateur** et **e-mail** peuvent être modifiés (onglet déverrouillé requis). Les modifications s'appliquent immédiatement à vos identifiants de connexion.
-- Le champ **Date de création** est en lecture seule et indique votre date d'inscription.
+- Les champs **Nom d'utilisateur** et **Email** peuvent être modifiés (onglet déverrouillé requis). Les modifications s'appliquent immédiatement à vos identifiants de connexion.
+- Le champ **Compte Créé** est en lecture seule et indique votre date d'inscription.
 
 ## 🔐 Sécurité
 

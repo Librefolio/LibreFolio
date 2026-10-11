@@ -9,7 +9,7 @@ La pestaña **Preferencias** controla **cómo se ve y se comporta la aplicación
 | Ajuste | Categoría | Descripción |
 |---------|----------|-------------|
 | **Idioma** | 🌍 Visualización | Idioma de la interfaz — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Se aplica en cuanto lo guardas |
-| **Divisa predeterminada** | 💰 Divisa | Tu propia divisa base. El Panel, la página de Brókers y la página de cada bróker, y la pestaña **Correlación** de la página de Activos se abren en ella, y la Exportación IA de un par de divisas también la usa; una divisa que elijas en el Panel se mantiene durante la sesión. También se propone cuando creas algo nuevo — un activo, el primer saldo de efectivo de un bróker nuevo, un plan PAC. Este menú enumera todas las divisas |
+| **Moneda predeterminada** | 💰 Divisa | Tu propia divisa base. El Panel, la página de Brókeres y la página de cada bróker, y la pestaña **Correlación** de la página de Activos se abren en ella, y la Exportación IA de un par de divisas también la usa; una divisa que elijas en el Panel se mantiene durante la sesión. También se propone cuando creas algo nuevo — un activo, el primer saldo de efectivo de un bróker nuevo, un plan PAC. Este menú enumera todas las divisas |
 | **Tema** | 🎨 Apariencia | ☀️ Claro / 🌙 Oscuro / 🖥️ Auto (sigue tu sistema operativo) |
 
 <style>
@@ -26,7 +26,7 @@ Elige una categoría en la barra lateral — en un teléfono, en el menú **Cate
 
 !!! tip "Menús de divisas en el Panel y en las páginas de activos"
 
-    Los menús de divisas del **Panel** y de una página de activo son más cortos que **Divisa predeterminada**: ofrecen solo las divisas de tus pares FX, y **Crear forex…** al final de la lista añade un par que falte. Consulta **[Panel](../dashboard/index.md)**.
+    Los menús de divisas del **Panel** y de una página de activo son más cortos que **Moneda predeterminada**: ofrecen solo las divisas de tus pares FX, y **Crear forex…** al final de la lista añade un par que falte. Consulta **[Panel](../dashboard/index.md)**.
 
 ## 💾 Guardar, deshacer, restablecer
 
@@ -35,8 +35,8 @@ Cada campo conserva su propio estado:
 - Cambia un campo y aparecen **Guardar** y **Deshacer**; el encabezado ofrece **Guardar todo** y **Deshacer todo**
   para cada campo modificado.
 - Cuando un valor guardado difiere del **valor predeterminado de la instancia** (establecido por tu administrador en
-  [Configuración global](../../admin/settings.md)), aparece un botón naranja **Restablecer al valor predeterminado**: devuelve
-  el valor predeterminado al campo, listo para guardar. **Restablecer todo a los valores predeterminados** lo hace para cada
+  [Configuración global](../../admin/settings.md)), aparece un botón naranja **Restablecer**: devuelve
+  el valor predeterminado al campo, listo para guardar. **Restablecer Todo** lo hace para cada
   campo.
 
 ---
@@ -44,8 +44,8 @@ Cada campo conserva su propio estado:
 ## 🧭 Introducción y guías {: #onboarding-and-guides }
 
 La categoría **Introducción** enumera todas las guías, agrupadas según dónde aparecen. Cada una muestra su
-estado — **Pendiente**, **Completada** u **Omitida** — y la versión que has visto.
-**Nueva versión para ver** significa que hay contenido actualizado en espera: la guía se inicia de nuevo la próxima vez que
+estado — **Pendiente**, **Completado** u **Omitido** — y la versión que has visto.
+**Nueva versión por ver** significa que hay contenido actualizado en espera: la guía se inicia de nuevo la próxima vez que
 llegues a ella.
 
 | Grupo | Guías |
@@ -53,14 +53,14 @@ llegues a ella.
 | **Configuración** | Configuración de bienvenida |
 | **Recorrido principal** | Recorrido rápido |
 | **Transacciones** | Resumen de transacciones, Guía para añadir transacciones, Resumen del espacio de trabajo masivo, Guía de importación |
-| **Brókers** | Resumen de brókers, Guía de brókers, Guía de detalles del bróker |
+| **Brókeres** | Resumen de brókeres, Guía de brókeres, Guía de detalles del bróker |
 | **FX** | Resumen de FX, Guía de FX, Guía de detalles del par FX |
 | **Activos** | Resumen de activos, Guía de activos, Guía de detalles del activo |
 
 ### 🔁 Repetir una guía
 
 - **Configuración de bienvenida** y **Recorrido rápido** — **Repetir** las inicia de inmediato.
-- Cualquier otra guía — **Repetir en el próximo desencadenante** la deja lista: se inicia la próxima vez que abras su
+- Cualquier otra guía — **Repetir en la próxima activación** la deja lista: se inicia la próxima vez que abras su
   página, formulario, asistente o espacio de trabajo. **Cancelar activación** lo revierte.
 - **Repetir todo** deja lista cada guía y abre primero la página de Bienvenida.
 
@@ -125,7 +125,7 @@ el signo, de modo que una ganancia sigue leyéndose como ganancia y una pérdida
 `•••` son siempre los mismos tres puntos — incluso la **K** o la **M** de una cifra abreviada desaparece — de modo que
 nunca revela el orden de magnitud. Cubre:
 
-- **Panel**, **Brókers** y los **paneles de riesgo** — sus importes: las tarjetas KPI, los Saldos de efectivo,
+- **Panel**, **Brókeres** y los **paneles de riesgo** — sus importes: las tarjetas KPI, los Saldos de efectivo,
   la información emergente de Asignación, las tarjetas de bróker y la página de detalles del bróker.
 - **[Posiciones](../dashboard/positions.md)** y
   **[Análisis de lotes FIFO](../dashboard/positions.md#fifo-lots-analysis)** — cada importe excepto los
@@ -142,7 +142,7 @@ Los números que no indican **cuánto posees** siguen siendo legibles, para que 
 
 - la **divisa** de cada importe oculto, los **porcentajes** (rentabilidades, ponderaciones, cuotas de asignación,
   rendimiento sobre coste) y los **tipos de cambio**;
-- los **precios por unidad** — precios de mercado, las columnas **Precio** y **Coste medio** de Posiciones, los
+- los **precios por unidad** — precios de mercado, las columnas **Precio** y **PMC** de Posiciones, los
   precios de los lotes y las líneas de precio del gráfico PMC / Precio de mercado;
 - los **recuentos, fechas y nombres**, y los **eventos de activos** como un dividendo o un desdoblamiento, que describen
   el activo más que tu cartera;

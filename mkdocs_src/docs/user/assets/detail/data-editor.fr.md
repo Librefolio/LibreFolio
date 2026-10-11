@@ -10,7 +10,7 @@ L'éditeur de données vous permet de corriger et de compléter manuellement les
 
 ## 🛠️ Modifier les cours et les événements
 
-1. En mode **Cours**, cliquez sur **✏️ Modifier les cours et événements** en haut à droite du graphique. L'éditeur s'ouvre sous le graphique, avec un onglet **Cours** et un onglet **Événements**.
+1. En mode **Prix**, cliquez sur **✏️ Modifier les cours et événements** en haut à droite du graphique. L'éditeur s'ouvre sous le graphique, avec un onglet **Prix** et un onglet **Événements**.
 2. Modifiez ce dont vous avez besoin :
     - **Ajouter une ligne** ajoute une ligne à une date libre : modifiez la date si nécessaire, puis saisissez les valeurs.
     - Cliquez sur une cellule pour la modifier.
@@ -80,7 +80,7 @@ Chaque ligne possède un **Type** (Dividende, Intérêt, Division, Ajustement de
 
 ## 🖱️ Aller à une date depuis le graphique
 
-Avec l'éditeur ouvert, double-cliquez sur un point du graphique (ou appuyez longuement dessus sur un téléphone) pour accéder à cette date : à l'onglet **Événements** lorsque la date comporte un événement, à **Cours** sinon.
+Avec l'éditeur ouvert, double-cliquez sur un point du graphique (ou appuyez longuement dessus sur un téléphone) pour accéder à cette date : à l'onglet **Événements** lorsque la date comporte un événement, à **Prix** sinon.
 
 ---
 

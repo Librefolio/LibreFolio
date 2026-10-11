@@ -24,7 +24,7 @@ Il modulo transazione aggiunge o modifica una transazione — o una coppia colle
 
 Alcune regole rendono l'inserimento rapido:
 
-- **Gli importi sono totali** — digita il totale pagato o ricevuto, non il prezzo per azione (*Importo totale, non per azione*).
+- **Gli importi sono totali** — digita il totale pagato o ricevuto, non il prezzo per azione (*Importo totale (non per singola azione)*).
 - **Digita numeri positivi** — il modulo aggiunge il segno meno dove escono denaro o unità: il pagamento di un acquisto, le unità di una vendita, un prelievo, una commissione, un'imposta. Solo la quantità di una **Rettifica** porta un segno: positivo aggiunge unità, negativo le rimuove.
 - **Controlli mentre procedi** — una volta compilati i campi obbligatori, il modulo verifica la voce rispetto al tuo registro e alle altre righe del workspace bulk, ed elenca eventuali problemi in alto. **⚡ Valida ora** esegue subito il controllo.
 - **Broker o asset mancante?** — **Crea nuovo** nell'elenco dei broker, o **Nuovo asset** nell'elenco degli asset, lo crea senza uscire dal modulo.

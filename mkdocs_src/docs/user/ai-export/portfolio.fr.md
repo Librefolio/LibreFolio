@@ -9,7 +9,7 @@ la [Vue d'ensemble de l'export IA](index.md).
 ## 📍 Où le trouver
 
 Dans le **Tableau de bord**, sélectionnez **Export IA** dans la barre d'outils, à côté de **Actualiser**. Il s'ouvre d'abord sur
-**Plan d'investissement récurrent**.
+**Plan d’investissement récurrent**.
 
 L'export suit le [Tableau de bord](../dashboard/index.md) :
 
@@ -26,7 +26,7 @@ avec une part supérieure à 0 %.
 
 | Choix | Ce que vous obtenez |
 | :--- | :--- |
-| **Vue d'ensemble et historique du portefeuille** | Positions, liquidités, allocations, performance, flux, revenus, coûts enregistrés, un résumé économique FIFO, un contexte de marché compact par actif et le repli |
+| **Portefeuille et évolution** | Positions, liquidités, allocations, performance, flux, revenus, coûts enregistrés, un résumé économique FIFO, un contexte de marché compact par actif et le repli |
 | **Historique des actifs du portefeuille** | Prix détaillés, rendements, indicateurs, états et événements pour chaque actif que vous détenez, avec couverture |
 
 ---
@@ -35,9 +35,9 @@ avec une part supérieure à 0 %.
 
 | Analyse | Ce que fait l'IA |
 | :--- | :--- |
-| **Plan d'investissement récurrent** | Planifie des investissements récurrents conditionnels à partir de vos chiffres, en ne demandant que ce qui lui manque |
+| **Plan d’investissement récurrent** | Planifie des investissements récurrents conditionnels à partir de vos chiffres, en ne demandant que ce qui lui manque |
 | **Rééquilibrage du portefeuille** | Compare votre allocation avec les objectifs que vous indiquez et encadre des pistes de rééquilibrage conditionnelles |
-| **Performance du portefeuille et facteurs de marché** | Explique votre résultat et recherche des facteurs de marché datés pour chaque actif que vous détenez : utilisez une IA capable de rechercher sur le web |
+| **Performance et facteurs de marché** | Explique votre résultat et recherche des facteurs de marché datés pour chaque actif que vous détenez : utilisez une IA capable de rechercher sur le web |
 | **Stratégies de compensation des moins-values** | Explore comment des moins-values fiscales disponibles ou arrivant à expiration pourraient compenser des plus-values, en utilisant vos lots FIFO |
 
 ??? note "📅 Plan d'investissement récurrent — ce que l'IA vous demandera"

@@ -7,7 +7,7 @@ Tú revisas lo que ha leído y resuelves sus dudas; nada se guarda hasta que pul
 
 ## 🚀 Guía paso a paso
 
-1. Exporta un informe de transacciones desde tu bróker: su página en **[Brókers compatibles](index.md)**
+1. Exporta un informe de transacciones desde tu bróker: su página en **[Brókeres compatibles](index.md)**
    indica qué archivo.
 2. En la página **[Transacciones](../index.md)**, haz clic en **Importar** (:material-file-upload:).
 3. Suelta el informe en el asistente, asígnalo a su bróker y sigue los pasos de abajo.
@@ -34,7 +34,7 @@ barra de progreso muestra únicamente los pasos de la importación actual.
 | Paso | Cuándo lo ves |
 | :--- | :--- |
 | 1 · **Subir** | Siempre |
-| 2 · **Seleccionar archivos** | Siempre |
+| 2 · **Seleccionar** | Siempre |
 | 3 · **Analizar** | Siempre |
 | 🧬 **Unificar activos** | El mismo valor aparece con más de un nombre o código |
 | 🔧 **Correcciones** | El importador registró filas que no pudo entender del todo |
@@ -45,10 +45,10 @@ barra de progreso muestra únicamente los pasos de la importación actual.
 ### 📤 Paso 1: Subir
 
 Arrastra tus informes al asistente, o haz clic para elegirlos (CSV o XLSX), y asigna cada uno a
-su bróker — o todos a la vez con **Asignar bróker a las subidas**. Un bróker que falte puede crearse
+su bróker — o todos a la vez con **Broker para subidas**. Un bróker que falte puede crearse
 desde la misma lista (**Crear nuevo**).
 
-- Cada informe que subes se conserva: para reutilizar uno, salta este paso con **Siguiente: Seleccionar archivos**.
+- Cada informe que subes se conserva: para reutilizar uno, salta este paso con **Siguiente: Seleccionar**.
 - Cuando una cuenta llega en varias exportaciones (p. ej. [Danske Bank](danske-bank.md)), súbelas
   juntas: si falta una, el asistente se queda aquí y la nombra.
 
@@ -58,17 +58,17 @@ desde la misma lista (**Crear nuevo**).
 
 #### 🧭 Un archivo en el bróker equivocado {: #wrong-broker }
 
-Cuando haces clic en **Siguiente: Seleccionar archivos**, el asistente comprueba cada archivo que acabas de subir
+Cuando haces clic en **Siguiente: Seleccionar**, el asistente comprueba cada archivo que acabas de subir
 con el **Plugin de importación predeterminado** de su bróker. Si ese plugin no puede leer un archivo, el archivo probablemente
 pertenece a otro bróker, y el asistente te pregunta al respecto antes de continuar (*Este archivo puede pertenecer
 a otro bróker*). De arriba abajo, muestra:
 
 - **Asignado a** — el bróker en el que está el archivo, con su icono y su plugin predeterminado, marcado
-  *no puede leerlo*;
+  *no sabe leerlo*;
 - **Notas del plugin** — por qué ese plugin no puede leer el archivo, cuando lo indica: en tu
   idioma cuando existe una traducción;
-- **Moverlo a** — el bróker cuyo plugin predeterminado *sí puede leerlo*. Cuando los plugins predeterminados de
-  varios brókers pueden leerlo, el aviso lista esos brókers en su lugar: elige uno, el primero ya está
+- **Moverlo a** — el bróker cuyo plugin predeterminado *sabe leerlo*. Cuando los plugins predeterminados de
+  varios brókeres pueden leerlo, el aviso lista esos brókeres en su lugar: elige uno, el primero ya está
   seleccionado.
 
 Después elige:
@@ -76,16 +76,16 @@ Después elige:
 - **Mover a ‹bróker›**, con el icono de ese bróker — el archivo se sube a ese bróker, en la misma
   sesión, y se elimina del equivocado. Si el movimiento falla, un error lo indica y el archivo permanece
   donde estaba;
-- **Mantenerlo aquí** — el archivo se queda, y el asistente lo lee con otro plugin que sí puede, como
-  antes: lo ves en la columna **Plugin** de **Seleccionar archivos**;
-- **Eliminar el archivo** — el archivo se borra.
+- **Dejarlo aquí** — el archivo se queda, y el asistente lo lee con otro plugin que sí puede, como
+  antes: lo ves en la columna **Plugin** de **Seleccionar**;
+- **Quitar el archivo** — el archivo se borra.
 
 Un aviso por archivo, por turno (*Archivo 1 de 3*); cerrarlo mantiene el archivo. Si eliminas todos los archivos
-que acabas de subir, el asistente se queda en **Subir**, listo para otros. Cuando ninguno de tus brókers
+que acabas de subir, el asistente se queda en **Subir**, listo para otros. Cuando ninguno de tus brókeres
 tiene un plugin predeterminado que lea el archivo, el aviso nombra los plugins que sí lo leen — o dice que
 ninguno puede — y solo ofrece mantenerlo o eliminarlo.
 
-A los brókers sin plugin de importación predeterminado nunca se les pregunta, y tampoco a los informes que
+A los brókeres sin plugin de importación predeterminado nunca se les pregunta, y tampoco a los informes que
 reutilizas sin volver a subirlos.
 
 ### 🗂️ Paso 2: Seleccionar archivos
@@ -100,7 +100,7 @@ y para un CSV que hayas creado tú mismo elige **[CSV genérico](generic-csv.md)
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Paso 2 del asistente: Configuración del analizador" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Los **conjuntos de informes** son una sola tarjeta, marcada como un todo. **Leer como**, en su encabezado, cambia cómo se
+Los **conjuntos de informes** son una sola tarjeta, marcada como un todo. **Leído como**, en su encabezado, cambia cómo se
 lee el conjunto, y el menú **⋮** de cada archivo puede sacarlo del conjunto (**Leer por separado con ‹plugin›**,
 **Quitar del conjunto**) — [detalles](danske-bank.md#how-the-set-is-read).
 
@@ -136,8 +136,8 @@ Los mosaicos sobre la tabla cuentan lo que realmente se va a importar; **Ver tod
 </div>
 
 - **Advertencias**: **Continuar** las lista primero; léelas y después haz clic en **Continuar de todos modos**.
-- **Un archivo ha fallado**: un aviso indica por qué. Corrige su plugin en **Seleccionar archivos** y luego haz clic en
-  **Volver a analizar todo**.
+- **Un archivo ha fallado**: un aviso indica por qué. Corrige su plugin en **Seleccionar** y luego haz clic en
+  **Reanalizar todos**.
 
 ### 🧩 Pasos que aparecen solo cuando hacen falta {: #only-when-needed }
 
@@ -157,12 +157,12 @@ Abre el que te muestre el asistente:
     confirmar, **gris** significa nada que decidir.
 
     - **Confirmar** o **Separar** una propuesta; fusiona o separa tarjetas con **⋮** (**Fusionar con…**,
-      **Quitar del grupo**) o arrastrando y soltando.
+      **Sacar del grupo**) o arrastrando y soltando.
     - **Haz clic en una insignia de código** para convertirla en el código principal (⭐) — elige el que se usa para cotizar los precios; los
       demás quedan como alternativas.
-    - **Renombrar** con el lápiz; un valor que ya está en tu biblioteca (**en el archivo histórico**) conserva su nombre.
+    - **Renombrar** con el lápiz; un valor que ya está en tu biblioteca (**en archivo**) conserva su nombre.
     - **Continuar** espera hasta que no haya ninguna propuesta abierta: **Confirmar todo (N)** las resuelve de una vez, y
-      **Restaurar la agrupación automática** empieza de nuevo.
+      **Restaurar agrupación automática** empieza de nuevo.
 
 ??? warning "🔧 Correcciones — cuando el importador registró filas que no pudo entender del todo"
 
@@ -176,10 +176,10 @@ Abre el que te muestre el asistente:
     Las filas se agrupan por pregunta. Da una respuesta a cada una:
 
     - **Corregirla**: elige el tipo y, donde corresponda, el valor y la cantidad, y después
-      **Aplicar corrección**. Una comisión o un impuesto pueden pertenecer a **Sin instrumento (cargo del bróker)**.
+      **Aplicar corrección**. Una comisión o un impuesto pueden pertenecer a **Ningún activo (gasto del bróker)**.
     - **Dividirla**: separa el precio de las comisiones, impuestos o intereses acumulados que figuran en tu
       nota de contrato.
-    - **Mantener tal como se registró**: acepta lo que leyó el importador.
+    - **Dejar como está**: acepta lo que leyó el importador.
 
     **Fila N del archivo** muestra la línea original, y **Restaurar** deshace una respuesta. **Continuar** espera
     a que respondas a todas; **Mantener las N filas restantes tal como se leyeron** responde a todas las abiertas.
@@ -195,7 +195,7 @@ Abre el que te muestre el asistente:
 
     - **Prioridad de archivos**: arrastra los archivos al orden en que confíes y haz clic en **Recalcular por prioridad**.
       Cada grupo conserva la copia del archivo con mayor prioridad — nunca una ya guardada o esperando en el espacio de trabajo masivo.
-    - **Mantener**: marca las copias que quieras importar, fila a fila; **Restablecer valores predeterminados** restaura la elección automática.
+    - **Conservar**: marca las copias que quieras importar, fila a fila; **Restablecer valores** restaura la elección automática.
     - **Comparar** muestra las copias lado a lado, con las diferencias resaltadas.
 
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
@@ -218,7 +218,7 @@ además del archivo cuando importas varios.
 
 El panel **Resolver activos** sobre la cuadrícula lista los valores de tus archivos. Empareja cada uno:
 
-- Busca **En esta importación** y **En el archivo histórico** (tu biblioteca) desde un mismo campo. Las coincidencias probables
+- Busca **En esta importación** y **En el archivo** (tu biblioteca) desde un mismo campo. Las coincidencias probables
   aparecen primero, con una insignia de confianza (**Exacta** a **Baja**); una única coincidencia ya está seleccionada.
 - **Crear “…”** abre el formulario de nuevo activo, rellenado con el nombre y los códigos del informe.
 - ✏️ **Inspeccionar / editar** abre el activo elegido; **Fusionar** aparece cuando dos de tus activos coinciden.
@@ -239,11 +239,11 @@ alternativas. Una nota ámbar en un activo nuevo, como un posible vencimiento, e
 
 | Insignia | Significado | ¿Marcada inicialmente? |
 | :--- | :--- | :--- |
-| **✓ Única** | No hay nada similar guardado | ✅ |
-| **ℹ Posible duplicado** | Una transacción guardada tiene el mismo tipo, fecha, cantidad e importe, pero otra descripción | ✅ — revísala |
-| **⚠ Duplicado probable** | Una transacción guardada coincide, descripción incluida | ⬜ |
+| **✓ Único** | No hay nada similar guardado | ✅ |
+| **ℹ Posible dup** | Una transacción guardada tiene el mismo tipo, fecha, cantidad e importe, pero otra descripción | ✅ — revísala |
+| **⚠ Probable dup** | Una transacción guardada coincide, descripción incluida | ⬜ |
 | **⧉ Duplicado en el lote** | Copia exacta de otra fila de esta importación, o del espacio de trabajo masivo | ⬜ |
-| **≈ Posible duplicado en el lote** | Lo mismo, con otra descripción | ✅ — revísala |
+| **≈ Posible duplicado del lote** | Lo mismo, con otra descripción | ✅ — revísala |
 | **✗ Sin resolver** | Su valor aún no está emparejado | ✅ — emparéjalo o desmárcala |
 | **⛔ Anterior a la apertura** | Con fecha anterior a la fecha de apertura del bróker | No se puede importar |
 | **⏮ Ya en LibreFolio** | Conjuntos de informes: anterior al historial que conserva LibreFolio; ocultas tras un contador | No se puede importar |
@@ -294,7 +294,7 @@ La primera vez que abres el asistente, un bocadillo guía te acompaña:
 - termina resaltando **Guardar todo**, sin pulsarlo;
 - **X** omite solo el consejo actual.
 
-Para volver a verlo, elige **Repetir en el próximo disparador** para la **Guía de importación** en
+Para volver a verlo, elige **Repetir en la próxima activación** para la **Guía de importación** en
 **[Configuración → Preferencias → Introducción y guías](../../settings/preferences.md#onboarding-and-guides)**:
 se inicia con tu próxima importación.
 
@@ -302,5 +302,5 @@ se inicia con tu próxima importación.
 
 ## 🔗 Relacionado
 
-- 🏦 **[Brókers compatibles](index.md)** — qué archivo exportar
+- 🏦 **[Brókeres compatibles](index.md)** — qué archivo exportar
 - 🛠️ **[Funcionamiento interno del asistente de importación](../../../developer/frontend/components/features/import-wizard.md)** — para desarrolladores

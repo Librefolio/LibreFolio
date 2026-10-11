@@ -36,7 +36,7 @@ $$
 \mathrm{Other} = \mathrm{PnL}_{\text{período}} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Como el coste base conserva sus tipos de cambio históricos (véase [Valor contable](book-value.md)), el efecto de los tipos de cambio sobre los activos extranjeros forma parte de $\Delta\mathrm{UGL}$, no de Other. Lo que Other aún contiene es lo que los cuatro componentes no pueden ver, por ejemplo el valor de activos que viajan entre dos brókers en un día límite, o una venta excluida de Realized porque su importe no pudo convertirse o el coste de su posición está incompleto.
+Como el coste base conserva sus tipos de cambio históricos (véase [Valor contable](book-value.md)), el efecto de los tipos de cambio sobre los activos extranjeros forma parte de $\Delta\mathrm{UGL}$, no de Other. Lo que Other aún contiene es lo que los cuatro componentes no pueden ver, por ejemplo el valor de activos que viajan entre dos brókeres en un día límite, o una venta excluida de Realized porque su importe no pudo convertirse o el coste de su posición está incompleto.
 
 ---
 

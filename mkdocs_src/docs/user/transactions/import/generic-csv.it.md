@@ -1,6 +1,6 @@
 # <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6m1.8 18H14v-2h1.8v2m0-3H14v-2h1.8v2m0-3H14V9.8h1.8v4.2M13 9V3.5L18.5 9H13M6 20V4h5v7h7v9H6z"/></svg> Generic CSV
 
-L'importatore **Generic CSV** legge un file CSV che prepari tu stesso. Assegna alle sue colonne i nomi
+L'importatore **CSV generico** legge un file CSV che prepari tu stesso. Assegna alle sue colonne i nomi
 indicati nel [riferimento colonne](#column-reference) — almeno `date` e `type` — e LibreFolio le
 riconosce dai loro nomi: non c'è nulla da mappare manualmente.
 
@@ -15,7 +15,7 @@ riconosce dai loro nomi: non c'è nulla da mappare manualmente.
 1. **Prepara il file.** Salvalo come `.csv` (da Excel, salva una copia come CSV). La sua prima riga
    assegna i nomi alle colonne, come nel [riferimento colonne](#column-reference); le altre colonne vengono ignorate.
 2. **Caricalo** nella **[Procedura guidata di importazione](how-to.md)** e assegnalo al suo broker.
-3. **Controlla il plugin** in **Seleziona file**: se **Generic CSV** non è già selezionato, scegliilo
+3. **Controlla il plugin** in **Seleziona File**: se **CSV generico** non è già selezionato, scegliilo
    nella colonna **Plugin** del file.
 4. **Analizza e controlla.** Ogni riga diventa una transazione.
 
@@ -32,7 +32,7 @@ riconosce dai loro nomi: non c'è nulla da mappare manualmente.
   le assegna un nome diverso. Aggiungila, o rinomina la colonna con un nome accettato, e carica di nuovo il file.
 - **Manca una riga**: le righe che LibreFolio non riesce a leggere — un tipo sconosciuto, una data in
   un formato sconosciuto, una `currency` vuota — vengono saltate ed elencate tra gli avvisi del
-  passaggio **Analisi**; le righe con un segno errato appaiono come problemi di validazione. Correggile nel file e caricalo di nuovo.
+  passaggio **Analizza**; le righe con un segno errato appaiono come problemi di validazione. Correggile nel file e caricalo di nuovo.
 - **Il workspace bulk richiede un costo su una riga `ADJUSTMENT`**: inserisci il costo di **una**
   unità, non il valore totale della posizione.
 

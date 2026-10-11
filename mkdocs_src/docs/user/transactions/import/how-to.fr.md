@@ -1,6 +1,6 @@
 # 🧙 Comment importer des transactions
 
-L'**Assistant d'importation** transforme les rapports que vous téléchargez depuis votre courtier en transactions. Vous vérifiez ce qu'il a lu et levez ses doutes ; rien n'est enregistré tant que vous n'avez pas cliqué sur **Tout enregistrer**.
+L'**Assistant d'importation** transforme les rapports que vous téléchargez depuis votre courtier en transactions. Vous vérifiez ce qu'il a lu et levez ses doutes ; rien n'est enregistré tant que vous n'avez pas cliqué sur **Enregistrer Tout**.
 
 ---
 
@@ -10,7 +10,7 @@ L'**Assistant d'importation** transforme les rapports que vous téléchargez dep
 2. Sur la page **[Transactions](../index.md)**, cliquez sur **Importer** (:material-file-upload:).
 3. Déposez le rapport dans l'assistant, attribuez-le à son courtier et suivez les étapes ci-dessous.
 4. Cliquez sur **Importer N transactions** : les lignes s'ouvrent dans l'espace de travail groupé, pas encore enregistrées.
-5. Jetez-y un dernier coup d'œil et cliquez sur **Tout enregistrer**.
+5. Jetez-y un dernier coup d'œil et cliquez sur **Enregistrer Tout**.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-import-wizard" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Modale d'import rapide" alt="Modale d'import rapide">
@@ -30,20 +30,20 @@ Quatre étapes sont toujours présentes ; les autres n'apparaissent que lorsque 
 
 | Étape | Quand elle apparaît |
 | :--- | :--- |
-| 1 · **Téléversement** | Toujours |
-| 2 · **Sélection des fichiers** | Toujours |
-| 3 · **Analyse** | Toujours |
+| 1 · **Téléverser** | Toujours |
+| 2 · **Sélectionner** | Toujours |
+| 3 · **Analyser** | Toujours |
 | 🧬 **Unifier les actifs** | Le même titre apparaît sous plusieurs noms ou codes |
 | 🔧 **Corrections** | L'importateur a enregistré des lignes qu'il n'a pas pu comprendre entièrement |
 | 🧹 **Doublons** | Le même mouvement figure dans deux des fichiers que vous importez ensemble |
-| 4 · **Vérification** | Toujours |
+| 4 · **Révision** | Toujours |
 | ⚖️ **Aligner avec la banque** | Lots de rapports uniquement, lorsque les chiffres de la banque diffèrent de ceux de LibreFolio |
 
 ### 📤 Étape 1 : Téléversement
 
-Glissez vos rapports dans l'assistant, ou cliquez pour les choisir (CSV ou XLSX), puis attribuez chacun à son courtier — ou tous d'un coup avec **Attribuer un courtier aux téléversements**. Un courtier manquant peut être créé depuis la même liste (**Créer nouveau**).
+Glissez vos rapports dans l'assistant, ou cliquez pour les choisir (CSV ou XLSX), puis attribuez chacun à son courtier — ou tous d'un coup avec **Courtier pour les téléversements**. Un courtier manquant peut être créé depuis la même liste (**Créer nouveau**).
 
-- Chaque rapport que vous téléversez est conservé : pour en réutiliser un, passez cette étape avec **Suivant : Sélection des fichiers**.
+- Chaque rapport que vous téléversez est conservé : pour en réutiliser un, passez cette étape avec **Suivant : Sélectionner**.
 - Lorsqu'un compte arrive en plusieurs exports (par ex. [Danske Bank](danske-bank.md)), téléversez-les ensemble : s'il en manque un, l'assistant reste ici et le nomme.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
@@ -52,19 +52,19 @@ Glissez vos rapports dans l'assistant, ou cliquez pour les choisir (CSV ou XLSX)
 
 #### 🧭 Un fichier dans le mauvais courtier {: #wrong-broker }
 
-Lorsque vous cliquez sur **Suivant : Sélection des fichiers**, l'assistant vérifie chaque fichier que vous venez de téléverser par rapport au **Plugin d'importation par défaut** de son courtier. Si ce plugin ne peut pas lire un fichier, celui-ci appartient probablement à un autre courtier, et l'assistant vous interroge à ce sujet avant de continuer (*Ce fichier appartient peut-être à un autre courtier*). De haut en bas, il affiche :
+Lorsque vous cliquez sur **Suivant : Sélectionner**, l'assistant vérifie chaque fichier que vous venez de téléverser par rapport au **Plugin d'Import par Défaut** de son courtier. Si ce plugin ne peut pas lire un fichier, celui-ci appartient probablement à un autre courtier, et l'assistant vous interroge à ce sujet avant de continuer (*Ce fichier appartient peut-être à un autre courtier*). De haut en bas, il affiche :
 
-- **Attribué à** — le courtier dans lequel se trouve le fichier, avec son icône, et son plugin par défaut, marqué *ne peut pas le lire* ;
+- **Assigné à** — le courtier dans lequel se trouve le fichier, avec son icône, et son plugin par défaut, marqué *ne sait pas le lire* ;
 - **Notes du plugin** — pourquoi ce plugin ne peut pas lire le fichier, lorsqu'il en donne la raison : dans votre langue lorsqu'une traduction existe ;
-- **Déplacer vers** — le courtier dont le plugin par défaut *peut le lire*. Lorsque les plugins par défaut de plusieurs courtiers le lisent, l'invite liste ces courtiers à la place : choisissez-en un, le premier est déjà sélectionné.
+- **Le déplacer vers** — le courtier dont le plugin par défaut *sait le lire*. Lorsque les plugins par défaut de plusieurs courtiers le lisent, l'invite liste ces courtiers à la place : choisissez-en un, le premier est déjà sélectionné.
 
 Choisissez ensuite :
 
 - **Déplacer vers ‹courtier›**, avec l'icône de ce courtier — le fichier est téléversé vers ce courtier, dans la même session, et retiré du mauvais courtier. Si le déplacement échoue, une erreur le signale et le fichier reste où il était ;
-- **Conserver ici** — le fichier reste, et l'assistant le lit avec un autre plugin qui le peut, comme avant : vous le voyez dans la colonne **Plugin** de **Sélection des fichiers** ;
-- **Supprimer le fichier** — le fichier est supprimé.
+- **Le garder ici** — le fichier reste, et l'assistant le lit avec un autre plugin qui le peut, comme avant : vous le voyez dans la colonne **Plugin** de l'étape **Sélectionner** ;
+- **Retirer le fichier** — le fichier est supprimé.
 
-Une invite par fichier, l'une après l'autre (*Fichier 1 sur 3*) ; la fermer conserve le fichier. Si vous supprimez tous les fichiers que vous venez de téléverser, l'assistant reste sur **Téléversement**, prêt pour d'autres. Lorsqu'aucun de vos courtiers n'a de plugin par défaut qui lit le fichier, l'invite nomme les plugins qui le lisent — ou indique qu'aucun ne le peut — et propose seulement de le conserver ou de le supprimer.
+Une invite par fichier, l'une après l'autre (*Fichier 1 sur 3*) ; la fermer conserve le fichier. Si vous supprimez tous les fichiers que vous venez de téléverser, l'assistant reste sur **Téléverser**, prêt pour d'autres. Lorsqu'aucun de vos courtiers n'a de plugin par défaut qui lit le fichier, l'invite nomme les plugins qui le lisent — ou indique qu'aucun ne le peut — et propose seulement de le conserver ou de le supprimer.
 
 Les courtiers sans plugin d'importation par défaut ne sont jamais questionnés, et les rapports que vous réutilisez sans les téléverser à nouveau non plus.
 
@@ -78,7 +78,7 @@ L'importateur de chaque fichier est détecté pour vous : changez-le dans la col
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Étape 2 de l'assistant : Configuration de l'analyseur" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Les **lots de rapports** forment une seule carte, cochée dans son ensemble. **Lire comme**, dans son en-tête, change la façon dont le lot est lu, et le menu **⋮** de chaque fichier peut le retirer du lot (**Lire seul avec ‹plugin›**, **Retirer du lot**) — [détails](danske-bank.md#how-the-set-is-read).
+Les **lots de rapports** forment une seule carte, cochée dans son ensemble. **Lu comme**, dans son en-tête, change la façon dont le lot est lu, et le menu **⋮** de chaque fichier peut le retirer du lot (**Lire seul avec ‹plugin›**, **Retirer du lot**) — [détails](danske-bank.md#how-the-set-is-read).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-report-set-read-as" alt="Carte de lot de rapports dans Sélection des fichiers avec la liste Lire comme ouverte : Danske Bank (détecté) et Lire les fichiers un par un" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -98,23 +98,23 @@ LibreFolio lit chaque fichier, le vérifie et le résume dans un tableau :
 | :--- | :--- |
 | 📊 | Transactions lues |
 | 🏦 | Titres trouvés |
-| ✗ | Titres pas encore associés à vos actifs — vous les associez dans **Vérification** |
+| ✗ | Titres pas encore associés à vos actifs — vous les associez dans **Révision** |
 | 🔴 | Problèmes de validation : lignes qui n'ont pas pu devenir des transactions |
 | 🔧 | Champs à renseigner avant l'enregistrement (en rouge quand l'un bloque l'enregistrement) |
 | ⚠️ | Avertissements de l'importateur, comme des lignes ignorées |
 
-Les tuiles au-dessus du tableau comptent ce qui sera réellement importé ; **Tout afficher** ouvre les détails.
+Les tuiles au-dessus du tableau comptent ce qui sera réellement importé ; **Voir tout** ouvre les détails.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step3" alt="Étape 3 de l'assistant : Analyse" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 - **Avertissements** : **Continuer** les liste d'abord ; lisez-les, puis cliquez sur **Continuer quand même**.
-- **Un fichier a échoué** : une bannière en explique la raison. Corrigez son plugin dans **Sélection des fichiers**, puis cliquez sur **Tout réanalyser**.
+- **Un fichier a échoué** : une bannière en explique la raison. Corrigez son plugin dans **Sélectionner**, puis cliquez sur **Réanalyser tout**.
 
 ### 🧩 Étapes qui n'apparaissent qu'en cas de besoin {: #only-when-needed }
 
-Selon ce que **Analyse** trouve, jusqu'à trois étapes peuvent précéder **Vérification**, dans cet ordre. Ouvrez celle que l'assistant vous montre :
+Selon ce que l'étape **Analyser** trouve, jusqu'à trois étapes peuvent précéder **Révision**, dans cet ordre. Ouvrez celle que l'assistant vous montre :
 
 ??? abstract "🧬 Unifier les actifs — lorsque le même titre apparaît sous plusieurs noms ou codes"
 
@@ -127,13 +127,13 @@ Selon ce que **Analyse** trouve, jusqu'à trois étapes peuvent précéder **Vé
 
     Chaque carte correspond à un titre : une bordure **vert uni** signifie unifié, **ambre en pointillés** signifie à confirmer, **gris** signifie rien à décider.
 
-    - **Confirmer** ou **Scinder** une proposition ; fusionnez ou séparez des cartes avec **⋮** (**Fusionner avec…**,
+    - **Confirmer** ou **Séparer** une proposition ; fusionnez ou séparez des cartes avec **⋮** (**Fusionner avec…**,
       **Retirer du groupe**) ou par glisser-déposer.
     - **Cliquez sur un badge de code** pour en faire le code principal (⭐) — choisissez celui sur lequel les prix sont cotés ; les
       autres restent comme alternatives.
-    - **Renommez** avec le crayon ; un titre déjà présent dans votre bibliothèque (**dans l'archive**) conserve son nom.
+    - **Renommez** avec le crayon ; un titre déjà présent dans votre bibliothèque (**en archive**) conserve son nom.
     - **Continuer** attend qu'aucune proposition ne soit ouverte : **Tout confirmer (N)** les règle d'un coup, et
-      **Restaurer le regroupement automatique** recommence.
+      **Rétablir le regroupement automatique** recommence.
 
 ??? warning "🔧 Corrections — lorsque l'importateur a enregistré des lignes qu'il n'a pas pu comprendre entièrement"
 
@@ -150,7 +150,7 @@ Selon ce que **Analyse** trouve, jusqu'à trois étapes peuvent précéder **Vé
       **Appliquer la correction**. Des frais ou un impôt peuvent relever de **Aucun instrument (frais du courtier)**.
     - **Scinder** : séparez le prix des commissions, impôts ou intérêts courus figurant sur votre
       note d'opération.
-    - **Conserver tel qu'enregistré** : acceptez ce que l'importateur a lu.
+    - **Garder tel quel** : acceptez ce que l'importateur a lu.
 
     **Ligne N dans le fichier** affiche la ligne d'origine, et **Restaurer** annule une réponse. **Continuer** attend
     chaque réponse ; **Conserver les N lignes restantes telles que lues** répond à toutes les questions ouvertes.
@@ -158,7 +158,7 @@ Selon ce que **Analyse** trouve, jusqu'à trois étapes peuvent précéder **Vé
 ??? note "🧹 Doublons — lorsque le même mouvement figure dans deux des fichiers que vous importez ensemble"
 
     Le même mouvement figure dans deux des fichiers que vous importez ensemble, comme un relevé annuel et un relevé
-    trimestriel. Les correspondances avec des transactions déjà enregistrées n'ouvrent pas cette étape : **Vérification** les signale.
+    trimestriel. Les correspondances avec des transactions déjà enregistrées n'ouvrent pas cette étape : **Révision** les signale.
 
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicates-step" alt="Assistant d'importation — étape Doublons avec une paire inter-fichiers">
@@ -167,7 +167,7 @@ Selon ce que **Analyse** trouve, jusqu'à trois étapes peuvent précéder **Vé
     - **Priorité des fichiers** : faites glisser les fichiers dans l'ordre auquel vous faites confiance et cliquez sur **Recalculer par priorité**.
       Chaque groupe conserve la copie du fichier le plus prioritaire — jamais une copie déjà enregistrée ou en attente dans l'espace de travail
       groupé.
-    - **Conserver** : cochez les copies à importer, ligne par ligne ; **Réinitialiser les valeurs par défaut** rétablit le choix automatique.
+    - **Garder** : cochez les copies à importer, ligne par ligne ; **Réinitialiser** rétablit le choix automatique.
     - **Comparer** affiche les copies côte à côte, les différences mises en évidence.
 
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
@@ -190,7 +190,7 @@ plus le fichier lorsque vous en importez plusieurs.
 
 Le panneau **Résoudre les actifs** au-dessus de la grille liste les titres de vos fichiers. Associez chacun :
 
-- Recherchez **Dans cet import** et **Dans l'archive** (votre bibliothèque) depuis un seul champ. Les correspondances probables
+- Recherchez **Dans cet import** et **Dans l’archive** (votre bibliothèque) depuis un seul champ. Les correspondances probables
   viennent en premier, avec un badge de confiance (**Exacte** à **Faible**) ; une correspondance unique est déjà sélectionnée.
 - **Créer « … »** ouvre le formulaire de nouvel actif, prérempli avec le nom et les codes issus du rapport.
 - ✏️ **Inspecter / modifier** ouvre l'actif choisi ; **Fusionner** apparaît lorsque deux de vos actifs correspondent.
@@ -215,7 +215,7 @@ alternatives. Une note ambre sur un nouvel actif, comme une échéance possible,
 | **ℹ Doublon possible** | Une transaction enregistrée a le même type, la même date, la même quantité et le même montant, mais une autre description | ✅ — vérifiez-la |
 | **⚠ Doublon probable** | Une transaction enregistrée correspond, description comprise | ⬜ |
 | **⧉ Doublon dans le lot** | Copie exacte d'une autre ligne de cet import, ou de l'espace de travail groupé | ⬜ |
-| **≈ Doublon possible dans le lot** | La même chose, avec une autre description | ✅ — vérifiez-la |
+| **≈ Doublon possible du lot** | La même chose, avec une autre description | ✅ — vérifiez-la |
 | **✗ Non résolu** | Son titre n'est pas encore associé | ✅ — associez-le ou décochez-le |
 | **⛔ Avant l'ouverture** | Datée avant la date d'ouverture du courtier | Ne peut pas être importée |
 | **⏮ Déjà dans LibreFolio** | Lots de rapports : plus anciens que l'historique détenu par LibreFolio ; masqués derrière un compteur | Ne peut pas être importée |
@@ -240,7 +240,7 @@ titre. Une dernière vérification des doublons s'exécute d'abord : des doublon
 
     Pour un lot de rapports tel que [Danske Bank](danske-bank.md#first-import-align-with-the-bank), LibreFolio
     compare ce qu'il va détenir avec les soldes et positions de la banque. Des cartes présentent chaque point —
-    **Point de départ**, **Après l'écart**, **Vérification de fin de période** — au-dessus des corrections proposées,
+    **Point de départ**, **Après la période manquante**, **Vérification de fin de période** — au-dessus des corrections proposées,
     toutes cochées. Décochez celles que vous ne voulez pas et cliquez sur **Continuer** ; si la comparaison a échoué, continuez
     sans elles.
 
@@ -250,7 +250,7 @@ titre. Une dernière vérification des doublons s'exécute d'abord : des doublon
 
 ### 💾 Enregistrer dans l'espace de travail groupé
 
-Les lignes arrivent dans l'espace de travail groupé sans être enregistrées. Vérifiez-les ou modifiez-les, puis cliquez sur **Tout enregistrer** : cela attend
+Les lignes arrivent dans l'espace de travail groupé sans être enregistrées. Vérifiez-les ou modifiez-les, puis cliquez sur **Enregistrer Tout** : cela attend
 les lignes listées en rouge, et demande confirmation avant d'enregistrer les valeurs listées en ambre que vous n'avez pas
 vérifiées (**Enregistrer quand même**).
 
@@ -263,10 +263,10 @@ La première fois que vous ouvrez l'assistant, une bulle de guide vous accompagn
 - son **Étape N sur M** ne compte que les étapes que vous voyez ; les astuces des étapes facultatives attendent un import
   qui en a besoin ;
 - il ne fait qu'indiquer : il ne clique, ne téléverse et ne modifie jamais à votre place ;
-- il se termine en mettant en évidence **Tout enregistrer**, sans l'actionner ;
+- il se termine en mettant en évidence **Enregistrer Tout**, sans l'actionner ;
 - **X** ne passe que l'astuce en cours.
 
-Pour le revoir, choisissez **Relancer au prochain déclenchement** pour le **Guide d'importation** dans
+Pour le revoir, choisissez **Relancer à la prochaine activation** pour le **Guide d'importation** dans
 **[Paramètres → Préférences → Prise en main et guides](../../settings/preferences.md#onboarding-and-guides)** :
 il démarre à votre prochain import.
 

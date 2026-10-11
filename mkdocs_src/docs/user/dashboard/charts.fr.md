@@ -1,6 +1,6 @@
 # 📊 Graphiques
 
-Sous les cartes KPI, le graphique **Croissance du portefeuille** et le panneau **Allocation d'actifs** montrent l'évolution passée de votre portefeuille et sa composition. Tous deux suivent la plage temporelle et le filtre de courtier du Tableau de bord, et la page d'un courtier les affiche pour ce courtier uniquement.
+Sous les cartes KPI, le graphique **Croissance du portefeuille** et le panneau **Allocation Patrimoniale** montrent l'évolution passée de votre portefeuille et sa composition. Tous deux suivent la plage temporelle et le filtre de courtier du Tableau de bord, et la page d'un courtier les affiche pour ce courtier uniquement.
 
 ---
 
@@ -35,7 +35,7 @@ Le graphique mémorise votre dernière vue, sous-vue P&L incluse, dans ce naviga
 | Ligne — **[Valeur nette](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Vert foncé plein | Valeur totale du portefeuille aux prix de marché actuels |
 | Ligne — **[Capital versé](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Gris pointillé | Capital externe net apporté au fil du temps |
 
-**L'écart entre les deux lignes correspond à votre P&L total** : tous les gains accumulés (latents, réalisés, intérêts et dividendes) moins les frais et les impôts. L'infobulle affiche les deux lignes, le P&L total en vert ou en rouge, et la décomposition : **Actifs au coût d'achat** (l'aire bleue, actifs circulant entre vos courtiers inclus), **Rendements** et **Capital**.
+**L'écart entre les deux lignes correspond à votre P&L total** : tous les gains accumulés (latents, réalisés, intérêts et dividendes) moins les frais et les impôts. L'infobulle affiche les deux lignes, le P&L total en vert ou en rouge, et la décomposition : **Coût des actifs** (l'aire bleue, actifs circulant entre vos courtiers inclus), **Rendements** et **Capital**.
 
 **Les actifs valorisés à leur prix d'achat**, comme les prêts P2P sans prix live de marché, maintiennent la NAV proche du coût d'achat, si bien que l'écart peut être mince : lisez le **P&L total** dans l'infobulle.
 
@@ -115,7 +115,7 @@ L'infobulle donne la période, **Ouverture**, **Clôture**, **Plus haut** et **P
 
 | Colonne | Barres | Ce qu'elle représente |
 |--------|------|--------------------|
-| Revenus et coûts | **Dividende** · **Intérêt** au-dessus de zéro, **Frais et impôts** en dessous | Ce que le portefeuille vous a versé, et ce que l'activité vous a coûté |
+| Revenus et coûts | **Dividende** · **Intérêt** au-dessus de zéro, **Frais et taxes** en dessous | Ce que le portefeuille vous a versé, et ce que l'activité vous a coûté |
 | Dépôts | **Dépôt** | Argent frais que vous avez apporté (les retraits ne sont pas tracés) |
 | Achats | **Coût d'achat**, en deux zones : **Nouveau capital** en bas, **Réinvesti** au-dessus | Ce que vous avez dépensé pour vos achats, réparti selon l'origine de l'argent |
 
@@ -129,7 +129,7 @@ Comment le lire :
 
 - **Nouveau capital ou réinvesti.** Un achat dépense d'abord les rendements déjà détenus sous forme de liquidités chez ce courtier (**Réinvesti**, en vert comme dans **Abs**) ; le reste est du **Nouveau capital** (bleu). Les ventes ne sont jamais tracées.
 - **Les signes sont conservés.** Une correction négative sur un dividende passé réduit la barre de dividende ; les frais et les impôts restent en dessous de zéro.
-- **Cela correspond aux KPI.** Pour les mêmes dates et courtiers, **Dividende** et **Intérêt** correspondent exactement à la ligne **Dividendes et intérêt** de la [carte P&L période](kpi-cards.md#card-1-period-pl).
+- **Cela correspond aux KPI.** Pour les mêmes dates et courtiers, **Dividende** et **Intérêt** correspondent exactement à la ligne **Dividendes et intérêts** de la [carte P&L période](kpi-cards.md#card-1-period-pl).
 - **Une seule entrée de légende.** Les deux zones d'achat sont nommées **Coût d'achat** : un clic masque les deux, ainsi que l'aire **Abs** du même nom.
 - **Taux de change manquants.** Un montant qui ne peut pas être converti à sa date est omis, et non compté comme zéro ; la [bannière de qualité des données](index.md#data-quality-banner) le signale.
 
@@ -151,7 +151,7 @@ Dans **Bougies** et **Revenus**, les boutons dans le coin supérieur droit du gr
 
 ## 🥧 Panneau d'allocation {: #allocation-panel }
 
-Le panneau **Allocation d'actifs** montre comment votre portefeuille est réparti, aujourd'hui et dans le temps. Choisissez une dimension avec les onglets **Par type**, **Par secteur** et **Géographique**, et une vue avec les deux boutons dans le coin supérieur droit : le camembert pour **Maintenant**, le graphique en aires pour **Historique**.
+Le panneau **Allocation Patrimoniale** montre comment votre portefeuille est réparti, aujourd'hui et dans le temps. Choisissez une dimension avec les onglets **Par type**, **Par secteur** et **Géographique**, et une vue avec les deux boutons dans le coin supérieur droit : le camembert pour **Actuel**, le graphique en aires pour **Historique**.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-alloc" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active alloc-crop-container" data-title="Par type (actuel)" alt="Allocation par type — Actuel">
@@ -184,16 +184,16 @@ Le panneau **Allocation d'actifs** montre comment votre portefeuille est répart
 
 ### 🕰️ Maintenant et Historique
 
-- **Maintenant** — l'allocation au dernier jour de la plage sélectionnée : un donut pour **Par type** et **Par secteur**, une carte du monde pour **Géographique**. Survolez une part ou un pays pour obtenir son pourcentage et son montant. Par type, le donut peut avoir [deux anneaux](#allocation-type-rings).
+- **Actuel** — l'allocation au dernier jour de la plage sélectionnée : un donut pour **Par type** et **Par secteur**, une carte du monde pour **Géographique**. Survolez une part ou un pays pour obtenir son pourcentage et son montant. Par type, le donut peut avoir [deux anneaux](#allocation-type-rings).
 - **Historique** — un graphique en aires empilées à 100 % montrant l'évolution de l'allocation dans le temps, pratique pour visualiser le rééquilibrage. Par type, chaque famille est une aire ; survoler une date liste ses sous-types, tels que *ETF générique* et *ETF actions*.
 
 Le panneau mémorise la vue et l'onglet dans ce navigateur, pour chaque utilisateur, et les partage avec les pages des courtiers.
 
 ### 🍩 Deux anneaux par type {: #allocation-type-rings }
 
-Dès que vous détenez un actif doté d'un sous-type, comme un **ETF actions** ou un **Crowdfunding immobilier**, le donut **Maintenant** de **Par type** dessine deux anneaux :
+Dès que vous détenez un actif doté d'un sous-type, comme un **ETF actions** ou un **Crowdfunding immobilier**, le donut **Actuel** de **Par type** dessine deux anneaux :
 
-- **Anneau intérieur** — une part par famille, avec son icône là où elle tient : tous vos ETF (l'**ETF** générique et chaque sous-type) ensemble, **Crowdfund** avec **Crowdfunding immobilier**, et tout autre type, y compris **Liquidités**, isolément. Ce sont les familles que le [menu Type](../assets/create-edit.md#choosing-the-asset-type) de l'actif regroupe.
+- **Anneau intérieur** — une part par famille, avec son icône là où elle tient : tous vos ETF (l'**ETF** générique et chaque sous-type) ensemble, **Crowdfunding** avec **Crowdfunding immobilier**, et tout autre type, y compris **Liquidités**, isolément. Ce sont les familles que le [menu Type](../assets/create-edit.md#choosing-the-asset-type) de l'actif regroupe.
 - **Anneau extérieur** — plus fin et détaché, il divise chaque famille contenant un sous-type en ses membres, dans des nuances de la couleur de la famille, légendés là où il y a de la place. Le membre générique affiche *ETF générique* ou *Crowdfund générique*.
 - **Survolez** une part pour obtenir sa proportion et son montant ; sur l'anneau extérieur, une dernière ligne commençant par **↳** donne la part de toute la famille.
 - **La légende** liste uniquement les familles : cliquer sur l'une d'elles masque ses parts sur les deux anneaux.
