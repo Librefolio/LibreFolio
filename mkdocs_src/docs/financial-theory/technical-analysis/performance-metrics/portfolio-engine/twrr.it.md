@@ -3,6 +3,8 @@
 ## 💡 Cos'è?
 Il TWRR (dall'inglese *Time-Weighted Rate of Return*) misura la **performance "pura"** dei tuoi asset e della tua strategia d'investimento (Il Mercato), ignorando completamente il tempismo (timing) e l'entità dei tuoi depositi o prelievi.
 
+LibreFolio rileva le interruzioni esterne dei sotto-periodi dalle variazioni della base del capitale. Questo include il capitale da ADJUSTMENT/TRANSFER in natura prezzato, quindi gli asset iniziali sono trattati come capitale dell'investitore che entra nel portafoglio, non come rendimento di mercato.
+
 È la metrica standard utilizzata dai fondi comuni di investimento e dagli ETF perché i gestori di fondi non hanno alcun controllo su quando i clienti decidono di versare o prelevare capitali; devono quindi essere valutati unicamente sui rendimenti generati dagli investimenti sottostanti.
 
 ---
