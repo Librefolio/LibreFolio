@@ -1,5 +1,23 @@
 # PAC & Rebalancer — implementation bundle
 
+> 🧭 **Ripartire da qui (2026-10-11, `dev_release2` = `b20eac991`).** Il planner PAC 1.0.0 è integrato con le
+> righe 7–13, 15 e 16; per la 1.2 non resta lavoro. Si riparte dalla riga 14, l'analisi del Rebalancer, poi
+> dagli E2E del PAC insieme a quelli del Rebalancer, e dal [backlog](#backlog) (difetti 1, 2, 5 e opzione (e)).
+> Decidono i cinque design autorevoli. Gate: [Gate del PAC](#gate-del-pac), in una sola corsia
+> `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port … --data-dir …`.
+> La cartella non si archivia (developer, 10/10).
+>
+> - Commit successivi alla tabella delle righe:
+>   - chiusura S10 della riga 16: `09962bea4` `style(pac)`, `aee1e3d28` journal → merge `d5e3ba4d1` (treno 27);
+>   - difetti del lotto 9 nel backlog: `b59ddcfe2` journal → merge `9708050c4` (treno 28);
+>   - difetti 3 e 4 corretti: `161a5b06b` `fix(pac)`, `7c7497527` journal → merge `94f96f06c` (treno 31);
+>   - Prettier sul planner: `a0e32981b` `style(pac)`, `423758463` journal → merge `d06d5ca2e` (treno 32).
+> - Da verificare altrove, in carico al coordinatore dall'11/10:
+>   - gli scatti del PAC dopo `161a5b06b`, cioè «ROUTING –» e «Sintesi»/«Résumé»: M, al prossimo giro della
+>     gallery;
+>   - in it e fr il pulsante del banner nelle pagine utente del PAC («Torna al Riepilogo», «Retour au
+>     récapitulatif») non è quello della UI («Torna a Riepilogo», «Retour à Récapitulatif»): M, scansione 5.4.
+
 **Stato:** READY FOR PLANNING CHECKPOINT.
 **Baseline:** `b0a410b8805789b200aa7a66a2494c397fb1bc52`.
 **Scope corrente:** piani soltanto; nessuna implementazione prodotto è
