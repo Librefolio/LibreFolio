@@ -42,6 +42,20 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 /**
+ * Whether a lot amount row must be shown: an unknown amount (`null`, an FX rate is
+ * missing, shown as «—») or a non-zero one. Only a known zero is hidden; hiding an
+ * unknown would read as zero. Used by the lot charts, the lots table and the custody modal.
+ */
+export function isUnknownOrNonZero(value: number | null | undefined): boolean {
+    return value == null || value !== 0;
+}
+
+/** The sum of two lot amounts, or `null` (unknown) when either is. A known zero is a value. */
+export function addOrNull(left: number | null, right: number | null): number | null {
+    return left == null || right == null ? null : left + right;
+}
+
+/**
  * Apply an alpha channel to a color the charts already computed. Two shapes are
  * understood:
  *

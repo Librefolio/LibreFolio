@@ -152,10 +152,10 @@ def utils_js_cache_fail_loud(verbose: bool = False, test_names: list = None) -> 
 
 
 def utils_gate_docs_links(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the cross-boundary docs link gate (const resolution, plugin discovery, three verdicts)."""
+    """Test the cross-boundary docs link gate (const resolution, plugin discovery, three verdicts, anchors from the render) and the built site's asset URLs."""
     print_section("Utils: Docs Link Gate")
-    print_info("Testing: scripts/docs_links.py")
-    print_info("Tests: const resolution vs deletion, plugin/provider glob, unverifiable bucket")
+    print_info("Testing: scripts/docs_links.py, dev.py mkdocs check-links (_mkdocs_check_anchor, _mkdocs_page_anchors), dev.py mkdocs build (_check_asset_paths_in_built_site)")
+    print_info("Tests: const resolution vs deletion, plugin/provider glob, unverifiable bucket, anchors from the page's MkDocs render in every language, dev.py without MkDocs, relative asset URLs of the built site")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_links_gate.py", test_names)
     return run_command(cmd, "Docs link discovery tests", verbose=verbose)
 
@@ -268,6 +268,33 @@ def utils_translation_code_blocks(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Translation code-block tests", verbose=verbose)
 
 
+def utils_translation_cache(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the translation hash cache counts a language as done only for the EN version it was translated from (Aphra pipeline)."""
+    print_section("Utils: Translation Cache")
+    print_info("Testing: mkdocs_src/aphra-pipeline/translate_docs.py (run_translate, run_stamp, the hash cache transitions)")
+    print_info("Tests: failed, --lang-skipped and interrupted languages after an EN edit (parallel and sequential), an EN edit saved during the analysis (LF/CRLF), failed --force retry, stamp, plain success, the five transitions")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_cache.py", test_names)
+    return run_command(cmd, "Translation cache tests", verbose=verbose)
+
+
+def utils_translation_validator(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the translate-validate checks of R2 batches 11-14 and the block-based LINE_COUNT of the structural diff (Aphra pipeline)."""
+    print_section("Utils: Translation Validator")
+    print_info("Testing: mkdocs_src/aphra-pipeline/validate_translations.py (_strip_code, HTML checks, text-untranslated, inline-code-missing, anchor-missing, html-asset-depth, check_latex, validate_file), page_anchors.py (render_anchors, file_anchors), translate_docs.py (_structural_diff)")
+    print_info("Tests: fence-aware code stripping, inline code never read as HTML, untranslated alt/title/aria-label/data-title, inline code spans kept, link anchors from the page's MkDocs render, raw-HTML file paths one folder deeper, inline math read as arithmatex reads it, LINE_COUNT on blocks")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_validator.py", test_names)
+    return run_command(cmd, "Translation validator tests", verbose=verbose)
+
+
+def utils_docs_fr_typography(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the MkDocs hook that applies French typography to the French pages at build time."""
+    print_section("Utils: Docs French Typography")
+    print_info("Testing: mkdocs_src/hooks/fr_typography.py (typeset, typeset_html, on_page_content, on_nav), its registration in mkdocs_src/mkdocs.yml")
+    print_info("Tests: U+00A0/U+202F before : ; ? ! %, a currency, inside « », thousand groups, never inserted; text only (attributes, comments, code, formulas, raw text untouched); French pages and TOC, French nav labels; a page rendered in memory")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_fr_typography.py", test_names)
+    return run_command(cmd, "Docs French typography tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -375,7 +402,11 @@ Tests for utility modules and helper functions:
         "gate-docs-links",
         utils_gate_docs_links,
         name="Docs Link Gate",
-        desc="Cross-boundary link discovery: a resolved const confirms a link but an unresolved interpolation may never condemn one, plugin/provider folders are found by glob rather than by a hand-written list, and what cannot be decided is reported as unverifiable instead of dropped",
+        desc="Cross-boundary link discovery: a resolved const confirms a link but an unresolved interpolation may never condemn one, plugin/provider folders are found by glob rather than by a hand-written list, and what cannot be decided is reported as unverifiable instead of dropped; a link's anchor must be an id of the page's own MkDocs render in English and in every translation, and dev.py builds its CLI without MkDocs while check-links says it needs it; after mkdocs build every relative file URL of the site (img/source/video/audio, links to files) must resolve, a translation being built one folder deeper, or the build exits 1",
+        # Discovery on files under tmp_path; dev.py runs in child processes, on a docs tree
+        # under tmp_path for the anchor verdict, on a built site under tmp_path for the asset
+        # check, and on the code alone for the runs without MkDocs. Reads mkdocs_src/mkdocs.yml
+        # (the site configuration the anchors are rendered with).
         isolation="pure",
     )
     add_test(
@@ -463,6 +494,40 @@ Tests for utility modules and helper functions:
         desc="Aphra cleanup never collapses whitespace inside fenced code; translated blocks get the EN indentation back before the write; translate-validate raises code-block-indent; every up-to-date translation keeps the EN indentation",
         # Pure functions over strings, plus a read-only pass over mkdocs_src/docs and
         # the translation hash cache: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "translation-cache",
+        utils_translation_cache,
+        name="Translation Cache",
+        desc="A language counts as done only for the EN version it was translated or stamped from: after an EN edit, a language that fails (parallel and sequential paths), is left out by --lang or is cut short by an interruption is offered again by the next run, and its failure keeps the last translated_at; a failed --force retry of an unchanged page stays done; translate-stamp of a changed EN reopens the languages it does not stamp and clears the failure records of those it does; an EN edit saved while the analysis runs is offered again too, the md5 recorded being the one of the bytes translated (LF and CRLF)",
+        # run_translate and run_stamp on a docs tree and a cache under tmp_path, the
+        # LLM seams faked: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "translation-validator",
+        utils_translation_validator,
+        name="Translation Validator",
+        desc="translate-validate reads what a page renders: fenced blocks of any kind and inline code are stripped before the HTML checks, so inline code such as EUR<USD is never a tag while a real tag's class/src/data-* changes are still reported; alt, title, aria-label, data-title and Markdown image alts of three words or more copied from the source warn (text-untranslated); every inline code span of the source stays in the translation, digit grouping aside, named as the source writes it (inline-code-missing); a page.md#anchor link must land on an anchor of the translated target or its EN fallback, the anchors being the ids of the page's own MkDocs render with the site configuration (anchor-missing, page_anchors.py); a raw-HTML relative file path copied unchanged from the source is an error, since a translated page is built one folder deeper (html-asset-depth); inline math is counted as pymdownx.arithmatex reads it (smart dollar), so a price such as 500 $ is never a formula and a formula after a number is never dropped (latex-inline-count); the structural diff counts blocks, not lines, for LINE_COUNT",
+        # Check functions on strings in memory and on a docs tree under tmp_path (DOCS_DIR
+        # redirected in every test): no DB, no server, no network, never opens the repo's
+        # docs or translation cache, no writes outside tmp_path. Reads mkdocs_src/mkdocs.yml
+        # (the site configuration the anchors are rendered with).
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-fr-typography",
+        utils_docs_fr_typography,
+        name="Docs French Typography",
+        desc="The fr_typography MkDocs hook turns the plain whitespace already standing before : (U+00A0), before ; ? ! and % and before a currency symbol after a digit (U+202F), inside « » (U+00A0) and between thousand groups (U+202F) into non-breaking spaces and never inserts one; a : ; ? or ! counts only before whitespace, the end of the text, closing punctuation or an entity, and a year is not joined to the next number; it reads text only: tags and attributes (a quoted > included) and comments pass through byte for byte, code, pre, kbd, samp, var, svg, math and arithmatex formulas are skipped with nesting counted, script, style, textarea and the other raw-text elements up to their end tag (a <!-- inside them opens no comment); it acts on the pages whose source is French (file.locale fr as mkdocs-static-i18n sets it, never the English fallback) and their table of contents at every level, and in the French build on the French navigation labels once mkdocs-static-i18n has put them in; mkdocs.yml registers it, and a French page rendered with the site's Markdown extensions keeps its code, formulas, diagram and attributes",
+        # Strings in memory, the hook loaded by path. Reads mkdocs_src/mkdocs.yml: the hook's
+        # registration, and the site configuration MkDocs loads (plugins and hooks) to render one
+        # page in memory (Page.render, no build) and to dispatch on_nav on navigations built in
+        # the test. No DB, no server, no network, no writes.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")

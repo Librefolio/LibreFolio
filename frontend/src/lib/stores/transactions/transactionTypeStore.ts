@@ -314,14 +314,19 @@ export interface PromoteContext {
     assetB?: number | null;
     qtyA?: number;
     qtyB?: number;
+    /** `asset_event_id` of each row: a row linked to an asset event can only become a
+     *  type that accepts an event link. */
+    eventA?: number | null;
+    eventB?: number | null;
 }
 
 /**
  * Given 2 selected transaction rows, check if any paired type's `promote_from` rules
  * match their types. Returns the first match or null.
  *
- * When `context` is provided, also checks `field_constraints` (broker/currency/asset)
- * to return the correct target type (e.g. CASH_TRANSFER vs FX_CONVERSION).
+ * When `context` is provided, also checks `field_constraints` (broker/currency/asset, and
+ * quantities that cancel exactly) to return the correct target type (e.g. CASH_TRANSFER vs
+ * FX_CONVERSION), and refuses a target that cannot carry the rows' asset-event link.
  * Without context, returns the first type-matching rule (backward compat).
  */
 export function findPromoteMatch(typeA: string, typeB: string, t: (key: string) => string, context?: PromoteContext): PromoteMatch | null {
@@ -353,7 +358,7 @@ export function findPromoteMatch(typeA: string, typeB: string, t: (key: string) 
                 const qA = isForward ? ctx.qtyA : ctx.qtyB;
                 const qB = isForward ? ctx.qtyB : ctx.qtyA;
                 if (qA == null || qB == null) return null;
-                if (c.relation === 'opposite') return (qA > 0 && qB < 0) || (qA < 0 && qB > 0);
+                if (c.relation === 'opposite') return qA !== 0 && qA === -qB;
                 return null;
             }
             default:
@@ -384,6 +389,10 @@ export function findPromoteMatch(typeA: string, typeB: string, t: (key: string) 
                 }
                 if (!allPassed) continue; // constraint failed → try next rule
             }
+
+            // A row linked to an asset event can only become a type that accepts the link.
+            const eventLinked = context?.eventA != null || context?.eventB != null;
+            if (eventLinked && !st.event_compatible) continue;
 
             return {
                 targetType: st.code,

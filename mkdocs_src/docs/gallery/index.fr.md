@@ -22,7 +22,9 @@ Bienvenue dans la galerie visuelle de LibreFolio ! Ici, vous pouvez explorer tou
 !!! tip "Ce que vous verrez"
 
     - **Authentification** : Connexion sécurisée avec indicateur de force du mot de passe
-    - **Tableau de bord** : Aperçu rapide de votre portefeuille
+    - **Sécurité** : Indicateur de sécurité de la connexion dans la barre latérale, ouvert sur son niveau et sa raison
+    - **Prise en main** : Configuration d'accueil au premier lancement, parcours principal guidé et guides contextuels, relançables depuis les Paramètres
+    - **Tableau de bord** : Vue d'ensemble rapide de votre portefeuille
     - **Courtiers** : Gérez plusieurs comptes de courtage
     - **Fichiers** : Importez et gérez les rapports de courtage avec des vues en grille et en tableau
     - **Paramètres** : Personnalisez votre expérience en 4 langues
@@ -30,6 +32,8 @@ Bienvenue dans la galerie visuelle de LibreFolio ! Ici, vous pouvez explorer tou
     - **Média & Téléversement** : Recadrage/édition d'images, sélecteur d'actifs, renommage de fichiers
     - **Taux de change** : Paires de devises, graphiques, synchronisation, éditeur de données, import CSV
     - **Actifs** : Suivez les actions, ETF, obligations, crypto avec graphiques, signaux, mesures & classification
+    - **Analyse des risques** : Matrice de corrélation, comparaison des pertes, risque/rendement par rapport à une référence, rejeu historique et simulation
+    - **Outils** : Catalogue de calculs autonomes, avec l'allocateur PAC
 
 ## 🌍 Support Linguistique
 

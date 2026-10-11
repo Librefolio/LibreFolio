@@ -1,6 +1,6 @@
 # 📉 EMA — Media Móvil Exponencial
 
-La EMA rastrea la **tendencia** suavizando el ruido de los precios diarios, otorgando más peso a las observaciones recientes que a las más antiguas.
+La EMA rastrea la **tendencia** suavizando el ruido de los precios de una sesión a otra, otorgando más peso a las observaciones recientes que a las más antiguas.
 
 ---
 
@@ -21,7 +21,7 @@ $$
 donde $P_t$ es el precio de cierre en el tiempo $t$ y $\alpha$ es el **coeficiente de suavizado**.
 
 **Relación entre $N$ y $\alpha$.**
-Los traders especifican un "periodo" $N$ (en días). El coeficiente se deriva igualando la *edad promedio* de los datos entre una EMA y una Media Móvil Simple (SMA) de la misma ventana:
+Los traders especifican un "periodo" $N$ (en sesiones). El coeficiente se deriva igualando la *edad promedio* de los datos entre una EMA y una Media Móvil Simple (SMA) de la misma ventana:
 
 $$
 \text{Age}_{SMA} = \frac{N-1}{2}, \qquad
@@ -42,7 +42,7 @@ Por ejemplo, $N = 14 \implies \alpha = 2/15 \approx 0.133$.
 
 | Parámetro | Clave | Predeterminado | Descripción |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Ventana de observación en días. Mayor → más suave, más lento. |
+| Periodo ($N$) | `period` | 14 | Ventana de observación en sesiones. Mayor → más suave, más lento. |
 | Desplazamiento | `offset` | 0 | Desplazamiento vertical como % del valor base. |
 
 ---

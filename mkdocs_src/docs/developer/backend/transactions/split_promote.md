@@ -93,14 +93,27 @@ both. After resolving the references, the stage:
 1. rejects a row that already has `related_transaction_id`;
 2. calls `_find_promote_rule_match()` to infer the target type from
    `TX_TYPE_METADATA.promote_from` and its field constraints;
-3. assigns the inferred type to both existing ORM rows;
-4. writes reciprocal `related_transaction_id` values;
-5. applies recognized `resolved_fields`;
-6. marks same-batch correlation keys as consumed so the later create-link stage
+3. validates both rows as they would be once promoted: `_promoted_state_issues()`
+   runs `validate_transaction_business_rules()` on each row with the target type,
+   the per-type rules that creates and updates go through too. Each error becomes
+   an issue on operation `promote`, at the promote's index, with `ref_id` set only
+   for a saved row; the promote is then skipped and neither row changes;
+4. assigns the inferred type to both existing ORM rows;
+5. writes reciprocal `related_transaction_id` values;
+6. applies recognized `resolved_fields`;
+7. marks same-batch correlation keys as consumed so the later create-link stage
    does not process them again; and
-7. emits a `promote` result containing the same two row IDs.
+8. emits a `promote` result containing the same two row IDs.
 
 No original row is deleted and no replacement row is created.
+
+Step 3 exists for a row linked to an asset event, such as an `ADJUSTMENT` linked to a
+`SPLIT`. A promote never clears `asset_event_id`, and the business rules accept that
+link only on `EVENT_COMPATIBLE_TYPES` (`DIVIDEND`, `INTEREST`, `ADJUSTMENT`): every
+promote target has `event_compatible: false` in `TX_TYPE_METADATA`, so such a row is
+refused with `eventTypeIncompatible`. Without the check it would become a `TRANSFER`
+still linked to the split, and the average cost, which treats every row linked to a
+`SPLIT` event as a split whatever its type, would read it as one.
 
 ### 🧭 Inferred target rules
 
@@ -144,7 +157,8 @@ and cleared from the sender.
 The Transactions page sends a saved-row promote on its own, outside the
 workspace, when exactly two selected rows are unpaired, sit on brokers the user
 can edit, and match a rule (`findPromoteMatch()` on the `promote_from` metadata
-of `GET /transactions/types`). **🔗 Promote pair** then opens a plain
+of `GET /transactions/types`, which finds none when a row is linked to an asset
+event and the target type refuses the link). **🔗 Promote pair** then opens a plain
 confirmation, or `PromoteMergeModal` when the two rows differ in description,
 tags, date or cost basis; only the merge dialog adds `resolved_fields`.
 
@@ -226,6 +240,7 @@ their stage loops continue. Common stable codes are:
 | `promoteRefNotFound` | A saved or same-batch promote reference cannot be resolved |
 | `alreadyPaired` | A promote candidate already has a persistent partner |
 | `noPromoteRule` | No metadata rule and constraint set matches the two rows |
+| `eventTypeIncompatible` | A promoted row is linked to an asset event, which the target type refuses (step 3) |
 
 The service does not roll the session back itself. `/transactions/validate`
 always rolls back; `/transactions/commit` commits only when

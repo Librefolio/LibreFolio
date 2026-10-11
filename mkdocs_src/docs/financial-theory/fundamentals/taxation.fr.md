@@ -54,7 +54,7 @@ $$
 
 Paramètres clés qui varient selon la juridiction :
 
-- ⏳ **Durée** : Pendant combien de temps les pertes peuvent être reportées (ex: 4 ans en Italie, illimité en Allemagne, 7 ans aux USA pour certains types).
+- ⏳ **Durée** : Pendant combien de temps les pertes peuvent être reportées (ex. : 4 ans en Italie, illimité en Allemagne, 7 ans aux USA pour certains types).
 - 📊 **Portée** : Si les pertes d'une classe d'actifs peuvent compenser les gains d'une autre.
 - 🚫 **Règles de "Wash sale"** (ventes fictives) : Restrictions sur le rachat d'un actif vendu dans un court intervalle pour pouvoir déduire la perte.
 
@@ -68,13 +68,13 @@ L'un des concepts les plus puissants de l'investissement fiscalement efficace es
 
 Comparez deux scénarios sur $n$ années avec un rendement annuel $r$ et un taux d'imposition $\tau$ :
 
-**Scénario A — Imposition annuelle** (ex: fonds de distribution) :
+**Scénario A — Imposition annuelle** (ex. : fonds de distribution) :
 
 $$
 V_A = P \cdot (1 + r \cdot (1 - \tau))^n
 $$
 
-**Scénario B — Imposition à la fin** (ex: fonds de capitalisation) :
+**Scénario B — Imposition à la fin** (ex. : fonds de capitalisation) :
 
 $$
 V_B = P \cdot (1 + r)^n - \tau \cdot [P \cdot (1 + r)^n - P] = P \cdot [(1 + r)^n \cdot (1 - \tau) + \tau]
@@ -86,9 +86,9 @@ Avec $P = 10{,}000$, $r = 7\%$, $\tau = 26\%$, $n = 20$ ans :
 
 | Scénario | Valeur Finale | Rendement Effectif |
 |----------|------------|-----------------|
-| Imposition annuelle | 28 398 € | 5,18% par an |
-| Imposition à la fin | 31 616 € | 5,93% par an |
-| **Avantage du report** | **+3 218 €** | **+0,75% par an** |
+| Imposition annuelle | 28 398 € | 5,18 % par an |
+| Imposition à la fin | 31 616 € | 5,93 % par an |
+| **Avantage du report** | **+3 218 €** | **+0,75 % par an** |
 
 L'avantage croît de manière exponentielle avec le temps — sur 30 ans, l'écart s'élargit à plus de 8 000 € pour le même investissement de 10 000 €.
 
@@ -98,14 +98,14 @@ L'avantage croît de manière exponentielle avec le temps — sur 30 ans, l'éca
 
 Cet avantage du report se manifeste directement dans le choix entre les véhicules d'investissement de capitalisation et de distribution :
 
-### 📈 Capitalisation (ex: ETF Acc)
+### 📈 Capitalisation (ex. : ETF Acc)
 
 - Les dividendes sont **réinvestis au sein du fonds**.
 - **Aucun événement imposable** tant que vous ne vendez pas les parts du fonds.
 - Plein bénéfice de la [croissance composée](../technical-analysis/synthetic-benchmarks/compound.md) sur le montant avant fiscalité.
 - Idéal pour les investisseurs à long terme recherchant une croissance maximale.
 
-### 💵 Distribution (ex: ETF Dist)
+### 💵 Distribution (ex. : ETF Dist)
 
 - Les dividendes vous sont **versés** périodiquement.
 - Chaque distribution est un **événement imposable** (imposé immédiatement).
@@ -125,7 +125,7 @@ Chaque pays possède son propre cadre fiscal. Paramètres clés qui varient :
 
 | Paramètre | Exemples |
 |-----------|---------|
-| **Taux d'imposition des plus-values** | 26% (Italie), 25% (Allemagne), 0-20% (USA, selon la période de détention) |
+| **Taux d'imposition des plus-values** | 26 % (Italie), 25 % (Allemagne), 0-20 % (USA, selon la période de détention) |
 | **Avantages selon la durée de détention** | Certains pays réduisent les taux pour les détentions à long terme |
 | **Durée du report des pertes** | 4 ans (Italie), illimité (Allemagne), 7 ans (USA pour certains types) |
 | **Traités de double imposition** | Affectent les dividendes des actions étrangères |

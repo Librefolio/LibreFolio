@@ -265,6 +265,69 @@ def _lots_response(asset_id: int, lots: list[LotSummarySchema]) -> LotsAnalysisR
     )
 
 
+# B3b: the lot figures the lots analysis leaves None when a rate they need is missing...
+_UNVALUED_LOT_FIELDS = ("opening_unit_price", "original_cost", "cumulative_proceeds", "realized_pnl", "asset_income", "allocated_fees", "allocated_taxes")
+# ...the `FifoLotRow` fields they become (plus `residual_cost_basis`, derived from the original cost)...
+_UNVALUED_ROW_FIELDS = ("opening_unit_price", "original_cost", "cumulative_proceeds", "realized_pnl", "income", "fees", "taxes")
+# ...and the per-asset `FifoAssetSummaryRow` totals summed from them.
+_SUMMED_MONEY_FIELDS = ("original_cost", "residual_cost_basis", "cumulative_proceeds", "realized_pnl", "income", "fees", "taxes")
+# The eight `FifoLotRow` amounts B3b made nullable: a lot with one of them unknown is what `count_unavailable_amount_lots` counts.
+_NULLABLE_ROW_FIELDS = ("opening_unit_price", *_SUMMED_MONEY_FIELDS)
+# The market-dependent amounts, optional before B3b: None for a lot without a market price, which is no B3b unknown.
+_MARKET_FIGURES = {"open_value": _money(700), "unrealized_pnl": _money(200), "total_pnl": _money(300), "net_total_pnl": _money(285)}
+
+
+def _unvalued_lot(asset_id: int, lot_id: int, **kwargs) -> LotSummarySchema:
+    """A lot whose target-currency figures the lots analysis could not value (B3b): each None, its net metrics UNAVAILABLE."""
+    lot = _lot(asset_id, lot_id, **kwargs)
+    return LotSummarySchema.model_validate({**lot.model_dump(), **dict.fromkeys(_UNVALUED_LOT_FIELDS), "net_metrics_status": "UNAVAILABLE"})
+
+
+def _fifo_row(lot_ref: str, **overrides) -> FifoLotRow:
+    """A validated FIFO row of asset 1: 5 of 10 still open (cost 500 of 1000), the other 5 sold for 600."""
+    fields = {
+        "lot_ref": lot_ref,
+        "asset_id": 1,
+        "asset_name": "Asset 1",
+        "asset_ticker": "A1",
+        "opening_broker_id": 1,
+        "direction": "LONG",
+        "status": "PARTIAL",
+        "opening_date": date(2025, 1, 1),
+        "opening_unit_price": _money(100),
+        "original_quantity": Decimal("10"),
+        "open_quantity": Decimal("5"),
+        "realized_quantity": Decimal("5"),
+        "original_cost": _money(1000),
+        "residual_cost_basis": _money(500),
+        "cumulative_proceeds": _money(600),
+        "realized_pnl": _money(100),
+        "income": _money(20),
+        "fees": _money(10),
+        "taxes": _money(5),
+        "net_metrics_status": "AVAILABLE",
+    }
+    return FifoLotRow.model_validate({**fields, **overrides})
+
+
+# The summed totals of two default `_fifo_row`s.
+_TWO_ROW_TOTALS = {"original_cost": 2000, "residual_cost_basis": 1000, "cumulative_proceeds": 1200, "realized_pnl": 200, "income": 40, "fees": 20, "taxes": 10}
+
+
+def _total_fifo_residual_cost_basis():
+    """The helper B3b adds, looked up when called: until it exists only the tests using it fail, not the module."""
+    helper = getattr(shared_payloads, "total_fifo_residual_cost_basis", None)
+    assert helper is not None, "payloads.portfolio_broker.total_fifo_residual_cost_basis does not exist"
+    return helper
+
+
+def _count_unavailable_amount_lots():
+    """The counting helper of `unavailable_amount_lot_count`, looked up when called: until it exists only the tests using it fail."""
+    helper = getattr(shared_payloads, "count_unavailable_amount_lots", None)
+    assert helper is not None, "payloads.portfolio_broker.count_unavailable_amount_lots does not exist"
+    return helper
+
+
 def _asset_meta(asset_id: int) -> SimpleNamespace:
     return SimpleNamespace(
         id=asset_id,
@@ -1170,6 +1233,342 @@ class TestFifoLots:
         asset_ids_in_order = [lot["asset_id"] for lot in first_run.payload["lots"]]
         assert asset_ids_in_order == sorted(asset_ids_in_order)
         assert [lot["lot_ref"] for lot in first_run.payload["lots"]] == ["L1", "L2", "L3"]
+
+
+# =============================================================================
+# FIFO: a figure without a rate is null, never zero (B3b)
+# =============================================================================
+
+_FIFO_SCOPES = {
+    "portfolio": ({"broker_scope": (5,)}, portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS),
+    "broker": ({"domain": Domain.BROKER, "broker_id": 5, "broker_scope": (5,)}, broker_financial.BROKER_FINANCIAL_COMPONENTS),
+}
+
+
+class TestUnvaluedFifoFigures:
+    """B3b: a lot figure the lots analysis could not value in the target currency (a missing FX rate) is None.
+
+    The FIFO rows and summaries export it as null -- unavailable -- and a total with an unknown part is unknown:
+    never a 0, nor a partial sum, that would read as recorded.
+    """
+
+    def test_residual_cost_basis_is_unknown_while_the_lot_is_open_and_its_cost_is(self):
+        """An open or partial lot's residual cost is a share of its original cost, so it is unknown with it. A closed
+        lot has nothing left open: its residual is 0 whatever its cost."""
+        open_lot = _unvalued_lot(1, 1)
+        partial_lot = _unvalued_lot(1, 2, open_quantity=5, realized_quantity=5)
+        closed_lot = _unvalued_lot(1, 3, open_quantity=0, realized_quantity=10, closing_date=date(2026, 1, 5))
+
+        assert [shared_payloads.lot_residual_cost_basis(lot) for lot in (open_lot, partial_lot, closed_lot)] == [None, None, Decimal("0")]
+
+    def test_residual_cost_with_zero_original_quantity_is_unknown_when_its_cost_is(self):
+        """The cost is read before the zero original quantity: an open lot with an unknown cost has an unknown residual,
+        whatever its quantities. The 0 of `test_residual_cost_handles_zero_original_quantity` needs a known cost."""
+        lot = SimpleNamespace(open_quantity=Decimal("1"), original_quantity=Decimal("0"), original_cost=None)
+
+        assert shared_payloads.lot_residual_cost_basis(lot) is None
+
+    @pytest.mark.parametrize(
+        ("open_quantity", "realized_quantity", "closing_date", "status", "residual_cost_basis"),
+        [
+            pytest.param(10, 0, None, "OPEN", None, id="open"),
+            pytest.param(5, 5, None, "PARTIAL", None, id="partial"),
+            pytest.param(0, 10, date(2026, 1, 5), "CLOSED", Decimal("0"), id="closed"),
+        ],
+    )
+    def test_unvalued_lot_maps_to_a_row_with_null_figures_never_zero(self, open_quantity, realized_quantity, closing_date, status, residual_cost_basis):
+        lot = _unvalued_lot(1, 1, open_quantity=open_quantity, realized_quantity=realized_quantity, closing_date=closing_date)
+
+        row = shared_payloads.map_fifo_lot_row(lot, lot_ref="L1", asset_id=1, currency_code=CURRENCY, asset_name="Asset 1", asset_ticker="A1")
+
+        assert (row.status, row.open_quantity, row.net_metrics_status) == (status, Decimal(str(open_quantity)), "UNAVAILABLE")
+        assert {name: getattr(row, name) for name in _UNVALUED_ROW_FIELDS} == dict.fromkeys(_UNVALUED_ROW_FIELDS)
+        assert row.residual_cost_basis == (_money(residual_cost_basis) if residual_cost_basis is not None else None)
+
+    def test_lot_with_only_its_fees_unknown_keeps_every_other_figure(self):
+        """The lot a FEE pool split by trades in mixed currencies reaches: only its fees are unknown."""
+        valued = _lot(1, 1, open_quantity=5, realized_quantity=5, realized_pnl=100, cumulative_proceeds=600, asset_income=20, allocated_taxes=5)
+        lot = LotSummarySchema.model_validate({**valued.model_dump(), "allocated_fees": None, "net_metrics_status": "UNAVAILABLE"})
+
+        row = shared_payloads.map_fifo_lot_row(lot, lot_ref="L1", asset_id=1, currency_code=CURRENCY, asset_name="Asset 1", asset_ticker="A1")
+
+        assert row.fees is None
+        known = ("opening_unit_price", "original_cost", "residual_cost_basis", "cumulative_proceeds", "realized_pnl", "income", "taxes")
+        assert {name: getattr(row, name) for name in known} == {
+            "opening_unit_price": _money(100),
+            "original_cost": _money(1000),
+            "residual_cost_basis": _money(500),
+            "cumulative_proceeds": _money(600),
+            "realized_pnl": _money(100),
+            "income": _money(20),
+            "taxes": _money(5),
+        }
+
+    def test_summary_sums_known_lot_figures_as_before(self):
+        """Control: with every part known, each total is the plain sum."""
+        summary = shared_payloads.summarize_fifo_asset_rows([_fifo_row("L1"), _fifo_row("L2")])
+
+        assert {name: getattr(summary, name) for name in _SUMMED_MONEY_FIELDS} == {name: _money(total) for name, total in _TWO_ROW_TOTALS.items()}
+
+    @pytest.mark.parametrize("unknown_field", _SUMMED_MONEY_FIELDS)
+    def test_summary_total_is_unknown_when_one_lot_part_is(self, unknown_field):
+        """Summing the known parts would present a partial figure as the asset's: the total is unknown. The other
+        totals keep their sums."""
+        rows = [_fifo_row("L1"), _fifo_row("L2", **{unknown_field: None})]
+
+        summary = shared_payloads.summarize_fifo_asset_rows(rows)
+
+        assert getattr(summary, unknown_field) is None
+        known = {name: _money(total) for name, total in _TWO_ROW_TOTALS.items() if name != unknown_field}
+        assert {name: getattr(summary, name) for name in known} == known
+
+    def test_summary_of_rows_without_any_valued_figure_does_not_raise(self):
+        """The one-currency check reads the known figures only: rows whose money figures are all unknown have no
+        currency to disagree on, and summarize to unknown totals with their quantities still counted."""
+        no_money = dict.fromkeys(_NULLABLE_ROW_FIELDS)
+        rows = [_fifo_row("L1", **no_money), _fifo_row("L2", **no_money)]
+
+        summary = shared_payloads.summarize_fifo_asset_rows(rows)
+
+        assert (summary.partial_lot_count, summary.original_quantity, summary.open_quantity) == (2, Decimal("20"), Decimal("10"))
+        assert {name: getattr(summary, name) for name in _SUMMED_MONEY_FIELDS} == dict.fromkeys(_SUMMED_MONEY_FIELDS)
+
+    @pytest.mark.parametrize("unrealized_pnl", [None, Decimal("200")], ids=["market-value-only", "with-unrealized-pnl"])
+    def test_summary_takes_its_currency_from_a_market_value_when_every_nullable_amount_is_unknown(self, unrealized_pnl):
+        """A lot can have all eight nullable amounts unknown (no rate at its opening nor at its closures) and still a
+        market value, priced at today's rate. The summary's currency is read from every known amount: its market totals
+        keep that currency -- EUR here, appearing nowhere else -- and nothing raises. The summed totals stay unknown."""
+        unknown = dict.fromkeys(_NULLABLE_ROW_FIELDS)
+
+        def eur(amount: object) -> Currency:
+            return Currency(code="EUR", amount=Decimal(str(amount)))
+
+        priced = _fifo_row("L1", **unknown, open_value=eur(700), unrealized_pnl=eur(unrealized_pnl) if unrealized_pnl is not None else None)
+        unpriced = _fifo_row("L2", **unknown)
+
+        summary = shared_payloads.summarize_fifo_asset_rows([priced, unpriced])
+
+        assert summary.open_value == eur(700)
+        expected_unrealized = (eur(200), eur(200), eur(0)) if unrealized_pnl is not None else (None, None, None)
+        assert (summary.unrealized_pnl, summary.potential_gain, summary.potential_loss) == expected_unrealized
+        assert {name: getattr(summary, name) for name in _SUMMED_MONEY_FIELDS} == dict.fromkeys(_SUMMED_MONEY_FIELDS)
+
+    def test_summary_still_rejects_known_figures_in_two_currencies(self):
+        """Skipping the unknown figures must not skip the known ones: two currencies among them still fail."""
+        rows = [_fifo_row("L1"), _fifo_row("L2", original_cost=None, residual_cost_basis=None, fees=Currency(code="EUR", amount=Decimal("10")))]
+
+        with pytest.raises(ValueError, match="one target currency"):
+            shared_payloads.summarize_fifo_asset_rows(rows)
+
+    def test_summary_market_value_totals_keep_summing_the_valued_open_lots(self):
+        """Unchanged by B3b: open value, unrealized P&L and potential gain/loss sum the open lots that have a market
+        value, and say how many those are -- `value_coverage_status`, valued and unavailable counts."""
+        priced = _fifo_row("L1", **_MARKET_FIGURES)
+        unpriced = _fifo_row("L2")  # open as well, but without a market price
+
+        summary = shared_payloads.summarize_fifo_asset_rows([priced, unpriced])
+
+        market = ("open_value", "unrealized_pnl", "potential_gain", "potential_loss")
+        assert {name: getattr(summary, name) for name in market} == {"open_value": _money(700), "unrealized_pnl": _money(200), "potential_gain": _money(200), "potential_loss": _money(0)}
+        assert (summary.valued_open_lot_count, summary.unavailable_open_lot_count, summary.value_coverage_status) == (1, 1, "partial")
+
+    @pytest.mark.parametrize(
+        ("second_lot", "expected"),
+        [
+            # no market price: neither its total nor its net P&L is known
+            pytest.param({}, {"total_pnl": None, "net_total_pnl": None}, id="unpriced"),
+            # priced, but its fees unknown (a FEE pool without a rate): its total is known, its net is not
+            pytest.param({**_MARKET_FIGURES, "net_total_pnl": None}, {"total_pnl": _money(600), "net_total_pnl": None}, id="net-unknown"),
+        ],
+    )
+    def test_summary_total_and_net_pnl_are_unknown_when_one_lot_part_is(self, second_lot, expected):
+        """B3b: total and net P&L follow the rule of the cost sums. With no coverage field of their own, summing the
+        lots that have them would present a part as the asset's figure: one unknown part makes the total unknown."""
+        rows = [_fifo_row("L1", **_MARKET_FIGURES), _fifo_row("L2", **second_lot)]
+
+        summary = shared_payloads.summarize_fifo_asset_rows(rows)
+
+        assert {name: getattr(summary, name) for name in expected} == expected
+
+    def test_summary_total_and_net_pnl_sum_when_every_lot_has_them(self):
+        """Control: every lot's total and net P&L known, the summary's are their plain sums, as before."""
+        summary = shared_payloads.summarize_fifo_asset_rows([_fifo_row("L1", **_MARKET_FIGURES), _fifo_row("L2", **_MARKET_FIGURES)])
+
+        assert (summary.total_pnl, summary.net_total_pnl) == (_money(600), _money(570))
+
+    def test_total_residual_cost_basis_is_unknown_when_one_asset_residual_is(self):
+        """`total_fifo_residual_cost_basis`, the portfolio and broker FIFO summaries' total: the sum of the assets'
+        residual cost, unknown when one of them is; 0 with no asset."""
+        total_fifo_residual_cost_basis = _total_fifo_residual_cost_basis()
+        known_a = shared_payloads.summarize_fifo_asset_rows([_fifo_row("L1")])
+        known_b = shared_payloads.summarize_fifo_asset_rows([_fifo_row("L2", asset_id=2, asset_name="Asset 2")])
+        unknown = shared_payloads.summarize_fifo_asset_rows([_fifo_row("L3", asset_id=3, asset_name="Asset 3", original_cost=None, residual_cost_basis=None)])
+
+        assert total_fifo_residual_cost_basis([], CURRENCY) == _money(0)
+        assert total_fifo_residual_cost_basis([known_a, known_b], CURRENCY) == _money(1000)
+        assert total_fifo_residual_cost_basis([known_a, unknown], CURRENCY) is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    async def test_fifo_summary_leaves_unknown_what_an_unvalued_lot_leaves_unknown(self, monkeypatch, domain):
+        """Builder level: an asset whose only lot is unvalued has its summed figures null, and so has the payload's
+        total residual cost basis, which includes it. The valued asset keeps its figures."""
+        scope_overrides, components = _FIFO_SCOPES[domain]
+        scope = _scope(**scope_overrides)
+        _patch_report(monkeypatch, _report(scope))
+        _patch_lots(monkeypatch, {1: _lots_response(1, [_lot(1, 801, opening_broker_id=5)]), 2: _lots_response(2, [_unvalued_lot(2, 802, opening_broker_id=5)])})
+        _patch_metadata(monkeypatch, asset_ids=[1, 2], broker_ids=[5])
+        context = _make_context(scope, _registry(components), _make_async_session())
+
+        envelope = await context.resolve(f"{domain}.fifo_summary", required=True)
+
+        assets = {row["asset_id"]: row for row in envelope.payload["assets"]}
+        assert set(assets) == {1, 2}
+        assert {name: Decimal(assets[1][name]["amount"]) for name in ("original_cost", "residual_cost_basis")} == {"original_cost": Decimal("1000"), "residual_cost_basis": Decimal("1000")}
+        assert {name: assets[2][name] for name in _SUMMED_MONEY_FIELDS} == dict.fromkeys(_SUMMED_MONEY_FIELDS)
+        assert envelope.payload["total_residual_cost_basis"] is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    async def test_fifo_lots_export_an_unvalued_lot_with_null_figures(self, monkeypatch, domain):
+        """Builder level: the unvalued lot is still exported, with its quantities and UNAVAILABLE net metrics, and every
+        figure it could not value null."""
+        scope_overrides, components = _FIFO_SCOPES[domain]
+        scope = _scope(**scope_overrides)
+        _patch_report(monkeypatch, _report(scope))
+        _patch_lots(monkeypatch, {1: _lots_response(1, [_unvalued_lot(1, 811, opening_broker_id=5)])})
+        _patch_metadata(monkeypatch, asset_ids=[1], broker_ids=[5])
+        context = _make_context(scope, _registry(components), _make_async_session())
+
+        envelope = await context.resolve(f"{domain}.fifo_lots", required=True)
+
+        (row,) = envelope.payload["lots"]
+        assert (row["lot_ref"], row["status"], row["open_quantity"], row["net_metrics_status"]) == ("L1", "OPEN", "10", "UNAVAILABLE")
+        null_fields = ("residual_cost_basis", *_UNVALUED_ROW_FIELDS)
+        assert {name: row[name] for name in null_fields} == dict.fromkeys(null_fields)
+
+
+class TestUnavailableAmountLotCount:
+    """`unavailable_amount_lot_count` of `portfolio.fifo_lots` / `broker.fifo_lots` (B3b): how many of the payload's
+    lots have at least one of the eight amounts B3b made nullable unknown. The amounts optional before B3b (open value,
+    unrealized, total and net P&L) are unknown for other reasons, such as no market price, and their coverage is stated
+    elsewhere: they do not count. A required count, never a default 0.
+
+    Counted by `payloads.portfolio_broker.count_unavailable_amount_lots`, looked up when called so that, until it
+    exists, only the tests using it fail."""
+
+    def test_helper_is_public(self):
+        _count_unavailable_amount_lots()
+
+        assert "count_unavailable_amount_lots" in shared_payloads.__all__
+
+    def test_lots_with_every_amount_known_count_zero(self):
+        count_unavailable_amount_lots = _count_unavailable_amount_lots()
+
+        assert count_unavailable_amount_lots([_fifo_row("L1", **_MARKET_FIGURES), _fifo_row("L2", **_MARKET_FIGURES)]) == 0
+
+    @pytest.mark.parametrize("unknown_field", _NULLABLE_ROW_FIELDS)
+    def test_a_lot_with_one_unknown_amount_counts_once(self, unknown_field):
+        count_unavailable_amount_lots = _count_unavailable_amount_lots()
+        rows = [_fifo_row("L1", **_MARKET_FIGURES), _fifo_row("L2", **_MARKET_FIGURES, **{unknown_field: None}), _fifo_row("L3", **_MARKET_FIGURES)]
+
+        assert count_unavailable_amount_lots(rows) == 1
+
+    def test_a_lot_with_several_unknown_amounts_counts_once(self):
+        count_unavailable_amount_lots = _count_unavailable_amount_lots()
+        rows = [_fifo_row("L1", **_MARKET_FIGURES, **dict.fromkeys(_NULLABLE_ROW_FIELDS)), _fifo_row("L2", **_MARKET_FIGURES)]
+
+        assert count_unavailable_amount_lots(rows) == 1
+
+    @pytest.mark.parametrize(
+        "unknown_fields",
+        [("open_value",), ("unrealized_pnl",), ("total_pnl",), ("net_total_pnl",), tuple(_MARKET_FIGURES)],
+        ids=["open_value", "unrealized_pnl", "total_pnl", "net_total_pnl", "no-market-price"],
+    )
+    def test_a_lot_missing_only_amounts_optional_before_b3b_does_not_count(self, unknown_fields):
+        count_unavailable_amount_lots = _count_unavailable_amount_lots()
+        row = _fifo_row("L1", **{**_MARKET_FIGURES, **dict.fromkeys(unknown_fields)})
+
+        assert count_unavailable_amount_lots([row]) == 0
+
+    def test_no_lots_count_zero(self):
+        count_unavailable_amount_lots = _count_unavailable_amount_lots()
+
+        assert count_unavailable_amount_lots([]) == 0
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    @pytest.mark.parametrize(
+        ("case", "exported", "expected"),
+        [
+            pytest.param("all-valued", 2, 0, id="all-valued"),
+            pytest.param("two-with-an-unknown-amount", 3, 2, id="two-with-an-unknown-amount"),
+            pytest.param("unknown-but-not-exported", 1, 0, id="unknown-but-not-exported"),
+        ],
+    )
+    async def test_fifo_lots_count_the_exported_lots_with_an_unknown_amount(self, monkeypatch, domain, case, exported, expected):
+        """Builder level. The valued lots have no market price: their open value and P&L are None, which does not count.
+        A lot closed before the period is not in `lots`, so it does not count however unvalued."""
+        scope_overrides, components = _FIFO_SCOPES[domain]
+        scope = _scope(**scope_overrides)
+        valued = _lot(1, 821, opening_broker_id=5)
+        fees_unknown = LotSummarySchema.model_validate({**_lot(1, 823, opening_broker_id=5).model_dump(), "allocated_fees": None, "net_metrics_status": "UNAVAILABLE"})
+        lots = {
+            "all-valued": [valued, _lot(1, 822, opening_broker_id=5, open_quantity=5, realized_quantity=5)],
+            "two-with-an-unknown-amount": [valued, _unvalued_lot(1, 822, opening_broker_id=5), fees_unknown],
+            "unknown-but-not-exported": [valued, _unvalued_lot(1, 824, opening_broker_id=5, open_quantity=0, realized_quantity=10, closing_date=date(2025, 12, 31))],
+        }[case]
+        _patch_report(monkeypatch, _report(scope))
+        _patch_lots(monkeypatch, {1: _lots_response(1, lots)})
+        _patch_metadata(monkeypatch, asset_ids=[1], broker_ids=[5])
+        context = _make_context(scope, _registry(components), _make_async_session())
+
+        envelope = await context.resolve(f"{domain}.fifo_lots", required=True)
+
+        assert envelope.payload["lot_count"] == exported
+        assert envelope.payload.get("unavailable_amount_lot_count") == expected
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    async def test_fifo_lots_count_is_required_and_never_negative(self, monkeypatch, domain):
+        """A stated count, never a default: the builder's own payload validates, the same payload without the count or
+        with a negative one does not."""
+        scope_overrides, components = _FIFO_SCOPES[domain]
+        payload_model = {"portfolio": portfolio_financial.PortfolioFifoLotsPayload, "broker": broker_financial.BrokerFifoLotsPayload}[domain]
+        scope = _scope(**scope_overrides)
+        _patch_report(monkeypatch, _report(scope))
+        _patch_lots(monkeypatch, {1: _lots_response(1, [_lot(1, 831, opening_broker_id=5)])})
+        _patch_metadata(monkeypatch, asset_ids=[1], broker_ids=[5])
+        context = _make_context(scope, _registry(components), _make_async_session())
+        payload = (await context.resolve(f"{domain}.fifo_lots", required=True)).payload
+
+        payload_model.model_validate(payload)
+        with pytest.raises(ValidationError):
+            payload_model.model_validate({name: value for name, value in payload.items() if name != "unavailable_amount_lot_count"})
+        with pytest.raises(ValidationError):
+            payload_model.model_validate({**payload, "unavailable_amount_lot_count": -1})
+
+
+class TestFifoComponentVersion:
+    """B3b made the FIFO lot and summary money figures nullable (null = unavailable): each FIFO component moved from
+    version 1 to 2, on the real spec and on the frozen catalog placeholder together. The catalog is imported in the
+    test rather than at module level, so a parity failure on import reds these tests only."""
+
+    @pytest.mark.parametrize(
+        ("component_id", "components"),
+        [
+            pytest.param("portfolio.fifo_summary", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, id="portfolio-fifo-summary"),
+            pytest.param("portfolio.fifo_lots", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, id="portfolio-fifo-lots"),
+            pytest.param("broker.fifo_summary", broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker-fifo-summary"),
+            pytest.param("broker.fifo_lots", broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker-fifo-lots"),
+        ],
+    )
+    def test_fifo_component_is_versioned_v2_in_registry_and_placeholder(self, component_id, components):
+        from backend.app.services.ai_export.components import catalog  # noqa: PLC0415 — test-local: a real/placeholder parity failure on import must red these tests only
+
+        real = next(spec for spec in components if spec.component_id == component_id)
+        placeholder = next(spec for spec in catalog.ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
+        assert (real.version, placeholder.version) == (2, 2)
 
 
 # =============================================================================

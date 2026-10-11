@@ -17,7 +17,7 @@ En la práctica, la diferencia entre el crecimiento lineal y el compuesto se amp
     Cuando se vende un activo por encima de su precio de compra, la diferencia es una **plusvalía**;
     si es por debajo, una **pérdida de capital**. Cada jurisdicción tiene sus propias reglas respecto a las tasas impositivas,
     los umbrales del período de tenencia, la duración del arrastre de pérdidas y los métodos de emparejamiento
-    (FIFO, LIFO, identificación específica). Para una descripción general teórica, consulte
+    (FIFO, LIFO, identificación específica). Para un resumen teórico, consulte
     [Tributación y Eficiencia Fiscal](../../fundamentals/taxation.md).
 
 ---
@@ -31,7 +31,7 @@ $$
 donde:
 
 - $y_0$ es el valor inicial (primer punto de datos del gráfico),
-- $r$ es la tasa de crecimiento anual (expresada como decimal, p. ej., 0.07 para el 7%),
+- $r$ es la tasa de crecimiento anual (expresada como decimal, p. ej., 0,07 para el 7%),
 - $t$ es el tiempo en años desde el inicio.
 
 Esto es equivalente a la fórmula de **interés simple** $A = P(1 + rt)$, donde $t$ se expresa en años utilizando la [Convención de Conteo de Días](../../fundamentals/day-count.md) aplicable.

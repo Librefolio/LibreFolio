@@ -16,6 +16,7 @@
     import type {z} from 'zod';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import {compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, multiplyOrNull, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
+    import {isUnknownOrNonZero} from './lotChartShared';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
@@ -86,7 +87,7 @@
      * price is admissible (product owner, 2026-09-22), and with the quantity masked (D5′)
      * price × quantity rebuilds nothing. Totals keep `formatPrice`, which masks.
      */
-    function formatUnitPrice(value: string | number | null | undefined): string {
+    function formatUnitPrice(value: unknown): string {
         const parsed = parseNumber(value);
         return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency, {sensitivity: 'public'});
     }
@@ -248,11 +249,12 @@
     let lotNetTotalPnl = $derived.by(() => (lot ? parseNumber(lot.net_total_pnl) : null));
     let lotNetTotalReturn = $derived.by(() => (lot ? parseNumber(lot.net_total_return) : null));
     let lotNetMetricsStatus = $derived.by(() => (lot ? (unwrapScalar<string | null>(lot.net_metrics_status) ?? 'AVAILABLE') : 'AVAILABLE'));
-    let lotHasNetCosts = $derived((lotAllocatedFees != null && lotAllocatedFees !== 0) || (lotAllocatedTaxes != null && lotAllocatedTaxes !== 0));
+    // An amount the API could not value (null) keeps its row, shown as «—», never hidden as if it were zero.
+    let lotHasNetCosts = $derived(lot != null && (isUnknownOrNonZero(lotAllocatedFees) || isUnknownOrNonZero(lotAllocatedTaxes)));
     let lotNetAvailable = $derived(lotNetMetricsStatus !== 'UNAVAILABLE');
     let lotValueSource = $derived.by(() => (lot ? (unwrapScalar<string | null>(lot.value_source) ?? null) : null));
     let lotIsEstimated = $derived(lotValueSource === 'ESTIMATED_AT_COST');
-    let lotHasIncome = $derived(lotAssetIncome != null && lotAssetIncome !== 0);
+    let lotHasIncome = $derived(lot != null && isUnknownOrNonZero(lotAssetIncome));
 
     $effect(() => {
         void open;

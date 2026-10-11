@@ -30,7 +30,7 @@ Un simple calcul haut-moins-bas ignore les mouvements de nuit ou les gaps ; l'AT
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 14 | Fenêtre de lissage appliquée à la Plage Réelle. |
+| Période ($N$) | `period` | 14 | Fenêtre de lissage appliquée à la Plage Réelle, en séances. |
 
 ---
 

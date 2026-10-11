@@ -8,6 +8,8 @@ A **broker** is one of your accounts — at a brokerage, a bank or an exchange: 
 
 The **Brokers** page shows one card per broker, with its value (**NAV**) in the currency chosen in **Currency** at the top of the page. Click a card to open the broker.
 
+**Gain/Loss** is the NAV minus the capital that went into the broker: your deposits minus withdrawals, plus the cost of securities you brought in without cash, plus what you moved in from your other brokers minus what you moved out, each move valued on the day it arrived. So moving money or securities between two of your brokers is not a gain on one card and a loss on the other, and while a transfer is on its way, its value stays on the sending broker's card. The percentage in brackets is the gain over that capital: it shows 0.00% when that capital is zero or less, for example when the broker has sent out more than it received. → [Internal transfers](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
+
 !!! note "Shared brokers show your share"
 
     On a broker you co-own, the values on its card and in its **Overview** tab are **scaled by your ownership share**: a 50% Owner sees half of the account. Editors and Viewers always see the full amounts. See [Broker Sharing](sharing.md).
@@ -31,7 +33,7 @@ The **Brokers** page shows one card per broker, with its value (**NAV**) in the 
 
     - **Description** — your own notes.
     - **Default Import Plugin** — the importer that the [Import Wizard](../transactions/import/index.md) proposes for this broker's files.
-    - **Portal URL** — the broker's website, opened from the broker page. Its icon is used when you set no **Custom Icon URL**.
+    - **Portal URL** — the broker's website, opened from the broker page. The broker's icon is, in this order: your **Custom Icon URL**; the icon of the **Default Import Plugin**, when that importer is made for this broker; the website's icon; the icon of a generic importer such as the Generic CSV; otherwise a briefcase.
     - **Account Opened** and **Account Active** — when the account was opened, and whether it is still open. A closed broker shows dimmed in the list.
     - **Trading Options** — **Allow Leveraged Buying** and **Allow Short Selling**, explained in [Trading options](info.md#trading-options).
     - **Initial Balances** (only when creating) — your starting cash. LibreFolio records one **Deposit** per currency, **dated today**: if the money was there earlier, change the date of those deposits on the [Transactions](../transactions/index.md) page.

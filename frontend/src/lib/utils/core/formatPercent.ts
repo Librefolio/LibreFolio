@@ -58,14 +58,25 @@ export interface FormatPercentOptions {
      * unit it cannot carry.
      */
     suffix?: string;
+    /**
+     * Locale of the reader (`'fr'`, `'it'`, …). Without it the number keeps the
+     * fixed `12.50%` shape the charts and exports rely on; with it the number is
+     * written the reader's way — `12,50 %` in French, decimal comma and a
+     * no-break space before the sign — through `Intl` for `%`, and through
+     * `toLocaleString` before any other suffix.
+     */
+    locale?: string;
 }
 
-export function formatPercent(value: number | null | undefined, {scale = 1, signed = true, empty = '—', digits = 2, suffix = '%'}: FormatPercentOptions = {}): string {
+export function formatPercent(value: number | null | undefined, {scale = 1, signed = true, empty = '—', digits = 2, suffix = '%', locale}: FormatPercentOptions = {}): string {
     if (value == null || !Number.isFinite(value)) return empty;
     const scaled = value * scale;
     // `-0` survives arithmetic and prints as "-0.00%", which reads as a loss that
     // is not there. Two of the five copies guarded against it; now all do.
     const normalized = Object.is(scaled, -0) ? 0 : scaled;
     const sign = signed && normalized > 0 ? '+' : '';
-    return `${sign}${normalized.toFixed(digits)}${suffix}`;
+    if (locale === undefined) return `${sign}${normalized.toFixed(digits)}${suffix}`;
+    const fractionDigits = {minimumFractionDigits: digits, maximumFractionDigits: digits};
+    if (suffix === '%') return sign + new Intl.NumberFormat(locale, {style: 'percent', ...fractionDigits}).format(normalized / 100);
+    return `${sign}${normalized.toLocaleString(locale, fractionDigits)}${suffix}`;
 }

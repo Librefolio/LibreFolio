@@ -142,15 +142,15 @@ $$
 \text{MWRR}_{\text{acumulado}} = (1 + 0.130227)^{10} - 1 \approx +240.14\%
 $$
 
-### 💡 significa +240.14%?
+### 💡 significa +240,14%?
 * **No** significa que sus 100.000 € de contribuciones totales se hayan convertido en 340.140 €.
-* Significa que un **euro teórico**, invertido al principio del período de 10 años y no vuelto a tocar, se habría convertido en 3,40 €, logrando un retorno total del 240.14% al crecer a la misma velocidad compuesta promedio generada por sus flujos de caja reales.
+* Significa que un **euro teórico**, invertido al principio del período de 10 años y no vuelto a tocar, se habría convertido en 3,40 €, logrando un retorno total del 240,14% al crecer a la misma velocidad compuesta promedio generada por sus flujos de caja reales.
 
 ---
 
-## 🖥️ Integración en la UI y uso en el panel de control
+## 🖥️ Integración en la UI y uso en el Panel
 
-LibreFolio muestra estas métricas de rendimiento en el panel de control:
+LibreFolio muestra estas métricas de rendimiento en el Panel:
 
 ### 📊 de porcentaje (`%`)
 Las series trazadas utilizan el **MWRR Acumulado**, el **TWRR Acumulado** y el **ROI Simple**. Esto permite una comparación visual directa, ya que las tres series comienzan en 0% y representan el progreso total a lo largo del período seleccionado.

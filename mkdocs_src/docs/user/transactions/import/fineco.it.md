@@ -1,45 +1,47 @@
-# <img src="https://finecobank.com/favicon.ico" alt=""> Fineco
+# 📥 <img src="https://finecobank.com/favicon.ico" alt=""> Fineco
 
 !!! info "Beta"
 
-    Questo plugin è in **Beta** — testato con file di esempio, ma potrebbero esistere casi limite.
+    Questo plugin è in **Beta** — testato con file di esempio ma potrebbero esistere casi limite.
+
+LibreFolio importa il report **Movimenti Dossier Titoli** di FinecoBank — i movimenti del tuo
+dossier titoli — salvato come CSV.
 
 ## 📥 Come esportare
 
-LibreFolio importa il report **"Movimenti Dossier Titoli"** esportato da FinecoBank.
+1. Accedi al tuo conto **FinecoBank** (web o app).
+2. Apri i movimenti del **Dossier Titoli** e scegli il conto e il periodo desiderati.
+3. Esporta l'elenco: Fineco ti fornisce un file Excel.
+4. Aprilo e **salvalo come CSV**. Mantieni le righe sopra la tabella (**Dossier:**,
+   **Intestatario:**) e i nomi delle colonne: LibreFolio riconosce il report da questi.
 
-1. Accedi al tuo account **FinecoBank** (web o app).
-2. Apri la sezione **Dossier Titoli** e seleziona l'account/periodo desiderato.
-3. Esporta l'elenco dei movimenti. Fineco offre il report come file Excel.
-4. Se il file è `.xls`/`.xlsx`, aprilo e **salvalo come CSV** prima di importarlo — il
- plugin legge il formato **CSV**.
+## 🔄 Cosa viene importato
 
-## 📝 Note
+| Nel report (**Descrizione**) | Importato come |
+|:--------------------------------|:------------|
+| *Compravendita titoli*, con **Segno** `A` o `V` | **Acquisto** o **Vendita** |
+| *Dividendo* | **Dividendo** |
+| *Stacco Cedole* | **Interesse** (cedola obbligazionaria) |
+| *Rimborso* | **Vendita** (rimborso o scadenza) |
+| *Aumento capitale* | **Rettifica** della quantità, senza movimenti di cassa |
+| Colonne delle commissioni, quando il report le contiene | Una **Commissione** separata per riga, in euro |
 
-- **Gli avvisi di importazione sono mostrati in italiano.** L'unica esportazione attualmente supportata è il report italiano
- di FinecoBank *Movimenti Dossier Titoli*, pertanto eventuali avvisi generati durante l'analisi compaiono in
- italiano per coerenza con il report. FinecoBank opera anche nel Regno Unito — se in futuro verrà aggiunto un formato di
- esportazione UK (o altro), i relativi avvisi seguiranno la lingua di quel formato.
-- Sono supportati automaticamente due formati di esportazione:
- - **senza commissioni** (11 colonne), e
- - **con commissioni** (15 colonne). Le colonne delle commissioni vengono importate come transazioni
- **commissione** separate.
-- Operazioni supportate: acquisti e vendite (*Compravendita titoli*), dividendi
- (*Dividendo*), cedole obbligazionarie (*Stacco Cedole*), rimborsi/scadenze (*Rimborso*),
- e aumenti di capitale (*Aumento capitale*, importati come **aggiustamento** di quantità
- senza movimento di cassa).
-- **Obbligazione rimborsata sopra la pari** — quando una riga *Rimborso* riguarda un'obbligazione con prezzo
- **sopra la pari (100)**, l'importo accreditato sopra la pari (un *premio fedeltà* / rivalutazione inflazione) viene contabilizzato come una
- componente **interesse** separata e la **vendita** viene registrata al valore di rimborso 100.
- Ciò rispecchia il trattamento delle cedole (reddito di capitale) e mantiene la plusvalenza realizzata basata
- esclusivamente sul confronto prezzo-costo.
- Le obbligazioni rimborsate alla pari o sotto la pari, e i rimborsi azionari, vengono importati come un'unica vendita.
-- **Gli importi sono importati letteralmente** nella valuta indicata da Fineco: la colonna *Divisa*
- di ciascuna riga determina la valuta degli importi di quella riga. Non viene eseguita
- alcuna conversione valutaria e la colonna *Cambio* (tasso di cambio) viene ignorata — i
- numeri arrivano in LibreFolio esattamente come appaiono nel report.
-- La *Data valuta* viene utilizzata come data di regolamento della transazione.
+Qualsiasi altra operazione viene saltata con un avviso.
+
+**Obbligazioni rimborsate sopra la pari.** Quando un'obbligazione viene rimborsata sopra la pari (100) — un *premio fedeltà* o una
+rivalutazione inflazionistica — la vendita viene registrata alla pari e l'importo eccedente come un
+**Interesse** separato, come una cedola, così il tuo guadagno riflette solo il prezzo. LibreFolio riconosce le obbligazioni dal
+loro nome (BTP, BOT, CCT…). Le obbligazioni rimborsate alla pari o sotto la pari, e gli altri rimborsi, restano un'unica
+**Vendita**.
+
+## ⚠️ Buono a sapersi
+
+- **Entrambi i layout funzionano**, con o senza le colonne delle commissioni: LibreFolio li distingue da
+  sé.
+- **Importi così come scritti.** Ogni riga mantiene la propria valuta (**Divisa**), senza conversione; la
+  colonna **Cambio** viene ignorata.
+- **Date.** LibreFolio usa la data valuta (**Data valuta**), o la data di negoziazione quando questa manca.
 
 ## 🔗 Riferimenti per sviluppatori
 
-→ [Provider BRIM — Dettagli implementativi](../../../developer/backend/brim/providers_list.md)
+→ [Architettura BRIM — note su Fineco](../../../developer/backend/brim/architecture.md#plugin-fineco)
