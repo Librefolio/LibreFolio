@@ -18,7 +18,7 @@ Bienvenue dans le Manuel d'utilisation de LibreFolio. Cette section propose des 
 ## ⭐ Fonctionnalités principales
 
 - 🏦 **[Courtiers](brokers/index.md)** : Créer et gérer des comptes de courtage, importer des rapports et partager l'accès avec d'autres utilisateurs.
-- 📂 **[Fichiers et téléchargements](files/index.md)** : Gérer les ressources statiques et les rapports de courtage. Importer des fichiers, modifier des images.
+- 📂 **[Fichiers & Téléversements](files/index.md)** : Gérer les ressources statiques et les rapports de courtage. Téléverser des fichiers, modifier des images.
 - 💱 **[Taux de change](fx/index.md)** : Suivre les taux de change, configurer les fournisseurs de données, mettre en place la synchronisation automatique et importer des données CSV.
 - 🧰 **[Outils](tools/index.md)** : Des calculs autonomes qui ne modifient jamais votre portefeuille. Le premier, l'**[allocateur PAC](tools/pac-allocator/index.md)**, planifie les achats qui rapprochent au mieux un nouvel investissement de son allocation cible, sans passer aucun ordre.
 

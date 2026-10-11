@@ -7,15 +7,15 @@ a la vez desde un archivo CSV. Nada se guarda hasta que hagas clic en **Guardar*
 
 ## 📝 Abrir el editor
 
-Haz clic en ✏️ (**Editar tasas**) en el gráfico. El editor se abre debajo del gráfico y los demás paneles se pliegan
+Haz clic en ✏️ (**Editar tipos de cambio**) en el gráfico. El editor se abre debajo del gráfico y los demás paneles se pliegan
 mientras editas.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="fx" data-name="detail-editor" alt="Editor de datos FX" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Muestra los tipos de cambio del periodo seleccionado con su **Fecha**, **Tasa** y **Estado** (**Original**,
-**Editado**, **Eliminado** o **Nuevo**).
+Muestra los tipos de cambio del periodo seleccionado con su **Fecha**, **Tipo de cambio** y **Estado** (**Original**,
+**Modificado**, **Eliminado** o **Nuevo**).
 
 - Una fecha marcada con ⚠️ y un número de días no tiene tipo de cambio propio (un fin de semana o un festivo bancario) y
   repite el anterior. El interruptor ⚠️ en la parte superior oculta estos días.
@@ -113,7 +113,7 @@ La ventana de importación marca cada línea incorrecta; solo se importan las l�
 
 | Mensaje | Causa | Solución |
 |---------|-------|-----|
-| **Las monedas del encabezado no coinciden** | Otras divisas en el encabezado, p. ej. `GBP>JPY` en la página EUR/USD | Usa las divisas de este par |
+| **Las divisas del encabezado no coinciden** | Otras divisas en el encabezado, p. ej. `GBP>JPY` en la página EUR/USD | Usa las divisas de este par |
 | **Encabezado esperado** o **Faltan columnas obligatorias** | Sin fila de encabezado, o falta una columna | Empieza con una línea como `date;EUR>USD` |
 | **Formato de fecha no válido** | La fecha no es `YYYY-MM-DD` | Corrige la fecha |
 | **Número no válido** | El tipo de cambio no es un número | Corrige el valor |
@@ -121,7 +121,7 @@ La ventana de importación marca cada línea incorrecta; solo se importan las l�
 
 ??? info "🔀 Cómo se fusionan las filas importadas — cuando el editor ya tiene algunas de las fechas"
 
-    - Una fecha que ya está en el editor toma el tipo de cambio importado (estado **Editado**); una fecha nueva se añade
+    - Una fecha que ya está en el editor toma el tipo de cambio importado (estado **Modificado**); una fecha nueva se añade
       (estado **Nuevo**). Las fechas que faltan en el archivo permanecen como están.
     - Las fechas fuera del periodo seleccionado también se guardan, reemplazando cualquier tipo de cambio almacenado en esos días;
       después de guardar, el periodo se amplía para mostrarlas.

@@ -9,7 +9,7 @@ cuando añades un par FX, cada vez que lo solicites y —si tu administrador lo 
 
 1. En la [página de FX](index.md), elige el periodo en el selector de fechas. Selecciona **Todo** para todo
    el historial.
-2. Haz clic en **Sinc. Todo**. La ventana **Sincronizar tasas FX** enumera cada par FX con un proveedor: los pares FX que solo
+2. Haz clic en **Sinc. Todo**. La ventana **Sincronizar tipos de cambio** enumera cada par FX con un proveedor: los pares FX que solo
    tienen tipos manuales no tienen nada que descargar.
 3. Haz clic en **Iniciar sincronización**.
 

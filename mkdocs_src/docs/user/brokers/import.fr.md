@@ -6,7 +6,7 @@ L'onglet **Transactions** d'un courtier liste toutes ses transactions, de la plu
     <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Onglet Transactions du courtier">
 </div>
 
-Au-dessus de la liste, vous trouvez **Rapports Téléchargés**, **Voir dans les Transactions** et le sélecteur de colonnes. Les Propriétaires et les Éditeurs ont également accès à **Importer** et **Ajouter une transaction**.
+Au-dessus de la liste, vous trouvez **Rapports téléversés**, **Voir dans les Transactions** et le sélecteur de colonnes. Les Propriétaires et les Éditeurs ont également accès à **Importer** et **Ajouter une transaction**.
 
 ---
 
@@ -46,7 +46,7 @@ Le même assistant d'importation s'ouvre depuis **Importer** sur la page [Transa
 
 ## 🗂️ Rapports téléversés
 
-**Rapports Téléchargés** ouvre les fichiers de rapports stockés pour ce courtier :
+**Rapports téléversés** ouvre les fichiers de rapports stockés pour ce courtier :
 
 - **Téléverser** des fichiers CSV ou Excel : ils sont associés à ce courtier et listés à l'étape **Sélectionner** de l'assistant d'importation. Les fichiers que vous téléversez ensemble forment un lot — c'est ainsi que sont importées les banques qui répartissent un compte sur plusieurs exports, comme Danske Bank.
 - **Aperçu** ou **Supprimer** : prévisualisez ou supprimez un fichier. La suppression d'un rapport ne supprime jamais les transactions importées depuis celui-ci.
