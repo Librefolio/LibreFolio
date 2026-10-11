@@ -141,6 +141,39 @@ assegnata; il parallelismo dei file non autorizza runtime concorrenti.
 6. Un cambio a obiettivi, constraint, ledger, proof o UX approvata torna ai
    design autorevoli prima di proseguire.
 
+## Gate del PAC
+
+La sequenza di corsia è quella del S8 della [riga 16](plan-phase00PacRoundingDirectionFix.prompt.md)
+(`:564`): `api sync` → `front build --debug` → `front check` → `core-unit` → `component-unit` →
+`i18n audit` → `check-orphans` → `lint`, poi la porta libera. Dal 2026-10-10 si aggiunge il formato
+del planner, che nessun workflow della CI controlla:
+
+```bash
+cd frontend && ./node_modules/.bin/prettier --check src/lib/features/tools/pac-allocator/planner
+PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front format --check
+```
+
+- Il primo è il gate del PAC. Il secondo copre tutto `src/**` ed `e2e/**`: un avviso fuori dal planner
+  non è del PAC. Mai `npx`: il binario è quello del lockfile.
+- Entrambi si aspettano exit 0: ogni avviso nel planner è una regressione.
+- Il passaggio di Prettier del 2026-10-10, su base `f4a42bf4a`, ha formattato i 30 file del planner
+  fuori formato. La prova, file per file e con le versioni del lockfile:
+  - per 27 file l'output di produzione è identico prima e dopo: Svelte client e SSR, `compileModule`
+    per i `.svelte.ts`, esbuild per i `.ts`, classi Tailwind;
+  - per `assetRead.svelte.ts`, `fxRead.svelte.ts` e `result/exposureTooltip.ts` cambia solo l'output
+    di `vite:esbuild`, e solo negli spazi: esbuild conserva gli a capo degli argomenti e degli array,
+    Prettier li unisce. AST e codice minificato sono identici, e per i due `.svelte.ts` il modulo
+    finale di `compileModule` è identico byte per byte.
+  - Un passaggio futuro segue la stessa prova: un file che non la supera resta fuori e si segnala.
+- Un output identico non basta per i test che leggono i sorgenti come testo, riga per riga: un a capo
+  può far apparire o sparire un sito (`utils/privacy/moneyRenderSites.test.ts`, i `*.gate.test.ts`).
+  Dopo ogni passaggio di Prettier vanno rieseguiti tutti (al 2026-10-10: 35 file, 1415 test verdi):
+
+  ```bash
+  cd frontend && grep -rlE "node:fs|from 'fs'|readFile|readdir|globSync|fast-glob|import\.meta\.glob|\?raw|svelte/compiler" \
+    src --include='*.test.ts' | xargs ./node_modules/.bin/vitest run
+  ```
+
 ## Stato
 
 **Stato al 2026-10-09.** Il bundle è stato eseguito. Il planner PAC 1.0.0 è integrato in
@@ -165,8 +198,16 @@ checkpoint planning-only servono:
 
 **Al 2026-10-09, aggiornato il 2026-10-10.** Rinvii aperti di questa cartella, fuori dalla 1.2. Le righe
 3 e 4 dei difetti, segnate ✅, sono state corrette il 2026-10-10 su base `d59762e0a`. Le ancore valgono a `9f060ef6e`;
-`planner/` sta per `frontend/src/lib/features/tools/pac-allocator/planner/`. Le cause marcate
-«ipotesi» vengono dalla sola lettura del codice: vanno confermate nel browser prima della cura.
+`planner/` sta per `frontend/src/lib/features/tools/pac-allocator/planner/`. Il passaggio di Prettier
+del 2026-10-10 ([Gate del PAC](#gate-del-pac)) sposta otto ancore del planner:
+
+- in `planner/steps/TargetsStep.svelte`: `:109` → `:110`, `:102-135` → `:102-137`, `:203-213` → `:208-218`;
+- in `planner/steps/ReviewStep.svelte`: `:117-119` → `:117`, `:201-203` → `:199`;
+- `planner/ui.ts:36` → `:35`, `planner/result/ExposureMaps.svelte:279` → `:275` e
+  `planner/shell/SummaryPanel.svelte:109` → `:105`.
+
+Le altre ancore non cambiano. Le cause marcate «ipotesi» vengono dalla sola lettura del codice: vanno
+confermate nel browser prima della cura.
 
 ### Difetti di prodotto dagli scatti del lotto 9
 
