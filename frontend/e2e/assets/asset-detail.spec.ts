@@ -7912,6 +7912,63 @@ test.describe('Asset Detail Page', () => {
     });
 
     // ========================================================================
+    // P, item 8 (follow-up): the rolling-return window presets read the catalogue
+    // ========================================================================
+    // The window row's presets come from CALENDAR_RETURN_PRESETS, whose labels are
+    // English literals — '1W', '1M', '3M', '1Y' — so Italian reads «1W» where its
+    // date picker reads the catalogue's week. The contract: a window button reads
+    // the catalogue's count message for its unit, `datePicker.presets.weeks`,
+    // `.months` or `.years`, with its count as `{n}`; the keys, the testids and the
+    // windows do not change. Expectations are read from the catalogue JSON, never
+    // written here: `t()` reads the file, and `{n}` is replaced by the count.
+    // English is the control: today's exact 1W 1M 3M 1Y, which the cure keeps.
+    // Read-only on the seeded Apple asset, like the test above: no preset is
+    // clicked, so the persisted window stays, and the language lives in this
+    // context's localStorage.
+    test('rolling-return window presets read the count of their unit from the catalogue, in the active language', async ({page}) => {
+        // A dictionary load on top of the usual login and detail-page setup.
+        test.setTimeout(60_000);
+        /** The window presets, by key: the count, and the catalogue key of the unit it counts. */
+        const WINDOWS = [
+            {key: '1w', count: 1, unitKey: 'datePicker.presets.weeks'},
+            {key: '1m', count: 1, unitKey: 'datePicker.presets.months'},
+            {key: '3m', count: 3, unitKey: 'datePicker.presets.months'},
+            {key: '1y', count: 1, unitKey: 'datePicker.presets.years'},
+        ] as const;
+        /** What each preset must read in `lang`, in the row's order: the catalogue's message for its unit, its count as `{n}`. */
+        const expectedIn = (lang: string): string[] =>
+            WINDOWS.map(({count, unitKey}) => {
+                const message = t(lang, unitKey);
+                // `t()` falls back to the key itself: guard it, or the replacement below would replace nothing.
+                expect(message, `${lang}.json must give ${unitKey} its {n}`).toContain('{n}');
+                return message.replace('{n}', String(count));
+            });
+        // Italian must write some window count otherwise than English, or the Italian step proves nothing.
+        expect(expectedIn('it'), 'the IT catalogue must write a window count otherwise than EN').not.toEqual(expectedIn('en'));
+
+        await goToSeededAssetDetail(page);
+        const chart = page.getByTestId('asset-detail-chart');
+        const calendarPrimary = chart.getByTestId('asset-chart-primary-calendar-return');
+        const windowRow = chart.getByTestId('asset-calendar-window-controls');
+        const presetButtons = windowRow.getByTestId(/^asset-calendar-window-(1w|1m|3m|1y)$/);
+
+        await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+        await calendarPrimary.click();
+        await expect(chart).toHaveAttribute('data-primary-mode', 'calendar-return');
+        await expect(windowRow).toBeVisible({timeout: 10_000});
+        // The keys keep their testids and their order: what the label lists below are read against.
+        await expect.poll(() => presetButtons.evaluateAll((buttons) => buttons.map((button) => button.getAttribute('data-testid')))).toEqual(WINDOWS.map(({key}) => `asset-calendar-window-${key}`));
+        await expect(presetButtons, 'English control: the window presets read 1W 1M 3M 1Y').toHaveText(['1W', '1M', '3M', '1Y']);
+
+        // As above: the switch may remount the page in Prices mode, and re-entering the mode is a no-op when it survived.
+        await setLanguage(page, 'it');
+        await calendarPrimary.click();
+        await expect(chart).toHaveAttribute('data-primary-mode', 'calendar-return');
+        await expect(windowRow).toBeVisible({timeout: 10_000});
+        await expect(presetButtons, 'Italian: each window preset reads it.json for its unit, its count as {n}').toHaveText(expectedIn('it'));
+    });
+
+    // ========================================================================
     // Test 18: Chart type toggle — Line → Candlestick → Line
     // ========================================================================
     test('chart type toggle switches between line and candlestick', async ({page}) => {

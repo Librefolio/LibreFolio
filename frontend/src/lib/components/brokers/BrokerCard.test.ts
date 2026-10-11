@@ -48,10 +48,14 @@
  * Storage. The shared `$app/environment` mock reports `browser: false`, so `setPrivacyEnabled`
  * moves the in-memory rune and never touches `localStorage`; persistence is
  * privacyStore.test.ts's subject, not this one's.
+ *
+ * A second subject sits in its own block at the end of the file: the gain/loss percentage in the
+ * UI language. Its notes are beside it.
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
-import {toStore} from 'svelte/store';
+import {get, toStore} from 'svelte/store';
+import {locale, waitLocale} from 'svelte-i18n';
 
 // The only request this graph makes is the currency catalogue, answered here so the rendered
 // suffix carries a real symbol and flag, as on the Brokers page. Every other method is inert.
@@ -75,6 +79,7 @@ vi.mock('$lib/api', () => ({
 }));
 
 import {render, screen, setupI18n} from '$test/component';
+import {currentLanguage} from '$lib/stores/app/language';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {formatCurrencyAmountHtml, type CurrencyAmountFormatOptions} from '$lib/utils/currency/currencyFormat';
@@ -272,5 +277,107 @@ describe('BrokerCard — amounts follow the global privacy toggle (R20)', () => 
             await setPrivacy(false);
             expectClear(`round ${round}: on → off`, nav);
         }
+    });
+});
+
+// =========================================================================
+// The gain/loss percentage in the UI language
+// =========================================================================
+
+/**
+ * The bracketed gain/loss percentage, written the reader's way.
+ *
+ * Defect (after train 37): the card prints `({(toNumber(summary.gain_loss_percent) * 100).toFixed(2)}%)`,
+ * so a French reader gets `(12.34%)` where French writes `(12,34 %)` — a decimal comma and a
+ * no-break space before the sign. The cure hands the same value, `gain_loss_percent × 100`, to the
+ * shared `formatPercent` with `{signed: false, digits: 2, locale: $currentLanguage}`: same digits,
+ * same rounding, no sign; only the notation follows the UI language.
+ *
+ * Expectations. The French string comes from `Intl.NumberFormat('fr', {style: 'percent', …})` in
+ * this very runtime and is never written down: Node puts U+00A0 before the `%`, a browser may put
+ * U+202F, and a hard-coded space would be wrong on one of them. The English string is the one
+ * literal, on purpose: it is today's exact text, which the cure must leave alone — two digits, no
+ * `+`, no space. The figure is a gain, so a `+` the cure must not add would show in both languages.
+ *
+ * Language. Switched as the app does (LanguageSelector): `currentLanguage.set`, which also drives
+ * svelte-i18n's `locale`. Both dictionaries are loaded before the first test, so a switch is a pure
+ * state change. One test switches in place, because BrokerCard is a legacy component: a template
+ * call whose expression does not name `$currentLanguage` compiles to `$.untrack` and keeps the
+ * notation it had at mount — the R20 mechanism above, which only an in-place step can see.
+ *
+ * Selection. The card publishes no handle for the percentage. It is the one element whose whole
+ * text is a bracketed figure ending in `%`: the amounts beside it are CurrencyAmount's and never
+ * bracketed. Nothing here reads translated text.
+ */
+describe('BrokerCard — the gain/loss percentage in the UI language', () => {
+    /** A gain, as the report sends it: a fraction, 0.1234, that the card multiplies by 100. */
+    const PERCENT_SUMMARY = {...SUMMARY, gain_loss: {code: 'EUR', amount: '1523.40'}, gain_loss_percent: '0.1234'};
+    /** What the card computes before printing, `toNumber(gain_loss_percent) * 100`; the cure keeps it. */
+    const GAIN_LOSS_PERCENT = Number(PERCENT_SUMMARY.gain_loss_percent) * 100;
+    /** Today's English text, exactly. */
+    const ENGLISH = '(12.34%)';
+    /** The same figure in French notation, two digits, from this runtime's Intl. */
+    const FRENCH = `(${new Intl.NumberFormat('fr', {style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2}).format(GAIN_LOSS_PERCENT / 100)})`;
+
+    /** `text` with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(text: string): string {
+        return text.replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    function mountPercentCard(): void {
+        render(BrokerCard, {broker: {...BROKER}, summary: structuredClone(PERCENT_SUMMARY), assetCount: 3, targetCurrency: TARGET_CURRENCY});
+    }
+
+    /** The card's gain/loss percentage, brackets included: the one leaf whose text is `(…%)`. */
+    function gainLossPercent(): string {
+        const bracketed = [...card().querySelectorAll('*')].map((element) => ({element, text: (element.textContent ?? '').trim()})).filter(({element, text}) => element.children.length === 0 && /^\(.*%\)$/.test(text));
+        if (bracketed.length !== 1) throw new Error(`expected one bracketed percentage on the card, found ${JSON.stringify(bracketed.map(({text}) => text))}`);
+        return bracketed[0].text;
+    }
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: 'en' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; French joins it, so a switch never waits on a loader.
+        await waitLocale('fr');
+        // Control: this runtime has French ICU data, so the two notations really differ — or every
+        // French step below would compare equal strings and prove nothing.
+        expect(FRENCH, 'French notation has a decimal comma').toContain(',');
+        expect(FRENCH, 'French notation differs from English').not.toBe(ENGLISH);
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('English UI (control): prints exactly today’s text, (12.34%) — two digits, no sign, no space', () => {
+        mountPercentCard();
+        expect(gainLossPercent(), 'English, unchanged by the cure').toBe(ENGLISH);
+    });
+
+    it('mounted with the UI in French: writes the percentage in French notation', async () => {
+        await switchLanguage('fr');
+        mountPercentCard();
+        expect(gainLossPercent(), `French notation, ${spelled(FRENCH)}`).toBe(FRENCH);
+    });
+
+    it('follows an in-place switch of the UI language, en → fr → en', async () => {
+        mountPercentCard();
+        expect(gainLossPercent(), 'en, mount — today’s text').toBe(ENGLISH);
+
+        await switchLanguage('fr');
+        expect(gainLossPercent(), `en → fr in place — French notation, ${spelled(FRENCH)}`).toBe(FRENCH);
+
+        await switchLanguage('en');
+        expect(gainLossPercent(), 'fr → en in place — today’s text again').toBe(ENGLISH);
     });
 });

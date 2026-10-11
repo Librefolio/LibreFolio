@@ -89,7 +89,16 @@
     import {percentageAxisLabel, priceAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
     import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
     import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
-    import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
+    import {
+        CALENDAR_RETURN_PRESETS,
+        CALENDAR_RETURN_UNIT_LABEL_KEYS,
+        DEFAULT_CALENDAR_RETURN_WINDOW,
+        calendarReturnRangeDays,
+        calendarReturnWindowDays,
+        type CalendarReturnPresetKey,
+        type CalendarReturnWindowSelection,
+        type CalendarReturnWindowUnit,
+    } from '$lib/components/charts/calendarReturnWindow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
@@ -2981,7 +2990,7 @@
                                     title={`${$t('chartSettings.params.window')}: ${preset.windowDays} ${$t('chartSettings.units.days')}`}
                                     onclick={() => setCalendarPreset(preset.key)}
                                 >
-                                    {preset.label}
+                                    {$t(CALENDAR_RETURN_UNIT_LABEL_KEYS[preset.unit], {values: {n: preset.count}})}
                                 </button>
                             {/each}
                             <CompactDurationBadge
