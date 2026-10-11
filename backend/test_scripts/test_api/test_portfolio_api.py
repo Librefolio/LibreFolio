@@ -1138,8 +1138,21 @@ class TestLotsAnalysisEndpoint:
         print_success("LOT_SUMMARY + GANTT_TOPOLOGY correct, other sections omitted")
 
     async def test_target_currency_conversion(self, test_server):
-        """BUY in EUR, request target_currency=USD -> lot cost converted."""
+        """BUY 1000 EUR of an EUR asset, then ask for its lots in EUR and in USD.
+
+        target_currency is accepted and echoed, and in EUR the cost is the 1000 the BUY paid. In USD the cost is
+        converted at the EUR/USD rate of the BUY date; without one it is unknown (B3b): null -- never the native
+        1000 read as dollars -- with the pair and the BUY date in data_quality.missing_fx_pairs, and DEGRADED.
+
+        Which case applies is read from the response itself, not assumed. FX rates are global and the FX service
+        backward-fills without limit, so any EUR/USD row on or before the BUY date -- seeded, or written by a
+        concurrent FX unit -- makes the pair convertible. An API test can own neither case: it cannot delete a
+        neighbour's committed rate, and a rate it wrote would change every neighbour's EUR/USD conversion from
+        that date on. The response states, in one answer, whether the rate was there and what was computed with
+        it: each case is asserted strictly, and an answer that contradicts itself is red.
+        """
         print_section("Lots Analysis: target_currency conversion")
+        buy_date = "2026-01-10"
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             broker_id = await create_broker(client)
@@ -1148,7 +1161,7 @@ class TestLotsAnalysisEndpoint:
                 client,
                 creates=[
                     {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "10000"}},
-                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-01-10", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": buy_date, "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
                 ],
             )
 
@@ -1162,16 +1175,33 @@ class TestLotsAnalysisEndpoint:
                 json={"asset_id": asset_id, "requested_analyses": ["LOT_SUMMARY"], "target_currency": "USD"},
                 timeout=TIMEOUT,
             )
-            assert resp_eur.status_code == 200, resp_eur.text
-            assert resp_usd.status_code == 200, resp_usd.text
-            eur_cost = Decimal(resp_eur.json()["lots"][0]["original_cost"])
-            usd_cost = Decimal(resp_usd.json()["lots"][0]["original_cost"])
-            assert resp_usd.json()["target_currency"] == "USD"
-            assert eur_cost == Decimal("1000")
-            # No FX pair seeded in test DB -> conversion unavailable, service falls back to
-            # original amount rather than crashing (missing_fx degrades gracefully).
-            assert usd_cost in (Decimal("1000"), usd_cost)
-        print_success("target_currency accepted and echoed; EUR cost matches original transaction")
+        assert resp_eur.status_code == 200, resp_eur.text
+        assert resp_usd.status_code == 200, resp_usd.text
+        eur, usd = resp_eur.json(), resp_usd.json()
+        # This test's own asset, bought once: exactly one lot in each answer.
+        (eur_lot,) = eur["lots"]
+        (usd_lot,) = usd["lots"]
+
+        # Accepted and echoed; in EUR the cost is what the BUY paid; in USD the lot itself is unchanged.
+        assert (eur["target_currency"], usd["target_currency"]) == ("EUR", "USD")
+        assert Decimal(eur_lot["original_cost"]) == Decimal("1000")
+        assert (usd_lot["currency"], Decimal(usd_lot["original_quantity"])) == ("EUR", Decimal("10"))
+
+        assert usd["data_quality"] is not None
+        missing_dates = {item["pair"]: item["dates"] for item in usd["data_quality"]["missing_fx_pairs"]}
+        if buy_date in missing_dates.get("EUR/USD", []):
+            # No EUR/USD rate on or before the BUY date: the USD cost and unit price are unknown, and the
+            # answer says why -- the pair and that date above -- and that it is DEGRADED.
+            assert (usd_lot["original_cost"], usd_lot["opening_unit_price"], usd["calculation_status"]) == (None, None, "DEGRADED")
+            case = "no EUR/USD rate: USD cost null, pair and BUY date reported, DEGRADED"
+        else:
+            # A rate exists: nothing is missing, and the cost is a number, converted with the same rate as the
+            # unit price (both at the BUY date).
+            assert (usd["data_quality"]["missing_fx_pairs"], usd["calculation_status"]) == ([], "COMPLETE")
+            assert usd_lot["original_cost"] is not None and usd_lot["opening_unit_price"] is not None
+            assert Decimal(usd_lot["original_cost"]) == 10 * Decimal(usd_lot["opening_unit_price"]) > 0
+            case = "EUR/USD rate present: USD cost converted, nothing missing"
+        print_success(f"target_currency accepted and echoed; EUR cost matches the transaction; {case}")
 
     async def test_return_history_for_plain_buy_populates_total_and_open_return(self, test_server):
         """Plain BUY lots expose non-empty return_history with total_return + relative_return."""

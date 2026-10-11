@@ -21,7 +21,7 @@
 import {safeDecimal, safeString} from '$lib/types';
 import {finiteNumber} from '$lib/utils/core/finiteNumber';
 import {mapDateToBucket, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
-import {normalizeZero, formatAxisNumber} from './lotChartShared';
+import {normalizeZero, formatAxisNumber, addOrNull} from './lotChartShared';
 import {maskCurrencyParts, maskFormattedNumber} from '$lib/utils/privacy/maskable';
 
 /** The two value provenances a lot's series can carry. */
@@ -68,6 +68,105 @@ export function safeValueSource(value: unknown): LotValueSource | null {
 /** Parse a decimal-ish value, defaulting a missing/unparseable one to 0. */
 export function parseRequiredNumber(value: unknown): number {
     return safeDecimal(value) ?? 0;
+}
+
+// ---------------------------------------------------------------------------
+// Value and return series (a lot's cumulative income can be unknown)
+// ---------------------------------------------------------------------------
+
+/** One lot's value point. `income` is `null` when an income pool reaching the lot has no FX rate: unknown, never 0. */
+export interface LotValueSeriesPoint {
+    date: string;
+    proceeds: number;
+    openValue: number;
+    originalCost: number;
+    pnl: number;
+    income: number | null;
+}
+
+/** The value points of several lots summed per date; `income` is `null` on a date where one lot's is. */
+export interface AggregatedValuePoint {
+    date: string;
+    openValue: number;
+    proceeds: number;
+    originalCost: number;
+    income: number | null;
+}
+
+/** The P&L with income of several lots per date, and the return of the percent lots among them. */
+export interface AggregateReturnPoint {
+    date: string;
+    totalReturn: number | null;
+    openingValue: number;
+    pnlWithIncome: number | null;
+}
+
+/** Parse one API value-history point. The four amounts read a missing value as 0, as before; the income never does. */
+export function parseValueSeriesPoint(point: {date: string; proceeds: unknown; open_value: unknown; original_cost: unknown; pnl: unknown; income?: unknown}): LotValueSeriesPoint {
+    return {
+        date: point.date,
+        proceeds: parseRequiredNumber(point.proceeds),
+        openValue: parseRequiredNumber(point.open_value),
+        originalCost: parseRequiredNumber(point.original_cost),
+        pnl: parseRequiredNumber(point.pnl),
+        income: safeDecimal(point.income),
+    };
+}
+
+/** FIFO P&L plus cumulative income, or `null` when the income is unknown. */
+export function pnlWithIncome(point: {pnl: number; income: number | null}): number | null {
+    return addOrNull(point.pnl, point.income);
+}
+
+/** Residual value + sale proceeds + cumulative income, or `null` when the income is unknown. */
+export function comprehensiveValue(point: {openValue: number; proceeds: number; income: number | null}): number | null {
+    return addOrNull(point.openValue + point.proceeds, point.income);
+}
+
+/** Sum the given lots' value points per date, sorted by date. A date's income is unknown as soon as one lot's is. */
+export function aggregateValuePoints(lotIds: readonly number[], pointsByLotId: ReadonlyMap<number, readonly LotValueSeriesPoint[]>): AggregatedValuePoint[] {
+    const totals = new Map<string, AggregatedValuePoint>();
+    for (const lotId of lotIds) {
+        for (const point of pointsByLotId.get(lotId) ?? []) {
+            const current = totals.get(point.date) ?? {date: point.date, openValue: 0, proceeds: 0, originalCost: 0, income: 0};
+            current.openValue += point.openValue;
+            current.proceeds += point.proceeds;
+            current.originalCost += point.originalCost;
+            current.income = addOrNull(current.income, point.income);
+            totals.set(point.date, current);
+        }
+    }
+    return Array.from(totals.values()).sort((left, right) => left.date.localeCompare(right.date));
+}
+
+/**
+ * Per date: the P&L with income of every lot in `absLotIds`, and the return of those also in
+ * `pctLotIds` with a positive original cost that day. An unknown income makes the P&L unknown, and
+ * the return too when its lot is part of that day's ratio; the opening value stays the known cost.
+ */
+export function aggregateReturnPoints(absLotIds: readonly number[], pctLotIds: ReadonlySet<number>, pointsByLotId: ReadonlyMap<number, readonly LotValueSeriesPoint[]>): AggregateReturnPoint[] {
+    const totals = new Map<string, {date: string; pnlWithIncome: number | null; pctPnlWithIncome: number | null; pctOpeningValue: number}>();
+    for (const lotId of absLotIds) {
+        const percentLot = pctLotIds.has(lotId);
+        for (const point of pointsByLotId.get(lotId) ?? []) {
+            const current = totals.get(point.date) ?? {date: point.date, pnlWithIncome: 0, pctPnlWithIncome: 0, pctOpeningValue: 0};
+            const lotPnlWithIncome = pnlWithIncome(point);
+            current.pnlWithIncome = addOrNull(current.pnlWithIncome, lotPnlWithIncome);
+            if (percentLot && point.originalCost > 0) {
+                current.pctPnlWithIncome = addOrNull(current.pctPnlWithIncome, lotPnlWithIncome);
+                current.pctOpeningValue += point.originalCost;
+            }
+            totals.set(point.date, current);
+        }
+    }
+    return Array.from(totals.values())
+        .map((point) => ({
+            date: point.date,
+            totalReturn: point.pctPnlWithIncome != null && point.pctOpeningValue > 0 ? point.pctPnlWithIncome / point.pctOpeningValue : null,
+            openingValue: point.pctOpeningValue,
+            pnlWithIncome: point.pnlWithIncome,
+        }))
+        .sort((left, right) => left.date.localeCompare(right.date));
 }
 
 /** The `lotId:date` composite key used to look a point up by lot and day. */

@@ -493,7 +493,7 @@ Totale T-1: **medio**. È meccanico ma largo: il rischio sta nei conflitti (§7.
 | B1 | Δ% della coppia FX invertita (R15) | minimo | ✅ 2026-10-11 |
 | B2 | AI F6, valore d'apertura del lotto senza qbq (V6) | basso | ✅ 2026-10-11 |
 | B3a | Lotti, nessun numero calcolato mescola le valute; ogni conversione mancante va nel banner. Senza cambi di contratto | medio-basso | ✅ 2026-10-11 |
-| B3b | Lotti, campi base, Gantt ed eventi economici a «—». Col cambio di contratto | medio | ⏳ dopo il checkpoint di B1–B3a, prima della 1.2 |
+| B3b | Lotti, campi base, Gantt ed eventi economici a «—». Col cambio di contratto | medio-alto (riverificato) | 🚧 dal 2026-10-11 (treno 37 integrato) |
 | B4 | Data del lotto più vecchio dopo uno split (L1), quindi l'annualizzazione delle posizioni. Dipende da U6 e D-7 | medio | dopo |
 
 **B1, disegno.**
@@ -962,8 +962,229 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 >   - Documentato nella pagina dev come limite noto. Proposto come voce di backlog (B5).
 > - **Spunto per B3b**: `net_metrics_status = "UNAVAILABLE"` (oggi mai emesso) è già pensato per «a degraded economic pool», e la UI lo mostra già («netto non disponibile»). Trattenere per lotto gli eventi economici senza cambio può passare da lì, con meno campi da rendere Optional.
 
-### Checkpoint B1–B3a ⏳ (2026-10-11)
+### Checkpoint B1–B3a ✅ (2026-10-11, treno 37)
 
 > Consegnato al coordinatore FROZEN (messaggio del 2026-10-11): 13 file tracciati modificati + questo piano.
 > - Commit e righe di CHANGELOG proposti nel messaggio.
 > - Base `b20eac99`; il target è avanzato a `251067435` (treni 33–36) senza file in comune con questo delta.
+
+> **Integrato nel treno 37**: `dev_release2` = `41ddc61cb`, commit `9fab65f4a`…`9bb2b0c16`, merge `bfd962b9c`. Il coordinatore ha accorciato il soggetto del commit del piano: `docs(journal): plan 43, financial math home`. Worktree riallineata a `41ddc61cb` in fast-forward (contiene H di I, P, M).
+
+### Riconciliazione con l'analisi di F di I (coordinatore, 2026-10-11)
+
+- **F chiude O2 e X5 sui giri del portafoglio**: G1–G4, cioè il passo 1 del motore, `get_summary`, i 3 storici e i contributi, più la card `:983`. Chiude anche B13 e B14 di I. U1 e U3 escludono quei siti.
+- **B9 di I va in U3**, nella descrizione del developer:
+  - nel patrimonio lo 0 di Viewer ed Editor è giusto (la Dashboard passa solo i broker propri con quota > 0);
+  - il difetto è l'export dalla pagina di un broker solo visto: cifre del report piene, turnover moltiplicato per la quota grezza 0 (`broker_cost_efficiency.py:150-157`), più l'`abs` sul reddito (`portfolio_income.py:379`).
+- **Restano a T**: L1/L2 (U6), R1 (U4, dopo la 1.2). C1 di I (`_wac_qualifying_txs`, il costo unitario dell'anteprima) lo colloco io: in U4, come già nel §7.1.
+- **File**: F non tocca `schemas/portfolio.py`; riscrive `portfolio_engine.py` e `portfolio_service.py` e crea `financial_math/native_cash.py`. B3b, PL3, BU1 e FE1 non toccano questi file; uno spostamento di BU1 che tocca moduli importati dal motore o dal servizio va dopo F.
+- **Indice dopo la 1.2** (`Phase_0/BACKLOG_POST_1.2.md`, sezione T): da ora le voci le scrivo io, nello stesso checkpoint.
+- **Ordine**: B3b, PL3, BU1 (prima l'elenco dei file al coordinatore), FE1 (idem; P lavora su `TransactionBulkModal.svelte`, che importa da `$lib/features/onboarding/` `:89-91`), poi T-1 dopo F.
+
+### B3b — Lotti, campi base, Gantt ed eventi economici a «—» ✅ (2026-10-11)
+
+**Disegno**, approfondito sul codice il 2026-10-11 e mandato al coordinatore per il perimetro:
+- **Campi base della sintesi.**
+  - `original_cost` e `opening_unit_price` sono la conversione alla data d'apertura, oppure `None`.
+  - `realized_pnl` e `cumulative_proceeds` vengono da `_known_realized_pnl()` / `_known_cumulative_proceeds()`, oppure sono `None`.
+  - Spariscono `_converted_realized_pnl()` e `_converted_cumulative_proceeds()`.
+- **Gantt**: `unit_price` è la conversione oppure `None`.
+- **Eventi economici**, senza toccare il motore FIFO:
+  - Un evento di reddito, di costo o di tassa senza cambio entra nel motore col suo importo nativo, solo come segnaposto per collocarlo. Il motore ne ricava la struttura dell'allocazione.
+  - Il suo id va in `unconvertible_event_ids`.
+  - I trade di BUY/SELL senza cambio passano `target_amount=None` (stesso peso di oggi, `_trade_target_value`) e finiscono in `unconvertible_trade_ids`.
+- **Pool degradato** (un `EconomicAllocationGroup` del motore), in due casi:
+  - le sue `source_transaction_ids` contengono un evento senza cambio;
+  - è un pool di FEE/TAX pesato su trade (`SAME_DAY_TRADES`, `SAME_DAY_MIXED_TRADES`, `PREVIOUS_DAY_TRADES`), con un trade senza cambio e trade in valute diverse. Con trade tutti nella stessa valuta i rapporti nativi sono esatti e il pool non è degradato.
+- **Cosa si trattiene** sui lotti di un pool degradato, dalla data del pool:
+  - il reddito, i costi e le tasse della sintesi (`None`), con `net_metrics_status = "UNAVAILABLE"`: il disegno v4, che la UI mostra già;
+  - negli storici `income`, `allocated_fees`, `allocated_taxes` e `net_pnl` del valore, e `income`, `total_return` e `net_total_return` del rendimento;
+  - i derivati della sintesi (`total_pnl`, `cash_yield`, `net_*`, annualizzato).
+- **Altri valori a `None`**:
+  - l'`amount` dell'evento di reddito senza cambio;
+  - gli orfani di un tipo, se un pool degradato di quel tipo è orfano;
+  - nell'audit di un pool degradato, `target_pool_total`, `target_orphan` e il `target_amount` per lotto (le cifre native restano, sono giuste).
+- **Il segnaposto nativo non arriva mai alla risposta**: ogni uscita di un pool degradato è trattenuta.
+- **Schemi** (`schemas/portfolio.py`, solo la sezione dei lotti), campi che diventano Optional:
+  - `LotSummarySchema`: i 4 campi base, più asset_income, allocated_fees e allocated_taxes;
+  - `GanttSegmentSchema.unit_price`;
+  - `LotValueHistoryPoint`: income, allocated_fees, allocated_taxes, net_pnl;
+  - `LotReturnHistoryPoint`: income;
+  - `LotIncomeEventSchema`: amount;
+  - `EconomicAllocationGroupSchema`: target_pool_total, target_orphan; `EconomicLotAllocationSchema`: target_amount;
+  - `LotsAnalysisResponse`: asset_orphan_*.
+- **Poi**: `api sync`; i 6 componenti dei lotti (UnifiedLotsTable, LotCustodyModal, LotWacPriceChart, LotGanttChart, LotComparisonChart, LotsAnalysisPanel).
+- **AI Export**: `AssetLotDetailRow`, `FifoLotRow` (con `residual_cost_basis`) e `summarize_fifo_asset_rows`, dove una somma con una parte ignota diventa `None`. Le versioni dei componenti le decide il coordinatore (opzione A, bump più la mappa compatta; opzione B, nessun bump).
+
+**Perimetro approvato dal coordinatore** (2026-10-11, opzione A, su delega del developer): i campi Optional solo nella sezione dei lotti; i 6 componenti; nell'AI Export `AssetLotDetailRow`, `FifoLotRow` e `summarize_fifo_asset_rows`, con i bump `asset.lot_detail` 2→3 e `fifo_lots` 1→2 (`fifo_summary` solo se cambia forma); in `snapshotDataRenderer.ts` solo le voci di `COMPACT_COMPONENT_VERSIONS` più il loro test.
+
+#### Passo 1 — backend dei lotti ✅ (2026-10-11)
+> **Note implementazione**:
+> - **Schemi**: 22 campi Optional nella sezione dei lotti di `schemas/portfolio.py`. Il `weight` del lotto resta obbligatorio: è un rapporto di quantità, sempre noto.
+> - **Servizio**:
+>   - `_WithheldEconomics` raccoglie, per lotto, la data da cui reddito, costi e tasse sono ignoti, più gli indici dei pool degradati, gli eventi senza cambio e gli orfani ignoti; `reaches(lot_id)` decide `net_metrics_status = "UNAVAILABLE"`.
+>   - Funzioni nuove: `_unconvertible_ids()`, `_withheld_economics()`, `_economics_on_date()`, `_lot_returns()`, `_known_prefix_on_date()`.
+>   - `_converted_external_amount()` diventa `_engine_target_amount()`: il nome dice che l'importo nativo è solo il segnaposto per il motore.
+>   - Spariscono `_converted_realized_pnl()` e `_converted_cumulative_proceeds()`.
+>   - Gli storici del valore e del rendimento prendono `withheld=` e usano, a ogni data, solo i pool già noti.
+> - **Test** (test-author): 4 rossi in `test_lots_analysis_pure.py` e 9 in `test_financial/test_lots_analysis_service.py`, più una guardia; i 3 test di `_converted_cumulative_proceeds` migrati a `_known_cumulative_proceeds`.
+> - **Evidenze**:
+>   - `services lots-analysis-pure` → 121 passed;
+>   - `services roi-fifo-utils` → 599 passed;
+>   - ruff e black puliti.
+>
+> **⚠️ Fuori pista**:
+> - Il disegno diceva «nell'audit di un pool degradato restano le cifre native». Vale per il pool con un evento senza cambio.
+> - Non vale per il pool di FEE/TAX diviso su trade in valute diverse. Lì il motore pesa con l'importo nativo del trade senza cambio, quindi sono sbagliati il peso dell'operazione e l'importo nativo per lotto. Anche questi sono `None`.
+> - Il totale nativo del pool e il peso per lotto dentro l'operazione restano: sono giusti.
+
+#### Scoperte sul renderer dell'AI Export (2026-10-11, mandate al coordinatore)
+- **`asset.lot_detail` è in `PAYLOAD YAML FALLBACK` dalla v1.1.0.**
+  - F6 (`3e3f9c41f`) l'ha portato a v2, ma il renderer della v1.1.0 accettava solo `component_version === 1`.
+  - `COMPACT_COMPONENT_VERSIONS` oggi conosce solo le due provenance.
+  - Domanda al coordinatore: con v3, compatto o YAML?
+- **Nelle tabelle compatte `null` resta il testo `null`** (`null=explicitly unavailable` nel preambolo), non una cella vuota. Una colonna sparisce solo se è `null` in tutte le righe.
+- **`fifo_summary` cambia forma**: 7 campi della riga Asset e `total_residual_cost_basis` diventano nullable. Quindi va a v2 anche lui (portfolio e broker).
+
+**Decisioni del coordinatore sulle tre scoperte** (2026-10-11, «Tutti e tre sì»):
+1. **`asset.lot_detail` v3 compatto**, nella mappa, con lo stesso renderer generico di `fifo_lots`.
+   - Il motivo: il YAML è la riserva per le versioni sconosciute. Esserci rimasti dalla v2 di F6 è stata una regressione silenziosa, non una scelta.
+   - Va fatta una sonda mirata sulla corsia 6164: un Asset con lotti, solo dati sintetici.
+   - Nel checkpoint servono il prima e il dopo del blocco lotti nel prompt dell'Asset: forma, lunghezza, nessun dato perso.
+   - Il CHANGELOG dice che il dettaglio dei lotti torna una tabella compatta, mentre dalla 1.1.0 usciva in un blocco YAML più lungo.
+2. **Nelle tabelle compatte un valore ignoto è il testo `null`**: il test prova `null`, mai `0` e mai YAML.
+3. **`fifo_summary` va a v2**, portfolio e broker, con {1,2} nella mappa.
+
+**Una quarta decisione del coordinatore** (2026-10-11, «Sì al contatore, adesso»):
+- `unavailable_amount_lot_count` va in `asset.lot_detail` v3 e nei due `fifo_lots` v2, come riga della SUMMARY sempre visibile, anche a 0. Il motivo è la regola dei prompt: dichiarare cosa è parziale o non disponibile, mai lasciarlo implicito.
+- La sonda mirata deve mostrare un caso con valore > 0: un Asset in VND senza cambi, sui dati sintetici della 6164.
+- La regola esistente delle colonne nulle in tutte le righe si descrive nella doc developer, insieme al contatore.
+- La regola generale (segnalare le colonne tolte in tutti i componenti) va dopo la 1.2: riga T-B7 dell'indice.
+
+#### Passo 2 — AI Export ✅ (2026-10-11)
+> **Note implementazione**:
+> - **Righe**: in `AssetLotDetailRow` diventano nullable 7 campi, in `FifoLotRow` 8 (con `residual_cost_basis`), in `FifoAssetSummaryRow` 7.
+> - **`lot_residual_cost_basis()`**: è `None` quando il lotto è aperto e il costo è ignoto. Il costo si controlla prima della quantità originale a zero.
+> - **`summarize_fifo_asset_rows()`**:
+>   - le 7 somme del costo sono complete oppure `None`;
+>   - la valuta si prende da ogni importo noto: un lotto può avere ignoti tutti i costi e noto il valore di mercato;
+>   - nuova `total_fifo_residual_cost_basis()`.
+> - **Versioni**: `asset.lot_detail` 3, i quattro `fifo_lots`/`fifo_summary` 2, nelle spec reali e nei segnaposto del catalogo.
+> - **Contatore**: `unavailable_amount_lot_count` è obbligatorio e ≥ 0.
+>   - Lo calcolano `count_unavailable_amount_lots()` (FIFO) e `_has_unavailable_amount()` (`asset_core.py`).
+>   - Conta solo i campi che B3b rende nulli. Quelli già opzionali prima (valore di mercato, P&L di mercato, riferimento d'apertura) hanno la loro copertura.
+> - **Test** (test-author): 26 rossi, poi 36 rossi del contatore e 3 fissaggi. `services ai-export` → **999 passed**.
+>
+> **⚠️ Fuori pista**:
+> - Il C901 di `summarize_fifo_asset_rows` è salito a 12. L'ho riportato sotto 10 con quattro helper di modulo (`_fifo_rows_currency`, `_fifo_value_coverage_status`, `_sum_complete_amounts`, `_sum_known_amounts`), senza `noqa`.
+> - Ruff ha chiesto di riordinare gli import (I001) e `__all__` (RUF022).
+
+#### Passo 3 — frontend dei lotti ✅ (2026-10-11)
+> **Note implementazione**:
+> - **`api sync`**. Il generatore trasformava `Optional[SafeDecimal] = Field(default=0)` in `.default(0)`, un numero su un'unione di stringhe: 12 errori di svelte-check in `generated.ts`. Il default è ora `Decimal("0")`.
+> - **Helper con test**:
+>   - `isUnknownOrNonZero()` e `addOrNull()` in `lotChartShared.ts`;
+>   - `parseValueSeriesPoint()`, `pnlWithIncome()`, `comprehensiveValue()`, `aggregateValuePoints()` e `aggregateReturnPoints()` in `lotComparisonChartHelpers.ts`, tolti dal componente;
+>   - `sumCompleteOrNull()` e `weightedAverageCompleteOrNull()` in `unifiedLotsTableHelpers.ts`;
+>   - `isSplitTransition()` e `inferredTransitionKind()` accettano un prezzo ignoto.
+> - **Componenti**:
+>   - `UnifiedLotsTable`: tutti i totali e le due medie del piede sono «—» appena un lotto è ignoto, anche il valore corrente, per coerenza; le colonne restano visibili se un valore è ignoto.
+>   - `LotCustodyModal`: le righe di reddito e costi restano visibili con «—».
+>   - `LotGanttChart`: prezzo del segmento nullable; tooltip con «—»; il «P&L totale» non ripiega più su `pnl`, che è senza reddito.
+>   - `LotComparisonChart`: le linee si fermano dove il valore diventa ignoto, e la ritenuta dura fino in fondo, quindi non ci sono buchi a metà; un marcatore di reddito senza altezza nota non si disegna; l'importo dell'evento è «—».
+>   - `LotWacPriceChart`: bolle con importi nullable, tooltip «—».
+>   - `LotsAnalysisPanel`: il tipo dell'importo.
+> - **Test** (test-author): 46 + 7 + 4 vitest.
+> - **Evidenze**:
+>   - i 9 file dei lotti → 467 passed;
+>   - la suite vitest intera → **347 file, 10 328 passed**;
+>   - `front check` → 0 errori;
+>   - Prettier pulito.
+>
+> **⚠️ Fuori pista**:
+> - Il Gantt riconosce uno split dal nozionale, cioè quantità × prezzo. Con un prezzo ignoto non lo riconosce più.
+> - Però quello è solo il ripiego per un grafico senza eventi: la pagina dei lotti passa `lot_events`, con il SPLIT del backend. Il caso è fissato da un test.
+
+#### Passo 4 — renderer dell'AI Export ✅ (2026-10-11)
+> **Note implementazione**:
+> - `COMPACT_COMPONENT_VERSIONS`: `asset.lot_detail` → {1, 2, 3}; `portfolio/broker.fifo_lots` e `.fifo_summary` → {1, 2}. Nient'altro nel file.
+> - **Test** (test-author): 12 rossi, poi 9 per la riga del contatore, che non chiede modifiche al renderer.
+>   - Una colonna nulla in ogni riga sparisce, e il test la fissa come regola esistente.
+>   - Il contatore resta nella SUMMARY.
+> - `snapshotDataRenderer.test.ts` → **65 passed**; i 12 file dell'AI Export → 142 passed.
+
+#### Passo 5 — sonda mirata ✅ (2026-10-11)
+> **Note implementazione**:
+> - **Dati**: `test db populate --force --clean` sulla corsia; poi un Asset in VND senza cambi (asset 18, broker 1) con due acquisti, una vendita parziale e un dividendo, inseriti come nei test di servizio.
+> - **Sonda**: quella ufficiale (`ai_export_real_prompt_probe.py`), lanciata da un involucro temporaneo fuori dal repo.
+>   - L'involucro cambia solo l'alias dell'utente (`e2e_test_user`) e l'Asset dell'ambito: la CLI non sa scegliere né l'uno né l'altro.
+>   - Il resto è il percorso ufficiale: DB copiato, HTTP, costruttore della richiesta e renderer del frontend, hash e scansione dei segreti.
+>   - Selezione: `asset.position_and_history`, 1Y, full, porta 6164.
+> - **Esito della sonda**: snapshot HTTP 200, sorgente invariata, scansione dei segreti passata, porta libera.
+>   - Lo stato della sonda è però «1 fallimento» per ciascun caso: il controllo pubblico `raw_ratio_weight_name` trova `portfolio_weight_ratio` nella tabella `portfolio_role.unavailable` di `asset.position_scope`.
+>   - È preesistente (`ea0558b3c`), non è B3b, ed è segnalato al coordinatore.
+> - **Prima e dopo del blocco lotti**, renderer ufficiale caricato come lo carica la sonda.
+>   - Il «dopo» coincide byte per byte col blocco del prompt salvato dalla sonda.
+>   - Il «prima» è il percorso della versione sconosciuta (YAML), lo stesso che prendeva la v2 a HEAD: il renderer di HEAD differisce solo nella mappa, e l'intestazione del blocco non porta la versione.
+> - **Apple** (10 lotti, contatore 0):
+>   - dopo: 3 094 caratteri, 22 righe, ~774 token;
+>   - prima: 11 126 caratteri, 312 righe, ~2 782 token;
+>   - quindi **−72%**;
+>   - 230 celle verificate, 0 differenze, e nessun dato perso: l'unica colonna tolta è `closing_date`, nulla in tutti i lotti;
+>   - il YAML esponeva 30 id grezzi di broker.
+> - **VND** (2 lotti, **contatore 2**):
+>   - dopo: 930 caratteri;
+>   - 11 colonne nulle ovunque sono tolte (costo, prezzo d'apertura, reddito, valore, P&L…), e il contatore ne è la traccia;
+>   - realizzato e incassi mostrano `null` (L1, venduto senza cambio) accanto a `0` (L2);
+>   - entrambi i lotti sono `UNAVAILABLE`.
+> - Le prove sono nella cartella della sessione (`files/b3b_probe/`), fuori dal repo.
+>
+> **⚠️ Fuori pista**:
+> - Il primo Asset scelto dalla sonda (Bitcoin, asset 6) dava 503 su `asset.identity`: i dati sintetici scrivono la vecchia forma di `classification_params` (`populate_mock_data.py:793-881`), che `FAClassificationParams` rifiuta. È preesistente ed è segnalato al coordinatore.
+> - `--base-url` vuol dire «server già avviato»; senza, la sonda avvia il suo.
+> - `asset.position_performance` non è pubblico, quindi ho usato `asset.position_and_history`.
+
+#### Passo 6 — documentazione e due buchi trovati dal docs-writer ✅ (2026-10-11)
+> **Note implementazione**:
+> - **Doc developer** (docs-writer, solo inglese):
+>   - `lots_analysis_service.md`: tolto l'avviso «Transitional native fallback»; nuova sezione «Economic events and degraded pools»; la nota su `net_metrics_status` dice che `UNAVAILABLE` ora si emette.
+>   - `lots-analysis.md`: la visibilità delle colonne nette e il dettaglio del modale; i 5 `data-testid` mancanti del modale.
+>   - `ai_export_composition.md`: nuova sezione «Snapshot Data Tables», con `null` letterale, la regola delle colonne nulle in ogni riga, la SUMMARY e il contatore.
+>   - `ai_export_probe_workflow.md`: le diagnostiche delle colonne tolte.
+>   - `mkdocs build` (strict) e `check-links` (95) passano.
+>
+> **⚠️ Fuori pista**: rileggendo il codice, il docs-writer ha trovato due buchi, chiusi in B3b con il rosso prima.
+> - **Il segnaposto nativo usciva dal `data_quality`.** Un pool orfano con un evento senza cambio dava al suo avviso (`ASSET_INCOME/COST_NO_ELIGIBLE_LOTS`) l'importo nativo nella valuta di destinazione: il banner avrebbe letto «70 EUR» per 70 VND.
+>   - Ora `_orphan_issue_params()` dà il pool nella sua valuta («70 VND»); i nomi delle chiavi restano `target_`.
+>   - Test: 3 rossi (dividendo, FEE, TAX) e 3 controlli convertiti.
+> - **`total_pnl` e `net_total_pnl` della sintesi FIFO erano somme parziali senza copertura.** Ora sono `None` appena manca una parte.
+>   - Il valore aperto, il P&L non realizzato e il potenziale restano parziali, perché la loro copertura è dichiarata.
+>   - Una differenza di insiemi fra queste due somme va dopo la 1.2 (T-B8).
+>   - Test: 2 rossi più un controllo.
+> - **`api portfolio`: `test_target_currency_conversion` codificava il ripiego nativo**, con un'asserzione tautologica.
+>   - Il test-author l'ha riscritto sul contratto B3b: legge il caso dai `missing_fx_pairs` della risposta stessa e lo verifica in modo stretto.
+>   - Ha provato anche il ramo «con cambio» una volta, con una riga di cambio propria, poi cancellata.
+
+#### Gate finali (2026-10-11)
+> - `services lots-analysis-pure` → 121 passed.
+> - `services roi-fifo-utils` → **611 passed**.
+> - `services ai-export` → **1002 passed**.
+> - `api portfolio` → 51 passed.
+> - `api ai-export` → 15 passed.
+> - `front-broker detail` (E2E) → 35 passed.
+> - `front-portfolio privacy-masking` (E2E) → 18 passed.
+> - vitest: i lotti e l'AI Export → 21 file, 609 passed; la suite intera, prima dei due ultimi fix (solo backend) → 347 file, 10 328 passed.
+> - `front check` → 0 errori. Ruff, black e Prettier puliti. `git diff --check` pulito.
+> - La porta 6164 è libera dopo ogni comando.
+> - Non eseguito: la suite E2E intera e `--workers 4`.
+
+### Checkpoint B3b 🧊 (2026-10-11) — FROZEN, in attesa del coordinatore
+- **Cinque commit proposti** (soggetti ≤ 50): `fix(lots): withhold pools without a rate`, `fix(lots): show unknown lot amounts as a dash`, `fix(ai-export): null lot amounts, compact lots`, `docs: lots withholding, AI Export null columns`, `docs(journal): plan 43 B3b, T post-1.2 index`.
+- **CHANGELOG**: due righe in 1.2.0 «Fixed», entrambe «Present since v1.1.0»: B3 per i lotti, e il dettaglio dei lotti compatto dell'AI Export. Le scrive il coordinatore nel CL del treno, copiate parola per parola.
+  > **⚠️ Fuori pista**: `CHANGELOG.md` è un file condiviso con un solo scrittore, il coordinatore. L'avevo modificato io: riportato al contenuto di `HEAD`. D'ora in poi le righe del CHANGELOG vanno nel messaggio di handoff, mai nel file.
+- **Dopo la 1.2**: le righe sono nella sezione T dell'indice, scritte da T (T-B6, T-B7, T-B8 nuove; U1 e U8 estese).
+- **Segnalate al coordinatore, per altre aree**:
+  - `asset.position_scope` espone `portfolio_weight_ratio`;
+  - i dati sintetici scrivono la vecchia forma di `classification_params`;
+  - la CLI della sonda non sceglie l'Asset né l'utente sintetico.
+- **Prossimo**: PL3, poi BU1 e FE1, ciascuno con l'elenco dei file prima di scrivere codice, poi T-1 dopo F.
