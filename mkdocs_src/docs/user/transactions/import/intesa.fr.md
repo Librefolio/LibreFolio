@@ -25,7 +25,7 @@ LibreFolio lit deux exports Intesa Sanpaolo, au format **CSV** ou **Excel (XLSX)
     1. Importez l'**instantané de portefeuille**. Il ajoute un **Dépôt** pour votre solde de
        trésorerie et un **Ajustement** par position, à son coût fiscal, tous à la date de
        l'instantané : la date de cotation la plus récente du rapport.
-    2. Réglez la date d'**Ouverture du compte** du courtier à la date de l'instantané. Les mouvements plus anciens
+    2. Réglez la **Date d'Ouverture du Compte** du courtier à la date de l'instantané. Les mouvements plus anciens
        sont déjà comptés dans l'instantané : l'assistant d'importation les marque **Avant l'ouverture** et les
        laisse de côté ([comment ça marche](how-to.md#opening-date)).
     3. À partir de là, importez la **liste des mouvements** pour les nouveaux coupons, dividendes,
@@ -67,7 +67,7 @@ Depuis l'**instantané de portefeuille** : un **Ajustement** par position (sa qu
 - **Filtrez sur Operazioni titoli.** Sans ce filtre, chaque paiement par carte ou virement de la
   période apparaît dans les avertissements comme une ligne ignorée.
 - **Le même titre, deux noms.** La liste des mouvements ne nomme un titre qu'en texte libre, tandis
-  que l'instantané donne son ISIN. Associez les deux au même actif dans le panneau **Resolve Assets**
+  que l'instantané donne son ISIN. Associez les deux au même actif dans le panneau **Résoudre les actifs**
   de [Review](how-to.md#review).
 - **Montants tels quels.** Les mouvements conservent la devise de leur colonne **Valuta**, et
   l'instantané est en euros : rien n'est converti.

@@ -76,7 +76,7 @@ Los periodos se cuentan en **sesiones**, los días en que el activo cotizó: una
     <img class="gallery-img" data-category="assets" data-name="detail-signals-drawdown" alt="Tarjeta de señal de caída con la casilla de histórico completo">
 </div>
 
-La tarjeta **Caída bajo el pico** tiene una casilla **Histórico completo**, activada por defecto: la caída se mide desde el precio más alto de todo el histórico del activo, incluso años antes de las fechas en pantalla. Desmárcala para una vista más rápida, medida desde el precio más alto dentro de las fechas en pantalla.
+La tarjeta **Drawdown desde el máximo** tiene una casilla **Historial completo**, activada por defecto: la caída se mide desde el precio más alto de todo el histórico del activo, incluso años antes de las fechas en pantalla. Desmárcala para una vista más rápida, medida desde el precio más alto dentro de las fechas en pantalla.
 
 ---
 
@@ -84,10 +84,10 @@ La tarjeta **Caída bajo el pico** tiene una casilla **Histórico completo**, ac
 
 El menú **Comparación de datos** añade:
 
-- **Comparación de activos** — otro activo en el mismo gráfico, como una acción frente a su ETF de índice. En la vista **%** ambas líneas empiezan en 0 %.
+- **Comparación de activo** — otro activo en el mismo gráfico, como una acción frente a su ETF de índice. En la vista **%** ambas líneas empiezan en 0 %.
 - **Par FX** — el tipo de cambio de uno de tus pares de divisas.
 
-**Sync** (🔄) en una tarjeta de Comparación de activos descarga los precios de ese activo para las fechas del gráfico, junto con los tipos de cambio que lo convierten, para los pares que existan. Cuando el par falta, un ⚠️ ámbar en la tarjeta lo crea; cuando faltan sus tipos, un 🔄 ámbar los sincroniza.
+**Sincronizar** (🔄) en una tarjeta de Comparación de activos descarga los precios de ese activo para las fechas del gráfico, junto con los tipos de cambio que lo convierten, para los pares que existan. Cuando el par falta, un ⚠️ ámbar en la tarjeta lo crea; cuando faltan sus tipos, un 🔄 ámbar los sincroniza.
 
 En el modo [Rentabilidad móvil](chart.md#rolling-return) solo permanece la Comparación de activos: cada activo comparado se convierte en una rentabilidad móvil, con la misma ventana y divisa. Las demás señales se ocultan, no se eliminan, y vuelven en el modo **Precios**.
 

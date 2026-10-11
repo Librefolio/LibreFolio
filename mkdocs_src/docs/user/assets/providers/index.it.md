@@ -1,6 +1,6 @@
 # 🔌 Provider
 
-Un provider mantiene aggiornati per te i prezzi di un asset: il prezzo odierno, il suo storico e, per alcuni, dettagli come il tipo o il settore. Ogni asset ha al massimo un provider: scegli un risultato di **Ricerca Online** per collegarlo, oppure configuralo tu stesso in **Assegnazione Provider** — vedi [Crea e Modifica](../create-edit.md).
+Un provider mantiene aggiornati per te i prezzi di un asset: il prezzo odierno, il suo storico e, per alcuni, dettagli come il tipo o il settore. Ogni asset ha al massimo un provider: scegli un risultato di **Cerca Online** per collegarlo, oppure configuralo tu stesso in **Assegnazione Provider** — vedi [Crea e Modifica](../create-edit.md).
 
 <div class="grid cards" style="margin-top: 1.5rem; margin-bottom: 2rem;">
     <a href="yahoo-finance/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">

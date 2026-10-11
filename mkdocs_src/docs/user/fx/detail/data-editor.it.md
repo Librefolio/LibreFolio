@@ -49,7 +49,7 @@ Le modifiche vengono mostrate sul grafico come una linea **Anteprima** viola. **
 ### 🔓 Apri la finestra di importazione
 
 1. Nell'editor, fai clic su **Importa CSV**.
-2. In **Dati di importazione CSV**, trascina un file `.csv` o `.txt`, oppure incolla il testo nella casella.
+2. In **Importa dati CSV**, trascina un file `.csv` o `.txt`, oppure incolla il testo nella casella.
 3. Controlla la direzione in alto, poi fai clic su **Importa (N)**.
 
 Le righe vengono aggiunte all'editor: esaminale, poi fai clic su **Salva**.

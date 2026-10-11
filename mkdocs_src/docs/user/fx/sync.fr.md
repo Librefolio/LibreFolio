@@ -10,8 +10,8 @@ calendrier.
 
 1. Sur la [page FX](index.md), choisissez la période dans le sélecteur de date. Sélectionnez **Tout** pour tout
    l'historique.
-2. Cliquez sur **Tout synchroniser**. La fenêtre **Synchroniser les taux FX** liste chaque paire avec un fournisseur : les paires qui n'ont que des taux manuels n'ont rien à télécharger.
-3. Cliquez sur **Lancer la synchronisation**.
+2. Cliquez sur **Sync. Tout**. La fenêtre **Synchroniser les taux FX** liste chaque paire avec un fournisseur : les paires qui n'ont que des taux manuels n'ont rien à télécharger.
+3. Cliquez sur **Démarrer la synchronisation**.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="fx" data-name="sync-progress" alt="Progression de la synchronisation" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -57,7 +57,7 @@ calendrier.
 
     Une paire que vous ajoutez avec un fournisseur télécharge automatiquement tout son historique. Si le graphique d'une paire plus ancienne
     commence plus tard que l'historique du fournisseur, réglez la période sur la page FX sur **Tout** et cliquez sur
-    **Tout synchroniser** une fois : LibreFolio télécharge tout ce que les fournisseurs publient, jusqu'à aujourd'hui.
+    **Sync. Tout** une fois : LibreFolio télécharge tout ce que les fournisseurs publient, jusqu'à aujourd'hui.
 
 ---
 

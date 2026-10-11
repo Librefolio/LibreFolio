@@ -36,7 +36,7 @@ Basculez avec **Abs** / **%** dans le coin supérieur gauche du graphique ; la p
 
 ??? info "📅 Historique plus court que la période — quand le graphique commence plus tard"
 
-    Une bannière indique la date à partir de laquelle les données sont disponibles. **Sync** peut
+    Une bannière indique la date à partir de laquelle les données sont disponibles. **Synchroniser** peut
     récupérer des taux plus anciens, si le fournisseur les publie ; sinon, saisissez-les dans
     l'[éditeur de données](data-editor.md).
 

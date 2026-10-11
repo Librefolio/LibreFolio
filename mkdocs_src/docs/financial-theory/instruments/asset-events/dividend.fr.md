@@ -68,8 +68,8 @@ $$
 Dans LibreFolio, un événement `DIVIDEND` (et la transaction de portefeuille correspondante) est enregistré avec :
 
 - **Date** : La date de détachement
-- **Amount** : Le paiement en espèces par action
-- **Currency** : La devise du paiement (ex. : USD, EUR)
+- **Montant** : Le paiement en espèces par action
+- **Devise** : La devise du paiement (ex. : USD, EUR)
 
 ### The différence comptable : Dividende vs Intérêt
 Il est crucial de distinguer une transaction de **Dividende** d'une transaction d'**Intérêt** au niveau de la base de données :

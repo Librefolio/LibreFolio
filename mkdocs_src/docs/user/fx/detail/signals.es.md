@@ -29,7 +29,7 @@ detrás de cada uno.
 | Familia | Indicadores |
 |---|---|
 | 📈 **Tendencia** (3) | [EMA](../../../financial-theory/technical-analysis/indicators/ema.md) · [SMA](../../../financial-theory/technical-analysis/indicators/sma.md) · [KAMA](../../../financial-theory/technical-analysis/indicators/kama.md) |
-| ⚡ **Impulso** (5) | [RSI](../../../financial-theory/technical-analysis/indicators/rsi.md) · [MACD](../../../financial-theory/technical-analysis/indicators/macd.md) · [ROC](../../../financial-theory/technical-analysis/indicators/roc.md) · [Stochastic RSI](../../../financial-theory/technical-analysis/indicators/stochastic-rsi.md) · [PPO](../../../financial-theory/technical-analysis/indicators/ppo.md) |
+| ⚡ **Momentum** (5) | [RSI](../../../financial-theory/technical-analysis/indicators/rsi.md) · [MACD](../../../financial-theory/technical-analysis/indicators/macd.md) · [ROC](../../../financial-theory/technical-analysis/indicators/roc.md) · [Stochastic RSI](../../../financial-theory/technical-analysis/indicators/stochastic-rsi.md) · [PPO](../../../financial-theory/technical-analysis/indicators/ppo.md) |
 | 🌊 **Volatilidad** (1) | [Bandas de Bollinger](../../../financial-theory/technical-analysis/indicators/bollinger-bands.md) |
 
 ??? info "🤔 ¿Por qué solo 9? — los otros indicadores necesitan más que un tipo de cambio diario"
@@ -52,7 +52,7 @@ un cuadro de búsqueda en la parte superior: escribe para filtrar todas las fami
 
 - 💱 **Par FX** — otro de tus pares FX, p. ej. GBP/USD junto a EUR/USD. En la lista, 👑 marca el
   par de esta página y 📌 un par ya usado por otra señal.
-- ↔️ **Comparación de activos** — el precio de un activo junto al tipo de cambio.
+- ↔️ **Comparación de activo** — el precio de un activo junto al tipo de cambio.
 
 Una tarjeta de comparación tiene botones para sincronizar el par o el activo comparados y para abrir su página. En la vista %
 ambas curvas empiezan en 0 %, por lo que sus movimientos se comparan directamente.

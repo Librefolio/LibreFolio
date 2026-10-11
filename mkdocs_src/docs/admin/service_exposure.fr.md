@@ -193,7 +193,7 @@ Un routeur de sous-réseau fait partie de la plomberie de votre réseau : si vou
 
 !!! warning "🔐 Avant de passer en public"
 
-    Avec Funnel, n'importe qui sur Internet peut ouvrir votre page de connexion LibreFolio. Créez d'abord votre propre compte : le premier compte enregistré devient l'administrateur. Les inscriptions restent ensuite ouvertes : l'option **Enable Registration** (`enable_registration`) est activée par défaut ; désactivez-la dans les **Paramètres globaux** si vous ne voulez pas que des inconnus s'inscrivent (voir [Paramètres globaux](settings.md)).
+    Avec Funnel, n'importe qui sur Internet peut ouvrir votre page de connexion LibreFolio. Créez d'abord votre propre compte : le premier compte enregistré devient l'administrateur. Les inscriptions restent ensuite ouvertes : l'option **Activer l'Inscription** (`enable_registration`) est activée par défaut ; désactivez-la dans les **Paramètres globaux** si vous ne voulez pas que des inconnus s'inscrivent (voir [Paramètres globaux](settings.md)).
 
 1. Rendez-vous sur la page [Contrôles d'accès](https://login.tailscale.com/admin/acls) de la console d'administration Tailscale.
 2. Cliquez sur le bouton **Add node attribute**.

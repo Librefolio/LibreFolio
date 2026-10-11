@@ -68,7 +68,7 @@ I periodi sono contati in **sedute**, i giorni in cui l'asset è stato quotato: 
 
 !!! info "Non tutti gli indicatori possono funzionare su ogni asset"
 
-    ADX, Aroon, ATR, NATR, CCI, Donchian Channels e MFI richiedono i prezzi **high** e **low**; OBV e MFI richiedono il **volume**. In loro assenza, la scheda ti indica quali dati mancano.
+    ADX, Aroon, ATR, NATR, CCI, Donchian Channels e MFI richiedono i prezzi **Massimo** e **Minimo**; OBV e MFI richiedono il **volume**. In loro assenza, la scheda ti indica quali dati mancano.
 
 ### 📉 Drawdown sull'intera cronologia {: #drawdown-full-history }
 
@@ -76,7 +76,7 @@ I periodi sono contati in **sedute**, i giorni in cui l'asset è stato quotato: 
     <img class="gallery-img" data-category="assets" data-name="detail-signals-drawdown" alt="Scheda del segnale Drawdown con l'interruttore Storia completa">
 </div>
 
-La scheda **Drawdown sotto il picco** ha una casella di controllo **Cronologia completa**, attiva per impostazione predefinita: il calo è misurato dal massimo progressivo dell'intera cronologia dell'asset, anche anni prima delle date sullo schermo. Deselezionala per una vista più rapida, misurata dal massimo progressivo all'interno delle date sullo schermo.
+La scheda **Drawdown dal massimo** ha una casella di controllo **Storia completa**, attiva per impostazione predefinita: il calo è misurato dal massimo progressivo dell'intera cronologia dell'asset, anche anni prima delle date sullo schermo. Deselezionala per una vista più rapida, misurata dal massimo progressivo all'interno delle date sullo schermo.
 
 ---
 

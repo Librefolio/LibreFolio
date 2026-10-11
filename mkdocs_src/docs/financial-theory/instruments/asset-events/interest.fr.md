@@ -136,8 +136,8 @@ Où :
 Dans LibreFolio, un événement `INTEREST` (et la transaction de portefeuille correspondante) est enregistré avec :
 
 - **Date** : La date du paiement des intérêts
-- **Amount** : Le montant en espèces reçu
-- **Currency** : La devise du paiement
+- **Montant** : Le montant en espèces reçu
+- **Devise** : La devise du paiement
 
 ### The différence comptable : Intérêt vs Dividende
 Il est crucial de distinguer une transaction d'**Intérêt** d'une transaction de **Dividende** au niveau de la base de données :

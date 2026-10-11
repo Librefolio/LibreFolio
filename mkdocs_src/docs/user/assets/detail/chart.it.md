@@ -10,16 +10,16 @@ _Ultimo aggiornamento: 2026-10-08_
 
 ---
 
-## 🔀 Prezzi o Rendimento rolling {: #primary-modes }
+## 🔀 Prezzi o Rendimento mobile {: #primary-modes }
 
 I due pulsanti sopra il grafico scelgono cosa disegnare:
 
 - **Prezzi** — lo storico dei prezzi, con gli [eventi](events.md) dell'asset come marcatori.
-- **Rendimento rolling** — per ogni data, la variazione del prezzo su una finestra che scegli tu ([sotto](#rolling-return)).
+- **Rendimento mobile** — per ogni data, la variazione del prezzo su una finestra che scegli tu ([sotto](#rolling-return)).
 
 La pagina si apre sempre su **Prezzi**.
 
-### 🗓️ Finestra del rendimento rolling {: #rolling-return }
+### 🗓️ Finestra del Rendimento mobile {: #rolling-return }
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="Grafico dell'asset in modalità Rendimento rolling con la finestra 1Y e un asset di confronto" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -36,7 +36,7 @@ dove $P$ è l'ultima chiusura nota in quel giorno, nella valuta del grafico → 
 Scegli $N$ con il controllo **Finestra** accanto ai due pulsanti:
 
 - **1W**, **1M**, **3M**, **1Y** — 7, 30, 90 e 365 giorni.
-- **Personalizzato** — un numero intero con **W**, **M** o **Y**, contati come 7, 30 e 365 giorni: `3M` corrisponde a 90 giorni.
+- **Personalizzato** — un numero intero con **S**, **M** o **A**, contati come 7, 30 e 365 giorni: `3M` corrisponde a 90 giorni.
 - **?** apre questa sezione del manuale.
 
 La finestra può essere più lunga delle date visualizzate: LibreFolio legge i prezzi più vecchi di cui ha bisogno. Viene ricordata per questo asset, in questo browser.
@@ -83,9 +83,9 @@ In modalità **Prezzi**, i pulsanti in alto a sinistra del grafico permettono di
 
 I tre pulsanti in alto a destra del grafico:
 
-- **📏 Aggiungi misura** — confronta due punti: vedi [Misure](measures.md). **Prezzi** e **Rendimento rolling** mantengono misure separate.
+- **📏 Aggiungi misura** — confronta due punti: vedi [Misure](measures.md). **Prezzi** e **Rendimento mobile** mantengono misure separate.
 - **✏️ Modifica prezzi ed eventi** — apre l'[Editor dati](data-editor.md), solo in modalità **Prezzi**.
-- **⚙️ Estetica** — **Riempimento area**, **Colori linea di base** (verde sopra il valore iniziale, o sopra zero in %, rosso sotto), **Linee della griglia**, **Gradiente obsoleto** (attenua i punti il cui prezzo o tasso di cambio è mantenuto da un giorno precedente) e **Scala asse Y** (**Auto**, **Includi 0** o limiti **Personalizzati**). Le candele disattivano Riempimento area, Colori linea di base e Gradiente obsoleto.
+- **⚙️ Estetica** — **Riempimento area**, **Colori Riferimento** (verde sopra il valore iniziale, o sopra zero in %, rosso sotto), **Griglia**, **Gradiente Dati Vecchi** (attenua i punti il cui prezzo o tasso di cambio è mantenuto da un giorno precedente) e **Scala asse Y** (**Auto**, **Includi 0** o **Personalizzato**, con limiti a scelta). Le candele disattivano Riempimento area, Colori Riferimento e Gradiente Dati Vecchi.
 
 Queste impostazioni e i tuoi segnali vengono ricordati per questo asset, in questo browser. Per modificarli contemporaneamente per tutti gli asset, usa **Impostazioni** nella [pagina Assets](../index.md): vedi [Impostazioni grafico](../../fx/chart-settings.md).
 

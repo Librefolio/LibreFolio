@@ -40,7 +40,7 @@ Ajoutez, modifiez ou supprimez des taux individuels, ou importez-en plusieurs d'
 
 ### 🧠 Export IA
 
-**Export IA** prépare un instantané de la paire, ou une requête **Analyse de paire FX** ou **Impact de l'exposition FX**,
+**Export IA** prépare un instantané de la paire, ou une requête **Analyse de la paire de devises** ou **Impact de l’exposition FX**,
 à coller dans un assistant IA. Impact de l'exposition FX ne compte que les liquidités et les positions
 détenues directement dans les devises de la paire : il ne regarde pas à l'intérieur des fonds. Voir
 [Export IA FX](../../ai-export/fx.md).

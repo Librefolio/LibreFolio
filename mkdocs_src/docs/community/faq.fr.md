@@ -48,7 +48,7 @@ Suivez le [Guide d'installation Docker](../user/installation.md), la méthode re
 ### 👤 Comment créer un compte ?
 
 1. Ouvrez la page de connexion.
-2. Cliquez sur **S'inscrire ici**, à côté de *Vous n'avez pas de compte ?*
+2. Cliquez sur **Inscrivez-vous ici**, à côté de *Vous n'avez pas de compte ?*
 3. Remplissez vos informations : votre compte est prêt à l'emploi.
 
 Sur une nouvelle instance, le premier compte créé devient l'administrateur. Ensuite, l'inscription ne fonctionne que tant que l'administrateur garde **Activer l'inscription** activé dans les [Paramètres globaux](../admin/settings.md) ; sinon, demandez-lui un compte.

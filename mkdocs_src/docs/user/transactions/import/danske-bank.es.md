@@ -28,9 +28,9 @@ Así que las subes **juntas**: LibreFolio las lee como un único **conjunto de i
 
 ## 🧺 Sube ambos archivos juntos
 
-1. Abre el **[Asistente de importación](how-to.md)**, arrastra **ambos** archivos a **Subir**, asígnalos a tu bróker Danske Bank y haz clic en **Siguiente: Seleccionar archivos**.
-2. En **Seleccionar archivos**, los dos archivos forman **una tarjeta**, ya marcada: comprueba que diga **Completo**. Una nota en la tarjeta te indica qué hará esta importación.
-3. Haz clic en **Analizar**: LibreFolio fusiona los dos archivos en un único **archivo combinado** y lo analiza como una fila. Su detalle, **Emparejamiento de valores ↔ efectivo**, muestra cómo se emparejaron las operaciones con sus pagos y por qué se omitió alguna fila.
+1. Abre el **[Asistente de importación](how-to.md)**, arrastra **ambos** archivos a **Subir**, asígnalos a tu bróker Danske Bank y haz clic en **Siguiente: Seleccionar**.
+2. En **Seleccionar**, los dos archivos forman **una tarjeta**, ya marcada: comprueba que diga **Completo**. Una nota en la tarjeta te indica qué hará esta importación.
+3. Haz clic en **Analizar**: LibreFolio fusiona los dos archivos en un único **archivo combinado** y lo analiza como una fila. Su detalle, **Emparejamiento valores ↔ efectivo**, muestra cómo se emparejaron las operaciones con sus pagos y por qué se omitió alguna fila.
 4. Continúa como de costumbre hasta **Importar N transacciones**.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
@@ -41,13 +41,13 @@ Así que las subes **juntas**: LibreFolio las lee como un único **conjunto de i
     <img class="gallery-img" data-category="brokers" data-name="import-report-set-pairing" alt="Detalle de análisis del conjunto: Emparejamiento de valores ↔ efectivo, con las etiquetas de resultado y los motivos con su número de filas" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Los archivos subidos juntos desde la página [Archivos](../../files/index.md#broker-reports) o desde **Informes subidos** de un bróker también forman un conjunto.
+Los archivos subidos juntos desde la página [Archivos](../../files/index.md#broker-reports) o desde **Informes Cargados** de un bróker también forman un conjunto.
 
 Las exportaciones subidas con una versión de LibreFolio anterior a la 1.2 no pertenecen a ningún conjunto y no se pueden leer por sí solas: el asistente mantiene **Analizar** deshabilitado mientras una de ellas esté seleccionada. Sube de nuevo todas las exportaciones del conjunto juntas, de una vez, y luego selecciona ese conjunto; las copias antiguas se pueden eliminar.
 
 ### 🧩 Si falta un archivo
 
-- ¿Solo has arrastrado un archivo? **Siguiente: Seleccionar archivos** te mantiene en **Subir**, indicando la exportación que falta y su periodo: arrástrala allí — se une al **mismo conjunto** — y haz clic de nuevo en **Siguiente: Seleccionar archivos**.
+- ¿Solo has arrastrado un archivo? **Siguiente: Seleccionar** te mantiene en **Subir**, indicando la exportación que falta y su periodo: arrástrala allí — se une al **mismo conjunto** — y haz clic de nuevo en **Siguiente: Seleccionar**.
 - ¿Continúas sin él? La tarjeta muestra **Falta un archivo** y ofrece **Subir el archivo que falta**. Mientras tanto, el conjunto marcado bloquea **Analizar**: desmárcalo para importar primero tus otros archivos.
 - Los archivos subidos en momentos diferentes **nunca se unen**: sube de nuevo el que falta con **Subir el archivo que falta** en la tarjeta correcta y luego elimina la copia solitaria anterior.
 
@@ -57,7 +57,7 @@ Las exportaciones subidas con una versión de LibreFolio anterior a la 1.2 no pe
 
 ### 🔀 Cómo se lee el conjunto {: #how-the-set-is-read }
 
-Normalmente no hay nada que cambiar: **Leer como**, en el encabezado de la tarjeta, muestra **Danske Bank (detectado)**. Si un archivo no pertenece al conjunto — por ejemplo, un extracto de otra cuenta subido por error —, elige **Quitar del conjunto** en su menú **⋮**: el archivo se mueve, sin plugin, a **Otros archivos de este bróker**, donde lo desmarcas. Para volver a ponerlo, elige *Danske Bank* en su columna **Plugin** allí (la opción aparece una vez que el archivo está marcado).
+Normalmente no hay nada que cambiar: **Leído como**, en el encabezado de la tarjeta, muestra **Danske Bank (detectado)**. Si un archivo no pertenece al conjunto — por ejemplo, un extracto de otra cuenta subido por error —, elige **Quitar del conjunto** en su menú **⋮**: el archivo se mueve, sin plugin, a **Otros archivos de este bróker**, donde lo desmarcas. Para volver a ponerlo, elige *Danske Bank* en su columna **Plugin** allí (la opción aparece una vez que el archivo está marcado).
 
 **Leer los archivos uno a uno** no sirve aquí, ya que ningún otro importador lee estas exportaciones: si lo elegiste, vuelve a poner cada archivo de la misma forma. Un conjunto marcado solo en parte — su casilla muestra un guion — bloquea **Analizar**: haz clic una vez en la casilla para desmarcar el conjunto, dos veces para marcarlo entero.
 
@@ -100,7 +100,7 @@ La exportación de valores solo se remonta un año, así que importa **al menos 
 Los archivos dan **un total por operación**, con la comisión incluida, así que el paso **Correcciones** pregunta, para cada compra y venta:
 
 - **¿Separar el precio de los gastos?**, y luego **Aplicar corrección** — para un valor cotizado en euros, LibreFolio sugiere la comisión probable; la cifra exacta está en la confirmación de la operación en eBanking;
-- o **Mantener tal como se registró**: la operación conserva su importe completo (tu efectivo queda correcto de cualquier forma).
+- o **Dejar como está**: la operación conserva su importe completo (tu efectivo queda correcto de cualquier forma).
 
 Cada operación necesita una elección; **Mantener las N filas restantes tal como se leyeron** resuelve el resto con un clic.
 
@@ -118,7 +118,7 @@ Después de la **Revisión**, **Importar N transacciones** puede abrir **Alinear
 
 1. Las tarjetas de la parte superior muestran cada punto — el **Punto de partida**, un punto **Después del hueco** por cada [hueco](#gaps), la [Comprobación de fin de periodo](#end-of-period-check). Haz clic en uno para ver su comparación y solo sus correcciones; haz clic de nuevo para verlas todas.
 2. Las correcciones, etiquetadas `gap_fix`, están **seleccionadas por defecto**: desmarca las que no quieras (o usa **Seleccionar todo**, **Seleccionar visibles**, **Deseleccionar todo**) y luego haz clic en **Continuar**.
-3. En el editor, introduce el **coste por acción** de cada posición marcada como *coste a introducir* — la web del banco muestra el precio medio de compra de cada posición. **Guardar todo** espera a ello.
+3. En el editor, introduce el **coste por acción** de cada posición marcada como *coste por introducir* — la web del banco muestra el precio medio de compra de cada posición. **Guardar todo** espera a ello.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-gapfix-step" alt="Alinear con el banco: las tarjetas Punto de partida, Después del hueco y Comprobación de fin de periodo encima de las correcciones propuestas etiquetadas gap_fix" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -128,7 +128,7 @@ El paso se abre **solo cuando hay algo que mostrar** — normalmente no después
 
 ### ✅ Comprobación de fin de periodo {: #end-of-period-check }
 
-La última tarjeta compara tu efectivo con el saldo del extracto de la cuenta de efectivo al final del último periodo de valores: **Coincide** o **No coincide**. **Nunca se corrige**: tu siguiente importación trae las operaciones de los últimos días, que faltan en tu efectivo hasta entonces. Si no coincide, añade a mano el movimiento que la importación omitió (consulta el detalle del conjunto en **Analizar**).
+La última tarjeta compara tu efectivo con el saldo del extracto de la cuenta de efectivo al final del último periodo de valores: **Cuadra** o **No cuadra**. **Nunca se corrige**: tu siguiente importación trae las operaciones de los últimos días, que faltan en tu efectivo hasta entonces. Si no coincide, añade a mano el movimiento que la importación omitió (consulta el detalle del conjunto en **Analizar**).
 
 ---
 

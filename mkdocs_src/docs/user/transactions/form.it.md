@@ -24,7 +24,7 @@ Il modulo transazione aggiunge o modifica una transazione — o una coppia colle
 
 Alcune regole rendono l'inserimento rapido:
 
-- **Gli importi sono totali** — digita il totale pagato o ricevuto, non il prezzo per azione (*Importo totale, non per azione*).
+- **Gli importi sono totali** — digita il totale pagato o ricevuto, non il prezzo per azione (*Importo totale (non per singola azione)*).
 - **Digita numeri positivi** — il modulo aggiunge il segno meno dove escono denaro o unità: il pagamento di un acquisto, le unità di una vendita, un prelievo, una commissione, un'imposta. Solo la quantità di una **Rettifica** porta un segno: positivo aggiunge unità, negativo le rimuove.
 - **Controlli mentre procedi** — una volta compilati i campi obbligatori, il modulo verifica la voce rispetto al tuo registro e alle altre righe del workspace bulk, ed elenca eventuali problemi in alto. **⚡ Valida ora** esegue subito il controllo.
 - **Broker o asset mancante?** — **Crea nuovo** nell'elenco dei broker, o **Nuovo asset** nell'elenco degli asset, lo crea senza uscire dal modulo.
@@ -36,7 +36,7 @@ Alcune regole rendono l'inserimento rapido:
     - **Auto** — LibreFolio lo calcola come [prezzo medio di carico (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md); premi **⚡ Valida ora** per vederlo.
     - **Manuale** — lo digiti tu.
 
-    In **Auto**, la media viene presa sul broker mittente di un trasferimento, o sul broker della rettifica stessa. Se quel broker non ha altre transazioni sull'asset fino alla data in cui entrano le unità, non c'è nulla da mediare e il costo è 0 per scelta di progetto: se quelle unità sono costate qualcosa, apri la transazione in seguito e digita il loro costo in **Manuale**. In **Manuale**, il campo non può restare vuoto: LibreFolio segnala la riga e non salva nulla finché non lo compili o non passi a **Auto**. Per unità che non sono costate nulla, come un regalo, digita 0. Se manca un tasso di cambio, il link **Sincronizza tassi FX** lo recupera.
+    In **Auto**, la media viene presa sul broker mittente di un trasferimento, o sul broker della rettifica stessa. Se quel broker non ha altre transazioni sull'asset fino alla data in cui entrano le unità, non c'è nulla da mediare e il costo è 0 per scelta di progetto: se quelle unità sono costate qualcosa, apri la transazione in seguito e digita il loro costo in **Manuale**. In **Manuale**, il campo non può restare vuoto: LibreFolio segnala la riga e non salva nulla finché non lo compili o non passi a **Auto**. Digita 0 solo per unità che davvero non sono costate nulla, come le nuove azioni di uno split; per un regalo, digita il costo originario del donatore. Se manca un tasso di cambio, il link **Sincronizza tassi FX** lo recupera.
 
 ---
 
