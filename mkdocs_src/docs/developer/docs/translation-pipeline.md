@@ -520,14 +520,16 @@ while the structure stays intact:
   these attributes, whose translation is expected; this one checks that it happened.
 - `anchor-missing` (❌ ERROR): a Markdown link to `page.md#anchor` or `#anchor` in a
   translation (code ignored) must land on an anchor of the page it opens: the translated
-  target `page.<lang>.md`, or the English page when no translation exists. Anchors are the
-  explicit `{: #id }` ids, the heading slugs (Python-Markdown's default slugify; a repeated
-  slug gets `_1`, `_2`, …) and HTML `id`s. `mkdocs build --strict` stops at the first
-  language with a warning, so it surfaces these links one language at a time; this check
-  reports every language in one pass.
+  target `page.<lang>.md`, or the English page when no translation exists. A page's anchors
+  are the ids of its own MkDocs render with the site configuration (`page_anchors.py`),
+  exactly the ids `mkdocs build --strict` checks a link against: heading ids (an explicit
+  `{: #id }` replaces the text slug), raw-HTML `id`s and `<a name>`; the front matter is not
+  rendered. The strict build stops at the first language with a warning, so it surfaces
+  these links one language at a time; this check reports every language in one pass.
 - `inline-code-missing` (⚠️ WARN): every inline code span of the English must appear
   verbatim in the translation, as many times; digit grouping is ignored, so `1,000.50`
-  matches `1.000,50`. Identifiers, enum values and parameters are never translated.
+  matches `1.000,50`, but the message names a missing span as the English writes it.
+  Identifiers, enum values and parameters are never translated.
 
 The HTML checks (`html-tag-mismatch`, `html-attr-missing`, `html-attr-mismatch`) read only
 rendered HTML: fenced code (any fence, found by `code_line_mask()` in `code_blocks.py`) and
@@ -541,6 +543,11 @@ translation. Its `LINE_COUNT` check compares blank-line-separated blocks, not li
 flags a difference of more than max(3, 15% of the English blocks): the English wraps at
 about 80 columns while a translation often keeps a paragraph on one line, but a dropped or
 truncated section still removes blocks.
+
+Tests: `./dev.py test utils translation-validator`
+(`backend/test_scripts/test_utilities/test_translation_validator.py`). It covers the three
+checks above, `page_anchors.py` included, the code stripping of the HTML checks and the
+block-based `LINE_COUNT`, on pages in memory and on a docs tree in a temporary directory.
 
 ---
 

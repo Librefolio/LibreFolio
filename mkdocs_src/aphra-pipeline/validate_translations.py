@@ -27,13 +27,13 @@ Usage (via dev.py):
 import argparse
 import re
 import sys
-import unicodedata
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
 # Sibling modules: dev.py and a standalone run both put this directory on sys.path.
 from code_blocks import FencedBlock, code_indent_issues, code_line_mask
+from page_anchors import file_anchors, render_anchors  # MkDocs is imported only when a page renders
 
 # Import shared infrastructure from translate_docs
 from translate_docs import (
@@ -119,46 +119,23 @@ def _extract_links(text: str) -> list[tuple[str, str]]:
     return re.findall(r'\[([^\]]*)\]\(([^)]+)\)', text)
 
 
-_HEADING_LINE = re.compile(r"^[ ]{0,8}#{1,6}[ \t]+(.+?)[ \t]*$", re.MULTILINE)
-_EXPLICIT_ID = re.compile(r"\{:?[^}]*?#([A-Za-z0-9_-]+)[^}]*\}")
-
-
-def _toc_slug(heading: str) -> str:
-    """The id Python-Markdown's toc gives a heading (default slugify: NFKD, ASCII only, lowercase, dashes)."""
-    text = re.sub(r"\s*\{:?[^}]*\}\s*$", "", heading)
-    text = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", text)
-    text = re.sub(r"<[^>]+>", "", text).replace("`", "").replace("*", "")
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
-    text = re.sub(r"[^\w\s-]", "", text).strip().lower()
-    return re.sub(r"[-\s]+", "-", text)
-
-
-def _page_anchors(text: str) -> set[str]:
-    """Anchors a rendered page offers: explicit attr_list ids, heading slugs (duplicates get _1, _2), HTML ids."""
-    clean = _strip_code_blocks(text)
-    anchors = set(_EXPLICIT_ID.findall(clean)) | set(re.findall(r'\bid="([^"]+)"', clean))
-    seen: dict[str, int] = {}
-    for heading in _HEADING_LINE.findall(clean):
-        slug = _toc_slug(heading)
-        if slug in seen:
-            seen[slug] += 1
-            anchors.add(f"{slug}_{seen[slug]}")
-        else:
-            seen[slug] = 0
-            anchors.add(slug)
-    return anchors
-
-
 _INLINE_CODE_SPAN = re.compile(r"(`+)(?!`)(.+?)(?<!`)\1(?!`)")
 _DIGIT_GROUPING = re.compile(r"(?<=\d)[.,\u00a0\u202f ](?=\d)")
 
 
+def _inline_code_texts(text: str) -> list[str]:
+    """Inline code spans outside fenced blocks, as written."""
+    lines = [line for line, in_code in zip(text.split("\n"), code_line_mask(text), strict=True) if not in_code]
+    return [m.group(2).strip() for line in lines for m in _INLINE_CODE_SPAN.finditer(line)]
+
+
+def _without_digit_grouping(span: str) -> str:
+    return _DIGIT_GROUPING.sub("", span)
+
+
 def _inline_code_spans(text: str) -> Counter:
     """Inline code spans outside fenced blocks; digit grouping ignored, so `1,000.50` matches the localized `1.000,50`."""
-    lines = [line for line, in_code in zip(text.split("\n"), code_line_mask(text), strict=True) if not in_code]
-    return Counter(
-        _DIGIT_GROUPING.sub("", m.group(2).strip()) for line in lines for m in _INLINE_CODE_SPAN.finditer(line)
-    )
+    return Counter(_without_digit_grouping(span) for span in _inline_code_texts(text))
 
 
 def check_inline_code(
@@ -171,13 +148,16 @@ def check_inline_code(
     Nothing compared them: translations had turned them into `PRECIO_MERCADO`, `rendimento_totale`, `période`, or
     kept a span the source had since renamed (`asset_id` for `asset_event_id`).
     """
+    spelling: dict[str, str] = {}
+    for span in _inline_code_texts(source):
+        spelling.setdefault(_without_digit_grouping(span), span)
     missing = _inline_code_spans(source) - _inline_code_spans(translated)
     return [
         Issue(
             severity=Severity.WARN,
             file=cache_key, lang=lang,
             check="inline-code-missing",
-            message=f"`{span}`{f' ×{n}' if n > 1 else ''} missing or changed in the translation",
+            message=f"`{spelling[span]}`{f' ×{n}' if n > 1 else ''} missing or changed in the translation",
         )
         for span, n in sorted(missing.items())
     ]
@@ -192,10 +172,11 @@ def check_link_anchors(
     A translated page links the translated target (mkdocs-static-i18n serves `page.<lang>.md`, falling back to EN),
     whose headings slug differently from the EN ones. `check_links` only compares URLs with the source, and
     `mkdocs build --strict` stops at the first language with a warning, so such links surfaced one language at a time.
+    A page's anchors are the ids its MkDocs render records (page_anchors.py), the set the strict build checks.
     """
     issues = []
     page = DOCS_DIR / cache_key
-    anchors_of: dict[Path, set[str]] = {}
+    own_anchors: frozenset[str] | None = None
     reported: set[str] = set()
     for _text, url in _extract_links(_strip_code(translated)):
         url = url.strip().split()[0] if url.strip() else ""
@@ -215,12 +196,12 @@ def check_link_anchors(
             target_file = localized if localized.exists() else stem.parent / f"{stem.name}.en.md"
             if not target_file.exists():
                 continue  # a missing page is the links check's and the build's business
-            if target_file not in anchors_of:
-                anchors_of[target_file] = _page_anchors(target_file.read_text(encoding="utf-8"))
-            anchors = anchors_of[target_file]
+            anchors = file_anchors(target_file)
             where = target_file.resolve().relative_to(DOCS_DIR.resolve()).as_posix()
         else:
-            anchors = anchors_of.setdefault(page, _page_anchors(translated))
+            if own_anchors is None:
+                own_anchors = render_anchors(translated)
+            anchors = own_anchors
             where = "this page"
         if anchor not in anchors:
             reported.add(url)
