@@ -114,9 +114,7 @@
         },
     ]);
 
-    const sectionActions = $derived.by((): RowAction<SectionRow>[] => [
-        {id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (row) => ongoto(row.step), testid: 'pac-planner-review-goto'},
-    ]);
+    const sectionActions = $derived.by((): RowAction<SectionRow>[] => [{id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (row) => ongoto(row.step), testid: 'pac-planner-review-goto'}]);
 
     function kindLabel(kind: FactKind): string {
         return $t(`${KEY}.kind.${kind}`, {default: KIND_FALLBACKS[kind]});
@@ -198,9 +196,7 @@
         },
     ]);
 
-    const factActions = $derived.by((): RowAction<SnapshotFact>[] => [
-        {id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (fact) => ongoto(fact.step), testid: 'pac-planner-review-fact-goto'},
-    ]);
+    const factActions = $derived.by((): RowAction<SnapshotFact>[] => [{id: 'edit', icon: Pencil, label: () => $t(`${KEY}.edit`, {default: 'Edit'}), onClick: (fact) => ongoto(fact.step), testid: 'pac-planner-review-fact-goto'}]);
 </script>
 
 <div class="space-y-4" data-testid="pac-planner-review">

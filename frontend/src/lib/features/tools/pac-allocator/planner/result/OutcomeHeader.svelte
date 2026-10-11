@@ -73,19 +73,13 @@
             {/if}
             {#if shortfall}
                 <li data-testid="pac-planner-outcome-objective" data-objective="shortfall">
-                    <Tooltip
-                        text={$t(`${PLANNER_KEY}.result.kpi.help.shortfall`, {default: 'The part of the base that does not end up in the Assets: cash left free, costs and rounding.'})}
-                        maxWidth={TIP_WIDTH}
-                    >
+                    <Tooltip text={$t(`${PLANNER_KEY}.result.kpi.help.shortfall`, {default: 'The part of the base that does not end up in the Assets: cash left free, costs and rounding.'})} maxWidth={TIP_WIDTH}>
                         <span class={BADGE.neutral}>{$t(`${KEY}.shortfall`, {default: 'Not invested {value}', values: {value: formatObjectiveValue(shortfall.value, shortfall.unit, digits)}})}</span>
                     </Tooltip>
                 </li>
             {/if}
             <li data-testid="pac-planner-outcome-notes" data-tone={notesTone}>
-                <Tooltip
-                    text={$t(`${KEY}.notesHelp`, {default: 'The messages the calculation left about this plan, warnings or information. When there are any, they are listed just below.'})}
-                    maxWidth={TIP_WIDTH}
-                >
+                <Tooltip text={$t(`${KEY}.notesHelp`, {default: 'The messages the calculation left about this plan, warnings or information. When there are any, they are listed just below.'})} maxWidth={TIP_WIDTH}>
                     <span class={BADGE[notesTone]}>{$t(`${KEY}.notes`, {default: '{count, plural, =0 {no notes} one {# note} other {# notes}}', values: {count: result.issues.length}})}</span>
                 </Tooltip>
             </li>

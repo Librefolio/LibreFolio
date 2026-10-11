@@ -105,10 +105,7 @@ export class AddedAssetFacts {
         const priceIds = awaiting(priceAwaitsRead);
         const classIds = awaiting(exposuresAwaitRead);
         draft.refreshAsOf();
-        const source = await this.load.load(
-            {asOf: draft.data.asOf, targetCurrency: draft.data.valuationCurrency, sections: ['assets', 'prices', 'classifications'], brokerIds: owners, assetIds: ids, fxPairs: []},
-            accountGeneration,
-        );
+        const source = await this.load.load({asOf: draft.data.asOf, targetCurrency: draft.data.valuationCurrency, sections: ['assets', 'prices', 'classifications'], brokerIds: owners, assetIds: ids, fxPairs: []}, accountGeneration);
         if (sequence !== this.#sequence) return;
         if (!source) {
             if (this.load.status === 'error') this.#finish(this.load.error, ids);
