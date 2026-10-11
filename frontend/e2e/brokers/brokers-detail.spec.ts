@@ -1,5 +1,5 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {expectChartCanvas, showChartTooltip} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
@@ -1524,5 +1524,144 @@ test.describe('Broker detail — the Bulk editor opened before the transaction t
         await expect(page.getByTestId('confirm-modal-confirm')).toHaveCount(0);
 
         await closeEmptyBulkWithoutGuard(page);
+    });
+});
+
+// ============================================================================
+// The quota badge in the UI language
+// ============================================================================
+
+/**
+ * The signed-in user's share, in the badge beside the broker's name, written the reader's way.
+ *
+ * Defect (after train 37): the page prints `formatSharePercentage(v)` — that is
+ * `(Math.round(v * 10000) / 100).toFixed(1)` — and a `%`, so a French reader gets `45.7%` where
+ * French writes `45,7 %`, with a decimal comma and a no-break space before the sign. The cure
+ * hands the same pre-rounded value to the shared `formatPercent` with
+ * `{signed: false, digits: 1, locale: $currentLanguage}`: same digit, same rounding, no sign; only
+ * the notation follows the UI language.
+ *
+ * Data. A broker this test creates, whose complete access list it then sets to one row: the
+ * signed-in user, OWNER of 45.67% — a figure with a decimal in both notations that rounds to one
+ * digit without a tie. A new broker gives its creator 100%; the PUT makes the figure the test's
+ * own instead of the default's, and the answer is checked to be exactly that one row.
+ *
+ * Expectations. The French string is computed by the browser's own Intl (`page.evaluate`) and
+ * never written down: Chromium may put U+202F before the `%` where Node puts U+00A0. The English
+ * text is the one literal — today's exact badge, which the cure must leave alone.
+ *
+ * Language. Through the header selector (`setLanguage`), which writes only this browser context's
+ * localStorage: no other test sees the French, and the context ends with the test. The page is a
+ * legacy component, where a template call whose expression does not name `$currentLanguage` keeps
+ * the notation it had at mount (R20, BrokerCard.test.ts) — so one test opens the page in French and
+ * the other switches language with the page on screen.
+ *
+ * Reading. The badge's text, trimmed of the template's whitespace (its role icon carries none),
+ * polled and compared exactly: `toHaveText` normalises whitespace, which would let a plain space
+ * pass for the no-break one.
+ */
+
+/** The signed-in user's share of the owned broker, a fraction as the API stores it. */
+const QUOTA_SHARE = 0.4567;
+/** What the page computes before printing, `Math.round(share * 10000) / 100`; the cure keeps it. */
+const QUOTA_PERCENT = Math.round(QUOTA_SHARE * 10000) / 100;
+/** Today's English badge, exactly: one digit and a `%` — no sign, no space. */
+const QUOTA_ENGLISH = '45.7%';
+
+/** `text` with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+function spelledSpaces(text: string): string {
+    return text.replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
+/** The signed-in user's id, from the session `page.request` shares with the page. */
+async function signedInUserId(page: Page): Promise<number> {
+    const response = await page.request.get(`${API}/auth/me`);
+    expect(response.ok(), `GET /auth/me: HTTP ${response.status()}`).toBe(true);
+    const id = ((await response.json()) as {user?: {id?: unknown}}).user?.id;
+    if (typeof id !== 'number') throw new Error(`GET /auth/me returned no user id: ${JSON.stringify(id)}`);
+    return id;
+}
+
+/**
+ * Make the signed-in user OWNER of `share` of a broker the test created. The bulk PUT replaces the
+ * whole access list, and that list is this one row: the answer must be exactly it.
+ */
+async function setOwnQuota(page: Page, brokerId: number, share: number): Promise<void> {
+    const userId = await signedInUserId(page);
+    const response = await page.request.put(`${API}/brokers/${brokerId}/access`, {data: [{user_id: userId, role: 'OWNER', share_percentage: share}]});
+    expect(response.ok(), `PUT the access list of broker ${brokerId}: HTTP ${response.status()} ${await response.text()}`).toBe(true);
+    const {results} = (await response.json()) as {results: Array<{user_id: number; role: string; share_percentage: number | string}>};
+    // Cardinality is the premise, not a guess: the test owns this broker's complete access list.
+    expect(
+        results.map((row) => ({user_id: row.user_id, role: row.role, share: Number(row.share_percentage)})),
+        'the owned broker has one access row: its creator, OWNER of the share set',
+    ).toEqual([{user_id: userId, role: 'OWNER', share}]);
+}
+
+/** Open the owned broker's page; ends once its own name — and, inside the same block, the badge — is on screen. */
+async function openOwnedBroker(page: Page, brokerId: number, brokerName: string): Promise<void> {
+    await navigateTo(page, `/brokers/${brokerId}`);
+    await expect(page.getByTestId('broker-name')).toHaveText(brokerName, {timeout: 10_000});
+    await expect(page.getByTestId('broker-quota-badge')).toBeVisible();
+}
+
+/** The badge as the reader sees it: the share and its unit. */
+async function quotaBadgeText(page: Page): Promise<string> {
+    return ((await page.getByTestId('broker-quota-badge').textContent()) ?? '').trim();
+}
+
+/** The badge's figure in French notation, one digit, from the browser's own Intl. */
+async function frenchQuota(page: Page): Promise<string> {
+    const french = await page.evaluate(([percent, digits]) => new Intl.NumberFormat('fr', {style: 'percent', minimumFractionDigits: digits, maximumFractionDigits: digits}).format(percent / 100), [QUOTA_PERCENT, 1] as const);
+    expect(french, 'control: this browser has French ICU data, so the two notations differ').toContain(',');
+    return french;
+}
+
+test.describe('Broker detail — the quota badge in the UI language', () => {
+    let ownedBrokerId: number | undefined;
+
+    test.beforeEach(async ({page}) => {
+        ownedBrokerId = undefined;
+        await login(page, TEST_USER);
+    });
+
+    // afterEach, not `finally`: a cleanup throwing from `finally` would replace the assertion
+    // error it follows, and that assertion is the point of this block.
+    test.afterEach(async ({page}) => {
+        if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
+    });
+
+    /** A broker of this test's own, whose badge shows QUOTA_SHARE. */
+    async function createQuotaBroker(page: Page): Promise<{brokerId: number; brokerName: string}> {
+        // Never sorts first, so a neighbour's "first card" stays a mock broker.
+        const brokerName = `Quota badge locale ${uniqueSuffix()}`;
+        const brokerId = await createOwnedBroker(page, brokerName);
+        ownedBrokerId = brokerId;
+        await setOwnQuota(page, brokerId, QUOTA_SHARE);
+        return {brokerId, brokerName};
+    }
+
+    test('opened with the UI in French, the badge writes the share in French notation', async ({page}) => {
+        test.setTimeout(45_000);
+        const {brokerId, brokerName} = await createQuotaBroker(page);
+        await setLanguage(page, 'fr');
+        await openOwnedBroker(page, brokerId, brokerName);
+        await expect(page.locator('html'), 'control: the page opened in French').toHaveAttribute('lang', 'fr');
+
+        const french = await frenchQuota(page);
+        await expect.poll(() => quotaBadgeText(page), {message: `the badge in French notation, ${spelledSpaces(french)}`, timeout: 5_000}).toBe(french);
+    });
+
+    test('switched to French with the page on screen, the badge follows: today’s English text first, then French notation', async ({page}) => {
+        test.setTimeout(45_000);
+        const {brokerId, brokerName} = await createQuotaBroker(page);
+        // English explicitly: a session starts in the language of the user's settings.
+        await setLanguage(page, 'en');
+        await openOwnedBroker(page, brokerId, brokerName);
+        await expect.poll(() => quotaBadgeText(page), {message: 'English UI (control): the badge is exactly today’s text', timeout: 5_000}).toBe(QUOTA_ENGLISH);
+
+        await setLanguage(page, 'fr');
+        const french = await frenchQuota(page);
+        await expect.poll(() => quotaBadgeText(page), {message: `en → fr in place: the badge in French notation, ${spelledSpaces(french)}`, timeout: 5_000}).toBe(french);
     });
 });

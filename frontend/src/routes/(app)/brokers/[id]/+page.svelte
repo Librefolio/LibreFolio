@@ -10,6 +10,7 @@
     import {goBack} from '$lib/stores/app/navigationStore';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {currentLanguage} from '$lib/stores/app/language';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
     import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
@@ -453,8 +454,8 @@
         return 0;
     }
 
-    function formatSharePercentage(value: number | string | (string | null)[] | null | undefined): string {
-        return (Math.round(toNumber(value) * 10000) / 100).toFixed(1);
+    function formatSharePercentage(value: number | string | (string | null)[] | null | undefined, locale: string): string {
+        return formatPercent(Math.round(toNumber(value) * 10000) / 100, {signed: false, digits: 1, locale});
     }
 </script>
 
@@ -478,7 +479,7 @@
                             data-testid="broker-quota-badge"
                         >
                             {#if broker.user_share_percentage != null}
-                                <span class="text-xs font-medium">{formatSharePercentage(broker.user_share_percentage)}%</span>
+                                <span class="text-xs font-medium">{formatSharePercentage(broker.user_share_percentage, $currentLanguage)}</span>
                             {/if}
                             {#if role === 'OWNER'}<Crown size={13} />{:else if role === 'EDITOR'}<Pencil size={13} />{:else}<Eye size={13} />{/if}
                         </span>
