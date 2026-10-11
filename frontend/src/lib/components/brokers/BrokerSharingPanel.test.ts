@@ -46,9 +46,13 @@
  * a read-only panel offers no way in. The load-failed guards are asserted through
  * their public state (`data-access-state`) and by synthetic save dispatch, because
  * the real button is disabled.
+ *
+ * The last block switches the UI language to French and reads the percentages the
+ * panel prints — formatted numbers, never translated text. Its notes are beside it.
  */
-import {beforeEach, describe, expect, it, vi} from 'vitest';
-import {tick} from 'svelte';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {flushSync, tick} from 'svelte';
+import {get} from 'svelte/store';
 import {locale, waitLocale} from 'svelte-i18n';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 
@@ -107,6 +111,7 @@ import BrokerSharingPanel from './BrokerSharingPanel.svelte';
 import BrokerSharingPanelHarness from '$test/harness/BrokerSharingPanelHarness.svelte';
 import {zodiosApi} from '$lib/api';
 import {goto} from '$app/navigation';
+import {currentLanguage} from '$lib/stores/app/language';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1496,5 +1501,166 @@ describe('BrokerSharingPanel — Runes self-service boundaries', () => {
         } finally {
             gotoMock.mockReset();
         }
+    });
+});
+
+// =========================================================================
+// Percentages in the UI language
+// =========================================================================
+
+/**
+ * Every percentage the panel prints, written the reader's way.
+ *
+ * Defect (after train 37): six template sites print `toFixed(1)` and a `%` — allocated and
+ * available over the donut, each entry's share in the owners, editors and viewers columns, and
+ * the add dialog's `(max …)` hint — so a French reader gets `65.7%` where French writes
+ * `65,7 %`. The cure hands the same pre-rounded values (`Math.round(fraction * 10000) / 100`)
+ * to the shared `formatPercent` with `{signed: false, digits: 1, locale: $currentLanguage}`:
+ * same digit, same rounding, no sign; only the notation follows the UI language.
+ *
+ * Fixture. alice and dave own 45.67% and 20%, bob edits and carol views: allocated 65.67%,
+ * available and the add dialog's max 34.33%. Every figure keeps a decimal in both notations and
+ * none rounds on a tie. French expectations mirror the panel's own arithmetic on the fractions put
+ * in rather than restating its result.
+ *
+ * Expectations. French strings come from `Intl.NumberFormat('fr', {style: 'percent', …})` in
+ * this runtime and are never written down: Node puts U+00A0 before the `%`, a browser may put
+ * U+202F. The English control is literal — today's exact text, which the cure must leave alone,
+ * down to the absence of the `+` that `formatPercent` adds by default.
+ *
+ * Language. Switched as the app does, `currentLanguage.set` (which also drives svelte-i18n),
+ * before the mount. The panel is a runes component, whose template tracks whatever it reads; the
+ * in-place switch is the legacy BrokerCard's subject (BrokerCard.test.ts), not this one's.
+ *
+ * Selection. By `data-testid` and the panel's own markup: the figures over the donut are the
+ * leaves of `ownership-chart-section` whose text is a number with `%`, read as a sorted multiset
+ * because only their translated labels tell them apart; an entry's share is what follows the `·`
+ * the template puts after the role label; the max hint is the share field's own row. Role
+ * labels, column titles and every other translated string are never read.
+ */
+describe('BrokerSharingPanel — percentages in the UI language', () => {
+    const ALICE = 0.4567;
+    const DAVE = 0.2;
+    const ACCESSES = [access(1, 'alice', 'OWNER', ALICE), access(4, 'dave', 'OWNER', DAVE), access(2, 'bob', 'EDITOR'), access(3, 'carol', 'VIEWER')];
+
+    /** The panel's pre-rounding, which the cure keeps: a fraction to hundredths of a percent. */
+    const hundredths = (fraction: number): number => Math.round(fraction * 10000) / 100;
+    /** `totalAllocated`: the owners' shares, summed in the panel's order. */
+    const TOTAL = ALICE + DAVE;
+    /** `totalAllocatedPercent`, `availablePercent` and, with OWNER picked in the add dialog, `maxNewShare`. */
+    const ALLOCATED = hundredths(TOTAL);
+    const AVAILABLE = hundredths(1 - TOTAL);
+    const MAX_NEW_SHARE = Math.max(0, hundredths(1 - TOTAL));
+
+    /** Today's English text, exactly: `toFixed(1)` and a `%`. */
+    const ENGLISH = {allocated: '65.7%', available: '34.3%', alice: '45.7%', dave: '20.0%', noShare: '0.0%', max: '34.3%'};
+
+    const FRENCH_PERCENT = new Intl.NumberFormat('fr', {style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1});
+    /** French notation, one digit, for a value already in percent — `formatPercent` divides by 100 for `Intl`. */
+    const french = (percent: number): string => FRENCH_PERCENT.format(percent / 100);
+
+    /** `text` with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(text: string): string {
+        return text.replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Allocated and available as printed over the donut: a sorted multiset of the leaves that hold a number with `%`. */
+    function overDonut(): string[] {
+        return [...screen.getByTestId('ownership-chart-section').querySelectorAll('*')]
+            .filter((element) => element.children.length === 0)
+            .map((element) => (element.textContent ?? '').trim())
+            .filter((text) => /\d/.test(text) && text.includes('%'))
+            .sort();
+    }
+
+    /** An entry's share: the text after the `·` that follows its role label. */
+    function shareOf(userId: number): string {
+        const text = entry(userId).textContent ?? '';
+        const separator = text.lastIndexOf('\u00b7');
+        if (separator < 0) throw new Error(`access-entry-${userId} has no "·" before its share: ${JSON.stringify(text)}`);
+        return text.slice(separator + 1).trim();
+    }
+
+    /** Open the add dialog and pick OWNER; ends on the share field's row — the field and its `% (max …)` hint. */
+    async function maxHintRow(): Promise<string> {
+        const form = await openAdd();
+        await pickRole(form, 'OWNER');
+        return shareInput(form).parentElement?.textContent ?? '';
+    }
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: 'en' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    /** Boot i18n as every test of this file does, then put the UI in French before the mount. */
+    async function frenchUi(): Promise<void> {
+        await setupI18n();
+        await switchLanguage('fr');
+    }
+
+    beforeAll(async () => {
+        await setupI18n();
+        // French joins English up front, so a switch never waits on a loader.
+        await waitLocale('fr');
+        // Control: this runtime has French ICU data and every figure keeps a decimal, so each
+        // French expectation differs from today's text — or the French tests would prove nothing.
+        for (const percent of [ALLOCATED, AVAILABLE, hundredths(ALICE), hundredths(DAVE), 0, MAX_NEW_SHARE]) {
+            expect(french(percent), `${percent}: French notation has a decimal comma`).toContain(',');
+        }
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('English UI (control): allocated, available, every share and the max hint print exactly today’s text', async () => {
+        await setupI18n();
+        await mountPanel({accesses: ACCESSES});
+
+        expect(overDonut(), 'allocated and available').toEqual([ENGLISH.allocated, ENGLISH.available].sort());
+        expect(shareOf(1), 'alice, owners column').toBe(ENGLISH.alice);
+        expect(shareOf(4), 'dave, owners column').toBe(ENGLISH.dave);
+        expect(shareOf(2), 'bob, editors column').toBe(ENGLISH.noShare);
+        expect(shareOf(3), 'carol, viewers column').toBe(ENGLISH.noShare);
+        expect(await maxHintRow(), 'the add dialog’s max hint').toContain(`(max ${ENGLISH.max})`);
+    });
+
+    it('French UI: allocated and available over the donut are written in French notation', async () => {
+        await frenchUi();
+        await mountPanel({accesses: ACCESSES});
+
+        const expected = [french(ALLOCATED), french(AVAILABLE)].sort();
+        expect(overDonut(), `allocated and available in French notation, ${spelled(JSON.stringify(expected))}`).toEqual(expected);
+    });
+
+    /** One entry per column, each a template site of its own: the column, its role, the user, the share put in. */
+    const COLUMNS: Array<[column: string, role: Role, userId: number, share: number]> = [
+        ['owners', 'OWNER', 1, ALICE],
+        ['editors', 'EDITOR', 2, 0],
+        ['viewers', 'VIEWER', 3, 0],
+    ];
+
+    it.each(COLUMNS)('French UI: the %s column writes its entry’s share in French notation', async (column, role, userId, share) => {
+        await frenchUi();
+        await mountPanel({accesses: ACCESSES});
+        expect(columnOf(userId), `control: user ${userId} sits in the ${column} column`).toBe(role);
+
+        const expected = french(hundredths(share));
+        expect(shareOf(userId), `${column} column, user ${userId}: French notation, ${spelled(expected)}`).toBe(expected);
+    });
+
+    it('French UI: the add dialog’s max hint is written in French notation', async () => {
+        await frenchUi();
+        await mountPanel({accesses: ACCESSES});
+
+        const expected = `(max ${french(MAX_NEW_SHARE)})`;
+        expect(await maxHintRow(), `the max hint in French notation, ${spelled(expected)}`).toContain(expected);
     });
 });

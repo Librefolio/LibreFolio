@@ -23,12 +23,19 @@
  * testing the rule the day it slips by — and the oracle cannot agree with the
  * component by making the same mistake.
  */
-import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
 import {tick} from 'svelte';
 import {createSubscriber} from 'svelte/reactivity';
-import {fireEvent, render, screen, waitFor, within} from '$test/component';
+import {get} from 'svelte/store';
+import {addMessages} from 'svelte-i18n';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {SelectOption} from '$lib/components/ui/select/types';
+import {_ as t} from '$lib/i18n';
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
 import CompactDurationBadge from './CompactDurationBadge.svelte';
 import DateRangePicker, {type QuickPreset} from './DateRangePicker.svelte';
 
@@ -1019,6 +1026,169 @@ describe('DateRangePicker — quick ranges a caller leaves out (k5a)', () => {
             expect(trimmed.published, 'a range that stayed publishes another window than it does today').toEqual(Object.fromEntries(Object.entries(today.published).filter(([id]) => !gone.has(id))));
         } finally {
             vi.useRealTimers();
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// P, mini-lot after train 37, item 8. The count presets are English written in
+// the code — '1W', '1M', '3M', '6M', '1Y', '2Y' on the row, '3Y', '5Y', '10Y'
+// among the jolly presets the toolbar adds when it has room — while YTD and MAX
+// beside them come from the catalogue; Italian, French and Spanish write a week
+// S and a year A. The contract: a count preset reads `datePicker.presets.weeks`,
+// `.months` or `.years`, a message with an `{n}` placeholder, called with
+// `{values: {n}}` — on the row and on the jolly presets alike. The preset KEYS
+// do not change: they name the testids, and a click hands the key to
+// `activePreset`, which the pages bind into their URL state.
+//
+// Observed without reading a language, in a marker locale: every key of the
+// English catalogue, and each key the cure adds, reads as a marker of itself —
+// `⟦datePicker.presets.weeks n=1⟧` for the weeks message given n = 1 — so a
+// label taken from the catalogue reads its marker and a literal reads as
+// itself. The locale is set before mounting: the picker reads its preset labels
+// once, when it is created. YTD and MAX (MTD, QTD and WTD among the jolly
+// presets) are the control: they already come from the catalogue, and must read
+// their markers. Red today: every count preset reads its key, and no catalogue
+// has `datePicker.presets.weeks`, `.months` or `.years`.
+// ---------------------------------------------------------------------------
+
+describe('DateRangePicker — the count presets are labelled from the catalogues (P, item 8)', () => {
+    /** A private-use language (BCP 47 reserves qaa–qtz): Intl accepts it, and it is none of the app's catalogues. */
+    const MARKER_LOCALE = 'qaa';
+    const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+
+    /** How a label reads in the marker locale: `⟦key⟧`, or `⟦key n=3⟧` for a message given values. */
+    const marked = (key: string, values: Record<string, string | number> = {}): string => `⟦${[key, ...Object.entries(values).map(([name, value]) => `${name}=${value}`)].join(' ')}⟧`;
+
+    /** The value behind a dotted key of a catalogue, if any. */
+    const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+
+    /** Every dotted key of a catalogue that holds a string. */
+    function stringKeysOf(node: unknown, prefix = ''): string[] {
+        if (typeof node === 'string') return [prefix];
+        if (node === null || typeof node !== 'object') return [];
+        return Object.entries(node).flatMap(([part, child]) => stringKeysOf(child, prefix ? `${prefix}.${part}` : part));
+    }
+
+    /** Each of `keys` that some catalogue has no string for, with those catalogues: `{}` when all four have all of them. */
+    function catalogueGaps(keys: readonly string[]): Record<string, string[]> {
+        const gaps = keys.map((key) => [key, Object.entries(CATALOGUES).flatMap(([lang, catalogue]) => (typeof leafOf(catalogue, key) === 'string' ? [] : [lang]))] as const);
+        return Object.fromEntries(gaps.filter(([, langs]) => langs.length > 0));
+    }
+
+    /** Switch svelte-i18n to the marker locale: every key of the English catalogue reads as its marker, and so does every key of `added` — a key the cure adds, with the names of its values. */
+    async function useMarkerLocale(added: Record<string, readonly string[]>): Promise<void> {
+        const messages: Record<string, string> = Object.fromEntries(stringKeysOf(en).map((key) => [key, marked(key)]));
+        for (const [key, names] of Object.entries(added)) messages[key] = marked(key, Object.fromEntries(names.map((name) => [name, `{${name}}`])));
+        addMessages(MARKER_LOCALE, messages);
+        await setupI18n(MARKER_LOCALE);
+    }
+
+    type CountPreset = {key: QuickPreset; unit: 'weeks' | 'months' | 'years'; n: number};
+    /** The count presets of the row: the key — the testid's name, and what `activePreset` carries — its unit and its count. */
+    const ROW_COUNTS: readonly CountPreset[] = [
+        {key: '1W', unit: 'weeks', n: 1},
+        {key: '1M', unit: 'months', n: 1},
+        {key: '3M', unit: 'months', n: 3},
+        {key: '6M', unit: 'months', n: 6},
+        {key: '1Y', unit: 'years', n: 1},
+        {key: '2Y', unit: 'years', n: 2},
+    ];
+    /** The count presets among the jolly ones. */
+    const JOLLY_COUNTS: readonly CountPreset[] = [
+        {key: '3Y', unit: 'years', n: 3},
+        {key: '5Y', unit: 'years', n: 5},
+        {key: '10Y', unit: 'years', n: 10},
+    ];
+    /** The other jolly presets, already labelled from the catalogue. */
+    const PERIOD_JOLLIES: readonly QuickPreset[] = ['MTD', 'QTD', 'WTD'];
+    const UNIT_KEYS = ['datePicker.presets.weeks', 'datePicker.presets.months', 'datePicker.presets.years'];
+
+    /** A preset's testid: its key, lowercased. */
+    const testIdOf = (key: QuickPreset): string => `date-preset-${key.toLowerCase()}`;
+    /** How a count preset reads in the marker locale. */
+    const countLabel = ({unit, n}: CountPreset): string => marked(`datePicker.presets.${unit}`, {n});
+
+    beforeEach(async () => {
+        await useMarkerLocale(Object.fromEntries(UNIT_KEYS.map((key) => [key, ['n']])));
+    });
+
+    afterEach(async () => {
+        await setupI18n('en');
+    });
+
+    /** Mount with `activePreset` bound, as the pages do: `preset.value` is what they would write to their URL. */
+    function mountBound(props: Record<string, unknown> = {}) {
+        const preset = boundState<QuickPreset | 'custom' | null>(null);
+        const view = render(DateRangePicker, {
+            props: {
+                start: DEF_START,
+                end: DEF_END,
+                onchange: vi.fn(),
+                ...props,
+                get activePreset() {
+                    return preset.value;
+                },
+                set activePreset(next: QuickPreset | 'custom' | null) {
+                    preset.value = next;
+                },
+            },
+        });
+        return {preset, ...view};
+    }
+
+    /** Click each preset in turn, noting the key it hands to `activePreset`. */
+    async function keysCarried(presets: readonly CountPreset[], preset: {value: QuickPreset | 'custom' | null}): Promise<Record<string, unknown>> {
+        const carried: Record<string, unknown> = {};
+        for (const {key} of presets) {
+            await fireEvent.click(screen.getByTestId(testIdOf(key)));
+            carried[key] = preset.value;
+        }
+        return carried;
+    }
+
+    it('the four catalogues have weeks, months and years, each showing its count through {n}', () => {
+        expect(catalogueGaps(UNIT_KEYS), 'key → the catalogues with no string for it').toEqual({});
+        const countless = UNIT_KEYS.flatMap((key) => Object.entries(CATALOGUES).flatMap(([lang, catalogue]) => (String(leafOf(catalogue, key)).includes('{n}') ? [] : [`${lang}: ${key}`])));
+        expect(countless, 'a count message without its {n}').toEqual([]);
+    });
+
+    it('labels each count preset of the row from the catalogue, its count as n, beside YTD and MAX — testids and keys unchanged', async () => {
+        expect(get(t)('datePicker.presets.weeks', {values: {n: 1}}), 'control: the marker locale reads a count message called as the contract says').toBe(marked('datePicker.presets.weeks', {n: 1}));
+        const {preset, container} = mountBound();
+        const labels = Object.fromEntries(quickRow(container).flatMap((id) => (id === 'date-preset-custom' ? [] : [[id, screen.getByTestId(id).textContent?.trim()]])));
+
+        expect(await keysCarried(ROW_COUNTS, preset), 'a count preset no longer hands its own key to activePreset').toEqual(Object.fromEntries(ROW_COUNTS.map(({key}) => [key, key])));
+        expect(labels).toEqual({
+            ...Object.fromEntries(ROW_COUNTS.map((count) => [testIdOf(count.key), countLabel(count)])),
+            'date-preset-ytd': marked('datePicker.presets.ytd'),
+            'date-preset-max': marked('datePicker.presets.max'),
+        });
+    });
+
+    it('labels the jolly year presets the toolbar adds the same way, and measures the labels it draws', async () => {
+        // jsdom has no layout: every box measures zero, the toolbar finds no room and draws no jolly
+        // preset. Here a button is 40px wide and anything else 2000px: room for all six.
+        const room = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+            const width = this.tagName === 'BUTTON' ? 40 : 2000;
+            return {x: 0, y: 0, top: 0, left: 0, right: width, bottom: 20, width, height: 20, toJSON: () => ({})} as DOMRect;
+        });
+        try {
+            const {preset, container} = mountBound({align: 'start', compact: true});
+            const jollies = [...JOLLY_COUNTS.map(({key}) => key), ...PERIOD_JOLLIES].map(testIdOf);
+            await waitFor(() => expect(quickRow(container), 'premise: given room, the toolbar draws every jolly preset').toEqual(expect.arrayContaining(jollies)));
+            const drawn = Object.fromEntries(jollies.map((id) => [id, screen.getByTestId(id).textContent?.trim() ?? '']));
+
+            // The toolbar sizes its jolly presets from a hidden copy of them: it must measure what it draws.
+            const measured = [...container.querySelectorAll('[aria-hidden="true"] button')].map((button) => button.textContent?.trim() ?? '');
+            expect(measured.sort(), 'the toolbar measures other labels than the jolly presets it draws').toEqual(Object.values(drawn).sort());
+            expect(await keysCarried(JOLLY_COUNTS, preset), 'a jolly preset no longer hands its own key to activePreset').toEqual(Object.fromEntries(JOLLY_COUNTS.map(({key}) => [key, key])));
+            expect(drawn).toEqual({
+                ...Object.fromEntries(JOLLY_COUNTS.map((count) => [testIdOf(count.key), countLabel(count)])),
+                ...Object.fromEntries(PERIOD_JOLLIES.map((key) => [testIdOf(key), marked(`datePicker.presets.${key.toLowerCase()}`)])),
+            });
+        } finally {
+            room.mockRestore();
         }
     });
 });

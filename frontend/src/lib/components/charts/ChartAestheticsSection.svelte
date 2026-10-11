@@ -207,13 +207,13 @@
                                         onclick={() => updateAxis(row.key, row.settings, {mode: mode as AxisScaleMode})}
                                         type="button"
                                     >
-                                        {mode === 'auto' ? 'Auto' : mode === 'include0' ? $t('chartSettings.yAxisInclude0') : $t('common.custom')}
+                                        {mode === 'auto' ? $t('chartSettings.yAxisAuto') : mode === 'include0' ? $t('chartSettings.yAxisInclude0') : $t('common.custom')}
                                     </button>
                                 {/each}
                             </div>
                             {#if row.settings.mode === 'custom'}
                                 <div class="flex items-center gap-1.5 text-sm sm:text-xs">
-                                    <span class="text-xs sm:text-[10px] text-gray-500 dark:text-gray-400">Min</span>
+                                    <span class="text-xs sm:text-[10px] text-gray-500 dark:text-gray-400">{$t('common.min')}</span>
                                     <input
                                         type="number"
                                         use:numericArrows
@@ -229,7 +229,7 @@
                                         }}
                                         placeholder="—"
                                     />
-                                    <span class="text-xs sm:text-[10px] text-gray-500 dark:text-gray-400">Max</span>
+                                    <span class="text-xs sm:text-[10px] text-gray-500 dark:text-gray-400">{$t('common.max')}</span>
                                     <input
                                         type="number"
                                         use:numericArrows
