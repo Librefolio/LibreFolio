@@ -492,7 +492,7 @@ questo ramo non tocca `charts/`).
 
 ### Step 7 — Review manuale e FROZEN — **Stato: ✅ review fatta il 2026-09-24; correzioni in C7**
 
-> **⏳ Aperto** (verifica Q del 2026-10-09, base `3cceb4f90`): la review manuale delle correzioni C7 (step 8 e sezione «Runbook review manuale — copia prod `6168`») non è stata fatta. Lo conferma il developer, il 09/10, che decide di non archiviare. Vedi «Cosa resta aperto» in [plan-phase00Onboarding.prompt.md](plan-phase00Onboarding.prompt.md).
+> **✅ Chiusa l'11/10** (aggiornamento Q, base `43d92ed23`): la review manuale delle correzioni C7 (step 8 e sezione «Runbook review manuale — copia prod `6168`»). Il developer, l'11/10: «credo ti sei perso perchè tutte queste ricordo di averle testate, è tutto verde, forse l'unico non testato è il punto 7, ma mi fido di te, il resto era tutto fatto». Il punto 7 del runbook (Aggiungi Broker a metà guida, chiudi e riapri: la guida della modale riparte dal primo passo) l'ha provato il coordinatore l'11/10 alle 14:44, sul target `43d92ed23`, corsia 6150: `front-utility onboarding-guides`, 24 passati, con «OB-9 contrast» (`frontend/e2e/onboarding-guides.spec.ts:460`) verde su desktop e su mobile. Storia: al 09/10 risultava non fatta (verifica Q del 2026-10-09, base `3cceb4f90`), lo confermava il developer, che decideva di non archiviare. Vedi «Cosa resta aperto» in [plan-phase00Onboarding.prompt.md](plan-phase00Onboarding.prompt.md).
 
 > **Esito della review del developer, 2026-09-24 17:38** (copia rinfrescata, server `6168`, C6 nel working tree;
 > punti della test list; i punti 1–10 di privacy sono nel piano gemello, passo 11):
