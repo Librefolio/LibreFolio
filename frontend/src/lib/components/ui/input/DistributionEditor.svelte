@@ -37,6 +37,7 @@
     import {CountrySearchSelect, SectorSearchSelect} from '$lib/components/ui/select';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
     import DistributionDataImportModal from '$lib/components/assets/DistributionDataImportModal.svelte';
 
     // =========================================================================
@@ -374,11 +375,11 @@
         // Weight column
         cols.push({
             id: 'weight',
-            header: 'Weight %',
+            header: () => $t('assets.distribution.weightPercent'),
             type: 'number',
             cell: (row) => {
                 if (isReadonly || disabled) {
-                    return row.weight.toFixed(2);
+                    return formatPercent(row.weight, {signed: false, suffix: '', locale: $currentLanguage});
                 }
                 return {
                     type: 'editable-number' as const,
@@ -524,14 +525,14 @@
         <div class="flex items-center justify-end gap-1.5 text-xs font-medium pt-1">
             <span class="text-gray-500 dark:text-gray-400">{$t('assets.distribution.total')}:</span>
             <span data-testid="distribution-total-{kind}" class="{isValid ? 'text-green-600 dark:text-green-400' : isExcess ? 'text-red-500' : 'text-amber-500'} font-mono">
-                {totalPercent.toFixed(2)}%
+                {formatPercent(totalPercent, {signed: false, locale: $currentLanguage})}
             </span>
             {#if isValid}
                 <span class="text-green-500">✅</span>
             {:else if isExcess}
-                <span class="text-red-500">⚠ (+{(totalPercent - 100).toFixed(2)}% {$t('assets.distribution.excess')})</span>
+                <span class="text-red-500">⚠ ({formatPercent(totalPercent - 100, {locale: $currentLanguage})} {$t('assets.distribution.excess')})</span>
             {:else if isMissing}
-                <span class="text-amber-500">⚠ ({(100 - totalPercent).toFixed(2)}% {$t('assets.distribution.missing')})</span>
+                <span class="text-amber-500">⚠ ({formatPercent(100 - totalPercent, {signed: false, locale: $currentLanguage})} {$t('assets.distribution.missing')})</span>
             {/if}
         </div>
     {:else if isReadonly || disabled}
