@@ -19,11 +19,7 @@ export interface SectionCounts {
     strategy: {policy: string};
 }
 
-export type FactValue =
-    | {kind: 'money'; amount: string; currency: string; selected: string | null}
-    | {kind: 'price'; amount: string; currency: string; units: string}
-    | {kind: 'rate'; rate: string}
-    | {kind: 'modes'; currencies: string[]; fundingOnly: boolean};
+export type FactValue = {kind: 'money'; amount: string; currency: string; selected: string | null} | {kind: 'price'; amount: string; currency: string; units: string} | {kind: 'rate'; rate: string} | {kind: 'modes'; currencies: string[]; fundingOnly: boolean};
 
 /** R11.3: the composition for the maps is not a fact of the calculation, so it has no row here. */
 export type FactKind = 'broker' | 'cash' | 'contribution' | 'price' | 'fx';

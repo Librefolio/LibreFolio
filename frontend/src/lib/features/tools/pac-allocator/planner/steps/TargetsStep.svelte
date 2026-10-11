@@ -99,40 +99,42 @@
         tableRef?.clearSelection();
     }
 
-    const columns = $derived.by((): ColumnDef<DraftAsset>[] => withHelpCues<DraftAsset>([
-        {
-            id: 'asset',
-            header: () => $t('tools.pacAllocator.planner.routing.asset', {default: 'Asset'}),
-            type: 'text',
-            sortable: false,
-            filterable: false,
-            minWidth: 160,
-            getValue: (asset) => assetLabel(asset),
-            cell: (asset) => ({type: 'custom', component: AssetNameCell, props: {label: assetLabel(asset), iconUrl: asset.iconUrl, assetType: asset.assetClass ? asset.assetClass.toUpperCase() : null}}),
-        },
-        {
-            id: 'bar',
-            header: () => $t(`${KEY}.shape`, {default: 'Distribution'}),
-            type: 'custom',
-            sortable: false,
-            filterable: false,
-            width: 200,
-            minWidth: 100,
-            cell: (asset) => ({type: 'html', html: barHtml(asset)}),
-        },
-        {
-            id: 'target',
-            header: () => $t(`${KEY}.target`, {default: 'Target %'}),
-            headerTooltip: () => $t(`${KEY}.wire`, {default: 'The share of the money you invest now that goes to this Asset, in percent. Decimals are allowed.'}),
-            type: 'custom',
-            sortable: false,
-            filterable: false,
-            align: 'right',
-            width: 140,
-            minWidth: 128,
-            cell: (asset) => ({type: 'custom', component: TargetInputCell, props: {draft, assetKey: asset.key, label: assetLabel(asset)}}),
-        },
-    ]));
+    const columns = $derived.by((): ColumnDef<DraftAsset>[] =>
+        withHelpCues<DraftAsset>([
+            {
+                id: 'asset',
+                header: () => $t('tools.pacAllocator.planner.routing.asset', {default: 'Asset'}),
+                type: 'text',
+                sortable: false,
+                filterable: false,
+                minWidth: 160,
+                getValue: (asset) => assetLabel(asset),
+                cell: (asset) => ({type: 'custom', component: AssetNameCell, props: {label: assetLabel(asset), iconUrl: asset.iconUrl, assetType: asset.assetClass ? asset.assetClass.toUpperCase() : null}}),
+            },
+            {
+                id: 'bar',
+                header: () => $t(`${KEY}.shape`, {default: 'Distribution'}),
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                width: 200,
+                minWidth: 100,
+                cell: (asset) => ({type: 'html', html: barHtml(asset)}),
+            },
+            {
+                id: 'target',
+                header: () => $t(`${KEY}.target`, {default: 'Target %'}),
+                headerTooltip: () => $t(`${KEY}.wire`, {default: 'The share of the money you invest now that goes to this Asset, in percent. Decimals are allowed.'}),
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                align: 'right',
+                width: 140,
+                minWidth: 128,
+                cell: (asset) => ({type: 'custom', component: TargetInputCell, props: {draft, assetKey: asset.key, label: assetLabel(asset)}}),
+            },
+        ]),
+    );
 
     const rowActions = $derived.by((): RowAction<DraftAsset>[] => [
         {
@@ -178,7 +180,10 @@
                 </button>
                 <HelpTip
                     label={$t(`${KEY}.copyDistribution`, {default: 'Copy current distribution'})}
-                    help={$t(`${KEY}.copyHelp`, {default: 'Reads how much each of these Assets weighs today in the Brokers you tick, counting only these Assets and not the cash, and brings the ratios to 100%. Assets entered by hand get 0. You see the weights before using them, and a target you changed is replaced only after you confirm.'})}
+                    help={$t(`${KEY}.copyHelp`, {
+                        default:
+                            'Reads how much each of these Assets weighs today in the Brokers you tick, counting only these Assets and not the cash, and brings the ratios to 100%. Assets entered by hand get 0. You see the weights before using them, and a target you changed is replaced only after you confirm.',
+                    })}
                     testid="pac-planner-distribution-help"
                 />
             </div>
@@ -226,7 +231,10 @@
             {/if}
             <HelpTip
                 label={$t(`${KEY}.total`, {default: 'Total'})}
-                help={$t(`${KEY}.totalHelp`, {default: 'The targets split among the Assets the money you invest now, cash and contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.'})}
+                help={$t(`${KEY}.totalHelp`, {
+                    default:
+                        'The targets split among the Assets the money you invest now, cash and contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.',
+                })}
                 testid="pac-planner-targets-total-help"
             />
         </div>

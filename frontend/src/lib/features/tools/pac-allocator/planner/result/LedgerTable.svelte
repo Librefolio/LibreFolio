@@ -66,33 +66,35 @@
     const cell = (content: ResultCellContent) => ({type: 'custom' as const, component: ResultCell, props: {cell: content}});
     const helpKey = (field: LedgerField) => (LEDGER_PAC_ZERO_FIELDS.has(field) ? 'alwaysZero' : field);
 
-    const columns = $derived.by((): ColumnDef<PacLedgerRow>[] => withHelpCues<PacLedgerRow>([
-        {
-            id: 'pool',
-            header: () => $t(`${KEY}.item`, {default: 'Broker and currency'}),
-            type: 'custom',
-            sortable: false,
-            filterable: false,
-            pinned: 'left',
-            minWidth: 180,
-            cell: (row) => cell({type: 'broker', brokerId: row.broker_id, label: names.broker(row.broker_id), broker: draft.broker(row.broker_id) ?? null, currency: row.currency, testid: 'pac-planner-ledger-row'}),
-        },
-        ...LEDGER_FIELDS.map(
-            (field): ColumnDef<PacLedgerRow> => ({
-                id: field,
-                hiddenByDefault: !showAll && !speaking.has(field),
-                header: () => $t(`${KEY}.fields.${field}`, {default: FALLBACKS[field]}),
-                headerTooltip: () => $t(`${KEY}.help.${helpKey(field)}`, {default: HELP_FALLBACKS[helpKey(field)]}),
-                type: 'number',
+    const columns = $derived.by((): ColumnDef<PacLedgerRow>[] =>
+        withHelpCues<PacLedgerRow>([
+            {
+                id: 'pool',
+                header: () => $t(`${KEY}.item`, {default: 'Broker and currency'}),
+                type: 'custom',
                 sortable: false,
                 filterable: false,
-                align: 'right',
-                minWidth: 110,
-                cell: (row) =>
-                    cell(field === 'rounding_delta' ? {type: 'exactMoney', money: {value: row.rounding_delta, currency: row.currency}, digits, testid: `pac-planner-ledger-${field}`} : {type: 'money', amount: row[field], currency: row.currency, digits, testid: `pac-planner-ledger-${field}`}),
-            }),
-        ),
-    ]));
+                pinned: 'left',
+                minWidth: 180,
+                cell: (row) => cell({type: 'broker', brokerId: row.broker_id, label: names.broker(row.broker_id), broker: draft.broker(row.broker_id) ?? null, currency: row.currency, testid: 'pac-planner-ledger-row'}),
+            },
+            ...LEDGER_FIELDS.map(
+                (field): ColumnDef<PacLedgerRow> => ({
+                    id: field,
+                    hiddenByDefault: !showAll && !speaking.has(field),
+                    header: () => $t(`${KEY}.fields.${field}`, {default: FALLBACKS[field]}),
+                    headerTooltip: () => $t(`${KEY}.help.${helpKey(field)}`, {default: HELP_FALLBACKS[helpKey(field)]}),
+                    type: 'number',
+                    sortable: false,
+                    filterable: false,
+                    align: 'right',
+                    minWidth: 110,
+                    cell: (row) =>
+                        cell(field === 'rounding_delta' ? {type: 'exactMoney', money: {value: row.rounding_delta, currency: row.currency}, digits, testid: `pac-planner-ledger-${field}`} : {type: 'money', amount: row[field], currency: row.currency, digits, testid: `pac-planner-ledger-${field}`}),
+                }),
+            ),
+        ]),
+    );
 </script>
 
 <div class="space-y-3" data-testid="pac-planner-ledger">

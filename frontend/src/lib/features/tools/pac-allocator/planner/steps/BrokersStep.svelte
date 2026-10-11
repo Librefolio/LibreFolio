@@ -103,17 +103,31 @@
                             <dl class="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1.5 text-sm">
                                 <dt class="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">
                                     {$t('tools.pacAllocator.planner.brokerEditor.kind', {default: 'Order type'})}
-                                    <HelpTip label={$t('tools.pacAllocator.planner.brokerEditor.kind', {default: 'Order type'})} help={$t('tools.pacAllocator.planner.brokers.orderKindHelp', {default: 'How you enter an order at this Broker: by number of units (you buy 3 units) or by amount (you invest 150). It sets the unit of the increment and of the limits on each order.'})} />
+                                    <HelpTip
+                                        label={$t('tools.pacAllocator.planner.brokerEditor.kind', {default: 'Order type'})}
+                                        help={$t('tools.pacAllocator.planner.brokers.orderKindHelp', {default: 'How you enter an order at this Broker: by number of units (you buy 3 units) or by amount (you invest 150). It sets the unit of the increment and of the limits on each order.'})}
+                                    />
                                 </dt>
                                 <dd class="text-gray-900 dark:text-gray-100" data-testid="pac-planner-broker-mode-kind">{modeKindText($t, mode.kind)}</dd>
                                 <dt class="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">
                                     {$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})}
-                                    <HelpTip label={$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})} help={$t('tools.pacAllocator.planner.brokers.incrementHelp', {default: 'Every proposed order is a multiple of this value. By number of units: a whole number, for example 1. By amount: the smallest amount you can enter, for example 0.01; this is how you buy fractions of a unit.'})} />
+                                    <HelpTip
+                                        label={$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})}
+                                        help={$t('tools.pacAllocator.planner.brokers.incrementHelp', {
+                                            default: 'Every proposed order is a multiple of this value. By number of units: a whole number, for example 1. By amount: the smallest amount you can enter, for example 0.01; this is how you buy fractions of a unit.',
+                                        })}
+                                    />
                                 </dt>
                                 <dd class="tabular-nums text-gray-900 dark:text-gray-100" data-testid="pac-planner-broker-mode-step">{modeIncrementText($t, mode)}</dd>
                                 <dt class="flex items-center gap-0.5 text-gray-500 dark:text-gray-400">
                                     {$t('tools.pacAllocator.planner.brokerEditor.fee', {default: 'Purchase fee'})}
-                                    <HelpTip label={$t('tools.pacAllocator.planner.brokerEditor.fee', {default: 'Purchase fee'})} help={$t('tools.pacAllocator.planner.brokers.feeHelp', {default: 'What the Broker charges on each purchase: the percentage of the amount, kept between minimum and maximum, plus the fixed part. No purchase, no fee. It is paid from your liquidity and is not invested.\n\nExamples, in the currency of the purchase:\n• 0.19%, minimum 1.50, maximum 18: on 500 you pay 1.50, on 2,000 you pay 3.80, on 20,000 you pay 18.\n• Only a fixed part of 2.95: 2.95 on any purchase.\n• Fixed part 1 plus 0.10%: on 1,000 you pay 2.\n• Everything at 0: no fee.'})} />
+                                    <HelpTip
+                                        label={$t('tools.pacAllocator.planner.brokerEditor.fee', {default: 'Purchase fee'})}
+                                        help={$t('tools.pacAllocator.planner.brokers.feeHelp', {
+                                            default:
+                                                'What the Broker charges on each purchase: the percentage of the amount, kept between minimum and maximum, plus the fixed part. No purchase, no fee. It is paid from your liquidity and is not invested.\n\nExamples, in the currency of the purchase:\n• 0.19%, minimum 1.50, maximum 18: on 500 you pay 1.50, on 2,000 you pay 3.80, on 20,000 you pay 18.\n• Only a fixed part of 2.95: 2.95 on any purchase.\n• Fixed part 1 plus 0.10%: on 1,000 you pay 2.\n• Everything at 0: no fee.',
+                                        })}
+                                    />
                                 </dt>
                                 <dd class="tabular-nums text-gray-900 dark:text-gray-100" data-testid="pac-planner-broker-mode-fee">{modeFeeText($t, mode)}</dd>
                             </dl>
@@ -125,7 +139,13 @@
             <div class="space-y-1">
                 <p class={LABEL_ROW}>
                     {$t('tools.pacAllocator.planner.brokers.conversionLabel', {default: 'Currency conversion'})}
-                    <HelpTip label={$t('tools.pacAllocator.planner.brokers.conversionLabel', {default: 'Currency conversion'})} help={$t('tools.pacAllocator.planner.brokers.conversionHelp', {default: 'When a purchase needs a currency you do not hold here, money is converted at the rate and spread of the FX step. If you convert yourself, the plan gives the conversion as a numbered step before the orders; if the Broker converts when you buy, the plan shows it next to its orders. The calculation is the same either way.'})} />
+                    <HelpTip
+                        label={$t('tools.pacAllocator.planner.brokers.conversionLabel', {default: 'Currency conversion'})}
+                        help={$t('tools.pacAllocator.planner.brokers.conversionHelp', {
+                            default:
+                                'When a purchase needs a currency you do not hold here, money is converted at the rate and spread of the FX step. If you convert yourself, the plan gives the conversion as a numbered step before the orders; if the Broker converts when you buy, the plan shows it next to its orders. The calculation is the same either way.',
+                        })}
+                    />
                 </p>
                 <p class="text-sm text-gray-800 dark:text-gray-200" data-testid="pac-planner-broker-conversion" data-mode={broker.conversionMode}>
                     {broker.conversionMode === 'automatic'
@@ -137,7 +157,12 @@
             <div class="space-y-1.5" data-testid="pac-planner-broker-funding">
                 <p class={LABEL_ROW}>
                     {$t('tools.pacAllocator.planner.brokers.fundingLabel', {default: 'Usable liquidity'})}
-                    <HelpTip label={$t('tools.pacAllocator.planner.brokers.fundingLabel', {default: 'Usable liquidity'})} help={$t('tools.pacAllocator.planner.brokers.fundingHelp', {default: 'The money the plan may use to buy on this Broker: its own cash, plus the contributions and the cash of other accounts you allow in Edit. Everything is allowed at first; in Edit, click a source to exclude it.'})} />
+                    <HelpTip
+                        label={$t('tools.pacAllocator.planner.brokers.fundingLabel', {default: 'Usable liquidity'})}
+                        help={$t('tools.pacAllocator.planner.brokers.fundingHelp', {
+                            default: 'The money the plan may use to buy on this Broker: its own cash, plus the contributions and the cash of other accounts you allow in Edit. Everything is allowed at first; in Edit, click a source to exclude it.',
+                        })}
+                    />
                 </p>
                 {#if localCash.length === 0 && routes.length === 0}
                     <p class="text-sm text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.planner.brokers.noFunding', {default: 'none yet'})}</p>
