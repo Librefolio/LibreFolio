@@ -8,6 +8,8 @@ Un **bróker** es una de tus cuentas — en una casa de bolsa, un banco o un exc
 
 La página **Brókers** muestra una tarjeta por cada bróker, con su valor (**NAV**) en la divisa elegida en **Divisa** en la parte superior de la página. Haz clic en una tarjeta para abrir el bróker.
 
+**Ganancia/Pérdida** es el NAV menos el capital que entró en el bróker: tus depósitos menos los retiros, más el coste de los títulos que aportaste sin efectivo, más lo que trasladaste desde tus otros brókers menos lo que trasladaste a ellos, cada movimiento valorado el día en que llegó. Así, mover dinero o títulos entre dos de tus brókers no es una ganancia en una tarjeta y una pérdida en la otra, y mientras una transferencia está en tránsito, su valor permanece en la tarjeta del bróker que la envió. El porcentaje entre paréntesis es la ganancia sobre ese capital: muestra 0.00% cuando ese capital es cero o negativo, por ejemplo cuando el bróker ha enviado más de lo que ha recibido. → [Transferencias internas](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
+
 !!! note "Los brókers compartidos muestran tu participación"
 
     En un bróker del que eres copropietario, los valores de su tarjeta y de su pestaña **Resumen** se **escalan según tu porcentaje de propiedad**: un Propietario con el 50% ve la mitad de la cuenta. Los Editores y los Lectores siempre ven los importes completos. Consulta [Compartir brókers](sharing.md).

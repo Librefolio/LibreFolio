@@ -34,7 +34,7 @@ Esempi dalle importazioni: gli snapshot `patrimonio` di Intesa Sanpaolo usano `A
 
 !!! note "Promuovi a Trasferimento"
 
-    Due righe `ADJUSTMENT` con **quantità opposte**, **stesso asset** e **broker differenti** possono essere **promosse** a una coppia di Trasferimento Asset. Questo è utile quando inizialmente sono state registrate rettifiche separate e successivamente si desidera collegarle come un Trasferimento Asset.
+    Due righe `ADJUSTMENT` con **quantità opposte**, **stesso asset** e **broker differenti** possono essere **promosse** a una coppia di Trasferimento Asset. Questo è utile quando inizialmente sono state registrate rettifiche separate e successivamente si desidera collegarle come un Trasferimento Asset. Nessuna delle due righe può essere collegata a un evento dell'asset, per esempio uno split: un trasferimento non può portare quel collegamento, quindi LibreFolio non propone né accetta questa promozione.
 
 ---
 
@@ -42,8 +42,10 @@ Esempi dalle importazioni: gli snapshot `patrimonio` di Intesa Sanpaolo usano `A
 
 Le rettifiche con quantità positiva **aumentano** la quantità dei lotti (FIFO). Il costo di carico per i lotti creati tramite rettifica dipende dalla presenza di un **Cost Basis Override**:
 
-- **Con override**: il valore specificato viene utilizzato come **costo di acquisizione per unità** (PMC — Prezzo Medio di Carico)
-- **Senza override**: il lotto viene creato con costo zero (acquisizione gratuita — ad es. regali, airdrop)
+- **Con override**: il valore specificato viene utilizzato come **costo di acquisizione per unità** (PMC — Prezzo Medio di Carico); un override pari a **zero** registra un'acquisizione gratuita, come un airdrop
+- **Senza override**: il lotto FIFO si apre a costo zero, ma il costo medio (PMC) considera il costo **sconosciuto**, non gratuito: le unità entrano nella posizione senza costo, il suo PMC resta incompleto finché la posizione non viene chiusa, la Dashboard mostra il suo costo medio e il P&L latente come non disponibili, e un avviso di qualità dei dati indica l'asset (vedi [Override del costo di carico](../../technical-analysis/performance-metrics/weighted-average-cost.md#cost-basis-override))
+
+Una rettifica positiva non può essere salvata senza un costo di carico: inseriscine uno, oppure scegli **Auto**, che registra il costo medio della posizione a cui si uniscono le unità (zero se non ne contiene ancora). Due tipi di righe possono comunque esserne prive: una rettifica collegata a uno **split**, che Auto salva senza costo di carico perché lo split mantiene il costo già detenuto e lo distribuisce sulla nuova quantità, e le righe salvate prima che il costo di carico diventasse obbligatorio.
 
 !!! info "Valore per unità"
 

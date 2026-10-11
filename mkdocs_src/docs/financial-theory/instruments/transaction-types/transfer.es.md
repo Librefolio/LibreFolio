@@ -40,14 +40,14 @@ Escenarios comunes:
 
 ## 🔀 Relación con Ajustes
 
-Internamente, una Transferencia se compone de dos entradas de Ajuste. LibreFolio admite:
+Una Transferencia se guarda como dos filas `TRANSFER`, una por bróker, cada una vinculada a la otra mediante `related_transaction_id`. Separar el par convierte las dos filas en `ADJUSTMENT` independientes, y promover dos Ajustes las vuelve a convertir en una Transferencia:
 
 | Operación | Resultado |
 |-----------|--------|
 | **Separar par** (desvincular) | Transferencia → dos Ajustes independientes |
-| **Promocionar** (vincular) | Dos Ajustes → Transferencia |
+| **Promover** (vincular) | Dos Ajustes → Transferencia |
 
-**Restricciones de Promote**: mismo activo, diferentes brókers, cantidades opuestas.
+**Restricciones de promoción**: mismo activo, diferentes brókers, cantidades opuestas, y ninguna de las dos filas vinculada a un evento del activo (un desdoblamiento, por ejemplo), ya que una transferencia no puede llevar ese vínculo.
 
 ---
 

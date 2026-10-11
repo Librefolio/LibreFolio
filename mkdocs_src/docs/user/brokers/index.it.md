@@ -8,6 +8,8 @@ Un **broker** è uno dei tuoi conti — presso un'agenzia di intermediazione, un
 
 La pagina **Broker** mostra una scheda per broker, con il suo valore (**NAV**) nella valuta scelta in **Valuta** nella parte superiore della pagina. Fai clic su una scheda per aprire il broker.
 
+**Gain/Loss** è il NAV meno il capitale entrato nel broker: i tuoi depositi meno i prelievi, più il costo dei titoli che hai portato senza liquidità, più quanto hai spostato dagli altri tuoi broker meno quanto hai spostato verso di essi, ogni movimento valutato nel giorno in cui è arrivato. Così spostare denaro o titoli fra due dei tuoi broker non è un guadagno su una scheda e una perdita sull'altra, e finché un trasferimento è in transito il suo valore resta sulla scheda del broker che lo ha inviato. La percentuale tra parentesi è il guadagno su quel capitale: mostra 0.00% quando quel capitale è zero o negativo, per esempio quando il broker ha inviato più di quanto ha ricevuto. → [Trasferimenti interni](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
+
 !!! note "I broker condivisi mostrano la tua quota"
 
     Su un broker di cui sei comproprietario, i valori sulla sua scheda e nella sua scheda **Panoramica** sono **proporzionati alla tua quota di proprietà**: un Proprietario al 50% vede metà del conto. Editor e Visualizzatori vedono sempre gli importi completi. Vedi [Condivisione broker](sharing.md).

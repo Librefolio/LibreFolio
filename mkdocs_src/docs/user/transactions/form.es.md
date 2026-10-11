@@ -36,7 +36,7 @@ Algunas reglas hacen que las entradas sean rápidas:
     - **Auto** — LibreFolio lo calcula como un [precio medio de compra (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md); pulsa **⚡ Validar ahora** para verlo.
     - **Manual** — lo escribes tú.
 
-    En **Auto**, el PMC se toma en el bróker de origen de una transferencia, o en el bróker propio del ajuste. Si ese bróker no tiene otra transacción en el activo hasta la fecha en que entran las unidades, no hay nada que promediar, y el coste es 0 por diseño: si esas unidades sí costaron algo, vuelve a abrir la transacción después y escribe su coste en **Manual**. En **Manual**, el campo no puede quedar vacío: LibreFolio marca la fila y no guarda nada hasta que lo rellenes o cambies a **Auto**. Para unidades que no costaron nada, como un regalo, escribe 0. Si falta un tipo de cambio, el enlace **Sincronizar tipos de cambio** lo obtiene.
+    En **Auto**, el PMC se toma en el bróker de origen de una transferencia, o en el bróker propio del ajuste. Si ese bróker no tiene otra transacción en el activo hasta la fecha en que entran las unidades, no hay nada que promediar, y el coste es 0 por diseño: si esas unidades sí costaron algo, vuelve a abrir la transacción después y escribe su coste en **Manual**. En **Manual**, el campo no puede quedar vacío: LibreFolio marca la fila y no guarda nada hasta que lo rellenes o cambies a **Auto**. Escribe 0 solo para unidades que de verdad no costaron nada, como las nuevas acciones de un desdoblamiento; para un regalo, escribe el coste original del donante. Si falta un tipo de cambio, el enlace **Sincronizar tipos de cambio** lo obtiene.
 
 ---
 
