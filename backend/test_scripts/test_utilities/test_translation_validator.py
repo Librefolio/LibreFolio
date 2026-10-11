@@ -1,4 +1,4 @@
-"""translate-validate reads what a page renders: the checks of R2 batches 11-12 (M, R2 B13).
+"""translate-validate reads what a page renders: the checks of R2 batches 11-13 (M, R2 B13).
 
 Batches 11 and 12 changed ``mkdocs_src/aphra-pipeline/validate_translations.py`` and the structural diff of
 ``translate_docs.py``, and nothing covered the changes. Pinned here through the check functions
@@ -16,7 +16,8 @@ Batches 11 and 12 changed ``mkdocs_src/aphra-pipeline/validate_translations.py``
 * ``inline-code-missing`` (WARN): every inline code span of the source is in the translation, as many times, digit
   grouping aside;
 * ``anchor-missing`` (ERROR): a ``page.md#anchor`` link lands on an anchor of the page it opens, the translated page
-  when it exists (mkdocs-static-i18n falls back to EN), with the slugs Python-Markdown's toc gives;
+  when it exists (mkdocs-static-i18n falls back to EN). Since batch 13 a page's anchors are the ids its MkDocs render
+  records, not slugs made by hand (below);
 * ``_structural_diff`` counts blank-line-separated blocks for ``LINE_COUNT``, not lines: a paragraph the translation
   keeps on one line while the EN wraps it at 80 columns is not dropped content.
 
@@ -33,14 +34,44 @@ Red phase, against the pipeline at 01c6f1ae4 (before batch 11), staged outside t
   attributes, the two LINE_COUNT cases a count of lines leaves quiet as well (40 blocks, ±6), the fixture
   self-check.
 
+Batch 13 made ``anchor-missing`` read the page's render. ``page_anchors.render_anchors`` runs MkDocs' ``Page.render``
+with the site's configuration (``mkdocs_src/mkdocs.yml``) and returns ``Page.present_anchor_ids``, the set
+``mkdocs build --strict`` checks a fragment against; ``file_anchors`` does it for a page on disk, once per version of
+the file. The hand-made slugs it replaced offered the text slug of a heading with an explicit id (the build gives only
+the id), numbered duplicates without counting explicit ids, read ``{#x}`` and ``id="x"`` written in inline code as
+anchors and missed ``<a name="y">``, took a YAML comment of the front matter for a heading and an attr_list lookalike
+in a YAML value for an id, slugged an emoji shortcode as text, and lost the first heading of a page starting with a
+byte-order mark. ``render_anchors`` drops that mark, as MkDocs reads pages as utf-8-sig: ``validate_file`` reads a
+translation as utf-8, so the in-page links of one starting with a mark were checked against a render that had lost
+its first heading and rendered its front matter. ``inline-code-missing`` now names a span as the source writes it
+(``1,000.50``, not the key ``100050`` it is compared on). Pinned through ``check_link_anchors`` (target pages and
+in-page links), ``check_inline_code`` and ``page_anchors`` itself (a byte-order mark is not content; a file is
+rendered again once it changes, and only then).
+
+Red phase of batch 13, against the pipeline at f4a42bf4a (HEAD), staged outside the worktree and imported first, with
+``page_anchors``, which HEAD lacks, taken from the worktree: 12 red, 84 green.
+
+* red, on behaviour (12): every anchor case of ``TestLinkAnchorsReadTheRender`` (an explicit id in its three
+  spellings, duplicates, inline code and raw HTML, emoji, front matter, in-page links, the byte-order mark of a target
+  page and of the translation itself) and both spellings of a changed number;
+* green (84): the 70 tests of batches 11-12 (the 71 less the bare Python-Markdown fixture self-check, replaced), which
+  hold on both pipelines; the fixture guard (9), ``render_anchors`` (2) and ``file_anchors`` (3), which run
+  ``page_anchors`` alone and have no HEAD counterpart.
+
+The mark was first dropped only from files (``file_anchors`` reads utf-8-sig). Against a copy of ``page_anchors.py``
+whose ``render_anchors`` keeps it, the three tests of a translation's own mark are red: the in-page link to its first
+heading and ``render_anchors`` with the mark before a heading or before front matter.
+
 PURE: strings in memory and docs trees under ``tmp_path``. An autouse fixture points
 ``validate_translations.DOCS_DIR`` at an empty tree under ``tmp_path`` in every test, so no check resolves a link
 against ``mkdocs_src/docs``; the repository's docs and ``.translate-hashes.json`` are never opened (the Aphra pipeline
-may be rewriting them while this runs). Python-Markdown, installed with MkDocs, renders the slug fixture once to prove
-its expected anchors are the ones a build gives. No DB, no server, no network, no writes outside ``tmp_path``.
+may be rewriting them while this runs). ``page_anchors`` loads the site's configuration, ``mkdocs_src/mkdocs.yml``,
+once per process; no page of ``mkdocs_src/docs`` is read. ``TestFixtures`` renders every anchor fixture with it, to
+prove the expected anchors are the ones a build gives. No DB, no server, no network, no writes outside ``tmp_path``.
 """
 
 import importlib
+import os
 import re
 import textwrap
 from pathlib import Path
@@ -79,6 +110,13 @@ def validate_translations(pipeline_on_path) -> ModuleType:
 def translate_docs(pipeline_on_path) -> ModuleType:
     module = importlib.import_module("translate_docs")
     assert hasattr(module, "_structural_diff"), f"not the pipeline script: {module.__file__}"
+    return module
+
+
+@pytest.fixture(scope="module")
+def page_anchors(pipeline_on_path) -> ModuleType:
+    module = importlib.import_module("page_anchors")
+    assert hasattr(module, "render_anchors") and hasattr(module, "file_anchors"), f"not the pipeline module: {module.__file__}"
     return module
 
 
@@ -322,10 +360,24 @@ class TestInlineCode:
         assert vt.check_inline_code(f"A fee of `{en}` EUR.\n", f"Una commissione di `{localized}` EUR.\n", CACHE_KEY, LANG) == []
 
     def test_a_changed_number_is_still_reported(self, validate_translations):
-        """Check and severity only: how the message spells a number without its separators is not pinned here."""
+        """Check and severity only: the spelling the message gives is the next test's."""
         vt = validate_translations
         issues = vt.check_inline_code("A fee of `1,000.50` EUR.\n", "Una commissione di `1.500,00` EUR.\n", CACHE_KEY, LANG)
         assert _kinds(issues) == [("inline-code-missing", vt.Severity.WARN)]
+
+    @pytest.mark.parametrize(
+        ("source", "translated", "shown"),
+        [
+            pytest.param("A fee of `1,000.50` EUR.\n", "Una commissione di `1.500,00` EUR.\n", "`1,000.50`", id="grouping-and-decimal"),
+            pytest.param("Up to `12,345` rows, `12,345` at most.\n", "Fino a `12 346` righe.\n", "`12,345` ×2", id="twice-in-en"),
+        ],
+    )
+    def test_a_changed_number_is_named_as_the_source_writes_it(self, validate_translations, source, translated, shown):
+        """Not as the key it is compared on, digit grouping removed (``100050``): the translator searches the source for it."""
+        vt = validate_translations
+        issues = vt.check_inline_code(source, translated, CACHE_KEY, LANG)
+        assert _kinds(issues) == [("inline-code-missing", vt.Severity.WARN)]
+        assert shown in issues[0].message, issues[0].message
 
     def test_spans_inside_fenced_code_are_ignored(self, validate_translations):
         vt = validate_translations
@@ -345,7 +397,7 @@ TARGET_IT = "# Obiettivo\n\n## Titolo {: #x }\n\n## Intestazione italiana\n"
 FALLBACK_EN = "# English only\n\n## Fallback heading\n"
 SECTION_EN = "# Section\n\n## Section heading\n"
 
-# A translated glossary: the anchors Python-Markdown's toc renders (TestFixtures proves it) and near misses it does not.
+# A translated glossary: the anchors the site's render gives it (TestFixtures proves it) and near misses it does not.
 SLUG_PAGE = textwrap.dedent("""\
     # Glossario
 
@@ -393,6 +445,46 @@ SLUG_ANCHORS = (
 # What a translator might write instead: accents or the dot kept, a fourth duplicate, a dash for the underscore, a
 # capital, a prefix of the HTML id, and the text of a `# comment` inside a fence, which is no heading.
 NEAR_MISSES = ("café-crème-à-la-carte", "whats-new-v2.0", "résumé", "resume_3", "total-return-spiegato", "Glossario", "fees", "not-a-heading")
+
+# Batch 13: pages whose anchors the hand-made slugs got wrong. Each case gives the anchors the site's render records
+# (TestFixtures proves it) and the near misses the slugs offered instead.
+CODE_AND_HTML_PAGE = textwrap.dedent("""\
+    # Pagina
+
+    Scrivi `## Titolo {: #scritto }` per fissare l'ancora, oppure `id="attributo"` in un tag.
+
+    <div id="riquadro" markdown>
+
+    Testo nel riquadro.
+
+    </div>
+
+    Un <a name="segnalibro"></a>segnalibro nel testo.
+    """)
+EMOJI_PAGE = "# Supporto\n\n## :coffee: Buy Me a Coffee\n"
+FRONT_MATTER_PAGE = textwrap.dedent("""\
+    ---
+    title: Glossario
+    # Revisione: traduzione 2026
+    description: "Le voci del glossario {#fm-id}"
+    ---
+
+    # Glossario
+
+    ## Voci
+    """)
+RENDER_CASES = [
+    # attr_list's three spellings, all used in the docs: the heading gets the id, and its text slug is no anchor.
+    *(pytest.param(f"# Pagina\n\n## Titolo tradotto {syntax}\n", ("pagina", "en-id"), ("titolo-tradotto",), id=f"explicit-id-only-{name}") for name, syntax in (("colon", "{: #en-id }"), ("spaced", "{ #en-id }"), ("compact", "{#en-id}"))),
+    # The toc numbers a duplicate after the ids already given, explicit ones included: "Foo" comes second.
+    pytest.param("# Pagina\n\n## Bar {: #foo }\n\n## Foo\n", ("pagina", "foo", "foo_1"), ("bar",), id="duplicates-numbered-after-explicit-ids"),
+    # Written in inline code, `{: #x }` and `id="x"` are text; a raw HTML id and <a name> are anchors.
+    pytest.param(CODE_AND_HTML_PAGE, ("pagina", "riquadro", "segnalibro"), ("scritto", "attributo"), id="ids-in-inline-code-no-raw-html-ids-yes"),
+    # pymdownx.emoji (site config) renders the shortcode as an icon: it is not part of the heading's text.
+    pytest.param(EMOJI_PAGE, ("supporto", "buy-me-a-coffee"), ("coffee-buy-me-a-coffee",), id="emoji-shortcode-rendered-by-the-site"),
+    # Split off before rendering: a YAML comment is no heading, a value that looks like attr_list no id.
+    pytest.param(FRONT_MATTER_PAGE, ("glossario", "voci"), ("revisione-traduzione-2026", "fm-id"), id="front-matter-not-rendered"),
+]
 
 
 @pytest.fixture
@@ -485,6 +577,103 @@ class TestLinkAnchors:
         issues = vt.check_link_anchors("", _links("target.md#nope", "target.md#nope", "target.md#also-missing"), CACHE_KEY, LANG)
         assert _kinds(issues) == [("anchor-missing", vt.Severity.ERROR)] * 2
         assert [sum(url in issue.message for issue in issues) for url in ("target.md#nope", "target.md#also-missing")] == [1, 1]
+
+
+class TestLinkAnchorsReadTheRender:
+    """Batch 13: a page's anchors are the ids its MkDocs render records, ``mkdocs build``'s own set."""
+
+    @pytest.mark.parametrize(("page", "anchors", "near_misses"), RENDER_CASES)
+    def test_a_target_offers_the_anchors_of_its_render_and_no_other(self, validate_translations, docs, page, anchors, near_misses):
+        vt = validate_translations
+        _write(docs, "user/target.it.md", page)
+        assert vt.check_link_anchors("", _links(*(f"target.md#{anchor}" for anchor in anchors)), CACHE_KEY, LANG) == []
+        issues = vt.check_link_anchors("", _links(*(f"target.md#{anchor}" for anchor in near_misses)), CACHE_KEY, LANG)
+        assert _kinds(issues) == [("anchor-missing", vt.Severity.ERROR)] * len(near_misses)
+        assert [anchor for anchor in near_misses if not any(f"target.md#{anchor})" in issue.message for issue in issues)] == []
+
+    def test_an_in_page_link_lands_on_an_anchor_of_the_translated_pages_render(self, validate_translations):
+        vt = validate_translations
+        translated = textwrap.dedent("""\
+            ## Configurazione avanzata {: #advanced-configuration }
+
+            ## Bar {: #foo }
+
+            ## Foo
+
+            Vedi [la configurazione](#advanced-configuration) e [Foo](#foo_1), non [il titolo](#configurazione-avanzata) né [Bar](#bar).
+            """)
+        issues = vt.check_link_anchors("", translated, CACHE_KEY, LANG)
+        assert _kinds(issues) == [("anchor-missing", vt.Severity.ERROR)] * 2
+        reported = {anchor for anchor in ("configurazione-avanzata", "bar") for issue in issues if f"(link #{anchor})" in issue.message and "this page" in issue.message}
+        assert reported == {"configurazione-avanzata", "bar"}, [str(issue) for issue in issues]
+
+    def test_a_byte_order_mark_does_not_change_a_files_anchors(self, validate_translations, docs):
+        vt = validate_translations
+        page = "# Titolo\n\n## Sezione\n"
+        _write(docs, "user/plain.it.md", page)
+        bom = docs / "user" / "bom.it.md"
+        bom.write_text(page, encoding="utf-8-sig")
+        assert bom.read_bytes().startswith(b"\xef\xbb\xbf"), "barrier: the file starts with a UTF-8 byte-order mark"
+        assert _kinds(vt.check_link_anchors("", _links("bom.md#nope"), CACHE_KEY, LANG)) == [("anchor-missing", vt.Severity.ERROR)], "barrier: the page is read"
+        assert vt.check_link_anchors("", _links(*(f"{name}.md#{anchor}" for name in ("plain", "bom") for anchor in ("titolo", "sezione"))), CACHE_KEY, LANG) == []
+
+    def test_a_byte_order_mark_does_not_change_the_translations_own_anchors(self, validate_translations):
+        """validate_file reads a translation as utf-8, so its byte-order mark reaches the check; MkDocs reads pages as utf-8-sig."""
+        vt = validate_translations
+        assert _kinds(vt.check_link_anchors("", "\ufeff# Titolo\n\nVedi [giù](#nope).\n", CACHE_KEY, LANG)) == [("anchor-missing", vt.Severity.ERROR)], "barrier: the page's in-page links are checked"
+        assert vt.check_link_anchors("", "\ufeff# Titolo\n\nVedi [su](#titolo).\n", CACHE_KEY, LANG) == []
+
+
+# ---------------------------------------------------------------------------
+# page_anchors: what a render offers, one render per version of a file
+# ---------------------------------------------------------------------------
+
+
+class TestRenderAnchors:
+    @pytest.mark.parametrize(
+        ("page", "anchors"),
+        [
+            pytest.param("# Titolo\n", {"titolo"}, id="heading-first"),
+            pytest.param(FRONT_MATTER_PAGE, {"glossario", "voci"}, id="front-matter-first"),
+        ],
+    )
+    def test_a_byte_order_mark_is_not_content(self, page_anchors, page, anchors):
+        """MkDocs reads a page as utf-8-sig: a leading mark hides neither the first heading nor the front matter, which
+        would then be rendered (its YAML lines turned into headings)."""
+        assert page_anchors.render_anchors("\ufeff" + page) == page_anchors.render_anchors(page) == anchors
+
+
+class TestFileAnchors:
+    def test_each_version_of_a_file_is_rendered_once(self, page_anchors, docs, monkeypatch):
+        real_render, renders = page_anchors.render_anchors, []
+
+        def counting_render(source: str) -> frozenset[str]:
+            renders.append(source)
+            return real_render(source)
+
+        monkeypatch.setattr(page_anchors, "render_anchors", counting_render)
+        path = _write(docs, "user/page.it.md", "# Alfa\n")
+        assert page_anchors.file_anchors(path) == {"alfa"}
+        assert page_anchors.file_anchors(docs / "user" / ".." / "user" / "page.it.md") == {"alfa"}, "the same file, spelled differently"
+        assert renders == ["# Alfa\n"]
+
+    @pytest.mark.parametrize(
+        ("edit", "anchor", "same_mtime"),
+        [
+            pytest.param("# Beta\n", "beta", False, id="same-size-later-mtime"),
+            pytest.param("# Gamma\n", "gamma", True, id="other-size-same-mtime"),
+        ],
+    )
+    def test_a_changed_file_is_rendered_again(self, page_anchors, docs, edit, anchor, same_mtime):
+        """A version is the file's size and mtime: an edit saved within the same mtime tick is told by its size."""
+        path = _write(docs, "user/page.it.md", "# Alfa\n")
+        before = path.stat()
+        assert page_anchors.file_anchors(path) == {"alfa"}
+        path.write_text(edit, encoding="utf-8")
+        os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns if same_mtime else before.st_mtime_ns + 1_000_000_000))
+        after = path.stat()
+        assert (after.st_size == before.st_size, after.st_mtime_ns == before.st_mtime_ns) == (not same_mtime, same_mtime), "barrier: only the intended half of the version changed"
+        assert page_anchors.file_anchors(path) == {anchor}
 
 
 # ---------------------------------------------------------------------------
@@ -613,15 +802,25 @@ class TestValidateFile:
 # ---------------------------------------------------------------------------
 
 
-def _rendered_ids(text: str) -> set[str]:
-    """The ids Python-Markdown gives the page with the site's toc, attr_list and md_in_html (fenced_code for the fence)."""
-    html = markdown.Markdown(extensions=["toc", "attr_list", "md_in_html", "fenced_code"]).convert(text)
+def _bare_ids(text: str) -> set[str]:
+    """The ids bare Python-Markdown gives a page, toc and attr_list only: the site's render without its other extensions."""
+    html = markdown.Markdown(extensions=["toc", "attr_list"]).convert(text)
     return set(re.findall(r'\bid="([^"]+)"', html))
 
 
 class TestFixtures:
-    def test_the_expected_anchors_are_the_ones_python_markdown_renders(self):
-        """Not a product contract: an expected anchor the build would not give, or a near miss it would, would let the anchor tests pass for the wrong reason."""
-        rendered = _rendered_ids(SLUG_PAGE)
-        assert rendered == set(SLUG_ANCHORS)
-        assert rendered.isdisjoint(NEAR_MISSES)
+    """Not a product contract: an expected anchor the build would not give, or a near miss it would, would let the
+    anchor tests pass for the wrong reason. The oracle is ``page_anchors.render_anchors``, which gave the ids a real
+    ``mkdocs build`` records on all 946 pages (R2 B13 parity probe, 13,992 ids).
+    It does not involve the validator: against HEAD's, these stay green while the anchor tests turn red."""
+
+    @pytest.mark.parametrize(("page", "anchors", "near_misses"), [pytest.param(SLUG_PAGE, SLUG_ANCHORS, NEAR_MISSES, id="glossary"), *RENDER_CASES])
+    def test_the_expected_anchors_are_the_ones_the_site_renders(self, page_anchors, page, anchors, near_misses):
+        rendered = page_anchors.render_anchors(page)
+        assert rendered == set(anchors)
+        assert rendered.isdisjoint(near_misses)
+
+    def test_the_emoji_case_needs_the_sites_extensions(self):
+        """Only the site's render gives ``buy-me-a-coffee`` (above): without pymdownx.emoji the shortcode is text, and
+        its slug is the near miss. A validator rendering without the site's configuration fails the emoji case."""
+        assert _bare_ids(EMOJI_PAGE) == {"supporto", "coffee-buy-me-a-coffee"}
