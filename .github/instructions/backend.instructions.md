@@ -34,6 +34,9 @@ backend/
 | Asset Providers | `backend-providers-asset.instructions.md` — base class, cache, thread isolation |
 | FX Providers | `backend-providers-fx.instructions.md` — central banks, MANUAL sentinel |
 | BRIM Plugins | `backend-providers-brim.instructions.md` — broker import, fake asset ID flow |
+| Technical Signals | `backend-signals.instructions.md` — plugins, runtime, status and data policy |
+| Risk Engine | `backend-risk.instructions.md` — analytics, DB-free context, workers, i18n keys |
+| Tool Platform | `backend-tools.instructions.md` — Pydantic contracts, isolated jobs, registry |
 | Testing | `backend-testing.instructions.md` — pytest patterns, fixtures, coverage |
 | Lint & Format | skill `lint-format-backend` — ruff + black, rules, workflow |
 | Dead code | skill `lint-format-backend` — `./dev.py lint --dead-code` (vulture), test-only detection |

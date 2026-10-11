@@ -1787,6 +1787,7 @@
       "qtd": "QTD",
       "ytd": "YTD",
       "max": "All",
+      "days": "{n}D",
       "weeks": "{n}W",
       "months": "{n}M",
       "years": "{n}Y"

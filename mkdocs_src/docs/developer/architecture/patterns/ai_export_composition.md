@@ -419,6 +419,16 @@ market-value totals — open value, unrealized P&L, potential gain and loss — 
 summing the open lots that have them, with their coverage stated in
 `value_coverage_status`, `valued_open_lot_count` and `unavailable_open_lot_count`.
 
+The generic compact renderer prints ratio fields under public names:
+`PUBLIC_RATIO_FIELD_NAMES`, applied by `genericFieldName()` to SUMMARY rows and table
+columns, turns `portfolio_weight_ratio` into `portfolio_weight_percent`,
+`coverage_ratio` into `coverage_percent`, and so on. A value that references a payload
+field — a key in `FIELD_REFERENCE_KEYS`: a `field` leaf, as in `asset.position_scope`
+`portfolio_role.unavailable[].field`, or an item of `missing_fields`, as in
+`coverage.omitted[].missing_fields` — goes through the same map, so it names the
+column as the prompt shows it; free text such as `reason` is never rewritten, and the
+backend payload keeps the canonical codes.
+
 ## 📋 Manifests
 
 `dataset_manifest` records what was actually composed:

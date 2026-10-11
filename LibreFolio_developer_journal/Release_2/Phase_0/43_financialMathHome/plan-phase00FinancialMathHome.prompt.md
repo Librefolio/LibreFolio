@@ -1188,3 +1188,100 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
   - i dati sintetici scrivono la vecchia forma di `classification_params`;
   - la CLI della sonda non sceglie l'Asset né l'utente sintetico.
 - **Prossimo**: PL3, poi BU1 e FE1, ciascuno con l'elenco dei file prima di scrivere codice, poi T-1 dopo F.
+
+### Treno 38 e decisioni dopo B3b (coordinatore, 2026-10-11)
+- **B3b** è nel batch 36, treno 38: `dev_release2` = `b578f4fec`, i commit da `59a7c3e2f` a `7269f4085`, il merge `0e44fa787`. Il developer ha approvato le decisioni di B3b prese dal coordinatore al suo posto (opzione A col bump, `lot_detail` compatto, il contatore).
+- **BU1: opzione A**, niente prima della 1.2. Il motivo è lo strato: `schemas/` non importa mai `services/`, e `db/models.py` importa solo `utils/`; `sector_fin_utils`, `geo_utils` e `identifier_utils` sono importati da `schemas/assets.py:58-60` e `db/models.py:36`. `currency_utils` aspetta `services/fx/` (PL4, dopo F). BU1 si unisce a BU2 dopo la 1.2, in attesa di **D-P7**: aiuti puri di dominio in `backend/app/domain/` senza I/O, oppure in `utils/` con la regola scritta. La riga è nell'indice, sezione T.
+- **PL3, file condivisi assegnati**: `backend.instructions.md`, le righe della tabella `:32-37`. Niente `risk_plugin_guide.md` e niente `mkdocs.yml`: la guida del rischio esiste già in `risk/architecture.md` (`#plugin-contract`, `#adding-an-analytic`).
+- **FE1, file condivisi assegnati**: `routes/(app)/+layout.svelte` (4 import), `scripts/test_runner/_frontend_utility.py:325-330`.
+- **Ordine**: PL3, poi FE1, con un checkpoint solo se restano piccoli; T-1 dopo F.
+
+### PL3 — doc, skill e istruzioni di segnali, rischio e tools ✅ (2026-10-11)
+> **Note implementazione**:
+> - **Skill nuove**, sul modello in cinque sezioni di `asset-plugin`:
+>   - `.github/skills/signal-tools/signal-plugin/SKILL.md`;
+>   - `.github/skills/risk-tools/risk-plugin/SKILL.md`, che rimanda alle sezioni di `risk/architecture.md`.
+> - **Skill spostata**: `tool-plugin` passa in `.github/skills/tool-tools/tool-plugin/SKILL.md`. Il corpo è identico; solo la description è fra virgolette, come le altre.
+> - **Istruzioni nuove** (`applyTo` e file coperti, contati sul repo):
+>   - `backend-signals.instructions.md`: `services/signal_plugins/**`, `services/signal_*.py`, `services/series_preparation.py` → 30 file;
+>   - `backend-risk.instructions.md`: `services/risk/**`, `services/risk_plugins/**`, `services/series_preparation.py` → 47 file;
+>   - `backend-tools.instructions.md`: `services/tools/**`, `services/tool_plugins/**` → 13 file.
+>   - Ognuna dice l'architettura, le regole del contratto e del dato, dove si aggiunge un plugin e i test. Tutte ripetono la regola della casa unica: la matematica comune da `financial_math/` e dalla mappa di `backend.instructions.md`.
+> - **`backend.instructions.md`**: tre righe nella tabella delle istruzioni (Technical Signals, Risk Engine, Tool Platform).
+> - **`registry_pattern.md`**: la riga del rischio nella tabella delle guide (docs-writer).
+> - Nessun controllo del repo valida skill o istruzioni; i nomi citati sono verificati sul codice (simboli, azioni del runner).
+> - **`registry_pattern.md`** (docs-writer): la riga **Risk** tra Signals e Tools, verso `../../backend/risk/architecture.md#adding-an-analytic`; tolta la frase sotto la tabella. `mkdocs build` (strict, ancore controllate) e `check-links` (95) passano.
+> - **Note del docs-writer, lasciate a PL2** (i registri):
+>   - la docstring di `get_plugin_diagnostics` dice «all plugin registries» ma non copre il rischio;
+>   - `RiskAnalyticRegistry` manca dall'`__all__` di `provider_registry.py`;
+>   - nella pagina, «every later lookup raises» tace che anche la lookup che avvia la scoperta solleva l'errore.
+
+### FE1 — l'onboarding unito in `features/onboarding/` ✅ (2026-10-11)
+> **Note implementazione**:
+> - **Spostati**: i 15 file di `lib/components/onboarding/` (9 `.svelte` e 6 test) in `lib/features/onboarding/components/`, come `features/tools/components/`. Gli spostamenti sono fatti con `mv`, senza `git mv` né stage. Nessun import `../` dentro i file spostati, e nessuna collisione.
+> - **Import**:
+>   - 7 righe: `routes/(app)/+layout.svelte:23-26` (assegnato), `routes/+page.svelte:15`, `routes/(app)/welcome/+page.svelte:8`, `components/settings/tabs/PreferencesTab.svelte:19`;
+>   - 9 `vi.mock`: `PreferencesTab.test.ts:150`, `layout.authGate.test.ts:120-123`, `layout.gate.test.ts:116-119`;
+>   - la stringa di `features/onboarding/guideCopy.test.ts:63`.
+>   - Invariati: la logica e gli alias `$lib/features/onboarding/...`, compresi quelli di P in `TransactionBulkModal.svelte:89-91`.
+> - **Runner**: `_frontend_utility.py:325-330` (il comando `vitest run`, assegnato).
+> - **Skill**: `.github/skills/onboarding-tools/onboarding-guide/SKILL.md:78`.
+> - **Evidenze**:
+>   - `front check` → 0 errori;
+>   - vitest (onboarding, layout, Preferences, store) → 14 file, 498 passed;
+>   - E2E `front-utility onboarding-tour` → 10 passed, `onboarding-guides` → 24 passed;
+>   - Prettier pulito.
+>
+> **⚠️ Fuori pista**: `_frontend_utility.py` ha una seconda copia dei 6 percorsi alle `:593-598`, la tupla `tests=(...)` della registrazione `onboarding-component-unit` che legge `check-orphans`; l'inventario l'aveva mancata.
+> - Il coordinatore ha esteso l'assegnazione e io ho cambiato i percorsi.
+> - `check-orphans` è pulito: 347 test unitari registrati e raggiungibili da `all`.
+> - `front-utility onboarding-component-unit` → 15 file, 429 passed.
+>
+> **Doc** (docs-writer, con un secondo tentativo perché il primo è caduto per la rete): `developer/frontend/onboarding.md:92-95` e `:501`, `components/features/settings.md:70`. `mkdocs build` (strict) e `check-links` (95) passano.
+> **Nota, fuori dal lotto**: l'albero «Directory Structure» di `developer/frontend/index.md` non ha `lib/features/`: un buco già presente, da sistemare con FE2–FE11.
+
+### Etichette di durata (trovate da M, assegnate dal coordinatore, 2026-10-11) ✅
+- **Cosa**: tre punti scrivono le durate in inglese nel codice:
+  - il periodo dell'AI Export, `features/ai-export/ui.ts:60-63` (`'3M'`, `'6M'`, `'1Y'`);
+  - le colonne Δ di `AssetTable.svelte` e `FxTable.svelte`: le dinamiche `Δ ${period.key}` e la fissa `'Δ 1D'`.
+- **Come**: con le chiavi `datePicker.presets.{days,weeks,months,years}` (`{n}`), come il picker e la finestra mobile di P. Un helper puro, `deltaPeriodLabel(key, t)` in `utils/assetPriceDerived.ts`, accanto a `DELTA_PERIODS`, lascia invariata una chiave che non riconosce.
+- **L'AI Export**: `periodPresetLabels` è letto solo dai bottoni di `AiExportOptionsPanel.svelte:259`, mai dal renderer del prompt. I byte del prompt non cambiano.
+- **Catalogo** (coordinatore: «sì», un blocco diverso da quelli di M nel lotto 16): una chiave nuova `datePicker.presets.days`, en `{n}D`, it `{n}G`, fr `{n}J`, es `{n}D`, accanto a `weeks`.
+- **Test** (test-author): i rossi senza testo tradotto, con il marcatore `qaa` o un `t` marcatore, in file già registrati: `aiExportUi.test.ts`, `assetPriceDerived.test.ts`, `AssetTable.test.ts`. FxTable non ha un file di test, e il runner non è assegnato.
+> **Note implementazione** (2026-10-11):
+> - **Helper**: `deltaPeriodLabel(key, t)` riconosce `^(\d+)([DWMY])$` e restituisce invariata ogni altra chiave.
+> - **Le tabelle**: le colonne `Δ 1D` e dinamiche di AssetTable e FxTable passano per l'helper. I titoli prendono la forma a funzione, `() => …`, come gli altri titoli, quindi seguono il cambio di lingua.
+> - **L'AI Export**: `periodPresetLabels` in `ui.ts` usa `t('datePicker.presets.months'|'years', {values: {n}})`.
+> - **I rossi** (test-author): 7 rossi più una guardia che legge i 4 cataloghi, nei file registrati.
+> - **Evidenze**:
+>   - i 4 file → 33 passed;
+>   - `front check` → 0 errori;
+>   - `i18n audit`: 4348 chiavi complete, 0 inutilizzate;
+>   - le stringhe inglesi sono identiche a prima (`Δ 1W`, `3M`), quindi gli E2E in inglese non cambiano.
+> - **Cosa c'era già nella v1.1.0**: le tre etichette.
+> - **Note fuori dal lotto**: la pagina FX tiene una sua copia di `DELTA_PERIODS` (`routes/(app)/fx/+page.svelte:159`), e FxTable non ha un file di test. Le ho messe nella riga FE2–FE11 dell'indice.
+
+### C-50 — `portfolio_weight_ratio` grezzo nel prompt (developer: «C-50 prima della 1.2, lo fa T dopo le durate») — analisi
+- **Il difetto**: la tabella `portfolio_role.unavailable` di `asset.position_scope` nomina i campi del payload. Il renderer rinomina la colonna `portfolio_weight_ratio` in `portfolio_weight_percent` (`PUBLIC_RATIO_FIELD_NAMES`, `genericFieldName`), ma non i riferimenti nel valore `field`. Così il prompt nomina un campo che non mostra, e il controllo pubblico della sonda (`raw_ratio_weight_name`) fallisce appena una gamba non ha valore corrente.
+- **Dove correggere: nel renderer.**
+  - Il payload resta canonico, cioè nomina i propri campi, e la versione del componente non cambia.
+  - I byte del prompt cambiano solo dove un riferimento nomina un campo rinominato. Oggi è soltanto `asset_core.py:276,283`; `missing_fields` (`asset_core.py:398,464`) nomina solo campi non rinominati.
+  - Correggere il payload vorrebbe dire nominare nel JSON un campo che il JSON non ha, e cambiare il contratto del componente.
+- **Regola**: le foglie `field` e `missing_fields` passano per `PUBLIC_RATIO_FIELD_NAMES`, la stessa mappa delle colonne.
+- **Prove**:
+  - un rosso nel test del renderer;
+  - la sonda mirata sulla 6164: un Asset con una gamba senza valore corrente (l'asset KRW dei dati sintetici non ha cambi), con il controllo pubblico verde;
+  - la doc «Snapshot Data Tables».
+
+#### C-50 — implementazione ✅ (2026-10-11)
+> **Note implementazione**:
+> - **Renderer**: `FIELD_REFERENCE_KEYS = {'field', 'missing_fields'}` in `snapshotDataRenderer.ts`. In `genericLeaf`, una stringa sotto queste chiavi che è nella mappa `PUBLIC_RATIO_FIELD_NAMES` esce col nome pubblico; il testo libero, come `reason`, non cambia. Payload e versione del componente sono invariati.
+> - **Test** (test-author): 2 rossi e 2 controlli; il test copia la regex `raw_ratio_weight_name` della sonda. I test dell'AI Export → 12 file, 147 passed.
+> - **Sonda mirata** (6164, dati sintetici, Apple):
+>   - **Primo giro** (`20261011T200013`): la gamba senza valore non c'era, il peso era noto (31,2%) e la tabella assente. Il caso non era esercitato.
+>   - **Secondo giro** (`20261011T200040`), dopo aver rimesso l'Asset VND senza cambi del seme di B3b:
+>     - `TABLE portfolio_role.unavailable` dà `|2|portfolio_weight_percent|…|`, uguale alla SUMMARY `portfolio_role.portfolio_weight_percent|null`;
+>     - 0 nomi grezzi;
+>     - la sonda ha 0 fallimenti, controlli pubblici compresi;
+>     - UI e sonda identiche, stringa e byte UTF-8.
+> - **Cosa c'era già nella v1.1.0**: il difetto (`ea0558b3c`).

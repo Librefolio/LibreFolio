@@ -71,3 +71,36 @@ describe('AI Export UI helpers', () => {
         expect(getAiExportErrorMessage(t, error)).toBe('aiExport.selectionNotApplicable');
     });
 });
+
+describe('AI Export UI helpers — the count presets of the period are labelled from the catalogues (T, duration labels)', () => {
+    // The 3m, 6m and 1y presets are written '3M', '6M' and '1Y' in the code: English unit letters in
+    // every language, while `custom` beside them already reads `aiExport.periodCustom`. The contract is
+    // the date picker's and the rolling window's: `datePicker.presets.months` with n=3 and n=6,
+    // `datePicker.presets.years` with n=1 — the catalogues carry the reader's unit letter (1A in Italian).
+    //
+    // Observed without reading a language, through a marker `t`: a label taken from the catalogue reads
+    // as a marker of its key and values (`⟦datePicker.presets.months n=3⟧`), a literal written in the
+    // code reads as itself.
+    //
+    // Red today: the three presets read '3M', '6M' and '1Y'.
+
+    type TranslationValues = Readonly<Record<string, string | number | boolean | null | undefined>>;
+
+    /** How a label reads through the marker `t`: `⟦key⟧`, or `⟦key n=3⟧` for a message given values. */
+    const marked = (key: string, values: TranslationValues = {}): string => `⟦${[key, ...Object.entries(values).map(([name, value]) => `${name}=${String(value)}`)].join(' ')}⟧`;
+
+    /** A `t` that reads every key as its marker, with the values it is given. */
+    const markerT = (key: string, options?: {values?: TranslationValues}): string => marked(key, options?.values);
+
+    it('labels 3m and 6m datePicker.presets.months and 1y datePicker.presets.years, each with its count as n — custom unchanged', () => {
+        const labels = buildAiExportMenuLabels(markerT, compatibilityFixture(), 'AI Export');
+        expect(labels.options.periodPresetLabels.custom, 'control: a preset the helper already takes from the catalogue reads its marker').toBe(marked('aiExport.periodCustom'));
+
+        expect(labels.options.periodPresetLabels).toEqual({
+            '3m': marked('datePicker.presets.months', {n: 3}),
+            '6m': marked('datePicker.presets.months', {n: 6}),
+            '1y': marked('datePicker.presets.years', {n: 1}),
+            custom: marked('aiExport.periodCustom'),
+        });
+    });
+});
