@@ -31,7 +31,7 @@
 | K | `phases/25_taxonomySelect/` (step 23 e verifica d'archivio) | K-1 … K-26 |
 | P | `phases/30_wacUnification/`, `phases/39_autoCostNoPosition/` | P-1 … P-11 |
 | I | `phases/20_performanceCharts/`, `19_yieldOnCost/`, `24_privacyGlobal/` | I-01 … I-12 |
-| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-48 |
+| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-52 |
 
 In fondo: le voci del backlog del coordinatore **tracciate altrove** e quelle **chiuse alla verifica del 09/10**.
 
@@ -591,6 +591,20 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   11/10; erede di P-11). `transactions.costBasisOverride.warningAdjustment` dice «If these shares cost nothing (a stock
   split or a gift), enter 0»; per un regalo il costo è quello del donatore, come dice la tabella della pagina
   `financial-theory/instruments/transaction-types/adjustment`. Il testo va corretto nelle 4 lingue.
+- **C-49 · Il backend di test non si ferma al SIGTERM entro 5 s dopo alcuni E2E** — basso, **da verificare**
+  (coordinatore, 11/10). Quattro volte nei gate della corsia 6150: g32 (asset classif.), g35 (dashboard), g37 (asset
+  detail e dashboard). Il runner chiude il gruppo di processi (`scripts/test_runner/_server.py:329`), rc 0 e porta
+  libera: nessun test ne soffre. Nessun endpoint SSE (gli `StreamingResponse` sono backup e download). Da capire chi
+  trattiene lo shutdown di uvicorn (connessioni aperte del browser, lavori del lifespan) e se lo stesso succede con
+  `docker stop`, che dopo 10 s manda SIGKILL e salta gli hook di chiusura.
+- **C-50 · L'AI Export di un Asset espone il nome interno `portfolio_weight_ratio`** — basso, da valutare per la 1.2
+  (T, sonda di B3b, 11/10). Nella tabella `portfolio_role.unavailable` di `asset.position_scope` (da `ea0558b3c`) il
+  campo esce col nome interno invece di quello pubblico (`PUBLIC_RATIO_FIELD_NAMES` in `snapshotDataRenderer.ts`), e il
+  controllo pubblico della sonda fallisce appena una gamba non ha valore corrente.
+- **C-51 · I dati sintetici scrivono la vecchia forma di `classification_params`** — basso (T, 11/10).
+  `populate_mock_data.py:793-881`: l'AI Export degli Asset sintetici 4–8 risponde 503 su `asset.identity`. Tocca le
+  sonde e gli scatti futuri dell'AI Export (C-41), non gli utenti.
+- **C-52 · La CLI della sonda dell'AI Export non sa scegliere l'Asset né l'utente sintetico** — minimo (T, 11/10).
 
 ## Tracciate altrove
 
