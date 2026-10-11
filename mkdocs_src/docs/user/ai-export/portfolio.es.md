@@ -8,7 +8,7 @@ el [Resumen de la exportación IA](index.md).
 
 ## 📍 Dónde encontrarla
 
-En el **Panel**, selecciona **Exportar IA** en la barra de herramientas, junto a **Actualizar**. Se abre primero en
+En el **Panel**, selecciona **Exportación IA** en la barra de herramientas, junto a **Actualizar**. Se abre primero en
 **Plan de inversión recurrente**.
 
 La exportación sigue el [Panel](../dashboard/index.md):

@@ -13,7 +13,7 @@ Les **matières premières** sont des actifs physiques — ressources brutes ou 
 | **Devise** | Généralement cotées en USD (or, pétrole) mais peuvent être libellées dans n'importe quelle devise |
 | **Dividendes** | Aucun — les matières premières ne génèrent pas de revenus |
 | **Stockage** | Les matières premières physiques peuvent engendrer des coûts de stockage/assurance |
-| **Fournisseurs typiques** | Yahoo Finance (ex. : `GC=F` pour les contrats à terme sur l'or), Manuel |
+| **Fournisseurs typiques** | Yahoo Finance (ex. : `GC=F` pour les contrats à terme sur l'or), ou prix saisis manuellement dans l'[éditeur de données](../../../user/assets/detail/data-editor.md) |
 
 ---
 

@@ -51,7 +51,7 @@ Solo los administradores (superusuarios) tienen el candado; todos los demás obt
 | 🛡️ Seguridad | **Verificación Email Requerida** | Desactivado | Aún no está activo: el envío de correos es una función planificada, por lo que el interruptor es de solo lectura y está marcado como **Próximamente**. |
 | 🔄 Tarea de actualización | **Planificador Activado** | Activado | Activa o desactiva las actualizaciones automáticas de precios y tipos de cambio: consulta [Planificador de datos de mercado](#market-data-scheduler). |
 | 🧠 Memoria | **Tamaño Máx. Subida** | 10 MB | El archivo más grande que los usuarios pueden subir, incluidos los informes del bróker. Auméntalo si se rechaza una exportación grande. |
-| 🌍 Predeterminados | **Moneda predeterminada** | `EUR` | La moneda en la que informan los nuevos usuarios. |
+| 🌍 Predeterminados | **Divisa predeterminada** | `EUR` | La moneda en la que informan los nuevos usuarios. |
 | 🌍 Predeterminados | **Idioma predeterminado** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` o 🇪🇸 `es`. |
 | 🌍 Predeterminados | **Tema predeterminado** | `auto` | ☀️ `light`, 🌙 `dark`, o 🖥️ `auto`, que sigue al dispositivo. |
 

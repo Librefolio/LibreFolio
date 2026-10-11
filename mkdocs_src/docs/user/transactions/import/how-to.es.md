@@ -45,7 +45,7 @@ barra de progreso muestra únicamente los pasos de la importación actual.
 ### 📤 Paso 1: Subir
 
 Arrastra tus informes al asistente, o haz clic para elegirlos (CSV o XLSX), y asigna cada uno a
-su bróker — o todos a la vez con **Broker para subidas**. Un bróker que falte puede crearse
+su bróker — o todos a la vez con **Bróker para subidas**. Un bróker que falte puede crearse
 desde la misma lista (**Crear nuevo**).
 
 - Cada informe que subes se conserva: para reutilizar uno, salta este paso con **Siguiente: Seleccionar**.
@@ -147,7 +147,7 @@ Abre el que te muestre el asistente:
 ??? abstract "🧬 Unificar activos — cuando el mismo valor aparece con más de un nombre o código"
 
     Tus archivos describen el mismo valor más de una vez — con dos nombres o códigos, o en dos archivos.
-    Únifícalo aquí, o se convertirá en dos activos con sus transacciones repartidas entre ellos.
+    Unifícalo aquí, o se convertirá en dos activos con sus transacciones repartidas entre ellos.
 
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="import-wizard-assets-step" alt="Asistente de importación — paso Unificar activos con un grupo propuesto">

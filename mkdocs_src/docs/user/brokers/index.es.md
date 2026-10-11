@@ -59,7 +59,7 @@ La barra de herramientas de la parte superior se aplica a todas las pestañas:
 
 - el **rango de fechas** y la **Divisa** de las cifras;
 - **Editar**, **Compartir bróker** (abre la pestaña **Info**) y **Actualizar**;
-- **Exportar IA**, que copia al portapapeles un prompt ya preparado sobre este bróker; consulta [Exportación IA de bróker](../ai-export/broker.md).
+- **Exportación IA**, que copia al portapapeles un prompt ya preparado sobre este bróker; consulta [Exportación IA de bróker](../ai-export/broker.md).
 
 Debajo, cinco pestañas:
 

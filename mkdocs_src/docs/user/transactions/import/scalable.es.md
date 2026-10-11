@@ -104,12 +104,12 @@ Si un archivo acaba en el bróker equivocado, el asistente lo dice justo despué
 
 El dinero que mueves entre la cuenta de valores y la cuenta remunerada aparece en ambos archivos: un **Retiro** en un bróker y un **Depósito** en el otro, el mismo día y por el mismo importe. Fusiona cada par en una sola **transferencia de fondos**: el espacio de trabajo masivo de la página [Transacciones](../index.md) sugiere los pares, y pregunta antes de **Guardar todo** si no los has revisado.
 
-- **Archivos importados juntos**: las dos mitades se encuentran en el espacio de trabajo, donde un banner verde, *Transacciones complementarias detectadas*, ofrece **Combinar** cada par — o todos a la vez, con **Unir todos (N)**.
-- **Archivos importados en momentos distintos**: cuando importas el segundo archivo, el espacio de trabajo encuentra las mitades ya guardadas y muestra el botón 💡: haz clic en él para añadirlas, y luego **Combinar** cada par desde el banner. Para transferencias guardadas hace mucho tiempo, también puedes marcar las filas de transferencia de ambos brókeres en la página **Transacciones** y hacer clic en **Editar**: el banner aparece en el espacio de trabajo.
+- **Archivos importados juntos**: las dos mitades se encuentran en el espacio de trabajo, donde un banner verde, *Transacciones complementarias detectadas*, ofrece **Unir** cada par — o todos a la vez, con **Unir todos (N)**.
+- **Archivos importados en momentos distintos**: cuando importas el segundo archivo, el espacio de trabajo encuentra las mitades ya guardadas y muestra el botón 💡: haz clic en él para añadirlas, y luego pulsa **Unir** en cada par del banner. Para transferencias guardadas hace mucho tiempo, también puedes marcar las filas de transferencia de ambos brókeres en la página **Transacciones** y hacer clic en **Editar**: el banner aparece en el espacio de trabajo.
 
 También puedes enlazar un par a mano: marca sus dos filas en la página **Transacciones** y haz clic en **🔗 Promover par**.
 
-Las dos mitades tienen descripciones distintas, ya que cada una lleva su propio id de transacción: conserva la descripción unida que propone la fusión (en **Fusionar todos**, la opción predeterminada: **Combinar**). Una exportación que se solape con una transferencia ya fusionada entonces trae sus mitades de vuelta como probables duplicados, sin marcar.
+Las dos mitades tienen descripciones distintas, ya que cada una lleva su propio id de transacción: conserva la descripción unida que propone la fusión (en **Unir todos**, la opción predeterminada: **Combinar**). Una exportación que se solape con una transferencia ya fusionada entonces trae sus mitades de vuelta como probables duplicados, sin marcar.
 
 ### 🤔 ¿Un solo bróker? {: #one-broker-only }
 

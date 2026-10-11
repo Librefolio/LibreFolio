@@ -12,7 +12,7 @@ Le type d'actif **Autres** est une catégorie générique pour toute classe d'ac
 | **Évaluation** | Saisie manuelle ou tout fournisseur compatible |
 | **Devise** | Toute devise ISO 4217 |
 | **Revenus** | Dépend de l'actif spécifique |
-| **Fournisseurs typiques** | Manuel, CSS Scraper |
+| **Fournisseurs typiques** | CSS Scraper, ou prix saisis manuellement dans l'[éditeur de données](../../../user/assets/detail/data-editor.md) |
 
 ---
 
@@ -33,7 +33,7 @@ Le type d'actif **Autres** est une catégorie générique pour toute classe d'ac
 
 Pour les actifs sans flux de prix public :
 
-1. Utilisez le fournisseur **Manuel** et saisissez les prix via l' [Éditeur de données](../../../user/assets/detail/data-editor.md)
+1. Cochez **Pas de Fournisseur** pour l'actif et saisissez les prix vous-même dans l'[Éditeur de données](../../../user/assets/detail/data-editor.md)
 2. Ou utilisez le fournisseur **CSS Scraper** pour extraire les prix d'un site web
 3. Enregistrez les transactions d'achat/vente comme d'habitude via les importations de courtiers
 

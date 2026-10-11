@@ -134,7 +134,7 @@ Esta sección responde a la pregunta *¿cómo atravesó cada uno de estos un epi
 
 **Cómo leerlo**
 
-- **Elige un Preajuste**, como la *Crisis Financiera Global*, o define el **Periodo**, y luego pulsa **Ejecutar reproducción**. Cambiar la selección o las fechas de la página borra el resultado.
+- **Elige un Preajuste**, como la *Crisis Financiera Global*, o define el **Periodo**, y luego pulsa **Ejecutar repetición**. Cambiar la selección o las fechas de la página borra el resultado.
 - **La tabla** muestra la **Rentabilidad** de cada activo, con los peores primero, con una barra: roja para una pérdida, verde para una ganancia. No hay total: una selección no tiene ponderaciones que sumar.
 - **Los activos sin precios en los extremos del periodo** se excluyen y se listan encima de la tabla, con el motivo. Cuando es posible, un botón repite el periodo más corto en el que todos tienen precios.
 
@@ -164,7 +164,7 @@ Cuando algo va mal con los datos, la pestaña lo indica una vez, justo debajo de
 ## 🔎 Conviene saber {: #reading-the-numbers }
 
 - **Un periodo para todos los activos.** Cada cifra cubre los mismos días para cada activo seleccionado, de modo que las filas se pueden comparar. Un activo con un historial más corto acorta ese periodo para todos ellos, y sus cifras cambian: esto es esperable → [Calidad de datos](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#alignment-what-missing-data-actually-costs)
-- **Una única divisa.** Las rentabilidades se miden en tu **Moneda predeterminada**, definida en [Preferencias](../settings/preferences.md) (la predeterminada de la instancia si nunca elegiste una), incluidos los movimientos de los tipos de cambio.
+- **Una única divisa.** Las rentabilidades se miden en tu **Divisa predeterminada**, definida en [Preferencias](../settings/preferences.md) (la predeterminada de la instancia si nunca elegiste una), incluidos los movimientos de los tipos de cambio.
 - **Un guion no es un cero.** La cifra no se pudo medir para ese activo en este periodo; pasa el cursor o toca para leer el motivo.
 - **Otra página, otra cifra.** Otra página u otra selección mide en días diferentes: compara cifras solo si cubren el mismo periodo.
 
