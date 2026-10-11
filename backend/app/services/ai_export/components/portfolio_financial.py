@@ -60,6 +60,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
     build_fifo_lot_refs,
     build_performance_bucket_rows,
     build_uniform_performance_buckets,
+    count_unavailable_amount_lots,
     load_lots_results,
     load_portfolio_report,
     lot_is_eligible,
@@ -76,6 +77,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
     sort_positions,
     sort_unallocated,
     summarize_fifo_asset_rows,
+    total_fifo_residual_cost_basis,
 )
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     load_asset_metadata as _load_asset_metadata,
@@ -514,7 +516,7 @@ class PortfolioFifoSummaryPayload(PeriodBoundedModel):
     total_open_lots: int
     total_partial_lots: int
     total_closed_lots: int
-    total_residual_cost_basis: Currency
+    total_residual_cost_basis: Currency | None
     assets: list[FifoAssetSummaryRow] = Field(default_factory=list)
 
 
@@ -549,7 +551,6 @@ async def _build_portfolio_fifo_summary(context: BuildContext, dependencies: Map
     total_open = sum(row.open_lot_count for row in rows)
     total_partial = sum(row.partial_lot_count for row in rows)
     total_closed = sum(row.closed_lot_count for row in rows)
-    total_residual = sum((row.residual_cost_basis.amount for row in rows), Decimal("0"))
     return PortfolioFifoSummaryPayload(
         period_start=scope.period_start,
         period_end=scope.period_end,
@@ -559,7 +560,7 @@ async def _build_portfolio_fifo_summary(context: BuildContext, dependencies: Map
         total_open_lots=total_open,
         total_partial_lots=total_partial,
         total_closed_lots=total_closed,
-        total_residual_cost_basis=Currency(code=currency_code, amount=total_residual),
+        total_residual_cost_basis=total_fifo_residual_cost_basis(rows, currency_code),
         assets=rows,
     )
 
@@ -574,6 +575,9 @@ class PortfolioFifoLotsPayload(PeriodBoundedModel):
     target_currency: CurrencyCode
     cost_allocation_semantics: str
     lot_count: int
+    # Always present, 0 included: a compact table drops a column that is null in every row,
+    # so this count is the trace that those amounts are unavailable (a missing FX rate).
+    unavailable_amount_lot_count: int = Field(..., ge=0)
     lots: list[FifoLotRow] = Field(default_factory=list)
 
 
@@ -617,6 +621,7 @@ async def _build_portfolio_fifo_lots(context: BuildContext, dependencies: Mappin
         target_currency=currency_code,
         cost_allocation_semantics="Lot fees and taxes include only deterministically allocated costs. Portfolio or Broker unallocated costs are excluded and must not be interpreted as recorded zero.",
         lot_count=len(rows),
+        unavailable_amount_lot_count=count_unavailable_amount_lots(rows),
         lots=rows,
     )
 
@@ -701,7 +706,7 @@ PORTFOLIO_RECONCILIATION_COMPONENT = ComponentSpec(
 
 PORTFOLIO_FIFO_SUMMARY_COMPONENT = ComponentSpec(
     component_id="portfolio.fifo_summary",
-    version=1,
+    version=2,  # v2 (B3b): unvalued lot amounts are null
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioFifoSummaryPayload,
     builder=_build_portfolio_fifo_summary,
@@ -710,7 +715,7 @@ PORTFOLIO_FIFO_SUMMARY_COMPONENT = ComponentSpec(
 
 PORTFOLIO_FIFO_LOTS_COMPONENT = ComponentSpec(
     component_id="portfolio.fifo_lots",
-    version=1,
+    version=2,  # v2 (B3b): unvalued lot amounts are null
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioFifoLotsPayload,
     builder=_build_portfolio_fifo_lots,

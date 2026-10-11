@@ -585,6 +585,7 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
         cost_allocation_semantics="Lot fees and taxes include only costs deterministically allocated to this Asset's lots. Broker-level unallocated costs are not included and must not be interpreted as zero.",
         lots=tuple(rows),
         omitted_degraded_lot_count=omitted_degraded_lot_count,
+        unavailable_amount_lot_count=sum(1 for row in rows if _has_unavailable_amount(row)),
     )
 
 
@@ -662,9 +663,26 @@ ASSET_PERFORMANCE_SPEC = ComponentSpec(
     period_behavior=PeriodBehavior.WINDOWED,
 )
 
+# The amounts a missing FX rate leaves unknown (B3b). Amounts already optional before them
+# (market value and P&L, opening reference) have their own coverage and are not counted.
+_LOT_DETAIL_CONVERTED_AMOUNTS: tuple[str, ...] = (
+    "opening_unit_price",
+    "original_cost",
+    "cumulative_proceeds",
+    "realized_pnl",
+    "income",
+    "allocated_fees",
+    "allocated_taxes",
+)
+
+
+def _has_unavailable_amount(row: AssetLotDetailRow) -> bool:
+    return any(getattr(row, field_name) is None for field_name in _LOT_DETAIL_CONVERTED_AMOUNTS)
+
+
 ASSET_LOT_DETAIL_SPEC = ComponentSpec(
     component_id="asset.lot_detail",
-    version=2,  # v2 (F6): opening_reference_unit_price/_source + opening_market_value
+    version=3,  # v2 (F6): opening_reference_unit_price/_source + opening_market_value; v3 (B3b): unvalued amounts are null
     domains=frozenset({Domain.ASSET}),
     output_model=AssetLotDetailPayload,
     builder=_build_lot_detail,
