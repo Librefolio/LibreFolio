@@ -2395,7 +2395,7 @@
     },
     "costBasisOverride": {
       "tooltip": "Override of the weighted avg cost. If empty, auto-calculated from purchases at save. Override for Exit Tax, inheritance, or special fiscal rules. Use the Total/Per unit toggle below to choose how this amount is entered.",
-      "warningAdjustment": "The manual cost basis is empty: the transaction cannot be saved without it. If these shares cost nothing (a stock split or a gift), enter 0."
+      "warningAdjustment": "The manual cost basis is empty: the transaction cannot be saved without it. Enter what these shares cost: 0 for a stock split, the donor's original cost for a gift."
     },
     "wacPreview": {
       "calculating": "Calculating...",

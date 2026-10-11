@@ -418,3 +418,121 @@ Fuori dal lotto 42, con un checkpoint e un commit propri (coordinator, 10/10).
   `tx-import-asset-inspector` 5/5; `i18n audit` completo.
 - **Checkpoint**: 8 percorsi, verificato dal coordinator (10/10). Commit `01b967c56`
   («fix(assets): localize distribution editor labels»), fuso nel target come `e26b1b7f2` (treno 32, 11/10).
+
+## 7. Seguito: C-46, C-47, C-48 (11/10)
+
+Il lotto 42 è nel target come `7f8233c47`, fuso come `8ca0d5535` (treno 34, `dev_release2` = `f6a5a2fcc`). Il
+coordinator chiede, per il developer, di chiudere prima della 1.2 le tre voci del 38 nate da questo lotto, ognuna col
+suo rosso prima. Base: worktree a `f6a5a2fcc`, pulita. Corsia 6161.
+
+- **C-46** ✅ (11/10): la barra della selezione (`selectedForPromote`) usa per un TRANSFER il confronto esatto del banner
+  (`assetQuantitiesCancel`), con una riga accanto a quella di `cashAmountsCancel`.
+  > **Rosso** (test-author, 11/10): **PC5** in `tx-bulk-promote-cost-basis.spec.ts` (`:889-947`), con la sezione
+  > nell'intestazione (`:97-117`) e l'helper `unselectBulkRows`.
+  > - La coppia sono due righe nuove scritte nel form: `-123456789012.123456` su A e `+123456789012.123457` su B, cioè
+  >   12 cifre intere e 6 decimali, il massimo di `Numeric(18, 6)`. Come double sono lo stesso numero (provato in Node,
+  >   gli stessi bit IEEE), come decimali no.
+  > - Nello stesso test c'è il controllo positivo: la coppia esatta `±123456789012.123456`, che banner e barra offrono.
+  > - Il form conserva tutte le cifre, quindi il difetto si raggiunge dalla UI.
+  > - Esito: PC1–PC4, PC2b e PC2c verdi; PC5 rosso, con `promote-toolbar-confirm` visibile (atteso 0, trovato 1).
+  >   Log in `/tmp/libreFolio_c46_red.log`.
+  >
+  > **Cura**: in `selectedForPromote` c'è ora `if (match.targetType === 'TRANSFER' && !assetQuantitiesCancel(...))
+  > return null;`, accanto alla riga di `cashAmountsCancel`, con il commento.
+  >
+  > **⚠️ Fuori pista** (dal test-author): la cella della quantità nella griglia mostra `parseFloat(qty)`, quindi le due
+  > righe della coppia appaiono uguali (`±123456789012.12346`) e l'utente non vede perché non si uniscono. È fuori da
+  > C-46: va segnalato al coordinator.
+- **C-47**: lo slider *Max Δ days* arriva a 0, ma `/promote-suggest` vuole `tolerance_days ≥ 1`. Prima la verifica,
+  poi la cura che rompe meno, da proporre al coordinator prima di farla. ✅ (11/10)
+  > **Verifica nel codice** (11/10):
+  > - lo slider `promote-suggest-delta-input` va da 0 a 14 (`TransactionBulkModal.svelte:3470`, valore in
+  >   `sessionStorage`);
+  > - la ricerca del 💡 manda `tolerance_days: maxDeltaDays` (`:2787`) all'endpoint, che vuole
+  >   `Query(7, ge=1, le=30)` (`api/v1/transactions.py:283`): a 0 risponde 422, che finisce in un `console.warn`;
+  > - il 💡 resta vuoto, o mostra la risposta vecchia, mentre il banner locale propone le coppie dello stesso giorno.
+  >
+  > **⚠️ Fuori pista**: spostare lo slider non rilancia la ricerca del 💡. La chiave della richiesta sono solo gli input,
+  > e `maxDeltaDays` si legge nel timer, fuori dal tracciamento dell'effetto.
+  >
+  > Proposta al coordinator: (b), il backend accetta 0 (`ge=0`, come `events/suggest`), più la finestra nella chiave
+  > della ricerca. L'alternativa (a) è lo slider da 1, con il clamp del valore salvato.
+  >
+  > **Decisione** (coordinator, 11/10): **(b)**. `ge=0` in `api/v1/transactions.py:283`, file in cui oggi non scrive
+  > nessun altro; poi `api sync`; e la finestra entra nella chiave della ricerca del 💡. Prima i rossi: l'API a 0 dà
+  > 200 con i soli candidati dello stesso giorno; nell'E2E lo slider va a 0, e uno spostamento fa partire una ricerca
+  > nuova.
+  >
+  > **Rossi** (test-author, 11/10):
+  > - **B3.11** `test_suggest_tolerance_zero_is_the_same_day_only` (`test_transactions_batch_split_promote.py:1848-1887`).
+  >   Il controllo a `tolerance_days=1` passa e restituisce le due righe; a 0 la risposta è 422 (`greater_than_equal`).
+  >   `api batch-split-promote` dà 34 passati e 1 fallito.
+  > - **PC6** in `tx-bulk-promote-cost-basis.spec.ts` (`:1015-1063`, con la sezione nell'intestazione a `:122-142`).
+  >   - Ci sono i mittenti −5 di oggi e di ieri, fuori dall'editor. Lo slider va a 0, poi si aggiunge un +5 nuovo:
+  >     oggi la richiesta a 0 riceve 422 e il 💡 non compare.
+  >   - Lo slider passa a 1: oggi entro 5 s non parte nessuna richiesta.
+  >   - La riga nuova è in Manual senza costo, perché le riscritture di Auto rilanciano la ricerca e il rosso
+  >     dipenderebbe dai tempi.
+  > - Nella stessa corsa PC1–PC5 sono verdi: **PC5 verde è la prova di C-46**.
+  > - Il test-author ha anche aggiornato i commenti invecchiati dell'intestazione: PC2b e PC2c sono ora regressioni,
+  >   PC5 è al passato, e PC3 descrive il confronto della barra.
+  >
+  > **Cura**:
+  > - `api/v1/transactions.py:283`: `Query(7, ge=0, le=30)`. `api sync` aggiorna il client generato
+  >   (`gte(0).lte(30)`), che git ignora: nessun file tracciato cambia;
+  > - nell'effetto del 💡 in `TransactionBulkModal.svelte`, `toleranceDays = maxDeltaDays` si legge nella parte
+  >   tracciata ed entra nella chiave (`JSON.stringify({inputs, toleranceDays})`); la richiesta usa quel valore. Uno
+  >   spostamento dello slider fa partire una ricerca nuova, con il debounce di 500 ms;
+  > - doc, via docs-writer: in `transaction-draft.md` il punto del 💡 dice che la ricerca usa la finestra del banner,
+  >   che 0 è lo stesso giorno e che lo slider rilancia la ricerca. In più la clausola sulla barra della selezione
+  >   ora cita anche `assetQuantitiesCancel` (C-46).
+- **C-48**: il testo `transactions.costBasisOverride.warningAdjustment` nelle 4 lingue. Per un regalo il costo è
+  quello del donatore, non 0. ✅ (11/10)
+  > Proposta al coordinator:
+  > - niente rosso: è un testo, e le regole dei test vietano di asserire il testo tradotto;
+  > - la verifica è `i18n audit` più la lettura delle 4 stringhe;
+  > - segnalato anche `user/transactions/form.en.md:39`, che dà lo stesso consiglio.
+  >
+  > **Decisione** (coordinator, 11/10):
+  > - niente rosso. Le verifiche sono `i18n audit`, la lettura delle 4 stringhe riportata nel checkpoint e
+  >   `gate-i18n-usage`;
+  > - il testo inglese va bene; in IT, FR ed ES si usano i termini del glossario;
+  > - `form.en.md:39` lo correggo io in inglese, via docs-writer, senza stamp. M lo traduce nella parte B del suo giro,
+  >   con `adjustment` e `transfer`.
+  >
+  > Il glossario (`aphra-pipeline/glossaries/glossary.json`): cost basis è «costo di carico», «coût de base», «coste
+  > base»; uno split è «split», «division», «desdoblamiento». Le etichette del campo nella UI sono «Costo di carico
+  > manuale», «Coût de base manuel» e «Coste base manual». L'IT oggi dice «costo base» e «frazionamento», il FR
+  > «fractionnement»: tutti e due vanno allineati.
+  >
+  > **Fatto** (11/10):
+  > - `dev.py i18n update transactions.costBasisOverride.warningAdjustment`, una riga per catalogo. I testi:
+  >   - EN «The manual cost basis is empty: the transaction cannot be saved without it. Enter what these shares cost:
+  >     0 for a stock split, the donor's original cost for a gift.»
+  >   - IT «Il costo di carico manuale è vuoto: senza, la transazione non si può salvare. Scrivi quanto sono costate
+  >     queste quote: 0 per uno split, il costo di carico originale del donante per un regalo.»
+  >   - FR «Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Saisissez ce que
+  >     ces parts ont coûté : 0 pour une division d’actions, le coût de base d’origine du donateur pour un don.»
+  >   - ES «El coste base manual está vacío: sin él, la transacción no se puede guardar. Escribe lo que costaron estas
+  >     participaciones: 0 para un desdoblamiento, el coste base original del donante para un regalo.»
+  > - `form.en.md:39`, via docs-writer: «Type 0 only for units that really cost nothing, such as the new shares of a
+  >   stock split; for a gift, type the donor's original cost.» Il resto della riga e l'admonition restano com'erano,
+  >   e sulla pagina non c'è altro consiglio sui regali.
+
+**Gate del seguito** (11/10, corsia 6161, uno alla volta, base `f6a5a2fcc`; log in `/tmp/libreFolio_c4x_*.log`):
+- `front build --debug` OK; `front check` 0/0; ruff, black e prettier puliti; `api sync` senza file tracciati cambiati.
+- E2E, tutti verdi:
+  - `tx-bulk-promote-cost-basis` 8/8, con PC5 e PC6;
+  - `tx-bulk-suggest-ux` 8/8, `tx-bulk-promote-exec` 9/9, `tx-crud-full` 7/7, `tx-fx-implied-rate` 3/3;
+  - `tx-import-scalable-transfers` 4/4, `tx-selection-after-bulk` 10/10, `tx-split-promote` 6/6;
+  - `tx-ca-contract` 12/12, `tx-wac-bulk` 11/11, `tx-wac-formmodal` 10/10, `tx-wac-mode` 5/5.
+- API: `api batch-split-promote` 35/35 (con B3.11), `api transactions` 23/23.
+- Unità: `tx-unit` 881/881, `core-unit` 3676/3676, che comprende `htmlInterpolation.gate`.
+- i18n: `i18n audit` 4339 chiavi complete e 0 inutilizzate; `utils gate-i18n-usage` 195/195.
+- `check-orphans` pulito; porta libera.
+- Doc:
+  - `mkdocs build` strict OK; `check-links` 95 validi;
+  - `translate-validate`: su `form` nessun problema strutturale, perché la frase nuova è testo semplice, ma it, fr ed
+    es portano ancora la frase vecchia, per la parte B di M;
+  - sul sito restano 39 errori: 30 in `deposited-capital`, 6 in `dashboard/charts`, e i 3 noti di `adjustment` dal
+    lotto 42.
