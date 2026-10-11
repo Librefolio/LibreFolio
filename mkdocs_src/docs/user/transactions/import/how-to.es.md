@@ -147,7 +147,7 @@ Abre el que te muestre el asistente:
 ??? abstract "🧬 Unificar activos — cuando el mismo valor aparece con más de un nombre o código"
 
     Tus archivos describen el mismo valor más de una vez — con dos nombres o códigos, o en dos archivos.
-    Únifícalo aquí, o se convertirá en dos activos con sus transacciones repartidas entre ellos.
+    Unifícalo aquí, o se convertirá en dos activos con sus transacciones repartidas entre ellos.
 
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="import-wizard-assets-step" alt="Asistente de importación — paso Unificar activos con un grupo propuesto">

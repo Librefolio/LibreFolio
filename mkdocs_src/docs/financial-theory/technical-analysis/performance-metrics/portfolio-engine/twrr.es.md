@@ -3,6 +3,8 @@
 ## 💡 ¿Qué es?
 El TWRR (por sus siglas en inglés, *Time-Weighted Rate of Return*) mide el **rendimiento "puro"** de tus activos y tu estrategia de inversión (El Mercado), ignorando por completo la temporalidad (timing) y el volumen de tus depósitos o retiros.
 
+LibreFolio detecta los cortes externos de subperíodo a partir de los cambios en la base de capital. Esto incluye el capital valorado en especie por AJUSTE/TRANSFERENCIA, de modo que los activos iniciales se tratan como capital del inversor que entra en la cartera, no como rendimiento del mercado.
+
 Es la métrica estándar utilizada por los fondos de inversión y los ETF debido a que los gestores no tienen control sobre cuándo deciden los clientes depositar o retirar capital; por lo tanto, deben ser evaluados únicamente en función de las ganancias generadas por las inversiones subyacentes.
 
 ---
@@ -12,7 +14,7 @@ Para aislar el rendimiento de los activos de la influencia de la temporalidad de
 
 Un **subperíodo** es un intervalo de tiempo continuo entre dos flujos de caja externos consecutivos (depósitos o retiros).
 
-Per definición:
+Por definición:
 * Un nuevo subperíodo comienza inmediatamente después de cualquier flujo de caja externo.
 * Durante un subperíodo determinado, **no se añade ni se retira capital externo** de la cartera.
 * En consecuencia, cualquier variación en el valor de la cartera durante un subperíodo se debe exclusivamente al rendimiento de los activos (fluctuaciones de precios, dividendos, intereses).
