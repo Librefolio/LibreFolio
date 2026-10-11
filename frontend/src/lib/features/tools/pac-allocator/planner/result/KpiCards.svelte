@@ -57,10 +57,7 @@
         const base = shown(accounting.current_invested) ? [part('current_invested', text('parts.currentInvested', 'Already invested'), accounting.current_invested), reachable()] : [];
 
         const held = solution.asset_rows.filter((row) => shown(row.final_value)).length;
-        const invested: Chip[] =
-            solution.asset_rows.length > 0
-                ? [{id: 'assets', label: $t(`${KEY}.assetsHeld`, {default: 'in {held} of {total, plural, one {# Asset} other {# Assets}}', values: {held, total: solution.asset_rows.length}}), tone: 'neutral'}]
-                : [];
+        const invested: Chip[] = solution.asset_rows.length > 0 ? [{id: 'assets', label: $t(`${KEY}.assetsHeld`, {default: 'in {held} of {total, plural, one {# Asset} other {# Assets}}', values: {held, total: solution.asset_rows.length}}), tone: 'neutral'}] : [];
 
         const shortfall: Chip[] = shown(accounting.shortfall)
             ? [
@@ -71,11 +68,7 @@
               ]
             : [{id: 'all_invested', label: text('allInvested', 'All invested'), tone: 'success'}];
 
-        const funding: Chip[] = trapped
-            ? [reachable(), part('trapped_funding', text('parts.trapped', 'Not reachable'), accounting.trapped_funding, 'warning')]
-            : shown(accounting.selected_funding)
-              ? [{id: 'all_reachable', label: text('allReachable', 'All reachable'), tone: 'success'}]
-              : [];
+        const funding: Chip[] = trapped ? [reachable(), part('trapped_funding', text('parts.trapped', 'Not reachable'), accounting.trapped_funding, 'warning')] : shown(accounting.selected_funding) ? [{id: 'all_reachable', label: text('allReachable', 'All reachable'), tone: 'success'}] : [];
 
         const costParts = COST_PARTS.filter((cost) => shown(costs[cost.field])).map((cost) => part(cost.field, $t(cost.key, {default: cost.fallback}), costs[cost.field]));
         const cost: Chip[] = costParts.length > 0 ? costParts : [{id: 'no_cost', label: text('noCost', 'No costs'), tone: 'success'}];
@@ -85,12 +78,8 @@
         const automaticConversions = solution.conversions.length - manualConversions;
         const orders: Chip[] = [
             ...(brokers > 0 ? [{id: 'brokers', label: $t(`${KEY}.brokers`, {default: 'at {count, plural, one {# Broker} other {# Brokers}}', values: {count: brokers}}), tone: 'neutral' as const}] : []),
-            ...(manualConversions > 0
-                ? [{id: 'fx', label: $t(`${KEY}.fxActions`, {default: '{count, plural, one {# currency exchange} other {# currency exchanges}}', values: {count: manualConversions}}), tone: 'neutral' as const}]
-                : []),
-            ...(automaticConversions > 0
-                ? [{id: 'fx_auto', label: $t(`${KEY}.autoConversions`, {default: '{count, plural, one {# automatic conversion} other {# automatic conversions}}', values: {count: automaticConversions}}), tone: 'neutral' as const}]
-                : []),
+            ...(manualConversions > 0 ? [{id: 'fx', label: $t(`${KEY}.fxActions`, {default: '{count, plural, one {# currency exchange} other {# currency exchanges}}', values: {count: manualConversions}}), tone: 'neutral' as const}] : []),
+            ...(automaticConversions > 0 ? [{id: 'fx_auto', label: $t(`${KEY}.autoConversions`, {default: '{count, plural, one {# automatic conversion} other {# automatic conversions}}', values: {count: automaticConversions}}), tone: 'neutral' as const}] : []),
         ];
 
         const tile = (kpi: Kpi, key: string, fallback: string, help: string, value: string, chips: Chip[]): Tile => ({kpi, label: text(key, fallback), help: text(`help.${key}`, help), value, chips});
@@ -156,12 +145,7 @@
         {#if solution}
             <dl class="grid content-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {#each tiles as tile (tile.kpi)}
-                    <div
-                        class="rounded-lg border border-gray-200 p-3 dark:border-gray-700"
-                        data-testid="pac-planner-kpi-item"
-                        data-kpi={tile.kpi}
-                        data-trapped={tile.kpi === 'selected_funding' ? (trapped ? 'true' : 'false') : undefined}
-                    >
+                    <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="pac-planner-kpi-item" data-kpi={tile.kpi} data-trapped={tile.kpi === 'selected_funding' ? (trapped ? 'true' : 'false') : undefined}>
                         <dt class="{HINT} flex items-center gap-1">
                             <span>{tile.label}</span>
                             <HelpTip label={tile.label} help={tile.help} testid="pac-planner-kpi-help" />
@@ -186,11 +170,7 @@
         <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-900/40" data-testid="pac-planner-kpi-compute">
             <div class="flex items-center gap-1">
                 <svelte:element this={solution ? 'h4' : 'h3'} class={SECTION_TITLE}>{computeTitle}</svelte:element>
-                <HelpTip
-                    label={computeTitle}
-                    help={text('compute.help', 'How long the optimizer worked on this plan and how far it got within the time it was given. The details are in «Proof and solver».')}
-                    testid="pac-planner-kpi-compute-help"
-                />
+                <HelpTip label={computeTitle} help={text('compute.help', 'How long the optimizer worked on this plan and how far it got within the time it was given. The details are in «Proof and solver».')} testid="pac-planner-kpi-compute-help" />
             </div>
             <dl class="mt-2 space-y-2 text-sm">
                 <div data-testid="pac-planner-kpi-compute-row" data-row="time">

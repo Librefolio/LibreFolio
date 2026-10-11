@@ -194,13 +194,7 @@
                             {/if}
                             <div class="flex items-center justify-between gap-2">
                                 <div class="w-full max-w-64">
-                                    <CurrencySearchSelect
-                                        value={mode.currency}
-                                        compact
-                                        excludedCurrencies={otherCurrencies(mode)}
-                                        testId="pac-planner-mode-currency"
-                                        onchange={(currency) => setCurrency(mode, currency)}
-                                    />
+                                    <CurrencySearchSelect value={mode.currency} compact excludedCurrencies={otherCurrencies(mode)} testId="pac-planner-mode-currency" onchange={(currency) => setCurrency(mode, currency)} />
                                 </div>
                                 <button type="button" class={BUTTON_DANGER_SMALL} data-testid="pac-planner-mode-remove" onclick={() => removeMode(mode.key)}>
                                     <Trash2 class="h-3.5 w-3.5" aria-hidden="true" />{$t('common.remove', {default: 'Remove'})}
@@ -223,7 +217,9 @@
                                         <label for="{ids}-{mode.key}-step">{$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})} *</label>
                                         <HelpTip
                                             label={$t('tools.pacAllocator.planner.brokerEditor.step', {default: 'Increment'})}
-                                            help={$t('tools.pacAllocator.planner.brokers.incrementHelp', {default: 'Every proposed order is a multiple of this value. By number of units: a whole number, for example 1. By amount: the smallest amount you can enter, for example 0.01; this is how you buy fractions of a unit.'})}
+                                            help={$t('tools.pacAllocator.planner.brokers.incrementHelp', {
+                                                default: 'Every proposed order is a multiple of this value. By number of units: a whole number, for example 1. By amount: the smallest amount you can enter, for example 0.01; this is how you buy fractions of a unit.',
+                                            })}
                                         />
                                     </div>
                                     <div class="flex items-center gap-2">
@@ -242,17 +238,17 @@
                                     <span id="{ids}-{mode.key}-fee" class="font-semibold text-gray-700 dark:text-gray-200">{$t('tools.pacAllocator.planner.brokerEditor.fee', {default: 'Purchase fee'})}</span>
                                     <HelpTip
                                         label={$t('tools.pacAllocator.planner.brokerEditor.fee', {default: 'Purchase fee'})}
-                                        help={$t('tools.pacAllocator.planner.brokers.feeHelp', {default: 'What the Broker charges on each purchase: the percentage of the amount, kept between minimum and maximum, plus the fixed part. No purchase, no fee. It is paid from your liquidity and is not invested.\n\nExamples, in the currency of the purchase:\n• 0.19%, minimum 1.50, maximum 18: on 500 you pay 1.50, on 2,000 you pay 3.80, on 20,000 you pay 18.\n• Only a fixed part of 2.95: 2.95 on any purchase.\n• Fixed part 1 plus 0.10%: on 1,000 you pay 2.\n• Everything at 0: no fee.'})}
+                                        help={$t('tools.pacAllocator.planner.brokers.feeHelp', {
+                                            default:
+                                                'What the Broker charges on each purchase: the percentage of the amount, kept between minimum and maximum, plus the fixed part. No purchase, no fee. It is paid from your liquidity and is not invested.\n\nExamples, in the currency of the purchase:\n• 0.19%, minimum 1.50, maximum 18: on 500 you pay 1.50, on 2,000 you pay 3.80, on 20,000 you pay 18.\n• Only a fixed part of 2.95: 2.95 on any purchase.\n• Fixed part 1 plus 0.10%: on 1,000 you pay 2.\n• Everything at 0: no fee.',
+                                        })}
                                     />
                                 </div>
                                 <div class="mt-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                                     <div>
                                         <div class={LABEL_ROW}>
                                             <label for="{ids}-{mode.key}-floor">{$t('tools.pacAllocator.planner.brokerEditor.feeFloor', {default: 'Minimum'})}</label>
-                                            <HelpTip
-                                                label={$t('tools.pacAllocator.planner.brokerEditor.feeFloor', {default: 'Minimum'})}
-                                                help={$t('tools.pacAllocator.planner.brokerEditor.feeFloorHelp', {default: 'The percentage part is never below this amount. 0 = no minimum.'})}
-                                            />
+                                            <HelpTip label={$t('tools.pacAllocator.planner.brokerEditor.feeFloor', {default: 'Minimum'})} help={$t('tools.pacAllocator.planner.brokerEditor.feeFloorHelp', {default: 'The percentage part is never below this amount. 0 = no minimum.'})} />
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <div class="min-w-0 flex-1">
@@ -279,10 +275,7 @@
                                     <div>
                                         <div class={LABEL_ROW}>
                                             <label for="{ids}-{mode.key}-cap">{$t('tools.pacAllocator.planner.brokerEditor.feeCap', {default: 'Maximum'})}</label>
-                                            <HelpTip
-                                                label={$t('tools.pacAllocator.planner.brokerEditor.feeCap', {default: 'Maximum'})}
-                                                help={$t('tools.pacAllocator.planner.brokerEditor.feeCapHelp', {default: 'The percentage part is never above this amount. Empty = no maximum.'})}
-                                            />
+                                            <HelpTip label={$t('tools.pacAllocator.planner.brokerEditor.feeCap', {default: 'Maximum'})} help={$t('tools.pacAllocator.planner.brokerEditor.feeCapHelp', {default: 'The percentage part is never above this amount. Empty = no maximum.'})} />
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <div class="min-w-0 flex-1">
@@ -319,7 +312,13 @@
         <section class="space-y-3" aria-labelledby="{ids}-conversion">
             <div class="flex items-center gap-0.5">
                 <h3 id="{ids}-conversion" class={SECTION_TITLE}>{$t('tools.pacAllocator.planner.brokers.conversionLabel', {default: 'Currency conversion'})}</h3>
-                <HelpTip label={$t('tools.pacAllocator.planner.brokers.conversionLabel', {default: 'Currency conversion'})} help={$t('tools.pacAllocator.planner.brokers.conversionHelp', {default: 'When a purchase needs a currency you do not hold here, money is converted at the rate and spread of the FX step. If you convert yourself, the plan gives the conversion as a numbered step before the orders; if the Broker converts when you buy, the plan shows it next to its orders. The calculation is the same either way.'})} />
+                <HelpTip
+                    label={$t('tools.pacAllocator.planner.brokers.conversionLabel', {default: 'Currency conversion'})}
+                    help={$t('tools.pacAllocator.planner.brokers.conversionHelp', {
+                        default:
+                            'When a purchase needs a currency you do not hold here, money is converted at the rate and spread of the FX step. If you convert yourself, the plan gives the conversion as a numbered step before the orders; if the Broker converts when you buy, the plan shows it next to its orders. The calculation is the same either way.',
+                    })}
+                />
             </div>
             <fieldset class="grid gap-2 sm:grid-cols-2" data-testid="pac-planner-conversion-modes">
                 <legend class="sr-only">{$t('tools.pacAllocator.planner.brokers.conversionLabel', {default: 'Currency conversion'})}</legend>
@@ -390,9 +389,18 @@
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <div class="min-w-0 flex-1">
-                                            <ExactDecimalInput id="{ids}-{funding.key}-cap" bind:value={funding.cap} step={info.currency ? cldrCurrencyStep(info.currency) : '0.01'} placeholder={$t('tools.pacAllocator.planner.brokerEditor.fundingCapAll', {default: 'all'})} className={INPUT} testid="pac-planner-funding-cap" />
+                                            <ExactDecimalInput
+                                                id="{ids}-{funding.key}-cap"
+                                                bind:value={funding.cap}
+                                                step={info.currency ? cldrCurrencyStep(info.currency) : '0.01'}
+                                                placeholder={$t('tools.pacAllocator.planner.brokerEditor.fundingCapAll', {default: 'all'})}
+                                                className={INPUT}
+                                                testid="pac-planner-funding-cap"
+                                            />
                                         </div>
-                                        <span class={INPUT_SUFFIX}>{#if info.currency}<CurrencyCode code={info.currency} />{/if}</span>
+                                        <span class={INPUT_SUFFIX}
+                                            >{#if info.currency}<CurrencyCode code={info.currency} />{/if}</span
+                                        >
                                     </div>
                                 </div>
                             </div>

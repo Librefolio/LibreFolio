@@ -142,8 +142,7 @@
                 id="exposures"
                 title={title('exposures', 'Exposures – ideal vs actual')}
                 help={$t(`${KEY}.exposures.help`, {
-                    default:
-                        'How the Assets spread by country, type and sector, according to their declared exposures: the ideal distribution follows your target shares, the actual one the shares after the plan. The charts do not change the plan.',
+                    default: 'How the Assets spread by country, type and sector, according to their declared exposures: the ideal distribution follows your target shares, the actual one the shares after the plan. The charts do not change the plan.',
                 })}
                 open={open.has('exposures')}
                 ontoggle={toggle}

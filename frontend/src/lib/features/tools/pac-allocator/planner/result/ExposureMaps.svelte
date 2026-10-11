@@ -267,11 +267,7 @@
             <span class="tabular-nums">{formatPlannerPercentUnits('0', 0)}</span>
             <span class="h-2 w-32 rounded-sm" style:background="linear-gradient(to right, {colours.join(', ')})" aria-hidden="true"></span>
             <span class="tabular-nums">{formatPlannerPercentUnits(String(scaleMax), 0)}</span>
-            <HelpTip
-                label={$t(`${KEY}.exposures.scale`, {default: 'Colour scale'})}
-                help={$t(`${KEY}.exposures.scaleHelp`, {default: 'One scale for both maps: the same colour is the same weight. Point at a country, or tap it, to see its two weights.'})}
-                testid="pac-planner-exposures-scale-help"
-            />
+            <HelpTip label={$t(`${KEY}.exposures.scale`, {default: 'Colour scale'})} help={$t(`${KEY}.exposures.scaleHelp`, {default: 'One scale for both maps: the same colour is the same weight. Point at a country, or tap it, to see its two weights.'})} testid="pac-planner-exposures-scale-help" />
         </div>
     {/if}
     {#if offMap.length > 0}
