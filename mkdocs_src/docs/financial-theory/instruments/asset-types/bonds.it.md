@@ -13,7 +13,7 @@ Un'**obbligazione** è un titolo a reddito fisso che rappresenta un prestito da 
 | **Valuta** | Denominata nella valuta di emissione |
 | **Cedole** | Tasso fisso o variabile, pagate semestralmente o annualmente |
 | **Scadenza** | Data fissa in cui il capitale viene restituito |
-| **Provider tipici** | Yahoo Finance, Scheduled Investment, Manuale |
+| **Provider tipici** | Yahoo Finance, Borsa Italiana, Scheduled Investment, o prezzi inseriti manualmente nell'[editor dati](../../../user/assets/detail/data-editor.md) |
 
 ---
 

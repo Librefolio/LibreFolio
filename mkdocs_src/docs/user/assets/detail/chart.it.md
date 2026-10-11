@@ -2,7 +2,7 @@
 
 Il grafico è il cuore della pagina dell'asset: lo storico dei prezzi, oppure quanto il prezzo si è mosso su una finestra mobile. Scorri per zoomare, trascina per spostarti e passa il mouse su un punto per vederne i valori.
 
-_Ultimo aggiornamento: 2026-10-08_
+_Ultimo aggiornamento: 2026-10-11_
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Grafico del prezzo dell'asset" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

@@ -48,7 +48,7 @@ La scheda Rischio contiene il pannello **Rischio portafoglio**, che risponde a q
 
 In alto a destra nella dashboard hai diversi controlli per personalizzare la tua vista:
 
-- **Intervallo temporale** — preset da 1 settimana a All-Time (MAX), oppure un intervallo personalizzato tramite il selettore di date.
+- **Intervallo temporale** — preset da **1S** a **Tutti**, oppure un intervallo personalizzato tramite il selettore di date.
 - **Filtro broker** — filtra le metriche su uno o più broker specifici; la scheda Rischio copre sempre ogni broker che possiedi, e un sottotitolo lo indica quando un filtro è attivo.
 - **Valuta target** — converte dinamicamente tutte le attività e i saldi di cassa in un'unica valuta selezionata per una vista aggregata. L'elenco offre la tua valuta predefinita e le valute delle tue coppie FX configurate — entrambi gli estremi di ciascuna coppia. Una valuta che una [rotta a catena](../fx/add-pair.md) attraversa soltanto non viene offerta: sincronizzare una catena memorizza solo il tasso della sua coppia, quindi LibreFolio non ha tassi per convertire in quella valuta. Per rendere disponibile una valuta, assegnale una coppia propria: scegli **Create forex…** in fondo all'elenco, oppure spunta **Also create intermediate pairs** quando aggiungi una coppia tramite una rotta a catena.
 - **AI Export** (:material-brain:) — apre un'esportazione negli appunti. Scegli **Data
@@ -106,7 +106,7 @@ Le coppie con soli tassi manuali (nessun provider) ricevono un avviso proprio: i
 
 !!! tip "Riempire in una volta l'intera storia di una coppia"
 
-    Apri la [pagina FX](../fx/index.md), scegli l'intervallo **Tutti** (MAX) e fai clic su [Sinc. Tutto](../fx/sync.md): LibreFolio scarica tutto ciò che i provider pubblicano per le tue coppie, fino a oggi. Una coppia che aggiungi con un provider lo fa da sola — vedi [Aggiungere una coppia di valute](../fx/add-pair.md).
+    Apri la [pagina FX](../fx/index.md), scegli l'intervallo **Tutti** e fai clic su [Sinc. Tutto](../fx/sync.md): LibreFolio scarica tutto ciò che i provider pubblicano per le tue coppie, fino a oggi. Una coppia che aggiungi con un provider lo fa da sola — vedi [Aggiungere una coppia di valute](../fx/add-pair.md).
 
 ---
 

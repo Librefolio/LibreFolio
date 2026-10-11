@@ -48,7 +48,7 @@ La pestaña Riesgo contiene el panel **Riesgo de la cartera**, que responde a cu
 
 En la parte superior derecha del panel, tienes varios controles para personalizar tu vista:
 
-- **Rango temporal** — preajustes desde 1 semana hasta Todo el tiempo (MAX), o un rango personalizado mediante el selector de fechas.
+- **Rango temporal** — preajustes de **1S** a **Todo**, o un rango personalizado mediante el selector de fechas.
 - **Filtro de brókeres** — filtra las métricas a uno o varios brókeres específicos; la pestaña Riesgo siempre cubre todos los brókeres que posees, y un subtítulo lo indica cuando hay un filtro activo.
 - **Divisa objetivo** — convierte todos los activos y saldos de efectivo dinámicamente a una única divisa seleccionada para una visualización agregada. La lista ofrece tu divisa predeterminada y las divisas de tus pares FX configurados — ambos extremos de cada par. Una divisa por la que una [ruta en cadena](../fx/add-pair.md) solo pasa no se ofrece: al sincronizar una cadena se almacena únicamente el tipo de cambio de su propio par, por lo que LibreFolio no tiene tipos con los que convertir a esa divisa. Para que una divisa esté disponible, dale un par propio: elige **Crear forex…** al final de la lista, o marca **Crear también los pares intermedios** cuando añadas un par mediante una ruta en cadena.
 - **Exportar IA** (:material-brain:) — abre una exportación al portapapeles. Elige **Instantánea de datos** para solo datos fácticos, o una **tarea de análisis** que incluye automáticamente sus instrucciones y contrato de respuesta, y luego selecciona el **nivel de detalle** (Compacto, Estándar o Completo). La instantánea del backend sigue el filtro de brókeres activo, el rango de fechas y la divisa objetivo; LibreFolio no contacta con ningún servicio de IA. Consulta [exportación IA de la cartera](../ai-export/portfolio.md) o el [resumen de la exportación IA](../ai-export/index.md).
@@ -100,7 +100,7 @@ Los pares con solo tipos manuales (sin proveedor) reciben una advertencia propia
 
 !!! tip "Rellena todo el historial de un par de una vez"
 
-    Abre la [página FX](../fx/index.md), elige el rango **Todo** (MAX) y haz clic en [Sincronizar todo](../fx/sync.md): LibreFolio descarga todo lo que publican los proveedores para tus pares, hasta hoy. Un par que añadas con proveedor lo hace por sí solo — consulta [Añadir un par de divisas](../fx/add-pair.md).
+    Abre la [página FX](../fx/index.md), elige el rango **Todo** y haz clic en [Sincronizar todo](../fx/sync.md): LibreFolio descarga todo lo que publican los proveedores para tus pares, hasta hoy. Un par que añadas con proveedor lo hace por sí solo — consulta [Añadir un par de divisas](../fx/add-pair.md).
 
 ---
 

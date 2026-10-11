@@ -2,7 +2,7 @@
 
 Le graphique est le cœur de la page d'un actif : l'historique des prix, ou l'ampleur de la variation du prix sur une fenêtre glissante. Faites défiler pour zoomer, glissez pour vous déplacer et survolez un point pour afficher ses valeurs.
 
-_Dernière mise à jour : 2026-10-08_
+_Dernière mise à jour : 2026-10-11_
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Graphique des prix de l'actif" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

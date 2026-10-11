@@ -2,7 +2,7 @@
 
 El gráfico es el corazón de la página del activo: el historial de precios, o cuánto se movió el precio en una ventana móvil. Desplázate para hacer zoom, arrastra para desplazarte y pasa el cursor sobre un punto para ver sus valores.
 
-_Última actualización: 2026-10-08_
+_Última actualización: 2026-10-11_
 
 <div class="screenshot-container" style="max-width: 800px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="detail-chart" alt="Gráfico de precios del activo" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
