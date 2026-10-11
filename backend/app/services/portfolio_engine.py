@@ -527,6 +527,9 @@ class BrokerDailyContribution:
     nav_contribution: Decimal  # market_value_by_broker + cash_by_broker + in_transit_by_broker
     capital_contribution: Decimal  # cumulative_ecf_by_broker (this broker's capital baseline)
     pnl_contribution: Decimal  # nav_contribution - capital_contribution
+    # The in-transit part of nav_contribution. Internal, never exported: the broker card
+    # (PortfolioService.get_summary) adds it to market value and cash valued at its own date.
+    in_transit_contribution: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -1204,13 +1207,15 @@ class DailyStateBuilder:
             # hold by construction — never a residual/plug line.
             broker_contributions: dict[int, BrokerDailyContribution] = {}
             for bid in all_broker_ids:
-                broker_nav_contribution = market_value_by_broker.get(bid, zero) + cumulative_cash_by_broker.get(bid, zero) + it_by_broker.get(bid, zero)
+                broker_in_transit_contribution = it_by_broker.get(bid, zero)
+                broker_nav_contribution = market_value_by_broker.get(bid, zero) + cumulative_cash_by_broker.get(bid, zero) + broker_in_transit_contribution
                 broker_capital_contribution = cumulative_ecf_by_broker.get(bid, zero)
                 broker_contributions[bid] = BrokerDailyContribution(
                     broker_id=bid,
                     nav_contribution=broker_nav_contribution,
                     capital_contribution=broker_capital_contribution,
                     pnl_contribution=broker_nav_contribution - broker_capital_contribution,
+                    in_transit_contribution=broker_in_transit_contribution,
                 )
 
             # 4g. Clamp pools per-broker (rounding safety)

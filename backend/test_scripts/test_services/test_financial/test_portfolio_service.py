@@ -342,6 +342,225 @@ class TestPortfolioServiceGetSummary:
         assert by_broker[broker_two.id].gain_loss.amount == Decimal("0")
         assert by_broker[broker_two.id].gain_loss_percent == Decimal("0")
 
+    # Internal cash transfer between two owned brokers (lot 41). Moving one's own cash from
+    # one broker to another changes where the value sits, not how much was earned: no broker
+    # card may show the move as a gain or a loss.
+
+    async def _owned_receiver_broker(self, session, user: User) -> Broker:
+        """A second broker the user owns at 100%, beside ``broker_with_access``."""
+        receiver = Broker(name=f"PfBroker_receiver_{uuid4().hex[:12]}")
+        session.add(receiver)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=receiver.id, user_id=user.id, role=UserRole.OWNER, share_percentage=Decimal("1.0")))
+        await session.flush()
+        return receiver
+
+    async def _deposit_and_transfer(self, session, sender: Broker, receiver: Broker, *, sent_on: date, received_on: date, deposited_on: date = date(2025, 1, 1)) -> None:
+        """5000 EUR deposited at ``sender`` on ``deposited_on`` (2025-01-01 unless given), then
+        1000 EUR moved to ``receiver`` as a linked CASH_TRANSFER pair: -1000 on ``sent_on``,
+        +1000 on ``received_on``.
+
+        Same construction as the linked pairs of test_transaction_service.py: both legs are
+        flushed first to get their ids, then point at each other (the foreign key of
+        ``related_transaction_id`` is deferred)."""
+        session.add(Transaction(broker_id=sender.id, type=TransactionType.DEPOSIT, date=deposited_on, amount=Decimal("5000"), currency="EUR"))
+        sent = Transaction(broker_id=sender.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=sent_on, quantity=Decimal("0"), amount=Decimal("-1000"), currency="EUR")
+        received = Transaction(broker_id=receiver.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=received_on, quantity=Decimal("0"), amount=Decimal("1000"), currency="EUR")
+        session.add_all([sent, received])
+        await session.flush()
+        sent.related_transaction_id = received.id
+        received.related_transaction_id = sent.id
+        await session.flush()
+
+    @staticmethod
+    def _card_problems(summary, when: str, expected: list[tuple[str, int, str, str, str]]) -> list[str]:
+        """Every mismatch between ``summary.by_broker`` and the ``expected`` rows of
+        (who, broker_id, net_worth, gain_loss, gain_loss_percent), so one red shows them all."""
+        if summary.by_broker is None:
+            return [f"{when}: by_broker is None"]
+        cards = {card.broker_id: card for card in summary.by_broker}
+        problems: list[str] = []
+        for who, broker_id, *wanted in expected:
+            card = cards.get(broker_id)
+            if card is None:
+                problems.append(f"{when} {who}: no broker card")
+                continue
+            actual = (card.net_worth.amount, card.gain_loss.amount, card.gain_loss_percent)
+            for field, got, want in zip(("net_worth", "gain_loss", "gain_loss_percent"), actual, wanted, strict=True):
+                if got != Decimal(want):
+                    problems.append(f"{when} {who}: {field} expected {want}, got {got}")
+        return problems
+
+    @staticmethod
+    def _card_cash_problems(summary, when: str, expected: list[tuple[str, int, str]]) -> list[str]:
+        """Every mismatch between the cash of the cards in ``summary.by_broker``
+        (``cash_total``) and the ``expected`` rows of (who, broker_id, cash_total)."""
+        if summary.by_broker is None:
+            return [f"{when}: by_broker is None"]
+        cards = {card.broker_id: card for card in summary.by_broker}
+        problems: list[str] = []
+        for who, broker_id, want in expected:
+            card = cards.get(broker_id)
+            if card is None:
+                problems.append(f"{when} {who}: no broker card")
+            elif card.cash_total.amount != Decimal(want):
+                problems.append(f"{when} {who}: cash_total expected {want}, got {card.cash_total.amount}")
+        return problems
+
+    @pytest.mark.asyncio
+    async def test_summary_with_breakdown_internal_cash_transfer_same_day_is_not_gain(self, session, test_user, broker_with_access):
+        """Moving one's own cash between two owned brokers is neither a gain nor a loss.
+
+        5000 EUR deposited at A; on 2025-01-10, 1000 EUR goes from A to B, both legs that day.
+        Afterwards A's card shows 4000 and B's 1000, each with gain 0 and 0%: the invested
+        capital moves with the cash. Before lot 41 the cards showed the move as P&L:
+        A -1000, B +1000."""
+        sender, _ = broker_with_access
+        receiver = await self._owned_receiver_broker(session, test_user)
+        await self._deposit_and_transfer(session, sender, receiver, sent_on=date(2025, 1, 10), received_on=date(2025, 1, 10))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2025, 1, 20))
+
+        problems = self._card_problems(summary, "2025-01-20", [("A (sender)", sender.id, "4000", "0", "0"), ("B (receiver)", receiver.id, "1000", "0", "0")])
+        assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    async def test_summary_with_breakdown_internal_cash_transfer_in_transit_stays_with_sender(self, session, test_user, broker_with_access):
+        """Cash in transit between two owned brokers still belongs to the sender, and its
+        arrival is not a gain.
+
+        5000 EUR deposited at A; 1000 EUR leaves A on 2025-01-10 and reaches B on 2025-01-15.
+        During the transit (2025-01-12) A's card keeps the whole 5000 with gain 0 and B's shows
+        0 with gain 0; after the arrival (2025-01-20) A shows 4000 and B 1000, both with gain 0.
+        Before lot 41 A showed 4000 with a loss of 1000 during the transit."""
+        sender, _ = broker_with_access
+        receiver = await self._owned_receiver_broker(session, test_user)
+        await self._deposit_and_transfer(session, sender, receiver, sent_on=date(2025, 1, 10), received_on=date(2025, 1, 15))
+        service = PortfolioService(session)
+
+        in_transit = await service.get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2025, 1, 12))
+        arrived = await service.get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2025, 1, 20))
+
+        problems = self._card_problems(in_transit, "2025-01-12 (in transit)", [("A (sender)", sender.id, "5000", "0", "0"), ("B (receiver)", receiver.id, "0", "0", "0")])
+        problems += self._card_problems(arrived, "2025-01-20 (arrived)", [("A (sender)", sender.id, "4000", "0", "0"), ("B (receiver)", receiver.id, "1000", "0", "0")])
+        assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    async def test_summary_with_breakdown_internal_cash_transfer_foreign_currency_moves_capital_at_arrival_rate(self, session, test_user, broker_with_access):
+        """An internal transfer of foreign cash moves the invested capital at the rate of the
+        arrival day.
+
+        Base EUR; 1 CNY is worth 0.8 EUR on 2038-01-01, 0.9 on 01-10, 0.95 on 01-14, 1.0 on
+        01-15 and 1.2 on 01-20. 1000 CNY deposited at A on 01-01 (capital 1000 × 0.8 = 800);
+        500 CNY leaves A on 01-10 and reaches B on 01-15. During the transit (01-14) A's card
+        holds its 500 CNY of cash and the 500 in transit, both at 0.95: 950 with gain 150 on 800
+        (0.1875); B's shows 0. On arrival the 500 CNY enter B at 1.0, so 500 of capital moves
+        from A to B: on 01-20 each holds 500 CNY at 1.2 = 600, A with gain 300 on 300 (100%), B
+        with gain 100 on 500 (20%). The FX gain on the moved money is split by where it sat: A's
+        until the arrival (0.8 to 1.0), B's afterwards (1.0 to 1.2); the card gains add up to
+        400 = 1000 CNY × 1.2 - 800. Before lot 41 A showed 475 with a loss of 325 on 01-14 (the
+        in-transit value missing, the transfer invisible to the capital); on 01-20 A showed 600
+        with a loss of 200 and B 600 with a gain of 600 (0%, no capital)."""
+        sender, _ = broker_with_access
+        receiver = await self._owned_receiver_broker(session, test_user)
+        session.add_all(
+            [
+                FxRate(date=date(2038, 1, 1), base="CNY", quote="EUR", rate=Decimal("0.8"), source="TEST"),
+                FxRate(date=date(2038, 1, 10), base="CNY", quote="EUR", rate=Decimal("0.9"), source="TEST"),
+                FxRate(date=date(2038, 1, 14), base="CNY", quote="EUR", rate=Decimal("0.95"), source="TEST"),
+                FxRate(date=date(2038, 1, 15), base="CNY", quote="EUR", rate=Decimal("1.0"), source="TEST"),
+                FxRate(date=date(2038, 1, 20), base="CNY", quote="EUR", rate=Decimal("1.2"), source="TEST"),
+            ]
+        )
+        session.add(Transaction(broker_id=sender.id, type=TransactionType.DEPOSIT, date=date(2038, 1, 1), amount=Decimal("1000"), currency="CNY"))
+        sent = Transaction(broker_id=sender.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=date(2038, 1, 10), quantity=Decimal("0"), amount=Decimal("-500"), currency="CNY")
+        received = Transaction(broker_id=receiver.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=date(2038, 1, 15), quantity=Decimal("0"), amount=Decimal("500"), currency="CNY")
+        session.add_all([sent, received])
+        await session.flush()
+        sent.related_transaction_id = received.id
+        received.related_transaction_id = sent.id
+        await session.flush()
+        service = PortfolioService(session)
+
+        # Mid-transit check on 01-14, the last transit day, with its own rate: the engine fully re-values a day only when something happens on it (a transaction, a price, a transit boundary), not on a rate-only change (B4/F scope).
+        in_transit = await service.get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2038, 1, 14))
+        arrived = await service.get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2038, 1, 20))
+
+        problems = self._card_problems(in_transit, "2038-01-14 (in transit)", [("A (sender)", sender.id, "950", "150", "0.1875"), ("B (receiver)", receiver.id, "0", "0", "0")])
+        problems += self._card_problems(arrived, "2038-01-20 (arrived)", [("A (sender)", sender.id, "600", "300", "1"), ("B (receiver)", receiver.id, "600", "100", "0.2")])
+        assert not problems, "\n".join(problems)
+
+    # The horizon of the card (lot 41). Called directly without ``date_to`` (get_report always
+    # passes one, ``date_to or today``), the summary values the portfolio today: the engine
+    # (capital, value in transit, headline) stops there, and every number the service reads
+    # from the rows must stop there too, even when a row is dated after today. Dates are
+    # relative to today so these tests never age; every row sits at least two days away from
+    # it, so a midnight between the test and the service cannot move a row to the other side
+    # of today.
+
+    @pytest.mark.asyncio
+    async def test_summary_with_breakdown_internal_cash_transfer_arriving_after_today_stays_in_transit(self, session, test_user, broker_with_access):
+        """Without ``date_to``, an internal cash transfer whose arrival is dated after today
+        is still in transit today, on the cards as in the headline.
+
+        5000 EUR deposited at A ten days ago; 1000 EUR leaves A two days ago and its arrival
+        at B is dated three days from now. Today A's card holds 4000 of cash and the 1000 in
+        transit: 5000 with gain 0 and 0%; B's holds 0 of cash: 0 with gain 0 and 0%. The two
+        cards add up to the headline net worth, 5000. Before T2g the card cash read every row
+        of the broker, the future arrival too, while capital, value in transit and headline
+        stop at today: B showed 1000 of cash, a net worth of 1000 and a gain of 1000 (its
+        capital had not moved yet), and the cards added up to 6000 against a headline of 5000."""
+        sender, _ = broker_with_access
+        receiver = await self._owned_receiver_broker(session, test_user)
+        today = date.today()
+        await self._deposit_and_transfer(session, sender, receiver, deposited_on=today - timedelta(days=10), sent_on=today - timedelta(days=2), received_on=today + timedelta(days=3))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR")
+
+        when = f"{today} (no date_to, in transit)"
+        problems = self._card_problems(summary, when, [("A (sender)", sender.id, "5000", "0", "0"), ("B (receiver)", receiver.id, "0", "0", "0")])
+        problems += self._card_cash_problems(summary, when, [("A (sender)", sender.id, "4000"), ("B (receiver)", receiver.id, "0")])
+        cards_net_worth = sum((card.net_worth.amount for card in summary.by_broker or [] if card.broker_id in (sender.id, receiver.id)), Decimal("0"))
+        if cards_net_worth != summary.net_worth.amount:
+            problems.append(f"{when}: the cards add up to {cards_net_worth}, the headline net_worth is {summary.net_worth.amount}")
+        if summary.net_worth.amount != Decimal("5000"):
+            problems.append(f"{when}: headline net_worth expected 5000, got {summary.net_worth.amount}")
+        assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    async def test_summary_with_breakdown_future_dated_deposit_is_outside_today_valuation(self, session, test_user, broker_with_access):
+        """Without ``date_to``, a deposit dated after today is in neither the card nor the
+        period totals.
+
+        5000 EUR deposited at A ten days ago, 700 EUR more with a date five days from now.
+        Today A's card holds 5000 of cash: 5000 with gain 0 and 0%. The headline net worth is
+        5000, and so is the total deposited: the period totals reconcile to that net worth,
+        so they stop at the same day. Before T2g the card cash and the period totals read
+        every row of the broker, the future deposit too, while capital and headline stop at
+        today: the card showed 5700 with a gain of 700 (0.14) beside a headline of 5000, and
+        the total deposited was 5700."""
+        broker, _ = broker_with_access
+        today = date.today()
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=today - timedelta(days=10), amount=Decimal("5000"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=today + timedelta(days=5), amount=Decimal("700"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR")
+
+        when = f"{today} (no date_to)"
+        problems = self._card_problems(summary, when, [("A", broker.id, "5000", "0", "0")])
+        problems += self._card_cash_problems(summary, when, [("A", broker.id, "5000")])
+        if summary.net_worth.amount != Decimal("5000"):
+            problems.append(f"{when}: headline net_worth expected 5000, got {summary.net_worth.amount}")
+        total_deposited = summary.total_deposited.amount if summary.total_deposited is not None else None
+        if total_deposited != Decimal("5000"):
+            problems.append(f"{when}: total_deposited expected 5000, got {total_deposited}")
+        assert not problems, "\n".join(problems)
+
     @pytest.mark.asyncio
     async def test_summary_filter_by_broker(self, session, test_user, broker_with_access):
         """broker_ids filter: valid broker_id -> no crash, valid structure."""
