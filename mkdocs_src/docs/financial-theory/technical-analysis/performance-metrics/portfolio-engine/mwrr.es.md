@@ -142,9 +142,9 @@ $$
 \text{MWRR}_{\text{acumulado}} = (1 + 0.130227)^{10} - 1 \approx +240.14\%
 $$
 
-### 💡 significa +240.14%?
+### 💡 significa +240,14%?
 * **No** significa que sus 100.000 € de contribuciones totales se hayan convertido en 340.140 €.
-* Significa que un **euro teórico**, invertido al principio del período de 10 años y no vuelto a tocar, se habría convertido en 3,40 €, logrando un retorno total del 240.14% al crecer a la misma velocidad compuesta promedio generada por sus flujos de caja reales.
+* Significa que un **euro teórico**, invertido al principio del período de 10 años y no vuelto a tocar, se habría convertido en 3,40 €, logrando un retorno total del 240,14% al crecer a la misma velocidad compuesta promedio generada por sus flujos de caja reales.
 
 ---
 

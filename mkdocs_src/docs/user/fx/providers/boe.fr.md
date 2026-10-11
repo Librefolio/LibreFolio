@@ -23,5 +23,5 @@ La Bank of England prend en charge environ 15 devises majeures, notamment :
 
 ## 📝 Notes importantes
 
-- **Format des cotations** : Les taux sont exprimés comme le montant de la devise étrangère pour 1 GBP (ex: 1 GBP = 1.25 USD). LibreFolio normalise automatiquement cette représentation en arrière-plan.
+- **Format des cotations** : Les taux sont exprimés comme le montant de la devise étrangère pour 1 GBP (ex. : 1 GBP = 1,25 USD). LibreFolio normalise automatiquement cette représentation en arrière-plan.
 - **Jours fériés** : La BOE ne publie pas de taux les jours fériés au Royaume-Uni ou les week-ends.

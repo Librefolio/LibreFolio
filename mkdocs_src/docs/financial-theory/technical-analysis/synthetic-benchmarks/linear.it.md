@@ -31,7 +31,7 @@ $$
 dove:
 
 - $y_0$ è il valore iniziale (primo punto dati del grafico),
-- $r$ è il tasso di crescita annuale (espresso come decimale, ad es. 0.07 per il 7%),
+- $r$ è il tasso di crescita annuale (espresso come decimale, ad es. 0,07 per il 7%),
 - $t$ è il tempo in anni dall'inizio.
 
 Questo è equivalente alla formula dell'**interesse semplice** $A = P(1 + rt)$, dove $t$ è espresso in anni utilizzando la [Convenzione di Conteggio dei Giorni](../../fundamentals/day-count.md) applicabile.

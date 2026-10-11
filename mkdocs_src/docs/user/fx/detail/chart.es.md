@@ -13,7 +13,7 @@ El corazón de la página de detalle del par: el historial de cotización del pa
 Cambia con **Abs** / **%** en la esquina superior izquierda del gráfico; la página se abre en la vista %.
 
 - 📊 **%** — el cambio desde el primer día del periodo. Las superposiciones también empiezan desde 0 %, así que sus movimientos se pueden comparar de un vistazo.
-- 📈 **Abs** — la cotización en sí, p. ej. 1 EUR = 1.0845 USD.
+- 📈 **Abs** — la cotización en sí, p. ej. 1 EUR = 1,0845 USD.
 
 ---
 

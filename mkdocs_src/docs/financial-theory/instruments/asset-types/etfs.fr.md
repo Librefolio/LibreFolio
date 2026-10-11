@@ -42,7 +42,7 @@ L'[avantage du report d'imposition](../../fundamentals/taxation.md#tax-deferral-
 
 ## 🔍 Suivi de l'indice de référence
 
-La plupart des ETFs suivent un indice de référence (ex: S&P 500, MSCI World). L'**erreur de suivi** (tracking error) mesure à quel point le rendement de l'ETF s'écarte de celui de l'indice de référence :
+La plupart des ETFs suivent un indice de référence (ex. : S&P 500, MSCI World). L'**erreur de suivi** (tracking error) mesure à quel point le rendement de l'ETF s'écarte de celui de l'indice de référence :
 
 $$
 TE = \sigma(R_{ETF} - R_{index})

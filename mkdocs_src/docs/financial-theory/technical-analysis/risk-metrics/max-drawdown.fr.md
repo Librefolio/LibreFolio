@@ -99,10 +99,10 @@ Ces chiffres relèvent de l'histoire générale des marchés, et non d'une mesur
 
     | Perte | Gain requis |
     |:----:|:-------------:|
-    | -10% | +11.1% |
-    | -25% | +33.3% |
-    | -50% | +100% |
-    | -75% | +300% |
+    | -10 % | +11,1 % |
+    | -25 % | +33,3 % |
+    | -50 % | +100 % |
+    | -75 % | +300 % |
 
     </div>
 

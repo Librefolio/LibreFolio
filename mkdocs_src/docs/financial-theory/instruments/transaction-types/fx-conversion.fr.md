@@ -31,7 +31,7 @@ $$
 
 Les conversions de devise peuvent être :
 
-- **Explicites** : L'utilisateur convertit délibérément des devises (ex: EUR → USD avant d'acheter des actions américaines)
+- **Explicites** : L'utilisateur convertit délibérément des devises (ex. : EUR → USD avant d'acheter des actions américaines)
 - **Implicites** : Le courtier convertit automatiquement lors de l'achat d'un actif libellé dans une devise étrangère
 
 !!! info "FX Implicite et Frais"

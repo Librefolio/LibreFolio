@@ -12,7 +12,7 @@ Un ATR de 3€ es enorme para una acción de 10€ e insignificante para una acc
 
 ## 🔢 Fórmula Matemática
 
-Basándose en el Rango Verdadero y ATR (consulte [ATR](atr.md)):
+Basándose en el Rango Verdadero y ATR (consulta [ATR](atr.md)):
 
 $$
 NATR_t = 100 \cdot \frac{ATR_t}{C_t}
@@ -46,8 +46,8 @@ flowchart LR
 
 !!! note "Elegir ATR vs NATR"
 
-    Utilice **ATR** para decisiones de un solo activo en las unidades de precio de ese activo (por ejemplo,
-    distancia de stop-loss en euros). Utilice **NATR** para comparaciones entre activos o entre
+    Utiliza **ATR** para decisiones de un solo activo en las unidades de precio de ese activo (por ejemplo,
+    distancia de stop-loss en euros). Utiliza **NATR** para comparaciones entre activos o entre
     períodos de tiempo, o siempre que el nivel de precio bruto no sea directamente significativo para la
     pregunta que se está formulando.
 

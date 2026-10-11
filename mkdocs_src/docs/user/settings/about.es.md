@@ -1,7 +1,7 @@
 # ℹ️ Acerca de
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="settings" data-name="about" alt="About">
+    <img class="gallery-img" data-category="settings" data-name="about" alt="Acerca de">
 </div>
 
 La pestaña **Acerca de** muestra:

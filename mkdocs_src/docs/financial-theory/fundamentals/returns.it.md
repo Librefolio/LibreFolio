@@ -14,7 +14,7 @@ $$
 
 !!! example
 
-    Se EUR/USD passa da 1.10 a 1.14:
+    Se EUR/USD passa da 1,10 a 1,14:
 
     $$R = \frac{1.14 - 1.10}{1.10} = 0.0364 = 3.64\%$$
 
@@ -73,7 +73,7 @@ Questo è ciò che visualizza lo [strumento Misure](../../user/fx/detail/measure
 
 !!! example
 
-    EUR/USD passa da 1.10 a 1.14 in 90 giorni:
+    EUR/USD passa da 1,10 a 1,14 in 90 giorni:
 
     $$R_{annual} = \left(\frac{1.14}{1.10}\right)^{365/90} - 1 = (1.0364)^{4.056} - 1 \approx 15.5\%$$
 
@@ -98,7 +98,7 @@ Questa linearità è uno dei principali vantaggi dei rendimenti logaritmici nell
 | **Annualizzazione** | $(1+R)^{365/d} - 1$ | $r \times 365/d$ |
 | **Rendimenti di portafoglio** | La somma ponderata funziona ✅ | La somma ponderata non funziona ❌ |
 | **Serie temporali** | Non additivo ❌ | Additivo ✅ |
-| **Interpretazione** | "Ho guadagnato il 5%" | "Il tasso di crescita logaritmico era 0.0488" |
+| **Interpretazione** | "Ho guadagnato il 5%" | "Il tasso di crescita logaritmico era 0,0488" |
 
 !!! tip "Quando usare quale?"
 
@@ -172,6 +172,6 @@ Per un approfondimento su come funzionano queste metriche, perché differiscono 
 
 ## ⚠️ Insidie
 
-1. **Periodi molto brevi**: annualizzare un rendimento di 3 giorni può produrre cifre fuorvianti (ad es., un movimento dello 0.1% in 3 giorni → 12.5% annualizzato)
+1. **Periodi molto brevi**: annualizzare un rendimento di 3 giorni può produrre cifre fuorvianti (ad es., un movimento dello 0,1% in 3 giorni → 12,5% annualizzato)
 2. **Prezzi negativi**: i rendimenti logaritmici non sono definiti per valori negativi — non è un problema per i tassi di cambio
 3. **Frequenza di capitalizzazione**: il CAGR presuppone la capitalizzazione continua; gli strumenti del mondo reale possono capitalizzare giornalmente, mensilmente o trimestralmente

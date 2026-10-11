@@ -1,7 +1,7 @@
 # 👤 Profil
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile">
+ <img class="gallery-img" data-category="settings" data-name="profile" alt="Profil">
 </div>
 
 L'onglet **Profil** gère votre **identité** dans LibreFolio — qui vous êtes et comment vous vous connectez. Les choix d'affichage (langue, devise, thème) se trouvent en revanche dans **[Préférences](preferences.md)** ; les options à l'échelle de l'instance se trouvent dans l'**[onglet Admin](../../admin/settings.md)**.

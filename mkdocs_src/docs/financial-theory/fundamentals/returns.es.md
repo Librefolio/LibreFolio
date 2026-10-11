@@ -14,7 +14,7 @@ $$
 
 !!! example
 
-    Si el EUR/USD pasa de 1.10 a 1.14:
+    Si el EUR/USD pasa de 1,10 a 1,14:
 
     $$R = \frac{1.14 - 1.10}{1.10} = 0.0364 = 3.64\%$$
 
@@ -73,7 +73,7 @@ Esto es lo que muestra la [herramienta Medidas](../../user/fx/detail/measures.md
 
 !!! example
 
-    El EUR/USD pasa de 1.10 a 1.14 en 90 días:
+    El EUR/USD pasa de 1,10 a 1,14 en 90 días:
 
     $$R_{annual} = \left(\frac{1.14}{1.10}\right)^{365/90} - 1 = (1.0364)^{4.056} - 1 \approx 15.5\%$$
 

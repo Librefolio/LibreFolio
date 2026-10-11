@@ -63,8 +63,8 @@ Lorsque plusieurs transactions ont lieu à la même date :
 
     | Date | Type | Qté | Coût unitaire | Qté du pool | PRU |
     |------|------|-----|-----------|----------|-----|
-    | 1 avr. | Achat | 10 | $150 | 10 | $150.00 |
-    | 15 avr. | Achat | 5 | $180 | 15 | $160.00 |
+    | 1 avr. | Achat | 10 | $150 | 10 | $150,00 |
+    | 15 avr. | Achat | 5 | $180 | 15 | $160,00 |
 
     $$
     PRU = \frac{150 \times 10 + 180 \times 5}{10 + 5} = \frac{2400}{15} = 160.00
@@ -76,8 +76,8 @@ Lorsque plusieurs transactions ont lieu à la même date :
 
     | Date | Type | Qté | Coût unitaire | Qté du pool | PRU |
     |------|------|-----|-----------|----------|-----|
-    | 1 avr. | Achat | 10 | $150 | 10 | $150.00 |
-    | 15 avr. | Vente | -5 | (au PRU) | 5 | $150.00 |
+    | 1 avr. | Achat | 10 | $150 | 10 | $150,00 |
+    | 15 avr. | Vente | -5 | (au PRU) | 5 | $150,00 |
 
     La vente retire des unités au PRU actuel ($150). Le PRU reste **inchangé** — seul le pool diminue.
 
@@ -85,14 +85,14 @@ Lorsque plusieurs transactions ont lieu à la même date :
 
     | Date | Type | Qté | Coût unitaire | Qté du pool | PRU |
     |------|------|-----|-----------|----------|-----|
-    | 1 avr. | Achat | 10 | $150 | 10 | $150.00 |
-    | 1 mai | Ajustement | +5 | $0 | 15 | $100.00 |
+    | 1 avr. | Achat | 10 | $150 | 10 | $150,00 |
+    | 1 mai | Ajustement | +5 | $0 | 15 | $100,00 |
 
     $$
     PRU = \frac{150 \times 10 + 0 \times 5}{10 + 5} = \frac{1500}{15} = 100.00
     $$
 
-    Le PRU est **dilué** parce que 5 unités sont entrées à coût nul — un ajustement dont le remplacement du coût de base est zéro, comme un airdrop. Une division 3 pour 2 liée à son événement de division atteint les mêmes $100.00 sans aucune acquisition : le pool conserve ses $1,500 et les répartit sur 15 unités.
+    Le PRU est **dilué** parce que 5 unités sont entrées à coût nul — un ajustement dont le remplacement du coût de base est zéro, comme un airdrop. Une division 3 pour 2 liée à son événement de division atteint les mêmes $100,00 sans aucune acquisition : le pool conserve ses $1 500 et les répartit sur 15 unités.
 
 ## 🔄 Remplacement du coût de base {: #cost-basis-override }
 
@@ -128,10 +128,10 @@ $$
 
     | Courtier | Date | Type | Qté | Coût unitaire | Qté du pool | PRU |
     |--------|------|------|-----|-----------|----------|-----|
-    | A | 1 avr. | Achat | 10 | $150 | 10 | $150.00 |
-    | A | 15 avr. | Achat | 5 | $180 | 15 | $160.00 |
-    | A | 1 mai | Transfert sortant | −3 | (au PRU) | 12 | $160.00 |
-    | B | 1 mai | Transfert entrant (auto) | +3 | $160 (PRU de A) | 3 | $160.00 |
+    | A | 1 avr. | Achat | 10 | $150 | 10 | $150,00 |
+    | A | 15 avr. | Achat | 5 | $180 | 15 | $160,00 |
+    | A | 1 mai | Transfert sortant | −3 | (au PRU) | 12 | $160,00 |
+    | B | 1 mai | Transfert entrant (auto) | +3 | $160 (PRU de A) | 3 | $160,00 |
 
     En **mode auto**, le côté récepteur prend le PRU de l'émetteur comme remplacement du coût de base : le courtier B démarre à la moyenne du courtier A, et les $480 de coût se déplacent avec les 3 unités.
 

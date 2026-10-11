@@ -85,7 +85,7 @@ Pour chaque devise dans laquelle vous achetez, définissez :
     Les frais sont prélevés sur chaque ordre, et aucun ordre signifie aucun frais. Ils sont payés
     depuis vos liquidités et ne sont pas investis. Par exemple, avec $r = 0.19\%$,
     $f_{\min} = 1.50$, $f_{\max} = 18$ et aucune part fixe, un ordre de $500$
-    paie $1.50$, un de $2{,}000$ paie $3.80$, et un de $20{,}000$ paie $18$.
+    paie $1.50$, un de $2\,000$ paie $3.80$, et un de $20\,000$ paie $18$.
 
 Chaque courtier a aussi deux réglages qui lui sont propres :
 
@@ -257,8 +257,8 @@ et la part d'arrondi de **Non investi** n'est jamais négative. La colonne **Arr
 **Soldes par courtier et devise** montre combien de chaque ligne provient de l'arrondi :
 ≈ marque un chiffre affiché arrondi, comme lorsque la différence exacte n'a pas de forme
 décimale finie (par exemple après une conversion USD → EUR à $1/1.085$), et une différence
-inférieure à la plus petite unité conserve les chiffres dont elle a besoin, comme ≈ −0.0022
-plutôt que ≈ −0.00.
+inférieure à la plus petite unité conserve les chiffres dont elle a besoin, comme ≈ −0,0022
+plutôt que ≈ −0,00.
 
 Lorsque LibreFolio n'a pas de taux pour une paire, l'étape propose **Ajouter la paire** ou
 **Télécharger les taux** : chacun ouvre la fenêtre correspondante de la page Change, et rien

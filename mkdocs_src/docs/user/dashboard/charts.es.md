@@ -76,7 +76,16 @@ Un segundo interruptor, en la parte superior izquierda del área de trazado, eli
   </div>
 </div>
 
-**Líneas de bróker.** Con dos o más brókeres en el ámbito, cada bróker recibe una línea discontinua y una fila en la información emergente con su parte del total; las partes suman el total cada día. Una parte no es el rendimiento propio del bróker: el dinero en tránsito cuenta para el bróker del que salió, por lo que la línea de un bróker puede dar un salto en la fecha de una transferencia. Con un solo bróker, o en la página de un bróker, solo se dibuja el total.
+**Líneas de bróker.** Con dos o más brókeres en el ámbito, cada bróker recibe una línea discontinua y una fila en la información emergente con su parte del total; las partes suman el total cada día. La línea de un bróker es el P&L generado mientras el valor estaba en ese bróker: mover dinero o títulos entre dos de tus brókeres no es ni una ganancia ni una pérdida, así que ninguna línea da un salto cuando llega una transferencia.
+
+- **En tránsito** — hasta que llega la transferencia, el valor y sus variaciones de precio o de tipo de cambio se quedan en el bróker del que salió.
+- **Porcentajes de propiedad distintos** — cuando los dos brókeres tienen [porcentajes de propiedad](../brokers/sharing.md) distintos, la línea que recibe conserva un escalón el día de la llegada: el mismo escalón que muestra el total.
+- **Sin valor el día de la llegada** — si el título todavía no tiene precio, o falta un tipo de cambio, el salto se queda: no se inventa ningún valor.
+- **Brókeres fuera de la vista** — en la página de un bróker, o con el filtro de bróker activado, los títulos enviados a un bróker fuera de la vista, o recibidos de él, cuentan como capital a su valor de mercado de ese día, no como ganancia o pérdida; el dinero cuenta como un depósito o un retiro. Lo mismo vale para la mitad que queda cuando se elimina el otro bróker de una transferencia.
+
+Con un solo bróker, o en la página de un bróker, solo se dibuja el total.
+
+🔗 **Teoría**: [Transferencias internas en las líneas de bróker](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
 
 #### Velas — la oscilación dentro del período {: #pnl-candles }
 

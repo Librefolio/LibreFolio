@@ -1,7 +1,7 @@
 # ℹ️ À propos
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="settings" data-name="about" alt="About">
+    <img class="gallery-img" data-category="settings" data-name="about" alt="À propos">
 </div>
 
 L'onglet **À propos** affiche :

@@ -34,7 +34,7 @@ Que possédez-vous à la date de fin, et comment se porte chaque position ? **Po
 | Colonne | Ce qu'elle affiche |
 |:---|:---|
 | **Actif** | L'actif, avec son icône de type |
-| **Δ1** / **Δ1%** | Variation du jour du P&L latent à la quantité du jour, en montant et en % de la valeur de la veille |
+| **Δ1** / **Δ1 %** | Variation du jour du P&L latent à la quantité du jour, en montant et en % de la valeur de la veille |
 | **P&L latent** / **P&L %** | Valeur actuelle moins ce qu'a coûté la position ouverte, en montant et en % de ce coût → [Valeur comptable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md) |
 | **Annualisé** | Rendement composé annuel depuis la première transaction, revenus et frais inclus → [Rendement annualisé net](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md) |
 | **YOC** | Les dividendes et intérêts de la dernière année par unité, rapportés à son prix moyen → [Rendement sur coût](#yield-on-cost-yoc) |
@@ -54,7 +54,7 @@ Que possédez-vous à la date de fin, et comment se porte chaque position ? **Po
 ??? info "➖ Cellules vides — quand une valeur manque"
 
     - **`—` dans P&L latent, P&L % ou PRU** : l'actif n'a aucun prix, ou une partie de ce que vous avez payé est inconnue — un taux de change manquant à une date d'achat, ou un transfert ou ajustement sans coût de base. La [bannière de qualité des données](index.md#data-quality-banner) indique ce qu'il faut corriger.
-    - **Δ1** et **Δ1%** nécessitent un prix de marché ; **Annualisé** nécessite une position suffisamment ancienne pour qu'un taux annuel ait un sens.
+    - **Δ1** et **Δ1 %** nécessitent un prix de marché ; **Annualisé** nécessite une position suffisamment ancienne pour qu'un taux annuel ait un sens.
 
 ### 💸 Rendement sur coût (YOC) {: #yield-on-cost-yoc }
 
@@ -83,7 +83,7 @@ Quelles positions ont gagné ou perdu de l'argent au cours de la période, et co
 
 - **P&L période**, décomposé comme sur la [carte P&L période](kpi-cards.md#card-1-period-pl) en **Variation latente**, **Ventes**, **Dividendes et intérêts** et **Coûts** → [P&L période](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **Annualisé** — le résultat de la période en taux annuel, sur la durée pendant laquelle la position a été détenue dans la période → [Rendement annualisé net](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md)
-- **Δ1** / **Δ1%** pour les positions ouvertes et, masqués par défaut, **Valeur de début**, **Valeur de fin**, **Plus ancien lot ouvert** et **Statut**
+- **Δ1** / **Δ1 %** pour les positions ouvertes et, masqués par défaut, **Valeur de début**, **Valeur de fin**, **Plus ancien lot ouvert** et **Statut**
 - **Autres effets de la période** — ce qui n'appartient à aucune position : **Revenus non alloués** et **Coûts non alloués**, enregistrés sans actif, et le **Résidu autre / de rapprochement**
 
 **Comment l'interpréter**

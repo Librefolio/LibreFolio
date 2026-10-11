@@ -52,11 +52,11 @@ Este fenómeno se denomina **pull to par**:
 
 !!! example "Ejemplo: Bono Cupón Cero"
 
-    Un bono cupón cero con valor nominal de $1,000 adquirido por $850:
+    Un bono cupón cero con valor nominal de $1.000 adquirido por $850:
 
     - **En la compra**: Precio = $850 (descuento)
-    - **Al vencimiento**: El inversor recibe $1,000
-    - **Rendimiento implícito**: $150 ($1,000 − $850)
+    - **Al vencimiento**: El inversor recibe $1.000
+    - **Rendimiento implícito**: $150 ($1.000 − $850)
     - Sin pagos de intereses intermedios; todo el retorno proviene de la liquidación al vencimiento
 
 ---

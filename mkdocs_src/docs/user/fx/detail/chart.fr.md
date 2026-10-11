@@ -14,7 +14,7 @@ Basculez avec **Abs** / **%** dans le coin supérieur gauche du graphique ; la p
 
 - 📊 **%** — la variation depuis le premier jour de la période. Les superpositions partent elles aussi
   de 0 %, ce qui permet de comparer leurs évolutions d'un coup d'œil.
-- 📈 **Abs** — le taux lui-même, par ex. 1 EUR = 1.0845 USD.
+- 📈 **Abs** — le taux lui-même, par ex. 1 EUR = 1,0845 USD.
 
 ---
 
