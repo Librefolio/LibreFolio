@@ -1168,24 +1168,15 @@ def cmd_mkdocs_gallery(args):
 # "136 of 158" is wrong in the other direction and shows why the perimeter has to
 # travel with the number: 158 is already the H1-excluded count, so subtracting the
 # 22 again removes them twice.
-def _mkdocs_anchor_slugs(md_file) -> set:
-    """Valid anchor ids for a MkDocs page: explicit attr_list ids + generated heading slugs.
+def _mkdocs_page_anchors(md_file) -> frozenset[str]:
+    """The anchor ids of a MkDocs page, as ``mkdocs build`` records them: the ids of its own render.
 
-    attr_list accepts three syntaxes for a heading id and the project uses all three:
-    ``{: #id }``, ``{ #id }`` and ``{#id}``. Matching only one of them is how this
-    check previously reported healthy links as broken.
-
-    The ``^#{1,6}`` below deliberately spans H1 too: an earlier ``^#{2,6}`` skipped
-    page titles, so every generated-slug link into an H1 was judged against a set
-    that could not contain it.
+    The shared function of ``mkdocs_src/aphra-pipeline/page_anchors.py`` (translate-validate uses it too). It
+    needs MkDocs, so it is imported here, when a link is checked: dev.py itself runs where MkDocs is absent.
     """
-    content = md_file.read_text()
-    explicit = set(re.findall(r"\{:?[^}]*?#([A-Za-z0-9_-]+)[^}]*\}", content))
-    slugs = set(explicit)
-    for h in re.findall(r"^#{1,6}\s+(.+?)(?:\s*\{[^}]*\})?\s*$", content, re.MULTILINE):
-        slug = re.sub(r"[^\w\s-]", "", h.lower()).strip()
-        slugs.add(re.sub(r"[\s_]+", "-", slug).strip("-"))
-    return slugs
+    from page_anchors import file_anchors  # noqa: PLC0415 — needs MkDocs: imported when a link is checked
+
+    return file_anchors(md_file)
 
 
 # Anchors already shipped broken in translated pages, recorded 18 Sep 2026.
@@ -1215,14 +1206,14 @@ def _mkdocs_check_anchor(en_file, anchor: str, path: str, origin: str, docs_root
     Returns ``None`` when the anchor resolves everywhere, the string ``"KNOWN"`` for a
     recorded exception, or an error message.
     """
-    if anchor not in _mkdocs_anchor_slugs(en_file):
+    if anchor not in _mkdocs_page_anchors(en_file):
         return f"  ⚠️  {path}\n     → File exists but anchor #{anchor} not found (from {origin})"
 
     stem = en_file.name[: -len(".en.md")] if en_file.name.endswith(".en.md") else en_file.stem
     broken = []
     for lang in ("it", "fr", "es"):
         translated = en_file.parent / f"{stem}.{lang}.md"
-        if translated.exists() and anchor not in _mkdocs_anchor_slugs(translated):
+        if translated.exists() and anchor not in _mkdocs_page_anchors(translated):
             broken.append(lang)
 
     if not broken:
@@ -1255,6 +1246,13 @@ def cmd_mkdocs_check_links(args):
 
     docs_root = PROJECT_ROOT / "mkdocs_src" / "docs"
     frontend_src = PROJECT_ROOT / "frontend" / "src"
+    try:
+        # A link's anchor is checked against the page's own MkDocs render (page_anchors.py): the docs toolchain.
+        import mkdocs  # noqa: F401, PLC0415 — the docs toolchain: dev.py runs without it
+        import page_anchors  # noqa: F401, PLC0415 — mkdocs_src/aphra-pipeline, imported by this command only
+    except ImportError as exc:
+        print_error(f"check-links needs MkDocs and mkdocs_src/aphra-pipeline/page_anchors.py: {exc}")
+        return 1
     errors = []
     ok_count = 0
     known_count = 0
