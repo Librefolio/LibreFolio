@@ -13,7 +13,7 @@ A **bond** is a fixed-income security representing a loan from an investor to a 
 | **Currency** | Denominated in the issuance currency |
 | **Coupons** | Fixed or floating rate, paid semi-annually or annually |
 | **Maturity** | Fixed date when principal is returned |
-| **Typical providers** | Yahoo Finance, Scheduled Investment, Manual |
+| **Typical providers** | Yahoo Finance, Borsa Italiana, Scheduled Investment, or prices entered by hand in the [Data Editor](../../../user/assets/detail/data-editor.md) |
 
 ---
 

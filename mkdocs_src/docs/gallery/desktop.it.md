@@ -660,12 +660,12 @@ Grafico dei prezzi interattivo a dimensione intera con selettore dell'intervallo
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-chart-candlestick" data-title="🕯️ Grafico a candele" alt="Grafico di dettaglio asset — Candele">
 </div>
 
-### 🗓️ Rendimento rolling
+### 🗓️ Rendimento mobile
 
-Il grafico dell'asset in modalità Rendimento rolling con finestra 1A e un asset di confronto.
+Il grafico dell'asset in modalità Rendimento mobile con finestra 1A e un asset di confronto.
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="🗓️ Rendimento rolling">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="🗓️ Rendimento mobile">
 </div>
 
 ### 📡 Sovrapposizione segnali

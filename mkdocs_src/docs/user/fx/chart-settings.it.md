@@ -53,7 +53,7 @@ le modifiche.
 | **Colori Riferimento** | Verde sopra, rosso sotto l'inizio del periodo |
 | **Riempimento Area** | Gradiente sotto la linea |
 | **Griglia** | Griglia orizzontale tratteggiata |
-| **Gradiente Dati Vecchi** | Atenua i giorni senza un nuovo valore, che ripetono uno precedente |
+| **Gradiente dati obsoleti** | Atenua i giorni senza un nuovo valore, che ripetono uno precedente |
 
 ### 📏 Intervalli degli assi
 

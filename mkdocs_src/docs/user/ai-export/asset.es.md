@@ -8,7 +8,7 @@ el activo o sobre tu posición en él. Las opciones y cómo pegar el contenido e
 
 ## 📍 Dónde encontrarla
 
-En la página de detalle de un activo, selecciona **Exportar IA** en la barra de herramientas de la página. Se abre inicialmente en
+En la página de detalle de un activo, selecciona **Exportación IA** en la barra de herramientas de la página. Se abre inicialmente en
 **Análisis del activo**.
 
 La exportación abarca el activo abierto en la página, en la divisa que muestra la página, con el último día

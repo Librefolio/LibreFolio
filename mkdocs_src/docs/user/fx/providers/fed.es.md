@@ -23,5 +23,5 @@ FRED proporciona tipos de cambio para aproximadamente 20 monedas principales, in
 
 ## 📝 Notas Importantes
 
-- **Formato de cotizaciones**: FRED cotiza algunas monedas como "USD por unidad de moneda extranjera" (ej. EUR, GBP) y otras como "moneda extranjera por USD" (ej. JPY, CAD). LibreFolio invierte y normaliza automáticamente estos tipos para garantizar la consistencia en su base de datos.
+- **Formato de cotizaciones**: FRED cotiza algunas monedas como "USD por unidad de moneda extranjera" (ej. EUR, GBP) y otras como "moneda extranjera por USD" (ej. JPY, CAD). LibreFolio invierte y normaliza automáticamente estos tipos para garantizar la consistencia en tu base de datos.
 - **Festivos**: No se publican tipos de cambio en los días festivos federales de EE. UU. (como Acción de Gracias, Día de la Independencia, etc.) ni los fines de semana.

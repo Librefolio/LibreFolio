@@ -40,7 +40,7 @@ $$
 - La conversión FX del coste base permanece fijada a la fecha de la transacción.
 - El PMC **nunca** se usa como precio de valoración.
 
-Consulte [Resolución de precios](price-resolution.md) para conocer el contrato del resolutor y la semántica de calidad de datos.
+Consulta [Resolución de precios](price-resolution.md) para conocer el contrato del resolutor y la semántica de calidad de datos.
 
 ---
 

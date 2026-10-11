@@ -32,9 +32,9 @@ Por tanto, el promedio pondera esa observación límite por la fracción de ella
 
 ---
 
-## 📐 La corrección y qué le hace a su cifra {: #the-correction }
+## 📐 La corrección y qué le hace a tu cifra {: #the-correction }
 
-Este es un cambio en una cifra que quizá ya haya visto. El estimador anterior tomaba un **promedio uniforme** sobre la cola; el actual aplica la ponderación fraccionaria descrita arriba.
+Este es un cambio en una cifra que quizá ya hayas visto. El estimador anterior tomaba un **promedio uniforme** sobre la cola; el actual aplica la ponderación fraccionaria descrita arriba.
 
 !!! warning "La nueva cifra no es solo distinta: es menos optimista"
 
@@ -60,7 +60,7 @@ La cifra del umbral también se mueve, aunque bajo una condición mucho más est
 
 ## 💡 Interpretación {: #interpretation }
 
-Lea esta cifra como *cuán mal se pone cuando se pone mal*: el resultado promedio entre los peores casos de la ventana, no el peor de ellos.
+Lee esta cifra como *cuán mal se pone cuando se pone mal*: el resultado promedio entre los peores casos de la ventana, no el peor de ellos.
 
 - Siempre es al menos tan severa como el Valor en Riesgo del mismo nivel, porque promedia valores que están todos más allá de ese umbral.
 - La brecha entre ambas es informativa en sí misma: un VaR condicional muy por encima de su Valor en Riesgo describe una cartera cuyos casos malos, cuando llegan, son mucho peores de lo que sugiere el umbral.

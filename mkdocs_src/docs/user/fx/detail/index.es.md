@@ -9,7 +9,7 @@ para analizar, editar y configurar el par.
 
 - **Encabezado** — ⇄ intercambia la dirección del par y la tarjeta de la lista se actualiza en consecuencia (con cambios sin guardar en el
   editor de tipos de cambio, LibreFolio pregunta primero); ← vuelve a la lista.
-- **Barra de herramientas** — el periodo, el último tipo de cambio con su variación, y los botones **Exportar IA**, **Proveedores**,
+- **Barra de herramientas** — el periodo, el último tipo de cambio con su variación, y los botones **Exportación IA**, **Proveedores**,
   **Sincronizar** y **Recargar**. **Recargar** vuelve a leer los tipos de cambio almacenados; **Sincronizar** descarga nuevos,
   consulta [Sincronización](../sync.md).
 - **Debajo** — el panel **Señales** plegado, el gráfico, luego el panel **Medidas** plegado.
@@ -40,7 +40,7 @@ Añade, edita o elimina tipos de cambio individuales, o importa muchos tipos de 
 
 ### 🧠 Exportación IA
 
-**Exportar IA** prepara una instantánea del par, o una solicitud de **Análisis del par de divisas** o de **Impacto de la exposición FX**,
+**Exportación IA** prepara una instantánea del par, o una solicitud de **Análisis del par de divisas** o de **Impacto de la exposición FX**,
 para pegar en un asistente de IA. Impacto de exposición a FX solo cuenta el efectivo y las posiciones
 mantenidas directamente en las monedas del par: no analiza el contenido de los fondos. Consulta
 [Exportación IA de FX](../../ai-export/fx.md).

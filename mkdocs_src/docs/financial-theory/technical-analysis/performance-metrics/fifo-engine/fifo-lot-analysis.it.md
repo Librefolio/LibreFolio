@@ -245,7 +245,7 @@ La riga **Reddito Asset** della modale di dettaglio del lotto è esattamente $\t
 Le `FEE` e `TAX` collegate a un asset vengono allocate ai lotti tramite una **scala deterministica di abbinamento
 alle operazioni**, per poi essere sottratte e produrre le cifre **nette** insieme a quelle **lorde**.
 
-### 🧭 deterministica dei costi
+### 🧭 Allocazione deterministica dei costi
 
 Un pool di costo (stesso broker, stesso giorno, stesso tipo) viene abbinato al primo target non vuoto in questo ordine:
 

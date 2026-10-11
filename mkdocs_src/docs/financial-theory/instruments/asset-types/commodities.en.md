@@ -13,7 +13,7 @@
 | **Currency** | Typically quoted in USD (gold, oil) but can be any currency |
 | **Dividends** | None — commodities do not generate income |
 | **Storage** | Physical commodities may incur storage/insurance costs |
-| **Typical providers** | Yahoo Finance (e.g., `GC=F` for gold futures), Manual |
+| **Typical providers** | Yahoo Finance (e.g., `GC=F` for gold futures), or prices entered by hand in the [Data Editor](../../../user/assets/detail/data-editor.md) |
 
 ---
 

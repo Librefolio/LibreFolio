@@ -20,7 +20,7 @@ El planificador te guía por estos pasos, en orden. El paso **Cambio** solo apar
 
 Planificas una nueva inversión, un «PAC puro»: el cálculo parte de una cartera vacía, por lo que no se cuenta lo que ya tienes, y reparte el efectivo que elijas entre los Activos, lo más cerca posible de los pesos objetivo.
 
-Aquí estableces la **Divisa de valoración**, en la que se comparan y resumen los importes. Al principio es la **Moneda predeterminada** de tus preferencias. El dinero permanece en su propia moneda: cada cambio necesario aparece en el plan.
+Aquí estableces la **Divisa de valoración**, en la que se comparan y resumen los importes. Al principio es la **Divisa predeterminada** de tus preferencias. El dinero permanece en su propia moneda: cada cambio necesario aparece en el plan.
 
 La fecha de referencia es siempre hoy: el planificador la vuelve a establecer antes de cada copia desde LibreFolio y antes de cada cálculo.
 

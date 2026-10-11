@@ -70,7 +70,7 @@ Los **detalles** son el tipo, la divisa, la descripción y datos similares que L
 - **Un precio que solo muestra una página web** → **CSS Scraper**.
 - **Una cuenta de ahorros, depósito a plazo, préstamo P2P o bono cuyo valor se calcula a partir de sus intereses** →
   **Inversión programada**.
-- **¿Nada encaja?** Marca **Sin proveedor** e introduce los precios tú mismo en el
+- **¿Nada encaja?** Marca **Sin Proveedor** e introduce los precios tú mismo en el
   [Editor de datos](../detail/data-editor.md).
 
 ## 🔗 Enlaces relacionados

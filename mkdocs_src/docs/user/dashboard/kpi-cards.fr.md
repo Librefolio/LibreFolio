@@ -31,7 +31,7 @@ Combien d'argent vos investissements ont-ils généré sur la période sélectio
 - **Variation non réalisée** — comment la plus-value ou moins-value latente de vos positions a évolué sur la période, effet de change inclus → [Valeur comptable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 - **Ventes** — la plus-value ou moins-value réalisée des ventes de la période, par rapport au prix de revient unitaire des unités vendues → [Prix de revient unitaire (PRU)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Dividendes et intérêts** — dividendes, coupons et intérêts P2P reçus → [Dividendes et intérêts](../../financial-theory/instruments/transaction-types/dividend-interest.md)
-- **Frais et taxes** — commissions et impôts enregistrés comme transactions ; survolez la ligne pour voir la répartition → [Frais et impôts](../../financial-theory/instruments/transaction-types/fee.md)
+- **Frais et impôts** — commissions et impôts enregistrés comme transactions ; survolez la ligne pour voir la répartition → [Frais et impôts](../../financial-theory/instruments/transaction-types/fee.md)
 
 **Comment la lire**
 

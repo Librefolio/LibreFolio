@@ -32,12 +32,12 @@ La línea de resumen de la medida añade el número de días.
 
 ---
 
-## 📈 En modo Rentabilidad móvil
+## 📈 En modo Rendimiento móvil
 
 Los valores ya son rentabilidades, así que la tabla los compara:
 
-- **Inicio**, **Fin** — la rentabilidad móvil en cada una de las dos fechas.
-- **Δ pp** — Fin menos Inicio, en puntos porcentuales → [Rentabilidad móvil a lo largo de los días naturales](../../../financial-theory/fundamentals/returns.md#rolling-return-calendar)
+- **Inicio**, **Fin** — el rendimiento móvil en cada una de las dos fechas.
+- **Δ pp** — Fin menos Inicio, en puntos porcentuales → [Rendimiento móvil a lo largo de los días naturales](../../../financial-theory/fundamentals/returns.md#rolling-return-calendar)
 - **Días** — los días naturales entre los dos puntos.
 
 ---

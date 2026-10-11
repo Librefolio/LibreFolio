@@ -89,4 +89,4 @@ Internamente, una Conversión de divisa se compone de un Retiro (moneda de orige
 
 ---
 
-*Ver también: [💱 Tasas de FX](../../../user/fx/index.md) — cómo configurar y sincronizar los tipos de cambio en LibreFolio.*
+*Ver también: [💱 Tipos de cambio](../../../user/fx/index.md) — cómo configurar y sincronizar los tipos de cambio en LibreFolio.*
