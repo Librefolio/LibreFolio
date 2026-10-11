@@ -25,11 +25,13 @@ Usage (via dev.py):
 """
 
 import argparse
+import posixpath
 import re
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 # Sibling modules: dev.py and a standalone run both put this directory on sys.path.
 from code_blocks import FencedBlock, code_indent_issues, code_line_mask
@@ -1077,6 +1079,82 @@ def check_html_relative_src(
 
 
 # ---------------------------------------------------------------------------
+# Raw-HTML file paths copied unchanged from the English (one folder short)
+# ---------------------------------------------------------------------------
+
+_URL_ATTR = re.compile(r"""(?<![\w-])(src|srcset|poster|href)\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.IGNORECASE)
+_FILE_NAME = re.compile(r"\.[A-Za-z0-9]{1,5}$")
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+def _translated_file_url(url: str, cache_key: str, lang: str) -> str:
+    """The URL that reaches, from the translated page, the file `url` reaches from its English page.
+
+    Pages are built with directory URLs (`x/index.en.md` into `x/`, `x/page.en.md` into `x/page/`) and a translation
+    under `<lang>/` (mkdocs-static-i18n): a path that climbs to the site root needs one more `../`, a shorter one more.
+    """
+    folder, name = posixpath.split(cache_key)
+    stem = name[: -len(".en.md")] if name.endswith(".en.md") else posixpath.splitext(name)[0]
+    english_folder = folder if stem == "index" else posixpath.join(folder, stem)
+    path = urlsplit(url).path
+    target = posixpath.normpath(posixpath.join(english_folder, path))
+    return posixpath.relpath(target, posixpath.join(lang, english_folder)) + url[len(path) :]
+
+
+def _relative_file_urls(text: str) -> list[tuple[int, str]]:
+    """(line, url) of each raw-HTML relative URL of a file: `src`, the `srcset` candidates, `poster`, `href`.
+
+    Code is ignored (fenced blocks and inline spans), and so are HTML comments. A page link (a folder URL, or
+    `.md`/`.html`) is not a file; external, root-absolute and fragment-only URLs are left out.
+    """
+    found = []
+    uncommented = _HTML_COMMENT.sub(lambda m: "\n" * m.group(0).count("\n"), text).split("\n")
+    for number, (line, in_code) in enumerate(zip(uncommented, code_line_mask(text), strict=True), start=1):
+        if in_code:
+            continue
+        for m in _URL_ATTR.finditer(_INLINE_CODE.sub("", line)):
+            attr = m.group(1).lower()
+            value = m.group(2) if m.group(2) is not None else m.group(3)
+            urls = [c.split()[0] for c in value.split(",") if c.strip()] if attr == "srcset" else [value]
+            for url in urls:
+                parts = urlsplit(url)
+                if parts.scheme or parts.netloc or url.startswith(("/", "#")) or not parts.path:
+                    continue
+                if not _FILE_NAME.search(parts.path) or parts.path.lower().endswith((".md", ".html", ".htm")):
+                    continue
+                found.append((number, url))
+    return found
+
+
+def check_html_asset_depth(
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
+) -> list[Issue]:
+    """
+    Flag a raw-HTML relative path of a file that the translation copied unchanged from the English (ERROR).
+
+    MkDocs rewrites the paths of Markdown images and links, not those of raw HTML. A translated page is built one folder
+    deeper than its English page (site/<lang>/...), and the language folders hold no files, so the English path points
+    under site/<lang>/ and the image is missing. The message gives the path to write: one more `../` for a path that
+    climbs to the site root. Whether a changed path resolves is left to the post-build check of `./dev.py mkdocs build`.
+    """
+    english = {url for _, url in _relative_file_urls(source)}
+    return [
+        Issue(
+            severity=Severity.ERROR,
+            file=cache_key,
+            lang=lang,
+            check="html-asset-depth",
+            message=f"L{number}: `{url}` is the English path; a translated page is built one folder deeper, so it needs `{_translated_file_url(url, cache_key, lang)}`",
+        )
+        for number, url in _relative_file_urls(translated)
+        if url in english
+    ]
+
+
+# ---------------------------------------------------------------------------
 # Truncated word detection (common LLM artifact)
 # ---------------------------------------------------------------------------
 
@@ -1322,6 +1400,7 @@ ALL_CHECKS = [
     ("html-attrs", check_html_attrs, True),
     ("text-untranslated", check_untranslated_text_attrs, True),
     ("html-relative-src", check_html_relative_src, True),
+    ("html-asset-depth", check_html_asset_depth, True),
     ("front-matter", check_front_matter, True),
     ("latex", check_latex, True),
     ("math-indentation", check_math_indentation, True),     # positional: indented $$ blocks stay indented

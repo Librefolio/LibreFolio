@@ -510,7 +510,7 @@ with its English page, for every target language, and exits non-zero on any ❌ 
 fails the release workflow outside `dev` (see
 [Code block indentation](#code-block-indentation)). Among its checks (`code-block-indent` is
 described above, `admonition-empty-line` under
-[Prettier Compatibility](#prettier-compatibility)), three catch what a translation can break
+[Prettier Compatibility](#prettier-compatibility)), four catch what a translation can break
 while the structure stays intact:
 
 - `text-untranslated` (⚠️ WARN): an `alt`, `title`, `aria-label` or `data-title` value (in
@@ -530,6 +530,15 @@ while the structure stays intact:
   verbatim in the translation, as many times; digit grouping is ignored, so `1,000.50`
   matches `1.000,50`, but the message names a missing span as the English writes it.
   Identifiers, enum values and parameters are never translated.
+- `html-asset-depth` (❌ ERROR): a relative file path in raw HTML (`src`, `srcset`,
+  `poster`, an `href` to a file rather than a page) that the translation copied unchanged
+  from the English page; code is ignored. A translated page is built one folder deeper,
+  under `site/<lang>/`, which holds only HTML pages and no other file; MkDocs rewrites the
+  paths of Markdown images and links, not those of raw HTML, so the English path is one
+  `../` short. The message gives the translation's line and the path to write, `../`
+  followed by the English path. Whether a corrected path resolves is left to
+  `./dev.py mkdocs build`, which afterwards resolves every relative file URL of the built
+  site (images, video and audio, links to files) and exits 1 on a broken one.
 
 The HTML checks (`html-tag-mismatch`, `html-attr-missing`, `html-attr-mismatch`) read only
 rendered HTML: fenced code (any fence, found by `code_line_mask()` in `code_blocks.py`) and
@@ -545,9 +554,12 @@ about 80 columns while a translation often keeps a paragraph on one line, but a 
 truncated section still removes blocks.
 
 Tests: `./dev.py test utils translation-validator`
-(`backend/test_scripts/test_utilities/test_translation_validator.py`). It covers the three
+(`backend/test_scripts/test_utilities/test_translation_validator.py`). It covers the four
 checks above, `page_anchors.py` included, the code stripping of the HTML checks and the
 block-based `LINE_COUNT`, on pages in memory and on a docs tree in a temporary directory.
+`./dev.py test utils gate-docs-links`
+(`backend/test_scripts/test_utilities/test_docs_links_gate.py`) covers the build's check of
+the relative file URLs.
 
 ---
 

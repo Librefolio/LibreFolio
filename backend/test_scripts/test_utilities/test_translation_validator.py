@@ -1,4 +1,4 @@
-"""translate-validate reads what a page renders: the checks of R2 batches 11-13 (M, R2 B13).
+"""translate-validate reads what a page renders: the checks of R2 batches 11-14 (M, R2 B13-B14).
 
 Batches 11 and 12 changed ``mkdocs_src/aphra-pipeline/validate_translations.py`` and the structural diff of
 ``translate_docs.py``, and nothing covered the changes. Pinned here through the check functions
@@ -62,6 +62,24 @@ The mark was first dropped only from files (``file_anchors`` reads utf-8-sig). A
 whose ``render_anchors`` keeps it, the three tests of a translation's own mark are red: the in-page link to its first
 heading and ``render_anchors`` with the mark before a heading or before front matter.
 
+Batch 14 added ``html-asset-depth`` (ERROR). A translated page is built one folder deeper than its English page
+(``site/<lang>/...``), and the language folders hold only pages; MkDocs rewrites Markdown paths, not raw-HTML ones. A
+raw-HTML relative path of a file (``src``, a ``srcset`` candidate, ``poster``, an ``href`` to a file that is not a
+page) copied unchanged from the English therefore points where the file is not: 21 images shipped broken that way.
+``check_html_asset_depth`` reports each URL of the translation identical to one of the English's, at the
+translation's own line, with the path that reaches the same file from the translated page: pages are built with
+directory URLs, so a path that climbs to the site root needs one more ``../`` and one that does not needs the way back
+down. A changed path is left to the check ``./dev.py mkdocs build`` runs on the built site. Code, fenced or inline,
+and HTML comments are not HTML; a comment keeps its lines. Red phase, against the pipeline at c0d933abf (HEAD),
+staged outside the worktree and imported first: 19 red, 96 green.
+
+* red on a missing function (18): every case of ``TestHtmlAssetDepth``;
+* red on behaviour (1): ``validate_file``, which reported no error for the copy;
+* green (96): the tests of batches 11-13, unchanged.
+
+Against the first version of batch 14 (the current file with one change reverted), the path that reaches the file is
+red on the three paths that do not climb to the root, and comments on the test that has them.
+
 PURE: strings in memory and docs trees under ``tmp_path``. An autouse fixture points
 ``validate_translations.DOCS_DIR`` at an empty tree under ``tmp_path`` in every test, so no check resolves a link
 against ``mkdocs_src/docs``; the repository's docs and ``.translate-hashes.json`` are never opened (the Aphra pipeline
@@ -72,10 +90,12 @@ prove the expected anchors are the ones a build gives. No DB, no server, no netw
 
 import importlib
 import os
+import posixpath
 import re
 import textwrap
 from pathlib import Path
 from types import ModuleType
+from urllib.parse import urlsplit
 
 import markdown
 import pytest
@@ -308,6 +328,114 @@ class TestUntranslatedTextAttrs:
         img, link = f'<img src="x.png" alt="{EN_TEXT}">', '<a href="import.md" title="Open the import wizard">Import</a>'
         assert len(_untranslated(vt, f"{img}\n\n{link}\n")) == 2, "barrier: both values are reported outside code"
         assert _untranslated(vt, f"Write `{img}` in the page.\n\n```html\n{link}\n```\n") == []
+
+
+# ---------------------------------------------------------------------------
+# check_html_asset_depth (html-asset-depth)
+# ---------------------------------------------------------------------------
+
+# CACHE_KEY, user/guide.md, is built as site/user/guide/, its translation as site/it/user/guide/: the English climbs two
+# folders to static/, the translation three. MkDocs rewrites Markdown paths, not raw HTML ones.
+EN_IMG = '<img src="../../static/a.png" alt="Chart">'
+IT_IMG_COPIED = '<img src="../../static/a.png" alt="Grafico">'
+IT_IMG_SHIFTED = '<img src="../../../static/a.png" alt="Grafico">'
+
+
+def _asset_depth(vt, source: str, translated: str) -> list:
+    return vt.check_html_asset_depth(source, translated, CACHE_KEY, LANG)
+
+
+def _flagged_urls(issues) -> list[str]:
+    """The URL each html-asset-depth message names as the English path."""
+    return [re.match(r"L\d+: `([^`]+)` is the English path", issue.message).group(1) for issue in issues]
+
+
+class TestHtmlAssetDepth:
+    def test_a_path_copied_from_the_english_is_an_error_naming_its_line_and_the_fix(self, validate_translations):
+        vt = validate_translations
+        source = f"# Guide\n\n{EN_IMG}\n"
+        translated = f"# Guida\n\nUn paragrafo che l'inglese non ha.\n\n{IT_IMG_COPIED}\n"
+        issues = _asset_depth(vt, source, translated)
+        assert _kinds(issues) == [("html-asset-depth", vt.Severity.ERROR)]
+        assert issues[0].message.startswith("L5: `../../static/a.png` "), issues[0].message  # the translation's line, not the source's (L3)
+        assert "`../../../static/a.png`" in issues[0].message, issues[0].message
+
+    @pytest.mark.parametrize(
+        "translated",
+        [
+            pytest.param(IT_IMG_SHIFTED, id="one-folder-deeper"),
+            pytest.param('<img src="../../../static/b.png" alt="Grafico">', id="a-url-only-the-translation-has"),
+            pytest.param('<img src="../static/a.png" alt="Grafico">', id="changed-otherwise"),
+        ],
+    )
+    def test_a_changed_path_is_left_to_the_build_check(self, validate_translations, translated):
+        assert _asset_depth(validate_translations, f"{EN_IMG}\n", f"{translated}\n") == []
+
+    def test_page_links_and_urls_that_are_not_relative_files_are_not_compared(self, validate_translations):
+        vt = validate_translations
+        page = "\n".join(
+            [
+                '<a href="scalable/">Scalable</a> <a href="../x.md">X</a> <a href="p.html">P</a> <a href="p.htm">P</a>',
+                '<img src="https://example.com/a.png"> <img src="//cdn.example.com/a.png"> <img src="/static/a.png">',
+                '<a href="#top">Top</a> <img src="data:image/png;base64,iVBORw0KGgo=">',
+            ]
+        )
+        assert _kinds(_asset_depth(vt, f"{page}\n{EN_IMG}\n", f"{page}\n{IT_IMG_COPIED}\n")) == [("html-asset-depth", vt.Severity.ERROR)], "barrier: a file path copied on the same page is reported"
+        assert _asset_depth(vt, f"{page}\n", f"{page}\n") == []
+
+    @pytest.mark.parametrize(
+        ("source", "translated", "flagged"),
+        [
+            pytest.param('<img srcset="../../static/a.png 1x, ../../static/b.png 2x">', '<img srcset="../../../static/a.png 1x, ../../static/b.png 2x">', ["../../static/b.png"], id="srcset-the-copied-candidate"),
+            pytest.param('<video src="../../static/v.mp4" poster="../../static/p.jpg"></video>', '<video src="../../../static/v.mp4" poster="../../static/p.jpg"></video>', ["../../static/p.jpg"], id="poster"),
+            pytest.param('<a href="../../static/report.pdf">PDF</a>', '<a href="../../static/report.pdf">PDF</a>', ["../../static/report.pdf"], id="a-link-to-a-file"),
+            pytest.param('<img data-src="../../static/a.png">', '<img data-src="../../static/a.png">', [], id="data-src-is-not-src"),
+        ],
+    )
+    def test_each_file_url_attribute_is_compared(self, validate_translations, source, translated, flagged):
+        assert _flagged_urls(_asset_depth(validate_translations, f"{source}\n", f"{translated}\n")) == flagged
+
+    def test_code_is_not_html(self, validate_translations):
+        vt = validate_translations
+        assert _kinds(_asset_depth(vt, f"{EN_IMG}\n", f"{IT_IMG_COPIED}\n")) == [("html-asset-depth", vt.Severity.ERROR)], "barrier: outside code the copy is reported"
+        translated = f"Scrivi `{IT_IMG_COPIED}` nella pagina.\n\n```html\n{IT_IMG_COPIED}\n```\n\n1. In un elenco:\n\n    ~~~html\n    {IT_IMG_COPIED}\n    ~~~\n"
+        assert _asset_depth(vt, f"{EN_IMG}\n", translated) == []
+
+    def test_an_image_in_a_heading_line_is_html(self, validate_translations):
+        vt = validate_translations
+        issues = _asset_depth(vt, '# <img src="../../static/a.png" alt=""> Title\n', '# <img src="../../static/a.png" alt=""> Titolo\n')
+        assert _kinds(issues) == [("html-asset-depth", vt.Severity.ERROR)]
+        assert issues[0].message.startswith("L1: "), issues[0].message
+
+    def test_the_line_number_counts_the_lines_of_a_fenced_block_before_it(self, validate_translations):
+        translated = f"# Guida\n\n```bash\necho uno\necho due\n```\n\n{IT_IMG_COPIED}\n"
+        line = translated.split("\n").index(IT_IMG_COPIED) + 1
+        assert line == 8, "barrier: the tag is on the eighth line of the translation"
+        issues = _asset_depth(validate_translations, f"{EN_IMG}\n", translated)
+        assert [issue.message.split(":", 1)[0] for issue in issues] == ["L8"]
+
+    @pytest.mark.parametrize(
+        ("cache_key", "lang", "built", "url", "fix"),
+        [
+            pytest.param("user/x/index.en.md", "it", "user/x", "../../static/a.png", "../../../static/a.png", id="up-to-the-root-one-more-up"),
+            pytest.param("user/x/index.en.md", "it", "user/x", "../img.png", "../../../user/img.png", id="into-its-section-back-down-from-the-root"),
+            pytest.param("user/x/page.en.md", "es", "user/x/page", "shot.png?v=2#top", "../../../../user/x/page/shot.png?v=2#top", id="a-page-not-an-index-query-and-fragment-kept"),
+            pytest.param("faq.en.md", "fr", "faq", "../static/a.png", "../../static/a.png", id="a-top-level-page"),
+            pytest.param("user/v1.2.en.md", "it", "user/v1.2", "shot.png", "../../../user/v1.2/shot.png", id="a-page-whose-name-holds-a-dot"),
+        ],
+    )
+    def test_the_fix_reaches_from_the_translated_page_the_file_the_english_reaches(self, validate_translations, cache_key, lang, built, url, fix):
+        """Pages are built with directory URLs (x/index.md into x/, x/page.md into x/page/), a translation under <lang>/."""
+        path = urlsplit(url).path
+        assert posixpath.normpath(posixpath.join(built, path)) == posixpath.normpath(posixpath.join(lang, built, urlsplit(fix).path)), "barrier: from the translated page, the fix lands on the English URL's file"
+        issues = validate_translations.check_html_asset_depth(f'<img src="{url}">\n', f'<img src="{url}">\n', cache_key, lang)
+        assert [issue.message.rsplit("so it needs ", 1)[-1] for issue in issues] == [f"`{fix}`"]
+
+    def test_an_html_comment_is_not_html_and_keeps_its_lines(self, validate_translations):
+        translated = f"# Guida\n\n<!-- {IT_IMG_COPIED} -->\n\n<!--\nPrima versione:\n{IT_IMG_COPIED}\n-->\n\n{IT_IMG_COPIED}\n"
+        assert translated.split("\n")[9] == IT_IMG_COPIED, "barrier: the tag outside the comments is on line 10"
+        issues = _asset_depth(validate_translations, f"{EN_IMG}\n", translated)
+        assert [issue.message.split(":", 1)[0] for issue in issues] == ["L10"]
 
 
 # ---------------------------------------------------------------------------
@@ -795,6 +923,15 @@ class TestValidateFile:
     def test_the_fixed_page_passes_them(self, validate_translations, docs):
         assert GUIDE_IT_FIXED != GUIDE_IT and OTHER_IT_FIXED != OTHER_IT, "barrier: the fixes apply"
         assert [str(issue) for issue in _validate(validate_translations, docs, GUIDE_IT_FIXED, OTHER_IT_FIXED)] == []
+
+    def test_a_raw_html_path_copied_from_the_english_fails_the_validation(self, validate_translations, docs):
+        """html-asset-depth is in ALL_CHECKS: the copy is an error of the page. HEAD's validator reported none."""
+        vt = validate_translations
+        source = _write(docs, "user/guide.en.md", f"# Guide\n\n{EN_IMG}\n")
+        translation = _write(docs, "user/guide.it.md", f"# Guida\n\n{IT_IMG_COPIED}\n")
+        issues = vt.validate_file(source, translation, CACHE_KEY, LANG)
+        errors = [(issue.check, issue.severity) for issue in issues if issue.severity == vt.Severity.ERROR and "../../static/a.png" in issue.message]
+        assert errors == [("html-asset-depth", vt.Severity.ERROR)], [str(issue) for issue in issues]
 
 
 # ---------------------------------------------------------------------------
