@@ -70,15 +70,23 @@ page) copied unchanged from the English therefore points where the file is not: 
 translation's own line, with the path that reaches the same file from the translated page: pages are built with
 directory URLs, so a path that climbs to the site root needs one more ``../`` and one that does not needs the way back
 down. A changed path is left to the check ``./dev.py mkdocs build`` runs on the built site. Code, fenced or inline,
-and HTML comments are not HTML; a comment keeps its lines. Red phase, against the pipeline at c0d933abf (HEAD),
-staged outside the worktree and imported first: 19 red, 96 green.
+and HTML comments are not HTML; a comment keeps its lines. Batch 14 also made ``check_latex`` read inline math as
+pymdownx.arithmatex does (smart dollar: no space after the opening ``$`` nor before the closing one, no unescaped
+``$`` nor line break inside). The rule it replaced took a digit before a ``$`` for a price, and dropped the formula of
+«on day 3 $A$'s line» from the English while the translation, worded otherwise, kept it: a false
+``latex-inline-count`` on deposited-capital in it, fr and es. Red phase, against the pipeline at c0d933abf (HEAD),
+staged outside the worktree and imported first: 24 red, 106 green.
 
 * red on a missing function (18): every case of ``TestHtmlAssetDepth``;
-* red on behaviour (1): ``validate_file``, which reported no error for the copy;
-* green (96): the tests of batches 11-13, unchanged.
+* red on behaviour (6): ``validate_file``, which reported no error for the copy; the day-3 formula, counted in the
+  translation only; a formula the translation breaks with a space, not reported; a formula after a price, not read;
+  ``$ x$`` and ``$x $``, read as formulas;
+* green (106): the tests of batches 11-13, unchanged, and the ten readings of inline math HEAD already got right
+  (prices after their numbers, escaped dollars, display math, the prefix-price, shell-variable and markup filters).
 
 Against the first version of batch 14 (the current file with one change reverted), the path that reaches the file is
-red on the three paths that do not climb to the root, and comments on the test that has them.
+red on the three paths that do not climb to the root, comments on the test that has them, and the old price rule on
+the day-3 formula.
 
 PURE: strings in memory and docs trees under ``tmp_path``. An autouse fixture points
 ``validate_translations.DOCS_DIR`` at an empty tree under ``tmp_path`` in every test, so no check resolves a link
@@ -436,6 +444,64 @@ class TestHtmlAssetDepth:
         assert translated.split("\n")[9] == IT_IMG_COPIED, "barrier: the tag outside the comments is on line 10"
         issues = _asset_depth(validate_translations, f"{EN_IMG}\n", translated)
         assert [issue.message.split(":", 1)[0] for issue in issues] == ["L10"]
+
+
+# ---------------------------------------------------------------------------
+# check_latex: inline math as pymdownx.arithmatex reads it (latex-inline-count)
+# ---------------------------------------------------------------------------
+
+
+def _latex_inline(vt, source: str, translated: str) -> list:
+    return [issue for issue in vt.check_latex(source, translated, CACHE_KEY, LANG) if issue.check.startswith("latex-inline")]
+
+
+def _inline_formulas(vt, text: str) -> list[str]:
+    """The inline formulas check_latex reads in ``text``, in order. Compared with a page without math it reports their
+    count; compared with a page holding as many formulas of its own, each pair as modified, the text's first."""
+    counted = [issue.message for issue in _latex_inline(vt, text, "") if issue.check == "latex-inline-count"]
+    count = int(re.fullmatch(r"Inline math: source (\d+), translation 0", counted[0]).group(1)) if counted else 0
+    probe = " ".join(f"$\\omega_{{{9000 + n}}}$" for n in range(count))
+    modified = [issue.message for issue in _latex_inline(vt, text, probe) if issue.check == "latex-inline-modified"]
+    assert len(modified) == count, f"barrier: each formula pairs with one of the probe: {modified}"
+    return [re.search(r"SRC: \$(.*)\$\n", message).group(1) for message in modified]
+
+
+class TestInlineMath:
+    """Smart dollar, the site's arithmatex default: the opening ``$`` is not followed by a space, the closing one not
+    preceded by one, and a formula holds no unescaped ``$`` nor a line break."""
+
+    def test_a_formula_after_a_number_counts_in_the_source_too(self, validate_translations):
+        """deposited-capital: the former rule took a digit before the ``$`` for a price («500 $») and dropped the
+        English formula, which the translation, worded otherwise, kept: a false latex-inline-count in it, fr and es."""
+        source = "The chart starts on day 3 $A$'s line, then follows the deposits.\n"
+        translated = "Il grafico parte il giorno 3, la linea di $A$, poi segue i depositi.\n"
+        assert _latex_inline(validate_translations, source, translated) == []
+
+    def test_a_formula_the_translation_breaks_with_a_space_is_reported(self, validate_translations):
+        vt = validate_translations
+        issues = _latex_inline(vt, "The weight $w$ of each asset.\n", "Il peso $ w$ di ogni titolo.\n")
+        assert [(issue.check, issue.severity, issue.message) for issue in issues] == [("latex-inline-count", vt.Severity.WARN, "Inline math: source 1, translation 0")]
+
+    @pytest.mark.parametrize(
+        ("text", "formulas"),
+        [
+            pytest.param("Il rendimento $r$ e il peso $\\beta_1$.", ["r", "\\beta_1"], id="two-formulas"),
+            pytest.param("costa 500 $ al mese", [], id="a-price-after-its-number"),
+            pytest.param("entre 0,25 $ et 1,50 $ par jour", [], id="two-prices-after-their-numbers"),
+            pytest.param("costa 500 $ e poi $x$", ["x"], id="a-price-then-a-formula"),
+            pytest.param("il valore $ x$ e basta", [], id="a-space-after-the-opening-dollar"),
+            pytest.param("il valore $x $ e basta", [], id="a-space-before-the-closing-dollar"),
+            pytest.param("costs \\$5 and \\$6", [], id="escaped-dollars"),
+            pytest.param("the share $a\\$b$ of it", ["a\\$b"], id="an-escaped-dollar-inside-a-formula"),
+            pytest.param("the share $a\nb$ of it", [], id="no-line-break-inside"),
+            pytest.param("$$x + y$$", [], id="display-math-is-not-inline"),
+            pytest.param("between $0.25-$0.50 a day", [], id="prices-before-their-numbers"),
+            pytest.param("PATH=${HOME}/bin:${PATH}", [], id="shell-variables"),
+            pytest.param("Use **$var** in bash and **$other** in zsh", [], id="markup-between-two-dollars"),
+        ],
+    )
+    def test_inline_math_is_read_as_arithmatex_reads_it(self, validate_translations, text, formulas):
+        assert _inline_formulas(validate_translations, text) == formulas
 
 
 # ---------------------------------------------------------------------------
