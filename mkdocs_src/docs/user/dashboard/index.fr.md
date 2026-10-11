@@ -48,7 +48,7 @@ L'onglet Risque contient le panneau **Risque du portefeuille**, qui répond à q
 
 En haut à droite du tableau de bord, vous disposez de plusieurs contrôles pour personnaliser votre vue :
 
-- **Plage temporelle** — des préréglages d'une semaine à Tout l'historique (MAX), ou une plage personnalisée via le sélecteur de dates.
+- **Plage temporelle** — des préréglages de **1S** à **Tout**, ou une plage personnalisée via le sélecteur de dates.
 - **Filtre de courtiers** — filtre les métriques sur un ou plusieurs courtiers spécifiques ; l'onglet Risque couvre toujours chaque courtier que vous détenez, et un sous-titre l'indique lorsqu'un filtre est actif.
 - **Devise cible** — convertit dynamiquement tous les actifs et soldes de trésorerie dans une seule devise sélectionnée pour une vue agrégée. La liste propose votre devise par défaut et les devises de vos paires FX configurées — les deux extrémités de chaque paire. Une devise qu'une [route en chaîne](../fx/add-pair.md) traverse uniquement n'est pas proposée : la synchronisation d'une chaîne ne stocke que le taux de sa propre paire, LibreFolio n'a donc aucun taux pour convertir vers cette devise. Pour rendre une devise disponible, attribuez-lui sa propre paire : choisissez **Créer un forex…** en bas de la liste, ou cochez **Créer également les paires intermédiaires** lorsque vous ajoutez une paire via une route en chaîne.
 - **Export IA** (:material-brain:) — ouvre un export vers le presse-papiers. Choisissez **Capture de données**
@@ -106,7 +106,7 @@ Les paires avec des taux manuels uniquement (sans fournisseur) reçoivent leur p
 
 !!! tip "Remplir tout l'historique d'une paire en une fois"
 
-    Ouvrez la [page FX](../fx/index.md), choisissez la plage **Tout** (MAX) et cliquez sur [Tout synchroniser](../fx/sync.md) : LibreFolio télécharge tout ce que les fournisseurs publient pour vos paires, jusqu'à aujourd'hui. Une paire que vous ajoutez avec un fournisseur effectue cela d'elle-même — voir [Ajouter une paire de devises](../fx/add-pair.md).
+    Ouvrez la [page FX](../fx/index.md), choisissez la plage **Tout** et cliquez sur [Tout synchroniser](../fx/sync.md) : LibreFolio télécharge tout ce que les fournisseurs publient pour vos paires, jusqu'à aujourd'hui. Une paire que vous ajoutez avec un fournisseur effectue cela d'elle-même — voir [Ajouter une paire de devises](../fx/add-pair.md).
 
 ---
 

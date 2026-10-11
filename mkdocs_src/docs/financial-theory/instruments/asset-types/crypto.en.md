@@ -13,7 +13,7 @@
 | **Currency** | Typically quoted in USD, but tradeable against many fiat and crypto pairs |
 | **Dividends** | None for most (some DeFi tokens offer staking rewards) |
 | **Volatility** | Significantly higher than traditional assets |
-| **Typical providers** | Yahoo Finance (e.g., `BTC-USD`), Manual |
+| **Typical providers** | Yahoo Finance (e.g., `BTC-USD`), or prices entered by hand in the [Data Editor](../../../user/assets/detail/data-editor.md) |
 
 ---
 

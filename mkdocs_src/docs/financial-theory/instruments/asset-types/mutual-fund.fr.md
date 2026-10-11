@@ -13,7 +13,7 @@ Un **fonds commun de placement** est un véhicule d'investissement géré profes
 | **Devise** | Libellé dans la devise de référence du fonds |
 | **Dividendes** | Peuvent être distribués (fonds de revenu) ou réinvestis (fonds de croissance) |
 | **Frais** | Frais de gestion (TER), commissions d'entrée/sortie |
-| **Fournisseurs typiques** | Yahoo Finance, Manuel |
+| **Fournisseurs typiques** | Yahoo Finance, Borsa Italiana, ou prix saisis manuellement dans l'[éditeur de données](../../../user/assets/detail/data-editor.md) |
 
 ---
 
