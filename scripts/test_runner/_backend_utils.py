@@ -277,6 +277,15 @@ def utils_translation_cache(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Translation cache tests", verbose=verbose)
 
 
+def utils_translation_validator(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the translate-validate checks of R2 batches 11-12 and the block-based LINE_COUNT of the structural diff (Aphra pipeline)."""
+    print_section("Utils: Translation Validator")
+    print_info("Testing: mkdocs_src/aphra-pipeline/validate_translations.py (_strip_code, HTML checks, text-untranslated, inline-code-missing, anchor-missing, validate_file), translate_docs.py (_structural_diff)")
+    print_info("Tests: fence-aware code stripping, inline code never read as HTML, untranslated alt/title/aria-label/data-title, inline code spans kept, link anchors on the opened page, LINE_COUNT on blocks")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_validator.py", test_names)
+    return run_command(cmd, "Translation validator tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -482,6 +491,17 @@ Tests for utility modules and helper functions:
         desc="A language counts as done only for the EN version it was translated or stamped from: after an EN edit, a language that fails (parallel and sequential paths), is left out by --lang or is cut short by an interruption is offered again by the next run, and its failure keeps the last translated_at; a failed --force retry of an unchanged page stays done; translate-stamp of a changed EN reopens the languages it does not stamp and clears the failure records of those it does; an EN edit saved while the analysis runs is offered again too, the md5 recorded being the one of the bytes translated (LF and CRLF)",
         # run_translate and run_stamp on a docs tree and a cache under tmp_path, the
         # LLM seams faked: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "translation-validator",
+        utils_translation_validator,
+        name="Translation Validator",
+        desc="translate-validate reads what a page renders: fenced blocks of any kind and inline code are stripped before the HTML checks, so inline code such as EUR<USD is never a tag while a real tag's class/src/data-* changes are still reported; alt, title, aria-label, data-title and Markdown image alts of three words or more copied from the source warn (text-untranslated); every inline code span of the source stays in the translation, digit grouping aside (inline-code-missing); a page.md#anchor link must land on an anchor of the translated target or its EN fallback, with Python-Markdown's slugs (anchor-missing); the structural diff counts blocks, not lines, for LINE_COUNT",
+        # Check functions on strings in memory and on a docs tree under tmp_path (DOCS_DIR
+        # redirected in every test): no DB, no server, no network, never opens the repo's
+        # docs or translation cache, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")
