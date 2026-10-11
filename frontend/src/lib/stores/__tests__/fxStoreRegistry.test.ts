@@ -24,6 +24,7 @@ import {
     apiResultToFxDataPoint,
     apiResultsToCanonicalFxDataPoints,
     createPairSlug,
+    displayFxDelta,
     displayFxRate,
     ensureFxRangeLoaded,
     ensureFxRangeLoadedBulk,
@@ -484,6 +485,55 @@ describe('displayFxRate', () => {
         expect(displayFxRate(1.25, true)).toBe(0.8);
         expect(displayFxRate(0, false)).toBeNull();
         expect(displayFxRate(0, true)).toBeNull();
+    });
+});
+
+// The delta describes the pair as displayed: 1/rate when inverted.
+// Bug B1: the FX pair page negated the direct percentage for an inverted pair. The change of
+// 1/rate is first/last − 1, not −(last/first − 1): raw 0.8 → 1.0 is displayed as 1.25 → 1.0,
+// which is −20 %, while the negation reports −25 %.
+describe('displayFxDelta', () => {
+    it('measures a direct pair on the rate as quoted', () => {
+        const delta = displayFxDelta(1.25, 1.0, false);
+        expect(delta).not.toBeNull();
+        expect(delta!.abs).toBeCloseTo(-0.25, 10);
+        expect(delta!.pct).toBeCloseTo(-20, 10);
+    });
+
+    it('measures the absolute change of an inverted pair on the displayed rate', () => {
+        // raw 0.8 -> 1.0 is displayed as 1.25 -> 1.0
+        const delta = displayFxDelta(0.8, 1.0, true);
+        expect(delta).not.toBeNull();
+        expect(delta!.abs).toBeCloseTo(-0.25, 10);
+    });
+
+    it('measures the percentage change of an inverted pair on the displayed rate, not as the negated direct change', () => {
+        // displayed 1.25 -> 1.0 is -20 %; negating the direct +25 % gives -25 %
+        const delta = displayFxDelta(0.8, 1.0, true);
+        expect(delta).not.toBeNull();
+        expect(delta!.pct).toBeCloseTo(-20, 10);
+    });
+
+    it.each([
+        [1.1, 1.21],
+        [2, 1],
+    ])('gives an inverted pair a percentage of (first / last - 1) * 100 for raw %s -> %s', (first, last) => {
+        const delta = displayFxDelta(first, last, true);
+        expect(delta).not.toBeNull();
+        expect(delta!.pct).toBeCloseTo((first / last - 1) * 100, 10);
+    });
+
+    it.each<[string, number | null, number | null]>([
+        ['a missing first rate', null, 1.1],
+        ['a missing last rate', 1.1, null],
+        ['two missing rates', null, null],
+        ['a zero first rate', 0, 1.1],
+        ['a zero last rate', 1.1, 0],
+        ['a negative first rate', -1.1, 1.1],
+        ['a negative last rate', 1.1, -1.1],
+    ])('has no delta with %s, in either orientation', (_label, first, last) => {
+        expect(displayFxDelta(first, last, false)).toBeNull();
+        expect(displayFxDelta(first, last, true)).toBeNull();
     });
 });
 
