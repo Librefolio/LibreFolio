@@ -131,6 +131,8 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
 - **O-16 · Plurale scritto a mano nel tooltip del Gantt dei lotti** — basso. `LotGanttChart.svelte:701`. Origine: 29, §6.
 - **O-17 · Debito Prettier in `DistributionDialog.svelte`** — minimo, dominio del PAC (D): `DistributionDialog.svelte:74-126`,
   già alla base; anche i piani della 13 lo citano. Origine: 29, §8.
+  - ✅ **Chiusa l'11/10** con `style(pac): prettier on planner` (D, treno 32): Prettier su tutta la cartella del
+    planner, con la prova che l'output compilato non cambia. Il gate `front format --check` ora è nel README della 13.
 - **O-18 · Segnalare a monte la cache di svelte-i18n** — basso, decisione del developer mai presa.
   `getMessageFormatter` (svelte-i18n 4.0.1, `runtime.js:383-392`, `:496-500`) tiene in cache i formattatori per testo
   e ignora la lingua: un messaggio identico in due cataloghi usa le regole di plurale della prima lingua che lo
