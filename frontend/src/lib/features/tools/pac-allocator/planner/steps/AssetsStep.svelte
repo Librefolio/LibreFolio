@@ -157,7 +157,10 @@
         </button>
         <HelpTip
             label={$t(`${KEY}.autoLabel`, {default: 'Data from LibreFolio'})}
-            help={$t(`${KEY}.priceAuto`, {default: 'An Asset added from LibreFolio arrives with its latest stored price and its composition. The composition is the one of LibreFolio and is not changed here. The price is «Auto»: read again just before the calculation; switch it to «Manual» to use a price of your own. No provider is called: the prices are the ones LibreFolio already has.'})}
+            help={$t(`${KEY}.priceAuto`, {
+                default:
+                    'An Asset added from LibreFolio arrives with its latest stored price and its composition. The composition is the one of LibreFolio and is not changed here. The price is «Auto»: read again just before the calculation; switch it to «Manual» to use a price of your own. No provider is called: the prices are the ones LibreFolio already has.',
+            })}
             testid="pac-planner-assets-auto-help"
         />
         <button type="button" class="{BUTTON_SECONDARY} ml-auto" data-testid="pac-planner-asset-add" onclick={() => (editing = {key: null})}>
@@ -226,14 +229,7 @@
                             {#if asset.priceManual && asset.price}
                                 <span class="flex flex-wrap items-center gap-2" data-testid="pac-planner-asset-price-manual">
                                     <span class="w-36">
-                                        <ExactDecimalInput
-                                            value={asset.price.amount}
-                                            step="0.01"
-                                            className={INPUT}
-                                            ariaLabel={$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})}
-                                            testid="pac-planner-asset-price-input"
-                                            onchange={(value) => setPriceAmount(asset, value)}
-                                        />
+                                        <ExactDecimalInput value={asset.price.amount} step="0.01" className={INPUT} ariaLabel={$t('tools.pacAllocator.planner.assetEditor.price', {default: 'Price'})} testid="pac-planner-asset-price-input" onchange={(value) => setPriceAmount(asset, value)} />
                                     </span>
                                     <CurrencyCode code={asset.price.currency} />
                                     <span class={HINT}>{unitsText(asset.price)}</span>
@@ -269,12 +265,7 @@
                             {/if}
                             {#if asset.sourceAssetId !== null}
                                 <span class="ml-auto">
-                                    <AutoManualToggle
-                                        manual={asset.priceManual}
-                                        label={$t(`${KEY}.priceMode`, {default: 'Price of {name}', values: {name: title(asset)}})}
-                                        testid="pac-planner-asset-price-mode"
-                                        onchange={(manual) => switchPrice(asset, manual)}
-                                    />
+                                    <AutoManualToggle manual={asset.priceManual} label={$t(`${KEY}.priceMode`, {default: 'Price of {name}', values: {name: title(asset)}})} testid="pac-planner-asset-price-mode" onchange={(manual) => switchPrice(asset, manual)} />
                                 </span>
                             {/if}
                         </dd>
@@ -303,7 +294,14 @@
                                                 .map((row) => categoryText(row, whole))
                                                 .join(' · ')}
                                             {#if rows.length > VISIBLE_CATEGORIES}
-                                                <Tooltip text={rows.slice(VISIBLE_CATEGORIES).map((row) => categoryText(row, false)).join(' · ')} position="top" maxWidth="360px">
+                                                <Tooltip
+                                                    text={rows
+                                                        .slice(VISIBLE_CATEGORIES)
+                                                        .map((row) => categoryText(row, false))
+                                                        .join(' · ')}
+                                                    position="top"
+                                                    maxWidth="360px"
+                                                >
                                                     <span class={BADGE.neutral} data-testid="pac-planner-asset-dimension-more">+{rows.length - VISIBLE_CATEGORIES}</span>
                                                 </Tooltip>
                                             {/if}

@@ -152,7 +152,11 @@
                     {@const checked = selected.includes(broker.id)}
                     <li data-testid="{testid}-broker" data-broker-id={broker.id} data-selectable={broker.selectable ? 'true' : 'false'} data-selected={checked ? 'true' : 'false'}>
                         {#if broker.selectable}
-                            <label class="flex items-start gap-3 rounded-lg border p-3 transition-colors {checked ? 'border-libre-green bg-libre-green/10 dark:bg-libre-green/20' : 'border-gray-200 dark:border-gray-700'} {snapshot ? 'cursor-pointer hover:border-libre-green' : 'cursor-not-allowed opacity-60'}">
+                            <label
+                                class="flex items-start gap-3 rounded-lg border p-3 transition-colors {checked ? 'border-libre-green bg-libre-green/10 dark:bg-libre-green/20' : 'border-gray-200 dark:border-gray-700'} {snapshot
+                                    ? 'cursor-pointer hover:border-libre-green'
+                                    : 'cursor-not-allowed opacity-60'}"
+                            >
                                 <input type="checkbox" class="mt-2 rounded border-gray-300 text-libre-green focus:ring-libre-green" {checked} disabled={!snapshot} data-testid="{testid}-check" onchange={(event) => toggle(broker.id, event.currentTarget.checked)} />
                                 <BrokerIcon brokerId={broker.id} iconUrl={broker.iconUrl} portalUrl={broker.portalUrl} pluginCode={broker.pluginCode} altText="" size={32} />
                                 <span class="min-w-0 flex-1">

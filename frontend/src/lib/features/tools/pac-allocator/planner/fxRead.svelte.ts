@@ -105,10 +105,7 @@ export class FxRateReader {
             return;
         }
         draft.refreshAsOf();
-        const source = await this.load.load(
-            {asOf: draft.data.asOf, targetCurrency: draft.data.valuationCurrency, sections: ['fx_quotes'], brokerIds: owners, assetIds: [], fxPairs: wanted},
-            accountGeneration,
-        );
+        const source = await this.load.load({asOf: draft.data.asOf, targetCurrency: draft.data.valuationCurrency, sections: ['fx_quotes'], brokerIds: owners, assetIds: [], fxPairs: wanted}, accountGeneration);
         if (sequence !== this.#sequence) return;
         if (!source) {
             if (this.load.status === 'error') this.#finish(this.load.error, wanted);
