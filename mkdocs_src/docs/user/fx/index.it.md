@@ -24,7 +24,7 @@ provider. Fai clic su una coppia FX per aprire la sua [pagina di dettaglio](deta
 - L'interruttore di visualizzazione accanto a **Aggiungi coppia** passa tra schede e tabella; LibreFolio
   ricorda la tua scelta.
 - Nella tabella, le colonne **Δ** mostrano la variazione nell'ultimo giorno, nel periodo e, sui
-  periodi lunghi, da 1W a 5Y. **Colonne** aggiunge quelle nascoste, come i **Provider** di ogni
+  periodi lunghi, da 1S a 5A. **Colonne** aggiunge quelle nascoste, come i **Provider** di ogni
   coppia FX.
 - Seleziona le righe per agire su più coppie FX contemporaneamente, oppure fai clic con il tasto destro
   su una riga.
