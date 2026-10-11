@@ -280,7 +280,7 @@ async def suggest_events(
 @tx_router.post("/promote-suggest", response_model=TXPromoteSuggestResponse)
 async def promote_suggest(
     inputs: List[TXPromoteSuggestInput],
-    tolerance_days: int = Query(7, ge=1, le=30),
+    tolerance_days: int = Query(7, ge=0, le=30),
     session: AsyncSession = Depends(get_session_generator),
     current_user: User = Depends(get_current_user),
 ) -> TXPromoteSuggestResponse:

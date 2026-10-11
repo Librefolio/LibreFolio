@@ -112,6 +112,23 @@ export const DELTA_PERIODS = [
     {key: '5Y', days: 1825},
 ] as const;
 
+/** Catalog keys of a duration label by unit letter: `{n}` + the reader's unit letter, the date picker's presets. */
+const DURATION_LABEL_KEYS: Readonly<Record<string, string>> = {
+    D: 'datePicker.presets.days',
+    W: 'datePicker.presets.weeks',
+    M: 'datePicker.presets.months',
+    Y: 'datePicker.presets.years',
+};
+
+export type DurationLabelTranslate = (key: string, options?: {values?: Record<string, string | number>}) => string;
+
+/** The reader's label of a period key such as `1D`, `1W` or `3M` (`1G`, `1S`, `3M` in Italian); an unrecognised key is returned as it is. */
+export function deltaPeriodLabel(key: string, t: DurationLabelTranslate): string {
+    const match = /^(\d+)([DWMY])$/.exec(key);
+    if (!match) return key;
+    return t(DURATION_LABEL_KEYS[match[2]], {values: {n: Number(match[1])}});
+}
+
 /**
  * Compute the % change between the last chart point and the point `periodDays` before it
  * (backward-filled: the closest point at-or-before the target date).

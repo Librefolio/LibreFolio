@@ -28,7 +28,7 @@ su [página de detalle](detail/index.md).
 
 ### 🔍 Filtrar por divisa
 
-Elige una divisa en **Filtrar por divisa** para listar solo sus pares, y una **Segunda divisa** para reducir
+Elige una divisa en **Filtrar divisa** para listar solo sus pares, y una **Segunda divisa** para reducir
 la lista a un par; ✕ borra ambas.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
@@ -39,7 +39,7 @@ la lista a un par; ✕ borra ambas.
 
 - El selector de **periodo** de la parte superior establece el rango de todos los gráficos y variaciones; en la vista de tarjetas,
   **Abs** / **%** muestra todas las tarjetas como tipos o como variación porcentual.
-- **Sincronizar todo** descarga los nuevos tipos de cambio ([Sincronización](sync.md)); **Recargar todo** vuelve a leer los
+- **Sinc. Todo** descarga los nuevos tipos de cambio ([Sincronización](sync.md)); **Recargar todo** vuelve a leer los
   almacenados. **Configuración** establece la apariencia de cada tarjeta ([Ajustes del gráfico](chart-settings.md)).
 - En una tarjeta, ⇄ invierte la dirección mostrada (USD → EUR en lugar de EUR → USD); los botones de la parte inferior
   abren sus propios ajustes del gráfico, **Sincronizar** o **Recargar**, o eliminarla.

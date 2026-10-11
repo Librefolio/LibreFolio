@@ -33,8 +33,8 @@ Les **frais** et les **impôts** représentent des coûts qui réduisent la vale
 |----------|-------------|-------------|
 | **Impôt sur les plus-values** | Impôt sur le profit réalisé lors d'une vente | À la vente |
 | **Retenue à la source** | Impôt déduit à la source (dividendes, intérêts) | Au paiement |
-| **Droit de timbre** | Impôt sur les transactions (ex: stamp duty au Royaume-Uni) | À l'achat |
-| **Taxe sur les transactions financières** | Impôt sur les transactions (ex: taxe Tobin en Italie) | À la transaction |
+| **Droit de timbre** | Impôt sur les transactions (ex. : stamp duty au Royaume-Uni) | À l'achat |
+| **Taxe sur les transactions financières** | Impôt sur les transactions (ex. : taxe Tobin en Italie) | À la transaction |
 
 ---
 
@@ -71,18 +71,18 @@ $$
 Où :
 
 - $V_0$ = investissement initial
-- $r$ = taux de rendement annuel brut (ex: 0.07 pour 7%)
-- $f$ = taux de frais annuel (ex: 0.01 pour 1%)
+- $r$ = taux de rendement annuel brut (ex. : 0,07 pour 7 %)
+- $f$ = taux de frais annuel (ex. : 0,01 pour 1 %)
 - $n$ = nombre d'années
 
-!!! example "Le frein de 1% sur 30 ans"
+!!! example "Le frein de 1 % sur 30 ans"
 
-    Avec 10 000 $ investis à un rendement brut de 7% :
+    Avec 10 000 $ investis à un rendement brut de 7 % :
 
     - **Sans frais** : 10 000 $ × $(1.07)^{30}$ = **76 123 $**
-    - **Avec 1% de frais** : 10 000 $ × $(1.06)^{30}$ = **57 435 $**
+    - **Avec 1 % de frais** : 10 000 $ × $(1.06)^{30}$ = **57 435 $**
 
-    Les frais annuels de 1% vous coûtent **18 688 $** — soit une réduction de 26% de la valeur finale.
+    Les frais annuels de 1 % vous coûtent **18 688 $** — soit une réduction de 26 % de la valeur finale.
 
 ---
 

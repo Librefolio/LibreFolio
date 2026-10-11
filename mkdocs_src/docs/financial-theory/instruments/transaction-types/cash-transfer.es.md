@@ -46,7 +46,7 @@ Internamente, una Transferencia de fondos se compone de un Retiro y un Depósito
 | **Separar par** (desvincular) | Transferencia de fondos → Retiro + Depósito independientes |
 | **Promocionar** (vincular) | Retiro + Depósito → Transferencia de fondos |
 
-**Restricciones de promoción**: misma divisa, brókers diferentes, importes de efectivo opuestos.
+**Restricciones de promoción**: misma divisa, brókeres diferentes, importes de efectivo opuestos.
 
 ---
 

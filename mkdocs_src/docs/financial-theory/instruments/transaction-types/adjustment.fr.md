@@ -34,7 +34,7 @@ Exemples issus des imports : les instantanés `patrimonio` d'Intesa Sanpaolo uti
 
 !!! note "Promouvoir en Transfert"
 
-    Deux lignes `ADJUSTMENT` avec des **quantités opposées**, le **même actif** et des **courtiers différents** peuvent être **promues** en une paire de Transfert d'actifs. Ceci est utile lorsque vous avez initialement enregistré des ajustements séparés et que vous souhaitez ultérieurement les lier comme un transfert.
+    Deux lignes `ADJUSTMENT` avec des **quantités opposées**, le **même actif** et des **courtiers différents** peuvent être **promues** en une paire de Transfert d'actifs. Ceci est utile lorsque vous avez initialement enregistré des ajustements séparés et que vous souhaitez ultérieurement les lier comme un transfert. Aucune des deux lignes ne peut être liée à un événement d'actif, une division par exemple : un transfert ne peut pas porter ce lien, donc LibreFolio ne suggère ni n'accepte une telle promotion.
 
 ---
 
@@ -42,8 +42,10 @@ Exemples issus des imports : les instantanés `patrimonio` d'Intesa Sanpaolo uti
 
 Les ajustements avec une quantité positive **augmentent** le nombre de lots (FIFO). Le prix de revient pour les lots créés par ajustement dépend de la présence d'un **Forçage du coût de base (Cost Basis Override)** :
 
-- **Avec forçage** : la valeur spécifiée est utilisée comme **coût d'acquisition unitaire** (Prix de Revient Unitaire — PRU)
-- **Sans forçage** : le lot est créé avec un coût nul (acquisition gratuite — ex: dons, airdrops)
+- **Avec forçage** : la valeur spécifiée est utilisée comme **coût d'acquisition unitaire** (Prix de Revient Unitaire — PRU) ; un forçage à **zéro** enregistre une acquisition gratuite, comme un airdrop
+- **Sans forçage** : le lot FIFO s'ouvre à un coût nul, mais le coût moyen (PRU) traite le coût comme **inconnu**, et non gratuit : les unités rejoignent la position sans coût, son PRU reste incomplet jusqu'à la clôture de la position, le Tableau de bord affiche son coût moyen et son P&L latent comme indisponibles, et un avertissement de qualité des données nomme l'actif (voir [Remplacement du coût de base](../../technical-analysis/performance-metrics/weighted-average-cost.md#cost-basis-override))
+
+Un ajustement positif ne peut pas être enregistré sans coût de base : saisissez-en un, ou choisissez **Auto**, qui enregistre le coût moyen de la position que rejoignent les unités (zéro si elle n'en contient pas encore). Deux types de lignes peuvent encore en être dépourvues : un ajustement lié à une **division**, qu'Auto enregistre sans coût de base parce que la division conserve le coût déjà détenu et le répartit sur la nouvelle quantité, et les lignes enregistrées avant que le coût de base ne devienne obligatoire.
 
 !!! info "Valeur unitaire"
 

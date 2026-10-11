@@ -62,7 +62,7 @@
     "eventsInCurrency": "Eventi in {currency}",
     "addPricesManually": "Aggiungi manualmente",
     "openFxPair": "Apri dettaglio coppia FX",
-    "aiExport": "Export AI",
+    "aiExport": "AI Export",
     "browse": {
       "previous": "Asset precedente",
       "next": "Asset successivo",
@@ -1296,7 +1296,7 @@
     "areaFillDesc": "Gradiente sotto la linea",
     "gridLines": "Griglia",
     "gridLinesDesc": "Griglia orizzontale tratteggiata",
-    "staleGradient": "Gradiente Dati Vecchi",
+    "staleGradient": "Gradiente dati obsoleti",
     "staleGradientDesc": "Sfuma i dati vecchi",
     "overlaySignals": "Segnali Sovrapposti",
     "noSignals": "Nessun segnale sovrapposto configurato. Aggiungine uno qui sotto.",
@@ -1402,7 +1402,8 @@
       "price": "Asse dei prezzi ({currency})",
       "signal": "Asse {name}",
       "volume": "Asse dei volumi"
-    }
+    },
+    "yAxisAuto": "Auto"
   },
   "common": {
     "addMeasure": "Aggiungi misura",
@@ -1638,7 +1639,7 @@
     "noPositions": "Nessuna posizione disponibile",
     "noPeriodPnl": "Nessun P&L nel periodo selezionato",
     "seeAllPositions": "Vedi tutte →",
-    "aiExport": "Export AI",
+    "aiExport": "AI Export",
     "periodPnlTooltip": "Guadagno o perdita totale attribuibile solo al periodo selezionato (variazione non realizzata + realizzato + reddito − costi). Può differire dal guadagno totale della posizione.",
     "unrealizedPnlPercent": "P&L %",
     "pnlChange1d": "Δ1",
@@ -1771,7 +1772,13 @@
     "emptyMessage": "Nessun dato. Usa 'Aggiungi riga' o 'Importa CSV' per aggiungerne.",
     "editorTipDesktop": "Doppio clic sul grafico per saltare a quella data",
     "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data",
-    "saveFailed": "Salvataggio non riuscito: {error}"
+    "saveFailed": "Salvataggio non riuscito: {error}",
+    "status": {
+      "original": "Originale",
+      "edited": "Modificato",
+      "deleted": "Eliminato",
+      "appended": "Nuovo"
+    }
   },
   "datePicker": {
     "presets": {
@@ -1779,7 +1786,11 @@
       "mtd": "MTD",
       "qtd": "QTD",
       "ytd": "YTD",
-      "max": "Tutti"
+      "max": "Tutti",
+      "days": "{n}G",
+      "weeks": "{n}S",
+      "months": "{n}M",
+      "years": "{n}A"
     },
     "from": "Dal",
     "to": "Al",
@@ -1940,7 +1951,7 @@
     "noDataManual": "Nessun dato disponibile — inserire i tassi manualmente",
     "insertManually": "Inserisci manualmente",
     "syncDisabledManual": "Sync disabilitato — nessun provider configurato. Aggiungere un provider o inserire i tassi manualmente.",
-    "aiExport": "Export AI",
+    "aiExport": "AI Export",
     "syncFailed": "Sincronizzazione non riuscita: {error}",
     "loadFailed": "Impossibile caricare i tassi",
     "assetFallback": "Asset n. {id}",
@@ -2336,7 +2347,7 @@
       "assetEvent": "Evento asset",
       "eventPickerNone": "Nessun evento collegato",
       "cashLabelTotal": "Importo totale (non per singola azione)",
-      "costBasis": "Override costo medio",
+      "costBasis": "Costo di carico manuale",
       "linkUuid": "TX Collegata",
       "pairPartner": "Transazione collegata",
       "hintSignPositive": "deve essere > 0",
@@ -2395,7 +2406,7 @@
     },
     "costBasisOverride": {
       "tooltip": "Override del prezzo medio di carico. Se vuoto, calcolato automaticamente dagli acquisti al salvataggio. Sovrascrivi per Exit Tax, eredità o regole fiscali particolari. Usa il selettore Totale/Per unità sotto per scegliere come inserire questo importo.",
-      "warningAdjustment": "Il costo base manuale è vuoto: senza, la transazione non si può salvare. Se queste quote non sono costate nulla (un frazionamento o un regalo), scrivi 0."
+      "warningAdjustment": "Il costo di carico manuale è vuoto: senza, la transazione non si può salvare. Scrivi quanto sono costate queste quote: 0 per uno split, il costo di carico originale del donante per un regalo."
     },
     "wacPreview": {
       "calculating": "Calcolo in corso...",
@@ -5079,11 +5090,11 @@
       "logout": "Disconnettiti"
     },
     "errors": {
-      "loadTitle": "Non siamo riusciti a caricare l'onboarding",
+      "loadTitle": "Non siamo riusciti a caricare le guide",
       "loadDescription": "Riprova la configurazione o esci in sicurezza.",
-      "degraded": "Non è stato possibile aggiornare lo stato dell'onboarding. La configurazione completata resta attiva.",
+      "degraded": "Non è stato possibile aggiornare lo stato delle guide. La configurazione completata resta attiva.",
       "replayStart": "Impossibile avviare la guida. Riprova.",
-      "progressUnavailable": "L'avanzamento dell'onboarding non è disponibile. Ricarica e riprova.",
+      "progressUnavailable": "L'avanzamento delle guide non è disponibile. Ricarica e riprova.",
       "complete": "Impossibile completare la guida. Riprova.",
       "skip": "Impossibile saltare la guida. Riprova."
     },

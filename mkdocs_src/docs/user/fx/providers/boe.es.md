@@ -23,5 +23,5 @@ El Bank of England admite aproximadamente 15 monedas principales, incluyendo:
 
 ## 📝 Notas Importantes
 
-- **Formato de cotizaciones**: Los tipos se expresan como la cantidad de moneda extranjera por 1 GBP (ej. 1 GBP = 1.25 USD). LibreFolio normaliza automáticamente esta representación en segundo plano.
+- **Formato de cotizaciones**: Los tipos se expresan como la cantidad de moneda extranjera por 1 GBP (ej. 1 GBP = 1,25 USD). LibreFolio normaliza automáticamente esta representación en segundo plano.
 - **Festivos**: El BOE no publica tipos en los días festivos bancarios del Reino Unido ni los fines de semana.

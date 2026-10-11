@@ -13,7 +13,7 @@ visualizzando.
 ## 🔓 Come accedere
 
 Nella pagina di dettaglio della coppia, clicca su **Provider** (🔧) nella barra degli strumenti, accanto a **Sincronizza**. Si apre la
-finestra **Modifica provider della coppia**.
+finestra **Modifica Provider Coppia**.
 
 ---
 
@@ -31,7 +31,7 @@ Sotto **Percorsi di conversione**, ogni riga è un percorso, in ordine di priori
 
 ## 🔧 Modificare i provider
 
-1. Clicca su **Aggiungi percorso di conversione** e scegli un percorso sotto **Conversione diretta (1 passaggio)** oppure
+1. Clicca su **Aggiungi percorso di conversione** e scegli un percorso sotto **Conversione diretta (1 passo)** oppure
    **Conversione a catena**. Digita nella casella di ricerca per filtrare per provider, valuta o paese.
 2. Trascina le righe per impostarne la priorità (su un telefono, usa le frecce su e giù).
 3. Clicca su **Salva configurazione**: la prossima sincronizzazione userà i nuovi percorsi.

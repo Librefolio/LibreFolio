@@ -463,7 +463,7 @@
     }
   },
   "user/brokers/index.en.md": {
-    "md5": "d8f70a33d4e092238bb8ebbee027adef",
+    "md5": "cd52fb5543735be6cbccb39280fbb902",
     "langs_done": [
       "es",
       "fr",
@@ -483,7 +483,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 237.3,
-        "stamped_at": "2026-10-10T11:10:52.389522+00:00",
+        "stamped_at": "2026-10-11T16:16:36.268293+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -498,7 +498,7 @@
         "elapsed_s": 222.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=69, translated=70 (Δ+1)\n  L109: src=1 trn=2\n    EN: The Brokers page, the **Add Broker** form and the broker page each have a short contextual guide: replay them from [Sett\n    TR: La page **Courtiers**, le formulaire **Ajouter un courtier** et la page du courtier disposent chacun d'un bref guide con\n\nSOURCE_OUTLINE (for reference):\n  # 🏦 Brokers\n    ## ➕ Create a broker\n    ## ✏️ Edit or delete a broker\n    ## 🗂️ Inside a broker\n    ## 📈 Overview tab\n    ## 🔍 Positions tab\n    ## 📑 In this section",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-10T11:10:52.389522+00:00",
+        "stamped_at": "2026-10-11T16:16:36.268293+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -511,7 +511,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 260.4,
-        "stamped_at": "2026-10-10T11:10:52.389522+00:00",
+        "stamped_at": "2026-10-11T16:16:36.268293+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -1533,7 +1533,7 @@
     }
   },
   "user/assets/detail/chart.en.md": {
-    "md5": "721f9ff633d5ea81aebb06cce52b2569",
+    "md5": "5e62978cefec89d424f5ab98e1ea4728",
     "langs_done": [
       "es",
       "fr",
@@ -1552,7 +1552,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n1. **Glossary deviation — \"measure\" should be \"misura\" (mandatory mapping).**\n   The glossary explicitly maps `measure → misura`. The translation uses \"misurazione/misurazioni\" in two places:\n   - \"**📏 Aggiungi misurazione**\" should be \"**📏 Aggiungi misura**\" (or at least the term \"measure\" should not be rendered as \"misurazione\").\n   - \"**Prezzi** e **Rendimento rolling** mantengono misurazioni separate.\" should be \"**Prezzi** e **Rendimento rolling** mantengono misure separate.\"\n   This is also internally inconsistent, since the same document links to \"[Misure](measures.md)\". All occurrences of \"measure(s)\" must use \"misura/misure\".\n\n2. **Glossary deviation — \"chart settings\" should be \"impostazioni grafico\" (mandatory mapping).**\n   The glossary maps `chart settings → impostazioni grafico`. The translation renders the link text as \"Impostazioni del grafico\":\n   > \"vedi [Impostazioni del grafico](../../fx/chart-settings.md)\"\n   Correct to: \"vedi [impostazioni grafico](../../fx/chart-settings.md)\" (matching the glossary's exact form, lowercase as in the source link text \"Chart Settings\" — note the source capitalizes it, so \"[Impostazioni grafico]\" is also acceptable, but the \"del\" must be removed).\n\n3. **Glossary deviation — \"carried forward\" should be \"mantenuto\".**\n   The glossary maps `carried forward → mantenuto`. The source-phrase \"carried over from an earlier day\" is rendered as \"ripreso da un giorno precedente\":\n   > \"attenua i punti il cui prezzo o tasso di cambio è ripreso da un giorno precedente\"\n   This should use the mandated term, e.g.: \"attenua i punti il cui prezzo o tasso di cambio è mantenuto da un giorno precedente\".\n\n4. **Glossary deviation — \"stale\" should be \"obsoleto\".**\n   The glossary maps `stale → obsoleto`. The UI label \"Stale Gradient\" is rendered as \"Gradiente di obsolescenza\". The noun \"obsolescenza\" does not match the mandated adjective \"obsoleto\". Verify against the actual UI string; if the label is translated consistently with the glossary it should read something like \"Gradiente obsoleto\" / \"Sfumatura obsoleta\" rather than \"Gradiente di obsolescenza\".\n\n5. **Awkward/incorrect syntax in the opening sentence.**\n   Source: \"the price history, or how much the price moved over a rolling window.\"\n   Translation: \"lo storico dei prezzi, oppure di quanto il prezzo si è mosso su una finestra mobile.\"\n   The \"di quanto\" after \"oppure\" is syntactically broken (a noun phrase is needed, not a prepositional clause). Fix to: \"lo storico dei prezzi, oppure quanto il prezzo si è mosso su una finestra mobile.\"\n\n6. **Minor — UI label \"Create forex…\".**\n   The source keeps \"forex\" untranslated in the button label (\"Create forex…\"); the translation renders it as \"Crea forex…\". \"Create forex\" is a UI string that should be checked against the actual localized UI; \"forex\" must remain \"forex\". The verb should match whatever the app uses (likely \"Crea forex…\" is fine, but confirm consistency with any other occurrences in the docs).\n\n7. **Minor — \"Dashboard\" capitalization.**\n   Source uses \"Dashboard\" as a page name: \"the Dashboard, broker, asset and FX pages\". Translation: \"nelle pagine Dashboard, broker, asset e FX\". The glossary maps `dashboard → dashboard` (lowercase). For glossary consistency, use lowercase: \"nelle pagine dashboard, broker, asset e FX\".\n\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 85.9
+        "elapsed_s": 85.9,
+        "stamped_at": "2026-10-11T19:51:06.077503+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:05:57.598091+00:00",
@@ -1563,7 +1565,9 @@
         "critique": "<translation_critique>\n<improvements>\n**1. Terminologie obligatoire — « stale → obsolète » non appliquée (à corriger en priorité)**\nLe glossaire impose `stale → obsolète`. La traduction utilise « périmées » aux deux endroits :\n- « **Dégradé des valeurs périmées** » → **« Dégradé des valeurs obsolètes »**\n- « le dégradé des valeurs périmées » → **« le dégradé des valeurs obsolètes »**\n\n**2. Terminologie obligatoire — « settings → paramètres » non appliquée**\nLe glossaire impose `settings → paramètres`. La phrase « Ces réglages et vos signaux sont mémorisés pour cet actif » doit devenir :\n→ **« Ces paramètres et vos signaux sont mémorisés pour cet actif »**\n\n**3. Terminologie obligatoire — « chart settings → paramètres du graphique »**\nLe glossaire donne `chart settings → paramètres du graphique` (singulier). Le lien final utilise le pluriel :\n- « voir [Paramètres des graphiques](../../fx/chart-settings.md) » → **« voir [Paramètres du graphique](../../fx/chart-settings.md) »**\n(L’URL `../../fx/chart-settings.md` reste inchangée.)\n\n**4. Terminologie obligatoire — « carried forward → reporté » non appliquée**\nLa description du *Stale Gradient* dit « dont le prix ou le taux de change est repris d'un jour antérieur ». Le mapping `carried forward → reporté` doit être employé :\n→ **« (atténue les points dont le prix ou le taux de change est reporté depuis un jour antérieur) »**\nRemplacer ensuite « est repris » par la même formulation dans la suite de la phrase.\n\n**5. Exactitude sémantique — « the date it is compared with »**\n« ↩ donne la date à laquelle il est comparé » peut se lire comme « la date à laquelle la comparaison a lieu ». Le sens est « la date avec laquelle le point est comparé » :\n→ **« ↩ donne la date avec laquelle il est comparé »**\n\n**6. Grammaire — interrogation indirecte avec inversion**\n« Cette vue répond à la question *de combien le prix a-t-il varié sur la fenêtre, à chaque date ?* » : après « répond à la question », il s’agit d’une interrogation indirecte, l’inversion sujet-verbe est fautive en français. Corriger :\n→ **« Cette vue répond à la question : *de combien le prix a varié sur la fenêtre, à chaque date ?* »** (ou, sans les deux-points : « …la question de combien le prix a varié… »).\n\n**7. Fluidité de la phrase d’introduction (facultatif mais utile)**\n« l’historique des prix, ou de combien le prix a varié sur une fenêtre glissante » est bancal à cause de « ou de combien ». Proposition :\n→ **« l’historique des prix, ou l’ampleur de la variation du prix sur une fenêtre glissante »**\n\n**8. Libellés d’interface — à vérifier**\n- « **Sync** » est rendu par « **Synchroniser** ». Les autres libellés d’UI sont ici traduits (Convert to → Convertir en, Window → Fenêtre, Aesthetics → Esthétique), donc c’est cohérent, mais assurez-vous que le bouton réel de l’application est bien « Synchroniser » en français ; sinon, conservez « Sync » tel quel (les libellés d’UI ne doivent pas être inventés).\n- Même remarque pour les badges « **Weekly** / **Monthly** » rendus par « **Hebdomadaire** / **Mensuel** » et pour les préréglages « 3Y, 5Y, 10Y, WTD, MTD, QTD » qui, eux, sont restés en anglais — vérifier la source de vérité des libellés pour éviter une incohérence entre badges traduits et préréglages non traduits.\n\n**Points vérifiés et conformes (aucune action requise)**\n- Tous les liens et ancres sont préservés à l’identique : `events.md`, `signals.md#data-comparison`, `measures.md`, `data-editor.md`, `../index.md`, `../../fx/chart-settings.md`, `../../../financial-theory/fundamentals/returns.md#rolling-return-calendar`, `../../../developer/frontend/components/charts.md`.\n- Les ancres d’en-tête `{: #primary-modes }` et `{: #rolling-return }`, les blocs HTML (`screenshot-container`, `gallery-img`, `data-category`, `data-name`, styles), les admonitions `??? note \"…\"` et les blocs mathématiques `$$ … $$` sont intacts.\n- Emojis, variables `$N$`, `$R(d)$`, `$P$`, abréviations `1W/1M/3M/1Y`, `YTD`, `MAX`, `Abs`, `%` conservés.\n- Autres mappings du glossaire respectés : asset → actif, dashboard → tableau de bord, broker → courtier, event → événement, data editor → éditeur de données, measure → mesure, exchange rate → taux de change, FX pair → paire FX, rolling window → fenêtre glissante.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 132.4
+        "elapsed_s": 132.4,
+        "stamped_at": "2026-10-11T19:51:06.077503+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:05:57.598166+00:00",
@@ -1574,7 +1578,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Mandatory glossary term — `settings` → `configuración`:** The translation renders the generic UI term “Settings” as “Ajustes”: “usa **Ajustes** en la [página de Activos](../index.md)”. This violates the glossary mapping. Change to “usa **Configuración** en la [página de Activos](../index.md)”. Do not change “Ajustes del gráfico”, since the glossary explicitly maps `chart settings` → `ajustes del gráfico`.\n- **Mandatory glossary term — `measure` → `medida`:** “📏 Añadir medición”, “consulta [Mediciones](measures.md)”, “mantienen mediciones independientes”, and “📐 **[Mediciones](measures.md)**” should use `medida`: “📏 Añadir medida”, “consulta [Medidas](measures.md)”, “mantienen medidas independientes”, “📐 **[Medidas](measures.md)**”. If “Add measurement” is a distinct UI string, still consider “Añadir medida” for consistency with the feature name.\n- **Terminology/UI consistency — `banner`:** In “A banner above the chart names the pair”, `banner` is translated as “aviso”: “Un aviso sobre el gráfico indica el par...”. The glossary uses “banner” in other banner terms (“banner de calidad de datos”, “banner de campos por completar”), so use “banner” here: “Un banner sobre el gráfico indica el par...”.\n- **Grammar/capitalization:** “límites **Personalizados**” has an unnecessary capital mid-sentence. Correct to “límites **personalizados**” unless it is a fixed UI label. Also consider lowercasing option names when they are not bold labels: “el relleno de área, los colores de línea base y el degradado de datos obsoletos”.\n- **Naturalness/grammar:** “El rango que elijas te sigue a las páginas de Panel, bróker, activo y FX...” is an anglicism. Better: “El rango que elijas se mantiene en las páginas de Panel, bróker, activo y FX...” or “te acompaña en las páginas...”.\n- **Imperative consistency in Related section:** “Superpone indicadores técnicos” uses a formal imperative, while the other bullets use informal imperatives (“Mide”, “Comprende”). Change to “Superpón indicadores técnicos” for consistency.\n- **Clarity/ambiguity:** “cuando falta alguno de sus dos precios o no es positivo” is slightly ambiguous. Better: “cuando falta alguno de sus dos precios o este no es positivo” or “o alguno de ellos no es positivo”.\n- **Optional consistency:** “Crear forex…” may need alignment with the glossary term `FX pair` → `par FX` if it is not a fixed UI string: consider “Crear par FX…”. If it is a locked UI label, leave as is.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 194.4
+        "elapsed_s": 194.4,
+        "stamped_at": "2026-10-11T19:51:06.077503+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -2183,11 +2189,11 @@
     }
   },
   "financial-theory/instruments/asset-types/stocks.en.md": {
-    "md5": "613a0ca7a1df99cd5575bdb78003c30c",
+    "md5": "972769b76760e35fd73345ae4eed52f0",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-04-12T13:19:17.452718+00:00",
     "analysis": "[{\"name\": \"stock / share / equity\", \"keywords\": [\"stock share equity financial instrument ownership company\"]}, {\"name\": \"shareholder\", \"keywords\": [\"shareholder stock owner company ownership\"]}, {\"name\": \"assets and earnings\", \"keywords\": [\"assets earnings company financial statement\"]}, {\"name\": \"Real-time or delayed quotes\", \"keywords\": [\"real-time delayed stock quotes market data\"]}, {\"name\": \"Dividends\", \"keywords\": [\"dividend stock payment shareholder profit distribution\"]}, {\"name\": \"Splits\", \"keywords\": [\"stock split share split company action\"]}, {\"name\": \"Price discovery\", \"keywords\": [\"price discovery stock market supply demand\"]}, {\"name\": \"ex-date\", \"keywords\": [\"ex-date dividend stock trading\"]}, {\"name\": \"Capital gains\", \"keywords\": [\"capital gain profit loss investment\"]}, {\"name\": \"liquidity\", \"keywords\": [\"liquidity stock market trading volume\"]}, {\"name\": \"Total return\", \"keywords\": [\"total return investment performance dividend\"]}, {\"name\": \"price appreciation\", \"keywords\": [\"price appreciation stock gain value\"]}, {\"name\": \"holding period\", \"keywords\": [\"holding period investment duration\"]}, {\"name\": \"Taxation\", \"keywords\": [\"taxation capital gains dividend tax\"]}, {\"name\": \"supply and demand\", \"keywords\": [\"supply demand stock price market\"]}]",
@@ -2202,7 +2208,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary)**: In the \"Rendimento Totale\" section, the phrase \"periodo di detenzione\" is used for \"holding period\". While semantically correct, the glossary explicitly maps \"holding\" to \"posizione\". To maintain consistency with the project's terminology, change \"periodo di detenzione\" to \"periodo di detenzione della posizione\" or simply \"periodo della posizione\".\n- **Terminology Consistency (Glossary)**: In the first paragraph, \"equity\" is left as \"equity\" in parentheses. While \"equity\" is often used in finance, the glossary defines \"asset\" as \"asset\". Since equity is a type of asset, ensure that \"equity\" is treated as a technical term or consider if it should be omitted to avoid redundancy with \"azione\". However, the primary issue is ensuring \"asset\" remains \"asset\" (which the translation did correctly).\n- **Accuracy/Natural phrasing**: In the table under \"Valuta\", the translation \"Denominata nella valuta locale della borsa\" is a literal translation of \"Denominated in...\". In Italian financial contexts, assets are \"denominate in\" (denominate in) or \"espresse in\" (expressed in). A more natural phrasing would be: \"Denominata nella valuta locale della borsa\" $\\rightarrow$ \"Denominata in valuta locale della borsa\".\n- **Terminology (Financial Accuracy)**: In the \"How Stocks Work\" section, point 2, the translation \"data ex-dividend\" is used for \"ex-date\". While \"ex-dividend date\" is the full term, the source uses \"ex-date\". For consistency and brevity, \"data ex\" is the standard Italian shorthand in trading. Suggest changing \"data ex-dividend\" to \"data ex\".\n- **Terminology Consistency**: In the \"Related\" section, the translation uses \"Eventi Dividendo\" and \"Eventi Split\". While correct, ensure these match the internal link targets if those pages use \"Evento Dividendo\" (singular) as seen in the body text. Since the source uses \"Dividend Events\" (plural), the translation is correct, but consistency with the linked page titles is paramount.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 49.7
+        "elapsed_s": 49.7,
+        "stamped_at": "2026-10-11T19:51:03.862195+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-04-12T13:19:17.452434+00:00",
@@ -2213,7 +2221,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology (Glossary):** The term \"holding period\" is translated as \"période de détention\". According to the glossary, \"holding\" must be translated as \"position\". Suggest changing \"période de détention\" to \"période de position\" or \"durée de la position\" to maintain consistency with the project's terminology.\n- **Terminology (Consistency):** The term \"Splits\" is left in English in the table and the list, but translated as \"fractionner\" in the descriptions. While \"split\" is common in finance, for a technical document, it should be consistent. I suggest using \"Division d'actions (Splits)\" or consistently using \"Splits\" as a technical term, but \"fractionnement\" is the correct French financial term.\n- **Semantic Accuracy (Pricing):** In the table, \"Pricing\" is translated as \"Tarification\". In the context of stocks, \"Pricing\" refers to the \"Cotation\" (the process of determining the price). \"Tarification\" usually refers to the setting of a price for a service/product. Suggest replacing \"Tarification\" with \"Cotation\".\n- **Semantic Accuracy (Splits):** In the \"Related\" section, \"Forward and reverse splits\" is translated as \"Splits avant et reverse splits\". \"Forward split\" is simply a \"split\" (division), and \"reverse split\" is a \"regroupement d'actions\". Suggest replacing \"Splits avant et reverse splits\" with \"Divisions et regroupements d'actions\".\n- **Grammar/Natural Flow:** In the first paragraph, \"représente une propriété partielle\" is slightly awkward. \"Représente une part du capital\" or \"confère une propriété partielle\" is more natural in French financial contexts. Suggest: \"représente une part du capital d'une société cotée en bourse\".\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 49.8
+        "elapsed_s": 49.8,
+        "stamped_at": "2026-10-11T19:51:03.862195+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-04-12T13:19:17.452726+00:00",
@@ -2224,12 +2234,14 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Violation (Capital Gains):** The glossary mandates \"capital gain\" $\\rightarrow$ \"plusvalía\". The translation uses \"Ganancias de capital\". Change \"Ganancias de capital\" to \"Plusvalías\".\n- **Terminology Violation (Holding):** The glossary mandates \"holding\" $\\rightarrow$ \"posición\". The translation uses \"periodo de tenencia\". Change \"periodo de tenencia\" to \"periodo de posición\" or \"periodo de mantenimiento de la posición\".\n- **Terminology Consistency (Splits):** The term \"Splits\" is left in English in some places and translated as \"dividir\" in others. While \"split\" is common in finance, for consistency with the linked page titles \"Eventos de Split\", it should be handled uniformly. However, \"Splits directos e inversos\" (for Forward and reverse splits) is acceptable, but \"Forward\" should be explicitly translated to \"directos\" (as done) and \"Reverse\" to \"inversos\".\n- **Semantic Accuracy (Equity):** The translation uses \"capital social\" for \"equity\". In the context of a single stock/share, \"equity\" refers to \"patrimonio\" or \"capital propio\". \"Capital social\" refers to the total capital of a company. Suggest changing \"(o participación / capital social)\" to \"(o participación / capital)\".\n- **Grammar/Syntax (Price discovery):** \"Descubrimiento de precios\" is a literal translation. In Spanish financial contexts, \"Determinación de precios\" is more natural.\n- **Localization (Ex-date):** The translation keeps \"ex-date\". While used by professionals, \"fecha ex-dividendo\" is the correct Spanish terminology. Change \"fecha ex-date\" to \"fecha ex-dividendo\".\n- **Pronoun Consistency:** In point 3 under \"Cómo Funcionan las Acciones\", the translation switches to the formal \"su ganancia\" (your profit), whereas the rest of the text uses the informal \"compras\" (you buy). Change \"determina su ganancia o pérdida\" to \"determina tu ganancia o pérdida\" to maintain consistency.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 49.3
+        "elapsed_s": 49.3,
+        "stamped_at": "2026-10-11T19:51:03.862195+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
   "financial-theory/instruments/asset-types/etfs.en.md": {
-    "md5": "db1afaf94a3bf2243a7dcc7b318daa93",
+    "md5": "7953cc3674dbca3a27b1f3545c759784",
     "langs_done": [
       "es",
       "fr",
@@ -2249,7 +2261,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 51.0,
-        "stamped_at": "2026-10-10T08:18:57.211165+00:00",
+        "stamped_at": "2026-10-11T19:50:57.390403+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -2262,7 +2274,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 52.1,
-        "stamped_at": "2026-10-10T08:18:57.211165+00:00",
+        "stamped_at": "2026-10-11T19:50:57.390403+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -2275,24 +2287,38 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 51.3,
-        "stamped_at": "2026-10-10T08:18:57.211165+00:00",
+        "stamped_at": "2026-10-11T19:50:57.390403+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "financial-theory/instruments/asset-types/bonds.en.md": {
-    "md5": "067367a2b0bdab1adde34f9c26ba2b31",
+    "md5": "15e67076eb24c2cf53aa9d7eb297f3a4",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "analysis": "[{\"name\": \"bond\", \"keywords\": [\"bond definition fixed-income security financial instrument\"]}, {\"name\": \"fixed-income security\", \"keywords\": [\"fixed income security meaning financial investment\"]}, {\"name\": \"coupons\", \"keywords\": [\"bond coupon payment periodic interest fixed income\"]}, {\"name\": \"face value\", \"keywords\": [\"face value bond principal par value\"]}, {\"name\": \"principal\", \"keywords\": [\"principal bond amount borrowed repaid maturity\"]}, {\"name\": \"maturity\", \"keywords\": [\"bond maturity date end of term return principal\"]}, {\"name\": \"quoted as percentage of face value\", \"keywords\": [\"bond pricing percentage of par quotation\"]}, {\"name\": \"denominated in the issuance currency\", \"keywords\": [\"currency denomination bond issuance currency\"]}, {\"name\": \"fixed or floating rate\", \"keywords\": [\"fixed rate floating rate bond interest type\"]}, {\"name\": \"coupon rate\", \"keywords\": [\"coupon rate annual interest rate bond\"]}, {\"name\": \"yield to maturity\", \"keywords\": [\"yield to maturity YTM bond total return calculation\"]}, {\"name\": \"dirty price\", \"keywords\": [\"dirty price bond accrued interest inclusive price\"]}, {\"name\": \"clean price\", \"keywords\": [\"clean price bond quoted price excluding accrued interest\"]}, {\"name\": \"accrued interest\", \"keywords\": [\"accrued interest bond interest accumulated since last payment\"]}, {\"name\": \"day count convention\", \"keywords\": [\"day count convention financial calculation interest accrual\"]}, {\"name\": \"price–yield relationship\", \"keywords\": [\"bond price yield inverse relationship\"]}, {\"name\": \"Scheduled Investment\", \"keywords\": [\"Scheduled Investment LibreFolio provider data source\"]}, {\"name\": \"Mark-to-market\", \"keywords\": [\"mark to market valuation accounting adjustment\"]}, {\"name\": \"write-downs\", \"keywords\": [\"write-down asset reduction impairment bond\"]}, {\"name\": \"Interest Events\", \"keywords\": [\"Interest Events asset event coupon payment accrual LibreFolio\"]}, {\"name\": \"Maturity Settlement\", \"keywords\": [\"Maturity Settlement asset event capital return bond end\"]}, {\"name\": \"Price Adjustment\", \"keywords\": [\"Price Adjustment asset event mark to market revaluation\"]}, {\"name\": \"par\", \"keywords\": [\"par value bond face value 100%\"]}]",
     "analysis_model": "deepseek/deepseek-v4-flash:free",
-    "langs": {}
+    "langs": {
+      "it": {
+        "stamped_at": "2026-10-11T19:50:51.045205+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-10-11T19:50:51.045205+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-10-11T19:50:51.045205+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    },
+    "last_translated": "2026-10-11T19:50:51.045205+00:00"
   },
   "financial-theory/instruments/asset-types/crypto.en.md": {
-    "md5": "69a1fe152721c798cf36e53a8d071c86",
+    "md5": "d0c5ff8ed05d603c610eac07f8434884",
     "langs_done": [
       "es",
       "fr",
@@ -2302,33 +2328,47 @@
     "analysis_model": "deepseek/deepseek-v4-flash:free",
     "langs": {
       "it": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-10-11T19:50:55.265784+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-10-11T19:50:55.265784+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-10-11T19:50:55.265784+00:00",
         "stamped_by": "translate-stamp"
       }
     },
     "last_translated": "2026-06-30T15:11:29.707567+00:00"
   },
   "financial-theory/instruments/asset-types/mutual-fund.en.md": {
-    "md5": "bb10a1f81bd1c327944e8f4930da053e",
+    "md5": "48c5f00a8970afeb9497828abe7aadc9",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "analysis": "[{\"name\": \"investment vehicle\", \"keywords\": [\"investment vehicle definition financial product pooled fund\"]}, {\"name\": \"Net Asset Value (NAV)\", \"keywords\": [\"NAV mutual fund calculation net asset value meaning\"]}, {\"name\": \"denominated\", \"keywords\": [\"denominated currency financial term base currency fund\"]}, {\"name\": \"income funds\", \"keywords\": [\"income fund mutual fund distribution vs growth fund\"]}, {\"name\": \"growth funds\", \"keywords\": [\"growth fund mutual fund reinvestment capital appreciation\"]}, {\"name\": \"Management fee (TER)\", \"keywords\": [\"TER total expense ratio management fee mutual fund\"]}, {\"name\": \"entry/exit loads\", \"keywords\": [\"entry load exit load mutual fund sales charge front-end load back-end load\"]}, {\"name\": \"providers\", \"keywords\": [\"data provider financial data source software integration Yahoo Finance\"]}, {\"name\": \"intraday prices\", \"keywords\": [\"intraday trading price during trading hours vs end-of-day NAV\"]}, {\"name\": \"distribution vs accumulation\", \"keywords\": [\"distribution fund accumulation fund tax implications reinvestment dividends\"]}]",
     "analysis_model": "deepseek/deepseek-v4-flash:free",
-    "langs": {}
+    "langs": {
+      "it": {
+        "stamped_at": "2026-10-11T19:50:59.486117+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-10-11T19:50:59.486117+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-10-11T19:50:59.486117+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    },
+    "last_translated": "2026-10-11T19:50:59.486117+00:00"
   },
   "financial-theory/instruments/asset-types/commodities.en.md": {
-    "md5": "9c1b07f98340868d44778c8e437c1cb6",
+    "md5": "47625f3934f2ff260d84d60c0782f8c1",
     "langs_done": [
       "es",
       "fr",
@@ -2338,15 +2378,15 @@
     "analysis_model": "deepseek/deepseek-v4-flash:free",
     "langs": {
       "it": {
-        "stamped_at": "2026-09-24T09:24:28.246834+00:00",
+        "stamped_at": "2026-10-11T19:50:53.151919+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
-        "stamped_at": "2026-09-24T09:24:28.246834+00:00",
+        "stamped_at": "2026-10-11T19:50:53.151919+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
-        "stamped_at": "2026-09-24T09:24:28.246834+00:00",
+        "stamped_at": "2026-10-11T19:50:53.151919+00:00",
         "stamped_by": "translate-stamp"
       }
     },
@@ -2424,15 +2464,29 @@
     "last_translated": "2026-09-04T08:01:00.420943+00:00"
   },
   "financial-theory/instruments/asset-types/other.en.md": {
-    "md5": "bc51029f1047cc885f432eba569063ac",
+    "md5": "334167c00c1d5a3441e0f8bf34f63d64",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "analysis": "[{\"name\": \"catch-all category\", \"keywords\": [\"catch-all meaning generic category\", \"miscellaneous\", \"all-encompassing classification\"]}, {\"name\": \"public price feed\", \"keywords\": [\"financial data feed\", \"market price stream\", \"real-time price data\"]}, {\"name\": \"Manual provider\", \"keywords\": [\"manual data source\", \"manual price entry provider\", \"manual input method\"]}, {\"name\": \"CSS Scraper\", \"keywords\": [\"CSS web scraper\", \"CSS selector scraper\", \"web scraping provider\"]}, {\"name\": \"broker imports\", \"keywords\": [\"brokerage data import\", \"broker transaction import\", \"trading platform import\"]}, {\"name\": \"ISO 4217 currency\", \"keywords\": [\"ISO currency codes\", \"standard currency codes\", \"international currency standard\"]}, {\"name\": \"Private Equity\", \"keywords\": [\"private equity definition\", \"non-public company investment\", \"private capital\"]}, {\"name\": \"Venture Capital\", \"keywords\": [\"venture capital definition\", \"early-stage investment\", \"startup funding\"]}, {\"name\": \"appraisals\", \"keywords\": [\"asset appraisal\", \"valuation\", \"professional assessment\"]}, {\"name\": \"Data Editor\", \"keywords\": [\"data editing tool\", \"manual data entry interface\", \"portfolio data editor\"]}]",
     "analysis_model": "deepseek/deepseek-v4-flash:free",
-    "langs": {}
+    "langs": {
+      "it": {
+        "stamped_at": "2026-10-11T19:51:01.665793+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-10-11T19:51:01.665793+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-10-11T19:51:01.665793+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    },
+    "last_translated": "2026-10-11T19:51:01.665793+00:00"
   },
   "financial-theory/instruments/asset-events/index.en.md": {
     "md5": "0c5328ab5b39c1b0b468c2f70bac92d7",
@@ -3972,7 +4026,6 @@
           "writer": "google/gemma-4-31B-it",
           "critiquer": "google/gemma-4-31B-it"
         },
-        "failed": true,
         "failure_reason": "Translate: Translate timed out after 14400s. The request was cancelled and the model stopped. Set APHRA_STEP_TIMEOUT in .env to increase (current: 14400s)."
       },
       "fr": {
@@ -3981,7 +4034,6 @@
           "writer": "google/gemma-4-31B-it",
           "critiquer": "google/gemma-4-31B-it"
         },
-        "failed": true,
         "failure_reason": "Translate: Translate timed out after 14400s. The request was cancelled and the model stopped. Set APHRA_STEP_TIMEOUT in .env to increase (current: 14400s)."
       },
       "es": {
@@ -3990,13 +4042,12 @@
           "writer": "google/gemma-4-31B-it",
           "critiquer": "google/gemma-4-31B-it"
         },
-        "failed": true,
         "failure_reason": "Translate: Translate timed out after 14400s. The request was cancelled and the model stopped. Set APHRA_STEP_TIMEOUT in .env to increase (current: 14400s)."
       }
     }
   },
   "financial-theory/instruments/transaction-types/transfer.en.md": {
-    "md5": "ccb7f771d8de46d1d0cc582f40c77520",
+    "md5": "40f183ff5756a65e46c961d99f3ce696",
     "langs_done": [
       "es",
       "fr",
@@ -4016,7 +4067,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 76.5,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-10-11T16:16:42.302375+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -4029,7 +4080,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 142.5,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-10-11T16:16:42.302375+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -4042,13 +4093,13 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 97.0,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-10-11T16:16:42.302375+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "financial-theory/instruments/transaction-types/adjustment.en.md": {
-    "md5": "6fd611b6bf6d578861cc9b99d1754e54",
+    "md5": "120fa534deaffcd7d2900f36de8d9196",
     "langs_done": [
       "es",
       "fr",
@@ -4068,7 +4119,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 184.2,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-10-11T16:16:40.261232+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -4081,7 +4132,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 233.8,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-10-11T16:16:40.261232+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -4094,7 +4145,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 168.0,
-        "stamped_at": "2026-08-04T09:28:07.101981+00:00",
+        "stamped_at": "2026-10-11T16:16:40.261232+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -4616,7 +4667,6 @@
           "writer": "google/gemma-4-31B-it",
           "critiquer": "google/gemma-4-31B-it"
         },
-        "failed": true,
         "failure_reason": "Translate: Translate timed out after 14400s. The request was cancelled and the model stopped. Set APHRA_STEP_TIMEOUT in .env to increase (current: 14400s)."
       }
     }
@@ -5204,7 +5254,7 @@
     }
   },
   "user/dashboard/index.en.md": {
-    "md5": "f55570b38d28e0b12d9b7834c09e7f56",
+    "md5": "4ae3bbc75b8c9f840cb276a4c15aae7d",
     "langs_done": [
       "es",
       "fr",
@@ -5225,7 +5275,9 @@
         "structural_issues": 0,
         "elapsed_s": 209.8,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=52, translated=53 (Δ+1)\n  L57: src=0 trn=1\n    EN: level** (Compact, Standard, or Full). The backend snapshot follows the active\n    TR: **livello di dettaglio** (Compact, Standard o Full). Lo snapshot del backend segue il filtro\n  L70: src=5 trn=6\n    EN: The dashboard counts only the brokers you **own** with a share above 0%, and every amount from them is **scaled by your \n    TR: La dashboard conta solo i broker che **possiedi** con una quota superiore allo 0%, e ogni importo da essi è **scalato in\n\nSOURCE_OUTLINE (for reference):\n  # 📊 Dashboard\n    ## 🗂️ Tabbed Layout\n    ## 📈 Overview Tab\n      ### 🪙 Cash Balances\n    ## 🛡️ Risk Tab {: #risk-tab }\n    ## 🎛️ Date Range, Filters & AI Export\n    ## 🔄 Coming back and refreshing {: #coming-back-and-refreshing }\n    ## 🌡️ Data Quality Banner\n    ## 🔗 In this section\n    ## 🔗 Related theory",
-        "final_structural_issues": 1
+        "final_structural_issues": 1,
+        "stamped_at": "2026-10-11T19:51:08.331059+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:06:57.601298+00:00",
@@ -5236,7 +5288,9 @@
         "critique": "<translation_critique>\n<improvements>\n**Terminology deviations (mandatory glossary mappings — must be fixed):**\n\n1. **\"cash transfers\" → \"virements\"** (glossary: *cash transfer → virement*). The translation uses \"les transferts de trésorerie *vers d'autres courtiers*\". Required: **\"les virements *vers d'autres courtiers*\"**.\n\n2. **\"Deposited Capital\" → \"Capital versé\"** (glossary: *deposited capital → capital versé*). The translation uses \"Capital déposé\" in the tip admonition and in the \"Théorie associée\" list. Required: **\"Capital versé\"** in both places (i.e., \"les calculs du **Capital versé** et du P&L…\" and \"**[Capital versé et P&L total]**\").\n\n3. **\"cost basis\" → \"coût de base\"** (glossary: *cost basis → coût de base*). The translation uses \"base de coût\" twice: \"sans base de coût\" and \"attribuez-lui sa base de coût\". Required: **\"sans coût de base\"** and **\"attribuez-lui son coût de base\"**.\n\n4. **\"live price\" → \"prix live\"** (glossary: *live price → prix live*). The translation uses \"le prix en direct\". Required: **\"le prix live\"**.\n\n5. **\"banner\" → \"bannière\"** (glossary: *data-quality banner → bannière de qualité des données*). The translation consistently uses \"bandeau\" (section heading \"Bandeau de qualité des données\", \"un bandeau apparaît en haut\", \"le bandeau le liste\", \"Le bandeau vous avertit également\", etc.). Required: replace every \"bandeau\" with **\"bannière\"** — heading should read **\"## 🌡️ Bannière de qualité des données\"**.\n\n6. **\"period P&L\" → \"P&L période\"** (glossary: *period P&L → P&L période*). The translation uses \"P&L de la période\" in the KPI Cards table and in the \"Dans cette section\" list. Required: **\"P&L période\"** (e.g., \"du **P&L période** et des métriques de taux de rendement\" and \"**P&L période**\" as the list item).\n\n**Semantic accuracy / consistency:**\n\n7. **\"Liquid balances grouped by currency\"** — translated as \"Soldes liquides regroupés par devise\". Since the same row refers to \"Cash Balances\" and the glossary mandates *cash balance → solde de trésorerie*, prefer **\"Soldes de trésorerie regroupés par devise\"** for internal consistency with the panel it describes.\n\n8. **\"the figures appear at their value instead of counting up from zero\"** — \"les chiffres des KPI apparaissent directement à leur valeur au lieu de défiler depuis zéro\" reads slightly ambiguously; a closer rendering is **\"apparaissent à leur valeur finale au lieu de s'incrémenter depuis zéro\"**.\n\n9. **\"How much can it hurt?\"** — \"Quel impact cela peut-il avoir ?\" softens the register of the source. More faithful: **\"Combien cela peut-il faire mal ?\"** (or **\"Quel est le risque de perte ?\"** if a neutral register is preferred).\n\n10. **\"Cash Balances\" panel citation formatting** — \"le panneau **Soldes de trésorerie** affiche votre trésorerie liquide totale…\" repeats \"trésorerie\" twice in one sentence; consider \"affiche le total de vos liquidités agrégé par devise\" for smoother French.\n\n**Non-translatable / structural checks (all good, listed for completeness):**\n\n- All URLs, anchors (`#risk-tab`, `#coming-back-and-refreshing`, `#fifo-lots-analysis`, `#portfolio-growth-chart`, `#allocation-panel`) and image `data-*` attributes are preserved.\n- HTML carousel and screenshot blocks preserved verbatim.\n- Admonitions `!!! tip` / `!!! note` preserved.\n- Emojis preserved in headings.\n- French typography (space before `%`, `?`, `!`, `…`) correctly applied.\n\n**No other structural issues were detected.**\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 155.9
+        "elapsed_s": 155.9,
+        "stamped_at": "2026-10-11T19:51:08.331059+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:06:57.601415+00:00",
@@ -5247,7 +5301,9 @@
         "critique": "<translation_critique>\n<improvements>\n**1. \"viewer\" → must be \"lector\" (glossary violation)**\nThe glossary mandates `viewer → lector`. The translation uses \"Visualizador\" in two places:\n- In the note: \"Los brókeres en los que eres **Editor** o **Visualizador**...\"\n- Same note, later: \"los Editores y Visualizadores obtienen los importes **completos** del bróker.\"\nCorrect to: \"Editor o **Lector**\" and \"los Editores y Lectores…\". This is a mandatory glossary mapping and must be applied consistently.\n\n**2. \"cash transfer\" → must be \"transferencia de fondos\" (glossary violation)**\nThe glossary mandates `cash transfer → transferencia de fondos`. Two occurrences:\n- In the tip: \"las transferencias de efectivo *a otros brókeres* se convierten en flujos externos…\"\nCorrect to: \"las transferencias de fondos *a otros brókeres*…\".\n\n**3. \"cost basis\" → must be \"coste base\" (glossary violation)**\nThe glossary mandates `cost basis → coste base`. The translation uses \"base de coste\" twice:\n- \"una transferencia o un ajuste que incorporó unidades sin una base de coste.\"\n- \"y asígnale su base de coste.\"\nCorrect to: \"sin un coste base\" / \"y asígnale su coste base.\"\n\n**4. \"AI Export\" → must be \"exportación IA\" (glossary violation)**\nThe glossary mandates `AI Export → exportación IA` (lowercase \"exportación\", no \"a\"). The translation writes \"Exportación a IA\" / \"exportación a IA\" (adding the preposition \"a\") in the bullet, the section heading, and the two cross-reference links. Correct to \"exportación IA\" throughout, including in link text such as \"[exportación IA de la cartera](…)\" and \"[resumen de la exportación IA](…)\".\n\n**5. \"data-quality banner\" → must be \"banner de calidad de datos\" (glossary violation, plus internal inconsistency)**\nThe glossary mandates `data-quality banner → banner de calidad de datos`, and the term \"banner\" itself must remain \"banner\" (not \"aviso\"). The translation consistently renders \"banner\" as \"aviso\" and the section title as \"Aviso de calidad de los datos\". This affects the section heading, the HTML alt attribute, and every subsequent reference (\"un aviso en la parte superior\", \"el aviso lo lista\", \"El aviso también te advierte\", \"el aviso lo lista con el intervalo…\"). Correct consistently to:\n- Heading: `## 🌡️ Banner de calidad de datos`\n- alt: \"Banner de calidad de datos del panel con enlaces por activo\"\n- Body: \"aparece un banner en la parte superior\", \"el banner lo lista\", \"El banner también te advierte\", etc.\n\n**6. \"period P&L\" → must be \"P&L período\" (glossary violation)**\nThe glossary mandates `period P&L → P&L período` (no \"del\"). The translation uses \"P&L del período\" in the Overview table, in the \"In this section\" list, and in the \"Related theory\" list. Correct to \"P&L período\" everywhere to match the glossary.\n\n**7. \"overview\" → must be \"resumen\" (glossary violation)**\nThe glossary mandates `overview → resumen`. In the \"Related theory\" list, \"Performance Metrics overview\" is rendered as \"Descripción general de las métricas de rendimiento\". Correct the label to \"Resumen de métricas de rendimiento\" (or similar with \"resumen\") to comply.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 187.7
+        "elapsed_s": 187.7,
+        "stamped_at": "2026-10-11T19:51:08.331059+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -5298,7 +5354,7 @@
     }
   },
   "user/transactions/form.en.md": {
-    "md5": "7d33292dfe0a5a795d34e14cc24d929c",
+    "md5": "870a1968a59ef33983d13e8f274afa60",
     "langs_done": [
       "es",
       "fr",
@@ -5317,7 +5373,9 @@
         "critique": "<translation_critique>\n<improvements>\nNo structural issues were detected: headings, links, tables, admonition syntax, and the HTML carousel are preserved. The following fixes are required for mandatory glossary compliance and language accuracy.\n\n- **Mandatory glossary — bulk workspace**: The translation consistently renders “bulk workspace” as “area di lavoro multipla”. The glossary requires **workspace bulk**. Replace all occurrences:  \n  - “nell'[area di lavoro multipla](index.md#bulk-workspace)” → “nel [workspace bulk](index.md#bulk-workspace)”  \n  - “**Salva tutto** nell'area di lavoro” → “**Salva tutto** nel workspace bulk”  \n  - “alle altre righe dell'area di lavoro” → “alle altre righe del workspace bulk”  \n  - “l'area di lavoro multipla” in Related → “il workspace bulk”\n\n- **Mandatory glossary — weighted average cost**: “Costo Medio Ponderato” is not the required term. Replace with **prezzo medio di carico (PMC)**:  \n  “LibreFolio la calcola come [Costo Medio Ponderato](...)” → “LibreFolio la calcola come [prezzo medio di carico (PMC)](...)”.  \n  This also satisfies the WAC → PMC mapping.\n\n- **Mandatory glossary — tax**: Replace **Tassa** with **Imposta** in the single-transactions table. Also replace “una tassa” in the rules with “un'imposta”, and “Una tassa pagata” with “Un'imposta pagata”.\n\n- **Mandatory glossary — asset transfer**: Replace “Trasferimento di asset” / “Trasferimenti di asset” with **Trasferimento asset** / **Trasferimenti asset**. Occurrences:  \n  - admonition title: “per Rettifiche e Trasferimenti di asset” → “per Rettifiche e Trasferimenti asset”  \n  - admonition body: “di un **Trasferimento di asset**” → “di un **Trasferimento asset**”  \n  - table row: “**Trasferimento di asset**” → “**Trasferimento asset**”\n\n- **Mandatory glossary — cash transfer**: Replace **Trasferimento di liquidità** with **Giroconto**. The description may remain, but the type label must be “Giroconto”.\n\n- **Mandatory glossary — currency exchange**: Replace **Conversione di valuta** with **Cambio valuta**. Also adjust the following sentence, which currently says “una conversione due valute diverse”; it should refer to “cambio valuta”, e.g. “un cambio valuta richiede due valute diverse” or “un cambio valuta due valute diverse” if preserving the elliptical source style.\n\n- **Mandatory glossary — split (corporate action)**: Replace “un frazionamento” with **uno split** in the Adjustment description.\n\n- **Minor accuracy/naturalness**: “quando ci fai doppio clic in un elenco” is ambiguous and colloquial. Better: “quando fai doppio clic su di essa in un elenco”.\n\n- **Minor style**: “per collocare la riga” is unnatural; prefer “per inserire la riga”. Also “e una coppia separata di nuovo” could be clarified as “e una coppia può essere separata di nuovo”.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 243.1
+        "elapsed_s": 243.1,
+        "stamped_at": "2026-10-11T16:16:38.279218+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:04:00.109915+00:00",
@@ -5328,7 +5386,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Carousel HTML labels and alt text (required):** The visible carousel labels in `data-title` and the `alt` attributes were left in English. Since `data-show-titles=\"true\"` and the alt text is user-facing, these must be translated using the glossary mappings. Keep `data-name`, `src`, `class`, `style`, and the image paths unchanged. Correct examples: `BUY` → `ACHAT` / `alt=\"Buy\"` → `alt=\"Achat\"`; `SELL` → `VENTE` / `alt=\"Sell\"` → `alt=\"Vente\"`; `DIVIDEND` → `DIVIDENDE`; `DEPOSIT` → `DÉPÔT`; `ADJUSTMENT` → `AJUSTEMENT`; `TRANSFER` → `TRANSFERT D'ACTIF` (or at minimum `TRANSFERT`); `FX CONVERSION` → `CONVERSION FX`; `CASH TRANSFER` → `VIREMENT`. For alt texts: `Asset Transfer` → `Transfert d'actif`, `FX Conversion` → `Conversion FX`, `Cash Transfer` → `Virement`.\n\n- **`tax` terminology (required):** The glossary mandates `tax → impôt`. Replace **Taxe** in the table with **Impôt**, and change `Une taxe payée` to `Un impôt payé`. Also in the bullet: `une taxe` should become `un impôt`.\n\n- **`asset transfer` terminology (required):** The glossary mandates `asset transfer → transfert d'actif`. Replace **Transfert d'actifs** in the table and `Transfert d'actifs` in the admonition with **Transfert d'actif** (or, when plural, **Transferts d'actif**). Do not use `d'actifs`.\n\n- **`cash transfer` terminology (required):** The glossary mandates `cash transfer → virement`. Replace **Transfert d'espèces** in the table with **Virement**. The carousel label `CASH TRANSFER` should likewise be **VIREMENT**, and `alt=\"Cash Transfer\"` should be `alt=\"Virement\"`.\n\n- **`currency exchange` terminology (required):** The glossary mandates `currency exchange → change de devises`. Replace **Échange de devises** in the table with **Change de devises**. Adjust the following sentence if needed: `un échange deux devises différentes` should refer to the same term, e.g. `un change de devises deux devises différentes` or `une opération de change de devises nécessite deux devises différentes`.\n\n- **`FX conversion` terminology (required):** The glossary mandates `FX conversion → conversion FX`. In the carousel, replace `FX CONVERSION` with **CONVERSION FX** and `alt=\"FX Conversion\"` with `alt=\"Conversion FX\"`.\n\n- **`weighted average cost` terminology (required):** The glossary mandates `weighted average cost → prix de revient unitaire (PRU)`. Replace `[Coût moyen pondéré]` with `[prix de revient unitaire (PRU)]` in the admonition. The sentence should read, for example: `LibreFolio le calcule comme un [prix de revient unitaire (PRU)]`.\n\n- **`split` terminology (required):** The glossary mandates `split (corporate action) → division`. In the Adjustment row, replace `un fractionnement` with `une division`.\n\n- **`exchange rate` terminology (minor):** The sentence `Si un taux de change est manquant` correctly uses `taux de change`. However, the link label **Synchroniser les taux FX** uses `taux FX`; if this is not a fixed UI label, prefer **Synchroniser les taux de change** to align with the glossary mapping `exchange rate → taux de change`.\n\n- **Natural French phrasing (minor):** `Ouvrez **Facultatif**` is understandable but slightly terse. A more natural phrasing would be `Ouvrez la section **Facultatif**`. Similarly, the Related heading `Lié` is a literal rendering; standard French documentation often uses **Voir aussi** or **Associé**.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 297.5
+        "elapsed_s": 297.5,
+        "stamped_at": "2026-10-11T16:16:38.279218+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:04:00.110063+00:00",
@@ -5339,7 +5399,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Glossary violation — weighted average cost / WAC:** The translation uses “Coste medio ponderado” and later “el promedio”. The glossary mandates `weighted average cost → precio medio de compra (PMC)` and `WAC → PMC`. Replace the link text `[Coste medio ponderado](...)` with `[precio medio de compra (PMC)](...)`, and change “En Auto, el promedio se toma…” to “En Auto, el PMC se toma…” or “En Auto, el precio medio de compra se toma…”.\n\n2. **Glossary violation — cost basis:** The admonition title says “Base de coste de las unidades entrantes”. The glossary mandates `cost basis → coste base`. Correct it to “**Coste base** de las unidades entrantes — para Ajustes y Transferencias de activos”.\n\n3. **Glossary violation — cash transfer:** The table and carousel use “Transferencia de efectivo” for **Cash Transfer**. The glossary mandates `cash transfer → transferencia de fondos`. Correct the type and alt text to **Transferencia de fondos**; e.g. `alt=\"Transferencia de fondos\"` and table label **Transferencia de fondos**.\n\n4. **Glossary violation — currency exchange:** The table type is “Cambio de divisa” (singular). The glossary mandates `currency exchange → cambio de divisas`. Correct it to **Cambio de divisas**. Also update the later sentence to use the full term: “un cambio de divisas necesita dos divisas diferentes” or at least “un cambio, dos divisas diferentes”.\n\n5. **Glossary violation — split:** In the Adjustment row, “un split” is left in English. The glossary mandates `split (corporate action) → desdoblamiento`. Correct it to “un desdoblamiento”.\n\n6. **Terminology consistency — interest:** In “en dividendos, intereses y ajustes”, the source has singular `interest`, matching the type label **Interest**. The glossary maps `interest → interés`. Use “en dividendos, interés y ajustes” to match the type name **Interés**.\n\n7. **Carousel title consistency:** The `data-title` attributes remain in English: `BUY`, `SELL`, `DIVIDEND`, `DEPOSIT`, `ADJUSTMENT`, `TRANSFER`, `FX CONVERSION`, `CASH TRANSFER`. If these titles are user-visible, localize them according to the glossary: `COMPRA`, `VENTA`, `DIVIDENDO`, `DEPÓSITO`, `AJUSTE`, `TRANSFERENCIA DE ACTIVOS` (or `TRANSFERENCIA`), `CONVERSIÓN FX`, `TRANSFERENCIA DE FONDOS`.\n\n8. **Naturalness / terminology — sending broker:** “el bróker emisor de una transferencia” is understandable, but `sending broker` is more naturally “el bróker de origen de una transferencia” or “el bróker remitente”. “Emisor” can suggest an issuing broker rather than the origin of a transfer.\n\n9. **Grammar — elliptical sentence:** “Una transferencia necesita dos brókers diferentes, un cambio dos divisas diferentes.” is missing a comma or verb. Correct to “Una transferencia necesita dos brókers diferentes; un cambio de divisas, dos divisas diferentes” or “un cambio de divisas necesita dos divisas diferentes”.\n\n10. **Minor naturalness — “later”:** “abre la transacción más tarde” can imply a later time of day. Since the source means afterwards/later on, consider “abre la transacción más adelante” or “vuelve a abrir la transacción después”.\n\n11. **Minor naturalness — linking into a pair:** “vincular dos filas simples en un par más tarde” is acceptable but stiff. Better: “vincular dos filas simples para formar un par más adelante”.\n\n12. **Minor accuracy — “writes it”:** “**Guardar todo** en el espacio de trabajo la escribe” is a literal rendering. In Spanish, better “la guarda” or “la registra”.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 222.8
+        "elapsed_s": 222.8,
+        "stamped_at": "2026-10-11T16:16:38.279218+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -6290,7 +6352,7 @@
     }
   },
   "user/dashboard/charts.en.md": {
-    "md5": "1e15ab2ca0a6696fcf278292cc4de0c8",
+    "md5": "8b78fe94d01a3ebe8ed45b31a59a2222",
     "langs_done": [
       "es",
       "fr",
@@ -6309,7 +6371,9 @@
         "critique": "<translation_critique>\n<improvements>\n**Terminologia obbligatoria (glossario)**\n- **Purchase Cost** non è tradotto, ma il glossario impone `purchase cost → valore di acquisto`. Correggere tutte le occorrenze: `Area — **Valore di acquisto**`, `il KPI **Valore di acquisto**`, `**Valore di acquisto**, in due zone`, ecc.\n- **Deposited Capital** è lasciato in inglese e una volta reso con “capitale depositato”. Il glossario impone `deposited capital → capitale versato`. Correggere: `Linea — **Capitale versato**`, `NAV meno capitale versato`, `[Capitale versato](...)`, `[Capitale versato & Total P&L](...)`.\n- **Net Asset Value** è lasciato in inglese nel link. Il glossario impone `net asset value → valore netto`. Correggere in `[Valore netto](...)`.\n- **Net Worth** è lasciato in inglese. Il glossario impone `net worth → patrimonio netto`. Correggere: `[scheda Patrimonio netto](...)`, `NAV / Patrimonio netto`, `Patrimonio netto, P&L periodo, Rendimenti`.\n- **Period P&L** è lasciato in inglese. Il glossario impone `period P&L → P&L periodo`. Correggere: `[scheda P&L periodo](kpi-cards.md#card-1-period-pl)`.\n- **Timing Effect** è lasciato in inglese. Il glossario impone `timing effect → effetto timing`. Correggere: `è l'[effetto timing](...)` e `[Effetto timing](...)`.\n- **Data Quality banner** è lasciato in inglese. Il glossario impone `data-quality banner → banner di qualità dei dati`. Correggere entrambe le occorrenze in `[banner di qualità dei dati](index.md#data-quality-banner)`.\n- **Cash Balances** è lasciato in inglese nell’alt. Il glossario impone `cash balance → saldo di cassa`. Correggere: `dei Saldi di cassa`.\n- `live market price` è reso con “prezzo di mercato in tempo reale”; il glossario impone `live price → prezzo live`. Meglio: `senza un prezzo live`.\n- Le etichette delle barre **Dividend**, **Interest**, **Fees & taxes**, **Deposit** non seguono il glossario. Correggere almeno dove non sono etichette UI bloccate: `Dividendo`, `Interesse`, `Commissioni e imposte`, `Deposito`. Anche `Dividends & interest` → `Dividendi e interessi`.\n- **Allocation** in `Pannello Allocation` non è tradotto. Il glossario impone `allocation → allocazione`. Correggere in `Pannello Allocazione` o, se è nome pannello, `Pannello Asset Allocation` solo se “Asset Allocation” è un’etichetta UI bloccata.\n- **Portfolio Growth** contiene `portfolio`, che il glossario mappa con `portafoglio`. Se non è un’etichetta UI bloccata, correggere in `Grafico della crescita del portafoglio` o `Grafico Crescita del portafoglio`.\n\n**Coerenza terminologica e di vista**\n- La vista `Candles` è tradotta come **Candele** nei titoli, ma poi lasciata in inglese: `In **Candles** e **Income**`, `**Candles** prende la larghezza...`. Correggere in `In **Candele** e **Income**`, `**Candele** prende...`.\n- `Income` è lasciato in inglese, ma nella tabella è reso con “Redditi e costi”. Decidere una resa unica; se si traduce la vista, usare sempre `Entrate` o `Redditi`, non alternare.\n- `New capital` e `Reinvested` sono etichette di zona. Se non sono vincolate dalla UI, tradurle coerentemente: `Nuovo capitale`, `Reinvestito`.\n\n**Grammatica, sintassi e accuratezza semantica**\n- `l'interruttore ... passa tra valori assoluti` è poco naturale. Meglio: `permette di passare tra valori assoluti` oppure `alterna valori assoluti`.\n- `**%** è disattivato in grigio` è grammaticalmente discutibile e ambiguo. Meglio: `**%** è disattivata e in grigio` oppure `**%** è in grigio e disattivata`.\n- `la tua scelta torna la prossima volta` è innaturale. Meglio: `la tua scelta viene ripristinata la prossima volta`.\n- `ogni guadagno mai realizzato (non realizzato, realizzato, ...)` è semanticamente contraddittorio. Meglio: `ogni guadagno mai ottenuto (non realizzato, realizzato, ...)`.\n- `in fino a tre colonne` è agrammaticale. Correggere in `in massimo tre colonne` oppure `fino a tre colonne`.\n- `**Fees & taxes** sotto di esso` è ambiguo: “esso” non ha un referente chiaro. Correggere in `sotto lo zero`.\n- `Un acquisto spende prima i rendimenti...` è innaturale per “spends the returns”. Meglio: `Un acquisto utilizza prima i rendimenti...`.\n- `**Dividend** e **Interest** sommano esattamente alla riga` è scorretto: meglio `corrispondono esattamente alla riga` oppure `si sommano esattamente nella riga`.\n- `Per tipo, l'anello può avere due anelli` è ripetitivo e confuso. Meglio: `Per tipo, il grafico ad anello può avere due anelli`.\n- `l'anello **Now** di **By Type** disegna due anelli` è ambiguo. Meglio: `il grafico ad anello della vista **Now** di **By Type** disegna due anelli`.\n- `Senza alcun sottotipo, l'anello mantiene un solo anello.` è ripetitivo. Meglio: `Senza alcun sottotipo, il grafico ad anello resta a un solo anello.`\n\n**Struttura Markdown/HTML**\n- Heading, ancore esplicite, link, tabelle, admonition e blocchi HTML risultano preservati. Non sono emersi problemi strutturali oggettivi dai dati forniti; non era presente un `STRUCTURAL DIFF REPORT` da applicare come fix obbligatorio.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 247.2
+        "elapsed_s": 247.2,
+        "stamped_at": "2026-10-11T12:33:48.597290+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:07:05.607530+00:00",
@@ -6320,7 +6384,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminologie obligatoire — `purchase cost` → `coût d'achat`** : la traduction utilise systématiquement **« coût d'acquisition »**. C'est une déviation du glossaire. Corriger partout : `Aire — **Coût d'acquisition**` → `Aire — **Coût d'achat**` ; `Actifs au coût d'acquisition` → `Actifs au coût d'achat` ; `proche du coût d'acquisition` → `proche du coût d'achat` ; `KPI Coût d'acquisition` → `KPI Coût d'achat` ; `ligne **Coût d'acquisition**` → `ligne **Coût d'achat**`.\n- **Terminologie obligatoire — `deposited capital` → `capital versé`** : la traduction utilise **« capital déposé »**. Corriger : `Ligne — **[Capital déposé]**` → `Ligne — **[Capital versé]**` ; `[Capital déposé et P&L total]` → `[Capital versé et P&L total]` ; `VNI moins capital déposé` → `NAV moins capital versé`.\n- **Terminologie obligatoire — `net asset value` → `valeur nette`, `NAV` → `NAV`** : la traduction emploie **« Valeur nette d'inventaire »** et **« VNI »**. Corriger : `**[Valeur nette d'inventaire]**` → `**[Valeur nette]**` ; `maintiennent la VNI` → `maintiennent la NAV` ; `(VNI moins capital déposé)` → `(NAV moins capital versé)` ; `**[VNI / Valeur nette]**` → `**[NAV / Valeur nette]**`.\n- **Terminologie obligatoire — `allocation` → `allocation`** : la traduction rend `allocation` par **« répartition »** dans tout le panneau. Corriger les occurrences terminologiques : `Panneau de répartition` → `Panneau d'allocation` ; `**Répartition des actifs**` → `**Allocation d'actifs**` ; `la répartition au dernier jour` → `l'allocation au dernier jour` ; `l'évolution de la répartition dans le temps` → `l'évolution de l'allocation dans le temps`.\n- **Terminologie obligatoire — `taxes` → `impôts`** : la traduction garde **« taxes »**. Corriger : `moins les frais et les taxes` → `moins les frais et les impôts` ; `Frais et taxes` → `Frais et impôts` ; `les frais et les taxes restent` → `les frais et les impôts restent`.\n- **Terminologie obligatoire — `period P&L` → `P&L période`** : la traduction écrit **« P&L de la période »**. Corriger : `[carte P&L de la période]` → `[carte P&L période]` ; dans les liens connexes, `P&L de la période` → `P&L période`.\n- **Terminologie obligatoire — `timing effect` → `effet timing`** : la traduction écrit **« Effet de timing »**. Corriger : `[Effet de timing]` → `[Effet timing]` ; lien connexe `Effet de timing` → `Effet timing`.\n- **Terminologie obligatoire — `data-quality banner` → `bannière de qualité des données`** : la traduction écrit **« bannière Qualité des données »** sans « de ». Corriger les deux occurrences : `[bannière Qualité des données]` → `[bannière de qualité des données]`.\n- **Terminologie obligatoire — `interest` → `intérêt`** : les libellés source **Interest** sont rendus par **« Intérêts »** au pluriel. Pour les libellés d'interface, utiliser **« Intérêt »** : `**Dividende** · **Intérêts**` → `**Dividende** · **Intérêt`** ; de même pour `**Dividende** et **Intérêts**` si le libellé source est au singulier.\n- **Exactitude sémantique — « chaque gain jamais réalisé »** : la source dit `every gain ever made`, c'est-à-dire « tous les gains accumulés/générés », pas « jamais réalisé ». Remplacer par `tous les gains accumulés` ou `chaque gain jamais généré`. La formulation actuelle peut signifier « gain non réalisé », ce qui est faux.\n- **Exactitude sémantique — « s'additionnent exactement à la ligne »** : la source dit `add up exactly to the ... row`, c'est-à-dire « correspondent exactement à » / « totalisent exactement ». Remplacer par `correspondent exactement à la ligne` ou `totalisent exactement la ligne`.\n- **Exactitude sémantique — « Les liquidités en tant que Liquidités »** : traduction redondante et incorrecte de `Cash as Liquidity`. Remplacer par `La trésorerie comme liquidités` ou `Trésorerie affichée comme Liquidités`.\n- **Grammaire — « **Liquidités** inclus »** : accord manquant. Corriger par `**Liquidités** incluses` ou `y compris **Liquidités**`.\n- **Grammaire — « Une période que la plage commence en cours de route »** : formulation incorrecte pour `A period the range starts partway through`. Remplacer par `Une période qui commence au milieu de la plage` ou `Une période que la plage ne commence qu'en cours de route`.\n- **Exactitude sémantique — « largeurs qui correspondent au graphique et à la plage »** : `fit` signifie ici « tiennent dans ». Préférer `Seules les largeurs qui tiennent dans le graphique et la plage sont proposées`.\n- **Chaînes d'interface non traduites** : les libellés utilisateur restent en anglais : `**MWRR chart unavailable**`, `*Partial: N of M days*`, `*In progress: N of M days*`, `*Synthetic — cross-asset high/low are hypothetical and non-simultaneous*`. Les traduire, par exemple : `**Graphique MWRR indisponible**`, `*Partiel : N jours sur M*`, `*En cours : N jours sur M*`, `*Synthétique — les plus hauts/plus bas entre actifs sont hypothétiques et non simultanés*`.\n- **Attributs `data-title` et `alt` laissés en anglais** : les attributs techniques (`class`, `data-category`, `data-name`, `style`, `data-carousel*`) sont bien conservés, mais les valeurs visibles/accessibilité doivent être localisées. Exemples : `data-title=\"📈 Absolute Mode\"` → `data-title=\"📈 Mode absolu\"` ; `data-title=\"📈 Percentage Mode\"` → `data-title=\"📈 Mode pourcentage\"` ; `data-title=\"By Type (Current)\"` → `data-title=\"Par type (actuel)\"` ; `alt=\"Growth Chart — Absolute Mode\"` → `alt=\"Graphique de croissance — Mode absolu\"` ; `alt=\"The Dashboard with Hide amounts on...\"` → `alt=\"Le Tableau de bord avec Masquer les montants activé...\"`.\n- **Cohérence des titres de carrousel** : les `data-title` des captures doivent reprendre les libellés français des onglets/boutons : `By Sector (Current)` → `Par secteur (actuel)`, `By Geography (Historical)` → `Par géographie (historique)`, etc. Sinon l'interface documentée reste partiellement en anglais.\n- **Terminologie — `geographic distribution`** : si l'on suit le glossaire (`geographic breakdown` → `distribution géographique`), remplacer `selon la répartition géographique de chaque actif` par `selon la distribution géographique de chaque actif`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 215.1
+        "elapsed_s": 215.1,
+        "stamped_at": "2026-10-11T12:33:48.597290+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:07:05.607617+00:00",
@@ -6331,7 +6397,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n**A. Mandatory glossary violations (must be fixed)**\n\n1. **\"allocation\" → \"asignación\" (glossary) is never used.** The translation renders *allocation* as \"Distribución\" every time: \"**Distribución de Activos**\", \"Panel de Distribución\", \"la distribución en el último día\". Correct: \"**Asignación de Activos**\", \"Panel de Asignación\", \"la asignación en el último día\". Note the glossary also distinguishes \"geographic breakdown → distribución geográfica\" and \"sector distribution → distribución sectorial\": \"distribución\" is reserved for *breakdown/distribution*, not for *allocation*. Fix systematically across the section.\n\n2. **\"toggle\" → \"interruptor\" (glossary) is rendered as \"conmutador\".** Both occurrences must be corrected:\n   - \"el conmutador **Abs / % / P&L**\" → \"el interruptor **Abs / % / P&L**\".\n   - \"Un segundo conmutador, en la parte superior izquierda…\" → \"Un segundo interruptor, en la parte superior izquierda…\".\n\n3. **\"timing effect\" → \"efecto timing\" (glossary) is rendered as \"Efecto del Momento\".** Occurs twice (body text and Related section). Should be \"el [efecto timing](…)\" and \"**[Efecto timing](…)**\".\n\n4. **\"data-quality banner\" → \"banner de calidad de datos\" (glossary) is rendered as \"Aviso de Calidad de Datos\".** Both occurrences (in the \"% rate of return\" section and in \"Income\") should read \"el [banner de calidad de datos](index.md#data-quality-banner)\".\n\n5. **\"net asset value\" → \"valor neto\" (glossary).** The translation adds extra words: \"**[Valor Neto de los Activos (NAV)]**\". Should be \"**[Valor neto (NAV)]**\" (or simply \"[NAV]\"), matching the glossary mapping.\n\n**B. Semantic mistranslation — critical**\n\n6. **\"slice\" is systematically mistranslated as \"sector\".** In a donut/pie chart a \"slice\" is a \"porción\"/\"segmento\", not a \"sector\". Because this documentation uses \"sector\" for industry sector, the current rendering is actively misleading. Correct all instances:\n   - \"Hover a slice or a country\" → \"Pasa el cursor sobre una porción o un país\".\n   - \"un sector por familia\" → \"una porción por familia\".\n   - \"on the outer ring, a last line…\" — check \"un sector\" → \"una porción\".\n   - \"al hacer clic en una se ocultan sus sectores en ambos anillos\" → \"…se ocultan sus porciones en ambos anillos\".\n   - \"Tu efectivo es el sector **Liquidez**…\" → \"Tu efectivo es la porción **Liquidez**…\".\n\n**C. Typo / punctuation**\n\n7. **Missing space after a comma** — \"Tu rentabilidad personal ponderada por el dinero,incluido el momento de los depósitos\" → \"…por el dinero, incluido el momento de los depósitos\".\n\n**D. Untranslated UI strings left in English (consistency problem)**\n\nThe document translates most UI labels (\"Hide amounts\" → \"Ocultar importes\", \"Deposit\" → \"Depósito\", etc.) but leaves several UI strings that appear to be part of the same UI in English. Decide on one policy and apply it consistently — the following should be translated or explicitly kept, but not mixed:\n\n8. \"**MWRR chart unavailable**\" → \"**MWRR no disponible**\" (or \"gráfico MWRR no disponible\").\n9. \"*Partial: N of M days*\" → \"*Parcial: N de M días*\".\n10. \"*In progress: N of M days*\" → \"*En curso: N de M días*\".\n11. \"*Synthetic — cross-asset high/low are hypothetical and non-simultaneous*\" → *_Sintético — máximos/mínimos entre activos son hipotéticos y no simultáneos_*.\n12. \"*Generic ETF*\", \"*Generic Crowdfund*\", \"*Equity ETF*\" — either keep all asset-type names in English (including \"Real estate crowdfunding\" → keep \"Real estate crowdfunding\") or translate all of them (currently \"Real estate crowdfunding\" → \"Crowdfunding inmobiliario\" while \"Crowdfund\"/\"Generic ETF\" stay in English, which is inconsistent).\n\n**E. Minor terminology consistency**\n\n13. **\"period P&L\" → \"P&L período\" (glossary).** Rendered as \"P&L del Período\" and \"tarjeta de P&L del Período\". Align with glossary: \"P&L período\".\n14. **\"purchase cost\" → \"coste de compra\" (glossary, lowercase).** In tables and legend text the translation capitalises to \"Coste de Compra\". As a UI legend name that is acceptable, but in-line prose should follow glossary casing where generic (\"Coste de Compra\" as the legend entry can stay capitalised).\n15. **\"1Y\" → \"1A\"** in the width section: the source uses \"1D to 1Y\"; the translation uses \"1D a 1A\". Given the glossary's convention of glossing Spanish UI acronyms, keep this consistent across the section (currently 1D/3D/1S/2S/1M/3M/6M/1A — verify the UI tokens are actually localised this way; otherwise revert to \"1D…1Y\").\n16. \"**Tipos de cambio faltantes.**\" is unnatural; prefer \"**Faltan tipos de cambio.**\" or \"**Tipos de cambio ausentes.**\".\n17. \"Huecos\" for \"**Gaps**\" is understandable but \"**Ausencias**\" / \"**Huecos (sin vela)**\" may be clearer; optional.\n\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 183.7
+        "elapsed_s": 183.7,
+        "stamped_at": "2026-10-11T12:33:48.597290+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -6568,27 +6636,50 @@
     "analysis_model": "deepseek-ai/DeepSeek-V4.1-Flash"
   },
   "financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.en.md": {
-    "md5": "dbd3ef0584783efc15dc75f8aaf84ab2",
+    "md5": "e4138e54adbcef033c76724e2a71b40b",
     "langs_done": [
-      "es",
+      "it",
       "fr",
-      "it"
+      "es"
     ],
-    "last_translated": "2026-07-20T08:54:59.143801+00:00",
+    "last_translated": "2026-10-11T12:09:04.111420+00:00",
     "langs": {
       "it": {
-        "stamped_at": "2026-10-09T22:50:52.680330+00:00",
-        "stamped_by": "translate-stamp"
+        "translated_at": "2026-10-11T12:09:04.111380+00:00",
+        "models": {
+          "writer": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "critiquer": "deepseek-ai/DeepSeek-V4.1-Flash"
+        },
+        "critique": "<translation_critique>\n<improvements>\nRequired terminology fixes (glossary):\n- Title: “Capitale depositato” → “Capitale versato” per glossary `deposited capital → capitale versato`. Full title: “💸 Capitale versato, PnL totale e pool di liquidità”.\n- “I trasferimenti di liquidità tra broker spostano...” → “I giroconti tra broker spostano...” per glossary `cash transfer → giroconto`. Also check human-readable `CASH_TRANSFER` labels; if they are not literal enum identifiers, translate them as “giroconto/GIROCONTO”.\n- “come una conversione valutaria all’interno di un conto” → “come una conversione di valuta all’interno di un conto” per glossary `currency conversion → conversione di valuta`.\n- “l’ultimo prezzo noto riportato in avanti” → “l’ultimo prezzo noto mantenuto” per glossary `carried forward → mantenuto`.\n- “C = WAC pre-vendita × quantità venduta” → “C = PMC pre-vendita × quantità venduta” per glossary `WAC → PMC`.\n- “calcolata prima della riproduzione” → “calcolata prima del replay” (avoid “riproduzione”; use replay terminology).\n- Related link: “PnL del periodo” → “P&L periodo” per glossary `period P&L → P&L periodo`.\n- If uppercase transaction labels are intended as human-readable rather than literal enum identifiers, apply the glossary consistently: `ADJUSTMENT → rettifica`, `FEE → commissione`, `BUY → acquisto`, `SELL → vendita`, etc. At minimum, prose terms like “Cash transfers”, “ADJUSTMENT in natura”, and “currency conversion” must follow the glossary.\n\nAccuracy and terminology improvements:\n- “prezzo di valorizzazione” → “prezzo di valutazione” and “valorizzato” → “valutato” where it means valued/priced by the system. This aligns with glossary `valuation currency → valuta di valutazione` and standard financial Italian. Examples: “valorizzato esattamente come lo valuta il NAV” → “valutato esattamente come lo valuta il NAV”; “se il titolo non può essere valorizzato quel giorno” → “se il titolo non può essere valutato quel giorno”; “[prezzo di valorizzazione](index.md#2-valuation-price)” → “[prezzo di valutazione](index.md#2-valuation-price)”.\n- “Non è il guadagno non realizzato delle posizioni...” → “Non è la plusvalenza latente delle posizioni...” for consistency with `capital gain → plusvalenza` / `unrealized P&L → P&L latente`.\n- “Prendi la porzione della transazione nel pool a costo medio della sua posizione” → “Prendi la quota della transazione dal pool al costo medio della sua posizione” (or “dal pool del costo medio”) for more natural Italian and correct preposition.\n- “Il solo destinatario coincide con la sua riga combinata” → “Il destinatario da solo coincide con la propria riga nella vista combinata” for clarity. Similarly “Il solo mittente perde...” → “Il mittente da solo perde...”.\n- “Contato come guadagno o perdita...” → “Se conteggiato come guadagno o perdita...” for natural grammar.\n- In worked example B, “Cash=30” is inconsistent with the translated column “Liquidità”; consider “Liquidità=30” unless “Cash” is meant as a literal variable name.\n\nStructural check:\n- No structural issues found: headings, anchors (`#internal-transfers-broker-lines`, `#three-pool-cash-model`), links, tables, formulas, admonition, code spans, and emojis are preserved.\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 233.5
       },
       "fr": {
-        "stamped_at": "2026-10-09T22:50:52.680330+00:00",
-        "stamped_by": "translate-stamp"
+        "translated_at": "2026-10-11T12:09:04.111408+00:00",
+        "models": {
+          "writer": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "critiquer": "deepseek-ai/DeepSeek-V4.1-Flash"
+        },
+        "critique": "<translation_critique>\n<improvements>\n\n**1. Glossary deviation — Title: \"Capital déposé\" should be \"Capital versé\"**\nThe glossary mandatorily maps `deposited capital → capital versé`. The translation uses \"Capital déposé\" in the H1 heading. Change to:\n> `# 💸 Capital versé, PnL total et Pools de trésorerie`\n\n**2. Glossary deviation — \"WAC\" must be translated as \"PRU\"**\nThe glossary maps `WAC → PRU`. The translation keeps the English acronym:\n> \"…le coût qu'elle retire ($C$ = WAC avant vente × quantité vendue, aux taux historiques)\"\nChange to:\n> \"…($C$ = PRU avant vente × quantité vendue, aux taux historiques)\"\n\n**3. Glossary deviation — \"split\" must be translated as \"division\" in prose**\nThe glossary maps `split (corporate action) → division`. The translation leaves \"split\" in prose where it refers to the corporate action:\n> \"…portant `cost_basis_override` (non liées à un split)\"\n> \"| ADJUSTMENT liée à un SPLIT | ❌ Non, simple remise à l'échelle de la quantité |\"\nChange to \"non liées à une division\" / \"ADJUSTMENT liée à une DIVISION\". (Note: when \"SPLIT\" is the literal transaction-type identifier used elsewhere as a code key, it may stay uppercase; but here it is being referred to semantically, so the glossary term applies.)\n\n**4. Semantic issue — \"émetteur / récepteur\" for \"sender / receiver\"**\nThe translation renders \"sender\" as \"émetteur\" and \"receiver\" as \"récepteur\" throughout the internal-transfer section. In a document about securities, \"émetteur\" strongly reads as *issuer* (of a security), which is confusing. \"Récepteur\" is also unusual for a *receiving broker*. Prefer:\n- sender `A` → **expéditeur A** (or \"émetteur\" only if the project glossary confirms this)\n- receiver `B` → **destinataire B** (or \"bénéficiaire\")\nExample fixes: \"l'émetteur $A$ (la jambe sortante) et le récepteur $B$\" → \"l'expéditeur $A$ (la jambe sortante) et le destinataire $B$\"; \"la [part de propriété] de l'émetteur\" → \"de l'expéditeur\"; \"Chez l'émetteur, ou…\" etc.\n\n**5. Awkward translation of \"step\" as \"pas\"**\n\"Take the transaction's step of its position's average-cost pool\" is rendered:\n> \"On prend **le pas** de la transaction dans le pool de coût moyen de sa position…\"\n\"Pas\" is ambiguous (step/count/pace) and does not convey the intended idea of *portion/amount*. Better:\n> \"On prend **la part** de la transaction dans le pool de coût moyen de sa position…\"\nAlso consider \"pool de coût moyen\" → \"pool de PRU\" for consistency with the glossary-mandated `WAC → PRU`.\n\n**6. Inconsistent treatment of link titles (human-readable text of links)**\nTwo anchor texts are left in English while another is translated, creating inconsistency:\n- `[Period PnL](period-pnl.md)` → kept as \"Period PnL\" + appended French gloss (\"version fenêtrée\") ✔ (ok if the page title is unchanged)\n- `[Portfolio Engine](index.md)` → kept in English in the \"Related\" list, but the linked page title should normally be translated (e.g. \"Moteur de portefeuille\") if the French site has a translated title.\n- `[Performance Metrics Overview](../index.md)` → translated to \"toutes les métriques de performance en un coup d'œil\", which is a *description*, not the page title.\nNormalize the treatment: either keep page titles as-is in English (as with \"Period PnL\" and \"Portfolio Engine\"), or translate them consistently. For consistency with the retained titles, \"Performance Metrics Overview\" should also be rendered as a title (e.g. \"Vue d'ensemble des métriques de performance\") rather than a free description.\n\n**7. Headings in linked sections should not be half-translated**\n`**[Portfolio Engine — §6 Three-Pool Model](index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)**` keeps the English heading \"Three-Pool Model\", while the section itself is titled \"Modèle de trésorerie à trois pools\" in the target language. Align link text with the site's actual heading language (translate to match the French section title: \"Portfolio Engine — §6 Modèle de trésorerie à trois pools\", or leave the whole link in English). Inconsistency in the same document is the problem.\n\n**8. Style/terminology — \"Vues monoposte\" is unclear**\n\"Single-broker views\" → \"Vues monoposte\". \"Monoposte\" is telecom jargon and ambiguous here. Prefer:\n> **Vues d'un seul courtier** (or \"Vues par courtier unique\")\n\n**9. Style — \"Pools de trésorerie\"**\n\"Cash Pools\" is rendered as \"Pools de trésorerie\" (mixed English/French). If \"pool\" is not a retained technical term in the target documentation, prefer \"réservoirs de trésorerie\". Use consistently in the H1, H2 (\"Modèle de trésorerie à trois pools\"), and the table header \"Pool\".\n\n**10. Minor — \"Vente en gain\"**\nEnglish: \"Sell in Gain\". \"Vente en gain\" is understandable but unnatural; \"Vente avec gain\" reads better. Not blocking but improves fluidity.\n\n**11. Verify — \"référence de capital\" for \"capital baseline\"**\nNot mandated by the glossary, but a defined term: consistency is maintained throughout the document (\"Référence de capital\"). This is acceptable; no change required, but ensure the same rendering is used in the other linked pages (nav.md, period-pnl.md). If those pages use \"base de capital\" or \"Capital Baseline\", align for consistency across the site.\n\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 142.1
       },
       "es": {
-        "stamped_at": "2026-10-09T22:50:52.680330+00:00",
-        "stamped_by": "translate-stamp"
+        "translated_at": "2026-10-11T12:09:04.111420+00:00",
+        "models": {
+          "writer": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "critiquer": "deepseek-ai/DeepSeek-V4.1-Flash"
+        },
+        "critique": "<translation_critique>\n<improvements>\n- **Glosario: `overview` → `resumen`.** El encabezado “Descripción general del concepto” debe ser “Resumen del concepto”, conforme al glosario.\n- **Glosario: `WAC` → `PMC`.** En Implementación, “WAC previo a la venta” debe ser “PMC previo a la venta”. No dejar WAC en inglés.\n- **Glosario: `cash transfer` → `transferencia de fondos`.** En la admonición, “Las transferencias de efectivo entre brókeres…” debe ser “Las transferencias de fondos entre brókeres…”. Revisar también `CASH_TRANSFER` como etiqueta legible.\n- **Glosario: `split` → `desdoblamiento`.** “no vinculadas a un split” debe ser “no vinculadas a un desdoblamiento”; “ADJUSTMENT vinculado a SPLIT” debe ser “AJUSTE vinculado a un desdoblamiento”.\n- **Etiquetas de transacción en inglés.** Se dejan sin traducir `ADJUSTMENT`, `DEPOSIT`, `WITHDRAWAL`, `BUY`, `SELL`, `DIVIDEND`, `INTEREST`, `FEE`, `TAX`, `CASH_TRANSFER`, `FX_CONVERSION`, `TRANSFER` en tablas y texto normal. Según el glosario deben ser: `AJUSTE`, `DEPÓSITO`, `RETIRO`, `COMPRA`, `VENTA`, `DIVIDENDO`, `INTERÉS`, `COMISIÓN`, `IMPUESTO`, `TRANSFERENCIA DE FONDOS`, `CONVERSIÓN FX`, `TRANSFERENCIA` (o “transferencia de valores” cuando corresponda). Ejemplo: “CASH_TRANSFER / FX_CONVERSION cuya otra pata…” → “TRANSFERENCIA DE FONDOS / CONVERSIÓN FX cuya otra pata…”.\n- **Terminología `P&L` / `PnL`.** El glosario fija `P&L` → `P&L`. En prosa debe usarse “P&L total” en lugar de “PnL total”; “Period PnL” debe ser “P&L período”; y el encabezado de tabla `TotalPnL` debe ser “P&L total”. Mantener intactos los identificadores LaTeX como `\\mathrm{TotalPnL}` y `\\mathrm{PnL}_b`.\n- **Error semántico: “El receptor solo coincide…”** El original “The receiver alone matches…” significa “el receptor por sí solo”, no “solo coincide”. Corregir a “El receptor por sí solo coincide con su línea combinada.”.\n- **Error semántico: “El emisor solo pierde…”** Igual que el anterior: debe ser “El emisor por sí solo pierde los movimientos en tránsito.”.\n- **Ambigüedad: “situaría a A solo en −100 … y a B solo en +130”.** Mejor: “situaría a A por sí solo en −100 … y a B por sí solo en +130”, o “en su propia vista”.\n- **“convertido a $\\mathrm{fx}(c, C^*, t_{arr})$”**: en el original es “converted at”, no “to”. Debe ser “convertido al tipo $\\mathrm{fx}(c, C^*, t_{arr})$” o “convertido según $\\mathrm{fx}(c, C^*, t_{arr})$”.\n- **Implementación, paso 1: “Toma el paso de la transacción de su fondo de coste medio…”** Es una traducción poco clara de “Take the transaction’s step of its position’s average-cost pool”. Mejor: “Toma la parte de la transacción correspondiente al fondo de coste medio de su posición…”.\n- **Formato numérico en español.** En texto y tablas deben usarse coma decimal y punto de miles: “1,000 USD” → “1.000 USD”; “5,000” → “5.000”; “0.90 EUR” → “0,90 EUR”; “0.91, 0.92, 0.93” → “0,91, 0,92, 0,93”; “(0.5 - 1)” → “(0,5 - 1)”. Mantener solo la notación matemática interna si el proyecto lo exige.\n- **Consistencia de “ownership share”.** Se alterna “cuota de propiedad”, “participaciones” y “con propiedad al 50%”. Unificar preferentemente como “cuota de propiedad”: “Con cuotas de propiedad iguales…”, “cuotas de propiedad 100%”, “B con una cuota de propiedad del 50%”.\n- **“el valor de un título”**: resulta inconsistente con el uso mayoritario de “valores” para securities. Usar un término coherente, por ejemplo “el valor de un activo” o “el valor de un instrumento”, según el contexto.\n- **“modelo de 3 fondos”** debe ser “modelo de tres fondos” para mantener coherencia con “Modelo de tres fondos” usado en el enlace.\n- **“NAV — el otro término en el PnL total”**: corregir a “NAV — el otro término del P&L total”.\n- **“PnL del período — versión por ventanas”**: según glosario debe ser “P&L período — versión por ventana” (o “versión de ventana móvil” si se quiere precisar).\n</improvements>\n</translation_critique>",
+        "structural_diff": "",
+        "structural_issues": 0,
+        "elapsed_s": 271.0
       }
-    }
+    },
+    "analysis": "[{\"name\": \"Deposited Capital\", \"keywords\": [\"deposited capital portfolio tracker definition external capital contribution\"]}, {\"name\": \"Total PnL\", \"keywords\": [\"total PnL profit and loss portfolio tracker formula\"]}, {\"name\": \"Cash Pools\", \"keywords\": [\"cash pools portfolio tracker three pool cash model\"]}, {\"name\": \"Capital Baseline\", \"keywords\": [\"capital baseline portfolio tracker cumulative economic capital contributed\"]}, {\"name\": \"cumulative economic capital\", \"keywords\": [\"cumulative economic capital contributed since inception portfolio\"]}, {\"name\": \"ExternalCashFlow\", \"keywords\": [\"ExternalCashFlow external cash flow capital baseline portfolio engine\"]}, {\"name\": \"InKindCapital\", \"keywords\": [\"InKindCapital in-kind capital contribution securities portfolio tracker\"]}, {\"name\": \"NAV\", \"keywords\": [\"NAV net asset value portfolio tracker formula\"]}, {\"name\": \"cost_basis_override\", \"keywords\": [\"cost_basis_override cost basis override adjustment portfolio tracker\"]}, {\"name\": \"ADJUSTMENT rows\", \"keywords\": [\"ADJUSTMENT rows cost basis override portfolio transaction type\"]}, {\"name\": \"split-linked\", \"keywords\": [\"split-linked adjustment stock split portfolio tracker\"]}, {\"name\": \"TRANSFER legs\", \"keywords\": [\"TRANSFER legs transfer leg financial transaction portfolio\"]}, {\"name\": \"orphan\", \"keywords\": [\"orphan leg transfer portfolio tracker unlinked missing counterpart\"]}, {\"name\": \"market value\", \"keywords\": [\"market value portfolio valuation securities transfer\"]}, {\"name\": \"at cost\", \"keywords\": [\"at cost accounting cost basis portfolio tracker\"]}, {\"name\": \"DEPOSIT / WITHDRAWAL\", \"keywords\": [\"DEPOSIT WITHDRAWAL transaction type portfolio cash flow\"]}, {\"name\": \"CASH_TRANSFER\", \"keywords\": [\"CASH_TRANSFER transaction type portfolio tracker cash transfer\"]}, {\"name\": \"FX_CONVERSION\", \"keywords\": [\"FX_CONVERSION foreign exchange conversion transaction type portfolio\"]}, {\"name\": \"internal pair\", \"keywords\": [\"internal pair cash transfer FX conversion transfer legs portfolio\"]}, {\"name\": \"Internal Transfers\", \"keywords\": [\"internal transfers broker lines portfolio tracker\"]}, {\"name\": \"broker lines\", \"keywords\": [\"broker lines P&L chart per broker portfolio tracker\"]}, {\"name\": \"P&amp;L chart\", \"keywords\": [\"P&amp;L chart profit and loss chart broker lines dashboard\"]}, {\"name\": \"ownership share\", \"keywords\": [\"ownership share broker sharing portfolio tracker\"]}, {\"name\": \"InTransit\", \"keywords\": [\"InTransit value in transit portfolio tracker broker\"]}, {\"name\": \"value in transit\", \"keywords\": [\"value in transit portfolio transfer between brokers\"]}, {\"name\": \"valuation price\", \"keywords\": [\"valuation price portfolio tracker mark to market\"]}, {\"name\": \"mark\", \"keywords\": [\"mark price valuation portfolio mark to market\"]}, {\"name\": \"fx / exchange rate\", \"keywords\": [\"fx exchange rate portfolio tracker currency conversion\"]}, {\"name\": \"same-broker pairs\", \"keywords\": [\"same-broker pairs internal transfer currency conversion account\"]}, {\"name\": \"ADJUSTMENT pairs\", \"keywords\": [\"ADJUSTMENT pairs in-kind capital cost basis portfolio\"]}, {\"name\": \"filtered views\", \"keywords\": [\"filtered views portfolio tracker broker scope\"]}, {\"name\": \"combined view\", \"keywords\": [\"combined view portfolio tracker broker scope\"]}, {\"name\": \"single-broker views\", \"keywords\": [\"single-broker views portfolio tracker broker scope\"]}, {\"name\": \"in scope / outside the view\", \"keywords\": [\"in scope outside the view portfolio tracker broker\"]}, {\"name\": \"scope S\", \"keywords\": [\"scope S portfolio tracker brokers in scope\"]}, {\"name\": \"Three-Pool Cash Model\", \"keywords\": [\"three pool cash model portfolio tracker K R W\"]}, {\"name\": \"Growth Chart\", \"keywords\": [\"Growth Chart portfolio tracker cash decomposition\"]}, {\"name\": \"K_b, R_b, W\", \"keywords\": [\"K_b R_b W cash pools external capital returns global tracker\"]}, {\"name\": \"restorable on re-deposit\", \"keywords\": [\"restorable returns re-deposit cash pool portfolio tracker\"]}, {\"name\": \"Worked Examples\", \"keywords\": [\"worked examples financial documentation meaning\"]}, {\"name\": \"Full Sell Regression\", \"keywords\": [\"full sell regression portfolio tracker test case\"]}, {\"name\": \"WAC\", \"keywords\": [\"WAC weighted average cost portfolio tracker\"]}, {\"name\": \"ROI/TWRR/MWRR\", \"keywords\": [\"ROI TWRR MWRR performance metrics portfolio tracker\"]}, {\"name\": \"event-driven\", \"keywords\": [\"event-driven transaction loop portfolio engine\"]}, {\"name\": \"daily-delta\", \"keywords\": [\"daily delta event driven portfolio engine\"]}, {\"name\": \"single per-transaction loop\", \"keywords\": [\"single per-transaction loop portfolio engine implementation\"]}, {\"name\": \"cumulative_external_cash_flow\", \"keywords\": [\"cumulative_external_cash_flow capital baseline ROI TWRR MWRR\"]}, {\"name\": \"external_cash_flow\", \"keywords\": [\"external_cash_flow field portfolio engine cash only\"]}, {\"name\": \"Portfolio Engine\", \"keywords\": [\"Portfolio Engine LibreFolio mathematical model\"]}, {\"name\": \"Performance Metrics Overview\", \"keywords\": [\"Performance Metrics Overview portfolio tracker\"]}, {\"name\": \"candles\", \"keywords\": [\"candles chart portfolio performance total PnL\"]}, {\"name\": \"windowed version\", \"keywords\": [\"windowed version period PnL portfolio tracker\"]}, {\"name\": \"Period PnL\", \"keywords\": [\"Period PnL windowed PnL portfolio tracker\"]}, {\"name\": \"unrealized gain\", \"keywords\": [\"unrealized gain portfolio tracker broker positions\"]}, {\"name\": \"broker\", \"keywords\": [\"broker financial portfolio tracker account\"]}, {\"name\": \"securities\", \"keywords\": [\"securities portfolio tracker financial instruments\"]}, {\"name\": \"position\", \"keywords\": [\"position portfolio tracker holding average cost\"]}, {\"name\": \"fees\", \"keywords\": [\"fees transaction cost portfolio tracker\"]}, {\"name\": \"dividend\", \"keywords\": [\"dividend portfolio tracker income transaction\"]}, {\"name\": \"interest\", \"keywords\": [\"interest portfolio tracker income transaction\"]}, {\"name\": \"tax\", \"keywords\": [\"tax portfolio tracker transaction cost\"]}, {\"name\": \"BUY, SELL\", \"keywords\": [\"BUY SELL transaction types portfolio tracker\"]}, {\"name\": \"RE-DEPOSIT\", \"keywords\": [\"RE-DEPOSIT cash pool restore returns portfolio tracker\"]}, {\"name\": \"unlinked\", \"keywords\": [\"unlinked transaction cash flow portfolio tracker\"]}, {\"name\": \"never linked\", \"keywords\": [\"never linked transfer leg orphan portfolio tracker\"]}, {\"name\": \"hidden global tracker\", \"keywords\": [\"hidden global tracker cash pool W portfolio tracker\"]}, {\"name\": \"Generated returns\", \"keywords\": [\"generated returns still at broker cash pool portfolio tracker\"]}, {\"name\": \"external capital\", \"keywords\": [\"external capital still at broker cash pool portfolio tracker\"]}, {\"name\": \"per-broker update rules\", \"keywords\": [\"per-broker update rules three pool model portfolio engine\"]}, {\"name\": \"aggregates\", \"keywords\": [\"visible aggregates cash model portfolio tracker\"]}, {\"name\": \"arrival day / departure day\", \"keywords\": [\"arrival day departure day transfer legs portfolio tracker\"]}, {\"name\": \"sender / receiver\", \"keywords\": [\"sender receiver internal transfer portfolio tracker\"]}, {\"name\": \"leg\", \"keywords\": [\"leg transfer transaction portfolio tracker\"]}, {\"name\": \"link / linked\", \"keywords\": [\"link linked transfer leg portfolio tracker\"]}, {\"name\": \"profit or loss\", \"keywords\": [\"profit or loss PnL portfolio tracker\"]}, {\"name\": \"currency conversion\", \"keywords\": [\"currency conversion FX portfolio tracker broker\"]}, {\"name\": \"historical rates\", \"keywords\": [\"historical rates cost basis portfolio tracker\"]}, {\"name\": \"in-kind ADJUSTMENT\", \"keywords\": [\"in-kind adjustment capital portfolio tracker\"]}, {\"name\": \"last known price carried forward\", \"keywords\": [\"last known price carried forward valuation portfolio tracker\"]}]",
+    "analysis_model": "deepseek-ai/DeepSeek-V4.1-Flash"
   },
   "financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.en.md": {
     "md5": "b5d6d7726ebdbef6e65d3d448266f8c9",

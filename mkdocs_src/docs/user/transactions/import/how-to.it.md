@@ -34,23 +34,23 @@ barra di avanzamento mostra soltanto i passaggi dell'importazione corrente.
 
 | Passaggio | Quando lo vedi |
 | :--- | :--- |
-| 1 · **Caricamento** | Sempre |
-| 2 · **Seleziona i file** | Sempre |
-| 3 · **Analisi** | Sempre |
-| 🧬 **Unifica gli asset** | Lo stesso titolo compare con più di un nome o codice |
+| 1 · **Carica** | Sempre |
+| 2 · **Seleziona File** | Sempre |
+| 3 · **Analizza** | Sempre |
+| 🧬 **Unifica asset** | Lo stesso titolo compare con più di un nome o codice |
 | 🔧 **Correzioni** | L'importatore ha registrato righe che non è riuscito a comprendere del tutto |
 | 🧹 **Duplicati** | Lo stesso movimento è presente in due dei file che importi insieme |
 | 4 · **Revisione** | Sempre |
 | ⚖️ **Allinea con la banca** | Solo per i set di report, quando le cifre della banca differiscono da quelle di LibreFolio |
 
-### 📤 Passaggio 1: Caricamento
+### 📤 Passaggio 1: Carica
 
 Trascina i tuoi report nella procedura guidata, oppure clicca per sceglierli (CSV o XLSX), e assegna
-ciascuno al suo broker — oppure tutti in una volta con **Assegna il broker per i caricamenti**. Un
+ciascuno al suo broker — oppure tutti in una volta con **Broker per i caricamenti**. Un
 broker mancante può essere creato dalla stessa lista (**Crea nuovo**).
 
 - Ogni report che carichi viene conservato: per riutilizzarne uno, salta questo passaggio con
-  **Avanti: Seleziona i file**.
+  **Avanti: Seleziona File**.
 - Quando un conto arriva in più esportazioni (ad es. [Danske Bank](danske-bank.md)), caricale
   insieme: se ne manca una, la procedura guidata resta qui e la nomina.
 
@@ -60,17 +60,17 @@ broker mancante può essere creato dalla stessa lista (**Crea nuovo**).
 
 #### 🧭 Un file nel broker sbagliato {: #wrong-broker }
 
-Quando clicchi **Avanti: Seleziona i file**, la procedura guidata verifica ogni file appena caricato
-rispetto al **Plugin di importazione predefinito** del suo broker. Se quel plugin non riesce a
+Quando clicchi **Avanti: Seleziona File**, la procedura guidata verifica ogni file appena caricato
+rispetto al **Plugin di Import Predefinito** del suo broker. Se quel plugin non riesce a
 leggere un file, il file probabilmente appartiene a un altro broker, e la procedura guidata te lo
 chiede prima di procedere (*Questo file potrebbe appartenere a un altro broker*). Dall'alto verso il
 basso, mostra:
 
 - **Assegnato a** — il broker in cui si trova il file, con la sua icona, e il suo plugin predefinito,
-  contrassegnato *non è in grado di leggerlo*;
+  contrassegnato *non sa leggerlo*;
 - **Note dal plugin** — perché quel plugin non riesce a leggere il file, quando ne indica il motivo:
   nella tua lingua quando esiste una traduzione;
-- **Spostalo in** — il broker il cui plugin predefinito *è in grado di leggerlo*. Quando i plugin
+- **Spostalo in** — il broker il cui plugin predefinito *sa leggerlo*. Quando i plugin
   predefiniti di più broker lo leggono, la richiesta elenca invece quei broker: scegline uno, il
   primo è già selezionato.
 
@@ -79,19 +79,19 @@ Poi scegli:
 - **Sposta in ‹broker›**, con l'icona di quel broker — il file viene caricato su quel broker,
   nella stessa sessione, e rimosso da quello sbagliato. Se lo spostamento fallisce, un errore lo
   segnala e il file resta dov'era;
-- **Lascialo qui** — il file resta, e la procedura guidata lo legge con un altro plugin in grado di
-  farlo, come prima: lo vedi nella colonna **Plugin** di **Seleziona i file**;
+- **Tienilo qui** — il file resta, e la procedura guidata lo legge con un altro plugin in grado di
+  farlo, come prima: lo vedi nella colonna **Plugin** di **Seleziona File**;
 - **Rimuovi il file** — il file viene eliminato.
 
 Una richiesta per file, a turno (*File 1 di 3*); chiuderla mantiene il file. Se rimuovi tutti i file
-appena caricati, la procedura guidata resta su **Caricamento**, pronta per altri. Quando nessuno dei
+appena caricati, la procedura guidata resta su **Carica**, pronta per altri. Quando nessuno dei
 tuoi broker ha un plugin predefinito che legge il file, la richiesta nomina i plugin che lo leggono —
 o dice che nessuno può farlo — e offre solo di mantenerlo o rimuoverlo.
 
 I broker senza un plugin di importazione predefinito non vengono mai interrogati, e nemmeno i report
 che riutilizzi senza caricarli di nuovo.
 
-### 🗂️ Passaggio 2: Seleziona i file
+### 🗂️ Passaggio 2: Seleziona File
 
 Il pannello di ogni broker elenca i suoi report memorizzati, con i file appena caricati già spuntati.
 Spunta i file da leggere e clicca **Analizza (N)**.
@@ -103,9 +103,9 @@ sbagliato, e per un CSV che hai creato tu scegli **[CSV generico](generic-csv.md
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Passaggio 2 della procedura guidata: Configurazione del parser" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-I **set di report** sono una sola scheda, spuntata nel suo complesso. **Leggi come**, nella sua
+I **set di report** sono una sola scheda, spuntata nel suo complesso. **Letto come**, nella sua
 intestazione, cambia il modo in cui il set viene letto, e il menu **⋮** di ogni file può rimuoverlo
-dal set (**Leggi da solo con ‹plugin›**, **Rimuovi dal set**) — [dettagli](danske-bank.md#how-the-set-is-read).
+dal set (**Leggi da solo con ‹plugin›**, **Togli dal set**) — [dettagli](danske-bank.md#how-the-set-is-read).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-report-set-read-as" alt="Scheda del set di report in Seleziona i file con la lista Leggi come aperta: Danske Bank (rilevato) e Leggi i file uno per uno" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -119,7 +119,7 @@ dal set (**Leggi da solo con ‹plugin›**, **Rimuovi dal set**) — [dettagli]
 o solo parzialmente spuntato (un trattino nella sua casella di controllo): scegli il plugin, usa
 **Carica il file mancante**, oppure spunta o despunta l'intero set.
 
-### 🧠 Passaggio 3: Analisi
+### 🧠 Passaggio 3: Analizza
 
 LibreFolio legge ogni file, lo verifica e lo riassume in una tabella:
 
@@ -140,14 +140,14 @@ I riquadri sopra la tabella contano ciò che verrà realmente importato; **Vedi 
 
 - **Avvisi**: **Continua** li elenca per primi; leggili, poi clicca **Continua comunque**.
 - **Un file non è stato elaborato**: un banner ne indica il motivo. Correggi il suo plugin in
-  **Seleziona i file**, poi clicca **Analizza di nuovo tutto**.
+  **Seleziona File**, poi clicca **Rianalizza tutti**.
 
 ### 🧩 Passaggi che compaiono solo quando servono {: #only-when-needed }
 
-A seconda di ciò che **Analisi** trova, fino a tre passaggi possono precedere la **Revisione**, in
+A seconda di ciò che il passaggio **Analizza** trova, fino a tre passaggi possono precedere la **Revisione**, in
 questo ordine. Apri quello che la procedura guidata ti mostra:
 
-??? abstract "🧬 Unifica gli asset — quando lo stesso titolo compare con più di un nome o codice"
+??? abstract "🧬 Unifica asset — quando lo stesso titolo compare con più di un nome o codice"
 
     I tuoi file descrivono lo stesso titolo più di una volta — con due nomi o codici, oppure in due file.
     Unificalo qui, altrimenti si sdoppia in due asset con le sue transazioni divise tra loro.
@@ -160,12 +160,12 @@ questo ordine. Apri quello che la procedura guidata ti mostra:
     significa da confermare, **grigio** significa nulla da decidere.
 
     - **Conferma** o **Separa** una proposta; unisci o separa le schede con **⋮** (**Unisci con…**,
-      **Rimuovi dal gruppo**) oppure tramite trascinamento.
+      **Estrai dal gruppo**) oppure tramite trascinamento.
     - **Clicca un badge di codice** per renderlo il codice principale (⭐) — scegli quello su cui sono
       quotati i prezzi; gli altri restano come alternative.
-    - **Rinomina** con la matita; un titolo già nella tua libreria (**nell'archivio**) mantiene il suo nome.
-    - **Continua** attende finché nessuna proposta è aperta: **Conferma tutto (N)** le risolve in una
-      volta, e **Ripristina il raggruppamento automatico** ricomincia da capo.
+    - **Rinomina** con la matita; un titolo già nella tua libreria (**in archivio**) mantiene il suo nome.
+    - **Continua** attende finché nessuna proposta è aperta: **Conferma tutte (N)** le risolve in una
+      volta, e **Ripristina unione automatica** ricomincia da capo.
 
 ??? warning "🔧 Correzioni — quando l'importatore ha registrato righe che non è riuscito a comprendere del tutto"
 
@@ -198,10 +198,10 @@ questo ordine. Apri quello che la procedura guidata ti mostra:
         <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicates-step" alt="Procedura guidata di importazione — Passaggio Duplicati con una coppia tra file">
     </div>
 
-    - **Priorità dei file**: trascina i file nell'ordine di cui ti fidi e clicca **Ricalcola per priorità**.
+    - **Priorità file**: trascina i file nell'ordine di cui ti fidi e clicca **Ricalcola per priorità**.
       Ogni gruppo mantiene la copia dal file più in alto — mai una già salvata o in attesa nel workspace
       bulk.
-    - **Mantieni**: spunta le copie da importare, riga per riga; **Ripristina i valori predefiniti**
+    - **Tieni**: spunta le copie da importare, riga per riga; **Ripristina default**
       ripristina la scelta automatica.
     - **Confronta** mostra le copie affiancate, con le differenze evidenziate.
 
@@ -223,9 +223,9 @@ tag, più il file quando ne importi diversi.
 
 #### 🗂️ Abbina ogni titolo
 
-Il pannello **Risolvi gli asset** sopra la griglia elenca i titoli dei tuoi file. Abbina ciascuno:
+Il pannello **Risolvi Asset** sopra la griglia elenca i titoli dei tuoi file. Abbina ciascuno:
 
-- Cerca **In questa importazione** e **Nell'archivio** (la tua libreria) da un unico campo. Le
+- Cerca **In questo import** e **In archivio** (la tua libreria) da un unico campo. Le
   corrispondenze probabili vengono per prime, con un badge di attendibilità (**Esatta** fino a
   **Bassa**); una corrispondenza unica è già selezionata.
 - **Crea "…"** apre il modulo del nuovo asset, compilato con il nome e i codici dal report.
@@ -249,12 +249,12 @@ un consiglio.
 
 | Badge | Significato | Spuntato all'inizio? |
 | :--- | :--- | :--- |
-| **✓ Unica** | Nulla di simile è salvato | ✅ |
-| **ℹ Possibile duplicato** | Una transazione salvata ha lo stesso tipo, data, quantità e importo, ma un'altra descrizione | ✅ — controllala |
-| **⚠ Probabile duplicato** | Una transazione salvata corrisponde, descrizione inclusa | ⬜ |
+| **✓ Unico** | Nulla di simile è salvato | ✅ |
+| **ℹ Possibile dup** | Una transazione salvata ha lo stesso tipo, data, quantità e importo, ma un'altra descrizione | ✅ — controllala |
+| **⚠ Probabile dup** | Una transazione salvata corrisponde, descrizione inclusa | ⬜ |
 | **⧉ Duplicato nel lotto** | Copia esatta di un'altra riga di questa importazione, o del workspace bulk | ⬜ |
 | **≈ Possibile duplicato nel lotto** | Lo stesso, con un'altra descrizione | ✅ — controllala |
-| **✗ Non risolta** | Il suo titolo non è ancora abbinato | ✅ — abbinalo o despunta la riga |
+| **✗ Non risolto** | Il suo titolo non è ancora abbinato | ✅ — abbinalo o despunta la riga |
 | **⛔ Prima dell'apertura** | Datata prima della data di apertura del broker | Non può essere importata |
 | **⏮ Già in LibreFolio** | Set di report: più vecchia della cronologia conservata da LibreFolio; nascosta dietro un contatore | Non può essere importata |
 
@@ -265,7 +265,7 @@ righe sono deselezionate. Una conversione di valuta è una sola riga, importata 
 
 Le righe datate prima della data di apertura del broker non possono essere importate (il giorno di
 apertura stesso va bene). Se la data è sbagliata, il banner offre **Imposta l'apertura alla ‹data›** —
-la data della riga più antica — e **Modifica la data del broker**; le righe vengono poi ricontrollate.
+la data della riga più antica — e **Modifica data broker**; le righe vengono poi ricontrollate.
 
 #### 📥 Importa le righe
 
@@ -278,12 +278,12 @@ le spunte e clicca di nuovo.
 
     Per un set di report come [Danske Bank](danske-bank.md#first-import-align-with-the-bank),
     LibreFolio confronta ciò che conterrà con i saldi e le posizioni della banca. Le schede mostrano
-    ogni punto — **Punto di partenza**, **Dopo il divario**, **Controllo di fine periodo** — sopra le
+    ogni punto — **Punto di partenza**, **Dopo il buco**, **Verifica a fine periodo** — sopra le
     correzioni proposte, tutte spuntate. Despunta quelle che non vuoi e clicca **Continua**; se il
     confronto non è riuscito, prosegui senza di esse.
 
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="import-wizard-gapfix-step" alt="Allinea con la banca: le schede Punto di partenza, Dopo il divario e Controllo di fine periodo sopra le correzioni proposte contrassegnate gap_fix" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+        <img class="gallery-img" data-category="brokers" data-name="import-wizard-gapfix-step" alt="Allinea con la banca: le schede Punto di partenza, Dopo il buco e Verifica a fine periodo sopra le correzioni proposte contrassegnate gap_fix" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
     </div>
 
 ### 💾 Salva nel workspace bulk
@@ -304,7 +304,7 @@ La prima volta che apri la procedura guidata, una bolla guida ti accompagna:
 - termina evidenziando **Salva tutto**, senza premerlo;
 - **X** salta solo il suggerimento corrente.
 
-Per rivederla, scegli **Ripeti al prossimo avvio** per la **Guida all'importazione** in
+Per rivederla, scegli **Ripeti al prossimo ingresso** per la **Guida all'importazione** in
 **[Impostazioni → Preferenze → Primo utilizzo e guide](../../settings/preferences.md#onboarding-and-guides)**:
 si avvia con la tua prossima importazione.
 

@@ -1,6 +1,6 @@
 # 🏦 Instrumentos Financieros
 
-Esta sección cubre los componentes básicos de cualquier cartera: los **instrumentos** que puede poseer, las **transacciones** que los mueven y los **eventos** que afectan su valor.
+Esta sección cubre los componentes básicos de cualquier cartera: los **instrumentos** que puedes poseer, las **transacciones** que los mueven y los **eventos** que afectan su valor.
 
 ---
 
@@ -12,11 +12,11 @@ Las clases de activos que LibreFolio admite — desde acciones y ETF hasta bonos
 
 ### 💸 [Tipos de Transacciones](transaction-types/index.md)
 
-Cada operación financiera que cambia su cartera: compras, ventas, dividendos recibidos, comisiones pagadas y más. Comprender las transacciones es fundamental para un reporte preciso de pérdidas y ganancias (P&L) e impuestos.
+Cada operación financiera que cambia tu cartera: compras, ventas, dividendos recibidos, comisiones pagadas y más. Comprender las transacciones es fundamental para un reporte preciso de P&L e impuestos.
 
 ### 📅 [Eventos de Activos](asset-events/index.md)
 
-Acciones corporativas y ocurrencias programadas que afectan a un activo **globalmente** — dividendos declarados, desdoblamientos de acciones, ajustes de precios, pagos de intereses y liquidaciones por vencimiento. Los eventos son distintos de las transacciones: afectan al activo, no a su cartera.
+Acciones corporativas y ocurrencias programadas que afectan a un activo **globalmente** — dividendos declarados, desdoblamientos de acciones, ajustes de precios, pagos de intereses y liquidaciones por vencimiento. Los eventos son distintos de las transacciones: afectan al activo, no a tu cartera.
 
 ---
 

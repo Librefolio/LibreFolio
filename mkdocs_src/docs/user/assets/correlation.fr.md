@@ -50,7 +50,7 @@ Cette section répond à *lesquels évoluent ensemble ?* — pour repérer les a
 **Comment le lire**
 
 - **Un carré par paire** : bleu lorsque les deux actifs évoluent ensemble, rouge lorsqu'ils évoluent en sens opposés, pâle lorsqu'ils évoluent indépendamment. Survolez-le ou touchez-le pour obtenir la valeur en mots.
-- **Partez des deux listes** : **Les plus semblables** nomme les paires qui constituent presque la même exposition, **Celles qui se compensent** les paires qui s'amortissent mutuellement. Une liste vide est un résultat. Cliquez sur une paire pour la retrouver dans la matrice.
+- **Partez des deux listes** : **Les plus semblables** nomme les paires qui constituent presque la même exposition, **Ceux qui se compensent** les paires qui s'amortissent mutuellement. Une liste vide est un résultat. Cliquez sur une paire pour la retrouver dans la matrice.
 - **Un tiret n'est pas un zéro** : la paire n'a pas pu être mesurée — historique trop court, ou prix qui n'a jamais bougé.
 - **Les boutons d'ordre** réorganisent la matrice ; ils ne modifient jamais une valeur.
 
@@ -66,17 +66,17 @@ Cette section place chaque actif sur la même échelle de préjudice : ses pires
 
 **Outils affichés**
 
-- **Mauvais jour** — la perte moyenne sur les 5 % de jours les plus mauvais (CVaR à 95 %) → [VaR conditionnelle](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
+- **Mauvaise journée** — la perte moyenne sur les 5 % de jours les plus mauvais (CVaR à 95 %) → [VaR conditionnelle](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
 - **Mauvais mois** — la même chose sur de véritables périodes d'un mois → [VaR conditionnelle](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
-- **Pire chute** — la baisse la plus profonde depuis un sommet ; *durée N j* compte les jours jusqu'à ce que l'actif y revienne, ou jusqu'à la fin de la période → [Perte maximale](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
-- **Sous le sommet maintenant** — à quelle distance il se situe sous son plus haut niveau de la période → [Repli actuel](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
-- **Remontée vers le sommet** — le gain nécessaire pour y revenir : 20 % en dessous nécessite +25 % → [Ce qu'il faut pour revenir](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back)
+- **Pire repli** — la baisse la plus profonde depuis un sommet ; *durée N j* compte les jours jusqu'à ce que l'actif y revienne, ou jusqu'à la fin de la période → [Perte maximale](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
+- **Sous le sommet** — à quelle distance il se situe sous son plus haut niveau de la période → [Repli actuel](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
+- **Hausse jusqu'au sommet** — le gain nécessaire pour y revenir : 20 % en dessous nécessite +25 % → [Ce qu'il faut pour revenir](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back)
 
 **Comment le lire**
 
 - **Chaque colonne a son propre horizon**, d'un jour à toute la période : comparez les actifs dans une colonne, n'additionnez jamais les colonnes.
 - **Ce n'est pas un classement** : le tableau s'ouvre dans l'ordre de votre sélection. Cliquez sur un titre de colonne pour le trier, ou survolez-le pour savoir ce qu'il mesure.
-- **Sur une période courte**, **Mauvais jour** et **Mauvais mois** peuvent rester vides tandis que les colonnes de repli sont remplies : ils nécessitent plus d'historique.
+- **Sur une période courte**, **Mauvaise journée** et **Mauvais mois** peuvent rester vides tandis que les colonnes de repli sont remplies : ils nécessitent plus d'historique.
 
 ---
 
@@ -91,7 +91,7 @@ Cette section confronte le risque à la récompense — l'ampleur des variations
 **Outils affichés**
 
 - **Volatilité** — l'ampleur des variations des rendements, sur une base annuelle → [Volatilité](../../financial-theory/technical-analysis/risk-metrics/volatility.md)
-- **Rend. ann.** — le *rendement annuel moyen* : le rendement moyen de la période, ramené à une année → [Annualisation observée](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md)
+- **Rend. annuel** — le *Rendement moyen annuel* : le rendement moyen de la période, ramené à une année → [Annualisation observée](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md)
 - **Sortino** — le rendement obtenu par unité de variation à la baisse → [Ratio de Sortino](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md)
 - **Sharpe** — le rendement obtenu par unité de volatilité → [Ratio de Sharpe](../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md)
 - **Bêta** — avec un indice de référence : l'ampleur du mouvement de l'actif lorsque l'indice de référence bougeait → [Bêta et rendement actif](../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md#interpretation)
@@ -134,7 +134,7 @@ Cette section répond à *comment chacun s'en est-il sorti lors d'un épisode pa
 
 **Comment le lire**
 
-- **Choisissez un Préréglage**, tel que la *Crise financière mondiale*, ou définissez la **Période**, puis appuyez sur **Exécuter le rejeu**. Modifier la sélection ou les dates de la page efface le résultat.
+- **Choisissez un Préréglage**, tel que la *Crise financière mondiale*, ou définissez la **Période**, puis appuyez sur **Lancer le rejeu**. Modifier la sélection ou les dates de la page efface le résultat.
 - **Le tableau** affiche le **Rendement** de chaque actif, du pire au meilleur, avec une barre : rouge pour une perte, vert pour un gain. Il n'y a pas de total : une sélection n'a pas de pondérations à additionner.
 - **Les actifs sans prix aux extrémités de la période** sont exclus et listés au-dessus du tableau, avec la raison. Lorsque c'est possible, un bouton rejoue la période plus courte durant laquelle ils ont tous des prix.
 
@@ -154,10 +154,10 @@ Lorsque quelque chose ne va pas avec les données, l'onglet le signale une fois,
 
 **Comment le lire**
 
-- **La bannière de qualité des données** liste ce qu'il faut corriger, chaque problème avec son action, comme **Synchroniser les prix** ou **Synchroniser les taux**. Cliquez dessus pour ouvrir la liste.
+- **La bannière de qualité des données** liste ce qu'il faut corriger, chaque problème avec son action, comme **Synchroniser** pour les prix ou **Synchroniser** pour les taux. Cliquez dessus pour ouvrir la liste.
 - **L'avertissement** en dessous nomme les résultats **partiels** et leur cause. Un résultat partiel affiche tout de même ses chiffres : lisez-les en gardant cette cause à l'esprit.
 - **La bannière ambre d'une section** signifie qu'un résultat n'a pas pu être obtenu du tout, souvent parce que la période est trop courte : choisissez-en une plus longue, ou synchronisez les prix.
-- **Et si… ?** signale ses propres problèmes à l'intérieur de sa section.
+- **Que se passe-t-il si… ?** signale ses propres problèmes à l'intérieur de sa section.
 
 ---
 

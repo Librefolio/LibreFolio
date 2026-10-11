@@ -47,7 +47,7 @@ Combien d'argent vos investissements ont-ils généré sur la période sélectio
     \Delta = \text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}} \qquad \text{percentage} = \frac{\Delta}{\left|\text{Total P}\&\text{L}_{\text{yesterday}}\right|} \times 100
     $$
 
-    - **Le signe et la couleur suivent la variation**, même lorsque le P&L total est une perte : de `-558.10 €` à `-466.79 €`, la ligne affiche `+91.31 € (+16.36%)` — votre perte a diminué de 16.36 %.
+    - **Le signe et la couleur suivent la variation**, même lorsque le P&L total est une perte : de `-558.10 €` à `-466.79 €`, la ligne affiche `+91.31 € (+16.36%)` — votre perte a diminué de 16,36 %.
     - **Il faut deux jours d'historique** ; le pourcentage est omis lorsque le P&L total d'hier est exactement nul, et un jour sans variation affiche `0.00%`.
 
 ### 💱 Variation non réalisée par devise {: #unrealized-change-by-currency }
@@ -88,7 +88,7 @@ Il y a une ligne 📈 pour chaque devise, euro inclus, et une ligne 💱 pour ch
 - **Le pourcentage en dessous** — par exemple `+0.35%` : la variation d'aujourd'hui de votre P&L total, rapportée à la valeur nette d'hier (panneau ci-dessous)
 - **ROI** — le gain de la période rapporté au capital investi → [ROI simple](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)
 - **TWRR** — la performance de vos choix d'actifs, quel que soit le timing de vos dépôts → [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)
-- **MWRR cumulé** et **MWRR annualisé** — votre rendement personnel, timing des dépôts inclus, sur la période et en taux annuel → [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)
+- **MWRR cumulatif** et **MWRR annualisé** — votre rendement personnel, timing des dépôts inclus, sur la période et en taux annuel → [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)
 
 **Comment la lire**
 
@@ -124,7 +124,7 @@ Que vaut votre portefeuille à la fin de la période, et qu'a-t-il gagné depuis
 - **Valeur de marché** — ce que valent les actifs que vous détenez aux prix du marché → [NAV / Valeur nette](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
 - **Coût d'achat** — ce que vous ont coûté les positions que vous détenez encore, chaque achat au taux de change de sa propre date → [Valeur comptable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 - **Liquidités** — les liquidités chez vos courtiers ; survolez-les pour séparer le capital que vous avez déposé des rendements que vous avez générés → [Poches de liquidités](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
-- **Capital versé (période)** — les dépôts moins les retraits sur la période, vert à droite et rouge à gauche ; survolez-le pour les totaux → [Capital versé](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
+- **Capital versé sur la période** — les dépôts moins les retraits sur la période, vert à droite et rouge à gauche ; survolez-le pour les totaux → [Capital versé](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 
 $$
 \text{Total P}\&\text{L} = \text{Net Worth} - \text{Capital put in since the start}

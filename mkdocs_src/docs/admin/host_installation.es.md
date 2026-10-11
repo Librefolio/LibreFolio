@@ -121,7 +121,7 @@ Para empezar de nuevo desde una **base de datos vacía**, usa una de las dos for
 
 !!! warning "Se pierden todos los datos"
 
-    Ambas formas eliminan la base de datos para siempre: usuarios, brókers, transacciones y configuración. Haz una copia de seguridad primero (consulta [Copia de seguridad](filesystem.md#backup)).
+    Ambas formas eliminan la base de datos para siempre: usuarios, brókeres, transacciones y configuración. Haz una copia de seguridad primero (consulta [Copia de seguridad](filesystem.md#backup)).
 
 ### 🧹 Con `dev.py`
 

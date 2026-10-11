@@ -52,7 +52,7 @@ Este es el detalle que hace tropezar a cualquiera que recalcule la cifra a mano,
     \sqrt{\frac{T}{T - 1}}
     $$
 
-    Con $T = 750$, eso es **+0.0667%**: demasiado pequeño para parecer incorrecto, y aun así incorrecto. El índice de Ulcer es una media cuadrática, no una desviación estándar muestral, y no tiene ninguna media que estimar.
+    Con $T = 750$, eso es **+0,0667%**: demasiado pequeño para parecer incorrecto, y aun así incorrecto. El índice de Ulcer es una media cuadrática, no una desviación estándar muestral, y no tiene ninguna media que estimar.
 
 ---
 

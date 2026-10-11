@@ -329,6 +329,11 @@
       "fr": "P&L latent",
       "es": "P&L no realizado"
     },
+    "unrealized change": {
+      "it": "variazione non realizzata",
+      "fr": "variation non réalisée",
+      "es": "variación no realizada"
+    },
     "period P&L": {
       "it": "P&L periodo",
       "fr": "P&L période",
@@ -388,6 +393,11 @@
       "it": "coppia FX",
       "fr": "paire FX",
       "es": "par FX"
+    },
+    "FX Pair Analysis": {
+      "it": "Analisi della coppia FX",
+      "fr": "Analyse de la paire de devises",
+      "es": "Análisis del par de divisas"
     },
     "interest schedule": {
       "it": "piano interessi",

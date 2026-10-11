@@ -6,13 +6,13 @@
 
 ## 📥 Cómo exportar
 
-Para exportar sus transacciones desde Finpension:
+Para exportar tus transacciones desde Finpension:
 
-1. Inicie sesión en su [cuenta de Finpension](https://app.finpension.ch).
-2. Vaya al panel de control de su cartera o cuenta activa.
-3. Haga clic en la pestaña **Transactions** (Transazioni / Transaktionen).
-4. Haga clic en el botón **Export** o de descarga y seleccione **CSV**.
-5. Guarde el archivo en su ordenador.
+1. Inicia sesión en tu [cuenta de Finpension](https://app.finpension.ch).
+2. Ve al panel de control de tu cartera o cuenta activa.
+3. Haz clic en la pestaña **Transactions** (Transazioni / Transaktionen).
+4. Haz clic en el botón **Export** o de descarga y selecciona **CSV**.
+5. Guarda el archivo en tu ordenador.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <!-- [Screenshot Placeholder: Finpension Portal - Transactions page and Export button] -->
@@ -20,9 +20,9 @@ Para exportar sus transacciones desde Finpension:
 
 ## ⚠️ Errores comunes
 
-!!! warning "No modifique los delimitadores"
+!!! warning "No modifiques los delimitadores"
 
-    Las exportaciones de Finpension utilizan el punto y coma `;` como separador de columnas y formatos alemanes/suizos. El analizador BRIM detecta estas configuraciones regionales automáticamente. Evite abrir el archivo en editores de hojas de cálculo (como Excel) y volver a guardarlo, ya que esto podría alterar la estructura bruta del CSV.
+    Las exportaciones de Finpension utilizan el punto y coma `;` como separador de columnas y formatos alemanes/suizos. El analizador BRIM detecta estas configuraciones regionales automáticamente. Evita abrir el archivo en editores de hojas de cálculo (como Excel) y volver a guardarlo, ya que esto podría alterar la estructura bruta del CSV.
 
 ## 📝 Notas
 

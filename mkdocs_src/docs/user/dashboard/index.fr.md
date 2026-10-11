@@ -5,7 +5,7 @@ Le Tableau de bord est le **centre de commandement de votre portefeuille** — u
 <div class="lf-screenshot-carousel" data-carousel="carousel-dashboard-main" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
   <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vue principale (absolue)" alt="Tableau de bord — Mode absolu">
   <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📈 Vue principale (pourcentage)" alt="Tableau de bord — Mode pourcentage">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Répartition" alt="Tableau de bord — Répartition">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Allocation" alt="Tableau de bord — Répartition">
 </div>
 
 ## 🗂️ Disposition à onglets
@@ -40,7 +40,7 @@ Lorsque vous appliquez un filtre de courtiers, les soldes de trésorerie se mett
 
 ## 🛡️ Onglet Risque {: #risk-tab }
 
-L'onglet Risque contient le panneau **Risque du portefeuille**, qui répond à quatre questions sur le risque de votre portefeuille : **Combien cela peut-il faire mal ?**, **Suis-je aussi diversifié que je le pense ?**, **Suis-je rémunéré pour ce risque ?** et **Et si… ?** Il couvre toujours l'intégralité de votre portefeuille — chaque courtier que vous détenez avec une part supérieure à 0 % — et suit la plage de dates et la devise cible du tableau de bord, mais pas le filtre de courtiers : lorsqu'un filtre est actif, un sous-titre l'indique. Voir [Onglet Risque](risk.md) pour les blocs et les outils qu'ils affichent.
+L'onglet Risque contient le panneau **Risque du portefeuille**, qui répond à quatre questions sur le risque de votre portefeuille : **Quel mal cela peut-il faire ?**, **Suis-je aussi diversifié que je le crois ?**, **Suis-je payé pour ce risque ?** et **Que se passe-t-il si… ?** Il couvre toujours l'intégralité de votre portefeuille — chaque courtier que vous détenez avec une part supérieure à 0 % — et suit la plage de dates et la devise cible du tableau de bord, mais pas le filtre de courtiers : lorsqu'un filtre est actif, un sous-titre l'indique. Voir [Onglet Risque](risk.md) pour les blocs et les outils qu'ils affichent.
 
 ---
 
@@ -48,7 +48,7 @@ L'onglet Risque contient le panneau **Risque du portefeuille**, qui répond à q
 
 En haut à droite du tableau de bord, vous disposez de plusieurs contrôles pour personnaliser votre vue :
 
-- **Plage temporelle** — des préréglages d'une semaine à Tout l'historique (MAX), ou une plage personnalisée via le sélecteur de dates.
+- **Plage temporelle** — des préréglages de **1S** à **Tout**, ou une plage personnalisée via le sélecteur de dates.
 - **Filtre de courtiers** — filtre les métriques sur un ou plusieurs courtiers spécifiques ; l'onglet Risque couvre toujours chaque courtier que vous détenez, et un sous-titre l'indique lorsqu'un filtre est actif.
 - **Devise cible** — convertit dynamiquement tous les actifs et soldes de trésorerie dans une seule devise sélectionnée pour une vue agrégée. La liste propose votre devise par défaut et les devises de vos paires FX configurées — les deux extrémités de chaque paire. Une devise qu'une [route en chaîne](../fx/add-pair.md) traverse uniquement n'est pas proposée : la synchronisation d'une chaîne ne stocke que le taux de sa propre paire, LibreFolio n'a donc aucun taux pour convertir vers cette devise. Pour rendre une devise disponible, attribuez-lui sa propre paire : choisissez **Créer un forex…** en bas de la liste, ou cochez **Créer également les paires intermédiaires** lorsque vous ajoutez une paire via une route en chaîne.
 - **Export IA** (:material-brain:) — ouvre un export vers le presse-papiers. Choisissez **Capture de données**
@@ -80,7 +80,7 @@ Revenez au Tableau de bord — depuis la barre latérale, ou avec le bouton **�
 
 Le bouton **Actualiser** recalcule tout, même lorsque rien n'a changé : les chiffres, la vue Performance, le panneau des lots et l'onglet Risque. Ce que vous voyez reste à l'écran pendant ce temps.
 
-Si un recalcul échoue, les chiffres déjà à l'écran restent et un message vous en informe. Dans l'onglet Risque, cela ne vaut que pour les chiffres de la période et de la devise que vous consultez : si vous basculez vers une période ou une devise pour laquelle l'onglet n'a pas encore de chiffres et que le calcul échoue, il affiche *Les données de risque n'ont pas pu être chargées.* à la place de ses niveaux, plutôt que les chiffres de votre choix précédent.
+Si un recalcul échoue, les chiffres déjà à l'écran restent et un message vous en informe. Dans l'onglet Risque, cela ne vaut que pour les chiffres de la période et de la devise que vous consultez : si vous basculez vers une période ou une devise pour laquelle l'onglet n'a pas encore de chiffres et que le calcul échoue, il affiche *Impossible de charger les données de risque.* à la place de ses niveaux, plutôt que les chiffres de votre choix précédent.
 
 ---
 
@@ -92,11 +92,11 @@ Si des prix ou des taux FX sont manquants à la date de fin, une bannière appar
 </div>
  Les actifs sans fournisseur de prix (saisis manuellement, comme les projets de financement participatif immobilier) sont valorisés au prix de leur dernière transaction, sauf si vous saisissez vous-même un prix plus récent — c'est intentionnel et ne génère pas d'avertissement. Un actif qui dispose bien d'un fournisseur de prix mais qui n'a toujours pas de prix de marché à la date de fin, plus de deux semaines après votre premier achat, est valorisé entre-temps au prix de sa dernière transaction également, et la bannière le liste : une obligation achetée à l'émission, avant sa première cotation, par exemple.
 
-La bannière vous avertit également lorsqu'un actif que vous détenez dispose d'un fournisseur de prix mais que son dernier prix a **plus d'une semaine** à la date de fin : cliquez sur **Synchroniser les prix** pour récupérer les prix manquants, et l'avertissement disparaît une fois qu'ils sont à jour. Les actifs manuels ne sont jamais signalés de cette manière, puisqu'il n'y a rien à synchroniser.
+La bannière vous avertit également lorsqu'un actif que vous détenez dispose d'un fournisseur de prix mais que son dernier prix a **plus d'une semaine** à la date de fin : cliquez sur **Synchroniser** pour récupérer les prix manquants, et l'avertissement disparaît une fois qu'ils sont à jour. Les actifs manuels ne sont jamais signalés de cette manière, puisqu'il n'y a rien à synchroniser.
 
 Elle liste aussi les actifs avec un **coût d'achat manquant** : un transfert ou un ajustement qui a apporté des unités sans coût de base. LibreFolio ne peut pas savoir combien ces unités ont coûté, il les compte donc à zéro dans votre coût d'achat et affiche le coût moyen et le P&L latent de cette position comme indisponibles (`—`). Pour corriger cela, trouvez ce transfert ou cet ajustement parmi vos [transactions](../transactions/index.md) et attribuez-lui son coût de base.
 
-Les taux de change sont vérifiés pour chaque transaction jusqu'à la date de fin — chaque achat, vente et mouvement de trésorerie est converti au taux de sa propre date — et, pour valoriser ce que vous détenez, à chaque jour de la période affichée. Lorsqu'une paire FX configurée avec un fournisseur n'a **aucun taux** pour certaines de ces dates, la bannière la liste avec l'intervalle des dates manquantes. LibreFolio convertit un montant avec le taux le plus récent à sa date ou antérieur, aussi ancien soit-il, donc ces dates se situent *avant* le premier taux stocké de la paire — souvent bien avant la période affichée, car chaque transaction passée compte dans les totaux tels que votre P&L total et votre coût d'achat. Cliquez sur **Synchroniser les taux** pour les compléter :
+Les taux de change sont vérifiés pour chaque transaction jusqu'à la date de fin — chaque achat, vente et mouvement de trésorerie est converti au taux de sa propre date — et, pour valoriser ce que vous détenez, à chaque jour de la période affichée. Lorsqu'une paire FX configurée avec un fournisseur n'a **aucun taux** pour certaines de ces dates, la bannière la liste avec l'intervalle des dates manquantes. LibreFolio convertit un montant avec le taux le plus récent à sa date ou antérieur, aussi ancien soit-il, donc ces dates se situent *avant* le premier taux stocké de la paire — souvent bien avant la période affichée, car chaque transaction passée compte dans les totaux tels que votre P&L total et votre coût d'achat. Cliquez sur **Synchroniser** pour les compléter :
 
 - LibreFolio télécharge cet intervalle de dates avec **une semaine supplémentaire de chaque côté** (jamais au-delà d'aujourd'hui), quelle que soit la période affichée par le tableau de bord. La semaine supplémentaire couvre les week-ends et jours fériés, lorsque les fournisseurs ne publient rien : un tel jour en bordure de l'intervalle prend alors le taux du jour ouvré précédent.
 - Une fois le téléchargement terminé, le tableau de bord s'actualise et un message rapporte le résultat pour chaque paire.
@@ -106,7 +106,7 @@ Les paires avec des taux manuels uniquement (sans fournisseur) reçoivent leur p
 
 !!! tip "Remplir tout l'historique d'une paire en une fois"
 
-    Ouvrez la [page FX](../fx/index.md), choisissez la plage **Tout** (MAX) et cliquez sur [Tout synchroniser](../fx/sync.md) : LibreFolio télécharge tout ce que les fournisseurs publient pour vos paires, jusqu'à aujourd'hui. Une paire que vous ajoutez avec un fournisseur effectue cela d'elle-même — voir [Ajouter une paire de devises](../fx/add-pair.md).
+    Ouvrez la [page FX](../fx/index.md), choisissez la plage **Tout** et cliquez sur [Tout synchroniser](../fx/sync.md) : LibreFolio télécharge tout ce que les fournisseurs publient pour vos paires, jusqu'à aujourd'hui. Une paire que vous ajoutez avec un fournisseur effectue cela d'elle-même — voir [Ajouter une paire de devises](../fx/add-pair.md).
 
 ---
 

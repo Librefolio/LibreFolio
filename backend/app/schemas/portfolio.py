@@ -801,14 +801,14 @@ class LotSummarySchema(StrictModel):
     opening_broker_id: int
     opening_date: date_type
     closing_date: Optional[date_type] = Field(None, description="Authoritative closing date (max LotClosure.close_date) when fully closed (open_quantity == 0). None otherwise.")
-    opening_unit_price: SafeDecimal = Field(..., description="Opening unit price converted to response target_currency.")
+    opening_unit_price: Optional[SafeDecimal] = Field(None, description="Opening unit price converted to response target_currency; None when the rate at the opening date is missing.")
     original_quantity: SafeDecimal
-    original_cost: SafeDecimal = Field(..., description="Original lot cost in response target_currency.")
+    original_cost: Optional[SafeDecimal] = Field(None, description="Original lot cost in response target_currency; None when the rate at the opening date is missing.")
     currency: Optional[str] = Field(None, description="Original transaction currency preserved from FifoLot.currency.")
     open_quantity: SafeDecimal
     realized_quantity: SafeDecimal
-    realized_pnl: SafeDecimal = Field(..., description="Realized FIFO P&L in response target_currency.")
-    cumulative_proceeds: SafeDecimal = Field(..., description="Cumulative proceeds in response target_currency.")
+    realized_pnl: Optional[SafeDecimal] = Field(None, description="Realized FIFO P&L in response target_currency; None when the rate of one of its closures is missing.")
+    cumulative_proceeds: Optional[SafeDecimal] = Field(None, description="Cumulative proceeds in response target_currency; None when a rate they need is missing.")
     reference_unit_price: Optional[SafeDecimal] = Field(None, description="Reference unit price used for relative return, in target_currency.")
     reference_price_source: Optional[ReferencePriceSource] = None
     states: List[str] = Field(default_factory=list, description="Combinable derived state tags from FifoEngineResult.get_lot_states().")
@@ -817,15 +817,15 @@ class LotSummarySchema(StrictModel):
     total_value: Optional[SafeDecimal] = Field(None, description="Current total lot value (open_value + realized cash logic) in response target_currency.")
     pnl: Optional[SafeDecimal] = Field(None, description="Market+realized lot P&L in target_currency (excludes asset income). = market_pnl + realized_pnl.")
     relative_return: Optional[SafeDecimal] = Field(None, description="Open Return: relative return vs reference_unit_price, when computable.")
-    asset_income: SafeDecimal = Field(default=0, description="Cumulative asset-linked dividends+interest allocated to this lot, in target_currency.")
+    asset_income: Optional[SafeDecimal] = Field(default=Decimal("0"), description="Cumulative asset-linked dividends+interest allocated to this lot, in target_currency; None when an income pool reaching the lot has no rate.")
     market_pnl: Optional[SafeDecimal] = Field(None, description="Price-only P&L: OpenValue - open cost basis. 0 when value_source=ESTIMATED_AT_COST. = pnl - realized_pnl.")
     total_pnl: Optional[SafeDecimal] = Field(None, description="market_pnl + realized_pnl + asset_income, in target_currency.")
     cash_yield: Optional[SafeDecimal] = Field(None, description="asset_income / opening_value, when opening_value > 0.")
     total_return: Optional[SafeDecimal] = Field(None, description="total_pnl / opening_value (opening_value = original_cost), when > 0.")
     annualized_return: Optional[SafeDecimal] = Field(None, description="Net annualized return (CAGR) of net_total_return over the lot holding window (opening_date -> closing_date if closed, else analysis end): (1+net_total_return)^(365/days)-1. Fraction. None if net metrics unavailable / <30 days.")
     value_source: Optional[LotValueSource] = Field(None, description="MARKET_PRICE when a real current price exists, else ESTIMATED_AT_COST (open value assumed at cost, market_pnl=0).")
-    allocated_fees: SafeDecimal = Field(default=0, description="Cumulative FEE allocated to this lot, target_currency (positive magnitude).")
-    allocated_taxes: SafeDecimal = Field(default=0, description="Cumulative TAX allocated to this lot, target_currency (positive magnitude).")
+    allocated_fees: Optional[SafeDecimal] = Field(default=Decimal("0"), description="Cumulative FEE allocated to this lot, target_currency (positive magnitude); None when a FEE pool reaching the lot cannot be valued in target_currency.")
+    allocated_taxes: Optional[SafeDecimal] = Field(default=Decimal("0"), description="Cumulative TAX allocated to this lot, target_currency (positive magnitude); None when a TAX pool reaching the lot cannot be valued in target_currency.")
     net_total_pnl: Optional[SafeDecimal] = Field(None, description="total_pnl - allocated_fees - allocated_taxes, in target_currency.")
     net_total_return: Optional[SafeDecimal] = Field(None, description="net_total_pnl / opening_value, when opening_value > 0.")
     net_metrics_status: LotNetMetricsStatus = Field("AVAILABLE", description="AVAILABLE when net metrics are reliable; UNAVAILABLE when the lot belongs to a degraded economic pool.")
@@ -847,7 +847,7 @@ class GanttSegmentSchema(StrictModel):
     source_broker_id: Optional[int] = None
     destination_broker_id: Optional[int] = None
     quantity: SafeDecimal
-    unit_price: SafeDecimal = Field(..., description="Fragment unit price converted to response target_currency.")
+    unit_price: Optional[SafeDecimal] = Field(None, description="Fragment unit price converted to response target_currency; None when the rate at the fragment start is missing.")
     start_date: date_type
     end_date: Optional[date_type] = Field(None, description="None when fragment is still active.")
 
@@ -899,10 +899,10 @@ class LotValueHistoryPoint(StrictModel):
     total_value: SafeDecimal
     original_cost: SafeDecimal
     pnl: SafeDecimal
-    income: SafeDecimal = Field(default=0, description="Cumulative asset-linked income (dividends+interest) allocated to this lot up to date, in target_currency.")
-    allocated_fees: SafeDecimal = Field(default=0, description="Cumulative FEE allocated to this lot up to date, in target_currency (positive magnitude).")
-    allocated_taxes: SafeDecimal = Field(default=0, description="Cumulative TAX allocated to this lot up to date, in target_currency (positive magnitude).")
-    net_pnl: SafeDecimal = Field(default=0, description="pnl - allocated_fees - allocated_taxes up to date, in target_currency.")
+    income: Optional[SafeDecimal] = Field(default=Decimal("0"), description="Cumulative asset-linked income (dividends+interest) allocated to this lot up to date, in target_currency; None from the date of an income pool without a rate.")
+    allocated_fees: Optional[SafeDecimal] = Field(default=Decimal("0"), description="Cumulative FEE allocated to this lot up to date, in target_currency (positive magnitude); None from the date of a FEE pool that cannot be valued.")
+    allocated_taxes: Optional[SafeDecimal] = Field(default=Decimal("0"), description="Cumulative TAX allocated to this lot up to date, in target_currency (positive magnitude); None from the date of a TAX pool that cannot be valued.")
+    net_pnl: Optional[SafeDecimal] = Field(default=Decimal("0"), description="pnl - allocated_fees - allocated_taxes up to date, in target_currency; None when fees or taxes are unknown.")
 
 
 class LotReturnHistoryPoint(StrictModel):
@@ -916,7 +916,7 @@ class LotReturnHistoryPoint(StrictModel):
     )
     relative_return: Optional[SafeDecimal] = Field(None, description="None when reference price is unavailable or zero.")
     reference_price_source: Optional[ReferencePriceSource] = Field(None, description="Reference price resolution echoed for chart/tooltips.")
-    income: SafeDecimal = Field(default=0, description="Cumulative asset-linked income allocated to this lot up to date, in target_currency.")
+    income: Optional[SafeDecimal] = Field(default=Decimal("0"), description="Cumulative asset-linked income allocated to this lot up to date, in target_currency; None from the date of an income pool without a rate.")
     net_total_return: Optional[SafeDecimal] = Field(None, description="(total_value + income - allocated_fees - allocated_taxes)/original_cost - 1, when original_cost != 0.")
 
 
@@ -979,7 +979,7 @@ class LotIncomeEventSchema(StrictModel):
     date: date_type
     broker_id: Optional[int] = Field(None, description="Broker of the income transaction.")
     transaction_id: Optional[int] = Field(None, description="Source transaction id.")
-    amount: SafeDecimal = Field(..., description="Total income in target_currency (before pro-rata allocation).")
+    amount: Optional[SafeDecimal] = Field(None, description="Total income in target_currency (before pro-rata allocation); None when its rate is missing.")
     lot_ids: List[int] = Field(default_factory=list, description="LONG lots the income was allocated to at transaction.date.")
 
 
@@ -1001,8 +1001,8 @@ class EconomicLotAllocationSchema(StrictModel):
 
     lot_id: int
     weight: SafeDecimal
-    native_amount: SafeDecimal
-    target_amount: SafeDecimal
+    native_amount: Optional[SafeDecimal] = Field(None, description="Native share of the pool; None when the split of the pool is unknown (weighting trades in different currencies, one without a rate).")
+    target_amount: Optional[SafeDecimal] = Field(None, description="Target-currency share; None when the pool or its split cannot be valued in target_currency.")
 
 
 class TargetOperationAllocationSchema(StrictModel):
@@ -1015,7 +1015,7 @@ class TargetOperationAllocationSchema(StrictModel):
 
     context: AllocationContextLiteral
     operation_transaction_id: Optional[int] = Field(None, description="Trade/income transaction the pool was matched against; None for HOLDING fallback.")
-    weight: SafeDecimal
+    weight: Optional[SafeDecimal] = Field(None, description="Share of the pool assigned to this operation; None when the weighting trades are in different currencies and one has no rate.")
     lot_allocations: List[EconomicLotAllocationSchema] = Field(default_factory=list)
 
 
@@ -1031,10 +1031,10 @@ class EconomicAllocationGroupSchema(StrictModel):
     rule: AllocationRuleLiteral
     source_transaction_ids: List[int] = Field(default_factory=list)
     native_pool_total: SafeDecimal
-    target_pool_total: SafeDecimal
+    target_pool_total: Optional[SafeDecimal] = Field(None, description="Pool total in target_currency; None when one of its events has no rate.")
     operation_allocations: List[TargetOperationAllocationSchema] = Field(default_factory=list)
     native_orphan: SafeDecimal = Field(default=0, description="Unallocated native residual (orphan pool).")
-    target_orphan: SafeDecimal = Field(default=0, description="Unallocated target residual (orphan pool).")
+    target_orphan: Optional[SafeDecimal] = Field(default=Decimal("0"), description="Unallocated target residual (orphan pool); None when one of its events has no rate.")
 
 
 class LotsAnalysisMetadata(StrictModel):
@@ -1086,9 +1086,9 @@ class LotsAnalysisResponse(StrictModel):
         None,
         description="Inline one-shot economic audit (FEE/TAX/income pooling + allocations). Present with LOT_SUMMARY.",
     )
-    asset_orphan_income: SafeDecimal = Field(default=0, description="Income with no eligible lot, in target_currency.")
-    asset_orphan_fees: SafeDecimal = Field(default=0, description="FEE with no eligible lot, in target_currency.")
-    asset_orphan_taxes: SafeDecimal = Field(default=0, description="TAX with no eligible lot, in target_currency.")
+    asset_orphan_income: Optional[SafeDecimal] = Field(default=Decimal("0"), description="Income with no eligible lot, in target_currency; None when an orphan income pool has no rate.")
+    asset_orphan_fees: Optional[SafeDecimal] = Field(default=Decimal("0"), description="FEE with no eligible lot, in target_currency; None when an orphan FEE pool has no rate.")
+    asset_orphan_taxes: Optional[SafeDecimal] = Field(default=Decimal("0"), description="TAX with no eligible lot, in target_currency; None when an orphan TAX pool has no rate.")
 
     @field_validator("target_currency")
     @classmethod

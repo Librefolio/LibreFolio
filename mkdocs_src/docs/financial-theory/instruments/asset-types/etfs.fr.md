@@ -13,7 +13,7 @@ Un **ETF** est un panier de titres (actions, obligations, matières premières o
 | **Devise** | Libellé dans la devise de la bourse de cotation |
 | **Dividendes** | Peuvent être distribués (Dist) ou réinvestis en interne (Acc) |
 | **TER** | Total Expense Ratio — frais de gestion annuels déduits du NAV |
-| **Fournisseurs typiques** | Yahoo Finance, justETF, CSS Scraper |
+| **Fournisseurs typiques** | Yahoo Finance, justETF, Borsa Italiana, CSS Scraper |
 
 Dans LibreFolio, `ETF` est le code d'un fonds au contenu mixte ou non précisé ; un fonds qui détient une seule classe d'actifs prend l'un des six sous-types (`ETF_STOCK`, `ETF_BOND`, `ETF_COMMODITY`, `ETF_REAL_ESTATE`, `ETF_CRYPTO`, `ETF_MONETARY`), répertoriés dans le tableau de la [famille ETF](index.md#etf-family) avec leurs icônes composites et la classe à laquelle chacun se rattache.
 
@@ -42,7 +42,7 @@ L'[avantage du report d'imposition](../../fundamentals/taxation.md#tax-deferral-
 
 ## 🔍 Suivi de l'indice de référence
 
-La plupart des ETFs suivent un indice de référence (ex: S&P 500, MSCI World). L'**erreur de suivi** (tracking error) mesure à quel point le rendement de l'ETF s'écarte de celui de l'indice de référence :
+La plupart des ETFs suivent un indice de référence (ex. : S&P 500, MSCI World). L'**erreur de suivi** (tracking error) mesure à quel point le rendement de l'ETF s'écarte de celui de l'indice de référence :
 
 $$
 TE = \sigma(R_{ETF} - R_{index})

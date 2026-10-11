@@ -20,7 +20,7 @@ El planificador te guía por estos pasos, en orden. El paso **Cambio** solo apar
 
 Planificas una nueva inversión, un «PAC puro»: el cálculo parte de una cartera vacía, por lo que no se cuenta lo que ya tienes, y reparte el efectivo que elijas entre los Activos, lo más cerca posible de los pesos objetivo.
 
-Aquí estableces la **Divisa de valoración**, en la que se comparan y resumen los importes. Al principio es la **Moneda predeterminada** de tus preferencias. El dinero permanece en su propia moneda: cada cambio necesario aparece en el plan.
+Aquí estableces la **Divisa de valoración**, en la que se comparan y resumen los importes. Al principio es la **Divisa predeterminada** de tus preferencias. El dinero permanece en su propia moneda: cada cambio necesario aparece en el plan.
 
 La fecha de referencia es siempre hoy: el planificador la vuelve a establecer antes de cada copia desde LibreFolio y antes de cada cálculo.
 
@@ -28,23 +28,23 @@ La fecha de referencia es siempre hoy: el planificador la vuelve a establecer an
 
 ¿De dónde viene el dinero? Puedes combinar varias fuentes:
 
-- **Desde tus brókers**: efectivo que ya está en tus brókers en LibreFolio. Eliges cuánto de él usar.
+- **De tus brókeres**: efectivo que ya está en tus brókeres en LibreFolio. Eliges cuánto de él usar.
 - **Nueva aportación**: dinero nuevo que añades, como la cuota del PAC.
 - **Cuenta externa**: un saldo en una cuenta no registrada en LibreFolio, por ejemplo en tu banco. Declaras cuánto hay y cuánto usar. Desde una cuenta externa no se compra nada: su dinero se envía a un bróker.
 
-El bróker que recibe una aportación o el dinero de una cuenta externa se elige en el paso **Brókers**. Cada importe permanece en su propia moneda.
+El bróker que recibe una aportación o el dinero de una cuenta externa se elige en el paso **Brókeres**. Cada importe permanece en su propia moneda.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="tools" data-name="pac-step-liquidity" alt="El paso Liquidez, junto a la lista de pasos: efectivo de un bróker, con el importe a usar de lo disponible; una nueva aportación, con su importe y moneda; y una cuenta externa, con su liquidez declarada y el importe a usar">
 </div>
 
-### 🏦 Brókers
+### 🏦 Brókeres
 
-Añade los brókers donde el plan puede comprar: **Elegir bróker existente** copia uno de los tuyos, y **Bróker manual** añade uno a mano. En cualquier caso, son datos del escenario: el bróker en sí nunca se modifica. Las comisiones y los modos de orden no se registran en LibreFolio, por eso los estableces aquí.
+Añade los brókeres donde el plan puede comprar: **Elegir bróker existente** copia uno de los tuyos, y **Bróker manual** añade uno a mano. En cualquier caso, son datos del escenario: el bróker en sí nunca se modifica. Las comisiones y los modos de orden no se registran en LibreFolio, por eso los estableces aquí.
 
 Para cada moneda en la que compres, establece:
 
-- El modo de orden: **Por número de unidades** o **Por importe**.
+- El modo de orden: **Por número de títulos** o **Por importe**.
 - El **Incremento** $\Delta$: cada orden propuesta es un múltiplo entero de él. Con $q$ el tamaño de una orden, en unidades o como importe:
 
     $$
@@ -59,12 +59,12 @@ Para cada moneda en la que compres, establece:
     \text{comisión} = f + \min\big(\max(r\,A,\ f_{\min}),\ f_{\max}\big)
     $$
 
-    La comisión se cobra en cada orden, y sin orden no hay comisión. Se paga con tu liquidez y no se invierte. Por ejemplo, con $r = 0.19\%$, $f_{\min} = 1.50$, $f_{\max} = 18$ y sin parte fija, una orden de $500$ paga $1.50$, una de $2{,}000$ paga $3.80$, y una de $20{,}000$ paga $18$.
+    La comisión se cobra en cada orden, y sin orden no hay comisión. Se paga con tu liquidez y no se invierte. Por ejemplo, con $r = 0.19\%$, $f_{\min} = 1.50$, $f_{\max} = 18$ y sin parte fija, una orden de $500$ paga $1.50$, una de $2.000$ paga $3.80$, y una de $20.000$ paga $18$.
 
 Cada bróker también tiene dos ajustes propios:
 
 - **Liquidez utilizable**: el dinero que el plan puede usar para comprar allí, es decir, el efectivo propio del bróker más las aportaciones y otras cuentas que permitas. Al principio se permiten todas: puedes excluir una fuente, limitar cuánto de ella se usa allí y darle una **Prioridad** ($0$ = preferida).
-- **Conversión de divisa**: **Tú conviertes antes de comprar** o **El bróker convierte cuando compras**. Ambos convierten al tipo del paso **Cambio** menos el spread, así que el cálculo es el mismo en ambos casos: solo cambia la forma en que el plan muestra la conversión.
+- **Conversión de divisa**: **Conviertes tú antes de comprar** o **El bróker convierte al comprar**. Ambos convierten al tipo del paso **Cambio** menos el spread, así que el cálculo es el mismo en ambos casos: solo cambia la forma en que el plan muestra la conversión.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="tools" data-name="pac-step-brokers" alt="El editor de bróker, como datos de escenario que dejan el bróker sin cambios: bajo Cómo compras, moneda por moneda, el Tipo de orden Por importe, el Incremento y la Comisión de compra con su mínimo, porcentaje, máximo y parte fija; Conversión de divisa con El bróker convierte cuando compras seleccionado; y Aplicar al borrador">
@@ -77,7 +77,7 @@ Aún no soportado: un régimen fiscal, pérdidas y comisiones de venta para un b
 Añade los Activos que el plan puede comprar, en cualquier combinación:
 
 - busca los Activos registrados en LibreFolio;
-- añade **Tus Activos**: aquellos con una posición abierta hoy en tus brókers, añadidos solo como filas, sin cantidades;
+- añade **Tus Activos**: aquellos con una posición abierta hoy en tus brókeres, añadidos solo como filas, sin cantidades;
 - añade un **Activo manual**.
 
 Cada precio es uno de estos:
@@ -95,7 +95,7 @@ La composición por país, sector y tipo, copiada del Activo o introducida a man
 
 ### 🔀 Rutas
 
-Para cada bróker, elige qué Activos puede comprar: **Permitir todos**, **Excluir todos**, o haz clic en cada uno.
+Para cada bróker, elige qué Activos puede comprar: **Permitir todo**, **Excluir todo**, o haz clic en cada uno.
 
 Luego, solo donde los necesites, establece límites en cada ruta. Se miden como las órdenes de ese bróker, en unidades o como importe. Con $q$ la compra del Activo en ese bróker:
 
@@ -130,9 +130,9 @@ Dos acciones te ayudan a conseguirlo:
     w_i' = \frac{w_i}{\sum_j w_j} \cdot 100\%
     $$
 
-    Si todos son $0$, cada Activo recibe una parte igual. El redondeo mantiene el total exactamente en $100\%$. Para cambiar solo algunas filas, **Equilibrar a 100%** en una fila da a ese Activo lo que falta, o quita el exceso, y **Equilibrar las filas seleccionadas a 100%** reescala solo las filas que marques.
+    Si todos son $0$, cada Activo recibe una parte igual. El redondeo mantiene el total exactamente en $100\%$. Para cambiar solo algunas filas, **Equilibrar al 100 %** en una fila da a ese Activo lo que falta, o quita el exceso, y **Equilibrar las filas seleccionadas al 100 %** reescala solo las filas que marques.
 
-- **Copiar distribución actual** lee cuánto pesa hoy cada uno de estos Activos en los brókers que marques, contando solo estos Activos y no el efectivo. Con $H_i$ el valor de mercado del Activo $i$ mantenido allí hoy:
+- **Copiar la distribución actual** lee cuánto pesa hoy cada uno de estos Activos en los brókeres que marques, contando solo estos Activos y no el efectivo. Con $H_i$ el valor de mercado del Activo $i$ mantenido allí hoy:
 
     $$
     w_i = \frac{H_i}{\sum_j H_j} \cdot 100\%
@@ -175,7 +175,7 @@ $$
 
 así que sigue sin crear valor. Cuando los tipos son coherentes, este tipo es el habitual $x\,(1 - s)$. Tus tipos no se modifican: cada conversión del plan muestra el tipo del que parte como *spot* y el tipo que usa como *aplicado*.
 
-Cada importe que el plan registra se redondea una vez, sobre su valor final exacto, a la unidad mínima de su divisa (el céntimo para EUR o USD), y siempre en contra del plan: los importes que recibe (lo que entrega una conversión) se redondean a la baja, los importes que paga (el coste de una orden y su comisión) se redondean al alza. Así, el redondeo nunca mejora un plan, dividir una conversión en otras más pequeñas no aporta nada, y la parte de redondeo de **No invertido** nunca es negativa. La columna **Redondeo** de **Saldos por bróker y divisa** muestra cuánto de cada fila proviene del redondeo: ≈ marca una cifra mostrada redondeada, como cuando la diferencia exacta no tiene forma decimal finita (por ejemplo, tras convertir USD → EUR a $1/1.085$), y una diferencia por debajo de la unidad mínima conserva los dígitos que necesita, como ≈ −0.0022 en lugar de ≈ −0.00.
+Cada importe que el plan registra se redondea una vez, sobre su valor final exacto, a la unidad mínima de su divisa (el céntimo para EUR o USD), y siempre en contra del plan: los importes que recibe (lo que entrega una conversión) se redondean a la baja, los importes que paga (el coste de una orden y su comisión) se redondean al alza. Así, el redondeo nunca mejora un plan, dividir una conversión en otras más pequeñas no aporta nada, y la parte de redondeo de **No invertido** nunca es negativa. La columna **Redondeo** de **Saldos por bróker y divisa** muestra cuánto de cada fila proviene del redondeo: ≈ marca una cifra mostrada redondeada, como cuando la diferencia exacta no tiene forma decimal finita (por ejemplo, tras convertir USD → EUR a $1/1.085$), y una diferencia por debajo de la unidad mínima conserva los dígitos que necesita, como ≈ −0,0022 en lugar de ≈ −0,00.
 
 Cuando LibreFolio no tiene un tipo para un par, el paso ofrece **Añadir el par** o **Descargar los tipos**: cada uno abre la ventana correspondiente de la página de Cambio, y no se añade ni descarga nada hasta que lo confirmes allí.
 
@@ -195,15 +195,15 @@ Entre todos los planes de compra que respetan tus ajustes, elige el mejor con un
 
     donde $V_i$ es el valor del Activo $i$ después del plan, $w_i$ su objetivo, y $R$ la **Base de los objetivos**: el efectivo que elegiste que puede llegar a un bróker donde pueda comprar (en un PAC nada está ya invertido). Así, $w_i\,R$ es el valor ideal del Activo $i$. Los valores están en la divisa de valoración, al precio de cotización, sin comisiones ni margen sobre el precio. Elevar al cuadrado hace que las grandes diferencias pesen más, y $D$ se mide en dinero al cuadrado, por ejemplo EUR².
 
-2. **Dinero no invertido**: el menor dinero que queda fuera de los Activos, $R - \sum_i V_i$.
+2. **Liquidez no invertida**: el menor dinero que queda fuera de los Activos, $R - \sum_i V_i$.
 
-3. **Prioridad de bróker y fuente**: la menor suma de los números de **Prioridad** de las órdenes y fuentes de efectivo que usa el plan.
+3. **Prioridad de brókeres y fuentes**: la menor suma de los números de **Prioridad** de las órdenes y fuentes de efectivo que usa el plan.
 
 4. **Costes explícitos (comisiones, spread, margen)**: el menor total de comisiones, spread de conversión y margen sobre el precio, en la divisa de valoración.
 
 5. **Número de órdenes**: el menor número de órdenes.
 
-Un orden fijo de Activos y brókers resuelve cualquier empate final, por lo que una búsqueda que se completa siempre da el mismo plan para los mismos datos; una búsqueda detenida por un límite de tiempo o de nodos puede dar un plan diferente en una máquina más lenta o más ocupada.
+Un orden fijo de Activos y brókeres resuelve cualquier empate final, por lo que una búsqueda que se completa siempre da el mismo plan para los mismos datos; una búsqueda detenida por un límite de tiempo o de nodos puede dar un plan diferente en una máquina más lenta o más ocupada.
 
 ### ✅ Revisión
 
@@ -215,11 +215,11 @@ Una última comprobación antes del cálculo. Enumera la copia completa que se e
 
 ### 📋 Valores copiados o introducidos
 
-El planificador funciona sin ningún bróker o Activo registrado: todo se puede introducir a mano. Cuando prefieras partir de tus datos de LibreFolio, los copias con una acción explícita: **Elegir bróker existente**, **Desde tus brókers**, la búsqueda de Activos o **Tus Activos**, y **Copiar distribución actual**. En el paso **Cambio**, un tipo **Auto** se lee de LibreFolio en cuanto se abre el paso.
+El planificador funciona sin ningún bróker o Activo registrado: todo se puede introducir a mano. Cuando prefieras partir de tus datos de LibreFolio, los copias con una acción explícita: **Elegir bróker existente**, **De tus brókeres**, la búsqueda de Activos o **Tus Activos**, y **Copiar la distribución actual**. En el paso **Cambio**, un tipo **Auto** se lee de LibreFolio en cuanto se abre el paso.
 
 Cada valor muestra de dónde proviene (**Copiado**, **Manual** o **Modificado**), y una copia también muestra su fecha. Una copia no sigue a su fuente mientras editas, y una copia que hayas modificado se puede restaurar.
 
-Cuando pulsas **Calcular plan**, el planificador primero vuelve a leer de LibreFolio los precios, tipos y saldos que copiaste y no has cambiado. Los valores que introdujiste o cambiaste permanecen como están. Si esa lectura falla, no se calcula nada: puedes **Intentar de nuevo** o **Calcular con los datos copiados** para usar las copias anteriores.
+Cuando pulsas **Calcular plan**, el planificador primero vuelve a leer de LibreFolio los precios, tipos y saldos que copiaste y no has cambiado. Los valores que introdujiste o cambiaste permanecen como están. Si esa lectura falla, no se calcula nada: puedes **Reintentar** o **Calcular con los datos copiados** para usar las copias anteriores.
 
 ### ⏳ Mientras calcula
 
@@ -240,14 +240,14 @@ Un cálculo termina con uno de estos resultados:
 | Resultado | Qué significa |
 |---|---|
 | **Plan disponible** | Un plan que respeta todas las restricciones. Una segunda insignia dice cuánto vale. **Óptimo demostrado**: el solucionador demostró, dentro de su pequeño margen de cálculo (que crece con los importes), que no existe un plan mejor, objetivo por objetivo en el orden del paso **Estrategia**, y la comprobación exacta del plan coincide con sus números. **Optimalidad no demostrada**: el solucionador alcanzó su límite de tiempo o de nodos, o sus propios números no coinciden con la comprobación exacta del plan; entonces es el mejor plan encontrado, pero no está demostrado que sea el mejor. |
-| **Sin operación** | Con el efectivo que elegiste, ninguna compra cumple las restricciones: el plan es no hacer nada. Ninguna orden, ningún cambio de divisas y ninguna financiación. |
-| **Infactible con estas restricciones** | Marcado **Infactibilidad demostrada**: ninguna combinación cumple todas las restricciones duras a la vez. Se enumeran las restricciones implicadas (cada **Compra obligatoria**, y la liquidez que puede llegar a los brókers), cada una con un enlace al paso donde puedes cambiarla. El planificador no elige cuál relajar, y ningún plan parcial se muestra como válido. |
+| **Ninguna operación** | Con el efectivo que elegiste, ninguna compra cumple las restricciones: el plan es no hacer nada. Ninguna orden, ningún cambio de divisas y ninguna financiación. |
+| **Inviable con estas restricciones** | Marcado **Inviabilidad demostrada**: ninguna combinación cumple todas las restricciones duras a la vez. Se enumeran las restricciones implicadas (cada **Compra obligatoria**, y la liquidez que puede llegar a los brókeres), cada una con un enlace al paso donde puedes cambiarla. El planificador no elige cuál relajar, y ningún plan parcial se muestra como válido. |
 | **Ningún plan dentro de los límites** | El solucionador no encontró ningún plan antes de alcanzar su límite. Esto no es una prueba de que no exista. Una búsqueda más ligera ayuda: menos Activos o rutas, una **Compra máxima** más baja o un **Incremento** mayor. |
 | **Se necesitan más datos** | Falta algo. Tu borrador está intacto, y ningún Activo se elimina en silencio: añade el dato que falta o elimina el Activo tú mismo. |
 | **Entrada no válida** | Algunos de los datos no son válidos. |
-| **Escenario no soportado** | No es un error en tus datos: la herramienta aún no maneja este caso. |
+| **Escenario no admitido** | No es un error en tus datos: la herramienta aún no maneja este caso. |
 
-Cada plan mostrado se ha comprobado de nuevo en aritmética decimal exacta, independientemente del solucionador: esa es la insignia **Verificado en decimal**. Una última insignia indica cómo terminó la búsqueda: **Completada** (el solucionador terminó su búsqueda por sí mismo), **Límite de tiempo** o **Límite de nodos**. Cuando se encontró un plan pero la búsqueda se detuvo en un límite, un aviso añade que puede existir un plan mejor; el resultado sigue completo y se puede consultar. Si el redondeo a la unidad mínima de una divisa deja a un bróker ligeramente corto, un aviso indica cuánto efectivo más necesita ese bróker para ejecutar el plan.
+Cada plan mostrado se ha comprobado de nuevo en aritmética decimal exacta, independientemente del solucionador: esa es la insignia **Verificado en decimal**. Una última insignia indica cómo terminó la búsqueda: **Completado** (el solucionador terminó su búsqueda por sí mismo), **Límite de tiempo** o **Límite de nodos**. Cuando se encontró un plan pero la búsqueda se detuvo en un límite, un aviso añade que puede existir un plan mejor; el resultado sigue completo y se puede consultar. Si el redondeo a la unidad mínima de una divisa deja a un bróker ligeramente corto, un aviso indica cuánto efectivo más necesita ese bróker para ejecutar el plan.
 
 Los tres últimos resultados significan que el cálculo no pudo comenzar con tus datos: no se calcula nada, y se enumeran los problemas encontrados, con un enlace al paso correspondiente cuando lo haya. **Detalles** añade el código de backend de cada problema.
 
@@ -262,9 +262,9 @@ Debajo del resultado, un plan se estructura en este orden:
 3. **Plan operativo**: los pasos a seguir, en orden. Primero el efectivo (**Efectivo disponible**, **Transferencia**, **Depósito**), luego los cambios de divisas que haces tú mismo, luego una tabla de órdenes por bróker, con la **Instrucción** que introducir en el bróker, el **Precio**, el **Importe de la orden** y la **Comisión**. Una conversión que el bróker hace por sí mismo cuando compras no tiene número: aparece encima de las órdenes de ese bróker como **Conversión automática**. Esta sección se muestra solo cuando el plan tiene algo que hacer.
 4. **Exposiciones – ideal vs real**: mapas y barras por país, tipo y sector, construidos a partir de las composiciones de los Activos. Los gráficos no cambian el plan.
 5. **Saldos por bróker y divisa**: cómo se mueve cada saldo de efectivo y qué queda.
-6. **Prueba y solucionador**: cómo se estableció el resultado. Las insignias de resultado, prueba y parada, el valor exacto de cada objetivo, las etapas del solucionador y los tiempos del backend.
+6. **Prueba y solver**: cómo se estableció el resultado. Las insignias de resultado, prueba y parada, el valor exacto de cada objetivo, las etapas del solucionador y los tiempos del backend.
 
-**Asignación por Activo** y **Plan operativo** se abren al inicio; las demás secciones se abren a petición, y **Expandir todo** / **Contraer todo** las abre o cierra juntas. Sin plan (**Infactible con estas restricciones** o **Ningún plan dentro de los límites**), **Prueba y solucionador** es la única sección, y las cifras clave muestran solo la caja **Cálculo**.
+**Asignación por Activo** y **Plan operativo** se abren al inicio; las demás secciones se abren a petición, y **Expandir todo** / **Contraer todo** las abre o cierra juntas. Sin plan (**Inviable con estas restricciones** o **Ningún plan dentro de los límites**), **Prueba y solver** es la única sección, y las cifras clave muestran solo la caja **Cálculo**.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="tools" data-name="pac-result-plan" alt="El plan operativo: pasos numerados, primero las transferencias y el depósito que llevan el efectivo a un bróker, luego un cambio de divisa con su tipo, cada uno con su importe; después las órdenes de ese bróker, con Instrucción, Precio, Importe de la orden y Comisión; y las órdenes del siguiente bróker">
@@ -272,7 +272,7 @@ Debajo del resultado, un plan se estructura en este orden:
 
 Haz clic en una orden, o en su botón **Detalle**, para abrir su detalle: la instrucción, la cantidad económica, los precios usados (precio de origen, precio medio y precio de cargo con el margen sobre el precio), el débito de efectivo y la comisión, las conversiones que la pagan, y la prioridad, el límite y los mínimos de su ruta. **Mostrar procedencia** enumera de dónde proviene cada valor, **Copiado** o **Manual**, con la fecha y hora de la copia o de tu introducción.
 
-**Prueba y tiempos**, en la parte superior del resultado, abre **Prueba y solucionador** y se desplaza hasta él.
+**Prueba y tiempos**, en la parte superior del resultado, abre **Prueba y solver** y se desplaza hasta él.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="tools" data-name="pac-result-proof" alt="La sección Prueba y solucionador: las insignias de Resultado, Prueba y Parada; el valor exacto de cada objetivo, en orden, con el desempate final; la tabla de Etapas del solucionador; los Tiempos del backend; y Dónde se fue el tiempo, una barra de las fases del cálculo">
@@ -282,7 +282,7 @@ Cada cifra proviene de la contabilidad del backend; la interfaz no suma nada. Co
 
 ## 🧮 Qué hace el motor de cálculo
 
-El motor que hay detrás de esta herramienta planifica **compras**. Dado un conjunto de Activos con sus precios, los brókers y rutas de compra que pueden usarse para alcanzarlos, el efectivo y las aportaciones disponibles, y un peso objetivo por Activo, busca la combinación de compras cuya asignación resultante se acerque lo más posible a esos objetivos.
+El motor que hay detrás de esta herramienta planifica **compras**. Dado un conjunto de Activos con sus precios, los brókeres y rutas de compra que pueden usarse para alcanzarlos, el efectivo y las aportaciones disponibles, y un peso objetivo por Activo, busca la combinación de compras cuya asignación resultante se acerque lo más posible a esos objetivos.
 
 Merece la pena conocer tres propiedades, porque determinan lo que el planificador puede prometer:
 
@@ -298,14 +298,14 @@ El motor solo planifica compras. No planifica ventas.
 
 El asignador PAC distribuye la liquidez disponible **ahora**: efectivo existente más nuevas aportaciones. Sus objetivos describen cómo debería asignarse ese dinero; no describen la mezcla final de una cartera que ya posees.
 
-El cálculo no toma en absoluto las posiciones que ya posees como entrada, así que cambiarlas no puede cambiar lo que planifica esta herramienta. **Copiar distribución actual** solo las convierte en pesos objetivo para que los edites, y esos pesos no siguen cambios posteriores.
+El cálculo no toma en absoluto las posiciones que ya posees como entrada, así que cambiarlas no puede cambiar lo que planifica esta herramienta. **Copiar la distribución actual** solo las convierte en pesos objetivo para que los edites, y esos pesos no siguen cambios posteriores.
 
 ## 🚫 Lo que esta herramienta nunca hace
 
 El planificador y el cálculo que hay detrás se mantienen dentro del contrato de la plataforma de Herramientas:
 
 - no realiza órdenes, no ejecuta operaciones ni contacta con un bróker;
-- no escribe en tus Activos, brókers o transacciones;
+- no escribe en tus Activos, brókeres o transacciones;
 - no lee tu cartera por sí mismo: el cálculo recibe solo el escenario enviado desde **Revisión**, y el planificador lee tus datos de LibreFolio solo cuando copias algo o abres el paso **Cambio** (para sus tipos **Auto**), y luego de nuevo justo antes de un cálculo para los valores copiados que no hayas cambiado;
 - su resultado es un plan para evaluar, no un consejo ni una instrucción.
 

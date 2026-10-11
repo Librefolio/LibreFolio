@@ -24,7 +24,10 @@
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import {resolveBrokerName, withAlpha} from './lotChartShared';
     import {
+        aggregateReturnPoints as aggregateReturnPointsOf,
+        aggregateValuePoints,
         buildBucketInfos,
+        comprehensiveValue,
         buildZoomWindowForRange as sharedBuildZoomWindowForRange,
         computeAutoYAxisRange,
         computeBucketCounts as sharedComputeBucketCounts,
@@ -36,8 +39,9 @@
         logicalRangeFromBuckets,
         lotColor as sharedLotColor,
         lotIdFromSeriesId,
-        parseRequiredNumber,
         parseTimeMs,
+        parseValueSeriesPoint,
+        pnlWithIncome,
         pointKey,
         safeValueSource,
         seriesValue,
@@ -45,6 +49,9 @@
         tooltipTimestamp,
         tooltipXValue,
         type BucketInfo,
+        type AggregateReturnPoint,
+        type AggregatedValuePoint,
+        type LotValueSeriesPoint,
     } from './lotComparisonChartHelpers';
     import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 
@@ -59,7 +66,8 @@
         type: 'DIVIDEND' | 'INTEREST';
         date: string;
         broker_id: number | null;
-        amount: string;
+        /** `null` when the income has no rate to the target currency. */
+        amount: string | null;
         lot_ids: number[];
     };
 
@@ -79,34 +87,10 @@
         valueSource: LotValueSource | null;
     }
 
-    interface LotValueSeriesPoint {
-        date: string;
-        proceeds: number;
-        openValue: number;
-        originalCost: number;
-        pnl: number;
-        income: number;
-    }
-
     interface LotReturnSeriesPoint {
         date: string;
         totalReturn: number | null;
         relativeReturn: number | null;
-    }
-
-    interface AggregatedValuePoint {
-        date: string;
-        openValue: number;
-        proceeds: number;
-        originalCost: number;
-        income: number;
-    }
-
-    interface AggregateReturnPoint {
-        date: string;
-        totalReturn: number | null;
-        openingValue: number;
-        pnlWithIncome: number;
     }
 
     type ChartSeriesPoint = ReturnType<typeof namedPoint> & {
@@ -496,14 +480,7 @@
         const grouped = new Map<number, LotValueSeriesPoint[]>();
         for (const point of valueHistory) {
             const existing = grouped.get(point.lot_id);
-            const datum = {
-                date: point.date,
-                proceeds: parseRequiredNumber(point.proceeds),
-                openValue: parseRequiredNumber(point.open_value),
-                originalCost: parseRequiredNumber(point.original_cost),
-                pnl: parseRequiredNumber(point.pnl),
-                income: parseRequiredNumber(point.income),
-            } satisfies LotValueSeriesPoint;
+            const datum: LotValueSeriesPoint = parseValueSeriesPoint(point);
             if (existing) existing.push(datum);
             else grouped.set(point.lot_id, [datum]);
         }
@@ -523,26 +500,12 @@
         return byLotDate;
     });
 
-    const aggregatedValuePoints = $derived.by(() => {
-        const totals = new Map<string, AggregatedValuePoint>();
-        for (const lot of visibleLots) {
-            for (const point of valuePointsByLotId.get(lot.lotId) ?? []) {
-                const current = totals.get(point.date) ?? {
-                    date: point.date,
-                    openValue: 0,
-                    proceeds: 0,
-                    originalCost: 0,
-                    income: 0,
-                };
-                current.openValue += point.openValue;
-                current.proceeds += point.proceeds;
-                current.originalCost += point.originalCost;
-                current.income += point.income;
-                totals.set(point.date, current);
-            }
-        }
-        return Array.from(totals.values()).sort((left, right) => left.date.localeCompare(right.date));
-    });
+    const aggregatedValuePoints = $derived.by((): AggregatedValuePoint[] =>
+        aggregateValuePoints(
+            visibleLots.map((lot) => lot.lotId),
+            valuePointsByLotId,
+        ),
+    );
 
     const returnPointsByLotId = $derived.by(() => {
         const grouped = new Map<number, LotReturnSeriesPoint[]>();
@@ -589,31 +552,13 @@
 
     const activeReturnLotsWithData = $derived.by(() => (returnUnit === 'pct' ? returnPctLotsWithData : returnAbsLotsWithData));
 
-    const aggregateReturnPoints = $derived.by(() => {
-        if (returnAbsLotsWithData.length < 1 && returnPctLotsWithData.length < 1) return [] satisfies AggregateReturnPoint[];
-
-        const pctEligibleLotIds = new Set(returnPctLotsWithData.map((lot) => lot.lotId));
-        const totals = new Map<string, {date: string; pnlWithIncome: number; pctPnlWithIncome: number; pctOpeningValue: number}>();
-        for (const lot of returnAbsLotsWithData) {
-            for (const point of valuePointsByLotId.get(lot.lotId) ?? []) {
-                const current = totals.get(point.date) ?? {date: point.date, pnlWithIncome: 0, pctPnlWithIncome: 0, pctOpeningValue: 0};
-                current.pnlWithIncome += point.pnl + point.income;
-                if (pctEligibleLotIds.has(lot.lotId) && point.originalCost > 0) {
-                    current.pctPnlWithIncome += point.pnl + point.income;
-                    current.pctOpeningValue += point.originalCost;
-                }
-                totals.set(point.date, current);
-            }
-        }
-
-        return Array.from(totals.values())
-            .map((point) => ({
-                date: point.date,
-                totalReturn: point.pctOpeningValue > 0 ? point.pctPnlWithIncome / point.pctOpeningValue : null,
-                openingValue: point.pctOpeningValue,
-                pnlWithIncome: point.pnlWithIncome,
-            }))
-            .sort((left, right) => left.date.localeCompare(right.date)) satisfies AggregateReturnPoint[];
+    const aggregateReturnPoints = $derived.by((): AggregateReturnPoint[] => {
+        if (returnAbsLotsWithData.length < 1 && returnPctLotsWithData.length < 1) return [];
+        return aggregateReturnPointsOf(
+            returnAbsLotsWithData.map((lot) => lot.lotId),
+            new Set(returnPctLotsWithData.map((lot) => lot.lotId)),
+            valuePointsByLotId,
+        );
     });
 
     const aggregateReturnSeriesPoints = $derived.by(() => aggregateReturnPoints.map((point) => lineDataPoint(point.date, returnUnit === 'pct' ? (point.totalReturn == null ? null : point.totalReturn * 100) : point.pnlWithIncome)).filter((point): point is LineDataPoint => point != null));
@@ -666,6 +611,12 @@
         return type === 'DIVIDEND' ? modeLabels.incomeDividend : modeLabels.incomeInterest;
     }
 
+    /** A distribution's total; «—» when it has no rate to the target currency. */
+    function formatIncomeEventAmount(amount: string | null): string {
+        const parsed = parseNumber(amount);
+        return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency, {showSign: true});
+    }
+
     function buildIncomeEventTooltip(event: LotIncomeEvent | null): string {
         if (!event) return '';
         const theme = buildTooltipTheme(isDark);
@@ -673,7 +624,7 @@
             buildTooltipRow(escapeHtml(modeLabels.incomeType), escapeHtml(incomeEventTypeLabel(event.type)), incomeEventColor(event.type)),
             buildTooltipRow(escapeHtml(modeLabels.incomeDate), escapeHtml(formatLongDate(event.date))),
             buildTooltipRow(escapeHtml(modeLabels.incomeBroker), escapeHtml(brokerName(event.broker_id))),
-            buildTooltipRow(escapeHtml(modeLabels.incomeAmount), escapeHtml(formatCurrencyAmountPlain(parseRequiredNumber(event.amount), currency, {showSign: true}))),
+            buildTooltipRow(escapeHtml(modeLabels.incomeAmount), escapeHtml(formatIncomeEventAmount(event.amount))),
             buildTooltipRow(escapeHtml(modeLabels.incomeLotCount), escapeHtml(String(event.lot_ids?.length ?? 0))),
         ];
         return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(incomeEventTypeLabel(event.type)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
@@ -699,7 +650,7 @@
         }
 
         const point = findPointAtOrBefore(valuePointsByLotId.get(lotId) ?? [], timestampMs);
-        return point ? point.pnl + point.income : null;
+        return point ? pnlWithIncome(point) : null;
     }
 
     /** Income "|" markers (rect 2×16px) sitting on the relevant line at each distribution date:
@@ -714,7 +665,8 @@
             const color = incomeEventColor(event.type);
             if (mode === 'value') {
                 const agg = findPointAtOrBefore(aggregatedValuePoints, timestamp);
-                if (agg) data.push({value: [event.date, agg.openValue + agg.proceeds + agg.income], incomeEvent: event, itemStyle: {color, opacity: 0.95}});
+                const y = agg ? comprehensiveValue(agg) : null;
+                if (y != null) data.push({value: [event.date, y], incomeEvent: event, itemStyle: {color, opacity: 0.95}});
             } else if (mode === 'return') {
                 for (const lotId of event.lot_ids ?? []) {
                     if (!visibleLots.some((lot) => lot.lotId === lotId)) continue;
@@ -936,7 +888,7 @@
         const residualData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.openValue)).filter((point): point is LineDataPoint => point != null));
         const proceedsData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.proceeds)).filter((point): point is LineDataPoint => point != null));
         const incomeData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.income)).filter((point): point is LineDataPoint => point != null));
-        const comprehensiveData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.openValue + point.proceeds + point.income)).filter((point): point is LineDataPoint => point != null));
+        const comprehensiveData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, comprehensiveValue(point))).filter((point): point is LineDataPoint => point != null));
         const openingData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.originalCost)).filter((point): point is LineDataPoint => point != null));
 
         const series: echarts.SeriesOption[] = [
@@ -1061,7 +1013,7 @@
                 const data =
                     returnUnit === 'pct'
                         ? toChartSeriesPoints((returnPointsByLotId.get(lot.lotId) ?? []).map((point) => lineDataPoint(point.date, point.totalReturn == null ? null : point.totalReturn * 100)).filter((point): point is LineDataPoint => point != null))
-                        : toChartSeriesPoints((valuePointsByLotId.get(lot.lotId) ?? []).map((point) => lineDataPoint(point.date, point.pnl + point.income)).filter((point): point is LineDataPoint => point != null));
+                        : toChartSeriesPoints((valuePointsByLotId.get(lot.lotId) ?? []).map((point) => lineDataPoint(point.date, pnlWithIncome(point))).filter((point): point is LineDataPoint => point != null));
                 series.push({
                     id: `return-${lot.lotId}`,
                     name: returnSeriesName(lot.label),

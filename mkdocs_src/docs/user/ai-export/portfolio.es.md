@@ -8,7 +8,7 @@ el [Resumen de la exportación IA](index.md).
 
 ## 📍 Dónde encontrarla
 
-En el **Panel**, selecciona **exportación IA** en la barra de herramientas, junto a **Actualizar**. Se abre primero en
+En el **Panel**, selecciona **Exportación IA** en la barra de herramientas, junto a **Actualizar**. Se abre primero en
 **Plan de inversión recurrente**.
 
 La exportación sigue el [Panel](../dashboard/index.md):
@@ -26,7 +26,7 @@ con una participación superior al 0%.
 
 | Elección | Qué obtienes |
 | :--- | :--- |
-| **Resumen e historial de la cartera** | Posiciones, efectivo, asignaciones, rendimiento, flujos, ingresos, costes registrados, un resumen económico FIFO, un contexto de mercado compacto por activo y caída |
+| **Cartera y evolución** | Posiciones, efectivo, asignaciones, rendimiento, flujos, ingresos, costes registrados, un resumen económico FIFO, un contexto de mercado compacto por activo y caída |
 | **Historial de activos de la cartera** | Precios detallados, rendimientos, indicadores, estados y eventos para cada activo que posees, con cobertura |
 
 ---
@@ -36,9 +36,9 @@ con una participación superior al 0%.
 | Análisis | Qué hace la IA |
 | :--- | :--- |
 | **Plan de inversión recurrente** | Planifica inversiones recurrentes condicionales a partir de tus cifras, preguntando solo lo que le falta |
-| **Rebalanceo de cartera** | Compara tu asignación con los objetivos que le das y plantea rutas de rebalanceo condicionales |
-| **Rendimiento de la cartera y factores del mercado** | Explica tu resultado e investiga factores de mercado con fecha para cada activo que posees: usa una IA que pueda buscar en la web |
-| **Estrategias de compensación de minusvalías** | Explora cómo las minusvalías fiscales disponibles o que expiran podrían compensar plusvalías, usando tus lotes FIFO |
+| **Reequilibrio de la cartera** | Compara tu asignación con los objetivos que le das y plantea rutas de rebalanceo condicionales |
+| **Rendimiento y factores de mercado** | Explica tu resultado e investiga factores de mercado con fecha para cada activo que posees: usa una IA que pueda buscar en la web |
+| **Estrategias para compensar minusvalías** | Explora cómo las minusvalías fiscales disponibles o que expiran podrían compensar plusvalías, usando tus lotes FIFO |
 
 ??? note "📅 Plan de inversión recurrente — qué te preguntará la IA"
 

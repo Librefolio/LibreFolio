@@ -12,7 +12,7 @@ Il tipo di asset **Altro** è una categoria generica per qualsiasi classe di att
 | **Prezzi** | Inserimento manuale o qualsiasi provider compatibile |
 | **Valuta** | Qualsiasi valuta ISO 4217 |
 | **Rendimento** | Dipende dall'asset specifico |
-| **Provider tipici** | Manual, CSS Scraper |
+| **Provider tipici** | CSS Scraper, o prezzi inseriti manualmente nell'[editor dati](../../../user/assets/detail/data-editor.md) |
 
 ---
 
@@ -33,7 +33,7 @@ Il tipo di asset **Altro** è una categoria generica per qualsiasi classe di att
 
 Per gli asset senza un feed di prezzi pubblico:
 
-1. Utilizza il provider **Manual** e inserisci i prezzi tramite il [Data Editor](../../../user/assets/detail/data-editor.md)
+1. Seleziona **Nessun Provider** per l'asset e inserisci i prezzi tu stesso nell'[editor dati](../../../user/assets/detail/data-editor.md)
 2. Oppure utilizza il provider **CSS Scraper** per estrarre i prezzi da un sito web
 3. Registra le transazioni di acquisto/vendita come di consueto tramite importazioni da broker
 

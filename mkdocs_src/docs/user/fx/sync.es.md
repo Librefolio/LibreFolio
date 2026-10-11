@@ -9,7 +9,7 @@ cuando añades un par FX, cada vez que lo solicites y —si tu administrador lo 
 
 1. En la [página de FX](index.md), elige el periodo en el selector de fechas. Selecciona **Todo** para todo
    el historial.
-2. Haz clic en **Sincronizar todo**. La ventana **Sincronizar tipos de cambio FX** enumera cada par FX con un proveedor: los pares FX que solo
+2. Haz clic en **Sinc. Todo**. La ventana **Sincronizar tipos de cambio** enumera cada par FX con un proveedor: los pares FX que solo
    tienen tipos manuales no tienen nada que descargar.
 3. Haz clic en **Iniciar sincronización**.
 
@@ -57,7 +57,7 @@ cuando añades un par FX, cada vez que lo solicites y —si tu administrador lo 
 
     Un par FX que añades con un proveedor descarga todo su historial por sí mismo. Si el gráfico de un par FX más antiguo
     empieza más tarde que el historial del proveedor, establece el periodo en la página de FX a **Todo** y haz clic en
-    **Sincronizar todo** una vez: LibreFolio descarga todo lo que publican los proveedores, hasta hoy.
+    **Sinc. Todo** una vez: LibreFolio descarga todo lo que publican los proveedores, hasta hoy.
 
 ---
 

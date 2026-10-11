@@ -8,7 +8,7 @@ LibreFolio importa ambas cuentas de **Scalable Capital**: la **cuenta de valores
 
 ---
 
-## 🏦 Dos cuentas, dos brókers {: #two-brokers }
+## 🏦 Dos cuentas, dos brókeres {: #two-brokers }
 
 Cada cuenta se convierte en un bróker propio en LibreFolio, leído por su propio importador:
 
@@ -17,7 +17,7 @@ Cada cuenta se convierte en un bróker propio en LibreFolio, leído por su propi
 | Cuenta de valores | **Scalable Capital cuenta de valores** | el archivo de bróker del exportador de LibreFolio, o el propio CSV de Scalable |
 | Cuenta remunerada | **Scalable Capital cuenta remunerada** | el archivo de cuenta remunerada del exportador de LibreFolio |
 
-¿Por qué dos brókers? Cada cuenta tiene su propio saldo de efectivo y su propio IBAN, y el dinero que mueves entre ellas es una **transferencia de fondos**, que enlaza dos brókers. Con dos brókers, cada saldo se puede comprobar con la app de Scalable, y cada transferencia se convierte en un par enlazado. Cada importador rechaza el archivo de la otra cuenta e indica el importador que lo lee.
+¿Por qué dos brókeres? Cada cuenta tiene su propio saldo de efectivo y su propio IBAN, y el dinero que mueves entre ellas es una **transferencia de fondos**, que enlaza dos brókeres. Con dos brókeres, cada saldo se puede comprobar con la app de Scalable, y cada transferencia se convierte en un par enlazado. Cada importador rechaza el archivo de la otra cuenta e indica el importador que lo lee.
 
 ---
 
@@ -81,16 +81,16 @@ Cíñete a una sola fuente por cuenta. Las descripciones que escribe LibreFolio 
 
 ---
 
-## ⚙️ Configura los dos brókers {: #set-up }
+## ⚙️ Configura los dos brókeres {: #set-up }
 
-Crea dos [brókers](../../brokers/index.md), uno por cuenta — por ejemplo *Scalable broker* y *Scalable overnight account* — y elige el **Plugin de importación predeterminado** de cada uno:
+Crea dos [brókeres](../../brokers/index.md), uno por cuenta — por ejemplo *Scalable broker* y *Scalable overnight account* — y elige el **Plugin de importación predeterminado** de cada uno:
 
 | Bróker para | Plugin de importación predeterminado | Icono |
 |:--|:--|:--:|
 | la cuenta de valores | **Scalable Capital cuenta de valores** | ![El logotipo de Scalable con una insignia de gráfico azul, el icono del importador Scalable Capital cuenta de valores](../../../static/icons/brokers/scalable-broker.png){: width="48" } |
 | la cuenta remunerada | **Scalable Capital cuenta remunerada** | ![El logotipo de Scalable con una insignia de hucha naranja, el icono del importador Scalable Capital cuenta remunerada](../../../static/icons/brokers/scalable-deposit.png){: width="48" } |
 
-El bróker entonces muestra el icono del importador por sí mismo: un bróker sin un icono propio muestra el icono de su plugin de importación predeterminado, antes del icono del sitio web de su **URL del portal**, así que deja **URL de icono personalizado** vacío.
+El bróker entonces muestra el icono del importador por sí mismo: un bróker sin un icono propio muestra el icono de su plugin de importación predeterminado, antes del icono del sitio web de su **URL del portal**, así que deja **URL del Icono Personalizado** vacío.
 
 ---
 
@@ -104,21 +104,21 @@ Si un archivo acaba en el bróker equivocado, el asistente lo dice justo despué
 
 El dinero que mueves entre la cuenta de valores y la cuenta remunerada aparece en ambos archivos: un **Retiro** en un bróker y un **Depósito** en el otro, el mismo día y por el mismo importe. Fusiona cada par en una sola **transferencia de fondos**: el espacio de trabajo masivo de la página [Transacciones](../index.md) sugiere los pares, y pregunta antes de **Guardar todo** si no los has revisado.
 
-- **Archivos importados juntos**: las dos mitades se encuentran en el espacio de trabajo, donde un banner verde, *Transacciones complementarias detectadas*, ofrece **Fusionar** cada par — o todos a la vez, con **Fusionar todos (N)**.
-- **Archivos importados en momentos distintos**: cuando importas el segundo archivo, el espacio de trabajo encuentra las mitades ya guardadas y muestra el botón 💡: haz clic en él para añadirlas, y luego **Fusionar** cada par desde el banner. Para transferencias guardadas hace mucho tiempo, también puedes marcar las filas de transferencia de ambos brókers en la página **Transacciones** y hacer clic en **Editar**: el banner aparece en el espacio de trabajo.
+- **Archivos importados juntos**: las dos mitades se encuentran en el espacio de trabajo, donde un banner verde, *Transacciones complementarias detectadas*, ofrece **Unir** cada par — o todos a la vez, con **Unir todos (N)**.
+- **Archivos importados en momentos distintos**: cuando importas el segundo archivo, el espacio de trabajo encuentra las mitades ya guardadas y muestra el botón 💡: haz clic en él para añadirlas, y luego pulsa **Unir** en cada par del banner. Para transferencias guardadas hace mucho tiempo, también puedes marcar las filas de transferencia de ambos brókeres en la página **Transacciones** y hacer clic en **Editar**: el banner aparece en el espacio de trabajo.
 
 También puedes enlazar un par a mano: marca sus dos filas en la página **Transacciones** y haz clic en **🔗 Promover par**.
 
-Las dos mitades tienen descripciones distintas, ya que cada una lleva su propio id de transacción: conserva la descripción unida que propone la fusión (en **Fusionar todos**, la opción predeterminada: **Combinar**). Una exportación que se solape con una transferencia ya fusionada entonces trae sus mitades de vuelta como probables duplicados, sin marcar.
+Las dos mitades tienen descripciones distintas, ya que cada una lleva su propio id de transacción: conserva la descripción unida que propone la fusión (en **Unir todos**, la opción predeterminada: **Combinar**). Una exportación que se solape con una transferencia ya fusionada entonces trae sus mitades de vuelta como probables duplicados, sin marcar.
 
 ### 🤔 ¿Un solo bróker? {: #one-broker-only }
 
 Puedes importar ambos archivos en un solo bróker. La importación funciona, pero:
 
-- cada transferencia entre las cuentas sigue siendo un **Depósito** más un **Retiro**, ya que una transferencia de fondos necesita dos brókers: el dinero que entra y sale parece mayor de lo que es;
+- cada transferencia entre las cuentas sigue siendo un **Depósito** más un **Retiro**, ya que una transferencia de fondos necesita dos brókeres: el dinero que entra y sale parece mayor de lo que es;
 - las dos cuentas comparten un único saldo de efectivo, así que ninguna puede comprobarse por sí sola con la app de Scalable.
 
-En cualquier caso, nunca importes el mismo archivo en dos brókers: sus transacciones contarían dos veces.
+En cualquier caso, nunca importes el mismo archivo en dos brókeres: sus transacciones contarían dos veces.
 
 ---
 

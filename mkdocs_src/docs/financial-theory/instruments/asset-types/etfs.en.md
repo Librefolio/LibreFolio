@@ -13,7 +13,7 @@ An **ETF** is a basket of securities (stocks, bonds, commodities, or a mix) that
 | **Currency** | Denominated in the listing exchange's currency |
 | **Dividends** | May distribute (Dist) or reinvest internally (Acc) |
 | **TER** | Total Expense Ratio — annual management fee deducted from NAV |
-| **Typical providers** | Yahoo Finance, justETF, CSS Scraper |
+| **Typical providers** | Yahoo Finance, justETF, Borsa Italiana, CSS Scraper |
 
 In LibreFolio, `ETF` is the code for a fund of mixed or unstated content; a fund that holds a single asset class takes one of six subtypes (`ETF_STOCK`, `ETF_BOND`, `ETF_COMMODITY`, `ETF_REAL_ESTATE`, `ETF_CRYPTO`, `ETF_MONETARY`), listed in the [ETF family](index.md#etf-family) table with their composite icons and the class each one rolls up to.
 

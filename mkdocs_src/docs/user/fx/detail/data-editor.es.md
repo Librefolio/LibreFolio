@@ -15,7 +15,7 @@ mientras editas.
 </div>
 
 Muestra los tipos de cambio del periodo seleccionado con su **Fecha**, **Tipo de cambio** y **Estado** (**Original**,
-**Editado**, **Eliminado** o **Nuevo**).
+**Modificado**, **Eliminado** o **Nuevo**).
 
 - Una fecha marcada con ⚠️ y un número de días no tiene tipo de cambio propio (un fin de semana o un festivo bancario) y
   repite el anterior. El interruptor ⚠️ en la parte superior oculta estos días.
@@ -121,7 +121,7 @@ La ventana de importación marca cada línea incorrecta; solo se importan las l�
 
 ??? info "🔀 Cómo se fusionan las filas importadas — cuando el editor ya tiene algunas de las fechas"
 
-    - Una fecha que ya está en el editor toma el tipo de cambio importado (estado **Editado**); una fecha nueva se añade
+    - Una fecha que ya está en el editor toma el tipo de cambio importado (estado **Modificado**); una fecha nueva se añade
       (estado **Nuevo**). Las fechas que faltan en el archivo permanecen como están.
     - Las fechas fuera del periodo seleccionado también se guardan, reemplazando cualquier tipo de cambio almacenado en esos días;
       después de guardar, el periodo se amplía para mostrarlas.

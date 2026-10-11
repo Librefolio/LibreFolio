@@ -23,19 +23,19 @@ Cada bloque a continuación sigue un patrón: qué responde, una captura de pant
 **Herramientas mostradas**
 
 - **Un mal día**, **Un mal mes** — tu pérdida promedio en el peor 5% de los días, o de los períodos de un mes → [VaR condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md)
-- **Umbral de VaR** — en *Distribución de rendimientos diarios*: la pérdida diaria que solo el peor 5% de los días superó → [Valor en riesgo](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
-- **Peor día realmente visto** — el peor día del período → [Peor realización](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
+- **Umbral de VaR** — en *Distribución de los rendimientos diarios*: la pérdida diaria que solo el peor 5% de los días superó → [Valor en riesgo](../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md)
+- **El peor día realmente visto** — el peor día del período → [Peor realización](../../financial-theory/technical-analysis/risk-metrics/worst-realization.md)
 - **La peor caída** — la caída más profunda desde un máximo hasta un mínimo posterior → [Caída máxima](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md)
 - **Caída en riesgo** — cuán por debajo de su pico estuvo la cartera, dejando de lado su peor 5% de días → [Caída en riesgo](../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md)
-- **Promedio más allá de ese umbral** — cuán por debajo de su pico estuvo, en promedio, en esos peores días → [Caída en riesgo condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
-- **Actualmente por debajo del pico** — cuán por debajo de su último máximo está la cartera hoy → [Caída actual](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
-- **Índice de Ulcer** — bajo *Tiempo pasado bajo el pico*: cuán profundas y cuán largas fueron las caídas; más bajo es más calmado → [Índice de Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
+- **Media más allá de ese umbral** — cuán por debajo de su pico estuvo, en promedio, en esos peores días → [Caída en riesgo condicional](../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md)
+- **Actualmente por debajo del máximo** — cuán por debajo de su último máximo está la cartera hoy → [Caída actual](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md)
+- **Índice de Ulcer** — bajo *Tiempo bajo el pico*: cuán profundas y cuán largas fueron las caídas; más bajo es más calmado → [Índice de Ulcer](../../financial-theory/technical-analysis/risk-metrics/ulcer-index.md)
 
 **Cómo leerlo**
 
 - **Distintos horizontes**: las tarjetas van de un día a un mes a la peor caída, así que nunca las sumes.
 - **El importe** bajo cada porcentaje es esa pérdida aplicada a tu patrimonio neto.
-- **Actualmente por debajo del pico** aparece solo mientras tu cartera está por debajo de su último máximo.
+- **Actualmente por debajo del máximo** aparece solo mientras tu cartera está por debajo de su último máximo.
 - **Los iconos ? e ⓘ** junto a una cifra abren su página de teoría.
 
 ---
@@ -51,8 +51,8 @@ Poseer muchas posiciones no es lo mismo que estar diversificado. Este bloque mue
 **Herramientas mostradas**
 
 - **¿Cuántas apuestas independientes tengo realmente?** — cuán uniformemente está repartido tu dinero → [Concentración](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
-- **¿Repartir el dinero logró algo?** — cuánto se amortiguan tus posiciones entre sí → [Concentración](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
-- **¿Cuánto de mi cartera no se mide aquí?** — efectivo, más posiciones sin precios utilizables → [Calidad de datos](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#excluded-weight)
+- **¿Repartir el dinero ha servido de algo?** — cuánto se amortiguan tus posiciones entre sí → [Concentración](../../financial-theory/technical-analysis/risk-metrics/concentration.md)
+- **¿Cuánto de mí no se mide aquí?** — efectivo, más posiciones sin precios utilizables → [Calidad de datos](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#excluded-weight)
 - **Peso** y **contribución al riesgo** — la parte de tu dinero y de tu riesgo que corresponde a cada posición → [Contribución al riesgo](../../financial-theory/technical-analysis/risk-metrics/risk-contribution.md)
 - **¿Cuáles de estas son la misma apuesta?** — cuán de cerca se mueve cada par de posiciones → [Correlación](../../financial-theory/technical-analysis/risk-metrics/correlation.md)
 
@@ -60,7 +60,7 @@ Poseer muchas posiciones no es lo mismo que estar diversificado. Este bloque mue
 
 - **Una barra roja larga** a la derecha señala una posición que carga más de tu riesgo de lo que sugiere su peso; cuando una destaca, la frase bajo el título la nombra.
 - **En la matriz**, los pares azules se mueven juntos, así que tener ambos añade poco; los pares rojos se mueven en direcciones opuestas y se compensan entre sí.
-- **Pasa el cursor sobre un cuadrado** para ver su valor en palabras. Las listas *Las más parecidas* y *Las que se compensan* señalan los pares que vale la pena mirar.
+- **Pasa el cursor sobre un cuadrado** para ver su valor en palabras. Las listas *Los más parecidos* y *Los que se compensan* señalan los pares que vale la pena mirar.
 
 ---
 
@@ -75,7 +75,7 @@ El riesgo vale la pena solo si paga. Este bloque compara el rendimiento de tu ca
 **Herramientas mostradas**
 
 - **Volatilidad** — cuánto oscilan los rendimientos a lo largo de un año → [Volatilidad](../../financial-theory/technical-analysis/risk-metrics/volatility.md)
-- **Rend. anual** — el rendimiento promedio, escalado a un año → [Anualización observada](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md)
+- **Rent. anual** — el rendimiento promedio, escalado a un año → [Anualización observada](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md)
 - **Sortino** — el rendimiento obtenido por cada unidad de oscilaciones a la baja → [Ratio de Sortino](../../financial-theory/technical-analysis/risk-metrics/sortino-ratio.md)
 - **Sharpe** — el rendimiento obtenido por cada unidad de oscilaciones, al alza o a la baja → [Ratio de Sharpe](../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md)
 - **Beta** — cuánto se mueve una posición cuando se mueve el índice de referencia → [Beta y rendimiento activo](../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md)
@@ -108,8 +108,8 @@ El riesgo vale la pena solo si paga. Este bloque compara el rendimiento de tu ca
 **Cómo leerlo**
 
 - **Añade una herramienta** con los botones **Añadir:**; su **×** la cierra y descarta su resultado. Las herramientas que dejes abiertas vuelven la próxima vez, en este navegador.
-- **Repetición histórica**: elige una crisis en **Preajuste**, o tu propio **Período**, y luego **Ejecutar repetición**. Las posiciones sin precios para ese período se excluyen, y un botón puede ofrecer un período en el que todas tengan precios.
-- **Choque hipotético**: haz clic en un escenario, como *Equity crash*, para ejecutarlo; **Mostrar el choque por grupo de exposición** te permite cambiar sus supuestos.
+- **Repetición histórica**: elige una crisis en **Preajuste**, o tu propio **Período**, y luego pulsa **Ejecutar repetición**. Las posiciones sin precios para ese período se excluyen, y un botón puede ofrecer un período en el que todas tengan precios.
+- **Choque hipotético**: haz clic en un escenario, como *Equity crash*, para ejecutarlo; **Mostrar el choque por grupo** te permite cambiar sus supuestos.
 - **Simulación**: elige un modo — *Historial remezclado* es el recomendado — y un horizonte, luego **Simular**. Lee el cono como un rango de posibilidades, no como un pronóstico.
 
 !!! note "La simulación sigue en beta"
@@ -128,7 +128,7 @@ Una cifra de riesgo es tan buena como los precios que la sustentan. Cuando falta
 
 **Herramientas mostradas**
 
-- **Calidad de datos** — precios y tasas faltantes u obsoletos, y las posiciones que quedan fuera → [Calidad de datos](../../financial-theory/technical-analysis/risk-metrics/data-quality.md)
+- **Calidad de datos** — precios y tipos de cambio faltantes u obsoletos, y las posiciones que quedan fuera → [Calidad de datos](../../financial-theory/technical-analysis/risk-metrics/data-quality.md)
 
 **Cómo leerlo**
 
@@ -154,5 +154,5 @@ Una cifra de riesgo es tan buena como los precios que la sustentan. Cuando falta
 - 🧪 **[Pestaña Correlación](../assets/correlation.md)** — las mismas preguntas, planteadas sobre una selección de activos que tú eliges
 - 📚 **[Métricas de Riesgo](../../financial-theory/technical-analysis/risk-metrics/index.md)** — la teoría detrás de cada cifra; el icono de libro de cada bloque la abre
 - 📊 **[Panel](index.md)** — las otras pestañas, el rango de fechas, la divisa y el filtro de bróker
-- 🏦 **[Brókers](../brokers/index.md)** — la página de cada bróker, con su propia pestaña Riesgo
+- 🏦 **[Brókeres](../brokers/index.md)** — la página de cada bróker, con su propia pestaña Riesgo
 - 🛠️ **[Detalles técnicos](../../developer/frontend/components/features/risk-lab.md#dashboard-risk-tab)** — para desarrolladores: cómo funciona esta pestaña por dentro

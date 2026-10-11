@@ -32,11 +32,11 @@ Choisissez une catégorie dans la barre latérale — sur un téléphone, dans l
 
 Chaque champ conserve son propre état :
 
-- Modifiez un champ et il affiche **Enregistrer** et **Annuler** ; l'en-tête propose **Tout enregistrer** et **Tout annuler**
+- Modifiez un champ et il affiche **Enregistrer** et **Annuler** ; l'en-tête propose **Enregistrer Tout** et **Annuler Tout**
   pour chaque champ modifié.
 - Lorsqu'une valeur enregistrée diffère de la **valeur par défaut de l'instance** (définie par votre administrateur dans
-  [Paramètres globaux](../../admin/settings.md)), un bouton orange **Réinitialiser par défaut** apparaît : il
-  remet la valeur par défaut dans le champ, prête à être enregistrée. **Tout réinitialiser par défaut** le fait pour chaque
+  [Paramètres globaux](../../admin/settings.md)), un bouton orange **Réinitialiser** apparaît : il
+  remet la valeur par défaut dans le champ, prête à être enregistrée. **Réinitialiser Tout** le fait pour chaque
   champ.
 
 ---
@@ -60,8 +60,8 @@ y accédez.
 ### 🔁 Relancer un guide
 
 - **Configuration d'accueil** et **Visite rapide** — **Relancer** les démarre immédiatement.
-- Tout autre guide — **Relancer au prochain déclenchement** le prépare : il démarre la prochaine fois que vous ouvrez sa
-  page, son formulaire, son assistant ou son espace de travail. **Annuler l'activation** le retire.
+- Tout autre guide — **Relancer à la prochaine activation** le prépare : il démarre la prochaine fois que vous ouvrez sa
+  page, son formulaire, son assistant ou son espace de travail. **Annuler l’activation** le retire.
 - **Tout relancer** prépare tous les guides et ouvre d'abord la page d'accueil.
 
 Un rejeu ne modifie jamais le statut enregistré, et les guides ne cliquent ni n'enregistrent à votre place. Une exception :
@@ -142,7 +142,7 @@ Les nombres qui n'indiquent pas **combien vous possédez** restent lisibles, afi
 
 - la **devise** de chaque montant masqué, les **pourcentages** (rendements, pondérations, parts d'allocation,
   rendement sur coût) et les **taux de change** ;
-- les **prix unitaires** — les prix de marché, les colonnes **Prix** et **Coût moyen** de Positions, les
+- les **prix unitaires** — les prix de marché, les colonnes **Prix** et **PRU** de Positions, les
   prix des lots et les lignes de prix du graphique PRU / Prix de marché ;
 - les **comptages, dates et noms**, et les **événements d'actif** tels qu'un dividende ou une division, qui décrivent
   l'actif plutôt que votre portefeuille ;

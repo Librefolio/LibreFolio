@@ -183,7 +183,7 @@
         brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
         cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
         quoteBaseQuantity = normalizeQuoteBaseQuantity(response.quote_base_quantity);
-        incomeEvents = asArray<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string; lot_ids?: number[]}>(response.income_events).map((event) => ({
+        incomeEvents = asArray<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string | null; lot_ids?: number[]}>(response.income_events).map((event) => ({
             type: event.type,
             date: event.date,
             broker_id: event.broker_id ?? null,

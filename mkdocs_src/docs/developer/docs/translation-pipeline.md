@@ -10,15 +10,15 @@ The pipeline translates `*.en.md` source files into `it`, `fr`, `es`. The transl
 
 | Scope | Files | Translated? |
 |-------|-------|:-----------:|
-| User Manual | 17 files | ✅ |
-| Admin Manual | 6 files | ✅ |
-| Financial Theory | 7 files (LaTeX) | ✅ |
+| User Manual | 94 files | ✅ |
+| Admin Manual | 8 files | ✅ |
+| Financial Theory | 99 files (LaTeX) | ✅ |
 | Gallery | 3 files | ✅ |
-| Root (Home, FAQ, Credits) | 3 files | ✅ |
-| Developer Manual | ~45 files | ❌ EN-only |
+| Root and Community (Home, FAQ, Contribute, Credits) | 4 files | ✅ |
+| Developer Manual | 114 files | ❌ EN-only |
 | POC UX | 1 file | ❌ EN-only |
 
-**Total**: ~36 source files → ~108 translated files (3 languages)
+**Total**: 208 source files → 624 translated files (3 languages)
 
 ---
 
@@ -510,7 +510,7 @@ with its English page, for every target language, and exits non-zero on any ❌ 
 fails the release workflow outside `dev` (see
 [Code block indentation](#code-block-indentation)). Among its checks (`code-block-indent` is
 described above, `admonition-empty-line` under
-[Prettier Compatibility](#prettier-compatibility)), three catch what a translation can break
+[Prettier Compatibility](#prettier-compatibility)), four catch what a translation can break
 while the structure stays intact:
 
 - `text-untranslated` (⚠️ WARN): an `alt`, `title`, `aria-label` or `data-title` value (in
@@ -530,6 +530,15 @@ while the structure stays intact:
   verbatim in the translation, as many times; digit grouping is ignored, so `1,000.50`
   matches `1.000,50`, but the message names a missing span as the English writes it.
   Identifiers, enum values and parameters are never translated.
+- `html-asset-depth` (❌ ERROR): a relative file path in raw HTML (`src`, `srcset`,
+  `poster`, an `href` to a file rather than a page) that the translation copied unchanged
+  from the English page; code is ignored. A translated page is built one folder deeper,
+  under `site/<lang>/`, which holds only HTML pages and no other file; MkDocs rewrites the
+  paths of Markdown images and links, not those of raw HTML, so the English path is one
+  `../` short. The message gives the translation's line and the path to write, `../`
+  followed by the English path. Whether a corrected path resolves is left to
+  `./dev.py mkdocs build`, which afterwards resolves every relative file URL of the built
+  site (images, video and audio, links to files) and exits 1 on a broken one.
 
 The HTML checks (`html-tag-mismatch`, `html-attr-missing`, `html-attr-mismatch`) read only
 rendered HTML: fenced code (any fence, found by `code_line_mask()` in `code_blocks.py`) and
@@ -545,9 +554,67 @@ about 80 columns while a translation often keeps a paragraph on one line, but a 
 truncated section still removes blocks.
 
 Tests: `./dev.py test utils translation-validator`
-(`backend/test_scripts/test_utilities/test_translation_validator.py`). It covers the three
+(`backend/test_scripts/test_utilities/test_translation_validator.py`). It covers the four
 checks above, `page_anchors.py` included, the code stripping of the HTML checks and the
 block-based `LINE_COUNT`, on pages in memory and on a docs tree in a temporary directory.
+`./dev.py test utils gate-docs-links`
+(`backend/test_scripts/test_utilities/test_docs_links_gate.py`) covers the build's check of
+the relative file URLs.
+
+---
+
+## 🇫🇷 French Typography {: #french-typography }
+
+French keeps a sign or a unit with the word before it: a non-breaking space stands before
+`:` `;` `?` `!` `%` and a currency symbol, inside « », and between the groups of a number.
+The French translations, as the pipeline writes them, use plain spaces, so a line could
+break before a colon or inside an amount like `28 398 €`; fixing the `*.fr.md` sources
+would not last, since the next run writes plain spaces again. The hook
+`mkdocs_src/hooks/fr_typography.py`, listed under `hooks:` in `mkdocs_src/mkdocs.yml`,
+therefore applies the French spacing at build time, to the rendered HTML of the French
+pages: the sources are never changed.
+
+`typeset()` only replaces whitespace that is already there and never inserts a space, so
+`16:9`, `https://`, `Next: Select Files` (an English UI label) and `«sans»` stay as
+written:
+
+| Plain whitespace | Becomes |
+|------------------|---------|
+| Before `:` | U+00A0 (no-break space) |
+| Before `;` `?` `!` | U+202F (narrow no-break space) |
+| Before `%`, and before `€` `$` `£` `¥` after a digit | U+202F |
+| After `«` and before `»` | U+00A0 |
+| Between the groups of a number (`28 398`) | U+202F |
+
+`:` `;` `?` `!` count only when they close a phrase, that is when followed by a space, the
+end of the text, closing punctuation or an entity.
+
+`typeset_html()` reads text only: tags and their attributes (URLs, `alt`, `title` and
+`data-title` texts) pass through byte for byte, and so do comments and the content of
+`code`, `pre`, `kbd`, `samp`, `var`, `svg`, `math`, of the raw-text elements (`script`,
+`style`, `textarea`, `iframe`, `noembed`, `noframes`, `xmp`, skipped up to their end tag,
+so a `<!--` inside them opens no comment) and of any element of class `arithmatex`
+(formulas).
+
+`on_page_content` typesets a page only when `page.file.locale` is `fr`: mkdocs-static-i18n
+sets it to the language of the source file, so an English page shown in the French build
+(the Developer Manual, English only) keeps its English text. The page's table-of-contents
+titles (`page.toc`) get the same treatment. `on_nav` runs at `event_priority(-110)`, after
+the `on_nav` of mkdocs-static-i18n (`-100`) has applied `nav_translations`; in the French
+build only, it typesets the navigation titles that are French labels (values of the French
+`nav_translations`). The sidebar, the tabs, the header and the browser tab title show these
+titles; a front-matter `title:`, which the hook leaves as written, replaces them in the
+header and the browser tab.
+
+Measured on two builds, with and without the hook: every English, Italian and Spanish file
+is byte-identical (only the shared search index differs, as it holds the French text); the
+322 French pages differ only in whitespace, with identical start tags and identical code
+and formula content; plain whitespace before `: ; ? ! %` in their French text (sidebar
+included) drops from 6,580 to 0, while the 28 in the English text of the English fallback
+pages stay, by design.
+
+Tests: `./dev.py test utils docs-fr-typography`
+(`backend/test_scripts/test_utilities/test_docs_fr_typography.py`).
 
 ---
 

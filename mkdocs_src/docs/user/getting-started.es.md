@@ -42,16 +42,16 @@ Después de registrarte, vuelves a la página de inicio de sesión. Inicia sesi�
 
 La primera vez que inicias sesión, LibreFolio abre una página de **Bienvenida** antes del panel:
 
-- 🌍 Revisa **Idioma** y **Moneda predeterminada**: comienzan con los valores predeterminados de tu administrador.
+- 🌍 Revisa **Idioma** y **Divisa predeterminada**: comienzan con los valores predeterminados de tu administrador.
 - 🖼️ Añade una **foto de perfil** si quieres — de lo contrario, se muestran tus iniciales.
-- ✅ Haz clic en **Continuar** para guardar, o en **Omitir configuración permanentemente** para mantener la configuración actual.
+- ✅ Haz clic en **Continuar** para guardar, o en **Omitir la configuración permanentemente** para mantener la configuración actual.
 - 🚪 ¿Necesitas salir? **Cerrar sesión** está en la esquina superior derecha.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="La página de Bienvenida de la primera ejecución: el bloque de foto de perfil con el avatar de iniciales y Elegir imagen, Idioma y Moneda predeterminada prellenados, la nota de que tu preferencia de tema se mantiene sin cambios, y Omitir configuración permanentemente y Continuar" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="La página de Bienvenida de la primera ejecución: el bloque de foto de perfil con el avatar de iniciales y Elegir imagen, Idioma y Divisa predeterminada prellenados, la nota de que tu preferencia de tema se mantiene sin cambios, y Omitir configuración permanentemente y Continuar" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Después sigue una breve animación de bienvenida y, luego, el **Recorrido rápido** comienza por sí solo — haz clic en **Iniciar recorrido** para empezar de inmediato, o en **✕** para omitirlo. El recorrido muestra dónde está cada cosa: el botón de menú y, después, **Panel**, **Transacciones**, **Brókers**, **FX**, **Activos**, **Herramientas** y **Configuración**. Solo señala: nunca abre un formulario ni crea datos.
+Después sigue una breve animación de bienvenida y, luego, el **Recorrido rápido** comienza por sí solo — haz clic en **Iniciar recorrido** para empezar de inmediato, o en **✕** para omitirlo. El recorrido muestra dónde está cada cosa: el botón de menú y, después, **Panel**, **Transacciones**, **Brókeres**, **FX**, **Activos**, **Herramientas** y **Configuración**. Solo señala: nunca abre un formulario ni crea datos.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="onboarding" data-name="core-tour-step" alt="El Recorrido rápido en el Panel en el paso 5 de 8, tipos de cambio: un marco y un cursor sobre la entrada Tipos de cambio de la barra lateral, y el panel de mensajes con Atrás y Siguiente" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -60,12 +60,12 @@ Después sigue una breve animación de bienvenida y, luego, el **Recorrido rápi
 ??? note "👋 ¿Ya usas LibreFolio? — cuentas anteriores a las guías"
 
     Si tu cuenta existía antes de que se añadieran las guías, LibreFolio no te las muestra:
-    la configuración de bienvenida cuenta como **Completada**, y el recorrido y todas las guías como **Omitidos**. Aun así, puedes repetir cualquiera de ellas desde
+    la configuración de bienvenida cuenta como **Completado**, y el recorrido y todas las guías como **Omitido**. Aun así, puedes repetir cualquiera de ellas desde
     **[Configuración → Preferencias → Introducción y guías](settings/preferences.md#onboarding-and-guides)**.
 
 ??? warning "⚠️ La configuración no se carga — qué hacer"
 
-    Si tu configuración o el progreso de tus guías no se pueden cargar, aparece una página **No pudimos cargar la introducción** que ofrece **Reintentar** y **Cerrar sesión**. Si tu configuración de bienvenida ya está hecha, puede que veas el Panel en su lugar, con un banner de **Reintentar** en la parte superior.
+    Si tu configuración o el progreso de tus guías no se pueden cargar, aparece una página **No se pudo cargar la introducción** que ofrece **Reintentar** y **Cerrar sesión**. Si tu configuración de bienvenida ya está hecha, puede que veas el Panel en su lugar, con un banner de **Reintentar** en la parte superior.
 
 ### 🧭 Guías contextuales
 
@@ -74,7 +74,7 @@ Más adelante, aparecen breves guías la primera vez que llegas a un lugar donde
 | Área | Guías contextuales |
 |---|---|
 | **Transacciones** | Resumen de la página, formulario Añadir transacción, espacio de trabajo masivo y Asistente de importación |
-| **Brókers** | Página de Brókers, formulario Añadir bróker y detalles del bróker |
+| **Brókeres** | Página de Brókeres, formulario Añadir bróker y detalles del bróker |
 | **FX** | Página de FX, formulario Añadir par FX y detalles del par FX |
 | **Activos** | Página de Activos, formulario Añadir activo y detalles del activo |
 
@@ -99,7 +99,7 @@ Tu panel sigue vacío — ya sea que llegues allí directamente o después de la
     <img class="gallery-img" data-category="dashboard" data-name="empty-state" alt="Panel vacío" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-La forma más rápida de llenarlo es importar tu historial de transacciones. No necesitas configurar brókers ni activos primero: el Asistente de importación los crea sobre la marcha.
+La forma más rápida de llenarlo es importar tu historial de transacciones. No necesitas configurar brókeres ni activos primero: el Asistente de importación los crea sobre la marcha.
 
 ### 📋 Pasos
 
@@ -133,7 +133,7 @@ La forma más rápida de llenarlo es importar tu historial de transacciones. No 
 
     Ver **[Pasos que aparecen solo cuando se necesitan](transactions/import/how-to.md#only-when-needed)**.
 
-La primera vez que abres el asistente, una guía te acompaña por los pasos que necesitan tus archivos; nunca hace clic ni guarda por ti (consulta **[Primera importación guiada](transactions/import/how-to.md#guided-first-import)**). Para el recorrido completo, consulta **[Cómo importar transacciones](transactions/import/how-to.md)**; para los brókers y formatos de archivo compatibles, consulta **[Importar desde bróker](transactions/import/index.md)**.
+La primera vez que abres el asistente, una guía te acompaña por los pasos que necesitan tus archivos; nunca hace clic ni guarda por ti (consulta **[Primera importación guiada](transactions/import/how-to.md#guided-first-import)**). Para el recorrido completo, consulta **[Cómo importar transacciones](transactions/import/how-to.md)**; para los brókeres y formatos de archivo compatibles, consulta **[Importar desde bróker](transactions/import/index.md)**.
 
 ---
 
@@ -153,6 +153,6 @@ Ahora que tu cartera está poblada, puedes:
 
 - 🤝 **[Comparte tu bróker](brokers/sharing.md)** — Da acceso a familiares o asesores.
 - 💱 **[Configura los tipos de cambio](fx/index.md)** — Configura la conversión de divisa para carteras multidivisa.
-- ⚙️ **[Personaliza tus preferencias](settings/preferences.md)** — Ajusta tu idioma, moneda predeterminada y tema. Los administradores también gestionan la **[Configuración global](../admin/settings.md)** de todo el sistema.
+- ⚙️ **[Personaliza tus preferencias](settings/preferences.md)** — Ajusta tu idioma, divisa predeterminada y tema. Los administradores también gestionan la **[Configuración global](../admin/settings.md)** de todo el sistema.
 - 🧭 **[Repite la configuración de bienvenida o los recorridos guiados](settings/preferences.md#onboarding-and-guides)** — Revisa la pantalla de bienvenida, el recorrido rápido o la guía de importación en cualquier momento desde Configuración → Preferencias.
 - 📱 **[Instala LibreFolio como aplicación](pwa.md)** — Ponlo en la pantalla de inicio de tu teléfono o en su propia ventana de escritorio.

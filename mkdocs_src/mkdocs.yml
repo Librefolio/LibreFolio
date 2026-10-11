@@ -180,7 +180,7 @@ plugins:
             User Preferences: Preferenze Utente
             About: Informazioni
             "🛠️ Admin Manual": "🛠️ Manuale Admin"
-            CLI Tools: Strumenti CLI
+            "CLI Admin Tools": "Strumenti CLI di amministrazione"
             Global Settings: Impostazioni Globali
             Filesystem Structure: Struttura Filesystem
             Advanced Docker: Docker Avanzato
@@ -199,7 +199,7 @@ plugins:
             ETFs: ETF
             Bonds: Obbligazioni
             Crypto: Crypto
-            "P2P / Crowdfunding": "Immobiliare & P2P"
+            "P2P / Crowdfunding": "P2P / Crowdfunding"
             Mutual Fund: Fondi Comuni
             Commodities: Materie Prime
             Other: Altro
@@ -207,11 +207,11 @@ plugins:
             "Buy & Sell": "Acquisto & Vendita"
             "Deposit & Withdrawal": "Deposito & Prelievo"
             "Fee & Tax": "Commissioni & Imposte"
-            Asset Transfer: Trasferimento Titoli
+            "Asset Transfer": "Trasferimento asset"
             Cash Transfer: Giroconto
             FX Conversion: Conversione di Valuta
             Adjustment: Rettifica
-            Single: Singole
+            "1️⃣ Single": "1️⃣ Singole"
             "🔢 Composite": "🔢 Composite"
             "📉 Technical Analysis": "📉 Analisi Tecnica"
             "📐 Indicators": "📐 Indicatori"
@@ -256,7 +256,7 @@ plugins:
             Sortino Ratio: Indice di Sortino
             Max Drawdown: Drawdown Massimo
             Volatility: Volatilità
-            Current Drawdown: Drawdown Corrente
+            "Current Drawdown": "Drawdown attuale"
             Worst Realization: Peggior Realizzazione
             "🧩 Am I Diversified?": "🧩 Sono Diversificato?"
             Correlation: Correlazione
@@ -276,8 +276,54 @@ plugins:
             FIFO Lot Analysis: Analisi Lotti FIFO
             NAV / Net Worth: NAV / Patrimonio Netto
             Book Value: Valore Contabile
-            Period P&L: P&L del Periodo
+            "Period P&L": "P&L periodo"
             Timing Effect: Effetto Timing
+            "Avanza": "Avanza"
+            "Disnat": "Disnat"
+            "InvestEngine": "InvestEngine"
+            "Scalable Capital": "Scalable Capital"
+            "Trade Republic": "Trade Republic"
+            "XTB": "XTB"
+            "Saxo": "Saxo"
+            "Swissquote": "Swissquote"
+            "Investimental": "Investimental"
+            "Intesa Sanpaolo": "Intesa Sanpaolo"
+            "Crédit Agricole": "Crédit Agricole"
+            "Danske Bank": "Danske Bank"
+            "BUX": "BUX"
+            "Rabobank": "Rabobank"
+            "Bitvavo": "Bitvavo"
+            "Crypto.com": "Crypto.com"
+            "Relai": "Relai"
+            "CoinTracking": "CoinTracking"
+            "Delta": "Delta"
+            "Parqet": "Parqet"
+            "ROI": "ROI"
+            "TWRR": "TWRR"
+            "MWRR": "MWRR"
+            "FX": "FX"
+            "KPI Cards": "Schede KPI"
+            "Charts": "Grafici"
+            "🔎 Asset Detail": "🔎 Dettaglio Asset"
+            "Classification": "Classificazione"
+            "Portfolio": "Portafoglio"
+            "Broker": "Broker"
+            "Asset": "Asset"
+            "🐳 Deployment & Exposure": "🐳 Installazione ed esposizione"
+            "⚙️ System Configuration": "⚙️ Configurazione di sistema"
+            "Environment Variables": "Variabili d'ambiente"
+            "🧹 Maintenance & Operations": "🧹 Manutenzione e operazioni"
+            "Dividend": "Dividendo"
+            "Interest": "Interessi"
+            "Price Resolution": "Risoluzione dei prezzi"
+            "Deposited Capital & Total P&L": "Capitale versato & P&L totale"
+            "Net Annualized Return": "Rendimento annualizzato netto"
+            "Yield on Cost": "Rendimento sul costo"
+            "Drawdown at Risk": "Drawdown a rischio"
+            "Conditional Drawdown at Risk": "Drawdown a rischio condizionale"
+            "Ulcer Index": "Indice di Ulcer"
+            "Value at Risk": "Value at Risk"
+            "Conditional Value at Risk": "VaR condizionale"
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             "🖼️ Gallery": "🖼️ Galleria"
             Desktop: Desktop
@@ -377,7 +423,7 @@ plugins:
             About: À propos
             Borsa Italiana: Borsa Italiana
             "🛠️ Admin Manual": "🛠️ Manuel Admin"
-            CLI Tools: Outils CLI
+            "CLI Admin Tools": "Outils CLI d'administration"
             Global Settings: Paramètres Globaux
             Filesystem Structure: Structure du Système de Fichiers
             Advanced Docker: Docker Avancé
@@ -396,7 +442,7 @@ plugins:
             ETFs: ETF
             Bonds: Obligations
             Crypto: Crypto
-            "P2P / Crowdfunding": "Immobilier & P2P"
+            "P2P / Crowdfunding": "P2P / Crowdfunding"
             Mutual Fund: Fonds Communs
             Commodities: Matières Premières
             Other: Autre
@@ -404,11 +450,11 @@ plugins:
             "Buy & Sell": "Achat & Vente"
             "Deposit & Withdrawal": "Dépôt & Retrait"
             "Fee & Tax": "Frais & Impôts"
-            Asset Transfer: Transfert de Titres
+            "Asset Transfer": "Transfert d'actif"
             Cash Transfer: Virement
             FX Conversion: Conversion de Devise
             Adjustment: Ajustement
-            Single: Simples
+            "1️⃣ Single": "1️⃣ Simples"
             "🔢 Composite": "🔢 Composites"
             "📉 Technical Analysis": "📉 Analyse Technique"
             "📐 Indicators": "📐 Indicateurs"
@@ -453,7 +499,7 @@ plugins:
             Sortino Ratio: Ratio de Sortino
             Max Drawdown: Perte Maximale
             Volatility: Volatilité
-            Current Drawdown: Drawdown Actuel
+            "Current Drawdown": "Repli actuel"
             Worst Realization: Pire Réalisation
             "🧩 Am I Diversified?": "🧩 Suis-je Diversifié ?"
             Correlation: Corrélation
@@ -473,8 +519,54 @@ plugins:
             FIFO Lot Analysis: Analyse des Lots FIFO
             NAV / Net Worth: NAV / Valeur Nette
             Book Value: Valeur Comptable
-            Period P&L: P&L de la Période
+            "Period P&L": "P&L période"
             Timing Effect: Effet de timing
+            "Avanza": "Avanza"
+            "Disnat": "Disnat"
+            "InvestEngine": "InvestEngine"
+            "Scalable Capital": "Scalable Capital"
+            "Trade Republic": "Trade Republic"
+            "XTB": "XTB"
+            "Saxo": "Saxo"
+            "Swissquote": "Swissquote"
+            "Investimental": "Investimental"
+            "Intesa Sanpaolo": "Intesa Sanpaolo"
+            "Crédit Agricole": "Crédit Agricole"
+            "Danske Bank": "Danske Bank"
+            "BUX": "BUX"
+            "Rabobank": "Rabobank"
+            "Bitvavo": "Bitvavo"
+            "Crypto.com": "Crypto.com"
+            "Relai": "Relai"
+            "CoinTracking": "CoinTracking"
+            "Delta": "Delta"
+            "Parqet": "Parqet"
+            "ROI": "ROI"
+            "TWRR": "TWRR"
+            "MWRR": "MWRR"
+            "FX": "FX"
+            "KPI Cards": "Cartes KPI"
+            "Charts": "Graphiques"
+            "🔎 Asset Detail": "🔎 Détail de l'actif"
+            "Classification": "Classification"
+            "Portfolio": "Portefeuille"
+            "Broker": "Courtier"
+            "Asset": "Actif"
+            "🐳 Deployment & Exposure": "🐳 Installation et exposition"
+            "⚙️ System Configuration": "⚙️ Configuration du système"
+            "Environment Variables": "Variables d'environnement"
+            "🧹 Maintenance & Operations": "🧹 Maintenance et opérations"
+            "Dividend": "Dividende"
+            "Interest": "Intérêt"
+            "Price Resolution": "Résolution de prix"
+            "Deposited Capital & Total P&L": "Capital versé et P&L total"
+            "Net Annualized Return": "Rendement annualisé net"
+            "Yield on Cost": "Rendement sur coût"
+            "Drawdown at Risk": "Repli à risque"
+            "Conditional Drawdown at Risk": "Repli à risque conditionnel"
+            "Ulcer Index": "Indice d'Ulcer"
+            "Value at Risk": "Valeur à risque"
+            "Conditional Value at Risk": "VaR conditionnelle"
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             "🖼️ Gallery": "🖼️ Galerie"
             Desktop: Bureau
@@ -574,7 +666,7 @@ plugins:
             About: Acerca de
             Borsa Italiana: Borsa Italiana
             "🛠️ Admin Manual": "🛠️ Manual de Admin"
-            CLI Tools: Herramientas CLI
+            "CLI Admin Tools": "Herramientas CLI de administración"
             Global Settings: Configuración Global
             Filesystem Structure: Estructura del Sistema de Archivos
             Advanced Docker: Docker Avanzado
@@ -601,11 +693,11 @@ plugins:
             "Buy & Sell": "Compra & Venta"
             "Deposit & Withdrawal": "Depósito & Retiro"
             "Fee & Tax": "Comisiones & Impuestos"
-            Asset Transfer: Transferencia de Títulos
+            "Asset Transfer": "Transferencia de activos"
             Cash Transfer: Transferencia de Fondos
             FX Conversion: Conversión de Divisa
             Adjustment: Ajuste
-            Single: Individuales
+            "1️⃣ Single": "1️⃣ Individuales"
             "🔢 Composite": "🔢 Compuestas"
             "📉 Technical Analysis": "📉 Análisis Técnico"
             "📐 Indicators": "📐 Indicadores"
@@ -650,7 +742,7 @@ plugins:
             Sortino Ratio: Ratio de Sortino
             Max Drawdown: Caída Máxima
             Volatility: Volatilidad
-            Current Drawdown: Drawdown Actual
+            "Current Drawdown": "Caída actual"
             Worst Realization: Peor Realización
             "🧩 Am I Diversified?": "🧩 ¿Estoy Diversificado?"
             Correlation: Correlación
@@ -670,8 +762,54 @@ plugins:
             FIFO Lot Analysis: Análisis de Lotes FIFO
             NAV / Net Worth: NAV / Patrimonio Neto
             Book Value: Valor Contable
-            Period P&L: P&L del Periodo
+            "Period P&L": "P&L período"
             Timing Effect: Efecto timing
+            "Avanza": "Avanza"
+            "Disnat": "Disnat"
+            "InvestEngine": "InvestEngine"
+            "Scalable Capital": "Scalable Capital"
+            "Trade Republic": "Trade Republic"
+            "XTB": "XTB"
+            "Saxo": "Saxo"
+            "Swissquote": "Swissquote"
+            "Investimental": "Investimental"
+            "Intesa Sanpaolo": "Intesa Sanpaolo"
+            "Crédit Agricole": "Crédit Agricole"
+            "Danske Bank": "Danske Bank"
+            "BUX": "BUX"
+            "Rabobank": "Rabobank"
+            "Bitvavo": "Bitvavo"
+            "Crypto.com": "Crypto.com"
+            "Relai": "Relai"
+            "CoinTracking": "CoinTracking"
+            "Delta": "Delta"
+            "Parqet": "Parqet"
+            "ROI": "ROI"
+            "TWRR": "TWRR"
+            "MWRR": "MWRR"
+            "FX": "FX"
+            "KPI Cards": "Tarjetas KPI"
+            "Charts": "Gráficos"
+            "🔎 Asset Detail": "🔎 Detalle del activo"
+            "Classification": "Clasificación"
+            "Portfolio": "Cartera"
+            "Broker": "Bróker"
+            "Asset": "Activo"
+            "🐳 Deployment & Exposure": "🐳 Instalación y exposición"
+            "⚙️ System Configuration": "⚙️ Configuración del sistema"
+            "Environment Variables": "Variables de entorno"
+            "🧹 Maintenance & Operations": "🧹 Mantenimiento y operaciones"
+            "Dividend": "Dividendo"
+            "Interest": "Interés"
+            "Price Resolution": "Resolución de precios"
+            "Deposited Capital & Total P&L": "Capital depositado y P&L total"
+            "Net Annualized Return": "Rendimiento neto anualizado"
+            "Yield on Cost": "Rendimiento sobre coste"
+            "Drawdown at Risk": "Caída en riesgo"
+            "Conditional Drawdown at Risk": "Caída en riesgo condicional"
+            "Ulcer Index": "Índice de Ulcer"
+            "Value at Risk": "Valor en riesgo"
+            "Conditional Value at Risk": "VaR condicional"
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             "🖼️ Gallery": "🖼️ Galería"
             Desktop: Escritorio
@@ -1105,6 +1243,7 @@ nav:
 hooks:
   - hooks/absolute_hreflang.py
   - hooks/jsonld.py
+  - hooks/fr_typography.py
 
 extra_css:
   - static/extra.css

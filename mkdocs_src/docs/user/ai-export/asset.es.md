@@ -9,10 +9,10 @@ el activo o sobre tu posición en él. Las opciones y cómo pegar el contenido e
 ## 📍 Dónde encontrarla
 
 En la página de detalle de un activo, selecciona **Exportación IA** en la barra de herramientas de la página. Se abre inicialmente en
-**Análisis de mercado del activo**.
+**Análisis del activo**.
 
 La exportación abarca el activo abierto en la página, en la divisa que muestra la página, con el último día
-del rango de fechas de la página como fecha de exportación. Tu posición contabiliza todos los brókers que puedes abrir.
+del rango de fechas de la página como fecha de exportación. Tu posición contabiliza todos los brókeres que puedes abrir.
 
 ---
 
@@ -20,7 +20,7 @@ del rango de fechas de la página como fecha de exportación. Tu posición conta
 
 | Opción | Qué obtienes |
 | :--- | :--- |
-| **Posición e historial de mercado (completo)** | Tus posiciones en el activo (coste, valor, P&L, rendimiento, lotes FIFO), un contexto de mercado compacto y caída |
+| **Posición e historial (completo)** | Tus posiciones en el activo (coste, valor, P&L, rendimiento, lotes FIFO), un contexto de mercado compacto y caída |
 | **Solo historial de mercado (sin posiciones)** | Precios, rendimientos, indicadores, estados, eventos y caída, sin tus posiciones |
 
 ---
@@ -29,8 +29,8 @@ del rango de fechas de la página como fecha de exportación. Tu posición conta
 
 | Análisis | Qué hace la IA |
 | :--- | :--- |
-| **Revisión de posición** | Revisa el valor, el coste, el P&L, los brókers y los lotes de tu posición, con contexto de mercado; necesita una posición en el activo |
-| **Análisis de mercado del activo** | Analiza el historial de precios, los rendimientos, la tendencia, el momentum, la volatilidad, la caída y los eventos |
+| **Revisión de posición** | Revisa el valor, el coste, el P&L, los brókeres y los lotes de tu posición, con contexto de mercado; necesita una posición en el activo |
+| **Análisis del activo** | Analiza el historial de precios, los rendimientos, la tendencia, el momentum, la volatilidad, la caída y los eventos |
 
 ---
 

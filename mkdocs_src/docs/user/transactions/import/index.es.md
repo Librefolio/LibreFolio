@@ -6,7 +6,7 @@ descargar, para que no tengas que escribirlas. Para realizar una importación, s
 
 ---
 
-## 🏦 Brókers compatibles
+## 🏦 Brókeres compatibles
 
 Elige tu bróker para ver qué archivo exportar y a qué prestar atención. Los importadores que aún están
 en desarrollo llevan una etiqueta:
@@ -152,10 +152,10 @@ Los importadores sin etiqueta están bien probados y son fiables para los format
     </a>
     <a href="scalable/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="../../../static/icons/brokers/scalable.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Scalable Capital">
+    <img src="../../../../static/icons/brokers/scalable.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Scalable Capital">
     <span class="card-title" style="margin: 0;">Scalable Capital</span>
     </div>
-    <span class="card-desc">🔬 Alpha · cuenta de bróker (el CSV de Scalable o el exportador de LibreFolio) y cuenta overnight (exportador), como dos brókers</span>
+    <span class="card-desc">🔬 Alpha · cuenta de bróker (el CSV de Scalable o el exportador de LibreFolio) y cuenta overnight (exportador), como dos brókeres</span>
     </a>
     <a href="traderepublic/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -255,7 +255,7 @@ Los importadores sin etiqueta están bien probados y son fiables para los format
     Los archivos escritos por bancos o vueltos a guardar con Excel en Windows se leen correctamente, y ello incluye letras acentuadas,
     el signo € y columnas separadas por puntos y coma (LibreFolio entiende las codificaciones UTF-8,
     Windows-1252 y Latin-1). Aun así, sube tus archivos tal como los descargaste siempre que puedas:
-    algunas páginas de brókers, como [Danske Bank](danske-bank.md), piden exactamente eso.
+    algunas páginas de brókeres, como [Danske Bank](danske-bank.md), piden exactamente eso.
 
 ---
 
@@ -269,8 +269,8 @@ Cada valor en tu informe debe asignarse a un activo de tu biblioteca. LibreFolio
 
 LibreFolio compara cada fila con las transacciones ya guardadas para el mismo bróker: mismo tipo, fecha, cantidad e importe, ignorando pequeñas diferencias de redondeo.
 
-- Si la descripción también coincide, la fila es **⚠ Probable duplicado** y llega sin marcar.
-- Si la descripción difiere, es **ℹ Posible duplicado** y permanece marcada para que la revises.
+- Si la descripción también coincide, la fila es **⚠ Probable dup** y llega sin marcar.
+- Si la descripción difiere, es **ℹ Posible dup** y permanece marcada para que la revises.
 
 Las copias entre los archivos que importas juntos se manejan de la misma manera, y el paso [Duplicados](how-to.md#only-when-needed) te permite elegir qué copia conservar. Siempre puedes marcar o desmarcar una fila tú mismo.
 
@@ -286,6 +286,6 @@ Si un bróker tiene una **fecha de apertura**, las filas con fecha anterior no s
 
 - 🧙 **[Cómo importar](how-to.md)** — el asistente, paso a paso
 - 📋 **[Transacciones](../index.md)** — visualiza y gestiona las transacciones importadas
-- 🏦 **[Brókers](../../brokers/index.md)** — configura primero tus cuentas de bróker
+- 🏦 **[Brókeres](../../brokers/index.md)** — configura primero tus cuentas de bróker
 - 🗂️ **[Archivos](../../files/index.md)** — tus informes de bróker subidos
 - 🛠️ **[Lista de proveedores BRIM](../../../developer/backend/brim/providers_list.md)** — notas técnicas sobre cada importador, para desarrolladores

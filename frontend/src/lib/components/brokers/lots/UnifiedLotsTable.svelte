@@ -14,7 +14,8 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {safeDecimal, safeNumber} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
-    import {filterStates, findBroker, formatLotQuantityCell, formatLotQuantityMasked, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumNumeric, weightedAverage} from './unifiedLotsTableHelpers';
+    import {filterStates, findBroker, formatLotQuantityCell, formatLotQuantityMasked, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumCompleteOrNull, sumNumeric, weightedAverageCompleteOrNull} from './unifiedLotsTableHelpers';
+    import {isUnknownOrNonZero} from './lotChartShared';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotCustodySummarySchema = z.infer<typeof schemas.LotCustodySummarySchema>;
@@ -395,36 +396,38 @@
 
     let hasDifferingStates = $derived.by(() => new Set(rows.map((row) => row.filterStates.join('|'))).size > 1);
     let hasMixedDirections = $derived.by(() => new Set(rows.map((row) => row.direction)).size > 1);
-    let hasPositiveAssetIncome = $derived.by(() => rows.some((row) => (row.assetIncome ?? 0) > 0));
-    let hasNetCosts = $derived.by(() => rows.some((row) => (row.allocatedFees ?? 0) !== 0 || (row.allocatedTaxes ?? 0) !== 0));
+    // A column stays visible when one of its values is unknown (null, shown as «—»): hiding it would read as zero.
+    let hasPositiveAssetIncome = $derived.by(() => rows.some((row) => row.assetIncome == null || row.assetIncome > 0));
+    let hasNetCosts = $derived.by(() => rows.some((row) => isUnknownOrNonZero(row.allocatedFees) || isUnknownOrNonZero(row.allocatedTaxes)));
 
     function buildFooterCells(footerRows: DisplayRow[]): Record<string, FooterCellContent> {
-        const totalPnl = sumNumeric(footerRows, (row) => row.totalPnl);
-        const openingValueSum = sumNumeric(footerRows, (row) => row.openingValue);
+        // Amounts that can be unknown total only when every row is known; a partial sum would read as complete.
+        const totalPnl = sumCompleteOrNull(footerRows, (row) => row.totalPnl);
+        const openingValueSum = sumCompleteOrNull(footerRows, (row) => row.openingValue);
         const totalReturn = ratioOrNull(totalPnl, openingValueSum);
-        const netTotalPnl = sumNumeric(footerRows, (row) => row.netTotalPnl);
+        const netTotalPnl = sumCompleteOrNull(footerRows, (row) => row.netTotalPnl);
         const netTotalReturn = ratioOrNull(netTotalPnl, openingValueSum);
 
         return {
             'opening-date': label('brokers.lots.footerTotals', label('assets.distribution.total', 'Totals')),
             'total-pnl': signedAmountCell(totalPnl),
             'total-return': signedPercentCell(totalReturn),
-            'asset-income': currencyCell(sumNumeric(footerRows, (row) => row.assetIncome)),
-            'allocated-fees': currencyCell(sumNumeric(footerRows, (row) => row.allocatedFees)),
-            'allocated-taxes': currencyCell(sumNumeric(footerRows, (row) => row.allocatedTaxes)),
+            'asset-income': currencyCell(sumCompleteOrNull(footerRows, (row) => row.assetIncome)),
+            'allocated-fees': currencyCell(sumCompleteOrNull(footerRows, (row) => row.allocatedFees)),
+            'allocated-taxes': currencyCell(sumCompleteOrNull(footerRows, (row) => row.allocatedTaxes)),
             'net-total-pnl': signedAmountCell(netTotalPnl),
             'net-total-return': signedPercentCell(netTotalReturn),
-            'current-value': currencyCell(sumNumeric(footerRows, (row) => row.currentValue)),
+            'current-value': currencyCell(sumCompleteOrNull(footerRows, (row) => row.currentValue)),
             'open-quantity': quantityValueCell(sumNumeric(footerRows, (row) => row.quantityOpen)),
             'opening-price': unitPriceCell(
-                weightedAverage(
+                weightedAverageCompleteOrNull(
                     footerRows,
                     (row) => row.openingUnitPrice,
                     (row) => row.currentValue,
                 ),
             ),
             'open-return': signedPercentCell(
-                weightedAverage(
+                weightedAverageCompleteOrNull(
                     footerRows,
                     (row) => row.relativeReturn,
                     (row) => row.currentValue,

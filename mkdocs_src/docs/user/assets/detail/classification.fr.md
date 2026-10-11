@@ -10,7 +10,7 @@ Le panneau de Classification affiche la répartition **sectorielle** et **géogr
 
 ## 📊 Répartition Sectorielle
 
-Un **graphique circulaire** montrant la ventilation par secteur d'activité (ex: Technologie 35%, Santé 20%, Finance 15%...). C'est particulièrement utile pour les ETF et les fonds diversifiés afin de comprendre l'allocation sectorielle sous-jacente.
+Un **graphique circulaire** montrant la ventilation par secteur d'activité (ex. : Technologie 35 %, Santé 20 %, Finance 15 %...). C'est particulièrement utile pour les ETF et les fonds diversifiés afin de comprendre l'allocation sectorielle sous-jacente.
 
 ## 🌍 Répartition Géographique
 
@@ -20,7 +20,7 @@ Une **carte du monde interactive** où les pays sont colorés selon le poids de 
 
 ### Country par Pays
 
-Un **graphique circulaire** montrant la ventilation en pourcentage par pays ou région (ex: États-Unis 60%, Europe 25%, Asie 15%...).
+Un **graphique circulaire** montrant la ventilation en pourcentage par pays ou région (ex. : États-Unis 60 %, Europe 25 %, Asie 15 %...).
 
 ---
 

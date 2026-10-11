@@ -1,4 +1,4 @@
-# <img src="../../../../static/scheduled_investment.png" alt=""> Investimento Programmato
+# <img src="../../../../../static/scheduled_investment.png" alt=""> Investimento Programmato
 
 Il provider Investimento Programmato calcola il valore di un asset dal suo piano interessi invece
 di leggere un prezzo di mercato. Usalo per conti di risparmio, depositi a termine, prestiti P2P o crowdfunding,
@@ -79,7 +79,7 @@ come evento di interesse: il valore riparte da $V_0$, e $I$ e le somme ripartono
 - **Dopo l'ultimo periodo**, rimane al suo importo finale, a meno che gli interessi di mora siano attivi. Con
   **Genera Cedola** sull'ultimo periodo e nessun interesse di mora, un evento di regolamento a scadenza chiude
   l'asset a quell'importo.
-- **Il grafico** riceve un punto a ogni data di **Frequenza**: scegli **Giornaliero** per una linea continua.
+- **Il grafico** riceve un punto a ogni data di **Frequenza**: scegli **Giornaliera** per una linea continua.
 
 ??? example "🧮 Un prestito di €10.000 al 5%, con una cedola ogni mese"
 

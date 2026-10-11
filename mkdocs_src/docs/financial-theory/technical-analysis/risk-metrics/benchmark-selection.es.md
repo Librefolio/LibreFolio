@@ -1,6 +1,6 @@
 # 🎯 Selección del índice de referencia
 
-Cada cifra relativa lleva un pasajero invisible: aquello contra lo que se midió. «La cartera superó al mercado por tres puntos» no es una afirmación sobre la cartera — es una afirmación sobre la cartera **y** lo que se llamara «el mercado». Cambie el segundo término y el veredicto cambia con él, sin que se haya movido una sola posición.
+Cada cifra relativa lleva un pasajero invisible: aquello contra lo que se midió. «La cartera superó al mercado por tres puntos» no es una afirmación sobre la cartera — es una afirmación sobre la cartera **y** lo que se llamara «el mercado». Cambia el segundo término y el veredicto cambia con él, sin que se haya movido una sola posición.
 
 Esta página trata sobre ese segundo término. La elección de comparación no es una preferencia de visualización aplicada después del análisis: es parte del resultado.
 
@@ -48,7 +48,7 @@ La consecuencia práctica es una regla de comparabilidad: **dos cifras relativas
 
 ## 🧮 Qué puede servir como índice de referencia {: #what-can-serve-as-a-benchmark }
 
-La comparación no es arbitraria. El análisis toma un **activo real que existe en sus datos** como su referencia, identificado explícitamente, y de eso se derivan tres cosas.
+La comparación no es arbitraria. El análisis toma un **activo real que existe en tus datos** como su referencia, identificado explícitamente, y de eso se derivan tres cosas.
 
 **Debe existir.** Una comparación contra un activo desconocido no se descarta silenciosamente ni se reemplaza por un valor predeterminado: el análisis no devuelve ningún valor, informa parámetros inválidos y nombra el activo que se solicitó.
 
@@ -70,9 +70,9 @@ Dos series rara vez cubren exactamente las mismas fechas, por lo que la comparac
 
 Tres consecuencias se publican con el resultado.
 
-**Se aplica un mínimo.** Por debajo de 20 observaciones compartidas la comparación no se calcula en absoluto: el resultado vuelve como no disponible con una razón de historial insuficiente que incluye tanto el número de observaciones compartidas encontradas como el número requerido. Un índice de referencia que apenas se superpone con su historial no produce ninguna cifra en lugar de una frágil.
+**Se aplica un mínimo.** Por debajo de 20 observaciones compartidas la comparación no se calcula en absoluto: el resultado vuelve como no disponible con una razón de historial insuficiente que incluye tanto el número de observaciones compartidas encontradas como el número requerido. Un índice de referencia que apenas se superpone con tu historial no produce ninguna cifra en lugar de una frágil.
 
-**Se informa la cobertura.** El resultado registra qué fracción de las fechas propias de la serie primaria sobrevivió a la intersección — es decir, en cuántas de sus fechas el índice de referencia elegido tuvo un rendimiento propio. Un índice de referencia lanzado a mitad de su período de tenencia no compara silenciosamente medio período; lo dice.
+**Se informa la cobertura.** El resultado registra qué fracción de las fechas propias de la serie primaria sobrevivió a la intersección — es decir, en cuántas de tus fechas el índice de referencia elegido tuvo un rendimiento propio. Un índice de referencia lanzado a mitad de tu período de tenencia no compara silenciosamente medio período; lo dice.
 
 **El factor de anualización se vuelve a medir en la ventana compartida.** Dado que la intersección es generalmente más corta y dispersa que la ventana de análisis completa, cualquier cantidad anualizada en la comparación se escala por un factor medido en la muestra común en lugar de heredarse del análisis más amplio — la misma lógica de factor observado descrita en [Anualización observada](observed-annualization.md), aplicada a la superposición.
 
@@ -96,11 +96,11 @@ donde:
 
 **Elección del índice de referencia para ello.** Dado que el índice de referencia representa «el mercado», un **índice global amplio** — por ejemplo, un fondo indexado a un índice mundial de renta variable — es el sustituto más significativo. Un índice nacional, un índice sectorial o un fondo de bonos aún dibujan una línea, pero la convierten en una comparación con esa referencia más estrecha: véase [Por qué la elección ya es la mitad del veredicto](#why-the-choice-is-already-half-the-verdict).
 
-**Sin índice de referencia elegido** — o uno que no pudo medirse durante la ventana — la línea atraviesa **su propia cartera** en su lugar. Estar por encima de ella significa entonces mejor pagado que la cartera en su conjunto, y la pendiente es el ratio de Sharpe de la cartera.
+**Sin índice de referencia elegido** — o uno que no pudo medirse durante la ventana — la línea atraviesa **tu propia cartera** en su lugar. Estar por encima de ella significa entonces mejor pagado que la cartera en su conjunto, y la pendiente es el ratio de Sharpe de la cartera.
 
-**Un índice de referencia que usted posee** se dibuja una sola vez, no como dos puntos: es el propio punto de su posición, en su peso, con el estilo del índice de referencia, y la línea pasa por él.
+**Un índice de referencia que posees** se dibuja una sola vez, no como dos puntos: es el propio punto de tu posición, en su peso, con el estilo del índice de referencia, y la línea pasa por él.
 
-**En la página de Activos.** Su [pestaña Correlación](../../../user/assets/correlation.md#what-did-each-pay), que compara una selección de activos que usted compone, dibuja la misma línea cuando se elige un índice de referencia y se mide durante la ventana: comienza en la tasa libre de riesgo que utiliza la página — 0 hoy, como en el Panel — y pasa por el rombo del índice de referencia, por lo que su pendiente es el ratio de Sharpe del índice de referencia y un punto por encima de ella estuvo mejor pagado por su riesgo que el índice de referencia. Un índice de referencia que es uno de los activos seleccionados se dibuja una sola vez, como el propio punto de ese activo con el estilo del índice de referencia, y la línea pasa por él. Sin índice de referencia, o con uno que no pudo medirse durante la ventana, no se dibuja ninguna línea, porque ninguna cartera puede ocupar el lugar del índice de referencia — una selección no tiene pesos y por lo tanto no tiene un todo propio por el que trazar una línea — y el gráfico muestra la disyuntiva y deja el juicio en sus manos.
+**En la página de Activos.** Su [pestaña Correlación](../../../user/assets/correlation.md#what-did-each-pay), que compara una selección de activos que compones, dibuja la misma línea cuando se elige un índice de referencia y se mide durante la ventana: comienza en la tasa libre de riesgo que utiliza la página — 0 hoy, como en el Panel — y pasa por el rombo del índice de referencia, por lo que su pendiente es el ratio de Sharpe del índice de referencia y un punto por encima de ella estuvo mejor pagado por su riesgo que el índice de referencia. Un índice de referencia que es uno de los activos seleccionados se dibuja una sola vez, como el propio punto de ese activo con el estilo del índice de referencia, y la línea pasa por él. Sin índice de referencia, o con uno que no pudo medirse durante la ventana, no se dibuja ninguna línea, porque ninguna cartera puede ocupar el lugar del índice de referencia — una selección no tiene pesos y por lo tanto no tiene un todo propio por el que trazar una línea — y el gráfico muestra la disyuntiva y deja el juicio en tus manos.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="risk" data-name="lab-risk-return" alt="¿Qué pagó cada uno de estos por su riesgo? en la pestaña Correlación, con el S&P 500 como índice de referencia: la tabla abierta por su fila tintada, y el gráfico con los círculos de los activos, el rombo del índice de referencia y la línea discontinua desde la tasa libre de riesgo pasando por él" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

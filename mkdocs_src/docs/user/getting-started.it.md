@@ -49,14 +49,14 @@ La prima volta che accedi, LibreFolio apre una pagina di **Benvenuto** prima del
 
 - 🌍 Controlla **Lingua** e **Valuta predefinita**: partono dai valori predefiniti del tuo amministratore.
 - 🖼️ Aggiungi un'**immagine del profilo** se vuoi — altrimenti vengono mostrate le tue iniziali.
-- ✅ Clicca **Continua** per salvare, oppure **Salta configurazione in modo permanente** per mantenere le impostazioni attuali.
-- 🚪 Devi uscire? **Esci** è in alto a destra.
+- ✅ Clicca **Continua** per salvare, oppure **Salta definitivamente la configurazione** per mantenere le impostazioni attuali.
+- 🚪 Devi uscire? **Disconnettiti** è in alto a destra.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="La pagina di Benvenuto al primo avvio: il blocco dell'immagine del profilo con l'avatar delle iniziali e Scegli immagine, Lingua e Valuta predefinita precompilate, la nota che la preferenza del tema resta invariata, e Salta configurazione in modo permanente e Continua" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-Segue una breve animazione di benvenuto, poi il **Tour rapido** inizia da solo — clicca **Avvia tour**
+Segue una breve animazione di benvenuto, poi il **Tour rapido** inizia da solo — clicca **Inizia tour**
 per iniziare subito, oppure **✕** per saltarlo. Il tour mostra dove si trovano le cose: il pulsante del menu, poi
 **Dashboard**, **Transazioni**, **Broker**, **FX**, **Asset**, **Strumenti** e **Impostazioni**. Indica
 soltanto: non apre mai un modulo né crea dati.
@@ -68,14 +68,14 @@ soltanto: non apre mai un modulo né crea dati.
 ??? note "👋 Usi già LibreFolio? — account precedenti alle guide"
 
     Se il tuo account esisteva prima dell'aggiunta delle guide, LibreFolio non te le propone:
-    la configurazione iniziale risulta **Completata**, il tour e ogni guida risultano **Saltati**. Puoi comunque
+    la configurazione iniziale risulta in stato **Completato**, il tour e ogni guida in stato **Saltato**. Puoi comunque
     ripetere qualsiasi guida da
     **[Impostazioni → Preferenze → Primo utilizzo e guide](settings/preferences.md#onboarding-and-guides)**.
 
 ??? warning "⚠️ La configurazione non si carica — cosa fare"
 
-    Se le tue impostazioni o i progressi delle guide non possono essere caricati, una pagina **Impossibile caricare i dati del primo utilizzo**
-    offre **Riprova** e **Esci**. Se la tua configurazione iniziale è già completata, potresti invece vedere la
+    Se le tue impostazioni o i progressi delle guide non possono essere caricati, una pagina **Non siamo riusciti a caricare le guide**
+    offre **Riprova** e **Disconnettiti**. Se la tua configurazione iniziale è già completata, potresti invece vedere la
     Dashboard, con un banner **Riprova** in alto.
 
 ### 🧭 Guide contestuali
@@ -146,7 +146,7 @@ o asset: la Procedura guidata di importazione li crea man mano.
     - **Unifica asset** — lo stesso titolo appare con nomi o codici diversi.
     - **Correzioni** — alcune righe non sono state lette completamente.
     - **Duplicati** — lo stesso movimento è in due file che importi insieme.
-    - **Allinea con la banca** — dopo **Rivedi e importa**, per un set di report come Danske Bank, quando le
+    - **Allinea con la banca** — dopo **Revisione**, per un set di report come Danske Bank, quando le
       cifre della banca differiscono da quelle di LibreFolio.
 
     Vedi **[Passaggi che compaiono solo quando necessario](transactions/import/how-to.md#only-when-needed)**.

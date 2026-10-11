@@ -27,7 +27,13 @@
  *        `create` issue, and the jump lands on PC1's pair, not on the other one;
  *   PC4  (the banner, not the save) a new +5 beside a saved −3 and a saved −5 of the same asset:
  *        the banner offers one merge only, the −5's, never the crossed −3 / +5 the backend's
- *        promote rule refuses (`assetQuantitiesCancel`, `$lib/utils/transactions/promoteSuggest.ts`).
+ *        promote rule refuses (`assetQuantitiesCancel`, `$lib/utils/transactions/promoteSuggest.ts`);
+ *   PC5  (the selection toolbar, not the save) two new ADJUSTMENTs, −123456789012.123456 on A and
+ *        +123456789012.123457 on B, opposite as doubles and not as decimals → neither the banner nor
+ *        the selection toolbar offers the merge; the regression test of C-46, see «PC5» below;
+ *   PC6  (the 💡's window, not the save) a new +5 on B, two saved −5 on A outside the editor, today and
+ *        yesterday → with «Max Δ days» at 0 the 💡 offers today's alone, and moving the slider to 1
+ *        searches again and offers both; red until the cure, see «PC6» below.
  *
  * PC1 and PC3, the two tests that save, each prove three things: the commit's answer, read
  * against the request the editor actually sent (indexes are looked up there by id and link_uuid,
@@ -70,18 +76,19 @@
  * banner offered exactly this merge (the previous PC2 asserted the offer, green), so the absences
  * PC2 asserts now negate an assertion that used to pass.
  *
- * ## PC2b and PC2c: the 💡's side of D2, red until the cure
+ * ## PC2b and PC2c: the 💡's side of D2, regression tests
  *
  * The 💡 (`tx-bulk-suggest-import`, its count in a `<span>`) offers the saved rows outside the
  * editor that the database search (`POST /transactions/promote-suggest`, `promote_suggest_bulk`)
- * proposes as the other half of a row, and opens them in the picker. The search ignores
- * `asset_event_id` on both sides, so it still offers the pairs D2 forbids: a row the user can
- * import and never merge. Both tests assert the cured behaviour and fail today:
+ * proposes as the other half of a row, and opens them in the picker. The search used to ignore
+ * `asset_event_id` on both sides, and so offered the pairs D2 forbids: a row the user could import
+ * and never merge. Both tests were written red against that, and are green regression tests since
+ * the cure:
  *   - candidate side (PC2b): a saved row linked to an asset event is never a candidate when the
  *     rule's target type refuses the link, which every promote target does;
- *   - input side (PC2c): the editor sends each row's `asset_event_id` (a new optional field of
- *     `TXPromoteSuggestInput`), and a linked row gets no candidate. PC2c therefore stays red after
- *     a backend-only cure, until the editor sends the field: that is its point.
+ *   - input side (PC2c): the editor sends each row's `asset_event_id` (an optional field of
+ *     `TXPromoteSuggestInput`), and a linked row gets no candidate. PC2c is the one that goes red if
+ *     the editor stops sending the field while the backend still honours it.
  * Their API counterparts are B3.8–B3.10 in
  * `backend/test_scripts/test_api/test_transactions_batch_split_promote.py`.
  *
@@ -90,6 +97,49 @@
  * (recognised by its body: debounced requests about other rows come first), reads the answer, and
  * anchors every absence on a twin the search must still offer. The 💡 is not shown before that
  * answer lands, since no earlier answer offers anything, so a count of exactly 1 can only come from it.
+ *
+ * ## PC5: the selection toolbar compared doubles (C-46), regression test
+ *
+ * Two paths offer an asset TRANSFER merge. The banner asks `findPromoteMatch` and
+ * `assetQuantitiesCancel`, which compares the signed decimal strings exactly, as the backend's
+ * `_validate_linked_pair` compares `Decimal`s. The selection toolbar (`selectedForPromote` in
+ * TransactionBulkModal → `promote-toolbar-confirm`) asked `findPromoteMatch` only, whose TRANSFER rule
+ * is `qA !== 0 && qA === -qB` on JavaScript numbers (`buildPromoteCtx` reads `Number(quantity)`): two
+ * quantities opposite as doubles and not as decimals passed the toolbar and not the banner, and two
+ * new rows merged that way were refused on save with `pairQuantityMismatch`. Since C-46 the toolbar
+ * asks `assetQuantitiesCancel` too; PC5 was written red against the old behaviour.
+ *
+ * The pair fits the column (`Numeric(18, 6)`) and the form (12 integer digits, 6 decimals). Between
+ * 2^36 and 2^37 consecutive doubles are 2^-16 ≈ 1.5e-5 apart, about 15 steps of the 6th decimal, so
+ * 123456789012.123456 and 123456789012.123457 are one double (0x423CBE991A141F9B), inside the run
+ * .123452–.123466 that rounds to it; neither ends on a zero the form would strip, so the text typed is
+ * the text the form must keep. The test re-checks the premise in Node, whose `Number()` is the browser's.
+ *
+ * The positive control comes first, in the same editor: A's same −123456789012.123456 against an exact
+ * +123456789012.123456 on B, one digit away from the pair under test. The banner offers it and its
+ * selection shows the toolbar's merge; the banner then merges it, so that the banner is hidden again
+ * and none of its rows is selected when the pair under test is typed. Nothing is saved.
+ *
+ * ## PC6: the 💡's window, red until the cure
+ *
+ * «Max Δ days» (`promote-suggest-delta-input`, a range 0–14 kept in sessionStorage, so 3 in a fresh
+ * context) is the window of the banner and of the 💡's database search, which sends it as
+ * `tolerance_days`. Two defects (C-47):
+ *   - at 0 the endpoint answers 422 (it declares `tolerance_days` ≥ 1) and the editor only logs it,
+ *     so the 💡 offers nothing, while the banner at 0 does offer same-day pairs;
+ *   - moving the slider does not search again: the search key is the rows alone, and the window is
+ *     read when the debounce fires, so the 💡 keeps the window of the last search until a row changes.
+ * PC6 asserts the contract of the cure: 0 is the same day only (`date ± 0`), and the window is part of
+ * the search key, so moving the slider starts a new, debounced search. Its first half is soft, so one
+ * run reports both defects. Its API counterpart is B3.11.
+ *
+ * Every request is recognised by the `tolerance_days` of its URL and by the new row in its body, never
+ * taken as "the next one": the opening search, about the fund alone, comes first. The new receiver is
+ * Manual with no cost basis on purpose. An Auto row has its average cost written back by every
+ * validation round, and until a search about the rows has succeeded, each rewrite asks again with the
+ * window the slider shows when the debounce fires: a request at 1 could then come from a rewrite rather
+ * than from the slider. With nothing to rewrite the rows, once the editor has settled a request at 1
+ * can only come from the slider.
  *
  * ## The save gate
  *
@@ -126,6 +176,8 @@ const TEST_PORT = process.env.TEST_PORT || '6041';
 const UI_TIMEOUT = 10_000;
 /** A save first lets the editor's validate round trip settle, then waits for the commit. */
 const SAVE_TIMEOUT = 20_000;
+/** A promote-suggest search leaves 500 ms after the change that asks it (debounced): ten debounces bound the wait for one. */
+const SEARCH_TIMEOUT = 5_000;
 /** The issue `_append_cost_basis_issue` writes, whatever the operation it names. */
 const COST_BASIS_REQUIRED = {code: 'costBasisRequired', field: 'cost_basis_override'} as const;
 
@@ -153,6 +205,8 @@ type LedgerRow = {id: number; broker_id: number; type: string; quantity: string;
 type SuggestInput = {id: number; type: string; broker_id: number; date: string; asset_id?: number | null; quantity?: number | null; asset_event_id?: number | null};
 /** One promote-suggest request: the rows it asked about, and the candidates per asked id (JSON keys are strings). */
 type SuggestAnswer = {inputs: SuggestInput[]; results: Record<string, Array<{id: number}>>};
+/** One promote-suggest exchange, however it was answered: the window in its URL, the rows it asked about, the status, and the candidates (on a 200) or the body. */
+type SuggestReply = {toleranceDays: string | null; inputs: SuggestInput[]; status: number; results: SuggestAnswer['results'] | null; body: string};
 
 type Owned = {
     suffix: string;
@@ -412,7 +466,7 @@ async function fillQuantity(page: Page, quantity: string): Promise<void> {
     await expect(input).toBeVisible({timeout: UI_TIMEOUT});
     await input.fill(quantity);
     await input.blur();
-    await expect(input).toHaveValue(quantity);
+    await expect(input, 'the form keeps every digit typed, after its own reformatting on blur').toHaveValue(quantity);
 }
 
 /** The description lives in the collapsible optional `<details>`: read its real `open` state, never click blind. */
@@ -493,6 +547,17 @@ async function selectBulkRows(rows: Locator, count: number): Promise<void> {
     }
 }
 
+/** The reverse of `selectBulkRows`: every row of an ALREADY-FILTERED locator back to `unchecked`. */
+async function unselectBulkRows(rows: Locator, count: number): Promise<void> {
+    await expect(rows).toHaveCount(count, {timeout: UI_TIMEOUT});
+    for (let i = 0; i < count; i++) {
+        const checkbox = rows.nth(i).locator('[data-testid^="dt-row-checkbox-"]');
+        await expect(checkbox).toBeVisible({timeout: UI_TIMEOUT});
+        if ((await checkbox.getAttribute('data-state')) !== 'unchecked') await checkbox.click();
+        await expect(checkbox).toHaveAttribute('data-state', 'unchecked');
+    }
+}
+
 /** The banner offers the pairs this test built, and nothing else: items 0..count-1, no item `count`. */
 async function expectBannerOffers(page: Page, count: number): Promise<Locator> {
     const banner = page.getByTestId('promote-suggest-banner');
@@ -528,6 +593,42 @@ function describeSuggest(answer: SuggestAnswer, ids: Record<string, number>): st
     const described = JSON.stringify({ids, asked: answer.inputs, results: answer.results});
     test.info().annotations.push({type: 'suggest answer', description: described});
     return described;
+}
+
+/**
+ * The exchange of the one promote-suggest request whose URL asks for `tolerance_days=<toleranceDays>` and whose
+ * rows `asks` recognises, however it is answered: in PC6 a refused window is the defect, not a broken test.
+ * Arm it BEFORE the action that makes the editor ask. Recognised by its window and its body, like `suggestAnswer`.
+ */
+function suggestReply(page: Page, toleranceDays: number, asks: (inputs: SuggestInput[]) => boolean, timeout = SAVE_TIMEOUT): Promise<SuggestReply> {
+    const windowOf = (request: {url(): string}) => new URL(request.url()).searchParams.get('tolerance_days');
+    const asked = page.waitForResponse((response) => isSuggestRequest(response.request()) && windowOf(response.request()) === String(toleranceDays) && asks(response.request().postDataJSON() as SuggestInput[]), {timeout});
+    const reply = asked.then(async (response) => {
+        const body = await response.text();
+        return {toleranceDays: windowOf(response.request()), inputs: response.request().postDataJSON() as SuggestInput[], status: response.status(), results: response.ok() ? (JSON.parse(body) as {results: SuggestAnswer['results']}).results : null, body};
+    });
+    // If the test fails before it awaits the reply, the wait must not outlive it as an unhandled rejection.
+    void reply.catch(() => undefined);
+    return reply;
+}
+
+/** A reply next to what the editor asked, with this test's ids named (`suggest reply` annotation). */
+function describeReply(reply: SuggestReply, ids: Record<string, number>): string {
+    const described = JSON.stringify({ids, tolerance_days: reply.toleranceDays, status: reply.status, asked: reply.inputs, answer: reply.results ?? reply.body});
+    test.info().annotations.push({type: 'suggest reply', description: described});
+    return described;
+}
+
+/**
+ * «Max Δ days» to `days`. The range input is filled like any other; that the editor took the value is read
+ * where the editor keeps it, in sessionStorage, written by its own effect.
+ */
+async function setSuggestWindow(page: Page, days: number): Promise<void> {
+    const slider = page.getByTestId('promote-suggest-delta-input');
+    await expect(slider).toBeVisible({timeout: UI_TIMEOUT});
+    await slider.fill(String(days));
+    await expect(slider).toHaveValue(String(days));
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('lf-suggest-delta-days')), {message: `the editor's window is ${days}`, timeout: UI_TIMEOUT}).toBe(String(days));
 }
 
 /**
@@ -741,7 +842,7 @@ test.describe('Bulk editor — a promoted receiver without a cost basis is refus
         const answer = await answered;
         const described = describeSuggest(answer, {fund: fund.id, linkedReceiver: receiver.id, twin: twin.id, sender: sender.id});
         // The input side: the editor tells the search the receiver's link (the promote-suggest inputs of
-        // TransactionBulkModal). A backend-only cure leaves this test red until the editor sends it: that is its point.
+        // TransactionBulkModal). If the editor stops sending it, this check goes red while the backend still honours it.
         expect.soft(answer.inputs.find((input) => input.id === receiver.id)?.asset_event_id ?? null, `the editor sends the receiver's link — ${described}`).toBe(split);
         // The positive the absences hang on: the twin is offered the −5.
         expect(candidatesOf(answer, twin.id), `the search offers the twin the saved −5 — ${described}`).toContain(sender.id);
@@ -760,7 +861,8 @@ test.describe('Bulk editor — a promoted receiver without a cost basis is refus
         const wire = `PCB wire ${owned.suffix}`;
         // The second pair is a cash one on purpose: a WITHDRAWAL and a DEPOSIT can only meet each other,
         // so the pairs «Merge all» takes do not depend on how the banner matches asset quantities —
-        // which PC4 checks on its own (the selection toolbar still matches them on opposite signs only).
+        // which PC4 checks on its own. (The selection toolbar asks `findPromoteMatch`, which compares the
+        // quantities as JavaScript numbers, then, since C-46, the exact `assetQuantitiesCancel`: see PC5.)
         const [fund, float, sender, withdrawal] = await commitOwnedRows(page, [
             {label: 'fund', create: adjustment(brokers.a, asset, dayBefore(owned.today), '10', `PCB fund ${owned.suffix}`, {cost_basis_override: {code: 'EUR', amount: '50'}})},
             {label: 'float', create: cashRow(brokers.a, 'DEPOSIT', dayBefore(owned.today), '1000', `PCB float ${owned.suffix}`)},
@@ -847,6 +949,115 @@ test.describe('Bulk editor — a promoted receiver without a cost basis is refus
         await expect(exactRows.getByTestId('tx-bulk-date'), 'the −5 row now carries its partner').toHaveAttribute('data-partner-date', /^\d{4}-\d{2}-\d{2}$/);
         await expect(shortRow.getByTestId('tx-bulk-date'), 'the −3 is still on its own').toHaveAttribute('data-partner-date', '');
         await expect(banner, 'and nothing is offered for the −3').toBeHidden();
+
+        // Nothing was saved: the editor is left open and discarded by the cleanup.
+        await expectLedgerUntouched(page, brokers, before);
+    });
+
+    test('PC5: two new legs opposite as doubles, not as decimals → no merge from the banner, none from the selection toolbar', async ({page, owned}) => {
+        // A's leg is the same in both pairs. B's cancels it exactly in the control, and one digit off in the
+        // 6th decimal in the pair under test: one double all the same (see «PC5» in the header).
+        const out = '-123456789012.123456';
+        const exactIn = '123456789012.123456';
+        const nearIn = '123456789012.123457';
+        expect(out, 'premise: the control is exactly opposite as decimals').toBe(`-${exactIn}`);
+        expect(out, 'premise: the pair under test is not').not.toBe(`-${nearIn}`);
+        expect(Number(out), 'premise: yet it is opposite as doubles, the comparison findPromoteMatch makes').toBe(-Number(nearIn));
+
+        const {asset, brokers} = await ownAssetAndBrokers(page, owned);
+        const exact = `PCB exact ${owned.suffix}`;
+        const near = `PCB near ${owned.suffix}`;
+        // The editor opens on A's fund, the earlier unrelated row. It does not cover A's legs, and the editor says
+        // so (A's holdings would go negative): balances play no part in what the banner or the toolbar offers, and
+        // nothing is saved.
+        const [fund] = await commitOwnedRows(page, [{label: 'fund', create: adjustment(brokers.a, asset, dayBefore(owned.today), '10', `PCB fund ${owned.suffix}`, {cost_basis_override: {code: 'EUR', amount: '50'}})}]);
+        const before = await readOwnedLedger(page, brokers);
+        expect(before.map((row) => row.id)).toEqual([fund.id]);
+
+        await openEditorOn(page, brokers, [fund]);
+        const banner = page.getByTestId('promote-suggest-banner');
+        const promote = page.getByTestId('promote-toolbar-confirm');
+
+        // The positive control, typed through the same form: the banner offers it, and so does the toolbar.
+        await addAdjustment(page, {broker: brokers.a, asset, quantity: out, description: exact});
+        await addAdjustment(page, {broker: brokers.b, asset, quantity: exactIn, description: exact});
+        const exactRows = bulkRowsWith(page, exact);
+        await expect(exactRows, 'the control is two rows').toHaveCount(2, {timeout: UI_TIMEOUT});
+        await expectBannerOffers(page, 1);
+        await selectBulkRows(exactRows, 2);
+        await expect(promote, 'the control: the selection toolbar offers the merge of two legs that cancel exactly').toBeVisible();
+        // Unselected before the banner merges them: the merged row, still selected, would be a third row in the
+        // selection below, and the toolbar asks about two rows only.
+        await unselectBulkRows(exactRows, 2);
+        await banner.getByTestId('promote-suggest-link-0').click();
+        await expect(exactRows, 'the banner offered the control: its two rows are now one pair row').toHaveCount(1, {timeout: UI_TIMEOUT});
+        await expect(banner, 'and it has nothing else to offer').toBeHidden();
+
+        // The pair under test, typed through the form: addAdjustment reads each quantity back after the blur
+        // (fillQuantity), and Apply is enabled only for a quantity within the form's 12 + 6 digits (applyForm).
+        await addAdjustment(page, {broker: brokers.a, asset, quantity: out, description: near});
+        await addAdjustment(page, {broker: brokers.b, asset, quantity: nearIn, description: near});
+        const nearRows = bulkRowsWith(page, near);
+        await expect(nearRows, 'the pair under test is two rows').toHaveCount(2, {timeout: UI_TIMEOUT});
+        // Side check, the exact one: the banner derives from the rows on screen, synchronously (see PC4), and
+        // compares the decimal strings.
+        await expect(banner, 'the banner offers no merge: the two legs differ in the 6th decimal').toBeHidden();
+
+        // The selection is exactly the two legs: their boxes checked, the anchor as in PC2, and no other.
+        await selectBulkRows(nearRows, 2);
+        for (const other of [bulkRowsWith(page, fund.description), exactRows]) await expect(other.locator('[data-testid^="dt-row-checkbox-"]'), 'no other row is selected').toHaveAttribute('data-state', 'unchecked');
+        await expect(promote, `nor does the selection toolbar: Number() makes ${out} and ${nearIn} one double, and the save would be refused (pairQuantityMismatch)`).toHaveCount(0);
+        await expect(nearRows, 'the two legs stay apart').toHaveCount(2);
+
+        // Nothing was saved: the editor is left open and discarded by the cleanup.
+        await expectLedgerUntouched(page, brokers, before);
+    });
+
+    test('PC6: the 💡 searches the window of «Max Δ days» — at 0 the same day only, and moving the slider searches again', async ({page, owned}) => {
+        const {asset, brokers} = await ownAssetAndBrokers(page, owned);
+        const yesterday = dayBefore(owned.today);
+        // A: the position, then the two saved senders the 💡 may offer, yesterday and today. Only the fund goes into the editor.
+        const [fund, sentYesterday, sentToday] = await commitOwnedRows(page, [
+            {label: 'fund', create: adjustment(brokers.a, asset, dayBefore(yesterday), '20', `PCB fund ${owned.suffix}`, {cost_basis_override: {code: 'EUR', amount: '50'}})},
+            {label: 'sent yesterday', create: adjustment(brokers.a, asset, yesterday, '-5', `PCB sent yesterday ${owned.suffix}`)},
+            {label: 'sent today', create: adjustment(brokers.a, asset, owned.today, '-5', `PCB sent today ${owned.suffix}`)},
+        ]);
+        const before = await readOwnedLedger(page, brokers);
+        expect(before.map((row) => row.id)).toEqual([fund.id, sentYesterday.id, sentToday.id].sort(byId));
+
+        // The senders can reach the editor only through the 💡, and the opening search, about the fund alone at the
+        // default window, offers nothing: the fund has no counterpart.
+        await openEditorOn(page, brokers, [fund]);
+        const bulbCount = page.getByTestId('tx-bulk-suggest-import').locator('span');
+        await setSuggestWindow(page, 0);
+
+        // The new +5 on B is asked under a negative id the test cannot know: its request is recognised by the row.
+        // Manual with no cost basis, so that no validation round rewrites it (see «PC6» in the header).
+        const isNewReceiver = (input: SuggestInput) => input.id < 0 && input.broker_id === brokers.b.id && input.asset_id === asset.id && Number(input.quantity) === 5;
+        const atZero = suggestReply(page, 0, (inputs) => inputs.some(isNewReceiver));
+        await addAdjustment(page, {broker: brokers.b, asset, quantity: '5', description: `PCB receiver ${owned.suffix}`, withoutCostBasis: true});
+        const zero = await atZero;
+        const key = zero.inputs.find(isNewReceiver)!.id;
+        const ids = {fund: fund.id, sentYesterday: sentYesterday.id, sentToday: sentToday.id, newReceiver: key};
+        const offered = (reply: SuggestReply) => ({status: reply.status, candidates: reply.results ? (reply.results[String(key)] ?? []).map((candidate) => candidate.id).sort(byId) : null});
+
+        // 1. At 0, the same day only: today's sender, the presence yesterday's absence hangs on. Soft, so that the
+        //    slider's half below runs and reports too.
+        expect.soft(offered(zero), `tolerance_days=0 is the same day only, the new contract (C-47): the search answers 200 and offers the new +5 today's sender alone — ${describeReply(zero, ids)}`).toEqual({status: 200, candidates: [sentToday.id]});
+        // The opening search offered nothing, so a count of exactly 1 can only come from this answer.
+        await expect.soft(bulbCount, 'the 💡 offers that one sender').toHaveText('1', {timeout: UI_TIMEOUT});
+
+        // 2. Moving the slider searches again: the same rows, the new window. Moved once the editor has settled, when
+        //    nothing else is left to ask the search anything, so that a request at 1 can only come from the slider.
+        await waitForSettled(page.getByTestId('tx-bulk-modal-root'), SAVE_TIMEOUT);
+        const atOne = suggestReply(page, 1, (inputs) => inputs.some(isNewReceiver), SEARCH_TIMEOUT);
+        await setSuggestWindow(page, 1);
+        const one = await atOne.catch(() => null);
+        expect(one, `moving the slider must start a search: no promote-suggest request with tolerance_days=1 about these rows went out within ${SEARCH_TIMEOUT} ms`).not.toBeNull();
+        expect(one!.inputs, 'the same rows, asked again with the new window').toEqual(zero.inputs);
+        expect(offered(one!), `tolerance_days=1 reaches yesterday: the search offers the new +5 both senders — ${describeReply(one!, ids)}`).toEqual({status: 200, candidates: [sentYesterday.id, sentToday.id].sort(byId)});
+        // The count stood at 1 before this answer, so 2 can only come from it.
+        await expect(bulbCount, 'the 💡 offers both senders').toHaveText('2', {timeout: UI_TIMEOUT});
 
         // Nothing was saved: the editor is left open and discarded by the cleanup.
         await expectLedgerUntouched(page, brokers, before);

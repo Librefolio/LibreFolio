@@ -26,5 +26,5 @@ Las monedas que el BCE ya no publica, como el lev búlgaro (BGN, sustituido por 
 
 ## 📝 Notas Importantes
 
-- **Formato de cotización**: Los tipos se expresan como la cantidad de moneda extranjera por 1 EUR (por ejemplo, 1 EUR = 1.08 USD). LibreFolio normaliza automáticamente este tipo dependiendo de la moneda base de su cartera.
+- **Formato de cotización**: Los tipos se expresan como la cantidad de moneda extranjera por 1 EUR (por ejemplo, 1 EUR = 1,08 USD). LibreFolio normaliza automáticamente este tipo dependiendo de la moneda base de tu cartera.
 - **Sin datos de fin de semana**: El BCE no publica tipos los sábados, domingos ni los festivos oficiales del BCE (por ejemplo, Viernes Santo, Lunes de Pascua, Navidad). LibreFolio conservará el tipo del último día hábil disponible para las valoraciones de fin de semana.

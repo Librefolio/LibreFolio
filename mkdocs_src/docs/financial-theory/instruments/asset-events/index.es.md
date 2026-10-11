@@ -23,7 +23,7 @@ Comprender los eventos de activos es esencial para un análisis de precios preci
 | Concepto | Eventos | Transacciones |
 |---------|--------|-------------|
 | **Alcance** | Global — afecta al activo | Personal — afecta a la cartera de un usuario |
-| **Ejemplo** | "Apple declaró un dividendo de $0.25 el 2024-05-10" | "Recibí $12.50 de mis 50 acciones de AAPL" |
+| **Ejemplo** | "Apple declaró un dividendo de $0,25 el 2024-05-10" | "Recibí $12,50 de mis 50 acciones de AAPL" |
 | **Efecto en el gráfico** | Marcador en el gráfico de precios | No visible en el gráfico de precios |
 | **Quién los crea** | Proveedor (automático) o usuario (manual) | Importación desde reportes del bróker (BRIM) |
 
@@ -49,7 +49,7 @@ Los eventos pueden añadirse manualmente a través del **Editor de Datos** o med
 
 ## 📈 Marcadores de Eventos en el Gráfico
 
-Los eventos aparecen como **marcadores en forma de diamante de colores** (◆) en el gráfico de precios interactivo. Cada tipo de evento tiene un color distinto. Pase el cursor sobre un marcador para ver los detalles completos (fecha, tipo, valor, moneda, notas).
+Los eventos aparecen como **marcadores en forma de diamante de colores** (◆) en el gráfico de precios interactivo. Cada tipo de evento tiene un color distinto. Pasa el cursor sobre un marcador para ver los detalles completos (fecha, tipo, valor, moneda, notas).
 
 Hacer doble clic en un marcador de evento mientras el Editor de Datos está abierto **desplazará la vista directamente a la fila de ese evento** en la pestaña de Eventos.
 

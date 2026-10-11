@@ -119,6 +119,22 @@ export function sumNumeric<T>(footerRows: readonly T[], getValue: (row: T) => nu
 }
 
 /**
+ * Sum a column only when every row has a finite value; `null` (shown as «—") as soon
+ * as one is unknown, or for no rows. A footer total that skipped an unknown lot (a
+ * missing FX rate) would read as complete.
+ */
+export function sumCompleteOrNull<T>(footerRows: readonly T[], getValue: (row: T) => number | null): number | null {
+    if (footerRows.length === 0) return null;
+    let total = 0;
+    for (const row of footerRows) {
+        const value = getValue(row);
+        if (value == null || !Number.isFinite(value)) return null;
+        total += value;
+    }
+    return total;
+}
+
+/**
  * Value-weighted average of a column, weighting by the absolute value of a second
  * column. Rows with a missing/non-finite value or weight, or a zero weight, are
  * skipped. Returns `null` when the total weight is zero.
@@ -130,6 +146,26 @@ export function weightedAverage<T>(footerRows: readonly T[], getValue: (row: T) 
         const value = getValue(row);
         const weight = getWeight(row);
         if (value == null || weight == null || !Number.isFinite(value) || !Number.isFinite(weight) || weight === 0) continue;
+        const absWeight = Math.abs(weight);
+        numerator += value * absWeight;
+        denominator += absWeight;
+    }
+    return denominator > 0 ? numerator / denominator : null;
+}
+
+/**
+ * {@link weightedAverage}, but `null` (shown as «—») as soon as a row that takes part in
+ * the average — a finite, non-zero weight — has an unknown or non-finite value. An
+ * average that silently dropped a weighted lot (a missing FX rate) would read as complete.
+ */
+export function weightedAverageCompleteOrNull<T>(footerRows: readonly T[], getValue: (row: T) => number | null, getWeight: (row: T) => number | null): number | null {
+    let numerator = 0;
+    let denominator = 0;
+    for (const row of footerRows) {
+        const weight = getWeight(row);
+        if (weight == null || !Number.isFinite(weight) || weight === 0) continue;
+        const value = getValue(row);
+        if (value == null || !Number.isFinite(value)) return null;
         const absWeight = Math.abs(weight);
         numerator += value * absWeight;
         denominator += absWeight;

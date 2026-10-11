@@ -10,8 +10,8 @@ Esta página define formalmente el modelo matemático que subyace al motor de c�
 
 | Símbolo | Significado |
 |--------|---------|
-| $V(u)$ | Todos los brókers visibles para el usuario $u$ |
-| $S \subseteq V(u)$ | Ámbito de brókers seleccionado (filtrado) |
+| $V(u)$ | Todos los brókeres visibles para el usuario $u$ |
+| $S \subseteq V(u)$ | Ámbito de brókeres seleccionado (filtrado) |
 | $A$ | Conjunto de activos con posiciones |
 | $C^*$ | Moneda objetivo |
 | $[t_0, t_1]$ | Marco de evaluación solicitado |
@@ -40,7 +40,7 @@ $$
 - La conversión FX del coste base permanece fijada a la fecha de la transacción.
 - El PMC **nunca** se usa como precio de valoración.
 
-Consulte [Resolución de precios](price-resolution.md) para conocer el contrato del resolutor y la semántica de calidad de datos.
+Consulta [Resolución de precios](price-resolution.md) para conocer el contrato del resolutor y la semántica de calidad de datos.
 
 ---
 
@@ -129,7 +129,7 @@ Tres fondos acumuladores rastrean la procedencia del efectivo. $K$ y $R$ se mant
 
 !!! info "Propiedad clave"
 
-    Una COMPRA en el bróker $b_1$ solo puede consumir $R_{b_1}$, nunca $R_{b_2}$. El efectivo no se teletransporta entre brókers — solo las transferencias explícitas mueven los saldos de los fondos.
+    Una COMPRA en el bróker $b_1$ solo puede consumir $R_{b_1}$, nunca $R_{b_2}$. El efectivo no se teletransporta entre brókeres — solo las transferencias explícitas mueven los saldos de los fondos.
 
 ### 🔁 Reglas de actualización (por transacción en el bróker $b$, cronológicas)
 
