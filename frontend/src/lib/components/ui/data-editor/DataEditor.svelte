@@ -21,7 +21,7 @@
     import {todayIso} from '$lib/utils/dateOnly';
     import {Plus, Trash2, Undo2, Upload, Eye, EyeOff} from 'lucide-svelte';
     import type {ParsedRow} from './CsvEditor.svelte';
-    import type {ColumnDef, DataRow} from './DataEditorTypes';
+    import type {ColumnDef, DataRow, RowStatus} from './DataEditorTypes';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
@@ -138,6 +138,14 @@
 
     /** Set of all existing dates for duplicate prevention */
     let existingDates = $derived(new Set(rows.map((r) => r.date)));
+
+    /** Catalog keys of the status badges and of the status filter's options: one wording for both. */
+    const STATUS_LABEL_KEYS: Record<RowStatus, string> = {
+        original: 'dataEditor.status.original',
+        edited: 'dataEditor.status.edited',
+        deleted: 'dataEditor.status.deleted',
+        appended: 'dataEditor.status.appended',
+    };
 
     let dtColumns: DTColumnDef<DataRow>[] = $derived.by(() => {
         const cols: DTColumnDef<DataRow>[] = [
@@ -349,18 +357,13 @@
         // Status column (hidden by default via column visibility)
         cols.push({
             id: 'status',
-            header: 'Status',
+            header: $t('common.status'),
             type: 'enum',
             hiddenByDefault: true,
-            enumOptions: [
-                {value: 'original', label: 'Original'},
-                {value: 'edited', label: 'Edited'},
-                {value: 'deleted', label: 'Deleted'},
-                {value: 'appended', label: 'New'},
-            ],
+            enumOptions: (['original', 'edited', 'deleted', 'appended'] as const).map((status) => ({value: status, label: $t(STATUS_LABEL_KEYS[status])})),
             cell: (r) => ({
                 type: 'badge',
-                text: r.status === 'appended' ? 'New' : r.status.charAt(0).toUpperCase() + r.status.slice(1),
+                text: $t(STATUS_LABEL_KEYS[r.status]),
                 variant: r.status === 'original' ? 'default' : r.status === 'edited' ? 'info' : r.status === 'deleted' ? 'error' : 'success',
             }),
             getValue: (r) => r.status,

@@ -56,6 +56,38 @@ from the same list (**Create new**).
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Wizard Step 1: Upload" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
+#### 🧭 A file in the wrong broker {: #wrong-broker }
+
+When you click **Next: Select Files**, the wizard checks each file you have just uploaded against
+its broker's **Default Import Plugin**. If that plugin cannot read a file, the file probably
+belongs to another broker, and the wizard asks you about it before going on (*This file may belong
+to another broker*). From top to bottom, it shows:
+
+- **Assigned to** — the broker the file is in, with its icon, and its default plugin, marked
+  *cannot read it*;
+- **Notes from the plugin** — why that plugin cannot read the file, when it says why: in your
+  language when a translation exists;
+- **Move it to** — the broker whose default plugin *can read it*. When the default plugins of
+  several brokers read it, the prompt lists those brokers instead: choose one, the first is already
+  selected.
+
+Then choose:
+
+- **Move to ‹broker›**, with that broker's icon — the file is uploaded to that broker, in the same
+  session, and removed from the wrong one. If the move fails, an error says so and the file stays
+  where it was;
+- **Keep it here** — the file stays, and the wizard reads it with another plugin that can, as
+  before: you see it in the **Plugin** column of **Select Files**;
+- **Remove the file** — the file is deleted.
+
+One prompt per file, in turn (*File 1 of 3*); closing it keeps the file. If you remove every file
+you have just uploaded, the wizard stays on **Upload**, ready for others. When none of your brokers
+has a default plugin that reads the file, the prompt names the plugins that read it — or says that
+none can — and offers only to keep or remove it.
+
+Brokers without a default import plugin are never questioned, and neither are the reports you
+reuse without uploading them again.
+
 ### 🗂️ Step 2: Select Files
 
 Each broker's panel lists its stored reports, with the files you have just uploaded already ticked.

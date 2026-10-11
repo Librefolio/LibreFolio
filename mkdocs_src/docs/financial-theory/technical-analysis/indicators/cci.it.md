@@ -37,7 +37,7 @@ Il CCI è stato progettato per segnalare l'inizio di nuovi cicli: letture oltre 
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Finestra per la media del prezzo tipico e la deviazione media. |
+| Periodo ($N$) | `period` | 14 | Finestra per la media del prezzo tipico e la deviazione media, in sedute. |
 
 ---
 

@@ -8,7 +8,7 @@ Un benchmark d'onde sinusoïdale représente une **oscillation périodique**. C'
 
 Utile pour :
 
-- Modéliser la **saisonnalité** (ex: matières premières agricoles, devises liées au tourisme).
+- Modéliser la **saisonnalité** (ex. : matières premières agricoles, devises liées au tourisme).
 - Fournir une référence visuelle pour des **schémas cycliques** que les traders soupçonnent dans les données.
 - Tester le pipeline de rendu avec une forme d'onde analytique connue.
 

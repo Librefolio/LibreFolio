@@ -1,7 +1,7 @@
 # 💶 ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Depositi e Prelievi ![](../../../static/icons/transactions/withdrawal.png){: width="32" style="vertical-align: middle;" }
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="transactions" data-name="form-modal-deposit" alt="Transaction Form — DEPOSIT">
+ <img class="gallery-img" data-category="transactions" data-name="form-modal-deposit" alt="Modulo della transazione — DEPOSIT">
 </div>
 
 I **depositi** e i **prelievi** tracciano il movimento di liquidità in entrata e in uscita da un conto broker. Non coinvolgono alcun asset — cambia solo il saldo di cassa.

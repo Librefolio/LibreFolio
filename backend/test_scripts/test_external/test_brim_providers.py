@@ -24,6 +24,7 @@ import ast
 import atexit
 import csv
 import io
+import json
 import re
 import shutil
 import tempfile
@@ -48,6 +49,7 @@ from backend.app.schemas.brim import (
     BRIMNotice,
     BRIMParseOutput,
     BRIMPluginInfo,
+    BRIMRefusal,
     is_fake_asset_id,
 )
 from backend.app.schemas.transactions import TXCreateItem
@@ -1086,6 +1088,112 @@ class TestGenericCSVSaysWhyItRefuses:
                     broken.append(f"{code} on {path.name}: {reason!r}")
 
         assert not broken, f"{len(broken)} answer(s) break the contract of cannot_parse_reason, the first ones: {broken[:3]}"
+
+
+# =============================================================================
+# CATEGORY 4d: A PLUGIN SAYS WHY WITH A CODE THE FRONTEND TRANSLATES (37_brimScalable, plan §7.1)
+# =============================================================================
+
+# A refusal's code: the stable snake_case key the frontend translates as ``importWizard.parseRefusal.<code>``.
+_REFUSAL_CODE = re.compile(r"[a-z][a-z0-9_]*")
+
+
+def _refusal_problems(detail: object, reason: object) -> List[str]:
+    """Where one answer of ``cannot_parse_detail`` breaks its contract, next to the answer of ``cannot_parse_reason`` on the same path."""
+    if detail is None:
+        return [] if reason is None else [f"no refusal, and yet the reason {reason!r}"]
+    if not isinstance(detail, BRIMRefusal):
+        return [f"{type(detail).__name__} {detail!r}, not a BRIMRefusal"]
+    problems = [] if detail.message == reason else [f"message {detail.message!r}, while cannot_parse_reason says {reason!r}"]
+    if not _is_one_sentence(detail.message):
+        problems.append(f"message {detail.message!r} is not one sentence (one line, lowercase start, no final period)")
+    if detail.code is not None and not _REFUSAL_CODE.fullmatch(detail.code):
+        problems.append(f"code {detail.code!r} is not a stable snake_case key")
+    try:
+        detail.model_dump_json()
+    except Exception as exc:  # it travels to the import wizard as JSON (GET /import/files/{file_id}/plugin-check)
+        problems.append(f"does not serialise to JSON: {type(exc).__name__}: {exc}")
+    return problems
+
+
+def _detail_answer(code: str, plugin: BRIMProvider, path: Path, label: str) -> tuple:
+    """One plugin's ``cannot_parse_detail`` on one path, and where it breaks the contract: an exception is a problem of the answer, never a crash of the test."""
+    try:
+        detail, reason = plugin.cannot_parse_detail(path), plugin.cannot_parse_reason(path)
+    except Exception as exc:  # the contract: neither method ever raises
+        return None, [f"{code} on {label}: raised {type(exc).__name__}: {exc}"]
+    return detail, [f"{code} on {label}: {problem}" for problem in _refusal_problems(detail, reason)]
+
+
+class TestPluginSaysWhyWithACode:
+    """37_brimScalable, plan §7.1: a plugin can say why it refuses a file with a stable code the frontend translates, and the context of the code.
+
+    The import wizard asks the broker's default plugin about every uploaded file (``GET /import/files/{file_id}/plugin-check``, category 17 of
+    ``test_api/test_brim_api.py``) and shows its reason. ``BRIMProvider`` gains a concrete, optional method, ``cannot_parse_detail(file_path) ->
+    Optional[BRIMRefusal]``: by default the ``cannot_parse_reason`` sentence, wrapped without a code and with an empty context; None when there is
+    no reason. A plugin that overrides it (the two Scalable plugins, refusing each other's files: ``test_brim_scalable.py``) gives a snake_case
+    ``code`` and a ``context``; its ``message`` stays what ``cannot_parse_reason`` says. Same rules as ``cannot_parse_reason``: never raises, one
+    English sentence.
+
+    Every input is a sample or is written in ``tmp_path``; the sentences are those of category 4c.
+    """
+
+    def test_the_base_method_is_concrete(self):
+        """A concrete method of ``BRIMProvider``, not an abstract one: every plugin written before it stays valid without it."""
+        assert callable(getattr(BRIMProvider, "cannot_parse_detail", None)), "BRIMProvider has no cannot_parse_detail method"
+        assert "cannot_parse_detail" not in BRIMProvider.__abstractmethods__
+
+    @pytest.mark.parametrize(("content", "missing"), _HEADERS_MISSING_DATE_OR_TYPE)
+    def test_the_default_wraps_the_reason_without_a_code(self, content: bytes, missing: tuple, tmp_path: Path):
+        """The generic CSV overrides ``cannot_parse_reason`` only: its refusal is that sentence, without a code, with an empty context."""
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert type(plugin).cannot_parse_detail is BRIMProvider.cannot_parse_detail, "premise: the generic CSV does not override cannot_parse_detail"
+        assert plugin.cannot_parse_reason(path) == _REASON_MISSING[missing], f"premise: the generic CSV names the columns {content.splitlines()[0]!r} misses"
+
+        detail = plugin.cannot_parse_detail(path)
+
+        assert isinstance(detail, BRIMRefusal), f"the default answers {detail!r}, not a BRIMRefusal"
+        assert (detail.code, detail.message, detail.context) == (None, _REASON_MISSING[missing], {})
+
+    @pytest.mark.parametrize(("name", "content"), [*_HEADERS_WITH_DATE_AND_TYPE, _WINDOWS_1252_HEADER])
+    def test_the_default_has_nothing_to_add_without_a_reason(self, name: str, content: bytes, tmp_path: Path):
+        """A file the generic CSV reads: no reason, so no refusal."""
+        path = tmp_path / name
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert plugin.cannot_parse_reason(path) is None, f"premise: the generic CSV has nothing to say about {name}"
+
+        assert plugin.cannot_parse_detail(path) is None
+
+    @pytest.mark.parametrize("code", ["broker_trading212", "broker_danske_bank"])
+    def test_a_plugin_that_overrides_neither_method_has_nothing_to_add(self, code: str, tmp_path: Path):
+        """The base defaults all the way down, about a file the plugin refuses: no reason, so no refusal."""
+        plugin = BRIMProviderRegistry.get_provider_instance(code)
+        assert plugin is not None, f"{code} is not registered"
+        path = tmp_path / "export.csv"
+        path.write_bytes(_DATE_AND_TYPE_ROWS)
+        assert plugin.can_parse(path) is False, f"premise: {code} refuses a generic CSV"
+        assert (type(plugin).cannot_parse_reason, type(plugin).cannot_parse_detail) == (BRIMProvider.cannot_parse_reason, BRIMProvider.cannot_parse_detail), f"premise: {code} overrides neither method"
+
+        assert plugin.cannot_parse_detail(path) is None
+
+    def test_every_plugin_answers_nothing_or_a_refusal_that_agrees_with_its_reason(self, tmp_path: Path):
+        """The contract for every registered plugin, on every file of ``sample_reports/`` (recursive, every extension) and on paths with nothing to read:
+        ``cannot_parse_detail`` never raises; it is None exactly when ``cannot_parse_reason`` is None; otherwise a ``BRIMRefusal`` whose message is that
+        reason and one sentence, whose code is None or snake_case, and which serialises to JSON."""
+        paths = [*sorted(path for path in SAMPLE_DIR.rglob("*") if path.is_file()), *(_unreadable_path(tmp_path / kind, kind) for kind in _UNREADABLE_PATHS)]
+        labels = {path: str(path.relative_to(SAMPLE_DIR) if path.is_relative_to(SAMPLE_DIR) else path.relative_to(tmp_path)) for path in paths}
+        answers = [_detail_answer(code, plugin, path, labels[path]) for code, plugin in _PLUGIN_PARAMS for path in paths]
+        details = [detail for detail, _ in answers]
+        # Positive controls: refusals and silences both occur, and one refusal at least carries a code, so no branch of the contract is vacuous.
+        assert any(detail is None for detail in details) and any(detail is not None for detail in details), "premise: the plugins refuse some of these files with a reason and others without"
+        assert any(getattr(detail, "code", None) for detail in details), "premise: one plugin at least refuses a sample with a code (broker_scalable on the overnight account's export)"
+
+        broken = [problem for _, problems in answers for problem in problems]
+
+        assert not broken, f"{len(broken)} answer(s) break the contract of cannot_parse_detail, the first ones: {broken[:3]}"
 
 
 class TestBrokerParserCoverageHelpers:
@@ -2495,6 +2603,10 @@ class TestPluginFrontendContract:
         ("broker_credit_agricole", CA_SAMPLE),
         ("broker_danske_bank", _ContractSampleSet("broker_danske_bank", 0, "danske_bank-main-set")),
         ("broker_danske_bank", _ContractSampleSet("broker_danske_bank", 1, "danske_bank-gap-set")),
+        # Scalable Capital (37_brimScalable): notices only, each with the rows of the file as evidence.
+        ("broker_scalable", SAMPLE_DIR / "scalable-prime-export.csv"),
+        ("broker_scalable", SAMPLE_DIR / "scalable-broker-export.csv"),
+        ("broker_scalable_deposit", SAMPLE_DIR / "scalable-deposit-export.csv"),
     ]
 
     KNOWN_ASSET_NOTICE_KINDS = {MATURITY_NOTICE_KIND}
@@ -2620,7 +2732,9 @@ class TestPluginFrontendContract:
             assert notice.code and notice.code.strip(), "notice with no code"
             assert notice.message and notice.message.strip(), f"{notice.code}: empty message"
             for ev in notice.evidence:
-                assert ev.title and ev.title.strip(), f"{notice.code}: evidence with no title"
+                # An empty title leaves the caption to the wizard, which shows its translated one (importWizard.evidenceRowsTitle):
+                # the Scalable plugins do so. A title of blanks is neither a caption nor that signal.
+                assert ev.title == "" or ev.title.strip(), f"{notice.code}: evidence title {ev.title!r} is blank"
                 assert ev.comment and ev.comment.strip(), f"{notice.code}: evidence table with no comment"
                 assert all(len(row) == len(ev.headers) for row in ev.rows), f"{notice.code}: evidence row width does not match headers"
                 assert not ev.row_numbers or len(ev.row_numbers) == len(ev.rows), f"{notice.code}: row_numbers must be empty or aligned with rows"
@@ -5850,6 +5964,144 @@ class TestWindows1252Invariance:
             f"{len(offenders)} call(s) to open(..., encoding=...) in BRIM plugins. A fixed encoding cannot read an export saved as "
             "Windows-1252 or Latin-1 (for example re-saved with Excel on Windows). Read the file with self._open_text(file_path), "
             'or BRIMProvider._open_text(file_path, newline="") where the csv module needs the line endings verbatim:\n' + "\n".join(f"  {offender}" for offender in offenders)
+        )
+
+
+# =============================================================================
+# THE PLUGINS' NAME AND DESCRIPTION IN THE FOUR UI CATALOGUES
+# =============================================================================
+
+# The checkout this test file belongs to, found from the file itself: the catalogues are read next to it.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_I18N_DIR = _REPO_ROOT / "frontend" / "src" / "lib" / "i18n"
+_TRANSLATED_LANGUAGES = ("it", "fr", "es")
+_UI_LANGUAGES = ("en", *_TRANSLATED_LANGUAGES)
+_PLUGIN_TEXT_FIELDS = ("name", "description")
+
+
+def _brim_plugin_texts(language: str) -> dict:
+    """The ``brimPlugins`` section of one UI catalogue: plugin code → ``{"name": …, "description": …}``."""
+    path = _I18N_DIR / f"{language}.json"
+    section = json.loads(path.read_text(encoding="utf-8")).get("brimPlugins")
+    assert isinstance(section, dict) and section, f"{path.relative_to(_REPO_ROOT)} has no brimPlugins section: every plugin would be shown in English"
+    return section
+
+
+def _plugin_text(texts: dict, code: str, field: str) -> Any:
+    """``brimPlugins.<code>.<field>`` of one catalogue, or None when the plugin or the field is missing."""
+    entry = texts.get(code)
+    return entry.get(field) if isinstance(entry, dict) else None
+
+
+class TestPluginTextCatalogues:
+    """A plugin's name and description in the UI language (``frontend/src/lib/utils/brim/pluginText.ts``).
+
+    The plugin select, the import wizard, the report-set card and the About page show ``brimPlugins.<code>.name`` and
+    ``brimPlugins.<code>.description`` from the catalogue of the UI language, and the plugin's own English text when the
+    catalogue has none. So the catalogues follow the registry: the English one *is* each plugin's ``name`` and
+    ``description``, verbatim — a plugin that rewords itself turns this red until its four entries follow — the Italian,
+    French and Spanish ones name and describe every plugin, and no catalogue keeps a plugin that is no longer registered.
+    """
+
+    @staticmethod
+    def _plugins() -> List[BRIMPluginInfo]:
+        """Every registered plugin, as ``GET /brokers/import/plugins`` lists it. Never empty: the checks would pass on nothing."""
+        plugins = BRIMProviderRegistry.list_plugin_info()
+        assert plugins, "No BRIM plugin is registered: the catalogue checks would pass on nothing"
+        return plugins
+
+    def test_the_english_catalogue_is_each_plugin_s_own_name_and_description(self):
+        texts = _brim_plugin_texts("en")
+
+        mismatches = [f"{info.code}.{field}: en.json {_plugin_text(texts, info.code, field)!r}, the plugin {getattr(info, field)!r}" for info in self._plugins() for field in _PLUGIN_TEXT_FIELDS if _plugin_text(texts, info.code, field) != getattr(info, field)]
+
+        assert not mismatches, f"{len(mismatches)} difference(s) between en.json brimPlugins and the registered plugins:\n" + "\n".join(f"  {mismatch}" for mismatch in mismatches)
+
+    @pytest.mark.parametrize("language", _TRANSLATED_LANGUAGES)
+    def test_the_translated_catalogue_names_and_describes_every_plugin(self, language: str):
+        texts = _brim_plugin_texts(language)
+
+        missing = [f"{info.code}.{field}" for info in self._plugins() for field in _PLUGIN_TEXT_FIELDS if not (isinstance(value := _plugin_text(texts, info.code, field), str) and value.strip())]
+
+        assert not missing, f"{language}.json: {len(missing)} plugin text(s) missing or empty, shown in English instead: {missing}"
+
+    @pytest.mark.parametrize("language", _UI_LANGUAGES)
+    def test_the_catalogue_holds_no_plugin_that_is_not_registered(self, language: str):
+        registered = {info.code for info in self._plugins()}
+
+        stale = sorted(set(_brim_plugin_texts(language)) - registered)
+
+        assert not stale, f"{language}.json has brimPlugins entries for {len(stale)} code(s) no registered plugin has: {stale}"
+
+
+# =============================================================================
+# GENERIC FALLBACK PLUGINS: THE PRIORITY LIMIT THE FRONTEND SHARES
+# =============================================================================
+
+# The frontend's one definition of a generic fallback plugin: ``isFallbackPlugin``, a detection_priority below this limit.
+_PLUGIN_KIND_TS = _REPO_ROOT / "frontend" / "src" / "lib" / "utils" / "brim" / "pluginKind.ts"
+_FALLBACK_LIMIT_DECLARATION = re.compile(r"^\s*export\s+const\s+FALLBACK_PLUGIN_PRIORITY_LIMIT\b[^=\n]*=\s*(\d+)\s*;", re.MULTILINE)
+# The plugins made for no broker in particular. A new generic plugin is a decision, and it is written down here.
+_GENERIC_FALLBACK_PLUGINS = frozenset({GENERIC_CSV_CODE})
+
+
+def _frontend_fallback_priority_limit() -> int:
+    """``FALLBACK_PLUGIN_PRIORITY_LIMIT`` as ``frontend/src/lib/utils/brim/pluginKind.ts`` declares it, read as text."""
+    declared = _FALLBACK_LIMIT_DECLARATION.findall(_PLUGIN_KIND_TS.read_text(encoding="utf-8"))
+    assert len(declared) == 1, f"{_PLUGIN_KIND_TS.relative_to(_REPO_ROOT)} should declare `export const FALLBACK_PLUGIN_PRIORITY_LIMIT = <n>;` once, found {declared}: the frontend's limit cannot be compared with the plugins' priorities"
+    return int(declared[0])
+
+
+class TestFallbackPluginPriorityLimit:
+    """The frontend tells a generic fallback plugin from one made for a broker by ``detection_priority`` alone.
+
+    ``isFallbackPlugin`` (``frontend/src/lib/utils/brim/pluginKind.ts``) calls a plugin a generic fallback when its
+    ``detection_priority``, as ``GET /brokers/import/plugins`` lists it, is below ``FALLBACK_PLUGIN_PRIORITY_LIMIT``: the
+    0-49 range ``BRIMProvider.detection_priority`` documents for generic fallbacks. The broker icon chain puts such a
+    plugin's icon after the portal's favicon — the generic CSV's icon is the same for every broker — while the icon of a
+    plugin made for the broker comes before it; the import wizard's wrong-broker check proposes the brokers of a generic
+    plugin only when no broker of a specific one reads the file.
+
+    So the registered priorities and the frontend's limit must agree: the plugins below the limit are exactly the generic
+    ones — today only the generic CSV — and every other plugin is at or above it. The limit is read from the frontend's
+    source, so moving it, or a plugin's priority, on one side only turns this red.
+    """
+
+    @staticmethod
+    def _priorities() -> dict:
+        """Plugin code → ``detection_priority``, as ``GET /brokers/import/plugins`` lists them. Never empty."""
+        plugins = BRIMProviderRegistry.list_plugin_info()
+        assert plugins, "No BRIM plugin is registered: the checks would pass on nothing"
+        return {info.code: info.detection_priority for info in plugins}
+
+    def test_the_frontend_limit_is_the_boundary_of_the_documented_generic_range(self):
+        limit = _frontend_fallback_priority_limit()
+
+        assert limit == 50, f"pluginKind.ts sets FALLBACK_PLUGIN_PRIORITY_LIMIT = {limit}; BRIMProvider.detection_priority documents 0-49 as generic fallbacks, 50-99 semi-generic, 100+ broker-specific: move both, or neither"
+        default = BRIMPluginInfo.model_fields["detection_priority"].default
+        assert default >= limit, f"BRIMPluginInfo.detection_priority defaults to {default}, below the limit {limit}: a plugin that does not rank itself would be a generic fallback, while the frontend reads a missing priority as 100"
+
+    def test_the_generic_plugins_are_below_the_limit(self):
+        limit = _frontend_fallback_priority_limit()
+        priorities = self._priorities()
+
+        unregistered = sorted(_GENERIC_FALLBACK_PLUGINS - priorities.keys())
+        assert not unregistered, f"Generic plugin(s) not registered: {unregistered}. Remove them from _GENERIC_FALLBACK_PLUGINS if they are gone for good."
+        ranked_as_specific = {code: priorities[code] for code in sorted(_GENERIC_FALLBACK_PLUGINS) if priorities[code] >= limit}
+        assert not ranked_as_specific, (
+            f"Generic plugin(s) at or above the frontend's limit {limit}: {ranked_as_specific}. The frontend takes them for plugins made for a broker — "
+            "their icon would come before the portal's favicon of every broker using them, and the wrong-broker check would rank their brokers with the specific plugins'"
+        )
+
+    def test_every_other_plugin_is_at_or_above_the_limit(self):
+        limit = _frontend_fallback_priority_limit()
+        priorities = self._priorities()
+
+        ranked_as_generic = {code: priority for code, priority in sorted(priorities.items()) if code not in _GENERIC_FALLBACK_PLUGINS and priority < limit}
+        assert not ranked_as_generic, (
+            f"Plugin(s) below the frontend's limit {limit} that are not generic: {ranked_as_generic}. The frontend takes them for generic fallbacks — "
+            "their icon would come after the portal's favicon, and the wrong-broker check would propose their brokers only when no specific plugin's broker reads the file. "
+            f"Rank them {limit} or more, or, if they really are made for no broker in particular, add them to _GENERIC_FALLBACK_PLUGINS"
         )
 
 

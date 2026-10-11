@@ -17,7 +17,7 @@ En pratique, la différence entre la croissance linéaire et la croissance compo
     Lors de la vente d'un actif au-dessus de son prix d'achat, la différence est une **plus-value** ;
     en dessous, une **moins-value**. Chaque juridiction possède ses propres règles concernant les taux d'imposition,
     les seuils de période de détention, la durée du report des pertes et les méthodes de calcul
-    (FIFO, LIFO, identification spécifique). Pour un aperçu théorique, voir
+    (FIFO, LIFO, identification spécifique). Pour une vue d'ensemble théorique, voir
     [Fiscalité et efficacité fiscale](../../fundamentals/taxation.md).
 
 ---

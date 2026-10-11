@@ -1,15 +1,15 @@
 # Phase 0 — 32 · Doc inglese 1.2: allineamento EN ai cambiamenti dalla 1.1
 
-> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`) è entrata col treno 19 (`22d80282a`, `dev_release2` = `4d09ac2ac`). Anche i seguiti del treno 19 (S19) sono stati integrati, col treno 20. La pagina sulla sicurezza della connessione e gli IP Tailscale (S20, `5980ab86f`) sono entrati col treno 24 (merge di Q `e994979f9`). **Il piano resta attivo** fino al giro di traduzioni, rinviato per decisione del developer: vedi «Cosa resta aperto» qui sotto.** L'analisi (§1-§2, §4) è stata scritta il
+> **Stato: Q1 (`dfcbc0003`), Q2 (`7b06e9f9f`), S12 (`a09220321`), S13 (`dc9209b3e`), l'onda 1 del feedback (`eee56b42a`, fusa col treno 14 in `cbfce2475`) e l'onda 2 (`1c2f88d67`, entrata col treno 17 = `108a2adf5`) sono committate. L'onda 3 (S18, pagine admin più FAQ e gli effetti del treno 18 su `kpi-cards`) è entrata col treno 19 (`22d80282a`, `dev_release2` = `4d09ac2ac`). Anche i seguiti del treno 19 (S19) sono stati integrati, col treno 20. La pagina sulla sicurezza della connessione e gli IP Tailscale (S20, `5980ab86f`) sono entrati col treno 24 (merge di Q `e994979f9`). S21 e S22 (`d614daed9`, `1fdcaef38`) sono entrati col treno 25 (merge `c0e9e4928`), S23 (`664fe9687`) col treno 27 (merge `befbb67cf`). Piano chiuso il 2026-10-10 (S24): vedi «Chiusura» qui sotto.** L'analisi (§1-§2, §4) è stata scritta il
 > 2026-10-07 in plan mode su `c9a602f74`, leggendo la punta `d07412899` con `git show`. Poi il
 > developer ha fatto il fast-forward del ramo: HEAD = `d07412899`, verificato. Le evidenze grezze
 > sono nella sessione Q (`files/`: `audit_brief.md`, `img_refs_report.txt`,
 > `translation_debt_baseline.txt`, `app_doc_links.tsv`, i report dei 9 audit).
 >
-> **Cosa resta aperto** (aggiornato il 2026-10-09, base `586a4f0ea`, treno 25):
-> - **Traduzioni IT/FR/ES** delle pagine cambiate nella 1.2, e delle pagine nuove mai tradotte. Il dry-run del 08/10 contava 131 pagine, circa 9,4 milioni di token (S18, «Resoconto per il lancio delle traduzioni»). Il giro lo decide il developer; finché non parte, questo piano resta in `Phase_0/`.
-> - **Screenshot:** gli 8 segnaposto dei portali dei broker (Trading212, Coinbase, …) restano TODO nascosti, per decisione del developer (S18). Il segnaposto `security/connection-indicator` l'ha chiuso M con `dbf4263e9`.
-> - Nessun altro seguito aperto. L'avviso Docker è stato tolto in S19; l'ancora `#session-cookie-secure` non serve (coordinatore, S20).
+> **Chiusura** (2026-10-10, base `d59762e0a`). In questa cartella non resta niente di aperto:
+> - **Traduzioni IT/FR/ES:** fatte nel lotto 11 di M, entrato col treno 29 (`e32f47133`): 303 traduzioni con la pipeline, il glossario, `check-links` senza eccezioni e `#rolling-return` chiuso (coordinatore, 10/10). Il secondo giro di M, sulle pagine di S, è in corso. Piano: [plan-phase00TranslationRound12.prompt.md](../27_releaseImages/plan-phase00TranslationRound12.prompt.md). Per lo storico: il dry-run del 08/10 contava 131 pagine (S18), e il `translate-validate` del 09/10 2126 errori e 72 file mancanti (S23).
+> - **Screenshot:** gli 8 segnaposto dei portali dei broker (Trading212, Coinbase, …) restano TODO nascosti, per decisione del developer (S18); sono una voce del backlog `38_postReleaseBacklog`. Il segnaposto `security/connection-indicator` l'ha chiuso M con `dbf4263e9`.
+> - L'avviso Docker è stato tolto in S19; l'ancora `#session-cookie-secure` non serve (coordinatore, S20).
 >
 > **Autorizzazione del developer**, inoltrata dal coordinatore (07/10): «Piano approvato dal developer,
 > in modalità interattiva». Il piano è stato approvato anche in questa sessione (exit plan mode,
@@ -1783,6 +1783,16 @@ gate li esegue solo Q**, uno alla volta (un solo comando nella corsia). Dopo ogn
   >    - i diagrammi Mermaid nuovi (`registries.md`, `core-infrastructure.md`, `test-walkthrough/index.md`) li ho controllati a mano: il build non li valida, perché si disegnano nel browser;
   >    - `translate-validate`, solo per il debito: 2126 errori e 72 file mancanti in tutto (`/tmp/libreFolio_q_tv_s23.log`). Delle pagine toccate hanno traduzioni solo `user/transactions/form` (12 errori), `user/dashboard/index` (39) e `admin/docker_advanced` (72): vanno al giro di traduzione, senza stamp;
   >    - `git diff --check` pulito, privacy pulita, nessun server, 6162 libera.
+- **S24** ✅ 2026-10-10 — Chiusura del piano (coordinator, su richiesta del developer prima della 1.2). Base `d59762e0a`, worktree pulita, verificato.
+  > **Note implementazione:**
+  > - **Verifica:** nel piano non resta nessun passo aperto: S1–S23 sono ✅ e committati, l'ultimo è S23 (`664fe9687`, treno 27). Restavano solo le due voci di «Cosa resta aperto», che sono fuori dal compito della 32:
+  >   - le traduzioni IT/FR/ES: Q non traduce, e il giro lo decide il developer;
+  >   - gli 8 screenshot dei portali dei broker, TODO nascosti per decisione del developer.
+  >
+  >   Le traduzioni le ha fatte M nel lotto 11 (treno 29, `e32f47133`); gli screenshot dei portali sono una voce del backlog 38, che scrive il coordinatore. Il piano è FINITO.
+  > - **Posto:** il piano resta in `Phase_0/32_docsEnglish12/`, per la regola del developer del 10/10: «non voglio archiviare i loro plan in LibreFolio_developer_journal/Release_2/Phase_0/ voglio solo archiviare le chat».
+  > - **16_toolPlatform:** le due note (`:7`, `:269`), testo nei miei file dalla S21, dicevano che le traduzioni erano tracciate nella 32. Ora rimandano al piano delle traduzioni di M ([plan-phase00TranslationRound12.prompt.md](../27_releaseImages/plan-phase00TranslationRound12.prompt.md)).
+  > - **Sessione** rinominata «Q - doc 1.2 e review onboarding», su richiesta del developer: Q resta per la review manuale C7 della 21.
 
 ## 4. Conflitti, rischi, definizione di fatto
 

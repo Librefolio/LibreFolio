@@ -98,6 +98,6 @@ Les événements de division apparaissent comme des **marqueurs sur le graphique
 
 ## 🔗 Liens connexes
 
-- 📅 **[Aperçu des événements liés aux actifs](index.md)** — Tous les types d'événements
+- 📅 **[Vue d'ensemble des événements d'actifs](index.md)** — Tous les types d'événements
 - 💸 **[Types de transactions](../transaction-types/index.md)** — Comment les divisions affectent les transactions du portefeuille
 - 📚 **[Types d'actifs](../asset-types/index.md)** — Types d'actifs pouvant faire l'objet d'une division

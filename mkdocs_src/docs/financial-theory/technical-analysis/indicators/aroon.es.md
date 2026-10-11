@@ -38,7 +38,7 @@ Aroon Up sube a 100 en el momento en que el precio establece un nuevo máximo de
 
 | Parámetro | Clave | Valor por Defecto | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 14 | Ventana obsoleta para localizar el máximo/mínimo extremo. |
+| Período ($N$) | `period` | 14 | Ventana retrospectiva para localizar el máximo/mínimo extremo, en sesiones. |
 
 ---
 

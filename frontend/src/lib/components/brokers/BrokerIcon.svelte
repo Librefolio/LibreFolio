@@ -3,9 +3,10 @@
      * BrokerIcon.svelte
      * Unified broker icon component. Fallback chain (invariant):
      *   1. custom icon_url
-     *   2. portal_url/favicon.ico
-     *   3. default_import_plugin icon (async, shared cache)
-     *   4. System briefcase icon
+     *   2. default_import_plugin icon (async, shared cache), when the plugin is made for a broker
+     *   3. portal_url/favicon.ico
+     *   4. default_import_plugin icon, when the plugin is a generic fallback such as the generic CSV
+     *   5. System briefcase icon
      *
      * All chain logic lives in brokerIconChain.svelte.ts — do not duplicate.
      * Svelte 5 runes.

@@ -38,6 +38,21 @@ combined first, and the combined file is parsed. The sets are declared in the pl
 | gap  | `danske_bank-gap-custody-2.xlsx` | Second custody period, two months later                                                                               | Segment 2; the last trade settles after the cash export ends (`not_yet_settled`)                                                                    |
 | gap  | `danske_bank-gap-cash.csv`       | Cash statement covering both periods and the trades in between                                                        | A proven gap: an opening checkpoint and a gap checkpoint; the standalone rows of the gap are imported                                               |
 
+### Scalable Capital plugins (`broker_scalable`, `broker_scalable_deposit`)
+
+Synthetic files with invented values, built on the real structure: Scalable's own CSV
+export (PRIME, broker only) and the two files of the LibreFolio exporter
+(`Librefolio/librefolio-exporter`, version 1.0.1), one per account. References, ids and
+amounts are invented; the ISINs are public securities and the IBAN is the standard
+documentation example. The two exporter files mirror each other: the internal transfers
+have the same dates and amounts on both sides.
+
+| File                          | Plugin                    | Description                                                                                                                     | Expected Result                                                                                                                                                         |
+|-------------------------------|---------------------------|---------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `scalable-prime-export.csv`   | `broker_scalable`         | PRIME export, 14 columns: buys (gross `amount`), a savings plan, a sell with fee and tax, a dividend with withholding, cash rows | Trades with FEE and TAX legs, gross dividend and interest with a TAX leg, a tax refund as DEPOSIT; pending, cancelled and security-transfer rows only in notices       |
+| `scalable-broker-export.csv`  | `broker_scalable`         | Exporter, broker account, 23 columns: the same families, plus internal transfers, an open partial order, a reversal, a venue fee | Same mapping, ids in the descriptions; notices for the open order, the reversal, the unknown cash type, the net dividend, the trade without details, the transfers |
+| `scalable-deposit-export.csv` | `broker_scalable_deposit` | Exporter, overnight account, 19 columns: interest with and without details, bank transfers, internal transfers                  | Gross interest with a TAX leg, net interest with a notice, deposits and withdrawals; each plugin refuses the other account's file                                     |
+
 
 ## File Format
 

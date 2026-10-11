@@ -22,6 +22,8 @@ Benvenuti nella galleria visiva di LibreFolio! Qui potete esplorare tutte le fun
 !!! tip "Cosa vedrai"
 
     - **Autenticazione**: Login sicuro con indicatore della forza della password
+    - **Sicurezza**: Indicatore di sicurezza della connessione nella barra laterale, aperto sul suo livello e sul motivo
+    - **Primo utilizzo**: Configurazione iniziale al primo accesso, tour principale guidato e guide contestuali, ripetibili dalle Impostazioni
     - **Dashboard**: Panoramica rapida del tuo portafoglio
     - **Broker**: Gestione di più conti broker
     - **File**: Caricamento e gestione dei report dei broker con viste a griglia e tabella
@@ -30,6 +32,8 @@ Benvenuti nella galleria visiva di LibreFolio! Qui potete esplorare tutte le fun
     - **Media e Caricamento**: Ritaglio/modifica immagini, selettore di asset, rinomina file
     - **Tassi di cambio**: Coppie di valute, grafici, sincronizzazione, editor dati, importazione CSV
     - **Asset**: Monitoraggio di azioni, ETF, obbligazioni, crypto con grafici, segnali, misure e classificazione
+    - **Analisi del rischio**: Matrice di correlazione, confronto delle perdite, rischio/rendimento rispetto a un benchmark, replay storico e simulazione
+    - **Strumenti**: Catalogo di calcoli autonomi, con l'allocatore PAC
 
 ## 🌍 Supporto Linguistico
 

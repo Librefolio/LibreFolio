@@ -4,7 +4,7 @@
 **Data aggiornamento:** 2026-09-10 · allineato il 2026-10-09 (Q, base `3cceb4f90`)
 
 > **Cosa resta aperto** (verifica Q del 2026-10-09, base `3cceb4f90`):
-> - **Niente di C.** I passi 1–6 sono chiusi o passati a D. Il §3 è superato dal round di capacità di D. Le traduzioni utente sono rinviate al giro di traduzioni (`32_docsEnglish12`).
+> - **Niente di C.** I passi 1–6 sono chiusi o passati a D. Il §3 è superato dal round di capacità di D. Le traduzioni utente sono rinviate al giro di traduzioni di M: [plan-phase00TranslationRound12.prompt.md](../27_releaseImages/plan-phase00TranslationRound12.prompt.md).
 > - **La cartella resta in `Phase_0/`** perché la §0 di [handoff-pac-D.md](handoff-pac-D.md) è il contratto vivo del PAC: D la mantiene in `13_pacAllocator`, ancora attiva (Rebalancer non implementato), che ci punta con più di 20 link. Si archivia insieme a `13_pacAllocator`, intera.
 **Owner:** C — Piattaforma Tool
 **Branch/worktree al checkpoint:** `e-alfy-tool-platform-c-r2` /
@@ -266,7 +266,7 @@ corretti. Regressioni backend e frontend sono verdi.
 - [x] Type-check, Vitest client e build frontend C.
 - [x] Mount About sul file E definitivo e applicazione i18n via CLI.
 - [x] MkDocs traduzioni utente richieste; nav/build/check-links completati.
-  > **Note implementazione** (verifica Q del 2026-10-09, base `3cceb4f90`): nav, build strict e `check-links` sono verdi. Le pagine utente Tools sono solo EN (`mkdocs_src/docs/user/tools/index.en.md`, `user/tools/pac-allocator/index.en.md`), come stabilito in `09_feedbackJobs/05_pac_allocation_tool.md:103-104`. Le traduzioni sono rinviate al giro deciso dal developer, tracciato in `32_docsEnglish12`.
+  > **Note implementazione** (verifica Q del 2026-10-09, base `3cceb4f90`): nav, build strict e `check-links` sono verdi. Le pagine utente Tools sono solo EN (`mkdocs_src/docs/user/tools/index.en.md`, `user/tools/pac-allocator/index.en.md`), come stabilito in `09_feedbackJobs/05_pac_allocation_tool.md:103-104`. Le traduzioni sono rinviate al giro deciso dal developer, fatto da M: [plan-phase00TranslationRound12.prompt.md](../27_releaseImages/plan-phase00TranslationRound12.prompt.md).
 - [x] Pilot reale e review operativa desktop/mobile/errori. ↗️ trasferito a D
   > **Note implementazione** (verifica Q del 2026-10-09, base `3cceb4f90`): il pilot è integrato (planner PAC 1.0.0). La review operativa e l'approvazione separata di PAC e Rebalancer sono tracciate da D (`13_pacAllocator/implementation/plan-phase00PacRebalancerImplementation.prompt.md:381`).
 - [x] Aggiornamento CHANGELOG per le superfici osservabili. ✅

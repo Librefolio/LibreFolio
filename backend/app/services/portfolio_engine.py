@@ -298,8 +298,12 @@ class ScopeAwareTransactionClassifier:
                 ctxn = ClassifiedTransaction(tx=tx, classification="normal", share=share)
                 classified.append(ctxn)
 
-                # Unlinked DEPOSIT/WITHDRAWAL → external cash flow
-                if tx.type in _EXTERNAL_CASH_TYPES and tx.amount and tx.amount != 0 and tx.currency:
+                # Unlinked DEPOSIT/WITHDRAWAL → external cash flow. Lot 41 (D5): so is an
+                # orphan CASH_TRANSFER / FX_CONVERSION, whose link was cleared when the
+                # broker of the other leg was deleted: its money crossed the scope boundary.
+                # An orphan TRANSFER (no amount) is in-kind capital, booked by
+                # DailyStateBuilder._transfer_leg_capital.
+                if (tx.type in _EXTERNAL_CASH_TYPES or tx.type in _CASH_LINKED_TYPES) and tx.amount and tx.amount != 0 and tx.currency:
                     external_cash_flows.append((tx.date, tx.broker_id, tx.amount * share, tx.currency))
                 continue
 
@@ -523,6 +527,9 @@ class BrokerDailyContribution:
     nav_contribution: Decimal  # market_value_by_broker + cash_by_broker + in_transit_by_broker
     capital_contribution: Decimal  # cumulative_ecf_by_broker (this broker's capital baseline)
     pnl_contribution: Decimal  # nav_contribution - capital_contribution
+    # The in-transit part of nav_contribution. Internal, never exported: the broker card
+    # (PortfolioService.get_summary) adds it to market value and cash valued at its own date.
+    in_transit_contribution: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -753,6 +760,17 @@ class DailyStateBuilder:
                 ecf_by_date[dt] += converted
                 ecf_by_date_by_broker[(dt, bid)] += converted
 
+        # ── 3b. Lot 41 — internal flows between brokers (per-broker capital only) ──
+        # An internal pair across two brokers moves X of capital from the sender to the
+        # receiver on the arrival day, the same Decimal on both sides, so the broker
+        # lines do not jump when the value changes hands. Never into ecf_by_date: the
+        # scope capital (cumulative_ecf) and every aggregate stay as they are.
+        internal_flow_dates: set[date_type] = set()
+        for flow_date, sender_bid, receiver_bid, flow_value in self._internal_transfer_flows():
+            ecf_by_date_by_broker[(flow_date, sender_bid)] -= flow_value
+            ecf_by_date_by_broker[(flow_date, receiver_bid)] += flow_value
+            internal_flow_dates.add(flow_date)
+
         # ── 4. Accumulators (shared across pre-frame and frame) ──
         states: list[DailyPortfolioState] = []
         cumulative_cash = zero
@@ -787,7 +805,7 @@ class DailyStateBuilder:
         # ── 5. PRE-FRAME: [date_from, frame_start) — accounting only ──
         # Process all transaction days before frame_start: update cash, qty, cost pools, ECF.
         # No market evaluation, no DailyPortfolioState emission.
-        preframe_tx_dates = sorted(d for d in (set(cash_deltas.keys()) | set(position_txs_by_date.keys()) | set(ecf_by_date.keys())) if d < self.frame_start)
+        preframe_tx_dates = sorted(d for d in (set(cash_deltas.keys()) | set(position_txs_by_date.keys()) | set(ecf_by_date.keys()) | internal_flow_dates) if d < self.frame_start)
         for day in preframe_tx_dates:
             cumulative_cash += cash_deltas.get(day, zero)
             cumulative_ecf += ecf_by_date.get(day, zero)
@@ -864,6 +882,10 @@ class DailyStateBuilder:
                     cost_pool[key] = step
                     if tx.id in self.split_linked_tx_ids:
                         continue
+                    transfer_capital = self._transfer_leg_capital(ctxn, tx_qty)
+                    if transfer_capital is not None:
+                        cumulative_ecf += transfer_capital
+                        cumulative_ecf_by_broker[tx.broker_id] += transfer_capital
                     if tx.quantity > 0:
                         if step.effect == CostEffect.ADD and self._is_capital_adjustment(tx):
                             cumulative_ecf += step.cost_report_change
@@ -886,6 +908,9 @@ class DailyStateBuilder:
             if d >= self.frame_start:
                 dirty_days.add(d)
         for d in ecf_by_date.keys():
+            if d >= self.frame_start:
+                dirty_days.add(d)
+        for d in internal_flow_dates:
             if d >= self.frame_start:
                 dirty_days.add(d)
         for interval in self.in_transit_intervals:
@@ -1002,6 +1027,13 @@ class DailyStateBuilder:
                         cost_pool[key] = step
                     if tx.id in self.split_linked_tx_ids:
                         continue  # split never touches cash/K/R/realized accounting
+                    # Lot 41 (D2/D5): a TRANSFER leg with no internal partner is in-kind
+                    # capital at market value. Not in ecf_today: the daily
+                    # external_cash_flow stays cash-only, as for the in-kind ADJUSTMENT.
+                    transfer_capital = self._transfer_leg_capital(ctxn, tx_qty)
+                    if transfer_capital is not None:
+                        cumulative_ecf += transfer_capital
+                        cumulative_ecf_by_broker[bid] += transfer_capital
                     if tx.quantity > 0:
                         # In-kind ADJUSTMENT-in (priced, no cash): capital contribution.
                         # Add the cost it brings into the pool to the capital baseline so total
@@ -1167,20 +1199,23 @@ class DailyStateBuilder:
 
             # 4f2. G1a — additive per-broker NAV/capital/P&L contribution. Built from
             # exactly the same Decimal components summed above (market value, cash,
-            # in-transit, external capital flow), so
+            # in-transit, external capital flow), plus the step-3b internal flows, which
+            # cancel out across brokers every day (lot 41), so
             #   sum(nav_contribution) == nav
             #   sum(capital_contribution) == capital_baseline
             #   sum(pnl_contribution) == total_pnl
             # hold by construction — never a residual/plug line.
             broker_contributions: dict[int, BrokerDailyContribution] = {}
             for bid in all_broker_ids:
-                broker_nav_contribution = market_value_by_broker.get(bid, zero) + cumulative_cash_by_broker.get(bid, zero) + it_by_broker.get(bid, zero)
+                broker_in_transit_contribution = it_by_broker.get(bid, zero)
+                broker_nav_contribution = market_value_by_broker.get(bid, zero) + cumulative_cash_by_broker.get(bid, zero) + broker_in_transit_contribution
                 broker_capital_contribution = cumulative_ecf_by_broker.get(bid, zero)
                 broker_contributions[bid] = BrokerDailyContribution(
                     broker_id=bid,
                     nav_contribution=broker_nav_contribution,
                     capital_contribution=broker_capital_contribution,
                     pnl_contribution=broker_nav_contribution - broker_capital_contribution,
+                    in_transit_contribution=broker_in_transit_contribution,
                 )
 
             # 4g. Clamp pools per-broker (rounding safety)
@@ -1639,6 +1674,84 @@ class DailyStateBuilder:
         over a new quantity, it neither adds nor removes economic capital.
         """
         return tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and tx.quantity is not None and tx.quantity != 0 and (tx.id is None or tx.id not in self.split_linked_tx_ids)
+
+    def _internal_transfer_flows(self) -> list[tuple[date_type, int, int, Decimal]]:
+        """Lot 41 — the capital flows of the internal pairs between two brokers (step 3b).
+
+        One ``(arrival_date, sender_broker_id, receiver_broker_id, value)`` for each
+        linked-internal CASH_TRANSFER / FX_CONVERSION / TRANSFER pair whose two legs sit on
+        different brokers. The sender is the leg going out (negative amount for cash, negative
+        quantity for securities), the receiver the leg coming in; the arrival date is the later
+        leg's date. Pairs without exactly one of each, same-broker pairs and ADJUSTMENT pairs
+        give no flow.
+
+        ``value`` is what the arrival brings into the receiver's NAV, valued on the arrival
+        date as the NAV values it — the received amount converted at that date, or the market
+        value of the received quantity — at the sender's share, like the value in transit.
+        A value that cannot be computed (MISSING mark, missing FX rate) gives no flow, which is
+        what the arrival adds to the NAV.
+
+        Pure: it records no missing data, so a build with this method returning ``[]`` differs
+        only in the per-broker capital.
+        """
+        zero = Decimal("0")
+        ctxn_by_id = {ctxn.tx.id: ctxn for ctxn in self.classified_txs if ctxn.tx.id is not None}
+        seen_pairs: set[tuple[int, int]] = set()
+        flows: list[tuple[date_type, int, int, Decimal]] = []
+        for ctxn in self.classified_txs:
+            tx = ctxn.tx
+            if ctxn.classification != "linked_internal" or ctxn.paired_tx is None or tx.id is None or tx.type not in _LINKED_TYPES:
+                continue
+            partner = ctxn_by_id.get(ctxn.paired_tx.id)
+            if partner is None or partner.classification != "linked_internal" or partner.tx.type != tx.type:
+                continue
+            pair_key = (min(tx.id, partner.tx.id), max(tx.id, partner.tx.id))
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+            if tx.broker_id is None or partner.tx.broker_id is None or tx.broker_id == partner.tx.broker_id:
+                continue  # a same-broker pair never leaves the broker's line
+            is_cash = tx.type in _CASH_LINKED_TYPES
+            legs = (ctxn, partner)
+            directions = [(leg.tx.amount if is_cash else leg.tx.quantity) or zero for leg in legs]
+            senders = [leg for leg, direction in zip(legs, directions, strict=True) if direction < 0]
+            receivers = [leg for leg, direction in zip(legs, directions, strict=True) if direction > 0]
+            if len(senders) != 1 or len(receivers) != 1:
+                logger.debug("Internal pair without one sender and one receiver: no broker flow", pair=pair_key)
+                continue
+            sender, receiver = senders[0], receivers[0]
+            arrival = max(sender.tx.date, receiver.tx.date)
+            received = receiver.tx
+            if is_cash:
+                value = self._convert(abs(received.amount), received.currency, arrival) if received.currency else None
+            else:
+                value = self._market_value_for(received.asset_id, abs(received.quantity), arrival).market_value if received.asset_id is not None else None
+            if value is None:
+                continue
+            flow_value = value * sender.share
+            if flow_value != zero:
+                flows.append((arrival, sender.tx.broker_id, received.broker_id, flow_value))
+        return flows
+
+    def _transfer_leg_capital(self, ctxn: ClassifiedTransaction, tx_qty: Decimal) -> Decimal | None:
+        """Lot 41 (D2/D5) — in-kind capital of a TRANSFER leg that forms no internal pair.
+
+        A TRANSFER whose other leg is outside the scope (linked_external_*), missing, or never
+        linked (an orphan) moves securities across the scope boundary without cash: capital,
+        not profit. It counts at market value on its own date, for ``tx_qty`` (already at the
+        broker's share): positive for securities received, negative for securities sent.
+        None for any other row, for an internal-pair leg (step 3b handles it), for a
+        split-linked row, or when the security cannot be valued that day.
+        """
+        tx = ctxn.tx
+        if tx.type != TransactionType.TRANSFER or tx.asset_id is None or tx_qty == 0:
+            return None
+        if ctxn.classification == "linked_internal" or (tx.id is not None and tx.id in self.split_linked_tx_ids):
+            return None
+        market_value = self._market_value_for(tx.asset_id, abs(tx_qty), tx.date).market_value
+        if market_value is None:
+            return None
+        return market_value if tx_qty > 0 else -market_value
 
     def _distribute_allocation(
         self,
@@ -2644,6 +2757,8 @@ class PortfolioCalculationEngine:
         - External cash flows → target_currency
         - Price currencies → target_currency (every day in range)
         - Asset currencies (resolver marks, unrealized split) → target_currency (every day in range)
+        - TRANSFER legs before the range → price/asset currencies at the leg date (lot 41: the
+          internal broker flows and the in-kind transfer capital value securities on that date)
         - In-transit cash → target_currency (every day of the transit); in-transit cost → at arrival
 
         Cost conversions are not here: compute_average_costs makes its own, at each movement's date.
@@ -2683,6 +2798,19 @@ class PortfolioCalculationEngine:
                 for ccy in all_non_target_ccys:
                     fx_needs.add((ccy, current))
                 current += timedelta(days=1)
+
+        # From TRANSFER legs before the range: the loop above starts at date_from
+        for ctxn in classified_txs:
+            tx = ctxn.tx
+            if tx.type != TransactionType.TRANSFER or tx.asset_id is None or not tx.quantity or tx.date >= date_from:
+                continue
+            leg_ccys = {ccy for _, _, ccy in price_map.get(tx.asset_id, [])}
+            asset_ccy = asset_currencies.get(tx.asset_id)
+            if asset_ccy:
+                leg_ccys.add(asset_ccy)
+            for ccy in leg_ccys:
+                if ccy != target_currency:
+                    fx_needs.add((ccy, tx.date))
 
         # From in-transit intervals: cash every day of the transit, cost at the arrival date
         for interval in in_transit_intervals:

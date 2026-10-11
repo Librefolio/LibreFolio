@@ -45,6 +45,35 @@ backend/
 - First user = automatic admin
 - Broker roles: Owner / Editor / Viewer
 
+## Financial Math — One Home
+
+Every financial calculation — purchase cost, P&L, capital, NAV, returns, FX valuation, yields — has exactly one
+implementation. Its home is `backend/app/services/financial_math/` (developer decision, 2026-10-11). Some engines still
+live in their historical modules until they are moved there: the table says where each calculation is today.
+
+1. **Search before writing.** Before computing anything financial, look in `financial_math/` and in the table below. If
+   the calculation exists, call it — with parameters when your case differs — instead of deriving it again.
+2. **Add there.** A new calculation goes into `financial_math/`, next to the ones it relates to, with its unit tests.
+3. **No local or partial copies.** A loop over transactions that recomputes cost, capital, NAV or P&L outside these
+   engines is a defect, even when it serves a single card or export: read the engine's output instead.
+4. **Report copies.** Report any copy you meet, old or new, to the coordinator (backlog 38 or the consolidation lot).
+   Before closing work that touched financial math, search the project for copies of what you changed.
+
+| Calculation | Where it lives today |
+|---|---|
+| Average purchase cost (WAC), cost-basis steps and conversions | `services/financial_math/average_cost.py` |
+| Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions | `services/portfolio_engine.py` |
+| FIFO lots and realized gains | `services/fifo_lot_engine.py` |
+| Simple ROI, TWRR, MWRR, annualization | `utils/financial/roi_utils.py` |
+| Holding value from quantity and price | `utils/financial/valuation_utils.py` |
+| Yield on Cost | `services/yield_on_cost.py` |
+| FX conversion | `services/fx.py` (`convert_bulk`) |
+| Technical indicators | `services/signal_plugins/`, `services/signal_runtime.py` |
+| Risk metrics and optimization | `services/risk/quant/` |
+| PAC allocation | `services/pac_allocator/` |
+
+The frontend computes none of these (`.github/copilot-instructions.md`, decision 1).
+
 ## Where to Find Things
 
 | What | Where |

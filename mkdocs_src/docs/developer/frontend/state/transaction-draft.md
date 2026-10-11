@@ -114,6 +114,71 @@ The tagged union structure of `PendingOp` simplifies complex composite operation
     its pre-promote type in `promoteFromType`, because the backend derives the target from the
     two source types.
 
+### 💡 Promote suggestions {: #promote-suggestions }
+
+The workspace looks for the two halves of a transfer or an exchange and offers to promote them
+(`TransactionBulkModal.svelte`, with the pure helpers of `lib/utils/transactions/promoteSuggest.ts`):
+
+* **The green banner** (`promote-suggest-banner`) lists `bannerSuggestions`: pairs of standalone
+  rows that are both in the workspace — two new rows, two saved rows, or a new row and a saved one
+  (`mixedPromotePairs`). The two dates are at most *Max Δ days* apart (`maxDeltaDays`, 0–14), and
+  `findPromoteMatch` finds a rule on the context `buildPromoteCtx` reads from the two rows: its
+  broker, currency, asset and quantity constraints hold — the quantities exactly opposite for an
+  asset transfer — and the target type accepts the rows' event links (`eventA`/`eventB`, each
+  row's `asset_event_id`). No promote target accepts one, so a row linked to an asset event, such
+  as an `ADJUSTMENT` linked to a split, is never offered. The two sides must also cancel exactly:
+  a cash transfer's amounts (`cashAmountsCancel`), and an asset transfer's quantities of one asset
+  (`assetQuantitiesCancel`, in `promoteSuggest.ts`). Both helpers give each value the sign its
+  type implies, then compare the decimal strings exactly, as the backend compares `Decimal`s: a
+  relative tolerance of 1e-9 would let a one-cent difference through above about 10 million, a
+  pair the backend refuses. It shows the first five pairs, the paying row first when both rows
+  carry cash. `executePromote` asks `findPromoteMatch` again before it promotes, so its refusals
+  hold for every promote of the workspace: **Merge**, **Merge all**, and the selection toolbar's
+  promote button (`selectedForPromote`, `promote-toolbar-confirm`), which also asks
+  `cashAmountsCancel` of a cash transfer and `assetQuantitiesCancel` of an asset transfer.
+* **The 💡 button** (`tx-bulk-suggest-import`, and the row action `suggest`) lists
+  `importableSuggestions`: saved transactions that `POST /transactions/promote-suggest` proposes as
+  the other half of a row, and that are not in the workspace yet. The search runs debounced on the
+  standalone saved rows and on the new rows that have a type, a broker, a date and an amount or a
+  quantity, asked about under a negative id (`newRowSuggestId`). It uses the banner's *Max Δ days*
+  window: the slider's value (`maxDeltaDays`) goes as `tolerance_days`, and the backend searches
+  each row's date ± that many days, so 0 means the same day only. The window is part of the search
+  key, so moving the slider starts a new search, debounced like any other change. Each input also
+  carries the row's `asset_event_id` (`TXPromoteSuggestInput`, where `null` or `0` means not
+  linked): the backend skips, for a linked row, every rule whose target type refuses the link —
+  today all of them, so the row gets an empty list — and never returns a saved row linked to an
+  event as a candidate for such a rule, so the 💡 never offers a pair that an event link would keep
+  from merging. The 💡 opens `TransactionPickerModal` on those candidates; once one is added, the
+  banner offers the pair.
+* **Merge** (`promote-suggest-link-<idx>`) promotes one pair: `executePromote` at once, or
+  `PromoteMergeModal` first when the two rows differ in description or tags.
+* **Merge all (N)** (`promote-suggest-merge-all`, when `mergeAllPairs` holds more than one pair)
+  opens `PromoteAllModal.svelte` (`promote-all-modal`), which asks one `PromoteAllStrategy` for every
+  pair, `merge` preselected at each opening: `left` (*All left*, the description and tags of the
+  row the banner lists first), `right` (*All right*, those of the other row) or `merge` (*Combine*:
+  `mergeStrings` of the two descriptions and `mergeTagSets` of the tags, `PromoteMergeModal`'s
+  default). `mergeAllPairs` is the banner's pairs in their order (all of them, not only the five
+  shown), without any pair that shares a row with an earlier one: when two suggestions share a
+  row, only the first is kept and the row is merged once. *N*, and the count the dialog shows, is
+  `mergeAllPairs.length`: the pairs to merge, not the suggestions. `mergeAllSuggestions` then walks
+  `mergeAllPairs` and passes the chosen values to `executePromote` where a pair differs in
+  description or tags; it skips a pair whose rows no longer match a rule, or with a row already
+  merged (`isPaired`).
+* **The save gate.** `requestCommit` first counts the suggestions nobody looked at
+  (`unseenSuggestionCount`): the 💡 candidates until the picker has been opened once
+  (`suggestPickerSeen`), and the banner's pairs until a click lands anywhere in the banner
+  (`promoteBannerSeen`, an `onclickcapture`). With any left, **Save All** opens *Suggestions you
+  have not looked at* (`tx-bulk-unseen-suggestions`) instead of saving. **Save anyway** marks both
+  as seen and goes on to the [warnings gate](#validation-resolution-lifecycle)
+  (`requestCommitPastSuggestions`). **Show the suggestions** — and closing the dialog — opens the
+  picker when it was never opened and has candidates, and otherwise marks the banner as seen and
+  scrolls it into view. Both flags reset only when the workspace opens again.
+
+`PromoteAllModal.test.ts` (Vitest, jsdom) pins the dialog: the three answers, *Combine* by default
+and again at every opening, and cancelling. `e2e/transactions/tx-import-scalable-transfers.spec.ts`
+runs the whole path on two Scalable exports: the banner's **Merge** (S1), the 💡 and a new + saved
+pair (S2), the save gate (S3) and **Merge all** (S4).
+
 ---
 
 ## 📤 Validation & Commit Pipeline
@@ -171,7 +236,10 @@ LibreFolio defers all deep ledger validation (such as checking if a sale results
   shows its issues without a click. Later edits follow the two rules above.
 
 ### 3. Batch Commit (`/transactions/commit`)
-On **Save All**, `resolveOps()` turns `PendingOp[]` into create, update and delete operations, and `buildBatchPayload()` assembles them, together with the queued splits and promotes, into a single atomic batch:
+**Save All** passes two gates first (`requestCommit`): the [suggestions nobody looked at](#promote-suggestions),
+then the warning todos ([below](#validation-resolution-lifecycle)).
+
+Then `resolveOps()` turns `PendingOp[]` into create, update and delete operations, and `buildBatchPayload()` assembles them, together with the queued splits and promotes, into a single atomic batch:
 
 * **Creates**: Array of brand-new transaction data (a pair contributes both legs).
 * **Updates**: Key-value diffs containing only modified fields vs the original `txStore` data.
@@ -232,8 +300,9 @@ export interface ImportTodo {
    gives a warning toast instead (*The affected rows are hidden by the table filters.*).
 3. **Blocker Prevention:** If any row has a todo with `severity: 'blocker'`, the **Save All** button
    is disabled and its tooltip reads *Complete all required fields before saving*.
-4. **Warnings gate:** with warning todos left, **Save All** first opens *Verify auto-derived
-   fields?*, listing them, with **Save anyway** and **Review**.
+4. **Warnings gate:** with warning todos left, **Save All** — once past the
+   [suggestions gate](#promote-suggestions) — opens *Verify auto-derived fields?*, listing them,
+   with **Save anyway** and **Review**.
 5. **Resolution:** the user opens the row in the nested `TransactionFormModal` (double-click or the
    row action) and applies it. Applying re-checks the row's todos with `remainingTodos()`
    (`lib/utils/transactions/bulkTodos.ts`): a todo is resolved when its field now holds a value.

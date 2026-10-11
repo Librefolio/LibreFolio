@@ -289,6 +289,27 @@ class BRIMPluginInfo(StrictModel):
     report_roles: List[BRIMReportRole] = Field(default_factory=list, description="Export roles of a report-set plugin; empty for single-file plugins")
 
 
+class BRIMRefusal(StrictModel):
+    """Why a plugin refuses a file: a stable code to translate, the plugin's English sentence and its parameters.
+
+    Returned by ``BRIMProvider.cannot_parse_detail``. The frontend translates ``code`` as
+    ``importWizard.parseRefusal.<code>`` with ``context`` as parameters, and shows ``message``
+    when the code is absent or has no translation.
+    """
+
+    code: Optional[str] = Field(default=None, pattern=r"^[a-z][a-z0-9_]*$", description="Stable snake_case code the frontend translates; None when the plugin gives only a sentence")
+    message: str = Field(..., min_length=1, description="The plugin's reason in one short English sentence (lowercase start, no final period): the fallback text")
+    context: Dict[str, Any] = Field(default_factory=dict, description="Parameters for the translation, e.g. the plugin that reads the file")
+
+
+class BRIMPluginCheck(StrictModel):
+    """Whether one plugin reads an uploaded file and, if not, why (``GET /import/files/{file_id}/plugin-check``)."""
+
+    plugin_code: str = Field(..., description="Code of the plugin asked")
+    can_parse: bool = Field(..., description="The plugin's can_parse answer for the file")
+    refusal: Optional[BRIMRefusal] = Field(default=None, description="Why the plugin refuses the file; None when it reads it or has nothing to add")
+
+
 # =============================================================================
 # ASSET MAPPING SCHEMAS (Fake ID → Real Asset)
 # =============================================================================

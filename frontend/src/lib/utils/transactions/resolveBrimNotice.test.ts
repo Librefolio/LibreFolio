@@ -1,7 +1,7 @@
 import {describe, it, expect} from 'vitest';
 import type {BrimNotice} from '$lib/types';
 import * as resolveBrimNotice from './resolveBrimNotice';
-import {resolveBrimNoticeMessage} from './resolveBrimNotice';
+import {resolveBrimEvidenceComment, resolveBrimNoticeMessage} from './resolveBrimNotice';
 
 /** Fake `$t`: known keys interpolate {tokens} from values; unknown keys echo the key. */
 function makeT(known: Record<string, string> = {}) {
@@ -130,5 +130,83 @@ describe('resolveBrimTodoMessage — the wording of a BRIM field todo', () => {
         const lookup = asked.find((call) => call.key === 'importWizard.brimNotice.probe_namespace');
         expect(lookup, `the keys looked up: ${JSON.stringify(asked.map((call) => call.key))}`).toBeDefined();
         expect(lookup?.values, 'the context reaches the lookup as its values').toEqual(expect.objectContaining(context));
+    });
+});
+
+/**
+ * ─── resolveBrimEvidenceComment: the comment under a notice's evidence table ────────────────────
+ *
+ * The plugin writes the comment under its evidence table in English, like the notice's message.
+ * The notices' contract, for the comment:
+ *   - key    `importWizard.brimEvidence.<notice.code>` — the notice's own key is the message's, not the comment's
+ *   - values `notice.context`
+ *   - miss, no code, or no comment to replace → the plugin's comment exactly as given: never the raw
+ *     key, and never a comment the plugin did not write.
+ * Generic over the comment's type (the generated client types it with an impossible array branch):
+ * anything but a non-empty string comes back as the very same value. BrimNoticeList hands the result
+ * to BrimEvidenceTable; the twelve `scalable_*` keys are checked in all four catalogues by
+ * test_brim_scalable.py.
+ */
+describe('resolveBrimEvidenceComment — the comment under a notice’s evidence table', () => {
+    const PLUGIN_COMMENT = 'lf_is_cancellation is true on these rows.';
+    const KEY = 'importWizard.brimEvidence.scalable_reversal';
+
+    it('is the catalogue comment at importWizard.brimEvidence.<code>, the notice’s context as its values', () => {
+        const {t, asked} = recordingT({[KEY]: '{count} rows reverse a booked transaction.'});
+        const reversal = notice({code: 'scalable_reversal', message: 'plugin message', context: {count: 2}});
+        expect(resolveBrimEvidenceComment(reversal, PLUGIN_COMMENT, t)).toBe('2 rows reverse a booked transaction.');
+        expect(asked, 'one lookup, at the evidence key of the notice’s code, with its context').toEqual([{key: KEY, values: {count: 2}}]);
+    });
+
+    it('is the catalogue comment for a notice without a context, looked up with no values', () => {
+        const {t, asked} = recordingT({[KEY]: 'These rows are reversals.'});
+        expect(resolveBrimEvidenceComment(notice({code: 'scalable_reversal', context: null}), PLUGIN_COMMENT, t)).toBe('These rows are reversals.');
+        expect(asked).toEqual([{key: KEY, values: {}}]);
+    });
+
+    it('leaves the notice’s context as the plugin wrote it', () => {
+        const context = Object.freeze({count: 3});
+        const reversal = notice({code: 'scalable_reversal', context});
+        expect(resolveBrimEvidenceComment(reversal, PLUGIN_COMMENT, makeT({[KEY]: '{count} reversals'}))).toBe('3 reversals');
+        expect(reversal.context).toEqual({count: 3});
+    });
+
+    it('keeps the plugin’s comment when the code has no evidence key — never the raw key', () => {
+        const reversal = notice({code: 'scalable_reversal', message: 'plugin message', context: {count: 2}});
+        expect(resolveBrimEvidenceComment(reversal, PLUGIN_COMMENT, makeT())).toBe(PLUGIN_COMMENT);
+    });
+
+    it('keeps the plugin’s comment when only the notice’s own key exists: that one words the message', () => {
+        const reversal = notice({code: 'scalable_reversal', context: {count: 2}});
+        expect(resolveBrimEvidenceComment(reversal, PLUGIN_COMMENT, makeT({'importWizard.brimNotice.scalable_reversal': 'the message, not the comment'}))).toBe(PLUGIN_COMMENT);
+    });
+
+    it.each([
+        ['null', null],
+        ['empty', ''],
+        ['left out', undefined],
+    ])('keeps the plugin’s comment, looking nothing up, when the notice’s code is %s', (_label, code) => {
+        const {t, asked} = recordingT({'importWizard.brimEvidence.': 'never shown', 'importWizard.brimEvidence.null': 'never shown', 'importWizard.brimEvidence.undefined': 'never shown'});
+        // The schema defaults the code to 'generic': a null or missing one reaches the UI only past it, hence the cast.
+        expect(resolveBrimEvidenceComment(notice({code: code as unknown as string}), PLUGIN_COMMENT, t)).toBe(PLUGIN_COMMENT);
+        expect(asked).toEqual([]);
+    });
+
+    it.each([
+        ['null', null],
+        ['empty', ''],
+        ['left out', undefined],
+    ])('hands a %s comment back as it is, looking nothing up — the key never invents a comment', (_label, comment) => {
+        const {t, asked} = recordingT({[KEY]: 'never shown'});
+        expect(resolveBrimEvidenceComment(notice({code: 'scalable_reversal', context: {count: 2}}), comment, t)).toBe(comment);
+        expect(asked).toEqual([]);
+    });
+
+    it('hands a comment that is not a string back untouched — the very same value — looking nothing up', () => {
+        const {t, asked} = recordingT({[KEY]: 'never shown'});
+        const lines = ['first line', 'second line'];
+        expect(resolveBrimEvidenceComment(notice({code: 'scalable_reversal', context: {count: 2}}), lines, t)).toBe(lines);
+        expect(lines, 'and unchanged').toEqual(['first line', 'second line']);
+        expect(asked).toEqual([]);
     });
 });

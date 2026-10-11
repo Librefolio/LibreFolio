@@ -4,20 +4,20 @@ Comprender la fiscalidad es esencial para maximizar los retornos de inversión a
 
 !!! warning "No es asesoramiento financiero"
 
-    LibreFolio no proporciona asesoramiento fiscal. Cada jurisdicción tiene reglas diferentes con respecto a las tasas impositivas, los periodos de tenencia, la compensación de pérdidas y los métodos de emparejamiento. Consulte a un profesional fiscal cualificado para su situación específica.
+    LibreFolio no proporciona asesoramiento fiscal. Cada jurisdicción tiene reglas diferentes con respecto a las tasas impositivas, los periodos de tenencia, la compensación de pérdidas y los métodos de emparejamiento. Consulta a un profesional fiscal cualificado para tu situación específica.
 
 ---
 
 ## 📊 Plusvalías y Pérdidas de Capital
 
-Cuando vende un activo, la diferencia entre el precio de venta y el precio de compra determina su **plusvalía** o **pérdida de capital**:
+Cuando vendes un activo, la diferencia entre el precio de venta y el precio de compra determina tu **plusvalía** o **pérdida de capital**:
 
 $$
 \text{Capital Gain} = P_{sell} - P_{buy} - \text{Fees}
 $$
 
-- **Plusvalía** ($> 0$): Vendió por más de lo que pagó → evento imponible en la mayoría de las jurisdicciones
-- **Pérdida de Capital** ($< 0$): Vendió por menos de lo que pagó → puede compensar plusvalías futuras
+- **Plusvalía** ($> 0$): Vendiste por más de lo que pagaste → evento imponible en la mayoría de las jurisdicciones
+- **Pérdida de Capital** ($< 0$): Vendiste por menos de lo que pagaste → puede compensar plusvalías futuras
 
 ### 🔄 Realizadas vs No Realizadas
 
@@ -26,17 +26,17 @@ $$
 | **No Realizadas** (ganancia/pérdida sobre el papel) | Activo aún mantenido; la ganancia/pérdida existe solo en el papel | No tributa (en la mayoría de las jurisdicciones) |
 | **Realizadas** | Activo vendido; la ganancia/pérdida se materializa | Normalmente desencadena un evento fiscal |
 
-Esta distinción es la base del **diferimiento fiscal**: al no vender, usted difiere el evento fiscal indefinidamente.
+Esta distinción es la base del **diferimiento fiscal**: al no vender, difieres el evento fiscal indefinidamente.
 
 ### 📋 Métodos de Emparejamiento
 
-Cuando ha comprado el mismo activo varias veces a precios diferentes, ¿con qué compra se empareja una venta?
+Cuando has comprado el mismo activo varias veces a precios diferentes, ¿con qué compra se empareja una venta?
 
 | Método | Regla | Efecto |
 |--------|------|--------|
 | **FIFO** (First In, First Out) | Las acciones más antiguas se venden primero | El valor predeterminado más común |
 | **LIFO** (Last In, First Out) | Las acciones más recientes se venden primero | Puede minimizar/maximizar las plusvalías |
-| **Identificación Específica** | Usted elige qué lote vender | Máxima optimización fiscal |
+| **Identificación Específica** | Tú eliges qué lote vender | Máxima optimización fiscal |
 
 !!! info "LibreFolio utiliza FIFO"
 
@@ -66,7 +66,7 @@ Uno de los conceptos más poderosos en la inversión fiscalmente eficiente es **
 
 ### 📐 La Fórmula
 
-Compare dos escenarios durante $n$ años con un retorno anual $r$ y una tasa impositiva $\tau$:
+Compara dos escenarios durante $n$ años con un retorno anual $r$ y una tasa impositiva $\tau$:
 
 **Escenario A — Impuestos anuales** (ej., fondo de distribución):
 
@@ -86,11 +86,11 @@ Con $P = 10{,}000$, $r = 7\%$, $\tau = 26\%$, $n = 20$ años:
 
 | Escenario | Valor Final | Retorno Efectivo |
 |----------|------------|-----------------|
-| Impuestos anuales | €28,398 | 5.18% p.a. |
-| Impuestos al final | €31,616 | 5.93% p.a. |
-| **Ventaja del diferimiento** | **+€3,218** | **+0.75% p.a.** |
+| Impuestos anuales | €28.398 | 5,18% p.a. |
+| Impuestos al final | €31.616 | 5,93% p.a. |
+| **Ventaja del diferimiento** | **+€3.218** | **+0,75% p.a.** |
 
-La ventaja crece exponencialmente con el tiempo; a lo largo de 30 años, la brecha se amplía a más de €8,000 sobre la misma inversión de €10,000.
+La ventaja crece exponencialmente con el tiempo; a lo largo de 30 años, la brecha se amplía a más de €8.000 sobre la misma inversión de €10.000.
 
 ---
 
@@ -101,16 +101,16 @@ Esta ventaja del diferimiento se manifiesta directamente en la elección entre v
 ### 📈 Acumulación (ej., Acc ETFs)
 
 - Los dividendos son **reinvertidos internamente** por el fondo
-- **No hay evento imponible** hasta que usted venda las participaciones del fondo
+- **No hay evento imponible** hasta que vendas las participaciones del fondo
 - Beneficio total del [crecimiento compuesto](../technical-analysis/synthetic-benchmarks/compound.md) sobre el importe bruto (antes de impuestos)
 - Ideal para inversores a largo plazo que buscan el máximo crecimiento
 
 ### 💵 Distribución (ej., Dist ETFs)
 
-- Los dividendos se le **pagan** periódicamente
+- Los dividendos se te **pagan** periódicamente
 - Cada distribución es un **evento imponible** (tributa inmediatamente)
-- Usted recibe efectivo pero pierde el beneficio del interés compuesto sobre el importe impositivo
-- Útil si necesita ingresos de sus inversiones
+- Recibes efectivo pero pierdes el beneficio del interés compuesto sobre el importe impositivo
+- Útil si necesitas ingresos de tus inversiones
 
 ### 🔗 Conexión con los Modelos de Crecimiento
 
@@ -134,7 +134,7 @@ Cada país tiene su propio marco fiscal. Parámetros clave que varían:
 
 !!! abstract "El rol de LibreFolio"
 
-    LibreFolio rastrea sus transacciones y calcula las plusvalías/pérdidas realizadas utilizando el emparejamiento FIFO. Proporciona la **base de datos** para la declaración de impuestos, pero no genera declaraciones fiscales ni aplica reglas específicas de cada jurisdicción. Exporte sus datos de transacciones y consulte a un profesional fiscal.
+    LibreFolio rastrea tus transacciones y calcula las plusvalías/pérdidas realizadas utilizando el emparejamiento FIFO. Proporciona la **base de datos** para la declaración de impuestos, pero no genera declaraciones fiscales ni aplica reglas específicas de cada jurisdicción. Exporta tus datos de transacciones y consulta a un profesional fiscal.
 
 ---
 

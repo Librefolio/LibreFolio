@@ -50,7 +50,7 @@ Lo schema pubblico del motore associa i prezzi del risolutore alle etichette del
 
 !!! warning "Nessuna cascata legacy"
 
-    Il codice attualmente distribuito **non** utilizza un percorso di valutazione separato `market → last BUY → seed cost`. I prezzi di origine delle transazioni sono osservazioni all'interno del risolutore unificato; il PMC rimane la base di costo, non il prezzo di valutazione.
+    Il codice attualmente distribuito **non** utilizza un percorso di valutazione separato `market → last BUY → seed cost`. I prezzi di origine delle transazioni sono osservazioni all'interno del risolutore unificato; il PMC rimane il costo di carico, non il prezzo di valutazione.
 
 ## 🌍 Valuta e Scala
 
@@ -62,7 +62,7 @@ $$
 
 Questo è importante per i prezzi riportati (carried): una quotazione o transazione osservata in $s<t$ viene convertita utilizzando il tasso di cambio a $t$, non il tasso di cambio a $s$.
 
-La base di costo utilizza tempistiche diverse. Il costo di acquisizione è ancorato alla data della transazione:
+Il costo di carico utilizza tempistiche diverse. Il costo di acquisizione è ancorato alla data della transazione:
 
 $$
 \mathrm{Costo}_{C^*}(\tau)=\mathrm{Costo}_{nativo}(\tau)\cdot \mathrm{fx}\bigl(\mathrm{ccy}_{costo}, C^*, \tau\bigr)
@@ -101,6 +101,6 @@ Gli avvisi del portafoglio vengono valutati **alla data di valutazione**. Le val
 ## 🔗 Correlati
 
 - 💼 [NAV](nav.md) — utilizza i prezzi del risolutore per il valore di mercato
-- 📖 [Valore Contabile](book-value.md) — lato della base di costo, indipendente dai prezzi
+- 📖 [Valore Contabile](book-value.md) — lato del costo di carico, indipendente dai prezzi
 - 📈 [Rendimento Netto Annualizzato](net-annualized-return.md) — annualizza i rendimenti basati sulle valutazioni del risolutore
 - ⚙️ [Portfolio Engine](index.md) — modello completo

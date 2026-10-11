@@ -36,8 +36,8 @@ L'RSI classico può rimanere nella zona 40–60 per lunghi periodi senza mai rag
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo Stocastico ($N$) | `period` | 14 | Lookback condiviso per l'RSI sottostante e il suo range %K stocastico. |
-| Periodo D ($d$) | `dPeriod` | 3 | Finestra SMA applicata a %K per produrre %D. |
+| Periodo Stocastico ($N$) | `period` | 14 | Lookback condiviso per l'RSI sottostante e il suo range %K stocastico, in sedute. |
+| Periodo D ($d$) | `dPeriod` | 3 | Finestra SMA applicata a %K per produrre %D, in sedute. |
 | Ipercomprato | `overbought` | 80 | Soglia per la zona di ipercomprato. |
 | Ipervenduto | `oversold` | 20 | Soglia per la zona di ipervenduto. |
 

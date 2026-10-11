@@ -140,14 +140,7 @@
                         {@const asset = draft.asset(route.assetKey)}
                         {@const mode = draft.modeFor(route.assetKey, route.brokerKey)}
                         {@const missing = missingCurrency(asset, mode)}
-                        <li
-                            class="{TOGGLE_CARD} {route.enabled ? TOGGLE_ON : TOGGLE_OFF}"
-                            data-testid="pac-planner-route"
-                            data-asset-key={route.assetKey}
-                            data-broker-key={route.brokerKey}
-                            data-enabled={route.enabled ? 'true' : 'false'}
-                            data-ready={mode ? 'true' : 'false'}
-                        >
+                        <li class="{TOGGLE_CARD} {route.enabled ? TOGGLE_ON : TOGGLE_OFF}" data-testid="pac-planner-route" data-asset-key={route.assetKey} data-broker-key={route.brokerKey} data-enabled={route.enabled ? 'true' : 'false'} data-ready={mode ? 'true' : 'false'}>
                             <button type="button" class="flex w-full cursor-pointer items-center gap-2 p-2 text-left" aria-pressed={route.enabled} data-testid="pac-planner-route-enabled" onclick={() => (route.enabled = !route.enabled)}>
                                 <AssetIcon iconUrl={asset?.iconUrl} assetType={asset?.assetClass.toUpperCase()} altText="" size="sm" />
                                 <span class="min-w-0 flex-1">
@@ -161,17 +154,14 @@
 
                             {#if route.enabled && !mode}
                                 {#if missing !== ''}
-                                    <div
-                                        class="mx-2 mb-2 space-y-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-900 sm:ml-10 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
-                                        data-testid="pac-planner-route-mode-missing"
-                                        data-currency={missing}
-                                    >
+                                    <div class="mx-2 mb-2 space-y-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-900 sm:ml-10 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100" data-testid="pac-planner-route-mode-missing" data-currency={missing}>
                                         <div class="flex flex-wrap items-center gap-x-1">
                                             <span>{$t('tools.pacAllocator.planner.route.modeMissing', {default: '{broker} has no order mode in {currency} yet', values: {broker: broker.name || '—', currency: missing}})}</span>
                                             <HelpTip
                                                 label={$t('tools.pacAllocator.planner.route.modeMissing', {default: '{broker} has no order mode in {currency} yet', values: {broker: broker.name || '—', currency: missing}})}
                                                 help={$t('tools.pacAllocator.planner.route.modeMissingHelp', {
-                                                    default: 'The order mode says how {broker} takes an order in {currency}: by units or by amount, with which increment and which fees. The plan needs it to size the purchase of this Asset, which is priced in {currency}. It is not the conversion: if you pay with another currency, the plan adds the conversion as you set it on the Broker. Add the mode, or exclude the Asset on this Broker.',
+                                                    default:
+                                                        'The order mode says how {broker} takes an order in {currency}: by units or by amount, with which increment and which fees. The plan needs it to size the purchase of this Asset, which is priced in {currency}. It is not the conversion: if you pay with another currency, the plan adds the conversion as you set it on the Broker. Add the mode, or exclude the Asset on this Broker.',
                                                     values: {broker: broker.name || '—', currency: missing},
                                                 })}
                                                 testid="pac-planner-route-mode-missing-help"
@@ -279,7 +269,8 @@
                                                 <HelpTip
                                                     label={$t('tools.pacAllocator.planner.route.priority', {default: 'Priority'})}
                                                     help={$t('tools.pacAllocator.planner.route.priorityHelp', {
-                                                        default: 'It counts only between plans that get equally close to the target: among them, buying on the Brokers with the lowest number is preferred. It weighs more than the fees: to let the cost decide, leave them all at 0. All at 0 = no preference.',
+                                                        default:
+                                                            'It counts only between plans that get equally close to the target: among them, buying on the Brokers with the lowest number is preferred. It weighs more than the fees: to let the cost decide, leave them all at 0. All at 0 = no preference.',
                                                     })}
                                                 />
                                             </div>

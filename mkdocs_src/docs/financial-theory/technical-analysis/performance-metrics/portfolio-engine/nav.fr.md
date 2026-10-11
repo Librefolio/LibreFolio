@@ -1,4 +1,4 @@
-# 💼 Valeur Netative Inventaire (NAV) / Patrimoine Net
+# 💼 Valeur nette d'inventaire (NAV) / Valeur nette
 
 ## 💡 Qu'est-ce que le NAV ?
 
@@ -35,7 +35,7 @@ Le cours $\operatorname{mark}(a,t)$ provient du resolver unifié :
 3. **CARRIED** — dernière observation antérieure à $t$, projetée en avant (LOCF).
 4. **MISSING** — aucune observation à la date $t$ ou antérieurement.
 
-Les marks restent en devise native jusqu'à la valorisation ; la conversion FX a lieu à $t$. Le PMP n'est **jamais** utilisé pour la valorisation. Voir [Résolution des Prix](price-resolution.md).
+Les marks restent en devise native jusqu'à la valorisation ; la conversion FX a lieu à $t$. Le PRU n'est **jamais** utilisé pour la valorisation. Voir [Résolution des Prix](price-resolution.md).
 
 ---
 

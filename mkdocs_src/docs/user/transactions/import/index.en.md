@@ -150,6 +150,13 @@ Importers without a label are well tested and reliable for the formats they supp
     </div>
     <span class="card-desc">🔬 Alpha · Finnish equity savings account: the securities XLSX and the cash CSV, uploaded together as one report set</span>
     </a>
+    <a href="scalable/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <img src="../../../static/icons/brokers/scalable.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Scalable Capital">
+    <span class="card-title" style="margin: 0;">Scalable Capital</span>
+    </div>
+    <span class="card-desc">🔬 Alpha · broker account (Scalable's CSV or the LibreFolio exporter) and overnight account (exporter), as two brokers</span>
+    </a>
     <a href="traderepublic/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
     <img src="https://traderepublic.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Trade Republic">

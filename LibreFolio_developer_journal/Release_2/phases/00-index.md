@@ -35,15 +35,25 @@
 | `36_connectionSecurity/` | Indicatore di sicurezza della connessione e login senza enumerazione degli account | ✅ merge `01da03047` (treno 24) — archiviata il 09/10 |
 | `25_taxonomySelect/` | K: tassonomia degli asset, select, Esc nelle modali, Bulk e correzioni (step 1–23) | ✅ step 1–23 integrati, l'ultimo nel treno 25; residui → 38 (K-1…K-26) — archiviata il 09/10 |
 | `39_autoCostNoPosition/` | P-1 (P): il costo Auto salvato a 0 quando il broker d'origine non ha quote — analisi | ✅ chiusa senza codice per decisione del developer (09/10): lo 0 è il ripiego voluto di Auto, l'utente corregge la transazione; P-10, P-11 → 38 |
+| `40_transferCostBasis/` | Costo dei trasferimenti in Auto e controllo del costo nei promote (P; C-33) | ✅ `d7c148564`, merge `2a5c15c3c` (treno 28); debito IT/FR/ES della pagina teorica del WAC → lotto 11 di M — archiviata il 10/10 |
 
 **Not archived (still active / paused):**
-- `../Phase_0/02_riskfolioIntegration/` — Risk Analysis: resta in `Phase_0` per decisione del developer (D382, 09/10); il suo README elenca il lavoro aperto (A1–A7, B1–B6).
+
+> **L'indice unico del backlog dopo la 1.2** è [`../Phase_0/BACKLOG_POST_1.2.md`](../Phase_0/BACKLOG_POST_1.2.md)
+> (dall'11/10): una riga per voce col rimando ai dettagli. Lo popolano il coordinatore e i workstream, ognuno nella sua
+> sezione, e il coordinatore lo riconcilia a ogni treno.
+
+> Regola del developer (10/10, nella pulizia delle chat prima della 1.2): «non voglio archiviare i loro plan in
+> …/Phase_0/ voglio solo archiviare le chat». Le cartelle qui sotto restano in `Phase_0` anche da chiuse.
+- `../Phase_0/02_riskfolioIntegration/` — Risk Analysis: resta in `Phase_0` per decisione del developer (D382, 09/10); il suo README elenca il lavoro aperto (A1–A6, B1–B3, B6–B8; chiuse A7, B4, B5) e, dal treno 31, la guida «Ripartire da qui» per la prossima release.
 - `../Phase_0/09_feedbackJobs/` — backlog strutturale P4 ereditato dall'audit 08, reperti e review visiva (attivo: si pesca da lì al prossimo round).
 - `../Phase_0/13_pacAllocator/` — allocatore PAC (workstream D), in chiusura per la 1.2.
 - `../Phase_0/16_toolPlatform/` — piattaforma dei Tool, insieme alla 13.
-- `../Phase_0/21_onboarding/` — onboarding: aspetta la review manuale C7 del developer.
-- `../Phase_0/27_releaseImages/` — immagini di rilascio, gallery e pipeline (workstream M).
-- `../Phase_0/32_docsEnglish12/` — documentazione inglese della 1.2 (workstream Q).
-- `../Phase_0/37_brimScalable/` — plugin BRIM Scalable Capital (workstream S): in corso, entra con il suo checkpoint.
-- `../Phase_0/40_transferCostBasis/` — costo dei trasferimenti in Auto e controllo dei promote (P): integrato nel treno 28, da archiviare.
+- `../Phase_0/21_onboarding/` — onboarding: la review manuale C7 è chiusa (developer, 11/10; treno 36). Restano le voci 2–7 di «Cosa resta aperto», per dopo la 1.2; la cartella resta per decisione del developer (09/10).
+- `../Phase_0/27_releaseImages/` — immagini di rilascio, gallery e pipeline (workstream M): il lotto 14, parte A (terzo giro, immagini delle traduzioni, controlli della build e del validatore, audit della guida tradotta), è nel treno 37; la parte B e il giro finale dopo F sono per la 1.2.
+- `../Phase_0/32_docsEnglish12/` — documentazione inglese della 1.2 (workstream Q): chiusa con S24 (treno 31); le traduzioni sono nel lotto 11 di M, gli 8 scatti dei portali nel 38 (C-43).
+- `../Phase_0/37_brimScalable/` — plugin BRIM Scalable Capital (workstream S): integrato nel treno 30, piano chiuso nel treno 31; restano le traduzioni delle sue pagine (secondo giro di M).
 - `../Phase_0/38_postReleaseBacklog/` — backlog dopo la 1.2: i residui delle cartelle archiviate il 09/10 e il backlog del coordinatore.
+- `../Phase_0/41_brokerPnlFlows/` — P&L per broker senza salti ai trasferimenti (workstream I): l'engine è entrato nel treno 32, le card dei broker (H) nel treno 35; la rivalutazione della cassa in valuta (F) è approvata (11/10) e in corso per la 1.2.
+- `../Phase_0/42_promotePairChecks/` — i controlli delle coppie promosse (workstream P): chiuso, integrato nel treno 34; il compito a lato `DistributionEditor` nel treno 32; C-46…C-48 nel treno 37; le voci rimaste nella sezione P dell'indice post-1.2.
+- `../Phase_0/43_financialMathHome/` — casa unica della matematica finanziaria e riordino del codice (workstream T): il piano e B1, B2, B3a nel treno 37; per la 1.2 B3b, PL3, BU1, FE1 e T-1 dopo F.

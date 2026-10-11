@@ -38,7 +38,7 @@ Una EMA de período fijo es un compromiso: lo suficientemente rápida para segui
 
 | Parámetro | Clave | Valor por defecto | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 10 | Ventana de retroceso para el Ratio de Eficiencia. |
+| Período ($N$) | `period` | 10 | Ventana de retroceso para el Ratio de Eficiencia, en sesiones. |
 
 !!! note "Las constantes rápida/lenta no están expuestas"
 

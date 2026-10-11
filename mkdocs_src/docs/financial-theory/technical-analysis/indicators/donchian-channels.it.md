@@ -36,7 +36,11 @@ Questo è l'indicatore alla base del leggendario sistema di breakout "Turtle Tra
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 20 | Finestra di lookback per il max/min mobile. |
+| Periodo ($N$) | `period` | 20 | Finestra di lookback per il max/min mobile, in sedute. |
+
+!!! note "Tracciati anche sui giorni di chiusura"
+
+    I canali hanno un valore solo nelle sedute, mentre l'asse delle date del grafico attraversa ogni giorno del calendario. In un fine settimana o in un giorno festivo, il canale ombreggiato è tracciato in linea retta dall'ultima seduta precedente alla prima successiva, come il punto medio, così non si interrompe: il tratto di raccordo dà forma solo al riempimento e non ha alcun valore proprio.
 
 ---
 

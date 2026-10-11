@@ -33,9 +33,7 @@
         const c = counts;
         switch (step) {
             case 'scenario':
-                return [
-                    {id: 'currency', label: $t('tools.pacAllocator.planner.summary.currency', {default: 'Currency'}), value: c.scenario.currency || '—'},
-                ];
+                return [{id: 'currency', label: $t('tools.pacAllocator.planner.summary.currency', {default: 'Currency'}), value: c.scenario.currency || '—'}];
             case 'liquidity':
                 return [
                     {id: 'sources', label: $t('tools.pacAllocator.planner.summary.sources', {default: 'Sources'}), value: String(c.liquidity.sources)},
@@ -76,9 +74,7 @@
                 return [
                     {id: 'pairs', label: $t('tools.pacAllocator.planner.summary.rates', {default: 'Rates'}), value: [c.fx.pairs, c.fx.needed].join('/'), warn: c.fx.pairs < c.fx.needed},
                     {id: 'stale', label: $t('tools.pacAllocator.planner.summary.stale', {default: 'Not of the day'}), value: String(c.fx.stale)},
-                    ...(c.fx.conversions > 0
-                        ? [{id: 'spread', label: $t('tools.pacAllocator.planner.summary.spread', {default: 'Spread'}), value: c.fx.spreadPercent ? formatPlannerPercentUnits(c.fx.spreadPercent) : '—'}]
-                        : []),
+                    ...(c.fx.conversions > 0 ? [{id: 'spread', label: $t('tools.pacAllocator.planner.summary.spread', {default: 'Spread'}), value: c.fx.spreadPercent ? formatPlannerPercentUnits(c.fx.spreadPercent) : '—'}] : []),
                 ];
             case 'strategy':
                 return [

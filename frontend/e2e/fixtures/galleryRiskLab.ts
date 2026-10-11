@@ -272,17 +272,50 @@ async function headerOutOfShot(page: Page): Promise<void> {
     await expect.poll(() => header.evaluate((element) => element.getBoundingClientRect().bottom), {message: 'the app header is still sliding away'}).toBeLessThanOrEqual(1);
 }
 
+/** Two animation frames rendered in the page: a scroll made before them is dispatched, and every frame callback it scheduled has run. */
+export async function renderedFrames(page: Page): Promise<void> {
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+}
+
+/**
+ * Resize the screen and end once the page has handled it: its `resize` dispatched at the new height. `setViewportSize`
+ * returns before that, and the app header resets itself on the event (Header.svelte, `syncScrollContext`: visible again,
+ * its scroll baseline where the page stands): dispatched after a later scroll down, it leaves the header over the shot. The
+ * app's listeners, added at mount, have run when the one armed here does. A no-op when the screen has that size already.
+ */
+export async function resizeViewport(page: Page, size: {width: number; height: number}): Promise<void> {
+    const screen = page.viewportSize();
+    if (screen?.width === size.width && screen.height === size.height) return;
+    await page.evaluate(() => {
+        const marker = window as unknown as {__galleryResizedTo?: number};
+        marker.__galleryResizedTo = -1;
+        window.addEventListener(
+            'resize',
+            () => {
+                marker.__galleryResizedTo = window.innerHeight;
+            },
+            {once: true},
+        );
+    });
+    await page.setViewportSize(size);
+    await expect.poll(() => page.evaluate(() => (window as unknown as {__galleryResizedTo?: number}).__galleryResizedTo), {message: 'the page never handled the screen resize'}).toBe(size.height);
+}
+
 /**
  * Scroll the page so `target` starts `margin` px under the top of the screen — or as near as the page's
  * end allows — and end on the header gone and the target still.
  *
  * Always down from the top: the header slides away only on a scroll down, and a scroll up — after a
  * click Playwright scrolled into view further down, say — would bring it back over the target. So the
- * top is reached first, and seen by the header, then the page scrolls down to the target.
+ * top is reached first, and seen by the header, then the page scrolls down to the target. Seen means
+ * rendered: the header measures a scroll from where it last saw the page, so a header reset where the
+ * page stood — a resize resets it — reads a way up and back down inside one frame as no movement, and stays.
  */
 export async function frameFromTop(page: Page, target: Locator, margin = 8): Promise<void> {
     await expect(target).toBeVisible();
-    await scrollBackToHeader(page);
+    await page.evaluate(() => window.scrollTo({top: 0, behavior: 'instant'}));
+    await renderedFrames(page);
+    await expect(page.getByTestId('app-header'), 'the app header is back at the top').toHaveAttribute('data-scroll-state', 'visible');
     await target.evaluate((element, offset) => {
         window.scrollTo({top: Math.max(0, element.getBoundingClientRect().top + window.scrollY - offset), behavior: 'instant'});
     }, margin);
@@ -309,7 +342,8 @@ export async function frameBlock(page: Page, block: {first: Locator; last: Locat
  * blocks (`dashboard/risk-*`), desktop only. Measured on the page as it stands, every time: the block's sentences wrap
  * differently in each language. The block must not move while it is measured, and nothing in it depends on the screen's
  * height, so the resize changes no layout inside it — a chart may still redraw, which the caller's settle waits out.
- * Returns the height measured and the screen's.
+ * A resize ends with the page having handled it ({@link resizeViewport}): the header is shown again where the page stands,
+ * so the caller frames the block again, from the top ({@link frameFromTop}). Returns the height measured and the screen's.
  */
 export async function fitViewportToBlock(page: Page, block: Locator, margin: number, minimumHeight: number): Promise<{blockHeight: number; viewportHeight: number}> {
     const viewport = page.viewportSize();
@@ -317,7 +351,7 @@ export async function fitViewportToBlock(page: Page, block: Locator, margin: num
     await waitForStillness(block, 'the block the screen is fitted to');
     const blockHeight = await block.evaluate((element) => element.getBoundingClientRect().height);
     const viewportHeight = Math.max(minimumHeight, Math.ceil(blockHeight) + 2 * margin);
-    if (viewportHeight !== viewport.height) await page.setViewportSize({width: viewport.width, height: viewportHeight});
+    await resizeViewport(page, {width: viewport.width, height: viewportHeight});
     return {blockHeight: Math.ceil(blockHeight), viewportHeight};
 }
 

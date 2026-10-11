@@ -9,6 +9,16 @@
  * is module level, so a flag left on by one test would still be on in the
  * next, and would mask its clear-text controls.
  *
+ * The value-series block at the end (parseValueSeriesPoint, pnlWithIncome,
+ * comprehensiveValue, aggregateValuePoints, aggregateReturnPoints) pins the B3b
+ * contract: a lot's cumulative income can be unknown (`null`: an income pool with
+ * no FX rate). It stays unknown through every sum and ratio it enters and is never
+ * read as 0. On fully known inputs the aggregates must equal what the component
+ * computes before B3b. The expected numbers were checked against a verbatim
+ * transcription of the component's `aggregatedValuePoints` and
+ * `aggregateReturnPoints`. Ratios are chosen to be exact in binary, so `toEqual`
+ * never depends on summation order.
+ *
  * @vitest-environment node
  */
 
@@ -40,7 +50,15 @@ import {
     computeBucketCounts,
     buildZoomWindowForRange,
     logicalRangeFromBuckets,
+    parseValueSeriesPoint,
+    pnlWithIncome,
+    comprehensiveValue,
+    aggregateValuePoints,
+    aggregateReturnPoints,
+    type AggregateReturnPoint,
+    type AggregatedValuePoint,
     type BucketInfo,
+    type LotValueSeriesPoint,
 } from './lotComparisonChartHelpers';
 
 describe('safeValueSource', () => {
@@ -592,5 +610,328 @@ describe('logicalRangeFromBuckets', () => {
         const weekly = buildBucketInfos(['2024-03-11', '2024-03-18'], 'weekly');
         const range = logicalRangeFromBuckets(weekly, 0, 100);
         expect(range).toEqual({startDate: mapDateToBucket('2024-03-11', 'weekly').bucketStart, endDate: mapDateToBucket('2024-03-18', 'weekly').bucketEnd});
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Value series: parsing & aggregation (B3b, a lot's income can be unknown)
+// ---------------------------------------------------------------------------
+
+/**
+ * A lot's value series, frozen deep. A helper that mutated its input would throw
+ * here instead of silently corrupting the next test's fixture. In the component,
+ * the same per-lot arrays also feed the tooltips and the per-lot lines.
+ */
+function lotSeries(points: LotValueSeriesPoint[]): readonly LotValueSeriesPoint[] {
+    return Object.freeze(points.map((point) => Object.freeze({...point})));
+}
+
+function seriesByLot(byLotId: Record<number, readonly LotValueSeriesPoint[]>): ReadonlyMap<number, readonly LotValueSeriesPoint[]> {
+    return new Map(Object.entries(byLotId).map(([lotId, points]): [number, readonly LotValueSeriesPoint[]] => [Number(lotId), points]));
+}
+
+// In every fixture point, pnl = openValue + proceeds − originalCost.
+
+/** Lot 1: cost 100, partly sold on 2024-01-04, income always known. */
+const LOT_1 = lotSeries([
+    {date: '2024-01-02', openValue: 100, proceeds: 0, originalCost: 100, pnl: 0, income: 0},
+    {date: '2024-01-03', openValue: 120, proceeds: 0, originalCost: 100, pnl: 20, income: 5},
+    {date: '2024-01-04', openValue: 75, proceeds: 70, originalCost: 100, pnl: 45, income: 5},
+]);
+
+/** Lot 2: cost 300, income always known. */
+const LOT_2_KNOWN = lotSeries([
+    {date: '2024-01-02', openValue: 320, proceeds: 0, originalCost: 300, pnl: 20, income: 5},
+    {date: '2024-01-03', openValue: 280, proceeds: 0, originalCost: 300, pnl: -20, income: 45},
+    {date: '2024-01-04', openValue: 310, proceeds: 0, originalCost: 300, pnl: 10, income: 90},
+]);
+
+/** The same lot 2 when an income pool with no FX rate lands on 2024-01-03: its income is unknown from that date on. */
+const LOT_2_UNKNOWN_FROM_2ND = lotSeries([
+    {date: '2024-01-02', openValue: 320, proceeds: 0, originalCost: 300, pnl: 20, income: 5},
+    {date: '2024-01-03', openValue: 280, proceeds: 0, originalCost: 300, pnl: -20, income: null},
+    {date: '2024-01-04', openValue: 310, proceeds: 0, originalCost: 300, pnl: 10, income: null},
+]);
+
+/** Lot 3: cost 100, opened a day before lot 1 and with no point on 2024-01-02, so each date has its own set of lots. */
+const LOT_3 = lotSeries([
+    {date: '2024-01-01', openValue: 112.5, proceeds: 0, originalCost: 100, pnl: 12.5, income: 0},
+    {date: '2024-01-03', openValue: 120, proceeds: 0, originalCost: 100, pnl: 20, income: 5},
+]);
+
+/** Lot 3 with its income unknown on its last date, 2024-01-03, a date lot 1 shares. */
+const LOT_3_UNKNOWN_ON_LAST = lotSeries([
+    {date: '2024-01-01', openValue: 112.5, proceeds: 0, originalCost: 100, pnl: 12.5, income: 0},
+    {date: '2024-01-03', openValue: 120, proceeds: 0, originalCost: 100, pnl: 20, income: null},
+]);
+
+/** Lot 4: no positive original cost, so even when listed among the percent lots it stays out of the ratio (today's per-point guard). */
+const LOT_4 = lotSeries([{date: '2024-01-02', openValue: 8, proceeds: 0, originalCost: 0, pnl: 8, income: 0}]);
+const LOT_4_UNKNOWN = lotSeries([{date: '2024-01-02', openValue: 8, proceeds: 0, originalCost: 0, pnl: 8, income: null}]);
+
+/** Lot 1 aggregated alone. */
+const LOT_1_VALUE_ALONE: AggregatedValuePoint[] = [
+    {date: '2024-01-02', openValue: 100, proceeds: 0, originalCost: 100, income: 0},
+    {date: '2024-01-03', openValue: 120, proceeds: 0, originalCost: 100, income: 5},
+    {date: '2024-01-04', openValue: 75, proceeds: 70, originalCost: 100, income: 5},
+];
+
+/** Lot 1 alone, as a percent lot. */
+const LOT_1_RETURN_ALONE: AggregateReturnPoint[] = [
+    {date: '2024-01-02', totalReturn: 0, openingValue: 100, pnlWithIncome: 0},
+    {date: '2024-01-03', totalReturn: 0.25, openingValue: 100, pnlWithIncome: 25},
+    {date: '2024-01-04', totalReturn: 0.5, openingValue: 100, pnlWithIncome: 50},
+];
+
+describe('parseValueSeriesPoint', () => {
+    it('parses the four amounts and a known income from the API decimal strings', () => {
+        expect(parseValueSeriesPoint({date: '2024-01-04', proceeds: '70.5', open_value: '75.25', original_cost: '100', pnl: '45.75', income: '5.5'})).toEqual({
+            date: '2024-01-04',
+            proceeds: 70.5,
+            openValue: 75.25,
+            originalCost: 100,
+            pnl: 45.75,
+            income: 5.5,
+        });
+    });
+
+    it('keeps a known zero income as 0', () => {
+        expect(parseValueSeriesPoint({date: '2024-01-02', proceeds: '0', open_value: '100', original_cost: '100', pnl: '0', income: '0'}).income).toBe(0);
+        expect(parseValueSeriesPoint({date: '2024-01-02', proceeds: 0, open_value: 100, original_cost: 100, pnl: 0, income: 0}).income).toBe(0);
+    });
+
+    it('keeps an unknown income (null: no FX rate) as null, never 0, while the amounts still parse', () => {
+        expect(parseValueSeriesPoint({date: '2024-01-03', proceeds: '0', open_value: '280', original_cost: '300', pnl: '-20', income: null})).toEqual({
+            date: '2024-01-03',
+            proceeds: 0,
+            openValue: 280,
+            originalCost: 300,
+            pnl: -20,
+            income: null,
+        });
+    });
+
+    it('reads an unparseable or non-finite income as unknown, as safeDecimal does', () => {
+        // Control: the same point with a readable income.
+        expect(parseValueSeriesPoint({date: '2024-01-03', proceeds: '0', open_value: '280', original_cost: '300', pnl: '-20', income: '45'}).income).toBe(45);
+
+        expect(parseValueSeriesPoint({date: '2024-01-03', proceeds: '0', open_value: '280', original_cost: '300', pnl: '-20', income: 'n/a'}).income).toBeNull();
+        expect(parseValueSeriesPoint({date: '2024-01-03', proceeds: '0', open_value: '280', original_cost: '300', pnl: '-20', income: 'Infinity'}).income).toBeNull();
+    });
+
+    it('unwraps the OpenAPI scalar-or-array shape of income, a null inside it staying unknown', () => {
+        // The generated type of `income` is `(string | null) | Array<string | null>`; safeDecimal reads position 0.
+        expect(parseValueSeriesPoint({date: '2024-01-03', proceeds: '0', open_value: '280', original_cost: '300', pnl: '-20', income: ['45']}).income).toBe(45);
+        expect(parseValueSeriesPoint({date: '2024-01-03', proceeds: '0', open_value: '280', original_cost: '300', pnl: '-20', income: [null]}).income).toBeNull();
+    });
+
+    it('reads an absent income as unknown: the helper never infers a zero', () => {
+        // Responses are validated against the API schema, which fills an absent `income` with its default '0'
+        // before this point is built. That default is the API's statement; the helper itself never invents a 0.
+        expect(parseValueSeriesPoint({date: '2024-01-03', proceeds: '0', open_value: '280', original_cost: '300', pnl: '-20'}).income).toBeNull();
+    });
+
+    it('still reads a missing or unparseable amount as 0, as before B3b', () => {
+        expect(parseValueSeriesPoint({date: '2024-01-03', proceeds: null, open_value: undefined, original_cost: '', pnl: 'n/a', income: '5'})).toEqual({
+            date: '2024-01-03',
+            proceeds: 0,
+            openValue: 0,
+            originalCost: 0,
+            pnl: 0,
+            income: 5,
+        });
+    });
+});
+
+describe('pnlWithIncome', () => {
+    it('adds the cumulative income to the FIFO P&L', () => {
+        expect(pnlWithIncome({pnl: 20, income: 5})).toBe(25);
+        expect(pnlWithIncome({pnl: -20, income: 5})).toBe(-15);
+    });
+
+    it('treats a zero income as known', () => {
+        expect(pnlWithIncome({pnl: 20, income: 0})).toBe(20);
+        expect(pnlWithIncome({pnl: 0, income: 0})).toBe(0);
+    });
+
+    it('is unknown when the income is unknown, whatever the P&L', () => {
+        expect(pnlWithIncome({pnl: 20, income: null})).toBeNull();
+        expect(pnlWithIncome({pnl: 0, income: null})).toBeNull();
+    });
+});
+
+describe('comprehensiveValue', () => {
+    it('is residual value + sale proceeds + cumulative income', () => {
+        expect(comprehensiveValue({openValue: 75, proceeds: 70, income: 5})).toBe(150);
+    });
+
+    it('treats a zero income as known', () => {
+        expect(comprehensiveValue({openValue: 100, proceeds: 0, income: 0})).toBe(100);
+    });
+
+    it('is unknown when the income is unknown, on a lot point or on an aggregated one', () => {
+        expect(comprehensiveValue({openValue: 75, proceeds: 70, income: null})).toBeNull();
+        const aggregated: AggregatedValuePoint = {date: '2024-01-03', openValue: 400, proceeds: 0, originalCost: 400, income: null};
+        expect(comprehensiveValue(aggregated)).toBeNull();
+    });
+});
+
+describe('aggregateValuePoints', () => {
+    it('sums each amount per date across the lots, sorted by date, with the same totals as before B3b', () => {
+        expect(aggregateValuePoints([1, 2], seriesByLot({1: LOT_1, 2: LOT_2_KNOWN}))).toEqual([
+            {date: '2024-01-02', openValue: 420, proceeds: 0, originalCost: 400, income: 5},
+            {date: '2024-01-03', openValue: 400, proceeds: 0, originalCost: 400, income: 50},
+            {date: '2024-01-04', openValue: 385, proceeds: 70, originalCost: 400, income: 95},
+        ]);
+    });
+
+    it('aggregates each date over the lots that have a point on it, sorting dates across lots', () => {
+        // Lot 3 starts a day before lot 1, which is listed first, and has no point on 2024-01-02.
+        expect(aggregateValuePoints([1, 3], seriesByLot({1: LOT_1, 3: LOT_3}))).toEqual([
+            {date: '2024-01-01', openValue: 112.5, proceeds: 0, originalCost: 100, income: 0},
+            {date: '2024-01-02', openValue: 100, proceeds: 0, originalCost: 100, income: 0},
+            {date: '2024-01-03', openValue: 240, proceeds: 0, originalCost: 200, income: 10},
+            {date: '2024-01-04', openValue: 75, proceeds: 70, originalCost: 100, income: 5},
+        ]);
+    });
+
+    it('aggregates only the lots it is given', () => {
+        // Lot 2's unknown income is in the map but not in the selection: it must not reach the totals.
+        expect(aggregateValuePoints([1], seriesByLot({1: LOT_1, 2: LOT_2_UNKNOWN_FROM_2ND}))).toEqual(LOT_1_VALUE_ALONE);
+    });
+
+    it('skips a lot id that has no series in the map', () => {
+        expect(aggregateValuePoints([1, 99], seriesByLot({1: LOT_1}))).toEqual(LOT_1_VALUE_ALONE);
+    });
+
+    it('returns no points for no lots, an empty map or an empty series', () => {
+        expect(aggregateValuePoints([], seriesByLot({1: LOT_1}))).toEqual([]);
+        expect(aggregateValuePoints([1, 2], seriesByLot({}))).toEqual([]);
+        expect(aggregateValuePoints([1], seriesByLot({1: lotSeries([])}))).toEqual([]);
+    });
+
+    it('makes the income unknown from the date one lot income is, the other sums still summed', () => {
+        expect(aggregateValuePoints([1, 2], seriesByLot({1: LOT_1, 2: LOT_2_UNKNOWN_FROM_2ND}))).toEqual([
+            {date: '2024-01-02', openValue: 420, proceeds: 0, originalCost: 400, income: 5},
+            {date: '2024-01-03', openValue: 400, proceeds: 0, originalCost: 400, income: null},
+            {date: '2024-01-04', openValue: 385, proceeds: 70, originalCost: 400, income: null},
+        ]);
+    });
+
+    it('does not let a known income listed after an unknown one bring the total back', () => {
+        const series = seriesByLot({1: LOT_1, 2: LOT_2_UNKNOWN_FROM_2ND});
+        const reversed = aggregateValuePoints([2, 1], series);
+        expect(reversed).toEqual(aggregateValuePoints([1, 2], series));
+        expect(reversed.map((point) => point.income)).toEqual([5, null, null]);
+    });
+
+    it('confines an unknown income to its own date', () => {
+        // Lot 3's income is unknown on 2024-01-03 only. The dates where only one of the two lots has a point keep a known income.
+        expect(aggregateValuePoints([1, 3], seriesByLot({1: LOT_1, 3: LOT_3_UNKNOWN_ON_LAST}))).toEqual([
+            {date: '2024-01-01', openValue: 112.5, proceeds: 0, originalCost: 100, income: 0},
+            {date: '2024-01-02', openValue: 100, proceeds: 0, originalCost: 100, income: 0},
+            {date: '2024-01-03', openValue: 240, proceeds: 0, originalCost: 200, income: null},
+            {date: '2024-01-04', openValue: 75, proceeds: 70, originalCost: 100, income: 5},
+        ]);
+    });
+});
+
+describe('aggregateReturnPoints', () => {
+    it('sums P&L with income over every lot and the return over the percent lots, with the same totals as before B3b', () => {
+        expect(aggregateReturnPoints([1, 2], new Set([1, 2]), seriesByLot({1: LOT_1, 2: LOT_2_KNOWN}))).toEqual([
+            {date: '2024-01-02', totalReturn: 0.0625, openingValue: 400, pnlWithIncome: 25},
+            {date: '2024-01-03', totalReturn: 0.125, openingValue: 400, pnlWithIncome: 50},
+            {date: '2024-01-04', totalReturn: 0.375, openingValue: 400, pnlWithIncome: 150},
+        ]);
+    });
+
+    it('keeps an abs-only lot in the P&L but out of the ratio and of the opening value', () => {
+        expect(aggregateReturnPoints([1, 2], new Set([1]), seriesByLot({1: LOT_1, 2: LOT_2_KNOWN}))).toEqual([
+            {date: '2024-01-02', totalReturn: 0, openingValue: 100, pnlWithIncome: 25},
+            {date: '2024-01-03', totalReturn: 0.25, openingValue: 100, pnlWithIncome: 50},
+            {date: '2024-01-04', totalReturn: 0.5, openingValue: 100, pnlWithIncome: 150},
+        ]);
+    });
+
+    it('has no percent return without a percent lot: opening value 0, return null', () => {
+        expect(aggregateReturnPoints([1, 2], new Set(), seriesByLot({1: LOT_1, 2: LOT_2_KNOWN}))).toEqual([
+            {date: '2024-01-02', totalReturn: null, openingValue: 0, pnlWithIncome: 25},
+            {date: '2024-01-03', totalReturn: null, openingValue: 0, pnlWithIncome: 50},
+            {date: '2024-01-04', totalReturn: null, openingValue: 0, pnlWithIncome: 150},
+        ]);
+    });
+
+    it('walks only the abs lots: a percent id outside them contributes nothing', () => {
+        expect(aggregateReturnPoints([1], new Set([1, 2]), seriesByLot({1: LOT_1, 2: LOT_2_KNOWN}))).toEqual(LOT_1_RETURN_ALONE);
+    });
+
+    it('keeps a percent lot out of the ratio on a date its original cost is not positive', () => {
+        // Lot 4's P&L counts on 2024-01-02; its cost and its return do not.
+        expect(aggregateReturnPoints([1, 4], new Set([1, 4]), seriesByLot({1: LOT_1, 4: LOT_4}))).toEqual([
+            {date: '2024-01-02', totalReturn: 0, openingValue: 100, pnlWithIncome: 8},
+            {date: '2024-01-03', totalReturn: 0.25, openingValue: 100, pnlWithIncome: 25},
+            {date: '2024-01-04', totalReturn: 0.5, openingValue: 100, pnlWithIncome: 50},
+        ]);
+    });
+
+    it('aggregates each date over the lots that have a point on it, sorting dates across lots', () => {
+        expect(aggregateReturnPoints([1, 3], new Set([1, 3]), seriesByLot({1: LOT_1, 3: LOT_3}))).toEqual([
+            {date: '2024-01-01', totalReturn: 0.125, openingValue: 100, pnlWithIncome: 12.5},
+            {date: '2024-01-02', totalReturn: 0, openingValue: 100, pnlWithIncome: 0},
+            {date: '2024-01-03', totalReturn: 0.25, openingValue: 200, pnlWithIncome: 50},
+            {date: '2024-01-04', totalReturn: 0.5, openingValue: 100, pnlWithIncome: 50},
+        ]);
+    });
+
+    it('skips a lot id that has no series, and returns no points for no lots or an empty map', () => {
+        expect(aggregateReturnPoints([1, 99], new Set([1, 99]), seriesByLot({1: LOT_1}))).toEqual(LOT_1_RETURN_ALONE);
+        expect(aggregateReturnPoints([], new Set([1]), seriesByLot({1: LOT_1}))).toEqual([]);
+        expect(aggregateReturnPoints([1], new Set([1]), seriesByLot({}))).toEqual([]);
+    });
+
+    it('makes P&L with income and the return unknown from the date a percent lot income is, keeping the opening value', () => {
+        expect(aggregateReturnPoints([1, 2], new Set([1, 2]), seriesByLot({1: LOT_1, 2: LOT_2_UNKNOWN_FROM_2ND}))).toEqual([
+            {date: '2024-01-02', totalReturn: 0.0625, openingValue: 400, pnlWithIncome: 25},
+            {date: '2024-01-03', totalReturn: null, openingValue: 400, pnlWithIncome: null},
+            {date: '2024-01-04', totalReturn: null, openingValue: 400, pnlWithIncome: null},
+        ]);
+    });
+
+    it('keeps the return known when the unknown income belongs to an abs-only lot', () => {
+        expect(aggregateReturnPoints([1, 2], new Set([1]), seriesByLot({1: LOT_1, 2: LOT_2_UNKNOWN_FROM_2ND}))).toEqual([
+            {date: '2024-01-02', totalReturn: 0, openingValue: 100, pnlWithIncome: 25},
+            {date: '2024-01-03', totalReturn: 0.25, openingValue: 100, pnlWithIncome: null},
+            {date: '2024-01-04', totalReturn: 0.5, openingValue: 100, pnlWithIncome: null},
+        ]);
+    });
+
+    it('does not let a known income listed after an unknown one bring the totals back', () => {
+        const series = seriesByLot({1: LOT_1, 2: LOT_2_UNKNOWN_FROM_2ND});
+        const reversed = aggregateReturnPoints([2, 1], new Set([1, 2]), series);
+        expect(reversed).toEqual(aggregateReturnPoints([1, 2], new Set([1, 2]), series));
+        expect(reversed.map((point) => [point.totalReturn, point.pnlWithIncome])).toEqual([
+            [0.0625, 25],
+            [null, null],
+            [null, null],
+        ]);
+    });
+
+    it('confines an unknown income to its own date', () => {
+        expect(aggregateReturnPoints([1, 3], new Set([1, 3]), seriesByLot({1: LOT_1, 3: LOT_3_UNKNOWN_ON_LAST}))).toEqual([
+            {date: '2024-01-01', totalReturn: 0.125, openingValue: 100, pnlWithIncome: 12.5},
+            {date: '2024-01-02', totalReturn: 0, openingValue: 100, pnlWithIncome: 0},
+            {date: '2024-01-03', totalReturn: null, openingValue: 200, pnlWithIncome: null},
+            {date: '2024-01-04', totalReturn: 0.5, openingValue: 100, pnlWithIncome: 50},
+        ]);
+    });
+
+    it('keeps the return known when the unknown income belongs to a percent lot that adds nothing to the ratio that day', () => {
+        // Lot 4 is listed among the percent lots but has no positive cost on 2024-01-02, so it is not part of that day's
+        // ratio and its unknown income cannot make the ratio unknown. Its P&L with income is unknown, as for any lot.
+        expect(aggregateReturnPoints([1, 4], new Set([1, 4]), seriesByLot({1: LOT_1, 4: LOT_4_UNKNOWN}))).toEqual([
+            {date: '2024-01-02', totalReturn: 0, openingValue: 100, pnlWithIncome: null},
+            {date: '2024-01-03', totalReturn: 0.25, openingValue: 100, pnlWithIncome: 25},
+            {date: '2024-01-04', totalReturn: 0.5, openingValue: 100, pnlWithIncome: 50},
+        ]);
     });
 });

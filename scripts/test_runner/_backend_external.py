@@ -250,6 +250,17 @@ def external_brim_degiro(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "BRIM DEGIRO tests", verbose=verbose)
 
 
+def external_brim_scalable(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Scalable Capital plugins (broker account and overnight account)."""
+    print_section("External: BRIM Scalable Capital Tests")
+    print_info("Testing: broker_scalable and broker_scalable_deposit — recognition by header, refusals with a code, mapping, legs, notices")
+    print_info("Tests: PRIME and exporter samples row by row, mirrored internal transfers, synthetic edge cases")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_scalable.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM Scalable Capital tests", verbose=verbose)
+
+
 def external_all(verbose: bool = False,
                  providers: list = None, exclude_providers: list = None) -> bool:
     """Run all external tests (network-dependent)."""
@@ -298,6 +309,9 @@ These tests verify external API integrations:
     add_test(cat, "brim-degiro", external_brim_degiro, name="BRIM DEGIRO",
              desc="Test the DEGIRO plugin", prereq="Sample files in test fixtures",
              tests="Recognition, reading by position, types, FX pairs, numbers, messages, orders list")
+    add_test(cat, "brim-scalable", external_brim_scalable, name="BRIM Scalable Capital",
+             desc="Test the Scalable Capital plugins (broker and overnight account)", prereq="Sample files in test fixtures",
+             tests="Recognition, refusals with a code, PRIME and exporter samples, legs, notices, synthetic edge cases")
     add_test(cat, "all", external_all, test_names=False, name="All External Tests",
              desc="Run all external tests")
     registry["external"] = cat

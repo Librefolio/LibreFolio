@@ -30,7 +30,7 @@ Un simple rango máximo-mínimo ignora los movimientos nocturnos o de gaps; el A
 
 | Parámetro | Clave | Valor por defecto | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 14 | Ventana de suavizado aplicada al Rango Verdadero. |
+| Período ($N$) | `period` | 14 | Ventana de suavizado aplicada al Rango Verdadero, en sesiones. |
 
 ---
 

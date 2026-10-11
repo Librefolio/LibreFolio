@@ -6,13 +6,13 @@ NATR es [ATR](atr.md) con una división añadida: expresa la misma medición de 
 
 ## 💡 Significado Financiero
 
-Un ATR de 3€ es enorme para una acción de 10€ e insignificante para una acción de 1.000€. NATR elimina esa distorsión, por lo que un filtro de volatilidad en una cartera completa — "¿cuál de mis posiciones se está moviendo más, en relación con su propio precio?" — se vuelve significativo. También es más estable a través del tiempo para un activo individual que ha sufrido una división de acciones o un gran cambio de precio plurianual.
+Un ATR de 3€ es enorme para una acción de 10€ e insignificante para una acción de 1.000€. NATR elimina esa distorsión, por lo que un filtro de volatilidad en una cartera completa — "¿cuál de mis posiciones se está moviendo más, en relación con su propio precio?" — se vuelve significativo. También es más estable a través del tiempo para un activo individual que ha sufrido un desdoblamiento de acciones o un gran cambio de precio plurianual.
 
 ---
 
 ## 🔢 Fórmula Matemática
 
-Basándose en el Rango Verdadero y ATR (consulte [ATR](atr.md)):
+Basándose en el Rango Verdadero y ATR (consulta [ATR](atr.md)):
 
 $$
 NATR_t = 100 \cdot \frac{ATR_t}{C_t}
@@ -26,7 +26,7 @@ Debido a que $ATR_t$ siempre es no negativo, $NATR_t \ge 0$, sin límite superio
 
 | Parámetro | Clave | Por defecto | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 14 | Ventana de suavizado aplicada al Rango Verdadero subyacente (igual que ATR). |
+| Período ($N$) | `period` | 14 | Ventana de suavizado aplicada al Rango Verdadero subyacente (igual que ATR), en sesiones. |
 
 ---
 
@@ -46,8 +46,8 @@ flowchart LR
 
 !!! note "Elegir ATR vs NATR"
 
-    Utilice **ATR** para decisiones de un solo activo en las unidades de precio de ese activo (por ejemplo,
-    distancia de stop-loss en euros). Utilice **NATR** para comparaciones entre activos o entre
+    Utiliza **ATR** para decisiones de un solo activo en las unidades de precio de ese activo (por ejemplo,
+    distancia de stop-loss en euros). Utiliza **NATR** para comparaciones entre activos o entre
     períodos de tiempo, o siempre que el nivel de precio bruto no sea directamente significativo para la
     pregunta que se está formulando.
 

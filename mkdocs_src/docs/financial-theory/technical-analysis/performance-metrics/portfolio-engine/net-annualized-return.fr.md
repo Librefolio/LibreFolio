@@ -78,15 +78,15 @@ $$
 Le pourcentage affiché pour la période reste :
 
 $$
-r_{\mathrm{période}} = \frac{\mathrm{PnL}_{période}}{|\mathrm{ValeurDépart}|}
+r_{\mathrm{période}} = \frac{\mathrm{PnL}_{période}}{|\mathrm{StartValue}|}
 $$
 
-lorsque `ValeurDépart` est non nul. L'annualisation peut revenir à la base de coût finale pour les actifs ouverts en milieu de période :
+lorsque `StartValue` est non nul. L'annualisation peut revenir au coût de base final pour les actifs ouverts en milieu de période :
 
 $$
 \mathrm{base\_ann}=
 \begin{cases}
-|\mathrm{ValeurDépart}|, & |\mathrm{ValeurDépart}|>0\\
+|\mathrm{StartValue}|, & |\mathrm{StartValue}|>0\\
 \mathrm{BaseDeCoût}_{fin}, & \text{sinon}
 \end{cases}
 $$
@@ -106,7 +106,7 @@ $$
 
 ## 🧬 Lots FIFO
 
-Le rendement annualisé d'un lot FIFO est net des revenus, frais et taxes alloués :
+Le rendement annualisé d'un lot FIFO est net des revenus, frais et impôts alloués :
 
 $$
 \mathrm{PnLNetTotal}_i =
@@ -122,7 +122,7 @@ $$
 \frac{\mathrm{PnLNetTotal}_i}{\mathrm{ValeurDOuverture}_i}
 $$
 
-La valeur annualisée utilise `rendement_net_total`, pas le `rendement_total` brut :
+La valeur annualisée utilise `net_total_return`, pas le `total_return` brut :
 
 $$
 r_{\mathrm{ann},i} =

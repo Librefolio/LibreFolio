@@ -362,6 +362,8 @@
             assetB: b.asset_id,
             qtyA: Number(a.quantity ?? 0),
             qtyB: Number(b.quantity ?? 0),
+            eventA: a.asset_event_id ?? null,
+            eventB: b.asset_event_id ?? null,
         });
     });
 

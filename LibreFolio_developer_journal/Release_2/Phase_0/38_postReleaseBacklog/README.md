@@ -8,6 +8,9 @@
 >
 > Non contiene le voci aperte delle cartelle che restano in `Phase_0/` (02, 09, 13, 16, 21, 27, 32, 37): vivono
 > lì. Il developer, il 09/10, sulle voci dopo la 1.2: «si a tutto, dopo».
+>
+> **L'indice unico** di tutto il lavoro dopo la 1.2, cartelle comprese, è [`../BACKLOG_POST_1.2.md`](../BACKLOG_POST_1.2.md)
+> (dall'11/10): una riga per voce, col rimando ai dettagli. Questo file resta il dettaglio delle voci N, O, L, K, P, I e C.
 
 ## Regole
 
@@ -28,7 +31,7 @@
 | K | `phases/25_taxonomySelect/` (step 23 e verifica d'archivio) | K-1 … K-26 |
 | P | `phases/30_wacUnification/`, `phases/39_autoCostNoPosition/` | P-1 … P-11 |
 | I | `phases/20_performanceCharts/`, `19_yieldOnCost/`, `24_privacyGlobal/` | I-01 … I-12 |
-| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-38 |
+| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-52 |
 
 In fondo: le voci del backlog del coordinatore **tracciate altrove** e quelle **chiuse alla verifica del 09/10**.
 
@@ -131,6 +134,8 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
 - **O-16 · Plurale scritto a mano nel tooltip del Gantt dei lotti** — basso. `LotGanttChart.svelte:701`. Origine: 29, §6.
 - **O-17 · Debito Prettier in `DistributionDialog.svelte`** — minimo, dominio del PAC (D): `DistributionDialog.svelte:74-126`,
   già alla base; anche i piani della 13 lo citano. Origine: 29, §8.
+  - ✅ **Chiusa l'11/10** con `style(pac): prettier on planner` (D, treno 32): Prettier su tutta la cartella del
+    planner, con la prova che l'output compilato non cambia. Il gate `front format --check` ora è nel README della 13.
 - **O-18 · Segnalare a monte la cache di svelte-i18n** — basso, decisione del developer mai presa.
   `getMessageFormatter` (svelte-i18n 4.0.1, `runtime.js:383-392`, `:496-500`) tiene in cache i formattatori per testo
   e ignora la lingua: un messaggio identico in due cataloghi usa le regole di plurale della prima lingua che lo
@@ -310,7 +315,7 @@ Origine: [30_wacUnification](../../phases/30_wacUnification/plan-phase00WacUnifi
   Dashboard (`portfolio_engine.py:2072-2077`, via `portfolio_service.py:561`) e nei lotti
   (`lots_analysis_service.py:855`). Lo fissa `test_portfolio_wac.py:521-588`. Origine: 39, §1.6.
 - **P-11 · Tre testi promettono un lotto a costo zero col costo vuoto** — doc EN chiusa da Q (S23, treno 27); la chiave e
-  il ripiego inline li ha corretti S (checkpoint 2 e 3), e si chiude quando S entra. Restano IT/FR/ES di `form` in I-08. La chiave `transactions.costBasisOverride.warningAdjustment` («No cost basis set — lot will
+  il ripiego inline li ha corretti S (checkpoint 2 e 3); ✅ **chiusa nel treno 30**, con l'ingresso di S. Le versioni IT/FR/ES di `form` le ha portate il lotto 11 di M (treno 29). La chiave `transactions.costBasisOverride.warningAdjustment` («No cost basis set — lot will
   be created with zero cost…», `TransactionFormModal.svelte:1947-1950`), la doc utente `user/transactions/form.en.md:39`
   (più IT, FR, ES) e `developer/frontend/components/features/transaction-form.md:198-199`; il backend invece, in Manuale
   col campo vuoto, rifiuta la riga con `COST_BASIS_REQUIRED` (`transaction_service.py:157-165`,
@@ -336,6 +341,11 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
   progetto: mai `npx` per gli strumenti del frontend.
 - **I-07 · `tsc` degli E2E, 2 errori** — basso. `tsc -p tsconfig.e2e.json` segnala `onboarding-tour.spec.ts:863` e
   `types/files.ts:9` (mancano i `paths`).
+  - Riverificata il 10/10 (M, lotto 12; il coordinatore nel checkout principale): sempre gli stessi 2 errori. Il
+    TS2322 di `:863` c'è dal 14/09 (`580bd504f`): `placement` riceve `unknown`. Il TS2307 di `files.ts:9` resta anche
+    col client generato presente, quindi non dipende dalla worktree: sono proprio i `paths`. Nessun gate li vede,
+    perché Playwright non controlla i tipi e `front check` non guarda `e2e/`. Con la cura, il controllo dei tipi
+    degli E2E va fra i gate.
 - **I-08 · debito di traduzione MkDocs** — medio, giro Aphra: «quando arriva il momento lo faremo» (developer,
   09/10). Il conto esatto lo dà `./dev.py mkdocs translate-validate`. Le pagine note il 09/10:
   - di I: `yield-on-cost.en.md` senza it/fr/es; `user/dashboard/charts`, `user/dashboard/index`,
@@ -343,8 +353,12 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
   - l'àncora `#rolling-return`, che c'è solo in inglese (D28; l'allineamento è nella 27);
   - dal treno 25: `admin/cli_tools` (N-7), `user/files/index` (anteprima PDF), `user/connection-security`, la gallery
     e il suo indice con la sezione Security (M, lotto 8); Sharpe e Sortino, la cui formula del tasso privo di rischio
-    esiste solo in inglese (Q);
-  - dal treno 27: `user/tools/index` e `user/tools/pac-allocator/index`, nel nav ma solo EN (D); `user/transactions/form`
+    esiste solo in inglese (Q) — ✅ chiusa: in it/fr/es la formula porta `^{1/f}` da `647475999` (lotto 11 di M,
+    treno 29), verificato il 10/10 (Risk e coordinatore);
+  - dal treno 27: `user/tools/index` e `user/tools/pac-allocator/index`, nel nav ma solo EN (D) — ✅ chiuse: it/fr/es
+    esistono da `647475999` (lotto 11 di M, treno 29), dopo l'ultima modifica EN `29103f95b` (verificato l'11/10, D e
+    coordinatore); restano solo le due etichette del pulsante di ritorno in it e fr, nella scansione 5.4 di M;
+    `user/transactions/form`
     e `user/dashboard/index` (Q, S23); `developer/dev_workflow` (N);
   - dal treno 26: le otto pagine EN riscritte da K senza IT/FR/ES (`financial-theory/instruments/asset-types/{index,etfs,real-estate}`,
     `user/assets/{create-edit,index,detail/index}`, `user/dashboard/index`, `user/transactions/import/how-to`);
@@ -394,8 +408,8 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
 - **C-6 · eToro: dividendi `KER/EUR` etichettati EUR** — basso, serve un export reale. L'importo è nella valuta del
   conto, mentre la valuta viene dal ticker `SYMBOL/CURRENCY` (`broker_etoro.py:143`; Q, 08/10). La voce eToro di
   [04_brim_import.md](../09_feedbackJobs/04_brim_import.md) chiede lo stesso export.
-- **C-7 · Doc BRIM da allineare** — fatta da S il 09/10 (checkpoint 2, `94271713b`); si chiude quando S entra in
-  `dev_release2`. Era: basso. `brim_plugin_guide.md:435-436` dice «Fineco (Italian)», ma gli avvisi di
+- **C-7 · Doc BRIM da allineare** — fatta da S il 09/10 (checkpoint 2, `94271713b`); ✅ **chiusa nel treno 30**, con l'ingresso di
+  S in `dev_release2`. Era: basso. `brim_plugin_guide.md:435-436` dice «Fineco (Italian)», ma gli avvisi di
   Fineco sono in inglese (`broker_fineco.py:279-297`), e sbaglia anche la docstring del modulo (`:7-8`); la riga eToro
   di `providers_list.md:9` è da precisare (Q, 08/10).
 - **C-8 · Docstring e commenti superati** — basso.
@@ -503,7 +517,7 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
 - **C-33 · Costo medio dei trasferimenti e del promote: tre possibili difetti** — **confermati da P il 09/10** con test
   rossi, tutti già nella v1.1.0; ✅ **corretti il 09/10 (treno 28)** per decisione del developer («Correggere 1 e 2 nel
   backend con una sola cura, e 3 facendo chiedere il costo anche col promote»; data d'uscita: «Alla data in cui le quote
-  escono dal broker d'origine»), piano `Phase_0/40_transferCostBasis/`. Erano, letti da Q: (1) un transfer in Auto di un'intera posizione riceverebbe costo 0, perché la gamba in uscita
+  escono dal broker d'origine»), piano `phases/40_transferCostBasis/`. Erano, letti da Q: (1) un transfer in Auto di un'intera posizione riceverebbe costo 0, perché la gamba in uscita
   svuota il pool prima della media (`transaction_service.py:976`, `average_cost.py:407-423`); (2) un transfer esistente
   modificato in Auto farebbe la media sul broker che riceve (gli update non hanno `link_uuid`,
   `schemas/transactions.py:533-585`); (3) il promote salta il controllo del costo (`transaction_batch_stages.py:845-866`,
@@ -526,6 +540,71 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   azioni, ma `thead.sticky-header th` è più specifica di `.th-actions`, quindi l'intestazione resta sticky a `right: 0`
   mentre il ⋮ delle righe esce dallo schermo. Riguarda ogni tabella con azioni; nel PAC spiega F e la tabella Targets
   (backlog della 13). Componente condiviso: la cura va concordata con chi lo possiede.
+- **C-39 · Cataloghi i18n divisi per namespace** — dopo la 1.2, per decisione del developer (09/10, su proposta di
+  S): «Chiavi brimPlugins ora per tutti i 33 plugin, divisione dopo la 1.2.0 (Consigliato)». I quattro cataloghi
+  `frontend/src/lib/i18n/{en,it,fr,es}.json` hanno oltre 4.200 chiavi ciascuno, testi dei plugin (`brimPlugins.*`)
+  compresi: dividerli per namespace, cominciando da `brimPlugins`, riduce i conflitti fra flussi paralleli e ciò che
+  ogni pagina carica.
+- **C-40 · Un parametro per scegliere l'icona del broker** — dopo la 1.2, idea del developer (10/10): «in futuro
+  potremmo pensare di aggiungere un parametro selettore». Per la 1.2 l'ordine è personalizzata → plugin dedicato →
+  favicon del portale → plugin di ripiego → valigetta; i plugin di ripiego sono quelli con `detection_priority` sotto
+  `FALLBACK_PLUGIN_PRIORITY_LIMIT` (50, `frontend/src/lib/utils/brim/pluginKind.ts`, workstream S). Un selettore,
+  sul plugin o sul broker, sostituirebbe la soglia.
+- **C-41 · Gli scatti dell'AI Export** — dopo la 1.2, per decisione del developer (10/10): «sull'ai export mettiamolo
+  nel backlog i suoi scatti, ora non è una priorità». Le 5 pagine `user/ai-export/*` non hanno scatti, e
+  `frontend/e2e/gallery.spec.ts` non ne prevede: servono la spec (desktop e mobile), le immagini nelle pagine utente e
+  le voci delle due gallery, con le traduzioni.
+- **C-42 · I vincoli delle coppie anche per contante e cambio** — dopo la 1.2 (decisione D1 del coordinatore sul lotto 42 di
+  P, 10/10). Il lotto 42 fa controllare a `_validate_linked_pair` asset e quantità delle coppie TRANSFER; gli altri
+  `pair_field_constraints` dei metadati (importo e valuta del CASH_TRANSFER, valute e broker dell'FX_CONVERSION,
+  `backend/app/schemas/transactions.py:1217-1221`) li rispettano il modulo e l'import, ma un client dell'API può ancora
+  salvare una coppia sbilanciata.
+- **C-43 · Gli 8 scatti dei portali dei broker** — basso (Q, 10/10). Le pagine di import di eToro, Freetrade, DEGIRO,
+  Coinbase, Trading212, Finpension, Charles Schwab e Revolut hanno ciascuna un segnaposto nascosto
+  `<!-- [Screenshot Placeholder: …] -->`
+  (`mkdocs_src/docs/user/transactions/import/{etoro,freetrade,degiro,coinbase,trading212,finpension,schwab,revolut}.en.md`)
+  dove andrebbe la schermata del portale del broker da cui si scarica il report. La gallery non può generarle: servono
+  schermate vere dei portali. Restano TODO nascosti finché non si possono ottenere (decisione del developer, 08/10;
+  piano [DocsEnglish12](../32_docsEnglish12/plan-phase00DocsEnglish12.prompt.md), S18).
+- **C-44 · Gli aiuti della gallery per ridimensionare e inquadrare, in un posto solo** — basso, dopo la 1.2 (M, lotto
+  12, 10/10). Il lotto 12 ha messo in `frontend/e2e/fixtures/galleryRiskLab.ts` `resizeViewport` (finisce quando la
+  pagina ha gestito il `resize`) e `renderedFrames`, e `frameFromTop` scende solo dopo due frame resi in cima. Restano
+  copie e aggiramenti locali, oggi verdi: `galleryPac.ts` (`fitScreenToPacProof`, con barriera e frame suoi, ora
+  ridondanti, e una copia privata di `renderedFrames`), `galleryTallShots.ts` (`resizeScreen` e `renderedFrames`
+  duplicati, timeout di 10 s), `galleryProviderCompare.ts` (ridimensiona senza aspettare: sicuro finché il dialogo
+  blocca l'header) e `frameGrowthChart` in `gallery.spec.ts` (legge `visible` come «ha visto la cima»: sicuro solo su
+  una pagina appena caricata). Portarli sugli aiuti condivisi, con un giro della gallery come prova. Il triage è nel
+  piano [ReleaseGallery](../27_releaseImages/plan-phase00ReleaseGallery.prompt.md), passo 25.
+- **C-45 · Il picker del 💡 vede solo le transazioni caricate** — basso, **da verificare** (test-author di P, lotto 42,
+  11/10). Il picker dei suggerimenti del Bulk cerca i candidati fra le transazioni che la pagina ha caricato, mentre il
+  contatore del 💡 li conta dal backend (`/promote-suggest`): un candidato su un broker non caricato verrebbe contato ma
+  non comparirebbe nel picker. Prima un rosso che lo dimostri, poi la cura.
+- ✅ **C-46 · La barra della selezione confronta le quantità come numeri JS** — chiusa l'11/10 da P (rosso PC5), treno 37. Era: basso (P, lotto 42, 11/10). Per un TRANSFER
+  `selectedForPromote` usa solo `findPromoteMatch`, che confronta `qA === -qB` in virgola mobile, senza
+  `assetQuantitiesCancel` come fa il banner. Oltre circa 15 cifre significative propone una coppia che il salvataggio
+  rifiuta (`noPromoteRule` o `pairQuantityMismatch`); nessun dato sbagliato. La cura è una riga in
+  `TransactionBulkModal.svelte`, accanto a quella di `cashAmountsCancel`.
+- ✅ **C-47 · Lo slider *Max Δ days* ammette 0** — chiusa l'11/10 da P: il backend accetta 0 e la finestra entra nella chiave del 💡 (rossi B3.11 e PC6), treno 37. Era: basso, **da verificare** (docs-writer di P, lotto 42, 11/10).
+  `/promote-suggest` vuole `tolerance_days ≥ 1`: a 0 la richiesta del 💡 andrebbe in 422, e l'errore finisce solo nel
+  log. Prima un rosso, poi la cura (lo slider da 1, o il backend che accetta 0).
+- ✅ **C-48 · L'avviso del costo di una rettifica suggerisce 0 per un regalo** — chiusa l'11/10 da P (4 lingue e `form.en.md`), treno 37. Era: basso (docs-writer di P, lotto 42,
+  11/10; erede di P-11). `transactions.costBasisOverride.warningAdjustment` dice «If these shares cost nothing (a stock
+  split or a gift), enter 0»; per un regalo il costo è quello del donatore, come dice la tabella della pagina
+  `financial-theory/instruments/transaction-types/adjustment`. Il testo va corretto nelle 4 lingue.
+- **C-49 · Il backend di test non si ferma al SIGTERM entro 5 s dopo alcuni E2E** — basso, **da verificare**
+  (coordinatore, 11/10). Quattro volte nei gate della corsia 6150: g32 (asset classif.), g35 (dashboard), g37 (asset
+  detail e dashboard). Il runner chiude il gruppo di processi (`scripts/test_runner/_server.py:329`), rc 0 e porta
+  libera: nessun test ne soffre. Nessun endpoint SSE (gli `StreamingResponse` sono backup e download). Da capire chi
+  trattiene lo shutdown di uvicorn (connessioni aperte del browser, lavori del lifespan) e se lo stesso succede con
+  `docker stop`, che dopo 10 s manda SIGKILL e salta gli hook di chiusura.
+- **C-50 · L'AI Export di un Asset espone il nome interno `portfolio_weight_ratio`** — basso, da valutare per la 1.2
+  (T, sonda di B3b, 11/10). Nella tabella `portfolio_role.unavailable` di `asset.position_scope` (da `ea0558b3c`) il
+  campo esce col nome interno invece di quello pubblico (`PUBLIC_RATIO_FIELD_NAMES` in `snapshotDataRenderer.ts`), e il
+  controllo pubblico della sonda fallisce appena una gamba non ha valore corrente.
+- **C-51 · I dati sintetici scrivono la vecchia forma di `classification_params`** — basso (T, 11/10).
+  `populate_mock_data.py:793-881`: l'AI Export degli Asset sintetici 4–8 risponde 503 su `asset.identity`. Tocca le
+  sonde e gli scatti futuri dell'AI Export (C-41), non gli utenti.
+- **C-52 · La CLI della sonda dell'AI Export non sa scegliere l'Asset né l'utente sintetico** — minimo (T, 11/10).
 
 ## Tracciate altrove
 
@@ -535,7 +614,8 @@ Voci del backlog del coordinatore che una cartella attiva tiene già: non sono d
 - La doc developer precedente alla 1.1 (l'esempio JSON di `api/overview`, `-v` in `external.md`, «11 categories»,
   le opzioni del runner e i moduli mancanti): [DocsEnglish12](../32_docsEnglish12/plan-phase00DocsEnglish12.prompt.md),
   S9. Alcune voci di quell'elenco sono chiuse: vedi sotto.
-- La fase 3 di Risk, i buchi B1–B6 e le questioni aperte: [README della 02](../02_riskfolioIntegration/README.md).
+- La fase 3 di Risk, i buchi B1–B3 e B6–B8, A6 (riaperta il 10/10) e le questioni aperte, con la guida «Ripartire
+  da qui» per una chat nuova: [README della 02](../02_riskfolioIntegration/README.md).
 
 ## Chiuse alla verifica del 09/10
 
@@ -544,7 +624,7 @@ Voci del backlog del coordinatore che il codice del treno 25 ha già chiuso.
 | Voce | Chiusa da |
 |---|---|
 | Id dei broker riusati e file BRIM ereditati da un broker nuovo (⚠️ del 07/10) | `AUTOINCREMENT` (`db/models.py:535`) e `delete_files_for_brokers` (`brim_provider.py:1203-1222`), piano 34 |
-| `portfolio_optimization` oltre 100 titoli risponde `invalid_parameters` | `RESOURCE_LIMIT` (`portfolio_optimization.py:189-196`) |
+| `portfolio_optimization` oltre 100 titoli risponde `invalid_parameters` | ~~`RESOURCE_LIMIT` (`portfolio_optimization.py:189-196`)~~ ❌ **riaperta il 10/10** (Risk, verificato dal coordinatore): la `ValidationError` di `OptimizationEngineRequest` (`risk/quant/optimization_models.py:21`, `max_length=100`) nasce dentro il `try` e finisce in `except ValueError` (`risk_plugins/portfolio_optimization.py:221`), quindi il ramo di `:189` non si raggiunge. Aperta come A6 nel [README della 02](../02_riskfolioIntegration/README.md) |
 | Docstring di `AssetType` e del budget in `pac_allocator` | `db/models.py:147-184`; `planner.py:145-160` e `solver.py:99-111` coerenti |
 | `mkdocs gallery --no-populate` che ripopola a ogni giro | `dev.py:1074`, `global-setup.ts:34` |
 | `ai_export_snapshot.md` senza il 422 `selection_not_applicable` | `ai_export_snapshot.md:121` |

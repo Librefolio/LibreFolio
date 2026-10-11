@@ -46,6 +46,7 @@
         type TimelineGap,
     } from '$lib/utils/transactions/importReportSets';
     import type {BrimSetPreview} from '$lib/types';
+    import {brimPluginName} from '$lib/utils/brim/pluginText';
 
     interface Props {
         set: ReportSetGroup;
@@ -206,7 +207,10 @@
     let detectedPlugin = $derived(set.files.length > 0 ? setPluginFor(set.files[0], plugins) : null);
     /** The «one by one» entry of «Read as»: a value no plugin code can take (an empty value means «nothing chosen» to the select). */
     const ONE_BY_ONE = '__one_by_one__';
-    let readAsOptions = $derived<SelectOption[]>([...readAsChoices.map((choice) => ({value: choice.code, label: choice.code === detectedPlugin ? `${choice.name} (${$t('importWizard.reportSet.detected')})` : choice.name})), {value: ONE_BY_ONE, label: $t('importWizard.reportSet.readAsOneByOne')}]);
+    let readAsOptions = $derived<SelectOption[]>([
+        ...readAsChoices.map((choice) => ({value: choice.code, label: choice.code === detectedPlugin ? `${brimPluginName(choice, $t)} (${$t('importWizard.reportSet.detected')})` : brimPluginName(choice, $t)})),
+        {value: ONE_BY_ONE, label: $t('importWizard.reportSet.readAsOneByOne')},
+    ]);
 
     function readAs(value: string) {
         onReadAs(value === ONE_BY_ONE ? null : value);
@@ -222,7 +226,7 @@
             (choice): RowAction<MemberRow> => ({
                 id: `read-alone-${choice.code}`,
                 icon: FileOutput,
-                label: $t('importWizard.reportSet.readAloneWith', {values: {plugin: choice.name}}),
+                label: $t('importWizard.reportSet.readAloneWith', {values: {plugin: brimPluginName(choice, $t)}}),
                 visible: (row) => (readAloneByFile.get(row.fileId) ?? []).some((option) => option.code === choice.code),
                 onClick: (row) => onReadAlone(row.fileId, choice.code),
             }),
@@ -331,7 +335,7 @@
                 <ChevronRight size={14} class="shrink-0 text-gray-400" />
             {/if}
             <Layers size={14} class="shrink-0 text-libre-green" />
-            <span class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{$t('importWizard.reportSet.setLabel', {values: {date: formatDay(set.uploadedAt), plugin: plugin?.name ?? set.pluginCode}})}</span>
+            <span class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{$t('importWizard.reportSet.setLabel', {values: {date: formatDay(set.uploadedAt), plugin: plugin ? brimPluginName(plugin, $t) : set.pluginCode}})}</span>
             <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.reportSet.fileCount', {values: {n: set.files.length}})}</span>
         </button>
         <div class="ml-auto flex shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
@@ -375,13 +379,13 @@
             {#if defaultNote}
                 <p class="flex items-start gap-1.5 text-xs text-sky-700 dark:text-sky-300" data-testid="report-set-default-note" data-default-plugin={defaultNote.code}>
                     <Info size={12} class="mt-0.5 shrink-0" />
-                    <span>{$t('importWizard.reportSet.defaultPluginNote', {values: {plugin: plugin?.name ?? set.pluginCode, defaultPlugin: defaultNote.name}})}</span>
+                    <span>{$t('importWizard.reportSet.defaultPluginNote', {values: {plugin: plugin ? brimPluginName(plugin, $t) : set.pluginCode, defaultPlugin: brimPluginName(defaultNote, $t)}})}</span>
                 </p>
             {/if}
             {#each alsoRecognised as entry (entry.file.file_id)}
                 <p class="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300" data-testid="report-set-also-recognised" data-file-id={entry.file.file_id} data-plugins={entry.others.map((other) => other.code).join(',')}>
                     <AlertTriangle size={12} class="mt-0.5 shrink-0" />
-                    <span>{$t('importWizard.reportSet.alsoRecognisedBy', {values: {file: entry.file.filename, plugins: entry.others.map((other) => other.name).join(', ')}})}</span>
+                    <span>{$t('importWizard.reportSet.alsoRecognisedBy', {values: {file: entry.file.filename, plugins: entry.others.map((other) => brimPluginName(other, $t)).join(', ')}})}</span>
                 </p>
             {/each}
 

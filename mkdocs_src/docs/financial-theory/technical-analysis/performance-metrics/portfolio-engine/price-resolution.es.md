@@ -32,25 +32,25 @@ flowchart TD
     A["Resolver activo a en fecha t"] --> B{"¿Cotización de mercado en t?"}
     B -- "sí" --> C["MARKET"]
     B -- "no" --> D{"¿Observaciones de transacciones en t?"}
-    D -- "sí" --> E["PROM_TRADE"]
+    D -- "sí" --> E["TRADE_AVG"]
     D -- "no" --> F{"¿Alguna observación anterior a t?"}
-    F -- "sí" --> G["ARRASTRADO (LOCF)"]
-    F -- "no" --> H["FALTA"]
+    F -- "sí" --> G["CARRIED (LOCF)"]
+    F -- "no" --> H["MISSING"]
 ```
 
 El esquema público del motor asigna los precios del resolutor a etiquetas de fuente de valoración:
 
 | Fuente del resolutor | Origen | Fuente de valoración de la cartera |
 |----------------------|--------|-------------------------------------|
-| `MARKET` | Cotización real del mismo día | `PRECIO_MERCADO` |
-| `PROM_TRADE` | Precio de transacción del mismo día | `ULTIMO_PRECIO_TRANSACCION` |
-| `ARRASTRADO` desde MARKET | Cotización real obsoleta | `PRECIO_MERCADO` |
-| `ARRASTRADO` desde TRADE | Precio de transacción obsoleto | `ULTIMO_PRECIO_TRANSACCION` |
-| `FALTA` | Sin observación en la fecha o anterior | `FALTA` |
+| `MARKET` | Cotización real del mismo día | `MARKET_PRICE` |
+| `TRADE_AVG` | Precio de transacción del mismo día | `LAST_TRADE_PRICE` |
+| `CARRIED` desde MARKET | Cotización real obsoleta | `MARKET_PRICE` |
+| `CARRIED` desde TRADE | Precio de transacción obsoleto | `LAST_TRADE_PRICE` |
+| `MISSING` | Sin observación en la fecha o anterior | `MISSING` |
 
 !!! warning "Sin cascada heredada"
 
-    El código actual distribuido **no** utiliza una ruta de valoración separada de `mercado → última COMPRA → costo inicial`. Los precios de origen de transacciones son observaciones dentro del resolutor unificado; el PMP sigue siendo la base del costo, no el precio de valoración.
+    El código actual distribuido **no** utiliza una ruta de valoración separada de `market → last BUY → seed cost`. Los precios de origen de transacciones son observaciones dentro del resolutor unificado; el PMC sigue siendo la base del costo, no el precio de valoración.
 
 ## 🌍 Moneda y Escala
 
@@ -94,7 +94,7 @@ $$
 
 ## ⚠️ Precios Faltantes
 
-`FALTA` significa que no hay ninguna observación de mercado o transacción en la fecha de valoración o antes. En el motor de cartera, esa posición no puede contribuir al valor de mercado hasta que exista un precio. En el análisis de lotes, el modo estimado al costo aún puede valorar los lotes abiertos al costo cuando el activo no tiene ninguna serie de precios de mercado; consulte [Análisis de Lotes FIFO](../fifo-engine/fifo-lot-analysis.md#estimated-at-cost).
+`MISSING` significa que no hay ninguna observación de mercado o transacción en la fecha de valoración o antes. En el motor de cartera, esa posición no puede contribuir al valor de mercado hasta que exista un precio. En el análisis de lotes, el modo estimado al costo aún puede valorar los lotes abiertos al costo cuando el activo no tiene ninguna serie de precios de mercado; consulte [Análisis de Lotes FIFO](../fifo-engine/fifo-lot-analysis.md#estimated-at-cost).
 
 Las advertencias de la cartera se evalúan **a partir de la fecha de valoración**. Las valoraciones de origen de transacciones con más de 14 días de antigüedad alimentan la advertencia "activos valorados al costo / sin precio de mercado durante más de dos semanas"; un activo que posteriormente recibe una cotización de mercado real elimina la advertencia.
 

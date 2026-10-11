@@ -127,7 +127,9 @@
     }
 
     function compositionHelp(): string {
-        const what = $t('tools.pacAllocator.planner.assets.compositionHelp', {default: 'What the Asset holds, by sector and geography. It is used only by the result report, to show the portfolio before and after: it does not change the orders. A share that is not indicated counts as “Uncategorised”.'});
+        const what = $t('tools.pacAllocator.planner.assets.compositionHelp', {
+            default: 'What the Asset holds, by sector and geography. It is used only by the result report, to show the portfolio before and after: it does not change the orders. A share that is not indicated counts as “Uncategorised”.',
+        });
         const weights = $t(`${KEY}.weightsHelp`, {default: 'For each dimension, give the shares in percent. They may add up to less than 100%; over 100% the calculation rejects the data.'});
         return `${what}\n\n${weights}`;
     }
@@ -167,12 +169,7 @@
             <span>{$t('common.type', {default: 'Type'})} *</span>
             <HelpTip label={$t('common.type', {default: 'Type'})} help={$t(`${KEY}.typeHelp`, {default: 'The kind of instrument, as on the Asset page. It is shown in the result and does not change the orders.'})} />
         </div>
-        <AssetTypeSelect
-            value={working.assetClass.trim().toUpperCase()}
-            testId="pac-planner-asset-editor-type"
-            placeholder={pickCategory('asset_type')}
-            onchange={setType}
-        />
+        <AssetTypeSelect value={working.assetClass.trim().toUpperCase()} testId="pac-planner-asset-editor-type" placeholder={pickCategory('asset_type')} onchange={setType} />
     </div>
 {/snippet}
 
@@ -188,7 +185,10 @@
             <div>
                 <div class={LABEL_ROW}>
                     <label for="{ids}-ticker">{$t(`${KEY}.ticker`, {default: 'Ticker / ISIN'})}</label>
-                    <HelpTip label={$t(`${KEY}.ticker`, {default: 'Ticker / ISIN'})} help={$t(`${KEY}.tickerHelp`, {default: 'Optional: a ticker, an ISIN or any code that helps you recognise the Asset in the result. It does not link the Asset to LibreFolio, and two manual Assets are never merged by name or code.'})} />
+                    <HelpTip
+                        label={$t(`${KEY}.ticker`, {default: 'Ticker / ISIN'})}
+                        help={$t(`${KEY}.tickerHelp`, {default: 'Optional: a ticker, an ISIN or any code that helps you recognise the Asset in the result. It does not link the Asset to LibreFolio, and two manual Assets are never merged by name or code.'})}
+                    />
                 </div>
                 <input id="{ids}-ticker" class={INPUT} bind:value={working.ticker} maxlength="128" data-testid="pac-planner-asset-editor-ticker" />
             </div>

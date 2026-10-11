@@ -14,7 +14,7 @@ I mattoni di ogni portafoglio:
 
 - **[Tipi di Asset](instruments/asset-types/index.md)** — Azioni, ETF, Obbligazioni, Crypto, Immobiliare, Indici
 - **[Tipi di Transazione](instruments/transaction-types/index.md)** — Acquisto/Vendita, Deposito/Prelievo, Dividendo, Commissione, Interesse, Trasferimento
-- **[Eventi dell'Asset](instruments/asset-events/index.md)** — Dividendo, Interesse, Split, Aggiustamento del Prezzo, Liquidazione alla scadenza
+- **[Eventi dell'Asset](instruments/asset-events/index.md)** — Dividendo, Interesse, Split, Rettifica prezzo, Liquidazione alla scadenza
 
 ### 📊 [Analisi Tecnica](technical-analysis/index.md)
 

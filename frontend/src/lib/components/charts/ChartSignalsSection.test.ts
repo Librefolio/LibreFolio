@@ -13,10 +13,15 @@
  * icon are the two published states; never a translated label, never a CSS
  * class.
  */
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {get} from 'svelte/store';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {_ as t} from '$lib/i18n';
+import {addMessages} from 'svelte-i18n';
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
 
 // The section's currency labels come from this store, which talks to the API —
 // jsdom has no server. The diagnostic cases only need the flag field rendered
@@ -545,5 +550,99 @@ describe('ChartAestheticsSection — custom numeric bounds', () => {
         expect(max).toHaveValue(19);
         expect(onchange).toHaveBeenCalledTimes(2);
         expect(onchange).toHaveBeenLastCalledWith(expect.objectContaining({yAxisMin: 11, yAxisMax: 19}));
+    });
+});
+
+describe('ChartAestheticsSection — the y-axis scale is labelled from the catalogues (P, item 8)', () => {
+    // Three labels of the y-axis scale are English written in the code: the auto mode prints 'Auto'
+    // while its two neighbours already read `chartSettings.yAxisInclude0` and `common.custom`, and the
+    // custom bounds are captioned 'Min' and 'Max' — in every language. The contract: the auto mode
+    // reads `chartSettings.yAxisAuto`, a key the cure adds; the bounds read `common.min` and
+    // `common.max`, which the four catalogues already have (Spanish writes them «Mín» and «Máx»).
+    //
+    // Observed without reading a language, in a marker locale: every key of the English catalogue,
+    // and each key the cure adds, reads as a marker of itself (`⟦common.min⟧`), so a label the section
+    // takes from the catalogue reads its marker and a literal written in it reads as itself. Whether
+    // the four catalogues have the keys is asked of the JSON files, in the first case. Include 0 and
+    // Custom are the control: they already come from the catalogue, and must read their markers.
+    //
+    // Red today: the auto mode reads 'Auto', the bounds 'Min' and 'Max'; no catalogue has
+    // `chartSettings.yAxisAuto`.
+
+    /** A private-use language (BCP 47 reserves qaa–qtz): Intl accepts it, and it is none of the app's catalogues. */
+    const MARKER_LOCALE = 'qaa';
+    const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+
+    /** How a label reads in the marker locale: `⟦key⟧`, or `⟦key n=3⟧` for a message given values. */
+    const marked = (key: string, values: Record<string, string | number> = {}): string => `⟦${[key, ...Object.entries(values).map(([name, value]) => `${name}=${value}`)].join(' ')}⟧`;
+
+    /** The value behind a dotted key of a catalogue, if any. */
+    const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+
+    /** Every dotted key of a catalogue that holds a string. */
+    function stringKeysOf(node: unknown, prefix = ''): string[] {
+        if (typeof node === 'string') return [prefix];
+        if (node === null || typeof node !== 'object') return [];
+        return Object.entries(node).flatMap(([part, child]) => stringKeysOf(child, prefix ? `${prefix}.${part}` : part));
+    }
+
+    /** Each of `keys` that some catalogue has no string for, with those catalogues: `{}` when all four have all of them. */
+    function catalogueGaps(keys: readonly string[]): Record<string, string[]> {
+        const gaps = keys.map((key) => [key, Object.entries(CATALOGUES).flatMap(([lang, catalogue]) => (typeof leafOf(catalogue, key) === 'string' ? [] : [lang]))] as const);
+        return Object.fromEntries(gaps.filter(([, langs]) => langs.length > 0));
+    }
+
+    /** Switch svelte-i18n to the marker locale: every key of the English catalogue reads as its marker, and so does every key of `added` — a key the cure adds, with the names of its values. */
+    async function useMarkerLocale(added: Record<string, readonly string[]>): Promise<void> {
+        const messages: Record<string, string> = Object.fromEntries(stringKeysOf(en).map((key) => [key, marked(key)]));
+        for (const [key, names] of Object.entries(added)) messages[key] = marked(key, Object.fromEntries(names.map((name) => [name, `{${name}}`])));
+        addMessages(MARKER_LOCALE, messages);
+        await setupI18n(MARKER_LOCALE);
+    }
+
+    beforeEach(async () => {
+        await useMarkerLocale({'chartSettings.yAxisAuto': []});
+    });
+
+    afterEach(async () => {
+        await setupI18n('en');
+    });
+
+    /** The section's custom y-axis row, mounted in the marker locale, after checking that the locale is live. */
+    function mountMarkedBounds() {
+        const bounds = mountCustomAestheticBounds();
+        expect(screen.getByTestId('chart-axis-legacy-custom'), 'control: a mode the section already takes from the catalogue reads its marker').toHaveTextContent(marked('common.custom'));
+        return bounds;
+    }
+
+    /** The texts around the two bound fields, in reading order: every text of the smallest element that holds both. */
+    function boundCaptions(min: HTMLElement, max: HTMLElement): string[] {
+        let frame = min.parentElement;
+        while (frame && !frame.contains(max)) frame = frame.parentElement;
+        if (!frame) throw new Error('the two bound fields share no element');
+        const walker = document.createTreeWalker(frame, NodeFilter.SHOW_TEXT);
+        const texts: string[] = [];
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const text = node.textContent?.trim();
+            if (text) texts.push(text);
+        }
+        return texts;
+    }
+
+    it('the four catalogues have every label of the y-axis scale', () => {
+        expect(catalogueGaps(['chartSettings.yAxisAuto', 'chartSettings.yAxisInclude0', 'common.custom', 'common.min', 'common.max']), 'key → the catalogues with no string for it').toEqual({});
+    });
+
+    it('names the auto mode chartSettings.yAxisAuto, as Include 0 and Custom beside it are named from the catalogue', () => {
+        mountMarkedBounds();
+        const modes = Object.fromEntries(['auto', 'include0', 'custom'].map((mode) => [mode, screen.getByTestId(`chart-axis-legacy-${mode}`).textContent?.trim()]));
+
+        expect(modes).toEqual({auto: marked('chartSettings.yAxisAuto'), include0: marked('chartSettings.yAxisInclude0'), custom: marked('common.custom')});
+    });
+
+    it('captions the custom bounds common.min and common.max', () => {
+        const {min, max} = mountMarkedBounds();
+
+        expect(boundCaptions(min, max)).toEqual([marked('common.min'), marked('common.max')]);
     });
 });

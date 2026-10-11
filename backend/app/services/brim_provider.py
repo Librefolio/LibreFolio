@@ -51,7 +51,7 @@ import structlog
 from pydantic import ValidationError
 from sqlalchemy import String, and_, cast, or_, select
 
-from backend.app.db.models import Asset, Transaction
+from backend.app.db.models import Asset, Transaction, TransactionType
 from backend.app.schemas.assets import FAAinfoFiltersRequest
 from backend.app.schemas.brim import (
     BRIMAssetCandidate,
@@ -66,7 +66,9 @@ from backend.app.schemas.brim import (
     BRIMMatchConfidence,
     BRIMMemberSummary,
     BRIMParseOutput,
+    BRIMPluginCheck,
     BRIMPluginInfo,
+    BRIMRefusal,
     BRIMReportRole,
     BRIMSetShape,
     BRIMTXDuplicateCandidate,
@@ -335,6 +337,25 @@ class BRIMProvider(ABC):
             The reason, or None when there is nothing to add (the default)
         """
         return None
+
+    def cannot_parse_detail(self, file_path: Path) -> Optional[BRIMRefusal]:
+        """Why ``can_parse`` refuses this file, with a code the frontend can translate.
+
+        The import wizard asks it right after an upload, through ``GET
+        /import/files/{file_id}/plugin-check``: when the broker's default plugin refuses the
+        file, the wizard shows this reason next to the plugin and the broker that read it.
+
+        The default wraps ``cannot_parse_reason`` with no code, so every plugin answers
+        without changes. Override it to give a stable snake_case ``code``, translated as
+        ``importWizard.parseRefusal.<code>``, and its ``context``; ``message`` stays the
+        English fallback and must be what ``cannot_parse_reason`` returns. Same rules as
+        ``cannot_parse_reason``: as cheap as ``can_parse``, and never raise.
+
+        Returns:
+            The refusal, or None when there is nothing to add
+        """
+        reason = self.cannot_parse_reason(file_path)
+        return BRIMRefusal(message=reason) if reason else None
 
     @abstractmethod
     def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
@@ -1176,6 +1197,40 @@ def _refusal_message(plugin: Any, plugin_code: str, file_path: Path, checked_pat
         logger.warning("Plugin failed to explain its refusal", plugin_code=plugin_code, error=str(e))
         return message
     return f"{message}: {reason}" if reason else message
+
+
+def _check_path(plugin: BRIMProvider, file_path: Path) -> BRIMPluginCheck:
+    """``plugin``'s answer about one path. A check or an explanation that raises is logged: it never reaches the caller."""
+    code = plugin.provider_code
+    try:
+        accepted = bool(plugin.can_parse(file_path))
+    except Exception as e:
+        logger.warning("Plugin failed to check a file", plugin_code=code, error=str(e))
+        accepted = False
+    if accepted:
+        return BRIMPluginCheck(plugin_code=code, can_parse=True)
+    try:
+        return BRIMPluginCheck(plugin_code=code, can_parse=False, refusal=plugin.cannot_parse_detail(file_path))
+    except Exception as e:
+        logger.warning("Plugin failed to explain its refusal", plugin_code=code, error=str(e))
+        return BRIMPluginCheck(plugin_code=code, can_parse=False)
+
+
+def check_file_with_plugin(file_id: str, plugin: BRIMProvider) -> Optional[BRIMPluginCheck]:
+    """Whether ``plugin`` reads an uploaded file and, if not, why; ``None`` when the file's content is gone.
+
+    A refusal on a path that a concurrent parse has just moved is asked again on the new path,
+    as the parse guard does.
+    """
+    file_path = get_file_path(file_id)
+    if file_path is None:
+        return None
+    check = _check_path(plugin, file_path)
+    if not check.can_parse:
+        moved_path = _relocated_path(file_id, file_path)
+        if moved_path is not None:
+            check = _check_path(plugin, moved_path)
+    return check
 
 
 def delete_file(file_id: str) -> bool:
@@ -2022,6 +2077,13 @@ def _description_key(description: Optional[str]) -> str:
     return _WHITESPACE_RE.sub("", description).upper()
 
 
+# A deposit or a withdrawal that a promote merged into a pair is stored as one leg of a
+# CASH_TRANSFER (two brokers) or of an FX_CONVERSION (two currencies). Exported again — an
+# export "since the last one" starts on the last day it covered — the same movement comes back
+# as a plain DEPOSIT or WITHDRAWAL and must still be recognised.
+_MERGED_LEG_TYPES = (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION)
+
+
 async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per-tx match evaluation from loop
     transactions: List[TXCreateItem],
     broker_id: int,
@@ -2033,7 +2095,8 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
 
     For each parsed transaction, queries the DB for existing transactions with:
     - Same broker_id (scoped to broker)
-    - Same type
+    - Same type; a DEPOSIT or WITHDRAWAL also looks at the legs of CASH_TRANSFER and
+      FX_CONVERSION pairs, where a promote stored the same movement
     - Same date
     - Same quantity (within tolerance for decimals)
     - Same cash amount and currency (if present)
@@ -2044,6 +2107,9 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
     - POSSIBLE_WITH_ASSET: key fields match, asset auto-resolved and matches
     - LIKELY: key fields + description match, asset not resolved
     - LIKELY_WITH_ASSET: key fields + description match, asset auto-resolved
+
+    On a merged leg the description matches when it contains the incoming one: merging a pair
+    joins the descriptions of its two sides.
 
     Args:
         transactions: List of parsed TXCreateItem
@@ -2087,9 +2153,10 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
                 asset_is_resolved = True
 
         # Build query conditions
+        merged_leg_types = _MERGED_LEG_TYPES if tx.type in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL) else ()
         conditions = [
             Transaction.broker_id == broker_id,
-            Transaction.type == tx.type,
+            Transaction.type.in_([tx.type, *merged_leg_types]),
             Transaction.date == tx.date,
         ]
 
@@ -2129,7 +2196,8 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
             # 2. Whether description matches (even more confident)
             tx_desc = _description_key(tx.description)
             existing_desc = _description_key(existing.description)
-            desc_matches = bool(tx_desc) and tx_desc == existing_desc
+            merged_leg = existing.type != tx.type
+            desc_matches = bool(tx_desc) and (tx_desc == existing_desc or (merged_leg and tx_desc in existing_desc))
 
             if asset_is_resolved and existing.asset_id is not None:
                 # Asset resolved on both sides - use WITH_ASSET levels

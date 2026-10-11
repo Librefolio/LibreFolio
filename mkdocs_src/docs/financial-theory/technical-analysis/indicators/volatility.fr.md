@@ -60,6 +60,6 @@ flowchart LR
 
 ## 🔗 Liens connexes
 
-- 📉 **[Tous les indicateurs](index.md)** — Aperçu complet avec les vues financière et de traitement du signal
+- 📉 **[Tous les indicateurs](index.md)** — Vue d'ensemble complète avec les vues financière et de traitement du signal
 - 🧭 **[Indicateurs de tendance](trend.md)** — Direction du mouvement que la volatilité entoure
 - 📦 **[Indicateurs de volume](volume.md)** — Confirmation par l'activité de négociation

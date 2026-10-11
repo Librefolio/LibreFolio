@@ -10,8 +10,7 @@ export const BUTTON_DANGER =
     'inline-flex items-center justify-center gap-2 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:bg-gray-800 dark:text-red-300 dark:hover:bg-red-950/40';
 
 /** Confirms a replacement the user must notice (amber, like the shared ConfirmModal warning). */
-export const BUTTON_WARNING =
-    'inline-flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 disabled:cursor-not-allowed disabled:opacity-50';
+export const BUTTON_WARNING = 'inline-flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 disabled:cursor-not-allowed disabled:opacity-50';
 
 export const BUTTON_LINK = 'inline-flex items-center gap-1 rounded text-sm font-medium text-libre-green hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:text-green-400';
 
@@ -53,12 +52,10 @@ export const INPUT_SUFFIX = 'w-20 shrink-0 text-xs text-gray-500 dark:text-gray-
 export const INPUT_ADORNMENT = 'pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-gray-500 dark:text-gray-400';
 
 /** A light Remove inside a row or a card header. */
-export const BUTTON_DANGER_SMALL =
-    'inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-500 dark:text-red-300 dark:hover:bg-red-950/40';
+export const BUTTON_DANGER_SMALL = 'inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-500 dark:text-red-300 dark:hover:bg-red-950/40';
 
 /** A bulk action over a list («All», «None»): the same pill as the Risk panel. */
-export const BUTTON_PILL =
-    'inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700';
+export const BUTTON_PILL = 'inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700';
 
 export const HINT = 'text-xs text-gray-500 dark:text-gray-400';
 

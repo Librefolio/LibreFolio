@@ -87,6 +87,6 @@ $$
 
 ## 🔗 Relacionado
 
-- 📅 **[Descripción general de eventos de activos](index.md)** — Todos los tipos de eventos
+- 📅 **[Resumen de eventos de activos](index.md)** — Todos los tipos de eventos
 - 📈 **[Interés](interest.md)** — Pagos de intereses periódicos
 - 🏁 **[Liquidación al vencimiento](maturity-settlement.md)** — Retorno final de capital

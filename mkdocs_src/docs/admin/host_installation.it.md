@@ -1,24 +1,24 @@
 # 📦 Installazione su Host (Pipenv)
 
-Questa guida descrive come configurare LibreFolio direttamente su una macchina host usando Python, Node.js e Pipenv. Questo metodo di installazione manuale è adatto per gli utenti che desiderano eseguire LibreFolio senza Docker (ad es. su macchine con poche risorse) ed è anche il primo passo per gli sviluppatori che preparano un ambiente di sviluppo locale.
+Questa guida installa LibreFolio direttamente sulla tua macchina con Python, Node.js e Pipenv, senza Docker: comodo su macchine con poche risorse, e il primo passo verso un ambiente di sviluppo.
 
-Per il deployment containerizzato, consulta la [Guida all'Installazione del Manuale Utente](../user/installation.md) o la [Guida a Docker Avanzato](docker_advanced.md).
+Per Docker, consulta la [Installazione nel Manuale Utente](../user/installation.md) o la [Guida Avanzata a Docker](docker_advanced.md).
 
 ---
 
 ## ✅ Prerequisiti
 
-Prima di procedere, assicurati di avere i seguenti requisiti installati sul tuo sistema:
+Installa prima questi tre strumenti.
 
-??? info "🐍 Python 3.13+"
+??? info "🐍 Python 3.13"
 
-    Python 3.13 è richiesto per il backend FastAPI.
-    
-    * **macOS**: Installa tramite Homebrew:
+    Il backend richiede Python 3.13, la versione impostata nel `Pipfile` del progetto.
+
+    * **macOS**: Installa usando Homebrew:
       ```bash
       brew install python@3.13
       ```
-    * **Windows**: Scarica l'installer da [python.org](https://www.python.org/downloads/) (assicurati di spuntare "Add Python to PATH").
+    * **Windows**: Scarica il programma di installazione da [python.org](https://www.python.org/downloads/) (assicurati di selezionare "Add Python to PATH").
     * **Linux (Ubuntu/Debian)**:
       ```bash
       sudo apt update
@@ -27,8 +27,8 @@ Prima di procedere, assicurati di avere i seguenti requisiti installati sul tuo 
 
 ??? info "📦 Node.js 24+"
 
-    Node.js è richiesto per compilare il frontend SvelteKit.
-    
+    Node.js genera l'interfaccia web.
+
     * **macOS**: Installa tramite Homebrew:
       ```bash
       brew install node@24
@@ -37,123 +37,104 @@ Prima di procedere, assicurati di avere i seguenti requisiti installati sul tuo 
 
 ??? info "📋 Pipenv"
 
-    Pipenv gestisce gli ambienti virtuali e le dipendenze per Python.
-    
+    Pipenv gestisce l'ambiente virtuale Python e i suoi pacchetti.
+
     * **Tutte le piattaforme**:
       ```bash
       pip install --user pipenv
       ```
-      *Nota: Assicurati che i percorsi dei binari dell'utente (ad es. `~/.local/bin` su Linux/macOS o `%APPDATA%\Python` su Windows) siano aggiunti alla variabile `PATH` della tua shell.*
+      *Nota: Assicurati che i percorsi dei binari della tua user-base (ad esempio `~/.local/bin` su Linux/macOS o `%APPDATA%\Python` su Windows) siano aggiunti alla variabile `PATH` della tua shell.*
 
 ---
 
 ## 📋 Istruzioni di Configurazione
 
-LibreFolio include uno script di orchestrazione principale, `dev.py`, per automatizzare le attività di gestione comuni.
+!!! tip "I comandi vengono eseguiti nell'ambiente Pipenv"
 
-!!! important "Prerequisito per l'Ambiente Python"
-
-    Poiché `dev.py` importa moduli dal codice dell'applicazione backend, eseguirlo direttamente prima di installare le dipendenze risulterà in eccezioni di tipo `ImportError`. 
-    
-    Pertanto, la primissima volta che configuri il progetto sul tuo host, devi inizializzare l'ambiente virtuale eseguendo:
-    ```bash
-    pipenv install --dev
-    ```
-    Una volta configurato questo ambiente iniziale, puoi utilizzare in sicurezza `dev.py` per tutti i passaggi successivi.
-
-!!! tip "Esecuzione di `dev.py` (Contesto Pipenv)"
-
-    Poiché tutte le dipendenze del backend sono installate all'interno dell'ambiente virtuale gestito da `pipenv`, qualsiasi esecuzione di comandi sull'host deve essere eseguita in quel contesto:
-    
-    * **Comandi singoli**: Prefissa il tuo comando con `pipenv run` (ad es. `pipenv run ./dev.py server`).
-    * **Shell interattiva**: Esegui prima `pipenv shell` per entrare nell'ambiente virtuale, dopodiché potrai eseguire direttamente `./dev.py` senza prefissi.
-    
-    *Nota: Se stai eseguendo comandi all'interno di un container Docker in esecuzione (ad es. tramite `docker exec`), **non** è necessario utilizzare `pipenv run` o `pipenv shell`. L'immagine Docker di produzione pre-installa tutte le dipendenze Python globalmente nell'ambiente di sistema del container.*
+    I comandi `dev.py` iniziano con `pipenv run`, che li esegue nell'ambiente virtuale del progetto. Puoi anche accedervi una volta con `pipenv shell`, poi digitare `./dev.py …` senza il prefisso.
 
 ### 📥 1. Scarica il Progetto
-
-Clona il repository:
 
 ```bash
 git clone https://github.com/Librefolio/LibreFolio.git
 cd LibreFolio
 ```
 
-Oppure scarica l'ultimo pacchetto di rilascio da [GitHub Releases](https://github.com/Librefolio/LibreFolio/releases) ed estrailo.
+Oppure scarica il pacchetto della release più recente da [GitHub Releases](https://github.com/Librefolio/LibreFolio/releases) e decomprimilo.
 
-### 📦 2. Installa le Dipendenze
+### 🐍 2. Crea l'Ambiente Python
 
-Una volta inizializzato l'ambiente virtuale, installa tutte le rimanenti dipendenze Python, Node.js e del browser:
+```bash
+pipenv install --dev
+```
+
+Fallo prima di qualsiasi comando `dev.py`: `dev.py` necessita di questi pacchetti Python e, senza di essi, si interrompe con un `ModuleNotFoundError`.
+
+### 📦 3. Installa le Altre Dipendenze
 
 ```bash
 pipenv run ./dev.py install
 ```
 
-Sotto il cofano, questo comando:
+Nell'ordine, installa:
 
-1. Inizializzerà l'ambiente virtuale Python e installerà i pacchetti tramite `pipenv`.
-2. Installerà gli strumenti di progetto radice tramite `npm install`.
-3. Installerà le dipendenze frontend SvelteKit tramite `npm ci`.
-4. Installerà i binari del browser Playwright (utilizzati per la generazione di report PDF e i test E2E).
+1. nuovamente i pacchetti Python, con `pipenv install --dev`;
+2. gli strumenti del progetto, con `npm install`;
+3. le dipendenze dell'interfaccia web, con `npm ci` in `frontend/`;
+4. il browser Chromium di Playwright, usato dai test end-to-end e dagli screenshot della documentazione. Se fallisce solo questo download, l'installazione si completa comunque.
 
-### ⚙️ 3. Configura l'Ambiente
-
-Copia il file dell'ambiente di esempio per creare la tua configurazione `.env` attiva:
+### ⚙️ 4. Configura l'Ambiente
 
 ```bash
 cp .env.example .env
 ```
 
-Le impostazioni predefinite funzionano immediatamente. Di seguito sono riportate le variabili chiave:
+I valori predefiniti funzionano così come sono. Le variabili principali:
 
 | Variabile | Predefinito | Descrizione |
 | --- | --- | --- |
 | `PORT` | `6040` | Porta di bind del server. |
-| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Percorso della directory in cui sono memorizzati il database, i caricamenti e i log. |
-| `LOG_LEVEL` | `INFO` | Livello di dettaglio dei log. |
+| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Directory in cui sono archiviati il database, i file caricati e i log (vedi [Struttura del Filesystem](filesystem.md)). |
+| `LOG_LEVEL` | `INFO` | Verbosità del logging. |
 
-Per una descrizione completa di tutte le variabili d'ambiente supportate, consulta la [Guida alle Variabili d'Ambiente](configuration.md).
+Le altre variabili sono descritte nella [Guida alle Variabili d'Ambiente](configuration.md).
 
-### 🚀 4. Avvia il Server
-
-Per avviare il server FastAPI sull'host:
+### 🚀 5. Avvia il Server
 
 ```bash
 pipenv run ./dev.py server
 ```
 
-Il server sarà disponibile all'indirizzo `http://localhost:6040`.
+Il primo avvio genera l'interfaccia web e la documentazione, quindi richiede qualche minuto. Poi apri `http://localhost:6040`. Per i worker, un'altra porta e le altre opzioni, vedi [Strumenti da Riga di Comando](cli_tools.md#start-the-server).
 
-#### Server del Comando Server
+### 👤 6. Crea il Tuo Account
 
-| Flag | Descrizione |
-|------|-------------|
-| `--host HOST` | Indirizzo di bind (predefinito: var d'ambiente `HOST` o `0.0.0.0`) |
-| `--port PORT` / `-p PORT` | Porta di bind (predefinita: var d'ambiente `PORT` o `6040`) |
-| `--workers N` / `-w N` | Numero di worker uvicorn (predefinito: 1, disabilita il ricaricamento automatico) |
-| `--no-scheduler` | Disabilita le attività in background per la sincronizzazione dei dati di mercato |
-
-### 👤 5. Accesso all'App & Creazione Utenti
-
-La prima volta che accedi a LibreFolio nel tuo browser, vedrai una **pagina di registrazione** in cui potrai creare il tuo primo account. Il primo utente registrato diventa automaticamente l'amministratore del sistema.
-
-Per gestire gli utenti o promuoverli ad amministratore tramite la riga di comando, consulta la [Guida agli Strumenti CLI per Utenti](cli_tools.md).
+Apri LibreFolio nel browser e scegli **Registrati qui** sotto il modulo di accesso: il primo account registrato diventa l'amministratore. Per gestire gli utenti dal terminale, vedi [Strumenti da Riga di Comando](cli_tools.md).
 
 ---
 
-## 🗃️ Inizializzazione & Reset del Database
+## 🗃️ Inizializzazione e Reset del Database {: #database-reset }
 
-Quando si esegue l'applicazione per la prima volta, il database viene inizializzato automaticamente. Se hai bisogno di resettare il database per ripartire da zero, puoi farlo in due modi:
+Non c'è nulla da inizializzare manualmente: a ogni avvio, il server crea il database se manca e applica eventuali migrazioni in sospeso.
 
-### 1. Comando da Terminale
-Puoi eseguire il comando di pulizia dalla CLI del database:
+Per ricominciare da un **database vuoto**, usa uno dei due modi seguenti.
+
+!!! warning "Tutti i dati vengono persi"
+
+    Entrambi i modi eliminano definitivamente il database: utenti, broker, transazioni e impostazioni. Esegui prima un backup (vedi [Backup](filesystem.md#backup)).
+
+### 🧹 Con `dev.py`
+
+Ferma il server (il comando rifiuta di essere eseguito mentre il server è in esecuzione), poi:
+
 ```bash
 pipenv run ./dev.py db create-clean
 ```
-> [!WARNING]
-> Questo comando eliminerà completamente il database SQLite esistente e ricreerà lo schema da zero. **Tutti i dati andranno persi in modo permanente.**
 
-### 2. Reset Manuale
+### 🗑️ Manualmente
+
 1. Ferma il server se è in esecuzione.
-2. Elimina il file del database SQLite (situato di default in `backend/data/prod/sqlite/app.db`).
-3. Riavvia il server; inizializzerà automaticamente un nuovo file di database SQLite.
+2. Elimina il file del database SQLite (per impostazione predefinita `backend/data/prod/sqlite/app.db`).
+3. Avvia il server: ne crea uno nuovo.
+
+Entrambi i modi sostituiscono solo il database: i file caricati, i report dei broker e i log rimangono nella directory dei dati. Per un avvio completamente pulito, ferma invece il server ed elimina l'intera directory dei dati (per impostazione predefinita `backend/data/prod/`): il prossimo avvio la ricrea.

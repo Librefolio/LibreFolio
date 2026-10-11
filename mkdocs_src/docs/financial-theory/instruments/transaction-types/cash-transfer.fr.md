@@ -1,10 +1,10 @@
-# ![](../../../static/icons/transactions/cash-transfer.png){: width="32" style="vertical-align: middle;" } Transfert de fonds
+# ![](../../../static/icons/transactions/cash-transfer.png){: width="32" style="vertical-align: middle;" } Virement
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-cash-transfer" alt="Transaction Form — Cash Transfer">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-cash-transfer" alt="Formulaire de transaction — Virement">
 </div>
 
-Les **transferts de fonds** (virements bancaires / bonifici) déplacent de l'argent entre des comptes de courtage. Le solde diminue à la source et augmente à la destination — aucun actif n'est impliqué.
+Les **virements** déplacent de l'argent entre des comptes de courtage. Le solde diminue à la source et augmente à la destination — aucun actif n'est impliqué.
 
 ---
 
@@ -23,7 +23,7 @@ Les **transferts de fonds** (virements bancaires / bonifici) déplacent de l'arg
 
 ## 📊 Comment ça fonctionne
 
-Un transfert de fonds enregistre **deux écritures** : un retrait chez le courtier source et un dépôt chez le courtier de destination. Les deux partagent la même devise avec des montants symétriques. Les deux côtés peuvent avoir des **dates différentes** — par exemple, un virement envoyé le lundi peut arriver le mercredi.
+Un virement enregistre **deux écritures** : un retrait chez le courtier source et un dépôt chez le courtier de destination. Les deux partagent la même devise avec des montants symétriques. Les deux côtés peuvent avoir des **dates différentes** — par exemple, un virement envoyé le lundi peut arriver le mercredi.
 
 Scénarios courants :
 
@@ -39,12 +39,12 @@ Scénarios courants :
 
 ## 🔀 Relation avec les Dépôts/Retraits
 
-En arrière-plan, un transfert de fonds est composé d'un Retrait et d'un Dépôt. LibreFolio prend en charge :
+En arrière-plan, un virement est composé d'un Retrait et d'un Dépôt. LibreFolio prend en charge :
 
 | Opération | Résultat |
 |-----------|--------|
-| **Division** (dissocier) | Transfert de fonds → Retrait + Dépôt indépendants |
-| **Promotion** (lier) | Retrait + Dépôt → Transfert de fonds |
+| **Séparer la paire** (dissocier) | Virement → Retrait + Dépôt indépendants |
+| **Promouvoir** (lier) | Retrait + Dépôt → Virement |
 
 **Contraintes de promotion** : même devise, courtiers différents, montants de liquidités opposés.
 

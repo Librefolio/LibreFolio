@@ -38,7 +38,7 @@ Aroon Up sale a 100 nel momento in cui il prezzo stabilisce un nuovo massimo su 
 
 | Parametro | Chiave | Predefinito | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Finestra di osservazione per individuare il massimo/minimo estremo. |
+| Periodo ($N$) | `period` | 14 | Finestra di osservazione per individuare il massimo/minimo estremo, in sedute. |
 
 ---
 

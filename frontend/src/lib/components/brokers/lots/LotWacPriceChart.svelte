@@ -126,7 +126,8 @@
         type: 'DIVIDEND' | 'INTEREST';
         date: string;
         broker_id: number | null;
-        amount: string;
+        /** `null` when the income has no rate to the target currency. */
+        amount: string | null;
         lot_ids: number[];
     };
 
@@ -277,6 +278,8 @@
      *  copies went through `safeString`, which answers `null` for a value that
      *  is already a number. */
     const parseNumber = (value: unknown): number | null => safeDecimal(value);
+    /** Clamp a known amount at 0 for the bubble metrics; an unknown one stays `null`. */
+    const nonNegativeOrNull = (value: number | null): number | null => (value == null ? null : Math.max(0, value));
 
     /** The chart's date labels are exactly the shared axis formatter's with-year
      *  long form; delegating keeps its ~8 call sites untouched. */
@@ -864,12 +867,12 @@
     function buildIncomeEventTooltip(event: LotIncomeEvent | null): string {
         if (!event) return '';
         const theme = buildTooltipTheme(isDark);
-        const amount = Number.parseFloat(event.amount);
+        const amount = parseNumber(event.amount);
         const rows = [
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerType')), escapeHtml(incomeEventTypeLabel(event.type)), incomeMarkerColor()),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerDate')), escapeHtml(formatAxisDate($currentLanguage, event.date))),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerBroker')), escapeHtml(brokerName(event.broker_id))),
-            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerAmount')), escapeHtml(Number.isFinite(amount) ? formatCurrencyAmountPlain(amount, currency) : String(event.amount))),
+            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerAmount')), escapeHtml(amount == null ? '—' : formatCurrencyAmountPlain(amount, currency))),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerLotCount')), escapeHtml(String(event.lot_ids?.length ?? 0))),
         ];
         return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(incomeEventTypeLabel(event.type)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
@@ -949,11 +952,12 @@
         priceAtOpening: number | null;
         openingUnitPrice: number | null;
         totalReturn: number | null;
-        totalPnl: number;
+        /** `null` when unknown (an FX rate is missing): shown as «—», never as 0. */
+        totalPnl: number | null;
         openQuantity: number;
         originalQuantity: number;
-        openingValue: number;
-        assetIncome: number;
+        openingValue: number | null;
+        assetIncome: number | null;
         estimatedAtCost: boolean;
         state: LotDisplayState;
         active: boolean;
@@ -1013,11 +1017,11 @@
                 priceAtOpening,
                 openingUnitPrice: parseNumber(lot.opening_unit_price),
                 totalReturn: parseNumber(lot.total_return),
-                totalPnl: parseNumber(lot.total_pnl) ?? 0,
+                totalPnl: parseNumber(lot.total_pnl),
                 openQuantity,
                 originalQuantity,
-                openingValue: Math.max(0, parseNumber(lot.original_cost) ?? 0),
-                assetIncome: parseNumber(lot.asset_income) ?? 0,
+                openingValue: nonNegativeOrNull(parseNumber(lot.original_cost)),
+                assetIncome: parseNumber(lot.asset_income),
                 estimatedAtCost: safeString(lot.value_source) === 'ESTIMATED_AT_COST',
                 state: lotDisplayState(openQuantity, originalQuantity),
                 active: lotSelectionSet.size === 0 || lotSelectionSet.has(lot.lot_id),
@@ -1038,12 +1042,12 @@
             buildTooltipRow(escapeHtml(labels.bubbleOpeningDate), escapeHtml(formatDate(point.openingDate))),
             buildTooltipRow(escapeHtml(labels.broker), escapeHtml(point.brokerName), point.fillColor),
             buildTooltipRow(escapeHtml(labels.bubbleState), escapeHtml(lotBubbleStateLabel(point.state)), lotStateColor(point.state, isDark)),
-            buildTooltipRow(escapeHtml(labels.bubbleOpeningValue), escapeHtml(formatCurrencyAmountPlain(point.openingValue, currency))),
-            buildTooltipRow(escapeHtml(labels.bubbleTotalPnl), `<span style="color:${lotBubbleSignColor(point.totalPnl)}">${escapeHtml(formatCurrencyAmountPlain(point.totalPnl, currency))}</span>`),
+            buildTooltipRow(escapeHtml(labels.bubbleOpeningValue), escapeHtml(point.openingValue == null ? '—' : formatCurrencyAmountPlain(point.openingValue, currency))),
+            buildTooltipRow(escapeHtml(labels.bubbleTotalPnl), point.totalPnl == null ? '—' : `<span style="color:${lotBubbleSignColor(point.totalPnl)}">${escapeHtml(formatCurrencyAmountPlain(point.totalPnl, currency))}</span>`),
             buildTooltipRow(escapeHtml(labels.bubbleTotalReturn), point.totalReturn == null ? '—' : `<span style="color:${lotBubbleSignColor(point.totalReturn)}">${escapeHtml(formatPercent(point.totalReturn * 100))}</span>`),
         ];
-        if (point.assetIncome > 0) {
-            rows.push(buildTooltipRow(escapeHtml(labels.bubbleAssetIncome), escapeHtml(formatCurrencyAmountPlain(point.assetIncome, currency))));
+        if (point.assetIncome == null || point.assetIncome > 0) {
+            rows.push(buildTooltipRow(escapeHtml(labels.bubbleAssetIncome), escapeHtml(point.assetIncome == null ? '—' : formatCurrencyAmountPlain(point.assetIncome, currency))));
         }
         if (point.estimatedAtCost) {
             rows.push(buildTooltipRow(escapeHtml(labels.bubbleEstimatedAtCost), escapeHtml('•'), point.fillColor));
@@ -1078,7 +1082,7 @@
                     const connectorBaseY = point.priceAtOpening ?? baseY;
                     return {point, baseY, connectorBaseY, yValue: baseY * (1 + point.totalReturn), metric};
                 }
-                return {point, baseY: 0, connectorBaseY: 0, yValue: point.totalReturn * 100, metric: point.openingValue};
+                return {point, baseY: 0, connectorBaseY: 0, yValue: point.totalReturn * 100, metric: point.openingValue ?? 0};
             })
             .filter((entry): entry is {point: LotBubblePoint; baseY: number; connectorBaseY: number; yValue: number; metric: number} => entry != null);
 

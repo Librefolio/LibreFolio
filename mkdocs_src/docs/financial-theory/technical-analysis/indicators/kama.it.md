@@ -38,7 +38,7 @@ Una EMA a periodo fisso è un compromesso: abbastanza veloce da seguire i trend,
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 10 | Finestra di lookback per l'Efficiency Ratio. |
+| Periodo ($N$) | `period` | 10 | Finestra di lookback per l'Efficiency Ratio, in sedute. |
 
 !!! note "Le costanti fast/slow non sono esposte"
 

@@ -22,7 +22,7 @@ Los traders a menudo combinan el ADX con un sistema de seguimiento de tendencia 
     -DM_t = \max(L_{t-1} - L_t,\, 0) \quad \text{si} \quad L_{t-1} - L_t > H_t - H_{t-1}, \text{ sino } 0
     $$
 
-2. **Rango Verdadero** $TR_t$ (ver [ATR](atr.md)), suavizado en $N$ períodos, normaliza los movimientos direccionales en **+DI** / **-DI**:
+2. **Rango Verdadero** $TR_t$ (ver [ATR](atr.md)), suavizado en $N$ sesiones, normaliza los movimientos direccionales en **+DI** / **-DI**:
 
     $$
     +DI_t = 100 \cdot \frac{SMMA_N(+DM)}{SMMA_N(TR)}, \qquad
@@ -42,7 +42,7 @@ Los traders a menudo combinan el ADX con un sistema de seguimiento de tendencia 
 
 | Parámetro | Clave | Valor por defecto | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 14 | Ventana de suavizado para +DM, -DM, TR y DX. |
+| Período ($N$) | `period` | 14 | Ventana de suavizado para +DM, -DM, TR y DX, en sesiones. |
 
 ---
 

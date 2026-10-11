@@ -1,5 +1,23 @@
 # PAC & Rebalancer — implementation bundle
 
+> 🧭 **Ripartire da qui (2026-10-11, `dev_release2` = `b20eac991`).** Il planner PAC 1.0.0 è integrato con le
+> righe 7–13, 15 e 16; per la 1.2 non resta lavoro. Si riparte dalla riga 14, l'analisi del Rebalancer, poi
+> dagli E2E del PAC insieme a quelli del Rebalancer, e dal [backlog](#backlog) (difetti 1, 2, 5 e opzione (e)).
+> Decidono i cinque design autorevoli. Gate: [Gate del PAC](#gate-del-pac), in una sola corsia
+> `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port … --data-dir …`.
+> La cartella non si archivia (developer, 10/10).
+>
+> - Commit successivi alla tabella delle righe:
+>   - chiusura S10 della riga 16: `09962bea4` `style(pac)`, `aee1e3d28` journal → merge `d5e3ba4d1` (treno 27);
+>   - difetti del lotto 9 nel backlog: `b59ddcfe2` journal → merge `9708050c4` (treno 28);
+>   - difetti 3 e 4 corretti: `161a5b06b` `fix(pac)`, `7c7497527` journal → merge `94f96f06c` (treno 31);
+>   - Prettier sul planner: `a0e32981b` `style(pac)`, `423758463` journal → merge `d06d5ca2e` (treno 32).
+> - Da verificare altrove, in carico al coordinatore dall'11/10:
+>   - gli scatti del PAC dopo `161a5b06b`, cioè «ROUTING –» e «Sintesi»/«Résumé»: M, al prossimo giro della
+>     gallery;
+>   - in it e fr il pulsante del banner nelle pagine utente del PAC («Torna al Riepilogo», «Retour au
+>     récapitulatif») non è quello della UI («Torna a Riepilogo», «Retour à Récapitulatif»): M, scansione 5.4.
+
 **Stato:** READY FOR PLANNING CHECKPOINT.
 **Baseline:** `b0a410b8805789b200aa7a66a2494c397fb1bc52`.
 **Scope corrente:** piani soltanto; nessuna implementazione prodotto è
@@ -141,6 +159,39 @@ assegnata; il parallelismo dei file non autorizza runtime concorrenti.
 6. Un cambio a obiettivi, constraint, ledger, proof o UX approvata torna ai
    design autorevoli prima di proseguire.
 
+## Gate del PAC
+
+La sequenza di corsia è quella del S8 della [riga 16](plan-phase00PacRoundingDirectionFix.prompt.md)
+(`:564`): `api sync` → `front build --debug` → `front check` → `core-unit` → `component-unit` →
+`i18n audit` → `check-orphans` → `lint`, poi la porta libera. Dal 2026-10-10 si aggiunge il formato
+del planner, che nessun workflow della CI controlla:
+
+```bash
+cd frontend && ./node_modules/.bin/prettier --check src/lib/features/tools/pac-allocator/planner
+PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front format --check
+```
+
+- Il primo è il gate del PAC. Il secondo copre tutto `src/**` ed `e2e/**`: un avviso fuori dal planner
+  non è del PAC. Mai `npx`: il binario è quello del lockfile.
+- Entrambi si aspettano exit 0: ogni avviso nel planner è una regressione.
+- Il passaggio di Prettier del 2026-10-10, su base `f4a42bf4a`, ha formattato i 30 file del planner
+  fuori formato. La prova, file per file e con le versioni del lockfile:
+  - per 27 file l'output di produzione è identico prima e dopo: Svelte client e SSR, `compileModule`
+    per i `.svelte.ts`, esbuild per i `.ts`, classi Tailwind;
+  - per `assetRead.svelte.ts`, `fxRead.svelte.ts` e `result/exposureTooltip.ts` cambia solo l'output
+    di `vite:esbuild`, e solo negli spazi: esbuild conserva gli a capo degli argomenti e degli array,
+    Prettier li unisce. AST e codice minificato sono identici, e per i due `.svelte.ts` il modulo
+    finale di `compileModule` è identico byte per byte.
+  - Un passaggio futuro segue la stessa prova: un file che non la supera resta fuori e si segnala.
+- Un output identico non basta per i test che leggono i sorgenti come testo, riga per riga: un a capo
+  può far apparire o sparire un sito (`utils/privacy/moneyRenderSites.test.ts`, i `*.gate.test.ts`).
+  Dopo ogni passaggio di Prettier vanno rieseguiti tutti (al 2026-10-10: 35 file, 1415 test verdi):
+
+  ```bash
+  cd frontend && grep -rlE "node:fs|from 'fs'|readFile|readdir|globSync|fast-glob|import\.meta\.glob|\?raw|svelte/compiler" \
+    src --include='*.test.ts' | xargs ./node_modules/.bin/vitest run
+  ```
+
 ## Stato
 
 **Stato al 2026-10-09.** Il bundle è stato eseguito. Il planner PAC 1.0.0 è integrato in
@@ -163,9 +214,18 @@ checkpoint planning-only servono:
 
 ## Backlog
 
-**Al 2026-10-09.** Rinvii aperti di questa cartella, fuori dalla 1.2. Le ancore valgono a `9f060ef6e`;
-`planner/` sta per `frontend/src/lib/features/tools/pac-allocator/planner/`. Le cause marcate
-«ipotesi» vengono dalla sola lettura del codice: vanno confermate nel browser prima della cura.
+**Al 2026-10-09, aggiornato il 2026-10-10.** Rinvii aperti di questa cartella, fuori dalla 1.2. Le righe
+3 e 4 dei difetti, segnate ✅, sono state corrette il 2026-10-10 su base `d59762e0a`. Le ancore valgono a `9f060ef6e`;
+`planner/` sta per `frontend/src/lib/features/tools/pac-allocator/planner/`. Il passaggio di Prettier
+del 2026-10-10 ([Gate del PAC](#gate-del-pac)) sposta otto ancore del planner:
+
+- in `planner/steps/TargetsStep.svelte`: `:109` → `:110`, `:102-135` → `:102-137`, `:203-213` → `:208-218`;
+- in `planner/steps/ReviewStep.svelte`: `:117-119` → `:117`, `:201-203` → `:199`;
+- `planner/ui.ts:36` → `:35`, `planner/result/ExposureMaps.svelte:279` → `:275` e
+  `planner/shell/SummaryPanel.svelte:109` → `:105`.
+
+Le altre ancore non cambiano. Le cause marcate «ipotesi» vengono dalla sola lettura del codice: vanno
+confermate nel browser prima della cura.
 
 ### Difetti di prodotto dagli scatti del lotto 9
 
@@ -179,8 +239,8 @@ Le immagini sono fuori dal repository. Una combinazione è una lingua (en, it, f
 |---:|---|---|---|---|---|
 | 1 | C | La colonna Asset taglia «MSFT Microsoft Corporation» a metà lettera, senza «…»: «…Corp», «…Cor» in es. | `pac-step-targets` desktop, 8 combinazioni su 8; piano della gallery `:1710` | Il nome passa da `planner/shared/AssetNameCell.svelte:16` a `planner/shared/MarqueeName.svelte:16` (R11.6: il nome scorre invece di essere tagliato, il testo intero sta nel tooltip). `overflowScrollTextClass` (`frontend/src/lib/utils/overflowScroll.ts:16`) taglia senza `text-overflow: ellipsis`. A riposo il testo resta tagliato: per 2 s prima di ogni scorrimento (`frontend/src/lib/actions/scrollOnOverflow.ts:22`), e sempre con `prefers-reduced-motion` (`:49`, `:121`). La colonna ha `minWidth: 160` (`planner/steps/TargetsStep.svelte:109`). | Da decidere: «…» a riposo nel solo `MarqueeName`, oppure una colonna più larga. Il marquee è condiviso da 24 file `.svelte`; `MarqueeName` serve anche `ReviewCell` e `ResultCell`. |
 | 2 | F | L'intestazione «Actions» c'è, ma nelle righe non c'è il ⋮. | `pac-step-review` mobile, 8 su 8; piano della gallery `:1723` | Le azioni non hanno `visible` (`planner/steps/ReviewStep.svelte:117-119`, `:201-203`), quindi il ⋮ viene disegnato (`frontend/src/lib/components/table/DataTable.svelte:1431-1452`). Ipotesi: sotto i 768 px la media query rende statiche le celle azioni (`DataTable.svelte:2295-2301`). Però `thead.sticky-header th` (`:1614-1619`; `stickyHeader` vale `true`, `:161`) è più specifica di `.th-actions`, quindi l'intestazione resta `sticky` con `right: 0` (`:1658-1660`). Resta incollata al bordo destro, mentre le celle col ⋮ restano fuori, a destra. | `DataTable` è condiviso e non è del PAC: la cura va concordata con chi lo possiede. Lo stesso effetto è possibile in ogni tabella con azioni più larga del telefono. Causa probabile in comune con la riga 5. |
-| 3 | — | Nel titolo del passo Routing manca lo spazio prima del trattino: «ROUTING–». | `pac-step-routing` desktop; piano della gallery `:1711` | `planner/PacPlannerTool.svelte:354`: lo spazio prima del trattino è il primo carattere di `<span data-testid="pac-planner-routing-intro"> – …</span>`, e Svelte 5 toglie gli spazi all'inizio e alla fine di un tag. Il maiuscolo viene da `SECTION_TITLE` (`planner/ui.ts:36`). Riga introdotta in `6f29ec1cf`. | Correzione di una riga: uno spazio esplicito prima del trattino, per esempio `{' '}`. Vale per tutte e 4 le lingue. |
-| 4 | — | In it e fr una sola parola indica due cose: il passo «Review» e il toggle «Summary» sotto i passi, nella stessa card. È «Riepilogo» in it e «Récapitulatif» in fr. | Passi desktop; piano della gallery `:1711` | `tools.pacAllocator.planner.steps.review` (`it.json:4857`, `fr.json:4857`); `…summary.toggle` (`:4904`) e `…summary.title` (`:4903`). In it anche la colonna `…review.colSummary` dello stesso passo (`it.json:4788`). Il toggle sta sotto `StepNav` (`planner/PacPlannerTool.svelte:338-340`). In en ed es le parole sono già distinte: Review/Summary, Revisión/Resumen. | Si toccano solo i cataloghi, con `dev.py i18n` e un solo writer. La parola la sceglie il developer. |
+| 3 ✅ | — | Nel titolo del passo Routing manca lo spazio prima del trattino: «ROUTING–». | `pac-step-routing` desktop; piano della gallery `:1711` | `planner/PacPlannerTool.svelte:354`: lo spazio prima del trattino è il primo carattere di `<span data-testid="pac-planner-routing-intro"> – …</span>`, e Svelte 5 toglie gli spazi all'inizio e alla fine di un tag. Il maiuscolo viene da `SECTION_TITLE` (`planner/ui.ts:36`). Riga introdotta in `6f29ec1cf`. | **Corretto il 2026-10-10.** Lo span si apre con `{' '}`, come già fa `planner/result/ExposureMaps.svelte:279`; vale per tutte e 4 le lingue. Prova col compilatore Svelte 5.48.0 del lockfile, sul file prima e dopo: lo span rende «– …» prima e « – …» dopo, sia nel codice client sia in SSR. Nessun altro tag del PAC ha lo stesso schema. Nessun test nuovo: il planner non ha un test di `PacPlannerTool`, e gli E2E dedicati sono fuori dalla 1.2. |
+| 4 ✅ | — | In it e fr una sola parola indica due cose: il passo «Review» e il toggle «Summary» sotto i passi, nella stessa card. È «Riepilogo» in it e «Récapitulatif» in fr. | Passi desktop; piano della gallery `:1711` | `tools.pacAllocator.planner.steps.review` (`it.json:4857`, `fr.json:4857`); `…summary.toggle` (`:4904`) e `…summary.title` (`:4903`). In it anche la colonna `…review.colSummary` dello stesso passo (`it.json:4788`). Il toggle sta sotto `StepNav` (`planner/PacPlannerTool.svelte:338-340`). In en ed es le parole sono già distinte: Review/Summary, Revisión/Resumen. | **Corretto il 2026-10-10.** Il passo resta «Riepilogo»/«Récapitulatif», come fissa il glossario delle traduzioni (`mkdocs_src/aphra-pipeline/glossaries/glossary.json:622-626`) e come lo usano le pagine tradotte del PAC. Cambiano le tre chiavi che in en valgono «Summary», con `dev.py i18n update` e solo nei valori: `…summary.toggle` e `…summary.title` diventano «Sintesi» in it e «Résumé» in fr; `…review.colSummary` diventa «Sintesi» in it, mentre in fr era già «Résumé». `summary.title` è il titolo del pannello che il toggle apre (`planner/shell/SummaryPanel.svelte:109`). Le parole le ha scelte D, su delega del developer; es resta com'era. Le pagine tradotte del PAC non nominano né il toggle, né il pannello, né la colonna. |
 | 5 | D | Su mobile la tabella dei target non sta nella larghezza del telefono. I nomi sono tagliati a sinistra («APL Apple Inc.»), gli input Target % a destra e senza «%», e «Actions» sta sopra gli input. | `pac-step-targets` mobile, 8 su 8; piano della gallery `:1720-1721` | Larghezze dichiarate in `planner/steps/TargetsStep.svelte:102-135` e `:203-213`: selezione 48 px (`DataTable.svelte:131`), Asset min 160, Distribuzione 200 (min 100), Target % 140 (min 128), azioni 64. Il minimo supera i 500 px. Ipotesi: la colonna di selezione è `sticky` a sinistra (`DataTable.svelte:1648-1651`, `:1974-1978`) e copre i nomi quando la tabella scorre; «Actions» si comporta come nella riga 2. | Difetto di prodotto più fixture. M corregge solo la fixture (blur e reset orizzontale) nel lotto 10. Da decidere: un layout per il telefono, oppure la cura della riga 2 nel `DataTable`. |
 
 Fuori da questo backlog:

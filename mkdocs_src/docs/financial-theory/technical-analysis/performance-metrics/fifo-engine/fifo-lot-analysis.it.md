@@ -1,6 +1,6 @@
 # 🔬 Analisi dei Lotti FIFO
 
-L'analisi dei lotti FIFO è il complemento **per lotto** del [Prezzo Medio di Carico (PMC)](../weighted-average-cost.md). Vedi [Risoluzione Prezzi](../portfolio-engine/price-resolution.md).
+L'analisi dei lotti FIFO è il complemento **per lotto** del [Prezzo Medio di Carico (PMC)](../weighted-average-cost.md).
 
 Il PMC risponde: _"Qual è il mio prezzo medio di carico per questa posizione?"_ L'analisi dei lotti FIFO risponde a una domanda diversa: _"Come sta andando ogni singolo lotto di acquisto nel tempo?"_
 
@@ -44,7 +44,7 @@ $$
 
 In pratica:
 
-- se esiste una quotazione di mercato alla data di apertura del lotto, quella quotazione di apertura diventa `prezzo_di_riferimento`
+- se esiste una quotazione di mercato alla data di apertura del lotto, quella quotazione di apertura diventa `reference_unit_price`
 - se il lotto è stato aperto prima della prima quotazione di mercato disponibile, il sistema utilizza come riferimento il costo di apertura del lotto stesso, scalato alle unità della quotazione di mercato
 - `reference_price_source` registra se il riferimento era `exact`, `fallback` o `unavailable`
 
@@ -150,7 +150,7 @@ $$
     - quantità lotto = `1.000`
     - valore di mercato = `(1.000 / 100) × 101,50 = 1.015,00`
 
-    Se confronti direttamente `101,50` con una base di costo per singola unità come `0,992`, ottieni risultati privi di senso perché i due numeri vivono su scale diverse.
+    Se confronti direttamente `101,50` con un costo di carico per singola unità come `0,992`, ottieni risultati privi di senso perché i due numeri vivono su scale diverse.
 
     Il confronto corretto ridimensiona il costo del lotto sull'asse della quotazione di mercato:
 
@@ -182,8 +182,8 @@ Implicazione pratica:
 - i ricavi già realizzati rimangono ancora visibili
 - i dividendi o gli interessi allocati rimangono ancora visibili
 - **la volatilità non realizzata è temporaneamente sottostimata**
-- `value_source` = `ESTIMATED_AT_COST`
-- `market_pnl` = 0
+- `value_source = ESTIMATED_AT_COST`
+- `market_pnl = 0`
 - codice problema qualità dati: `CURRENT_PRICE_ASSUMED_AT_COST`
 
 !!! info "Interpretazione"
@@ -294,13 +294,13 @@ la propria controparte lorda meno i costi.
 
 !!! example "Numeri esemplificativi"
 
-    ACQUISTO 10×100, VENDITA 4×120, prezzo corrente 110, dividendo 50, commissioni 8, tasse 5:
+    ACQUISTO 10×100, VENDITA 4×120, prezzo corrente 110, dividendo 50, commissioni 8, imposte 5:
     P&L Totale Lordo $= 60 + 80 + 50 = 190$; P&L Totale Netto $= 190 - 13 = 177$; su un valore iniziale di 1.000
     corrisponde a un rendimento totale del **19%** lordo contro il **17,7%** netto.
 
 I costi con `asset_id = null` **non** fanno parte di questa vista a livello di lotto — sono a livello di
 portafoglio e gestiti dal [Portfolio Engine](../portfolio-engine/roi.md). Vedi
-[Commissioni e Tasse](../../../instruments/transaction-types/fee.md) per la teoria a livello di strumento.
+[Commissioni e Imposte](../../../instruments/transaction-types/fee.md) per la teoria a livello di strumento.
 
 ---
 
@@ -401,6 +401,8 @@ Questa vista a livello di lotto aiuta a spiegare **da dove** proviene il rendime
 - **ROI** si concentra sul guadagno relativo al capitale investito
 - **TWRR** neutralizza la tempistica dei flussi di cassa esterni
 - L'analisi dei lotti FIFO spiega il contributo e il percorso **all'interno** di una posizione
+
+La ricerca dei prezzi è volutamente esterna al motore FIFO. Il motore produce lotti e chiusure; `LotsAnalysisService` applica il risolutore unificato ([Risoluzione dei prezzi](../portfolio-engine/price-resolution.md)) e il fallback stimato al costo quando ricava le metriche di valutazione.
 
 <div class="screenshot-container">
  <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-table" alt="Tabella Lotti Unificata — una riga per lotto con data di apertura, rendimento totale, valore corrente, custodia e stato, le esatte righe per lotto su cui le formule aggregate sopra eseguono la somma">

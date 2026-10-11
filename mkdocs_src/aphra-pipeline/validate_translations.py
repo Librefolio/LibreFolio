@@ -25,13 +25,17 @@ Usage (via dev.py):
 """
 
 import argparse
+import posixpath
 import re
 import sys
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 # Sibling modules: dev.py and a standalone run both put this directory on sys.path.
-from code_blocks import FencedBlock, code_indent_issues
+from code_blocks import FencedBlock, code_indent_issues, code_line_mask
+from page_anchors import file_anchors, render_anchors  # MkDocs is imported only when a page renders
 
 # Import shared infrastructure from translate_docs
 from translate_docs import (
@@ -115,6 +119,101 @@ def _extract_links(text: str) -> list[tuple[str, str]]:
     Returns list of (display_text, url).
     """
     return re.findall(r'\[([^\]]*)\]\(([^)]+)\)', text)
+
+
+_INLINE_CODE_SPAN = re.compile(r"(`+)(?!`)(.+?)(?<!`)\1(?!`)")
+_DIGIT_GROUPING = re.compile(r"(?<=\d)[.,\u00a0\u202f ](?=\d)")
+
+
+def _inline_code_texts(text: str) -> list[str]:
+    """Inline code spans outside fenced blocks, as written."""
+    lines = [line for line, in_code in zip(text.split("\n"), code_line_mask(text), strict=True) if not in_code]
+    return [m.group(2).strip() for line in lines for m in _INLINE_CODE_SPAN.finditer(line)]
+
+
+def _without_digit_grouping(span: str) -> str:
+    return _DIGIT_GROUPING.sub("", span)
+
+
+def _inline_code_spans(text: str) -> Counter:
+    """Inline code spans outside fenced blocks; digit grouping ignored, so `1,000.50` matches the localized `1.000,50`."""
+    return Counter(_without_digit_grouping(span) for span in _inline_code_texts(text))
+
+
+def check_inline_code(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Every inline code span of the source must appear verbatim in the translation.
+
+    Inline code holds identifiers — enum values, API fields, parameters (`MARKET_PRICE`, `total_return`, `period`).
+    Nothing compared them: translations had turned them into `PRECIO_MERCADO`, `rendimento_totale`, `période`, or
+    kept a span the source had since renamed (`asset_id` for `asset_event_id`).
+    """
+    spelling: dict[str, str] = {}
+    for span in _inline_code_texts(source):
+        spelling.setdefault(_without_digit_grouping(span), span)
+    missing = _inline_code_spans(source) - _inline_code_spans(translated)
+    return [
+        Issue(
+            severity=Severity.WARN,
+            file=cache_key, lang=lang,
+            check="inline-code-missing",
+            message=f"`{spelling[span]}`{f' ×{n}' if n > 1 else ''} missing or changed in the translation",
+        )
+        for span, n in sorted(missing.items())
+    ]
+
+
+def check_link_anchors(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Every `page.md#anchor` link of a translation must land on an anchor of the page it opens.
+
+    A translated page links the translated target (mkdocs-static-i18n serves `page.<lang>.md`, falling back to EN),
+    whose headings slug differently from the EN ones. `check_links` only compares URLs with the source, and
+    `mkdocs build --strict` stops at the first language with a warning, so such links surfaced one language at a time.
+    A page's anchors are the ids its MkDocs render records (page_anchors.py), the set the strict build checks.
+    """
+    issues = []
+    page = DOCS_DIR / cache_key
+    own_anchors: frozenset[str] | None = None
+    reported: set[str] = set()
+    for _text, url in _extract_links(_strip_code(translated)):
+        url = url.strip().split()[0] if url.strip() else ""
+        if "#" not in url or re.match(r"^[a-zA-Z][\w+.-]*:", url) or url in reported:
+            continue
+        target, anchor = url.split("#", 1)
+        if not anchor:
+            continue
+        if target:
+            stem = page.parent / target
+            if target.endswith("/"):
+                stem = stem / "index.md"
+            if stem.suffix != ".md":
+                continue
+            stem = stem.with_suffix("")
+            localized = stem.parent / f"{stem.name}.{lang}.md"
+            target_file = localized if localized.exists() else stem.parent / f"{stem.name}.en.md"
+            if not target_file.exists():
+                continue  # a missing page is the links check's and the build's business
+            anchors = file_anchors(target_file)
+            where = target_file.resolve().relative_to(DOCS_DIR.resolve()).as_posix()
+        else:
+            if own_anchors is None:
+                own_anchors = render_anchors(translated)
+            anchors = own_anchors
+            where = "this page"
+        if anchor not in anchors:
+            reported.add(url)
+            issues.append(Issue(
+                severity=Severity.ERROR,
+                file=cache_key, lang=lang,
+                check="anchor-missing",
+                message=f"#{anchor} not found in {where} (link {url})",
+            ))
+    return issues
 
 
 def _extract_code_blocks(text: str) -> list[str]:
@@ -703,8 +802,26 @@ def check_admonitions(
 
 
 def _strip_code_blocks(text: str) -> str:
-    """Remove fenced code blocks from text (for checks that should ignore code)."""
-    return re.sub(r'```\w*\n.*?```', '', text, flags=re.DOTALL)
+    """Remove fenced code blocks from text (for checks that should ignore code).
+
+    Fence-aware (``code_blocks.parse_fenced_blocks``): backtick or tilde fences, at any indentation (lists, admonitions,
+    content tabs), with any info string. The former regex needed the language word to end the line, so a fence with a
+    title or a space left its code in the text.
+    """
+    lines = text.split("\n")
+    return "\n".join(line for line, in_code in zip(lines, code_line_mask(text), strict=True) if not in_code)
+
+
+_INLINE_CODE = re.compile(r"(`+)(?!`).+?(?<!`)\1(?!`)")
+
+
+def _strip_code(text: str) -> str:
+    """Remove fenced code blocks and inline code spans: for the HTML checks, which must read only rendered HTML.
+
+    Inline code such as `EUR<USD` or `<username>` is shown as text, not parsed as a tag; read as HTML it became a
+    ``<usd>`` tag whose "attributes" were the words of the following lines (user/fx/detail/data-editor: 201 warnings).
+    """
+    return _INLINE_CODE.sub("", _strip_code_blocks(text))
 
 
 def check_html_blocks(
@@ -717,9 +834,9 @@ def check_html_blocks(
     """
     issues = []
 
-    # Strip code blocks first to avoid false positives from e.g. <username>
-    src_clean = _strip_code_blocks(source)
-    tr_clean = _strip_code_blocks(translated)
+    # Strip code (fenced and inline) first to avoid false positives from e.g. <username>
+    src_clean = _strip_code(source)
+    tr_clean = _strip_code(translated)
 
     # Extract HTML tags (just opening/closing tag names)
     src_tags = re.findall(r'<(/?\w+)[^>]*>', src_clean)
@@ -808,8 +925,8 @@ def check_html_attrs(
         return tr_val == "../" + src_val
 
     issues = []
-    src_clean = _strip_code_blocks(source)
-    tr_clean = _strip_code_blocks(translated)
+    src_clean = _strip_code(source)
+    tr_clean = _strip_code(translated)
 
     src_tags = _extract_tag_attrs(src_clean)
     tr_tags = _extract_tag_attrs(tr_clean)
@@ -849,6 +966,45 @@ def check_html_attrs(
                     ),
                 ))
 
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Untranslated alt/title text (the counterpart of check_html_attrs)
+# ---------------------------------------------------------------------------
+
+_TEXT_ATTR = re.compile(r"""(?<![\w-])(alt|title|aria-label|data-title)\s*=\s*"([^"]*)\"""")
+_MD_IMAGE_ALT = re.compile(r"!\[([^\]]+)\]\(")
+# Names that stay in the source language on purpose (brand names, product names).
+_UNTRANSLATED_TEXT_OK = frozenset({"Buy Me a Coffee"})
+
+
+def check_untranslated_text_attrs(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Flag image alt text, `title`, `aria-label` and `data-title` (carousel caption) values copied verbatim from the source.
+
+    check_html_attrs skips these attributes because translating them is expected; nothing checked that they were.
+    A value of three words or more that appears unchanged among the source's own values is reported — shorter
+    values are mostly names (ETF, Buy, Revolut) that legitimately stay as they are.
+    """
+    def _values(text: str) -> list[str]:
+        clean = _strip_code(text)
+        found = [m.group(2).strip() for m in _TEXT_ATTR.finditer(clean)]
+        found += [m.group(1).strip() for m in _MD_IMAGE_ALT.finditer(clean)]
+        return [v for v in found if len(re.findall(r"[^\W\d_]{2,}", v)) >= 3 and v not in _UNTRANSLATED_TEXT_OK]
+
+    source_values = set(_values(source))
+    issues = []
+    for value in _values(translated):
+        if value in source_values:
+            issues.append(Issue(
+                severity=Severity.WARN,
+                file=cache_key, lang=lang,
+                check="text-untranslated",
+                message=f"alt/title text left in the source language: {value[:90]!r}",
+            ))
     return issues
 
 
@@ -920,6 +1076,82 @@ def check_html_relative_src(
         _add_issue(m, f"'{m.group(0)}...' hardcodes production base path, breaks in dev (/mkdocs/)")
 
     return issues
+
+
+# ---------------------------------------------------------------------------
+# Raw-HTML file paths copied unchanged from the English (one folder short)
+# ---------------------------------------------------------------------------
+
+_URL_ATTR = re.compile(r"""(?<![\w-])(src|srcset|poster|href)\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.IGNORECASE)
+_FILE_NAME = re.compile(r"\.[A-Za-z0-9]{1,5}$")
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+def _translated_file_url(url: str, cache_key: str, lang: str) -> str:
+    """The URL that reaches, from the translated page, the file `url` reaches from its English page.
+
+    Pages are built with directory URLs (`x/index.en.md` into `x/`, `x/page.en.md` into `x/page/`) and a translation
+    under `<lang>/` (mkdocs-static-i18n): a path that climbs to the site root needs one more `../`, a shorter one more.
+    """
+    folder, name = posixpath.split(cache_key)
+    stem = name[: -len(".en.md")] if name.endswith(".en.md") else posixpath.splitext(name)[0]
+    english_folder = folder if stem == "index" else posixpath.join(folder, stem)
+    path = urlsplit(url).path
+    target = posixpath.normpath(posixpath.join(english_folder, path))
+    return posixpath.relpath(target, posixpath.join(lang, english_folder)) + url[len(path) :]
+
+
+def _relative_file_urls(text: str) -> list[tuple[int, str]]:
+    """(line, url) of each raw-HTML relative URL of a file: `src`, the `srcset` candidates, `poster`, `href`.
+
+    Code is ignored (fenced blocks and inline spans), and so are HTML comments. A page link (a folder URL, or
+    `.md`/`.html`) is not a file; external, root-absolute and fragment-only URLs are left out.
+    """
+    found = []
+    uncommented = _HTML_COMMENT.sub(lambda m: "\n" * m.group(0).count("\n"), text).split("\n")
+    for number, (line, in_code) in enumerate(zip(uncommented, code_line_mask(text), strict=True), start=1):
+        if in_code:
+            continue
+        for m in _URL_ATTR.finditer(_INLINE_CODE.sub("", line)):
+            attr = m.group(1).lower()
+            value = m.group(2) if m.group(2) is not None else m.group(3)
+            urls = [c.split()[0] for c in value.split(",") if c.strip()] if attr == "srcset" else [value]
+            for url in urls:
+                parts = urlsplit(url)
+                if parts.scheme or parts.netloc or url.startswith(("/", "#")) or not parts.path:
+                    continue
+                if not _FILE_NAME.search(parts.path) or parts.path.lower().endswith((".md", ".html", ".htm")):
+                    continue
+                found.append((number, url))
+    return found
+
+
+def check_html_asset_depth(
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
+) -> list[Issue]:
+    """
+    Flag a raw-HTML relative path of a file that the translation copied unchanged from the English (ERROR).
+
+    MkDocs rewrites the paths of Markdown images and links, not those of raw HTML. A translated page is built one folder
+    deeper than its English page (site/<lang>/...), and the language folders hold no files, so the English path points
+    under site/<lang>/ and the image is missing. The message gives the path to write: one more `../` for a path that
+    climbs to the site root. Whether a changed path resolves is left to the post-build check of `./dev.py mkdocs build`.
+    """
+    english = {url for _, url in _relative_file_urls(source)}
+    return [
+        Issue(
+            severity=Severity.ERROR,
+            file=cache_key,
+            lang=lang,
+            check="html-asset-depth",
+            message=f"L{number}: `{url}` is the English path; a translated page is built one folder deeper, so it needs `{_translated_file_url(url, cache_key, lang)}`",
+        )
+        for number, url in _relative_file_urls(translated)
+        if url in english
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -1038,12 +1270,12 @@ def check_latex(
                 ),
             ))
 
-    # Inline math ($...$) — avoid display math, currency ($0.25 / 500 $), bash vars (${VAR})
-    # Uses finditer to have access to surrounding context for suffix-currency detection
-    _INLINE_RE = re.compile(r'(?<![\\\$])\$(?!\$)(.+?)(?<![\\\$])\$(?!\$)')
+    # Inline math ($...$) as pymdownx.arithmatex reads it with smart_dollar (the site's default): the
+    # opening $ is not followed by a space, the closing $ not preceded by one, and the content holds no
+    # unescaped $. So "500 $" or "0,25 $ et 1,50 $" never opens a formula, while "day 3 $A$" does: the
+    # former suffix-currency rule (a digit before the $) dropped such formulas from one side only.
+    _INLINE_RE = re.compile(r"(?<![\\$])\$(?![\s$])((?:\\.|[^\\$\n])+?)(?<![\s\\])\$(?!\$)")
     _NON_MATH_CONTENT_RE = re.compile(r'^[\d,.]|^\{')  # prefix currency or bash var
-    # Suffix currency: $ preceded by digit+optional-space (e.g. "500 $" or "500$")
-    _SUFFIX_CURRENCY_CTX_RE = re.compile(r'\d\s?$')
     # Markdown bold/italic markup leaked between two $ signs — not real math
     _MARKDOWN_MARKUP_RE = re.compile(r'\*\*|\*|__')
 
@@ -1054,10 +1286,6 @@ def check_latex(
             content = m.group(1)
             # Filter: content starts with digit/comma (prefix currency like $0.25) or { (bash var)
             if _NON_MATH_CONTENT_RE.match(content.strip()):
-                continue
-            # Filter: text before opening $ ends with digit or digit+space (suffix currency like "500 $")
-            before = text[:m.start()]
-            if _SUFFIX_CURRENCY_CTX_RE.search(before):
                 continue
             # Filter: content contains markdown bold/italic markers (leaked between two currency $ signs)
             if _MARKDOWN_MARKUP_RE.search(content):
@@ -1158,13 +1386,17 @@ def check_math_indentation(
 ALL_CHECKS = [
     ("heading-structure", check_heading_structure, True),   # needs source + translated
     ("links", check_links, True),
+    ("link-anchors", check_link_anchors, True),
     ("code-blocks", check_code_blocks, True),
     ("code-block-indent", check_code_block_indent, True),   # pairs blocks by content, not position
+    ("inline-code", check_inline_code, True),
     ("list-structure", check_list_structure, True),
     ("admonitions", check_admonitions, True),
     ("html-blocks", check_html_blocks, True),
     ("html-attrs", check_html_attrs, True),
+    ("text-untranslated", check_untranslated_text_attrs, True),
     ("html-relative-src", check_html_relative_src, True),
+    ("html-asset-depth", check_html_asset_depth, True),
     ("front-matter", check_front_matter, True),
     ("latex", check_latex, True),
     ("math-indentation", check_math_indentation, True),     # positional: indented $$ blocks stay indented
