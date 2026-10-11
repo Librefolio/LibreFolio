@@ -6,7 +6,8 @@
 >   1. il checkpoint 1, col solo engine (T5a, treno 32);
 >   2. poi H, cioè la card dal motore (T2f e T5b);
 >   3. poi l'analisi di F (T7).
-> - **Aperti**: T2f, T3b, il resto di T4, T5b, T6, T7.
+> - **Aperti**: T5b (READY, alla verifica del coordinatore), T7. T1d e T2g sono chiusi dal 2026-10-11 (§15): un reperto trovato preparando T5b, solo nella chiamata diretta di `get_summary`, senza effetto in produzione.
+> - **Checkpoint 1 nel target** (2026-10-11): `883681766`, `3801cf93e`, `5c4c2c0e8`, fusi come `46272c3f0`; treno 32, `dev_release2` = `b20eac991`. H pronto il 2026-10-11 (T5b).
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`), con le decisioni del developer (§1) e l'autorizzazione testuale (§0).
 > - **Workstream I**. Ramo `e-alfy-performance-charts-plan`, base `d59762e0a` (treno 30, fast-forward del developer a worktree pulita, verificata il 2026-10-10). L'analisi è stata fatta su `fbb57eb41` (treno 28) e riverificata su `e32f47133` (treno 29, la base del kickoff). I treni 29 e 30 non toccano le superfici del lotto (§8).
@@ -35,6 +36,10 @@
      Per ogni punto: cosa misura e chi lo legge, dentro o fuori dalla 1.2, la stima e il rischio concreto (quali valori attesi cambiano, quanti test).
      - **Guardia obbligatoria**: per i portafogli con la cassa solo nella valuta base, tutti gli output identici byte per byte prima e dopo.
      - La voce del waterfall tocca schema, frontend e i18n. I cataloghi ora li scrive P, quindi passa dal coordinatore.
+- **Coordinatore** (2026-10-11, 12:51): il checkpoint 1 è nel target (treno 32, `b20eac991`, albero `35d2afdc0533`); **via ad H** (T1c, T2f, T3b, T4), corsia 6157.
+- **Developer**, testuale, per l'analisi di F: «Riguardo la funzione unica ne sono lieto, se serve un posto dove metterla mettiamola nello stesso modulo dei calcoli matematici, vicino al wac centralizzato.»
+  - Il coordinatore: il codice nuovo di F va in `backend/app/services/financial_math/`, accanto a `average_cost.py`. L'analisi (T7) dice cosa ci va e come lo chiama l'engine.
+  - I file esistenti non si spostano: ne parla il coordinatore col developer, dopo il lotto.
 
 ## 1. Obiettivo e decisioni del developer
 
@@ -195,13 +200,16 @@ Tutti in `backend/test_scripts/test_services/test_financial/test_portfolio_engin
 | T2c | Preload dei cambi | ✅ 2026-10-10 |
 | T2d | D5 nel classificatore, ultimo e isolato | ✅ 2026-10-10 (stesso passaggio di T2b, separabile: §15) |
 | T2e | Lint e format del backend | ✅ 2026-10-10 |
-| T2f | La card prende il broker dal motore, lo specchio del capitale sparisce (§16.2); solo dopo la verifica dell'inventario | ⏳ opzione H approvata il 2026-10-11 (§0); dopo T5a |
+| T1c | Rosso della card col cambio, via `test-author` in `test_portfolio_service.py` (§16.3) | ✅ 2026-10-11 (§15) |
+| T2f | La card prende il broker dal motore, lo specchio del capitale sparisce (§16.2); solo dopo la verifica dell'inventario | ✅ 2026-10-11 (§15), opzione H con il disegno rivisto di §16.2 |
+| T1d | Rosso dell'orizzonte: righe con data futura in una chiamata diretta di `get_summary` senza `date_to`, sulla card e nel riepilogo, via `test-author` in `test_portfolio_service.py` | ✅ 2026-10-11 (§15) |
+| T2g | Il riepilogo legge le transazioni fino a `valuation_date`, l'orizzonte del motore | ✅ 2026-10-11 (§15) |
 | T3 | Doc EN via `docs-writer` (§7) | ✅ 2026-10-10, rivista; entra solo insieme all'engine |
-| T3b | Una riga sulle card in `user/brokers/index.en.md:9` (guadagno senza salti, valore in viaggio sulla card del mittente), via `docs-writer`; solo se T2f passa | ⏳ |
-| T4 | Gate (§11) | ⏳ backend senza T2f ✅ 2026-10-10 (§15); il resto dopo T2f |
-| T5a | Checkpoint 1, solo engine: T2a–T2e, i test dell'engine, la doc di T3, questo piano; senza `test_portfolio_service.py` (§0) | ✅ READY 2026-10-11 (§15), poi FROZEN; treno 32 |
-| T5b | Checkpoint 2, H: T2f, i rossi di T1b, il test della card col cambio, T3b, il resto di T4 | ⏳ |
-| T6 | Proposta per la devWiki (§13) | ⏳ bozza in §13 (2026-10-10); la parte della card dopo T2f |
+| T3b | Una riga sulle card in `user/brokers/index.en.md:9` (guadagno senza salti, valore in viaggio sulla card del mittente), via `docs-writer`; solo se T2f passa | ✅ 2026-10-11 (§15) |
+| T4 | Gate (§11) | ✅ 2026-10-11 (§15): backend senza T2f il 2026-10-10, poi tutto con T2f |
+| T5a | Checkpoint 1, solo engine: T2a–T2e, i test dell'engine, la doc di T3, questo piano; senza `test_portfolio_service.py` (§0) | ✅ 2026-10-11 (§15), nel treno 32 (`46272c3f0`) |
+| T5b | Checkpoint 2, H: T2f, i rossi di T1b, T1c e T1d, T2g, T3b, il resto di T4 | ✅ READY 2026-10-11 (§15), alla verifica del coordinatore |
+| T6 | Proposta per la devWiki (§13) | ✅ 2026-10-11, proposta completa in §13, card compresa; la archivia il coordinatore o lo storico |
 | T7 | Analisi di F, prima del codice (§0): la cassa nativa rivalutata (B4) e i flussi del periodo nel motore, con la guardia sui portafogli con la sola valuta base | ⏳ dopo T5b |
 
 ## 10. Rischi
@@ -229,6 +237,7 @@ Tutti in `backend/test_scripts/test_services/test_financial/test_portfolio_engin
     - B: backlog B8.
   - Il §2 («chi legge le contribuzioni») resta vero: lo specchio non le legge, le rifà.
   - **Decisione (2026-10-10): opzione A**, e il compito si allarga. Il developer, testuale: «si sono sempre daccordo nel fattorizzare, specie in matematica, verifica che non ci siano altre zone che rifanno questo calcolo con regole loro e in caso migra anche loro, ma stai attendo a verificare che il risultato finale sia migliore delle parti, se ci sono cose a cui non avevi pensato, prima di buttarle integrale». Il coordinatore: prima T1b, poi l'inventario (§16), poi T2f; nessuna copia tolta prima della sua verifica.
+  - **Esito (2026-10-11)**: T2f toglie lo specchio; le card prendono capitale e valore in viaggio dal motore (§15 T2f). T2g porta allo stesso orizzonte del motore anche la chiamata diretta senza `date_to` (§15 T1d/T2g).
 
 ## 11. Definition of done e gate
 
@@ -236,7 +245,7 @@ Tutti in `backend/test_scripts/test_services/test_financial/test_portfolio_engin
 - Aggregati della vista combinata identici byte per byte; Σ P_b = P ogni giorno.
 - Gate sulla 6157, un comando alla volta:
   - `services roi-fifo-utils`, `services portfolio-engine`, `services ai-export`, `api portfolio`;
-  - `front build --debug`, poi gli E2E `front-portfolio dashboard` e `front-broker detail`;
+  - `front build --debug`, poi gli E2E `front-portfolio dashboard` e `front-broker detail`; con T2f anche `front-broker list`, la pagina delle card;
   - `mkdocs build`, `mkdocs check-links`, `mkdocs translate-validate`.
 - Lint e format del backend puliti.
 - Nessun file vietato toccato; porta 6157 libera (`lsof -nP -iTCP:6157 -sTCP:LISTEN` vuoto).
@@ -247,12 +256,13 @@ Tutti in `backend/test_scripts/test_services/test_financial/test_portfolio_engin
 - 🐛 **Fixed**: broker lines in the P&L chart no longer jump when money or securities move between two of your brokers; the total is unchanged.
 - 🔄 **Changed**: in a view filtered to some brokers, securities sent to or received from a broker outside the filter count as capital at market value, not as a gain or a loss. The same applies to the leftover half of a transfer whose other broker was deleted.
 - Treno 32 (checkpoint 1, T5a): la riga Fixed non nomina le card. «…and broker cards» entra con H (T5b).
+- H (T5b), proposta per la riga Fixed: «Broker lines in the P&L chart and the broker cards no longer jump when money or securities move between two of your brokers; the total is unchanged. While a transfer is on its way, its value stays on the sending broker's card.»
 
 ## 13. devWiki (T6, solo proposta)
 
 `LibreFolio_devWiki/wiki/decisions/portfolio-pnl-series-contracts.md`, sezione G1a: i trasferimenti interni sono flussi di capitale per broker a somma zero, nel giorno d'arrivo, pari al valore che entra nel NAV del destinatario; il valore in viaggio resta al mittente; la regola di D2 nelle viste filtrate; D3, D4 e D5; gli invarianti di §4.5.
 
-Testo proposto (bozza del 2026-10-10, in inglese come la wiki; la parte della card si completa dopo T2f). Lo archivia il coordinatore o lo storico, non io.
+Testo proposto (bozza del 2026-10-10, in inglese come la wiki; la parte della card aggiunta il 2026-10-11, dopo T2f, ai punti 6–8). Lo archivia il coordinatore o lo storico, non io.
 
 1. In «G1a», al posto del punto «Cash in transit stays with the departure broker until it arrives.»:
 
@@ -284,6 +294,26 @@ Testo proposto (bozza del 2026-10-10, in inglese come la wiki; la parte della ca
    - il piano di questo lotto, col percorso che avrà dopo l'archiviazione.
 4. Due pagine `problems/` nuove, dai reperti preesistenti fuori dal lotto: B4 (la cassa estera nell'engine non si rivaluta mai) e B11 (`dirty_days` ignora i giorni in cui si muove solo il cambio).
 5. Prima di archiviare: `python3 LibreFolio_devWiki/check_source_paths.py`.
+6. In «G1a», dopo i punti del punto 1, la card (H, 2026-10-11):
+
+   ```markdown
+   - **Broker cards read the same capital** (lot 41, step H). `PortfolioService.get_summary(include_breakdown=True)`
+     no longer keeps its own per-broker capital (`broker_total_invested`: DEPOSIT/WITHDRAWAL plus in-kind
+     ADJUSTMENT as override × quantity, transfers ignored). Each card takes `capital_contribution` and
+     `in_transit_contribution` from the engine's `BrokerDailyContribution` at the valuation date. Market value
+     (holdings rows at the valuation date, dust excluded) and cash (native balances × FX at that date) stay the
+     service's own. NAV = MV + cash + in transit; gain = NAV − capital; percent only when capital > 0.
+   - **Rejected**: card NAV = `nav_contribution` − engine cash + cash at T. The engine re-values a day only when
+     it is dirty, so on a last day where only FX moved its market value would lag the holdings rows.
+   - A card and the last point of its broker line can still differ by foreign-cash drift (B4), dust, and an
+     FX-only move on a non-dirty last day (B11). The value in transit comes from the engine, so on such a day
+     it lags on both.
+   ```
+
+7. In `wiki/decisions/broker-card-aggregation-no-n-plus-one.md`, «Consequences», un punto: «Since lot 41 (2026-10), the card's Gain/Loss reads capital and value in transit from the engine's per-broker slice; the service's own capital mirror is gone (see [[decisions/portfolio-pnl-series-contracts]], G1a).»
+8. In «Source files» di `portfolio-pnl-series-contracts.md`, altre due righe:
+   - `backend/app/services/portfolio_service.py` (`get_summary`, the per-broker breakdown);
+   - `backend/test_scripts/test_services/test_financial/test_portfolio_service.py` (the card tests: same-day and multi-day transfer, foreign currency at the arrival rate).
 
 ## 14. Backlog
 
@@ -298,8 +328,18 @@ Testo proposto (bozza del 2026-10-10, in inglese come la wiki; la parte della ca
 - **B6**: coppie ADJUSTMENT coi flussi al valore di mercato (oggi, se di più giorni, un intervallo «cash» a valore 0).
 - **B7**: uno split durante il viaggio.
 - **B11**: il salto dei giorni ignora i cambi. `dirty_days` (`portfolio_engine.py:868-905`) raccoglie transazioni, flussi, bordi dei viaggi, prezzi e split, ma non le date dei cambi: in un giorno in cui si muove solo il cambio, le posizioni in valuta e la cassa in viaggio restano al valore del giorno prima. Trovato dal test-author sul caso 3 (d2). Preesistente, fuori dal lotto.
+- **B12** (2026-10-11, righe del codice di H), latente: le righe con data futura in una chiamata diretta senza `date_to`. Lì il motore si ferma a oggi, ma due letture del servizio tengono tutte le righe del broker:
+  - `_signed_transaction_sums_by_date` (`portfolio_service.py:1533`), per le storie di redditi, costi e depositi;
+  - `get_positions_contribution` (`:1775`).
+  - Nessun effetto in produzione: `get_report` passa sempre `effective_date_to` (`:2120`, `:2299-2372`). In `get_summary` lo stesso caso lo ripara T2g (§15 T1d/T2g). Da riguardare in T7, la seconda insieme a B8.
+  - Nessuna validazione impedisce una data futura. Se debba esserci, è una scelta di prodotto fuori dal lotto.
 
 ## 15. Avanzamento
+
+> **Righe citate**: ogni nota cita il codice del suo momento.
+> - Da T0 a T1/T1b, e le sezioni scritte allora (§4, §5, §14, §16): `d59762e0a`. Lì `portfolio_service.py` è identico a `b20eac991`.
+> - Da T2a–T2e a T1c: `b20eac991`, cioè il motore del checkpoint 1. Vale anche per i punti di §16 corretti in T1c.
+> - Da T2f in poi, e i punti di §16.2 rivisti per T2f: il codice di H, quello del checkpoint 2 (T5b).
 
 ### T0 — Piano nel journal ✅ (2026-10-10)
 
@@ -395,6 +435,170 @@ Testo proposto (bozza del 2026-10-10, in inglese come la wiki; la parte della ca
 > **⚠️ Fuori pista**: il lotto si divide in due checkpoint.
 > - Fra il primo e il secondo, a un trasferimento interno la card dei broker mostra ancora −X/+X, il grafico no.
 > - La riga del CHANGELOG del treno 32 non nomina le card (§12).
+>
+> **Integrato** (2026-10-11): `883681766` (engine e test), `3801cf93e` (doc EN), `5c4c2c0e8` (piano), fusi come `46272c3f0`; treno 32, `dev_release2` = `b20eac991`, albero `35d2afdc0533`. La worktree è avanzata lì, con `test_portfolio_service.py` intatto (+86, blob `b6d6642023ec`). Il treno 32 non tocca `portfolio_service.py` né gli schemi.
+
+### T1c — Rosso della card col cambio ✅ (2026-10-11)
+
+> **Note implementazione**: scenario in §16.3, scritto dal `test-author` (`test_portfolio_service.py:448-491` nel codice di H; `:431-474` quando è stato scritto, prima degli helper di T1d), accanto ai rossi di T1b; ruff e black puliti.
+> - Prova del rosso sulla 6157: `services roi-fifo-utils` → **583 passed, 3 failed**, cioè i 2 di T1b e T1c. Log `/tmp/libreFolio_l41_t1c_red.log`.
+> - T1c dà le 7 discrepanze previste: il 14 A 475 / −325 / −0,40625 (manca il valore in viaggio); il 20 A −200 / −0,25 e B +600 / 0 (il trasferimento non sposta il capitale).
+>
+> **Verifiche prima del codice di T2f** (sola lettura):
+> - Cache del blob solo in memoria (`theine`, `portfolio_engine.py:61`); `BrokerDailyContribution` ha un solo costruttore (`portfolio_engine.py:1209`), nessuno la serializza, e i test la controllano con `isinstance`. Un campo nuovo è sicuro.
+> - Le card scorrono `broker_names`, cioè ogni broker accessibile: B compare anche vuoto (`portfolio_service.py:1004-1019`).
+> - Un arrivo oltre `date_to` è caricato da `get_needed_paired_ids` (`portfolio_engine.py:255-265`) e resta `linked_internal`, con l'intervallo in viaggio: la vista a metà viaggio non diventa orfana.
+>
+> **⚠️ Fuori pista**:
+> - **Il ripiego per il cambio mancante (§16.2) non serve**: engine e servizio usano lo stesso `convert_bulk`, che riempie all'indietro senza limite. Se il cambio manca a T, manca anche a ogni movimento ≤ T. §16.2 è corretto.
+> - **La MV della card resta senza la polvere**: il servizio esclude le posizioni sotto 0,00001 unità (`portfolio_service.py:850`), il motore no. T2f tiene la MV della card com'è (le righe della tabella, §16.2), quindi la card continua a escluderla.
+> - **Il cambio mancante sulle rettifiche in natura** è già coperto: `average_cost.missing` → `_missing_fx` → `_engine_missing_fx_pairs` (`portfolio_service.py:298`). Togliere `inkind_missing` dallo specchio non perde coppie.
+> - **Reperto per F**: un giorno con un solo cambio di cambio non è «dirty» (`portfolio_engine.py:899-933`: transazioni, flussi, prezzi, bordi dei viaggi, split). Il giorno si copia dal precedente (`:939-976`), quindi la cassa in viaggio e la MV in valuta senza un prezzo nuovo restano al cambio dell'ultimo giorno «dirty».
+>   - Per questo T1c verifica il viaggio il 14, ultimo giorno del viaggio (sempre «dirty»), con la sua riga di cambio. Nello scenario iniziale la riga 0,95 era il 12: lì la card avrebbe dato 925 (cassa 475 + viaggio 450, copiato dal 10), non 950. Lo scarto è del motore, non di H.
+>   - Entra nell'analisi di F (T7): rivalutare la cassa ogni giorno (B4) chiede di rendere «dirty» i giorni di cambio, con il costo relativo.
+
+### T2f — La card dei broker dal motore ✅ (2026-10-11)
+
+> **Note implementazione**:
+> - `portfolio_engine.py`:
+>   - `BrokerDailyContribution` ha un campo nuovo, `in_transit_contribution` (`:530-532`). È la parte in viaggio di `nav_contribution`: interna, mai esportata, la legge solo la card.
+>   - Nel ciclo 4f2 (`:1210-1218`) lo stesso valore entra nella somma del NAV, nello stesso ordine di prima, e nel campo nuovo. Gli altri campi restano identici byte per byte.
+> - `portfolio_service.py`:
+>   - **Tolto lo specchio**: `broker_total_invested`, il blocco degli ADJUSTMENT in natura, e le due somme di DEPOSIT/WITHDRAWAL in `total_invested` e `broker_total_invested`.
+>   - **Restano**: gli accumuli del periodo (`_total_deposited`, `_total_withdrawn`, `:788-793`), la cassa, i redditi, le commissioni e `all_missing_pairs`.
+>   - **Card** (`:989-1001`):
+>     - capitale e valore in viaggio vengono dall'ultimo stato del motore (`last_state.broker_contributions`); senza stato valgono 0;
+>     - NAV = MV della tabella + cassa a T + valore in viaggio;
+>     - guadagno = NAV − capitale; la percentuale si calcola solo con capitale > 0.
+>   - **`total_invested`** vale 0 quando manca uno stato del motore. Il motore parte dalla prima transazione: `date_from=None`, anche nel report (`:2196-2203`). Lo stato manca quindi solo se non c'è nessuna transazione ≤ T, e anche la vecchia somma dava 0. Nessun cambio, salvo una chiamata diretta senza `date_to` con sole righe future, dove la vecchia somma le contava (§15 T1d/T2g).
+> - Nessun cambio di schema né di API. Le cache sono solo in memoria (`portfolio_service.py:112`, `portfolio_engine.py:61`).
+> - Ruff e black sono puliti sui due file.
+>
+> **Gate sulla 6157**, un comando alla volta (log in `/tmp/libreFolio_l41_t2f_*.log`):
+> - `services roi-fifo-utils` → **586 passed**. I 3 rossi di T1b e T1c ora sono verdi. Nessun altro test cambia, nemmeno `test_summary_with_breakdown_uses_per_broker_invested`.
+> - Verdi anche `services portfolio-engine` (42), `services ai-export` (929), `api portfolio` (51) e `services lots-analysis-pure` (106).
+> - Dopo i gate la porta 6157 è libera.
+>
+> **⚠️ Fuori pista**:
+> - **Il disegno approvato è cambiato prima del codice.** Era: NAV della card = `nav_contribution` − cassa del motore + cassa a T, con un campo `cash_contribution`.
+>   - Il motore rivaluta solo i giorni «dirty», e T non sempre lo è (§15 T1c). In un ultimo giorno in cui si muove solo il cambio, la MV del motore resta al cambio precedente, mentre le righe della tabella sono a T.
+>   - Ora la card prende dal motore solo il capitale e il valore in viaggio, e tiene la sua MV e la sua cassa a T. Il NAV ha la forma approvata in §16.2: MV + IT + cassa a T.
+> - **Cosa cambia di proposito rispetto allo specchio**:
+>   - il capitale conta le metà `linked_external` al valore di mercato (D2) e i trasferimenti interni all'arrivo;
+>   - il costo degli ADJUSTMENT in natura viene dal pool del costo medio (D4), non da override × quantità;
+>   - la percentuale è 0 con capitale ≤ 0; prima si divideva per qualunque capitale non nullo.
+
+### T3b — Doc EN della card ✅ (2026-10-11)
+
+> **Note implementazione**: `docs-writer` (`9879aae8`) ha aggiunto un solo paragrafo, `user/brokers/index.en.md:11`, e nient'altro.
+> - **Contenuto**:
+>   - Gain/Loss = NAV − capitale;
+>   - capitale = depositi − prelievi + costo dei titoli portati senza cassa + trasferimenti dagli altri broker − quelli verso gli altri, al valore del giorno d'arrivo;
+>   - un trasferimento fra due broker propri non dà guadagno a uno e perdita all'altro, e durante il viaggio il valore resta sulla card del mittente;
+>   - la percentuale è 0,00 % con capitale ≤ 0;
+>   - link a `deposited-capital.md#internal-transfers-broker-lines`.
+> - **Riletto contro il codice**: `BrokerCard.svelte:143-157`; `portfolio_service.py:989-1001`; la pagina Brokers chiede il report di tutti i broker accessibili, senza date (`brokers/+page.svelte:175`). Nessuna affermazione su Σ card = Total P&L.
+> - **Due scelte del docs-writer**, entrambe nei fatti: il costo dei titoli portati senza cassa (ADJUSTMENT in natura); «zero o meno» per lo 0,00 %.
+> - **Evidenze**:
+>   - `mkdocs build` stretto verde (`/tmp/libreFolio_l41_t3b_build.log`);
+>   - `check-links`: 95 validi, 0 rotti (`/tmp/libreFolio_l41_t3b_check_links.log`);
+>   - `translate-validate`: da 126/195 a 129/198 errori/avvisi (`/tmp/libreFolio_l41_t3b_tv_before.log`, `_after.log`). Il link nuovo manca in IT, FR ed ES: un link-missing e un link-count per lingua.
+> - Nessuno stamp: è debito vero per il secondo giro di M. La pagina non ha un timbro «last updated».
+
+### T4 — Gate completi ✅ (2026-10-11)
+
+> **Note implementazione**: sulla 6157, un comando alla volta, con T2f.
+> - Backend: in §15 T2f (586, 42, 929, 51, 106).
+> - `front build --debug` verde (`/tmp/libreFolio_l41_t4_front_build.log`).
+>   - Prima del build, `node_modules` coincide col lock: 0 differenze sui pacchetti non opzionali.
+>   - Il build risincronizza i tipi API; nessun file tracciato cambia.
+> - E2E:
+>   - `front-portfolio dashboard` → **27 passed** (`/tmp/libreFolio_l41_t4_e2e_dashboard.log`);
+>   - `front-broker detail` → **35 passed** (`/tmp/libreFolio_l41_t4_e2e_broker_detail.log`);
+>   - `front-broker list` → **9 passed** (`/tmp/libreFolio_l41_t4_e2e_broker_list.log`).
+> - I tre comandi `mkdocs` sono in T3b.
+> - Dopo i gate `lsof -nP -iTCP:6157 -sTCP:LISTEN` è vuoto.
+>
+> **⚠️ Fuori pista**: ho aggiunto `front-broker list` ai gate di §11. È la pagina delle card (`brokers.spec.ts`). Come gli altri E2E controlla la struttura e non i numeri: i valori della card li fissano T1b e T1c.
+
+### T1d / T2g — L'orizzonte della card ✅ (2026-10-11)
+
+> **⚠️ Fuori pista**: reperto trovato rileggendo il diff per T5b, prima del checkpoint 2.
+> - **Due orizzonti diversi**, in una chiamata diretta di `get_summary` con `date_to=None`:
+>   - il motore si ferma a oggi (`portfolio_engine.py:2544`, `actual_to = date_to or today`), quindi anche capitale, valore in viaggio, MV della card (`position_states_end`) e la testata (`net_worth`, `cash_total`, `:1218-1222`);
+>   - la cassa della card legge invece tutte le righe del broker, anche quelle con data futura (`_get_transactions(broker_id, date_to=date_to)`, `portfolio_service.py:759` prima di T2g). Nessuna validazione impedisce una data futura.
+> - **Cosa rompe H**, nella chiamata diretta:
+>   - un trasferimento di cassa partito ieri con l'arrivo registrato fra tre giorni (coppia interna, il motore carica tutte le righe, `:2497-2499`): A ha −X di cassa e +X in viaggio, e va bene. B ha già +X di cassa ma nessun capitale, perché l'arrivo è futuro: guadagno +X, e Σ card = NAV + X;
+>   - un deposito con data futura: cassa +X, capitale invariato, guadagno +X.
+>   - Prima di H lo specchio leggeva le stesse righe future della cassa, e il guadagno restava 0 per caso. Lo specchio aveva quindi una regola che il motore non ha: lo stesso orizzonte della cassa. È il caso della decisione del developer (§10): «stai attendo a verificare che il risultato finale sia migliore delle parti».
+> - **Già sbagliato prima di H**, nella chiamata diretta con righe future: una BUY (cassa −X, nessuna MV), un dividendo (+X), il periodo (`total_deposited`, redditi e commissioni del periodo, il residuo «Other»), la lista delle casse.
+> - **Portata, rivista dopo la cura e prima del checkpoint: nessun effetto in produzione.**
+>   - L'unico chiamante, `get_report`, passa sempre `date_to = date_to or today` (`portfolio_service.py:2120`, `:2214-2222`).
+>   - La pagina Brokers chiede il report senza date (`brokers/+page.svelte:175`), ma il report risolve oggi prima di chiamare il riepilogo. Lo stesso vale per l'API (`portfolio_api.py:239-240`), per l'AI Export (`fx_core.py:313`, `portfolio_broker.py:795`, `asset_resources.py:259`) e per il rischio (`risk/service.py:496`).
+>   - Il ramo con `date_to=None` lo usano solo le chiamate dirette: i test del servizio e un chiamante futuro.
+>   - In un primo momento avevo scritto che il difetto si vedeva nella pagina Brokers: era sbagliato.
+>   - T2g resta: H peggiora la chiamata diretta (guadagno +X), e una riga la rende coerente con la testata.
+> - **Cura proposta (T2g)**, una riga: `_get_transactions(broker_id, date_to=valuation_date)`.
+>   - Con `date_to` dato, `valuation_date == date_to`: nessun cambio.
+>   - Senza righe future: nessun cambio.
+>   - Con righe future e `date_to=None`: card, lista delle casse, totali del periodo e lotti leggono lo stesso orizzonte del motore e della testata.
+> - **T1d**: il rosso via `test-author`, prima della cura.
+>
+> **T1d ✅ (2026-10-11) — Note implementazione**: `test-author` (`t1d-horizon-red`) ha aggiunto due test in `TestPortfolioServiceGetSummary` (`test_portfolio_service.py:493-562`), con date relative a oggi, ognuna ad almeno due giorni, così una mezzanotte non sposta nessuna riga.
+> - `…_internal_cash_transfer_arriving_after_today_stays_in_transit`: 5000 depositati ad A dieci giorni fa; 1000 partono due giorni fa e arrivano a B fra tre. Attesi oggi A 5000 (cassa 4000 + 1000 in viaggio) / 0 / 0 e B 0 / 0 / 0; Σ card = testata = 5000.
+> - `…_future_dated_deposit_is_outside_today_valuation`: 5000 dieci giorni fa, 700 fra cinque. Attesi la card 5000 / 0 / 0 con cassa 5000, la testata 5000 e `total_deposited` 5000.
+> - Helper: `_deposit_and_transfer` ha la chiave opzionale `deposited_on` (predefinita 2025-01-01, i chiamanti di prima non cambiano); nuovo `_card_cash_problems`.
+> - **Prova del rosso sulla 6157**: `services roi-fifo-utils` → **586 passed, 2 failed**, i due nuovi, coi numeri previsti (`/tmp/libreFolio_l41_t1d_red.log`):
+>   - B: NAV 1000, guadagno 1000, cassa 1000; Σ card 6000 contro una testata di 5000;
+>   - A: NAV 5700, guadagno 700 (0,14), cassa 5700; `total_deposited` 5700.
+>
+> **T2g ✅ (2026-10-11) — Note implementazione**:
+> - `portfolio_service.py:759-761`: `_get_transactions(broker_id, date_to=valuation_date)`, con due righe di commento: lo stesso orizzonte del motore, quindi nessuna riga successiva raggiunge cassa, totali del periodo e lotti.
+> - In `get_summary` è l'unica lettura delle transazioni. Le altre due tengono `date_to=date_to` e restano fuori da H:
+>   - `_signed_transaction_sums_by_date` (`:1533`), per le storie di redditi, costi e depositi;
+>   - `get_positions_contribution` (`:1775`).
+>   - Anche loro ricevono sempre `effective_date_to` da `get_report` (`:2299-2372`): nessun effetto in produzione. Le annoto come B12 (§14), latenti.
+> - Ruff e black puliti su servizio, motore e test.
+> - **Gate sulla 6157**, un comando alla volta (log in `/tmp/libreFolio_l41_t2g_*.log`):
+>   - `services roi-fifo-utils` → **588 passed**: i 2 rossi di T1d ora sono verdi, nessun altro test cambia;
+>   - `api portfolio` → **51 passed**; `services ai-export` → **929 passed**;
+>   - E2E sul build di T4 (il frontend non è cambiato): `front-portfolio dashboard` **27**, `front-broker detail` **35**, `front-broker list` **9**.
+>   - Non ripetuti: `services portfolio-engine` (42) prova solo il motore, che T2g non tocca; `services lots-analysis-pure` (106) prova builder puri con `db=None` (`_backend_services.py:1084-1096`).
+>   - Dopo i gate la porta 6157 è libera.
+> - **Cosa cambia per l'utente: nulla.** In produzione `valuation_date == date_to` sempre (vedi «Portata»), quindi la lettura resta identica. Cambia solo la chiamata diretta senza `date_to`: lì card, lista delle casse, totali del periodo, «Other» e lotti stanno a oggi, come la testata. Nessuna riga di CHANGELOG.
+
+### T5b — Checkpoint 2, H ✅ READY (2026-10-11)
+
+> **Note implementazione**:
+> - **Base**: HEAD `b20eac991` (treno 32).
+>   - Il target è andato avanti a `c0d933abf` (treno 33, poi tre commit di documenti). Nessuno tocca i 5 percorsi di H: `git diff --stat b20eac991 c0d933abf -- <percorsi>` è vuoto.
+>   - In `user/brokers/` il treno 33 cambia solo le traduzioni, alla riga dell'ordine delle icone: nessuna sovrapposizione col paragrafo di T3b.
+> - **Delta**: 5 file tracciati modificati, nessun file nuovo, stage vuoto.
+>   - Motore: il campo `in_transit_contribution` e il ciclo 4f2.
+>   - Servizio: specchio tolto, card dal motore, T2g.
+>   - Test: T1b, T1c, T1d e due helper (+219).
+>   - Doc EN: il paragrafo di T3b.
+>   - Questo piano.
+> - **Prima del checkpoint**:
+>   - Il commento sopra i test di T1d diceva «as the Brokers page asks», ed era sbagliato (§15 T1d/T2g, «Portata»).
+>   - L'ha corretto il `test-author` (`t1d-comment-fix`), toccando solo il commento (`:493-499`). Poi py_compile, ruff e black puliti.
+>   - `services roi-fifo-utils` → **588 passed** sui byte del checkpoint (`/tmp/libreFolio_l41_t5b_roi.log`).
+>   - Gli altri gate di T2g restano validi, perché dopo non è cambiato codice.
+>   - `git diff --check` pulito.
+>   - Scansione privacy pulita, salvo due falsi positivi: `@pytest.mark` e il nome di questo piano.
+> - **⚠️ Fuori pista: regola nuova sul target.** È il commit `789c18582` (decisione 10, «One home for financial math», 2026-10-11), arrivato durante H. Il punto 4 chiede, prima di chiudere, di cercare le copie di ciò che si è cambiato. Letto dall'oggetto del commit, perché la worktree è a `b20eac991`. Esito:
+>   - **Capitale del broker**: l'inventario di §16 resta completo. Da `d59762e0a` a `c0d933abf`, in `backend/app` cambia solo il motore del checkpoint 1, e il frontend solo il PAC e `formatPercent`.
+>   - **Valore in viaggio**: nessuna copia. Fuori dal motore lo si legge soltanto:
+>     - riepilogo e storia (`portfolio_service.py:997-999`, `:1226-1228`, `:1382-1388`);
+>     - l'avviso del rischio (`risk/service.py:563`);
+>     - la custodia `IN_TRANSIT` dei lotti FIFO, che è un'altra cosa.
+>   - **Guadagno della card**: si calcola solo in `get_summary` (`:989-1001`), dal capitale del motore. Il frontend lo legge e basta.
+>   - **MV della card**: legge le posizioni del motore (`position_states_end`, `:835`, `:879-881`), oltre la soglia di polvere. Non è una copia.
+>   - **Copie che restano per la decisione 10**: la cassa della card e i totali del periodo sono un giro sulle transazioni fuori dal motore (`:759-813`). Sono i punti di §16 per F (T7), e le tiene il disegno rivisto di T2f (§16.2, B4).
+> - **Debito di traduzione per M**: il paragrafo di T3b manca in IT, FR ed ES. Con il validatore di `b20eac991`, errori e avvisi salgono da 126/195 a 129/198. Il validatore cambia nel treno 33, quindi la misura va rifatta sulla revisione combinata.
+> - **CHANGELOG di H**: la riga Fixed proposta in §12. T2g non ne ha.
+> - Porta 6157 libera.
+> - Messaggi proposti: `/tmp/libreFolio_commit_i_l41h_C1.txt`, `_C2.txt`, `_C3.txt`.
 
 ## 16. Inventario: capitale, investito e guadagno fuori dal motore (T2-inv)
 
@@ -427,14 +631,24 @@ Regole dello specchio confrontate col motore (punto 2):
 | ADJUSTMENT in natura | costo dal pool (`step.cost_report_change`), la gamba d'uscita toglie il costo medio, cambio mancante segnalato | `override × qty`, anche sulle uscite; `cost_basis_currency or base_currency` | motore (D4, un'unica funzione del costo medio) |
 | esclusione delle rettifiche legate a un evento | solo `split_linked_tx_ids` | `asset_event_id is None` | motore più preciso; differiscono solo su un ADJUSTMENT manuale con override legato a un evento non SPLIT (`transaction_service.py:958-975` azzera l'override sugli SPLIT automatici) |
 | coppie FX mancanti | `_missing_fx` del motore, unito da `_engine_missing_fx_pairs` (`:298-315`, `:1210`) | `all_missing_pairs` | nulla si perde |
-| limite `date_to` | stato alla data di valutazione | `_get_transactions(…, date_to)` | uguale |
+| limite `date_to` | stato alla data di valutazione | `_get_transactions(…, date_to)` | uguale in produzione, dove `get_report` passa sempre una data. Solo in una chiamata diretta senza `date_to` lo specchio leggeva anche le righe con data futura, il motore no: correzione del 2026-10-11, §15 T1d/T2g |
 
 ### 16.2 La card
 
 - **Capitale**: `capital_contribution` del motore alla data di valutazione. Guadagno = NAV − C; percentuale = guadagno / C solo se C > 0, altrimenti 0, come la testata (`:1110`). Un broker che ha spedito più di quanto ha ricevuto ha C ≤ 0: mostrerà 0,00 %; un «—» chiederebbe lo schema e il frontend (backlog).
-- **NAV, opzione H (consigliata)**: NAV_b = `nav_contribution_b` − cassa del motore_b + Σ_valute nativa_b × cambio(T) = MV_b + IT_b + cassa_b a T.
-  - Serve un campo interno `cash_contribution` in `BrokerDailyContribution` (`portfolio_engine.py:513-525`); nessuno fuori dall'engine lo legge (l'API esporta solo `pnl_contribution`, `:1831-1832`). Nessun cambio di schema né di API.
-  - Cambio mancante a T per una valuta del broker: niente scambio per quel broker (resta la cassa del motore), coppia segnalata. Oggi quella cassa sparisce dalla card.
+- **NAV, opzione H (consigliata)**: NAV_b = MV_b + IT_b + cassa_b a T.
+  - **Come si calcola (T2f, rivisto il 2026-10-11, §15 T2f)**:
+    - MV_b: invariata, cioè le righe della tabella (`position_states_end`, valutate a T, senza la polvere; `portfolio_service.py:835`, `:879-881`);
+    - cassa_b: invariata, Σ_valute nativa_b × cambio(T);
+    - IT_b: un campo interno nuovo, `in_transit_contribution` di `BrokerDailyContribution`, letto dall'ultimo stato del motore. Nessuno fuori dall'engine e dalla card lo legge (l'API esporta solo `pnl_contribution`). Nessun cambio di schema né di API.
+  - La prima idea era `nav_contribution_b` − cassa del motore_b + cassa_b a T. **L'ho abbandonata**: il motore valuta per intero solo i giorni «dirty». In un ultimo giorno con un solo cambio di cambio, la sua MV resterebbe al cambio dell'ultimo giorno «dirty», mentre le righe della tabella sono a T. La card avrebbe perso la valutazione esatta alla data, che oggi ha.
+  - Cambio mancante a T: **nessun ripiego serve** (correzione del 2026-10-11, §15 T1c). Engine e servizio cercano il cambio con lo stesso `convert_bulk`, che riempie all'indietro senza limite (`fx.py:1240-1420`; preload dell'engine `portfolio_engine.py:2820-2837`). Se a T manca, manca anche a ogni data di movimento ≤ T: la cassa del motore non ha quella valuta nemmeno lei, e la coppia è già segnalata. Oggi quella cassa sparisce dalla card, e così resta.
+  - Card e ultimo punto della linea del broker differiscono per tre motivi:
+    - la deriva di B4 sulla cassa;
+    - la polvere (`QUANTITY_DUST_THRESHOLD` = 0,00001 unità), che la card esclude e il motore conta;
+    - un cambio mosso in un giorno non «dirty», che il motore non rivaluta (F).
+  - Il valore in viaggio della card viene invece dal motore: in un giorno non «dirty» in cui si muove solo il cambio, resta al cambio dell'ultimo giorno «dirty», sulla card come sulla linea (§15 T1c, B11).
+  - Σ card = NAV della testata quando cassa e titoli sono in valuta base, a meno della polvere.
   - Ripara i salti e il valore in viaggio, e tiene la rivalutazione. Attribuzione del cambio verificata a mano: A guadagna (Y−X)·fx(T) − Y·fx(t0) + X·fx(t_arr), B guadagna X·(fx(T) − fx(t_arr)).
   - Resta la differenza fra card e linea del grafico, pari alla deriva di B4 sulla cassa; esiste già oggi, insieme al valore in viaggio.
   - `cash_total` e `cash_balances` invariati.
@@ -447,4 +661,9 @@ Regole dello specchio confrontate col motore (punto 2):
 - `test_portfolio_service.py`, accanto a `test_summary_with_breakdown_uses_per_broker_invested` (`:310-343`).
 - A deposita 5000; CASH_TRANSFER A→B di 1000, collegato, in giornata; nessun prezzo. `get_summary(include_breakdown=True)`: oggi le card danno −1000 / +1000, atteso 0 / 0; NAV 4000 / 1000.
 - Variante con un viaggio di più giorni, valutata durante il viaggio: oggi A ha NAV 4000 e B 0, atteso NAV A 5000 (il valore in viaggio resta di A), guadagni 0 / 0.
-- La variante in valuta aspetta la scelta fra H e F.
+- Variante in valuta (T1c, opzione H, 2026-10-11): `test_summary_with_breakdown_internal_cash_transfer_foreign_currency_moves_capital_at_arrival_rate`.
+  - Base EUR, CNY (nessun altro test usa CNY né il 2038). Cambi CNY→EUR: 01-01 0,8; 01-10 0,9; 01-14 0,95; 01-15 1,0; 01-20 1,2.
+  - A deposita 1000 CNY (capitale 800); 500 CNY partono da A il 10 e arrivano a B il 15.
+  - Il 14, in viaggio: A 950 / 150 / 0,1875 (500 di cassa e 500 in viaggio, entrambi a 0,95); B 0 / 0 / 0.
+  - Il 20: A 600 / 300 / 1; B 600 / 100 / 0,2. Il flusso interno vale 500 (al cambio dell'arrivo); Σ guadagni = 400 = 1000 × 1,2 − 800.
+  - La testata non si verifica: il motore valuta la cassa al cambio di ogni movimento (B4, F), quindi differisce da Σ card.
