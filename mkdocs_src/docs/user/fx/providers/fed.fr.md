@@ -23,5 +23,5 @@ FRED fournit les taux pour environ 20 devises majeures, notamment :
 
 ## 📝 Notes importantes
 
-- **Format des cotations** : FRED cote certaines devises comme « USD par unité de devise étrangère » (ex: EUR, GBP) et d'autres comme « devise étrangère par USD » (ex: JPY, CAD). LibreFolio inverse et normalise automatiquement ces taux pour garantir la cohérence dans votre base de données.
+- **Format des cotations** : FRED cote certaines devises comme « USD par unité de devise étrangère » (ex. : EUR, GBP) et d'autres comme « devise étrangère par USD » (ex. : JPY, CAD). LibreFolio inverse et normalise automatiquement ces taux pour garantir la cohérence dans votre base de données.
 - **Jours fériés** : Aucun taux n'est publié les jours fériés fédéraux américains (tels que Thanksgiving, Independence Day, etc.) ou les week-ends.

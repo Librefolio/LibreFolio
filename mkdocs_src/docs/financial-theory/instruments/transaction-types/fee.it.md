@@ -71,18 +71,18 @@ $$
 Dove:
 
 - $V_0$ = investimento iniziale
-- $r$ = tasso di rendimento lordo annuale (es. 0.07 per il 7%)
-- $f$ = tasso di commissione annuale (es. 0.01 per l'1%)
+- $r$ = tasso di rendimento lordo annuale (es. 0,07 per il 7%)
+- $f$ = tasso di commissione annuale (es. 0,01 per l'1%)
 - $n$ = numero di anni
 
 !!! example "Il trascinamento dell'1% su 30 anni"
 
-    Con $10,000 investiti a un rendimento lordo del 7%:
+    Con $10.000 investiti a un rendimento lordo del 7%:
 
-    - **Senza commissioni**: $10,000 × $(1.07)^{30}$ = **$76,123**
-    - **Con commissione dell'1%**: $10,000 × $(1.06)^{30}$ = **$57,435**
+    - **Senza commissioni**: $10.000 × $(1.07)^{30}$ = **$76.123**
+    - **Con commissione dell'1%**: $10.000 × $(1.06)^{30}$ = **$57.435**
 
-    La commissione annuale dell'1% ti costa **$18,688** — una riduzione del 26% del valore finale.
+    La commissione annuale dell'1% ti costa **$18.688** — una riduzione del 26% del valore finale.
 
 ---
 

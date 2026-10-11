@@ -3972,7 +3972,6 @@
           "writer": "google/gemma-4-31B-it",
           "critiquer": "google/gemma-4-31B-it"
         },
-        "failed": true,
         "failure_reason": "Translate: Translate timed out after 14400s. The request was cancelled and the model stopped. Set APHRA_STEP_TIMEOUT in .env to increase (current: 14400s)."
       },
       "fr": {
@@ -3981,7 +3980,6 @@
           "writer": "google/gemma-4-31B-it",
           "critiquer": "google/gemma-4-31B-it"
         },
-        "failed": true,
         "failure_reason": "Translate: Translate timed out after 14400s. The request was cancelled and the model stopped. Set APHRA_STEP_TIMEOUT in .env to increase (current: 14400s)."
       },
       "es": {
@@ -3990,7 +3988,6 @@
           "writer": "google/gemma-4-31B-it",
           "critiquer": "google/gemma-4-31B-it"
         },
-        "failed": true,
         "failure_reason": "Translate: Translate timed out after 14400s. The request was cancelled and the model stopped. Set APHRA_STEP_TIMEOUT in .env to increase (current: 14400s)."
       }
     }
@@ -4616,7 +4613,6 @@
           "writer": "google/gemma-4-31B-it",
           "critiquer": "google/gemma-4-31B-it"
         },
-        "failed": true,
         "failure_reason": "Translate: Translate timed out after 14400s. The request was cancelled and the model stopped. Set APHRA_STEP_TIMEOUT in .env to increase (current: 14400s)."
       }
     }

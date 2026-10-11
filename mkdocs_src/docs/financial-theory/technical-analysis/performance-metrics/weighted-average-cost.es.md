@@ -63,8 +63,8 @@ Cuando múltiples transacciones ocurren en la misma fecha:
 
     | Fecha | Tipo | Cant. | Coste unitario | Cant. en pool | PMC |
     |-------|------|-------|----------------|---------------|-----|
-    | 1 abr | COMPRA | 10 | $150 | 10 | $150.00 |
-    | 15 abr | COMPRA | 5 | $180 | 15 | $160.00 |
+    | 1 abr | COMPRA | 10 | $150 | 10 | $150,00 |
+    | 15 abr | COMPRA | 5 | $180 | 15 | $160,00 |
 
     $$
     PMC = \frac{150 \times 10 + 180 \times 5}{10 + 5} = \frac{2400}{15} = 160.00
@@ -76,8 +76,8 @@ Cuando múltiples transacciones ocurren en la misma fecha:
 
     | Fecha | Tipo | Cant. | Coste unitario | Cant. en pool | PMC |
     |-------|------|-------|----------------|---------------|-----|
-    | 1 abr | COMPRA | 10 | $150 | 10 | $150.00 |
-    | 15 abr | VENTA | -5 | (al PMC) | 5 | $150.00 |
+    | 1 abr | COMPRA | 10 | $150 | 10 | $150,00 |
+    | 15 abr | VENTA | -5 | (al PMC) | 5 | $150,00 |
 
     La VENTA elimina unidades al PMC actual ($150). El PMC permanece **sin cambios** — solo se reduce el pool.
 
@@ -85,14 +85,14 @@ Cuando múltiples transacciones ocurren en la misma fecha:
 
     | Fecha | Tipo | Cant. | Coste unitario | Cant. en pool | PMC |
     |-------|------|-------|----------------|---------------|-----|
-    | 1 abr | COMPRA | 10 | $150 | 10 | $150.00 |
-    | 1 may | AJUSTE | +5 | $0 | 15 | $100.00 |
+    | 1 abr | COMPRA | 10 | $150 | 10 | $150,00 |
+    | 1 may | AJUSTE | +5 | $0 | 15 | $100,00 |
 
     $$
     PMC = \frac{150 \times 10 + 0 \times 5}{10 + 5} = \frac{1500}{15} = 100.00
     $$
 
-    El PMC se **diluye** porque 5 unidades entraron a coste cero — un ajuste cuya anulación del coste base es cero, como un airdrop. Un desdoblamiento 3 por 2 vinculado a su evento de desdoblamiento alcanza los mismos $100.00 sin ninguna adquisición: el pool mantiene sus $1,500 y los reparte entre 15 unidades.
+    El PMC se **diluye** porque 5 unidades entraron a coste cero — un ajuste cuya anulación del coste base es cero, como un airdrop. Un desdoblamiento 3 por 2 vinculado a su evento de desdoblamiento alcanza los mismos $100,00 sin ninguna adquisición: el pool mantiene sus $1.500 y los reparte entre 15 unidades.
 
 ## 🔄 Anulación del coste base {: #cost-basis-override }
 
@@ -128,10 +128,10 @@ $$
 
     | Bróker | Fecha | Tipo | Cant. | Coste unitario | Cant. en pool | PMC |
     |--------|-------|------|-------|----------------|---------------|-----|
-    | A | 1 abr | COMPRA | 10 | $150 | 10 | $150.00 |
-    | A | 15 abr | COMPRA | 5 | $180 | 15 | $160.00 |
-    | A | 1 may | TRANSFERENCIA saliente | −3 | (al PMC) | 12 | $160.00 |
-    | B | 1 may | TRANSFERENCIA entrante (auto) | +3 | $160 (PMC de A) | 3 | $160.00 |
+    | A | 1 abr | COMPRA | 10 | $150 | 10 | $150,00 |
+    | A | 15 abr | COMPRA | 5 | $180 | 15 | $160,00 |
+    | A | 1 may | TRANSFERENCIA saliente | −3 | (al PMC) | 12 | $160,00 |
+    | B | 1 may | TRANSFERENCIA entrante (auto) | +3 | $160 (PMC de A) | 3 | $160,00 |
 
     En **modo automático**, el lado receptor toma el PMC del emisor como su anulación del coste base: el bróker B comienza con el promedio del bróker A, y los $480 de coste se mueven con las 3 unidades.
 
@@ -168,8 +168,8 @@ La moneda de la última adquisición es la moneda pagada por la transacción má
 
     | Fecha | Tipo | Cant. | Pagado | Tipo de cambio USD→EUR | Coste en EUR |
     |-------|------|-------|--------|--------------------------|--------------|
-    | 1 abr | COMPRA | 10 | €400 | — (pagado en EUR) | €400.00 |
-    | 1 may | COMPRA | 5 | 300 USD | 0.90 | €270.00 |
+    | 1 abr | COMPRA | 10 | €400 | — (pagado en EUR) | €400,00 |
+    | 1 may | COMPRA | 5 | 300 USD | 0,90 | €270,00 |
 
     $$
     PMC^{EUR} = \frac{400 + 270}{10 + 5} = \frac{670}{15} \approx 44.67 \text{ EUR}
