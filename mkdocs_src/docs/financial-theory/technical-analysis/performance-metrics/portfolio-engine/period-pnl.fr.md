@@ -85,14 +85,14 @@ $$
 
     | Jour | Valeur en USD | $r_{USD}$ | MV en EUR | $E^{\text{asset}}$ | $E^{\text{fx}}$ | $\mathrm{UGL}$ |
     |-----|-------|-----------|---------------|--------------------|-----------------|----------------|
-    | $t_0$ | 520 USD | 0.78 | 405.60 | $(520-500) \times 0.78 = 15.60$ | $500 \times 0.78 - 400 = -10.00$ | 5.60 |
-    | $t_1$ | 550 USD | 0.75 | 412.50 | $(550-500) \times 0.75 = 37.50$ | $500 \times 0.75 - 400 = -25.00$ | 12.50 |
+    | $t_0$ | 520 USD | 0,78 | 405,60 | $(520-500) \times 0.78 = 15.60$ | $500 \times 0.78 - 400 = -10.00$ | 5,60 |
+    | $t_1$ | 550 USD | 0,75 | 412,50 | $(550-500) \times 0.75 = 37.50$ | $500 \times 0.75 - 400 = -25.00$ | 12,50 |
 
     $$
     \Delta E^{\text{asset}} = +21.90, \qquad \Delta E^{\text{fx}} = -15.00, \qquad \Delta\mathrm{UGL} = +6.90 \text{ EUR}
     $$
 
-    L'ETF a progressé en dollars (+€21.90), le dollar a perdu du terrain face à l'euro (−€15.00) : ensemble, les +€6.90 de la variation latente de la période.
+    L'ETF a progressé en dollars (+€21,90), le dollar a perdu du terrain face à l'euro (−€15,00) : ensemble, les +€6,90 de la variation latente de la période.
 
 ---
 
@@ -118,9 +118,9 @@ Le rendement annualisé de la période borne le début de sa fenêtre à la plus
 
 ## 📝 Exemple
 
-- NAV à $t_0$ : €27,000
-- Augmentation de la base de capital sur la période : €1,000
-- NAV à $t_1$ : €33,000
+- NAV à $t_0$ : €27 000
+- Augmentation de la base de capital sur la période : €1 000
+- NAV à $t_1$ : €33 000
 
 $$
 \mathrm{PnL} = 33\,000 - 27\,000 - 1\,000 = +5\,000 \text{ EUR}

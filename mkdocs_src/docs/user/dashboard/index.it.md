@@ -5,7 +5,7 @@ La Dashboard è il **centro di comando del tuo portafoglio** — una singola sch
 <div class="lf-screenshot-carousel" data-carousel="carousel-dashboard-main" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
   <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Vista principale (assoluta)" alt="Dashboard — Modalità assoluta">
   <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📈 Vista principale (percentuale)" alt="Dashboard — Modalità percentuale">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Allocation" alt="Dashboard — Allocazione">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="allocation-type-now" data-title="📊 Allocazione" alt="Dashboard — Allocazione">
 </div>
 
 ## 🗂️ Layout a schede

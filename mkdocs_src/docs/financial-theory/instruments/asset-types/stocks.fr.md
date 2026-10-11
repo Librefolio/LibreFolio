@@ -12,7 +12,7 @@ Une **action** (ou titre de propriété) représente une part du capital d'une s
 | **Cotation** | Cotations en temps réel ou différées provenant des bourses (NYSE, NASDAQ, LSE, etc.) |
 | **Devise** | Libellée dans la devise locale de la bourse |
 | **Dividendes** | De nombreuses actions versent des dividendes périodiques en espèces (trimestriels aux États-Unis, semestriels en Europe) |
-| **Divisions** | Les sociétés peuvent fractionner les actions (ex: 4:1) pour abaisser le prix par action |
+| **Divisions** | Les sociétés peuvent fractionner les actions (ex. : 4:1) pour abaisser le prix par action |
 | **Fournisseurs typiques** | Yahoo Finance, CSS Scraper |
 
 ---

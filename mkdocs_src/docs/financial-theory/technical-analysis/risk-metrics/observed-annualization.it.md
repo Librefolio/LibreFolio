@@ -43,11 +43,11 @@ La tabella seguente sviluppa la formula per alcune forme di serie. È aritmetica
 
 | Serie | Rendimenti $N$ | Giorni di calendario $D$ | $f = 365N/D$ | $\sqrt{f}$ |
 |---|---|---|---|---|
-| Strumento quotato solo nei giorni di negoziazione, anno completo | 252 | 365 | 252.0 | 15.87 |
-| Strumento negoziato ogni giorno (cripto), anno completo | 365 | 365 | 365.0 | 19.10 |
-| Fondo con prezzo settimanale, anno completo | 52 | 365 | 52.0 | 7.21 |
-| Strumento quotato nei giorni di negoziazione, iniziato a metà periodo | 126 | 183 | 251.3 | 15.85 |
-| Serie giornaliera con lacune | 180 | 365 | 180.0 | 13.42 |
+| Strumento quotato solo nei giorni di negoziazione, anno completo | 252 | 365 | 252,0 | 15,87 |
+| Strumento negoziato ogni giorno (cripto), anno completo | 365 | 365 | 365,0 | 19,10 |
+| Fondo con prezzo settimanale, anno completo | 52 | 365 | 52,0 | 7,21 |
+| Strumento quotato nei giorni di negoziazione, iniziato a metà periodo | 126 | 183 | 251,3 | 15,85 |
+| Serie giornaliera con lacune | 180 | 365 | 180,0 | 13,42 |
 
 Da quelle righe seguono quattro letture.
 

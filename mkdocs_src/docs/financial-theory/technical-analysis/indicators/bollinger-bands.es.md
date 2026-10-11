@@ -31,7 +31,7 @@ Cuando las bandas se ensanchan, el mercado es volátil; cuando se comprimen, una
     Lower_t = MB_t - k \cdot \sigma_t
     $$
 
-Con $k = 2$, si los rendimientos estuvieran distribuidos normalmente, el precio se mantendría dentro de las bandas aproximadamente el 95.4% del tiempo. En la práctica, los rendimientos financieros tienen *colas pesadas* (leptocurtosis), por lo que las rupturas son más frecuentes, aunque siguen siendo estadísticamente significativas.
+Con $k = 2$, si los rendimientos estuvieran distribuidos normalmente, el precio se mantendría dentro de las bandas aproximadamente el 95,4% del tiempo. En la práctica, los rendimientos financieros tienen *colas pesadas* (leptocurtosis), por lo que las rupturas son más frecuentes, aunque siguen siendo estadísticamente significativas.
 
 ---
 

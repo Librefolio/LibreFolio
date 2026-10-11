@@ -66,4 +66,4 @@ flowchart LR
     %K peut passer de 0 à 100 en seulement quelques barres — utile pour des signaux de retournement rapides,
     mais plus sujet aux faux signaux que le RSI simple.
 
-:material-link: [Stochastic RSI on StockCharts](https://school.stockcharts.com/doku.php?id=technical_indicators:stochrsi){ target="_blank" }
+:material-link: [RSI stochastique sur StockCharts](https://school.stockcharts.com/doku.php?id=technical_indicators:stochrsi){ target="_blank" }

@@ -47,14 +47,14 @@ Dove $P$ è il prezzo per azione e $Q$ è la quantità di azioni.
 
 !!! example "Esempio: Split Apple 4:1 (Agosto 2020)"
 
-    - **Prima dello split**: 100 azioni × $500 = $50,000 valore totale
-    - **Dopo lo split**: 400 azioni × $125 = $50,000 valore totale
+    - **Prima dello split**: 100 azioni × $500 = $50.000 valore totale
+    - **Dopo lo split**: 400 azioni × $125 = $50.000 valore totale
     - **Variazione prezzo**: −75% (ma il valore della posizione rimane invariato)
 
 !!! example "Esempio: Reverse Split 1:10"
 
-    - **Prima**: 1,000 azioni × $0.50 = $500 valore totale
-    - **Dopo**: 100 azioni × $5.00 = $500 valore totale
+    - **Prima**: 1.000 azioni × $0,50 = $500 valore totale
+    - **Dopo**: 100 azioni × $5,00 = $500 valore totale
     - **Motivazione**: La società vuole alzare il prezzo dell'azione sopra i requisiti minimi di quotazione del mercato
 
 ---
@@ -70,7 +70,7 @@ Dove $P$ è il prezzo per azione e $Q$ è la quantità di azioni.
 
 ### Reverse (Reverse split)
 
-- **Conformità alla quotazione**: I mercati richiedono prezzi minimi per azione (ad esempio, $1.00 su NASDAQ)
+- **Conformità alla quotazione**: I mercati richiedono prezzi minimi per azione (ad esempio, $1,00 su NASDAQ)
 - **Percezione istituzionale**: Alcuni fondi hanno requisiti minimi di prezzo
 - **Spesso un segnale di allarme**: I reverse split sono frequentemente associati a società in difficoltà
 

@@ -47,7 +47,7 @@ Las tres tarjetas en la parte superior del panel responden tres preguntas de un 
     \Delta = \text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}} \qquad \text{percentage} = \frac{\Delta}{\left|\text{Total P}\&\text{L}_{\text{yesterday}}\right|} \times 100
     $$
 
-    - **El signo y el color siguen el cambio**, incluso mientras el P&L Total es una pérdida: de `-558.10 €` a `-466.79 €`, la línea muestra `+91.31 € (+16.36%)` — tu pérdida se redujo en un 16.36%.
+    - **El signo y el color siguen el cambio**, incluso mientras el P&L Total es una pérdida: de `-558.10 €` a `-466.79 €`, la línea muestra `+91.31 € (+16.36%)` — tu pérdida se redujo en un 16,36%.
     - **Necesita dos días de historial**; el porcentaje se omite cuando el P&L Total de ayer es exactamente cero, y un día sin cambios muestra `0.00%`.
 
 ### 💱 Variación no realizada por divisa {: #unrealized-change-by-currency }
@@ -64,11 +64,11 @@ Hay una fila 📈 para cada divisa, incluido el euro, y una fila 💱 para cada 
 
 ??? example "Un ETF estadounidense en un panel en euros"
 
-    Durante el periodo compraste 10 unidades por €400, cuando valían 500 USD. Al final del periodo valen 550 USD, y 1 USD = €0.75. La información emergente muestra:
+    Durante el periodo compraste 10 unidades por €400, cuando valían 500 USD. Al final del periodo valen 550 USD, y 1 USD = €0,75. La información emergente muestra:
 
-    - 📈 **Activos en USD**: (550 − 500) × 0.75 = **+€37.50** — tu ETF ganó un 10% en dólares;
-    - 💱 **Tipo USD → EUR**: 500 × 0.75 − 400 = **−€25.00** — el dólar perdió valor frente al euro;
-    - en conjunto, la **Variación no realizada**: 550 × 0.75 − 400 = **+€12.50**.
+    - 📈 **Activos en USD**: (550 − 500) × 0,75 = **+€37,50** — tu ETF ganó un 10% en dólares;
+    - 💱 **Tipo USD → EUR**: 500 × 0,75 − 400 = **−€25,00** — el dólar perdió valor frente al euro;
+    - en conjunto, la **Variación no realizada**: 550 × 0,75 − 400 = **+€12,50**.
 
 🔗 **Teoría**: [Variación no realizada por divisa](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md#unrealized-change-by-currency) — las fórmulas detrás de cada fila
 

@@ -16,7 +16,7 @@ Un **gráfico de sectores** que muestra el desglose por sector industrial (por e
 
 ### World Mundial
 
-Un **mapa mundial interactivo** con los países coloreados según el peso de la asignación. Pase el cursor sobre un país para ver su porcentaje.
+Un **mapa mundial interactivo** con los países coloreados según el peso de la asignación. Pasa el cursor sobre un país para ver su porcentaje.
 
 ### Country por País
 
@@ -26,9 +26,9 @@ Un **gráfico de sectores** que muestra el desglose porcentual por país o regi�
 
 ## 🛠️ Cómo utilizarlo
 
-1. Haga clic en el botón interruptor **Clasificación** en el área de la barra de herramientas
+1. Haz clic en el botón interruptor **Clasificación** en el área de la barra de herramientas
 2. El panel se expande debajo del gráfico mostrando los datos sectoriales y geográficos
-3. Pase el cursor sobre los sectores del gráfico o las regiones del mapa para ver los detalles
+3. Pasa el cursor sobre los sectores del gráfico o las regiones del mapa para ver los detalles
 
 ---
 
@@ -37,11 +37,11 @@ Un **gráfico de sectores** que muestra el desglose porcentual por país o regi�
 Los datos de clasificación se pueden establecer de dos maneras:
 
 1. **Metadatos del proveedor**: Algunos proveedores (Yahoo Finance, justETF) obtienen los datos sectoriales y geográficos automáticamente durante la sincronización
-2. **Entrada manual**: Edite el activo (✏️) y complete las distribuciones sectoriales/geográficas utilizando el **Editor de Distribución**
+2. **Entrada manual**: Edita el activo (✏️) y completa las distribuciones sectoriales/geográficas utilizando el **Editor de Distribución**
 
 ---
 
 ## 🔗 Relacionado
 
-- ➕ **[Crear y Editar](../create-edit.md)** — Configure los datos de clasificación manualmente
+- ➕ **[Crear y Editar](../create-edit.md)** — Configura los datos de clasificación manualmente
 - 🔌 **[Proveedores](../providers/index.md)** — Proveedores que obtienen metadatos de clasificación

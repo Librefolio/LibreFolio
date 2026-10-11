@@ -28,7 +28,7 @@ Vous les importez donc **ensemble** : LibreFolio les lit comme un seul **lot de 
 
 ## 🧺 Importer les deux fichiers ensemble
 
-1. Ouvrez l'**[Assistant d'importation](how-to.md)**, déposez **les deux** fichiers dans **Upload**, affectez-les à votre courtier Danske Bank et cliquez sur **Next: Select Files**.
+1. Ouvrez l'**[Assistant d'importation](how-to.md)**, déposez **les deux** fichiers dans **Téléverser**, affectez-les à votre courtier Danske Bank et cliquez sur **Suivant : Sélectionner**.
 2. Dans **Select Files**, les deux fichiers forment **une seule carte**, déjà cochée : vérifiez qu'elle indique **Complete**. Une note sur la carte vous indique ce que cet import va faire.
 3. Cliquez sur **Parse** : LibreFolio fusionne les deux fichiers en un **fichier combiné** et l'analyse comme une seule ligne. Son détail, **Matching securities ↔ cash**, montre comment les opérations ont été associées à leurs paiements, et pourquoi une ligne a été écartée.
 4. Continuez comme d'habitude jusqu'à **Import N transactions**.
@@ -47,7 +47,7 @@ Les exports importés avec une version de LibreFolio antérieure à 1.2 ne font 
 
 ### 🧩 Si un fichier manque
 
-- Vous n'avez déposé qu'un seul fichier ? **Next: Select Files** vous maintient sur **Upload**, en nommant l'export manquant et sa période : déposez-le là — il rejoint le **même lot** — et cliquez à nouveau sur **Next: Select Files**.
+- Vous n'avez déposé qu'un seul fichier ? **Suivant : Sélectionner** vous maintient sur **Téléverser**, en nommant l'export manquant et sa période : déposez-le là — il rejoint le **même lot** — et cliquez à nouveau sur **Suivant : Sélectionner**.
 - Vous continuez sans lui ? La carte affiche **A file is missing** et propose **Upload the missing file**. Pendant ce temps, le lot coché bloque **Parse** : décochez-le pour importer d'abord vos autres fichiers.
 - Les fichiers importés à des moments différents **ne se rejoignent jamais** : importez à nouveau le fichier manquant avec **Upload the missing file** sur la bonne carte, puis supprimez la copie isolée précédente.
 
@@ -99,7 +99,7 @@ L'export des titres ne remonte qu'à un an, importez donc **au moins une fois pa
 
 Les fichiers donnent **un total par opération**, commission incluse, donc l'étape **Corrections** demande, pour chaque achat et chaque vente :
 
-- **Separate the price from the charges?**, puis **Apply correction** — pour un titre libellé en euros, LibreFolio propose la commission probable ; le chiffre exact figure sur la confirmation d'opération dans l'eBanking ;
+- **Séparer le prix des frais ?**, puis **Appliquer la correction** — pour un titre libellé en euros, LibreFolio propose la commission probable ; le chiffre exact figure sur la confirmation d'opération dans l'eBanking ;
 - ou **Keep as recorded** : l'opération conserve son montant entier (votre trésorerie est correcte dans les deux cas).
 
 Chaque opération nécessite un choix ; **Keep the remaining N rows as read** règle le reste en un clic.

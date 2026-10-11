@@ -6,13 +6,13 @@
 
 ## 📥 Cómo exportar
 
-Para exportar su historial de transacciones desde Coinbase:
+Para exportar tu historial de transacciones desde Coinbase:
 
-1. Inicie sesión en su [cuenta de Coinbase](https://www.coinbase.com).
-2. Haga clic en su foto de perfil en la esquina superior derecha y seleccione **Taxes** o **Statements**.
-3. En la sección **Reports**, localice **Transaction History**.
-4. Haga clic en **Generate Report**, seleccione **CSV** como tipo de archivo y elija el rango de fechas deseado.
-5. Una vez que el informe esté listo, descargue el archivo CSV en su computadora.
+1. Inicia sesión en tu [cuenta de Coinbase](https://www.coinbase.com).
+2. Haz clic en tu foto de perfil en la esquina superior derecha y selecciona **Taxes** o **Statements**.
+3. En la sección **Reports**, localiza **Transaction History**.
+4. Haz clic en **Generate Report**, selecciona **CSV** como tipo de archivo y elige el rango de fechas deseado.
+5. Una vez que el informe esté listo, descarga el archivo CSV en tu computadora.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <!-- [Screenshot Placeholder: Coinbase Taxes/Reports - Generate Transaction History CSV report] -->
@@ -22,11 +22,11 @@ Para exportar su historial de transacciones desde Coinbase:
 
 !!! warning "Tipo de informe incorrecto"
 
-    Asegúrese de descargar el informe de **Transaction History**. Otros informes (como Tax Statements, Balance Summaries o informes específicos de Asset Ledger) tienen una estructura diferente y no se analizarán correctamente.
+    Asegúrate de descargar el informe de **Transaction History**. Otros informes (como Tax Statements, Balance Summaries o informes específicos de Asset Ledger) tienen una estructura diferente y no se analizarán correctamente.
 
 !!! warning "Conversiones USD/EUR"
 
-    El analizador de Coinbase procesa intercambios de criptomonedas, compras, ventas y comisiones. Asegúrese de que la moneda de visualización de su cuenta coincida con la moneda principal de su cartera de LibreFolio para evitar discrepancias en el tipo de cambio.
+    El analizador de Coinbase procesa intercambios de criptomonedas, compras, ventas y comisiones. Asegúrate de que la moneda de visualización de tu cuenta coincida con la moneda principal de tu cartera de LibreFolio para evitar discrepancias en el tipo de cambio.
 
 ## 📝 Notas
 

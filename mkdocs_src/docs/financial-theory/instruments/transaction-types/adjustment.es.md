@@ -34,7 +34,7 @@ Ejemplos de importación: las instantáneas `patrimonio` de Intesa Sanpaolo usan
 
 !!! note "Promover a Transferencia"
 
-    Dos filas de `ADJUSTMENT` con **cantidades opuestas**, **mismo activo** y **brókeres diferentes** pueden ser **promovidas** a un par de Transferencia de Activos. Esto es útil cuando inicialmente registró ajustes separados y posteriormente desea vincularlos como una transferencia.
+    Dos filas de `ADJUSTMENT` con **cantidades opuestas**, **mismo activo** y **brókeres diferentes** pueden ser **promovidas** a un par de Transferencia de Activos. Esto es útil cuando inicialmente registraste ajustes separados y posteriormente deseas vincularlos como una transferencia.
 
 ---
 
@@ -48,7 +48,7 @@ Los ajustes con cantidad positiva **incrementan** el recuento de lotes (FIFO). E
 !!! info "Valor por unidad"
 
     La Anulación del coste base es el costo promedio **por una sola unidad** del activo.
-    Para obtener el costo total del bloque transferido, multiplique por la cantidad:
+    Para obtener el costo total del bloque transferido, multiplica por la cantidad:
 
     $$\text{Costo total} = \text{PMP} \times \text{cantidad}$$
 
@@ -62,7 +62,7 @@ Esto registra capital en especie, no P&L: el ajuste crea o modifica lotes, pero 
 
 !!! tip "Más información"
 
-    Para ver la fórmula completa, ejemplos y casos especiales, consulte la página dedicada:
+    Para ver la fórmula completa, ejemplos y casos especiales, consulta la página dedicada:
     **[📊 Precio Medio de Compra (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)**
 
 ??? note "✏️ Cuándo Anular Manualmente"
@@ -79,7 +79,7 @@ Esto registra capital en especie, no P&L: el ajuste crea o modifica lotes, pero 
 
     !!! warning "Responsabilidad del Usuario"
 
-        Al anular manualmente el coste base, el usuario es responsable de la exactitud del valor. LibreFolio no valida los montos de anulación frente a las reglas fiscales; consulte a un asesor fiscal para obtener orientación específica de su jurisdicción.
+        Al anular manualmente el coste base, el usuario es responsable de la exactitud del valor. LibreFolio no valida los montos de anulación frente a las reglas fiscales; consulta a un asesor fiscal para obtener orientación específica de tu jurisdicción.
 
 ---
 
@@ -88,4 +88,4 @@ Esto registra capital en especie, no P&L: el ajuste crea o modifica lotes, pero 
 - 📊 **[Precio Medio de Compra (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Cómo se calcula el coste base automático
 - 🔄 **[Transferencia de Activos](transfer.md)** — Dos ajustes vinculados pueden promoverse a una transferencia
 - 🛒 **[Compra y Venta](buy-sell.md)** — Transacciones estándar de activos con efectivo
-- 💰 **[Comisión e Impuesto](fee.md)** — Correcciones solo de efectivo (use Comisión/Impuesto en lugar de Ajuste)
+- 💰 **[Comisión e Impuesto](fee.md)** — Correcciones solo de efectivo (usa Comisión/Impuesto en lugar de Ajuste)

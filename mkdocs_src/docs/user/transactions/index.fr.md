@@ -70,7 +70,7 @@ L'espace de travail groupé est une grille de lignes en brouillon — marquées 
     - **rouge** — lignes que l'importateur n'a pas entièrement comprises : **Enregistrer Tout** reste désactivé jusqu'à ce que vous les complétiez ;
     - **orange** — champs dérivés automatiquement à vérifier : **Enregistrer Tout** vous demande d'abord de les **Vérifier** ou d'**Enregistrer quand même**.
 
-    Cliquez sur une bannière pour dérouler sa liste, puis sur une entrée : la grille passe à la page de cette ligne et la met en surbrillance. Les problèmes de solde listent les lignes qui les causent (*Workspace rows: …*), et un clic ouvre la première dans l'ordre de tri actuel. Si vos filtres de colonnes masquent la ligne, un message vous en informe.
+    Cliquez sur une bannière pour dérouler sa liste, puis sur une entrée : la grille passe à la page de cette ligne et la met en surbrillance. Les problèmes de solde listent les lignes qui les causent (*Lignes de l’espace de travail : …*), et un clic ouvre la première dans l'ordre de tri actuel. Si vos filtres de colonnes masquent la ligne, un message vous en informe.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="transactions" data-name="bulk-todo-banner" alt="Espace de travail groupé avec la bannière des champs à vérifier déroulée et la ligne de l'entrée cliquée mise en surbrillance dans la grille">

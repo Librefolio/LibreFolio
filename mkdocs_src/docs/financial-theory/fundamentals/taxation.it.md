@@ -86,11 +86,11 @@ Con $P = 10{,}000$, $r = 7\%$, $\tau = 26\%$, $n = 20$ anni:
 
 | Scenario | Valore Finale | Rendimento Effettivo |
 |----------|------------|-----------------|
-| Tassazione annuale | €28,398 | 5.18% p.a. |
-| Tassazione finale | €31,616 | 5.93% p.a. |
-| **Vantaggio del differimento** | **+€3,218** | **+0.75% p.a.** |
+| Tassazione annuale | €28.398 | 5,18% p.a. |
+| Tassazione finale | €31.616 | 5,93% p.a. |
+| **Vantaggio del differimento** | **+€3.218** | **+0,75% p.a.** |
 
-Il vantaggio cresce esponenzialmente con il tempo — su 30 anni, il divario si allarga a oltre €8,000 sullo stesso investimento di €10,000.
+Il vantaggio cresce esponenzialmente con il tempo — su 30 anni, il divario si allarga a oltre €8.000 sullo stesso investimento di €10.000.
 
 ---
 

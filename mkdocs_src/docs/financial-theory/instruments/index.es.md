@@ -12,7 +12,7 @@ Las clases de activos que LibreFolio admite — desde acciones y ETF hasta bonos
 
 ### 💸 [Tipos de Transacciones](transaction-types/index.md)
 
-Cada operación financiera que cambia su cartera: compras, ventas, dividendos recibidos, comisiones pagadas y más. Comprender las transacciones es fundamental para un reporte preciso de pérdidas y ganancias (P&L) e impuestos.
+Cada operación financiera que cambia su cartera: compras, ventas, dividendos recibidos, comisiones pagadas y más. Comprender las transacciones es fundamental para un reporte preciso de P&L e impuestos.
 
 ### 📅 [Eventos de Activos](asset-events/index.md)
 

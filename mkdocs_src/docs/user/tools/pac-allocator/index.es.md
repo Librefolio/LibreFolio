@@ -59,7 +59,7 @@ Para cada moneda en la que compres, establece:
     \text{comisión} = f + \min\big(\max(r\,A,\ f_{\min}),\ f_{\max}\big)
     $$
 
-    La comisión se cobra en cada orden, y sin orden no hay comisión. Se paga con tu liquidez y no se invierte. Por ejemplo, con $r = 0.19\%$, $f_{\min} = 1.50$, $f_{\max} = 18$ y sin parte fija, una orden de $500$ paga $1.50$, una de $2{,}000$ paga $3.80$, y una de $20{,}000$ paga $18$.
+    La comisión se cobra en cada orden, y sin orden no hay comisión. Se paga con tu liquidez y no se invierte. Por ejemplo, con $r = 0.19\%$, $f_{\min} = 1.50$, $f_{\max} = 18$ y sin parte fija, una orden de $500$ paga $1.50$, una de $2.000$ paga $3.80$, y una de $20.000$ paga $18$.
 
 Cada bróker también tiene dos ajustes propios:
 
@@ -175,7 +175,7 @@ $$
 
 así que sigue sin crear valor. Cuando los tipos son coherentes, este tipo es el habitual $x\,(1 - s)$. Tus tipos no se modifican: cada conversión del plan muestra el tipo del que parte como *spot* y el tipo que usa como *aplicado*.
 
-Cada importe que el plan registra se redondea una vez, sobre su valor final exacto, a la unidad mínima de su divisa (el céntimo para EUR o USD), y siempre en contra del plan: los importes que recibe (lo que entrega una conversión) se redondean a la baja, los importes que paga (el coste de una orden y su comisión) se redondean al alza. Así, el redondeo nunca mejora un plan, dividir una conversión en otras más pequeñas no aporta nada, y la parte de redondeo de **No invertido** nunca es negativa. La columna **Redondeo** de **Saldos por bróker y divisa** muestra cuánto de cada fila proviene del redondeo: ≈ marca una cifra mostrada redondeada, como cuando la diferencia exacta no tiene forma decimal finita (por ejemplo, tras convertir USD → EUR a $1/1.085$), y una diferencia por debajo de la unidad mínima conserva los dígitos que necesita, como ≈ −0.0022 en lugar de ≈ −0.00.
+Cada importe que el plan registra se redondea una vez, sobre su valor final exacto, a la unidad mínima de su divisa (el céntimo para EUR o USD), y siempre en contra del plan: los importes que recibe (lo que entrega una conversión) se redondean a la baja, los importes que paga (el coste de una orden y su comisión) se redondean al alza. Así, el redondeo nunca mejora un plan, dividir una conversión en otras más pequeñas no aporta nada, y la parte de redondeo de **No invertido** nunca es negativa. La columna **Redondeo** de **Saldos por bróker y divisa** muestra cuánto de cada fila proviene del redondeo: ≈ marca una cifra mostrada redondeada, como cuando la diferencia exacta no tiene forma decimal finita (por ejemplo, tras convertir USD → EUR a $1/1.085$), y una diferencia por debajo de la unidad mínima conserva los dígitos que necesita, como ≈ −0,0022 en lugar de ≈ −0,00.
 
 Cuando LibreFolio no tiene un tipo para un par, el paso ofrece **Añadir el par** o **Descargar los tipos**: cada uno abre la ventana correspondiente de la página de Cambio, y no se añade ni descarga nada hasta que lo confirmes allí.
 
