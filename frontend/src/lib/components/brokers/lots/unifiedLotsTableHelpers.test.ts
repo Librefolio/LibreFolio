@@ -13,11 +13,21 @@
  * read the global privacy flag (decision D5′), so their blocks reset it on both
  * sides of each test — the store is module level, and a flag left on by one test
  * would mask the next one's clear-text controls.
+ *
+ * `sumCompleteOrNull` is the B3b footer total for columns whose cells can be
+ * unknown (`null`: no FX rate). `sumNumeric` skips a hole. `sumCompleteOrNull`
+ * answers `null` as soon as one cell is unknown, because a total with an unknown
+ * part is itself unknown.
+ *
+ * `weightedAverageCompleteOrNull` applies the same rule to the two weighted-average
+ * footers (opening price, open return). A row that takes part in the average (a
+ * finite, non-zero weight) and has an unknown value makes the average unknown. A row
+ * whose weight does not take part is still skipped, as in `weightedAverage`.
  */
 import {afterEach, beforeEach, describe, it, expect} from 'vitest';
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
-import {primaryState, secondaryStates, filterStates, formatLotQuantity, formatLotQuantityMasked, formatLotQuantityCell, findBroker, sameIdSet, sumNumeric, weightedAverage, ratioOrNull} from './unifiedLotsTableHelpers';
+import {primaryState, secondaryStates, filterStates, formatLotQuantity, formatLotQuantityMasked, formatLotQuantityCell, findBroker, sameIdSet, sumNumeric, sumCompleteOrNull, weightedAverage, weightedAverageCompleteOrNull, ratioOrNull} from './unifiedLotsTableHelpers';
 
 describe('primaryState', () => {
     it('prefers PARTIALLY_CLOSED over everything else (first if true)', () => {
@@ -272,6 +282,50 @@ describe('sumNumeric', () => {
     });
 });
 
+describe('sumCompleteOrNull', () => {
+    // A footer total over cells that can be unknown (no FX rate): with an unknown part the total is unknown, shown as «—».
+    const column = (...values: Array<number | null>): Row[] => values.map((v) => ({v, w: 0}));
+
+    it('sums the column when every value is known', () => {
+        expect(sumCompleteOrNull(column(1, 2, 3), (r) => r.v)).toBe(6);
+        expect(sumCompleteOrNull(column(5, -2.5), (r) => r.v)).toBe(2.5);
+    });
+
+    it('treats zero as a known value', () => {
+        expect(sumCompleteOrNull(column(0, 0), (r) => r.v)).toBe(0);
+        expect(sumCompleteOrNull(column(-0, 4), (r) => r.v)).toBe(4);
+    });
+
+    it('is null as soon as one value is unknown, wherever it sits', () => {
+        // Control: the same column without the hole has a total.
+        expect(sumCompleteOrNull(column(5, 5), (r) => r.v)).toBe(10);
+
+        expect(sumCompleteOrNull(column(null, 5, 5), (r) => r.v)).toBeNull();
+        expect(sumCompleteOrNull(column(5, null, 5), (r) => r.v)).toBeNull();
+        expect(sumCompleteOrNull(column(5, 5, null), (r) => r.v)).toBeNull();
+        expect(sumCompleteOrNull(column(null, null), (r) => r.v)).toBeNull();
+    });
+
+    it('is null when a value is not finite (NaN / ±Infinity)', () => {
+        // Control: a finite column.
+        expect(sumCompleteOrNull(column(7, 1), (r) => r.v)).toBe(8);
+
+        expect(sumCompleteOrNull(column(7, NaN), (r) => r.v)).toBeNull();
+        expect(sumCompleteOrNull(column(Infinity, 7), (r) => r.v)).toBeNull();
+        expect(sumCompleteOrNull(column(7, -Infinity), (r) => r.v)).toBeNull();
+    });
+
+    it('is null for no rows: there is no total to show', () => {
+        expect(sumCompleteOrNull<Row>([], (r) => r.v)).toBeNull();
+    });
+
+    it('answers null on the column where sumNumeric would show the known part as the total', () => {
+        const rows = column(5, null, 5);
+        expect(sumNumeric(rows, (r) => r.v)).toBe(10);
+        expect(sumCompleteOrNull(rows, (r) => r.v)).toBeNull();
+    });
+});
+
 describe('weightedAverage', () => {
     it('weights values by the second column', () => {
         // (10*1 + 20*3) / (1+3) = 70/4 = 17.5
@@ -381,6 +435,84 @@ describe('weightedAverage', () => {
                 (r) => r.w,
             ),
         ).toBeNull();
+    });
+});
+
+describe('weightedAverageCompleteOrNull', () => {
+    // The opening-price and open-return footers: an average that silently drops a weighted row would read as complete.
+    const weighted = (...cells: Array<[number | null, number | null]>): Row[] => cells.map(([v, w]) => ({v, w}));
+    const average = (rows: readonly Row[]): number | null =>
+        weightedAverageCompleteOrNull(
+            rows,
+            (r) => r.v,
+            (r) => r.w,
+        );
+    const today = (rows: readonly Row[]): number | null =>
+        weightedAverage(
+            rows,
+            (r) => r.v,
+            (r) => r.w,
+        );
+
+    it('averages by absolute weight like weightedAverage, a negative weight included', () => {
+        // Control: today's helper on the mixed-sign column. Signed weights would give (−10 + 90) / 2 = 40.
+        expect(today(weighted([10, -1], [30, 3]))).toBe(25);
+
+        expect(average(weighted([10, 1], [20, 3]))).toBe(17.5); // (10·1 + 20·3) / 4
+        expect(average(weighted([10, -2], [20, -2]))).toBe(15); // (10·2 + 20·2) / 4
+        expect(average(weighted([10, -1], [30, 3]))).toBe(25); // (10·1 + 30·3) / 4
+    });
+
+    it('skips a known row whose weight does not take part (zero, null, non-finite), like weightedAverage', () => {
+        const column = weighted([10, 1], [100, 0], [50, null], [70, NaN], [90, Infinity], [20, 3]);
+        // Control: today's helper averages the two weighted rows only.
+        expect(today(column)).toBe(17.5);
+
+        expect(average(column)).toBe(17.5);
+    });
+
+    it('is null as soon as a row with a usable weight has an unknown value, wherever it sits', () => {
+        // Control: today's helper drops the weighted row and answers with the other one, as if complete.
+        expect(today(weighted([null, 5], [8, 2]))).toBe(8);
+
+        expect(average(weighted([null, 5], [8, 2]))).toBeNull();
+        expect(average(weighted([8, 2], [null, 5]))).toBeNull();
+        expect(average(weighted([8, 2], [null, 5], [4, 2]))).toBeNull();
+        // A negative weight is a usable weight too: it counts by its absolute value.
+        expect(average(weighted([null, -5], [8, 2]))).toBeNull();
+    });
+
+    it('still skips an unknown value on a row whose weight does not take part, so the result stays known', () => {
+        expect(average(weighted([null, 0], [9, 2]))).toBe(9);
+        expect(average(weighted([null, -0], [9, 2]))).toBe(9);
+        expect(average(weighted([null, null], [9, 2]))).toBe(9);
+        expect(average(weighted([null, NaN], [9, 2]))).toBe(9);
+        expect(average(weighted([null, Infinity], [9, 2]))).toBe(9);
+        expect(average(weighted([NaN, 0], [9, 2]))).toBe(9);
+        // Between weighted rows the skipped ones move nothing: same 17.5 as the two weighted rows alone.
+        expect(average(weighted([10, 1], [null, 0], [null, null], [NaN, NaN], [20, 3]))).toBe(17.5);
+    });
+
+    it('is null when a row with a usable weight has a non-finite value (NaN / ±Infinity)', () => {
+        // Control: today's helper drops the row and answers with the other one.
+        expect(today(weighted([Infinity, 5], [6, 2]))).toBe(6);
+
+        expect(average(weighted([Infinity, 5], [6, 2]))).toBeNull();
+        expect(average(weighted([NaN, 1], [6, 2]))).toBeNull();
+        expect(average(weighted([6, 2], [-Infinity, 1]))).toBeNull();
+    });
+
+    it('is null when no row has a usable weight, as weightedAverage is', () => {
+        // Control: today's helper agrees.
+        expect(today(weighted([100, 0]))).toBeNull();
+
+        expect(average(weighted([100, 0]))).toBeNull();
+        expect(average(weighted([100, null], [50, NaN]))).toBeNull();
+        expect(average(weighted([null, 0]))).toBeNull();
+    });
+
+    it('is null for no rows', () => {
+        expect(average([])).toBeNull();
     });
 });
 
