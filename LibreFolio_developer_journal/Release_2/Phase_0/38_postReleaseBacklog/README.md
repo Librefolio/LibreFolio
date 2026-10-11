@@ -579,15 +579,15 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   11/10). Il picker dei suggerimenti del Bulk cerca i candidati fra le transazioni che la pagina ha caricato, mentre il
   contatore del 💡 li conta dal backend (`/promote-suggest`): un candidato su un broker non caricato verrebbe contato ma
   non comparirebbe nel picker. Prima un rosso che lo dimostri, poi la cura.
-- **C-46 · La barra della selezione confronta le quantità come numeri JS** — basso (P, lotto 42, 11/10). Per un TRANSFER
+- ✅ **C-46 · La barra della selezione confronta le quantità come numeri JS** — chiusa l'11/10 da P (rosso PC5), treno 37. Era: basso (P, lotto 42, 11/10). Per un TRANSFER
   `selectedForPromote` usa solo `findPromoteMatch`, che confronta `qA === -qB` in virgola mobile, senza
   `assetQuantitiesCancel` come fa il banner. Oltre circa 15 cifre significative propone una coppia che il salvataggio
   rifiuta (`noPromoteRule` o `pairQuantityMismatch`); nessun dato sbagliato. La cura è una riga in
   `TransactionBulkModal.svelte`, accanto a quella di `cashAmountsCancel`.
-- **C-47 · Lo slider *Max Δ days* ammette 0** — basso, **da verificare** (docs-writer di P, lotto 42, 11/10).
+- ✅ **C-47 · Lo slider *Max Δ days* ammette 0** — chiusa l'11/10 da P: il backend accetta 0 e la finestra entra nella chiave del 💡 (rossi B3.11 e PC6), treno 37. Era: basso, **da verificare** (docs-writer di P, lotto 42, 11/10).
   `/promote-suggest` vuole `tolerance_days ≥ 1`: a 0 la richiesta del 💡 andrebbe in 422, e l'errore finisce solo nel
   log. Prima un rosso, poi la cura (lo slider da 1, o il backend che accetta 0).
-- **C-48 · L'avviso del costo di una rettifica suggerisce 0 per un regalo** — basso (docs-writer di P, lotto 42,
+- ✅ **C-48 · L'avviso del costo di una rettifica suggerisce 0 per un regalo** — chiusa l'11/10 da P (4 lingue e `form.en.md`), treno 37. Era: basso (docs-writer di P, lotto 42,
   11/10; erede di P-11). `transactions.costBasisOverride.warningAdjustment` dice «If these shares cost nothing (a stock
   split or a gift), enter 0»; per un regalo il costo è quello del donatore, come dice la tabella della pagina
   `financial-theory/instruments/transaction-types/adjustment`. Il testo va corretto nelle 4 lingue.
