@@ -135,17 +135,21 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   carry cash. `executePromote` asks `findPromoteMatch` again before it promotes, so its refusals
   hold for every promote of the workspace: **Merge**, **Merge all**, and the selection toolbar's
   promote button (`selectedForPromote`, `promote-toolbar-confirm`), which also asks
-  `cashAmountsCancel` of a cash transfer.
+  `cashAmountsCancel` of a cash transfer and `assetQuantitiesCancel` of an asset transfer.
 * **The 💡 button** (`tx-bulk-suggest-import`, and the row action `suggest`) lists
   `importableSuggestions`: saved transactions that `POST /transactions/promote-suggest` proposes as
   the other half of a row, and that are not in the workspace yet. The search runs debounced on the
   standalone saved rows and on the new rows that have a type, a broker, a date and an amount or a
-  quantity, asked about under a negative id (`newRowSuggestId`). Each input also carries the row's
-  `asset_event_id` (`TXPromoteSuggestInput`, where `null` or `0` means not linked): the backend
-  skips, for a linked row, every rule whose target type refuses the link — today all of them, so
-  the row gets an empty list — and never returns a saved row linked to an event as a candidate for
-  such a rule, so the 💡 never offers a pair that an event link would keep from merging. The 💡
-  opens `TransactionPickerModal` on those candidates; once one is added, the banner offers the pair.
+  quantity, asked about under a negative id (`newRowSuggestId`). It uses the banner's *Max Δ days*
+  window: the slider's value (`maxDeltaDays`) goes as `tolerance_days`, and the backend searches
+  each row's date ± that many days, so 0 means the same day only. The window is part of the search
+  key, so moving the slider starts a new search, debounced like any other change. Each input also
+  carries the row's `asset_event_id` (`TXPromoteSuggestInput`, where `null` or `0` means not
+  linked): the backend skips, for a linked row, every rule whose target type refuses the link —
+  today all of them, so the row gets an empty list — and never returns a saved row linked to an
+  event as a candidate for such a rule, so the 💡 never offers a pair that an event link would keep
+  from merging. The 💡 opens `TransactionPickerModal` on those candidates; once one is added, the
+  banner offers the pair.
 * **Merge** (`promote-suggest-link-<idx>`) promotes one pair: `executePromote` at once, or
   `PromoteMergeModal` first when the two rows differ in description or tags.
 * **Merge all (N)** (`promote-suggest-merge-all`, when `mergeAllPairs` holds more than one pair)

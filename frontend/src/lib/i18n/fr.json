@@ -2395,7 +2395,7 @@
     },
     "costBasisOverride": {
       "tooltip": "Override du prix de revient unitaire. Si vide, calculé automatiquement à partir des achats lors de la sauvegarde. Remplacer pour Exit Tax, héritage ou règles fiscales particulières. Utilisez le sélecteur Total/Par unité ci-dessous pour choisir comment saisir ce montant.",
-      "warningAdjustment": "Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Si ces parts n’ont rien coûté (un fractionnement ou un don), saisissez 0."
+      "warningAdjustment": "Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Saisissez ce que ces parts ont coûté : 0 pour une division d’actions, le coût de base d’origine du donateur pour un don."
     },
     "wacPreview": {
       "calculating": "Calcul en cours...",
