@@ -332,7 +332,7 @@
     },
     "distribution": {
       "total": "Total",
-      "excess": "exces",
+      "excess": "excès",
       "missing": "manquant",
       "addSector": "Ajouter un secteur",
       "addCountry": "Ajouter un pays",
@@ -340,7 +340,8 @@
       "balanceRow": "Équilibrer à 100%",
       "balanceSelected": "Équilibrer les lignes sélectionnées",
       "deleteSelected": "Supprimer les lignes sélectionnées",
-      "deleteConfirmMessage": "Supprimer {n} entrées de cette distribution ?"
+      "deleteConfirmMessage": "Supprimer {n} entrées de cette distribution ?",
+      "weightPercent": "Poids (%)"
     },
     "showInactive": "Inactifs",
     "edit": {

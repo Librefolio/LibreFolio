@@ -335,12 +335,13 @@
       "excess": "exceso",
       "missing": "faltante",
       "addSector": "Agregar sector",
-      "addCountry": "Agregar pais",
+      "addCountry": "Agregar país",
       "emptyHint": "Sin datos — usa +Agregar o Preguntar al Proveedor",
       "balanceRow": "Equilibrar al 100%",
       "balanceSelected": "Equilibrar filas seleccionadas",
       "deleteSelected": "Eliminar filas seleccionadas",
-      "deleteConfirmMessage": "¿Eliminar {n} entradas de esta distribución?"
+      "deleteConfirmMessage": "¿Eliminar {n} entradas de esta distribución?",
+      "weightPercent": "Peso (%)"
     },
     "showInactive": "Inactivos",
     "edit": {
