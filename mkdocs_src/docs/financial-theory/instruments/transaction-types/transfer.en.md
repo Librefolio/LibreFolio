@@ -40,14 +40,14 @@ Common scenarios:
 
 ## 🔀 Relationship with Adjustments
 
-Under the hood, a Transfer is composed of two Adjustment entries. LibreFolio supports:
+A Transfer is stored as two `TRANSFER` rows, one per broker, each linked to the other through `related_transaction_id`. Splitting the pair turns the two rows into independent `ADJUSTMENT`s, and promoting two Adjustments turns them back into a Transfer:
 
 | Operation | Result |
 |-----------|--------|
 | **Split** (unlink) | Transfer → two independent Adjustments |
 | **Promote** (link) | Two Adjustments → Transfer |
 
-**Promote constraints**: same asset, different brokers, opposite quantities.
+**Promote constraints**: same asset, different brokers, opposite quantities, and neither row linked to an asset event (a split, for instance), since a transfer cannot carry that link.
 
 ---
 
