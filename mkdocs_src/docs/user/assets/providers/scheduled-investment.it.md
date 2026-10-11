@@ -1,4 +1,4 @@
-# <img src="../../../../static/scheduled_investment.png" alt=""> Investimento Programmato
+# <img src="../../../../../static/scheduled_investment.png" alt=""> Investimento Programmato
 
 Il provider Investimento Programmato calcola il valore di un asset dal suo piano interessi invece
 di leggere un prezzo di mercato. Usalo per conti di risparmio, depositi a termine, prestiti P2P o crowdfunding,

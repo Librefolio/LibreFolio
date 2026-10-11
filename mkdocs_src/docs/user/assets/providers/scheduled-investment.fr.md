@@ -1,4 +1,4 @@
-# <img src="../../../../static/scheduled_investment.png" alt=""> Investissement programmé
+# <img src="../../../../../static/scheduled_investment.png" alt=""> Investissement programmé
 
 Le fournisseur Investissement programmé calcule la valeur d'un actif à partir de son calendrier
 d'intérêts plutôt qu'en lisant un prix de marché. Utilisez-le pour les comptes d'épargne, les dépôts

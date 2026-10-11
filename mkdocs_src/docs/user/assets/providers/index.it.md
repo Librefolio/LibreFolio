@@ -26,14 +26,14 @@ Un provider mantiene aggiornati per te i prezzi di un asset: il prezzo odierno, 
     </a>
     <a href="css-scraper/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="../../../static/cssscraper.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Icona di CSS Scraper">
+            <img src="../../../../static/cssscraper.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Icona di CSS Scraper">
             <span class="card-title" style="margin: 0;">CSS Scraper</span>
         </div>
         <span class="card-desc">Scraper tramite selettori di pagine web per prezzi di obbligazioni personalizzate o strumenti esotici.</span>
     </a>
     <a href="scheduled-investment/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="../../../static/scheduled_investment.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Icona di Scheduled Investment">
+            <img src="../../../../static/scheduled_investment.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Icona di Scheduled Investment">
             <span class="card-title" style="margin: 0;">Investimento Programmato</span>
         </div>
         <span class="card-desc">Asset a reddito fisso il cui valore è calcolato tramite piani interessi.</span>
@@ -54,8 +54,8 @@ Un provider mantiene aggiornati per te i prezzi di un asset: il prezzo odierno, 
 | <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Yahoo Finance** | ✅ | ✅ | ✅ | ✅ | Ticker (`AAPL`, `VWCE.DE`) o ISIN | Azioni, ETF, fondi e criptovalute in tutto il mondo |
 | <img src="https://www.justetf.com/android-chrome-144x144.png?v2" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **justETF** | ✅ | ✅ | ✅ | ✅ | ISIN (`IE00B4L5Y983`) | ETF europei, quotati in EUR, USD, CHF o GBP |
 | <img src="https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Borsa Italiana** | ✅ | ✅ | ✅ | ✅ | ISIN (`IT0003128367`) | Strumenti quotati a Milano, fondi comuni italiani |
-| <img src="../../../static/cssscraper.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CSS Scraper** | ✅ | ❌ | ❌ | ❌ | URL della pagina | Un prezzo mostrato su qualsiasi pagina web pubblica |
-| <img src="../../../static/scheduled_investment.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Investimento Programmato** | ✅ | ✅ | ❌ | ❌ | Nessuno — creato per te | Depositi, prestiti e obbligazioni valutati in base ai loro interessi |
+| <img src="../../../../static/cssscraper.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CSS Scraper** | ✅ | ❌ | ❌ | ❌ | URL della pagina | Un prezzo mostrato su qualsiasi pagina web pubblica |
+| <img src="../../../../static/scheduled_investment.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Investimento Programmato** | ✅ | ✅ | ❌ | ❌ | Nessuno — creato per te | Depositi, prestiti e obbligazioni valutati in base ai loro interessi |
 
 I **Dettagli** sono il tipo, la valuta, la descrizione e dati simili che LibreFolio propone di
 compilare per te. Alcuni provider registrano anche gli [eventi dell'asset](../detail/events.md): dividendi (Yahoo

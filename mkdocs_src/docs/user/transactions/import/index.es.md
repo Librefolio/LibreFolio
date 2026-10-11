@@ -152,7 +152,7 @@ Los importadores sin etiqueta están bien probados y son fiables para los format
     </a>
     <a href="scalable/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="../../../static/icons/brokers/scalable.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Scalable Capital">
+    <img src="../../../../static/icons/brokers/scalable.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de Scalable Capital">
     <span class="card-title" style="margin: 0;">Scalable Capital</span>
     </div>
     <span class="card-desc">🔬 Alpha · cuenta de bróker (el CSV de Scalable o el exportador de LibreFolio) y cuenta overnight (exportador), como dos brókers</span>

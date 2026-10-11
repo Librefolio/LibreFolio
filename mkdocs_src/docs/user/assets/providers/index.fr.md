@@ -26,14 +26,14 @@ Un fournisseur maintient les prix d'un actif à jour pour vous : le prix du jour
     </a>
     <a href="css-scraper/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="../../../static/cssscraper.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Icône CSS Scraper">
+            <img src="../../../../static/cssscraper.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Icône CSS Scraper">
             <span class="card-title" style="margin: 0;">CSS Scraper</span>
         </div>
         <span class="card-desc">Scraper de sélecteurs de page web pour les prix d'obligations personnalisés ou exotiques.</span>
     </a>
     <a href="scheduled-investment/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <img src="../../../static/scheduled_investment.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Icône Investissement programmé">
+            <img src="../../../../static/scheduled_investment.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Icône Investissement programmé">
             <span class="card-title" style="margin: 0;">Investissement programmé</span>
         </div>
         <span class="card-desc">Actifs à revenu fixe dont la valeur est calculée via des calendriers d'intérêts.</span>
@@ -54,8 +54,8 @@ Un fournisseur maintient les prix d'un actif à jour pour vous : le prix du jour
 | <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Yahoo Finance** | ✅ | ✅ | ✅ | ✅ | Symbole (`AAPL`, `VWCE.DE`) ou ISIN | Actions, ETF, fonds et cryptomonnaies du monde entier |
 | <img src="https://www.justetf.com/android-chrome-144x144.png?v2" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **justETF** | ✅ | ✅ | ✅ | ✅ | ISIN (`IE00B4L5Y983`) | ETF européens, valorisés en EUR, USD, CHF ou GBP |
 | <img src="https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Borsa Italiana** | ✅ | ✅ | ✅ | ✅ | ISIN (`IT0003128367`) | Instruments cotés à Milan, fonds communs de placement italiens |
-| <img src="../../../static/cssscraper.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CSS Scraper** | ✅ | ❌ | ❌ | ❌ | URL de la page | Un prix affiché sur n'importe quelle page web publique |
-| <img src="../../../static/scheduled_investment.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Investissement programmé** | ✅ | ✅ | ❌ | ❌ | Aucun — créé pour vous | Dépôts, prêts et obligations évalués par leurs intérêts |
+| <img src="../../../../static/cssscraper.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CSS Scraper** | ✅ | ❌ | ❌ | ❌ | URL de la page | Un prix affiché sur n'importe quelle page web publique |
+| <img src="../../../../static/scheduled_investment.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Investissement programmé** | ✅ | ✅ | ❌ | ❌ | Aucun — créé pour vous | Dépôts, prêts et obligations évalués par leurs intérêts |
 
 Les **détails** sont le type, la devise, la description et les données similaires que LibreFolio propose de remplir pour vous. Certains fournisseurs enregistrent également des [événements d'actifs](../detail/events.md) : dividendes (Yahoo Finance, justETF), divisions (Yahoo Finance), paiements d'intérêts et échéance (Investissement programmé).
 
