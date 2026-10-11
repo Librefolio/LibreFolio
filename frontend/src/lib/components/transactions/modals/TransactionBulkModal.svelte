@@ -2607,8 +2607,11 @@
         const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
         if (!match) return null;
         // For CASH_TRANSFER: require exact cash cancel (same currency, opposite sign).
+        // For TRANSFER: the same asset by exactly opposite quantities, compared as decimals like
+        // the banner and the backend do (findPromoteMatch compares JavaScript numbers).
         // For FX_CONVERSION: amounts are in different currencies — no cancel check.
         if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) return null;
+        if (match.targetType === 'TRANSFER' && !assetQuantitiesCancel(a, b, getTypeRule)) return null;
         return {...match, opA: a, opB: b};
     });
 
@@ -2777,14 +2780,16 @@
                 asset_event_id: o.fields.asset_event_id ?? null,
             };
         });
-        const key = JSON.stringify(inputs);
+        // The window is part of the search: moving the Max Δ days slider asks again.
+        const toleranceDays = maxDeltaDays;
+        const key = JSON.stringify({inputs, toleranceDays});
         untrack(() => {
             suggestAskedKey = key;
             if (key === lastSuggestKey) return;
             if (suggestTimer) clearTimeout(suggestTimer);
             suggestTimer = setTimeout(async () => {
                 try {
-                    const resp = await zodiosApi.promote_suggest_api_v1_transactions_promote_suggest_post(inputs as never, {queries: {tolerance_days: maxDeltaDays}});
+                    const resp = await zodiosApi.promote_suggest_api_v1_transactions_promote_suggest_post(inputs as never, {queries: {tolerance_days: toleranceDays}});
                     // The rows changed while the request was out (a promote, an edit): this answer is stale.
                     if (key !== suggestAskedKey) return;
                     const raw = (resp as any).results ?? {};

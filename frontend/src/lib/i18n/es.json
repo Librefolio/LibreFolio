@@ -2395,7 +2395,7 @@
     },
     "costBasisOverride": {
       "tooltip": "Override del precio medio de compra. Si está vacío, se calcula automáticamente de las compras al guardar. Sustituir por Exit Tax, herencia o reglas fiscales especiales. Usa el selector Total/Por unidad de abajo para elegir cómo introducir este importe.",
-      "warningAdjustment": "El coste base manual está vacío: sin él, la transacción no se puede guardar. Si estas participaciones no costaron nada (un desdoblamiento o un regalo), escribe 0."
+      "warningAdjustment": "El coste base manual está vacío: sin él, la transacción no se puede guardar. Escribe lo que costaron estas participaciones: 0 para un desdoblamiento, el coste base original del donante para un regalo."
     },
     "wacPreview": {
       "calculating": "Calculando...",

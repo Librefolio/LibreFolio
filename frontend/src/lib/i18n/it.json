@@ -2395,7 +2395,7 @@
     },
     "costBasisOverride": {
       "tooltip": "Override del prezzo medio di carico. Se vuoto, calcolato automaticamente dagli acquisti al salvataggio. Sovrascrivi per Exit Tax, eredità o regole fiscali particolari. Usa il selettore Totale/Per unità sotto per scegliere come inserire questo importo.",
-      "warningAdjustment": "Il costo base manuale è vuoto: senza, la transazione non si può salvare. Se queste quote non sono costate nulla (un frazionamento o un regalo), scrivi 0."
+      "warningAdjustment": "Il costo di carico manuale è vuoto: senza, la transazione non si può salvare. Scrivi quanto sono costate queste quote: 0 per uno split, il costo di carico originale del donante per un regalo."
     },
     "wacPreview": {
       "calculating": "Calcolo in corso...",

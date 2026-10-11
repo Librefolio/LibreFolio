@@ -1845,3 +1845,43 @@ class TestPromoteSuggest:
                 ids = sorted(c["id"] for c in resp.json()["results"].get("-1", []))
                 assert ids == control_ids, f"asset_event_id={unlinked!r} must mean not linked: candidates {ids}, without the field {control_ids}"
             print_success("Suggest: asset_event_id null or 0 answers as without the field ✓")
+
+    async def test_suggest_tolerance_zero_is_the_same_day_only(self):
+        """tolerance_days=0 is the same day only: a new +5 on day D is offered the -5 of D, never the -5 of D-1.
+
+        C-47: the bulk editor's Max delta days slider goes down to 0, where its local banner offers
+        same-day pairs only; the database search must read 0 the same way. promote_suggest_bulk
+        searches date ± tolerance_days, so 0 is lo == hi == date. Today the endpoint declares
+        tolerance_days >= 1 and answers 422, which the editor only logs: its lightbulb offers nothing.
+        The control, in its own request at tolerance_days=1, offers both rows: what 0 leaves out is
+        the window's doing, nothing else.
+        """
+        print_section("B3.11 — Suggest: tolerance_days=0 = the same day only")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "SugZeroA")
+            broker_b = await create_broker(client, "SugZeroB")
+            asset_id = await get_or_create_asset(client)
+            day, day_before = "2026-03-10", "2026-03-09"
+            # A: the position (create_standalone_tx gives the +20 a USD 50 cost basis), then a -5 on D-1 and a -5 on D
+            await create_standalone_tx(client, broker_a, "ADJUSTMENT", asset_id=asset_id, quantity="20", tx_date="2026-03-01")
+            day_before_id = await create_standalone_tx(client, broker_a, "ADJUSTMENT", asset_id=asset_id, quantity="-5", tx_date=day_before)
+            same_day_id = await create_standalone_tx(client, broker_a, "ADJUSTMENT", asset_id=asset_id, quantity="-5", tx_date=day)
+            plus_five = [{"id": -1, "type": "ADJUSTMENT", "broker_id": broker_b, "date": day, "asset_id": asset_id, "quantity": "5"}]
+
+            # Control, its own request: one day either side reaches both -5
+            control = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 1}, json=plus_five, timeout=TIMEOUT)
+            assert control.status_code == 200, control.text
+            control_ids = sorted(c["id"] for c in control.json()["results"].get("-1", []))
+            both = sorted([same_day_id, day_before_id])
+            assert control_ids == both, f"Control: at tolerance_days=1 a new ADJUSTMENT(+5) on broker {broker_b} at {day} must be offered both ADJUSTMENT(-5) on broker {broker_a}, id={same_day_id} at {day} and id={day_before_id} at {day_before}; candidates {control_ids}"
+
+            # tolerance_days=0: the same day only
+            resp = await client.post(f"{API_BASE}/transactions/promote-suggest", params={"tolerance_days": 0}, json=plus_five, timeout=TIMEOUT)
+            if resp.status_code != 200:
+                pytest.fail(
+                    f"promote-suggest answered HTTP {resp.status_code} to tolerance_days=0: {resp.text}. 0 is the new contract (C-47): the same day only, the window {day} ± 0 days, as the bulk editor's Max delta days slider means at 0; today the endpoint declares tolerance_days >= 1 and refuses it"
+                )
+            ids = sorted(c["id"] for c in resp.json()["results"].get("-1", []))
+            assert ids == [same_day_id], f"tolerance_days=0 must offer the ADJUSTMENT(-5) id={same_day_id} of {day} alone, never id={day_before_id} of {day_before}; candidates {ids}"
+            print_success("Suggest: tolerance_days=0 offers the same day only ✓")
