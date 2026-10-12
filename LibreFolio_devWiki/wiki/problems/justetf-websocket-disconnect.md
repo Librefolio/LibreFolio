@@ -17,7 +17,7 @@ The JustETF provider streams live quotes via a persistent WebSocket. After an in
 
 ## Solution
 The implemented workaround:
-1. Each ISIN gets a dedicated daemon thread: `_live_quote_worker(isin)` in `justetf.py`
+1. Each ISIN gets a dedicated daemon thread: `_live_quote_worker(isin)` in `justetf/plugin.py`
 2. The worker wraps `iterate_live_quote` in `try/except Exception` and reconnects on any exception with **exponential backoff** (1 s → cap at 60 s)
 3. Backoff sleep uses `_live_quote_stop.wait(timeout=backoff)` — interruptible when `shutdown_live_feeds()` is called
 4. Global state: `_live_quote_store: dict[str, object]` (isin → latest Quote), `_live_quote_threads`, `_live_quote_stop: threading.Event`
@@ -36,5 +36,5 @@ The implemented workaround:
 
 | Role | Path |
 |------|------|
-| JustETF provider | `backend/app/services/asset_source_providers/justetf.py` |
+| JustETF provider | `backend/app/services/asset_source_providers/justetf/plugin.py` |
 | Provider shutdown pattern | `backend/app/services/asset_source.py` |

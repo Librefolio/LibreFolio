@@ -94,8 +94,8 @@ The developer's decisions of 2026-10-09 (plan 37, §1):
 | Role | Path |
 |------|------|
 | Shared module (detection, mapping, notices, refusals) | `backend/app/services/brim_providers/_scalable.py` |
-| Broker plugin | `backend/app/services/brim_providers/broker_scalable.py` |
-| Overnight-account plugin | `backend/app/services/brim_providers/broker_scalable_deposit.py` |
+| Broker plugin | `backend/app/services/brim_providers/broker_scalable/plugin.py` |
+| Overnight-account plugin | `backend/app/services/brim_providers/broker_scalable_deposit/plugin.py` |
 | Synthetic samples (PRIME, broker, overnight) | `backend/app/services/brim_providers/sample_reports/scalable-prime-export.csv`, `backend/app/services/brim_providers/sample_reports/scalable-broker-export.csv`, `backend/app/services/brim_providers/sample_reports/scalable-deposit-export.csv` |
 | The plugins' icons and their generator | `backend/app/services/brim_providers/static/scalable/`, `scripts/compose_broker_icons.py` |
 | Plugin tests; the two-broker API flow | `backend/test_scripts/test_external/test_brim_scalable.py`, `backend/test_scripts/test_api/test_brim_scalable_api.py` |

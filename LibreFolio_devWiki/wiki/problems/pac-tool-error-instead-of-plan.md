@@ -64,7 +64,7 @@ fail-closed by design — but in each case the engine had produced something its
 | Result models and their validators | `backend/app/schemas/pac_allocator.py` |
 | Published gap, objective rows | `backend/app/services/pac_allocator/planner_report.py` |
 | Posting scope | `backend/app/services/pac_allocator/constraints.py` |
-| Engine-failure log | `backend/app/services/tool_plugins/pac_allocator.py` |
+| Engine-failure log | `backend/app/services/tool_plugins/pac_allocator/plugin.py` |
 | Report tests | `backend/test_scripts/test_services/test_pac_planner_report.py` |
 | Planner tests | `backend/test_scripts/test_services/test_pac_planner_planner.py` |
 | Round 5 plan (N22, R13) | `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacRound5PostMerge.prompt.md` |

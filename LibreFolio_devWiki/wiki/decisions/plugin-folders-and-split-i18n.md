@@ -1,8 +1,9 @@
 ---
-title: "Each plugin a folder with its own translations; the i18n catalogues split by subsystem (planned, workstream U)"
+title: "Each plugin a folder with its own translations; the i18n catalogues split by subsystem (U-1 delivered, the i18n split planned)"
 category: decision
 status: accepted
 date: 2026-10-12
+updated: 2026-10-12
 tags: [backend, frontend, architecture, plugins, providers, i18n, translations, build, docker, workstream-u, release-1.2]
 related:
   - decisions/provider-registry-decision
@@ -14,6 +15,16 @@ related:
 
 # Decision: plugins as folders, translations split by subsystem
 
+> **Update (step D of the historian, 2026-10-12, at `145502a39`): U-1 is in the code.** `2eed3d26c` («one folder per
+> plugin», merged in train 61, `bd8ee8e4d`) moved the 84 first-party plugins with `git mv` (82 renames at 100 %, 2 at
+> 99 %) to `<family>/<name>/plugin.py`, each beside an `__init__.py` that is only its docstring — «the code is in
+> ``plugin.py``, which the registry loads; this package re-exports nothing». Discovery loads `plugin.py` as
+> `<namespace>.<name>.plugin` (`PLUGIN_MODULE_NAME` in `provider_registry.py`); the family helpers (`_brim_io.py`,
+> `_brim_output.py`, `_scalable.py`, `signal_plugins/base.py`) stay at the family root, and
+> `test_plugin_layout_gate.py` guards the layout, the imports and the strings. **The translations are still planned**:
+> U-2 (a catalogue built from sources) and U-3 (one catalogue per subsystem and plugin) are later steps of plan 45, and
+> `frontend/src/lib/i18n/` still holds one catalogue per language.
+
 > **Planned, not in the code.** Decided on 2026-10-12; at `e7d698c4d` (train 56) nothing of it is implemented and
 > workstream U's plan (45) is not in the target yet. The decisions are quoted from the coordinator's diary, which is
 > not in the repository, as the coordinator relayed them.
@@ -24,7 +35,7 @@ The request comes from the developer's server checklist, item 28: every plugin a
 merged at build time like a `generate.ts`, because a plugin is installed with a new Docker image — «non è un sistema
 a hot-plugin, solo una modularizzazione estrema» ("it is not a hot-plug system, only an extreme modularization").
 
-Today every plugin family is a package of flat modules under `backend/app/services/` (`asset_source_providers/`,
+Until U-1, every plugin family was a package of flat modules under `backend/app/services/` (`asset_source_providers/`,
 `fx_providers/`, `brim_providers/`, `signal_plugins/`, `risk_plugins/`, `tool_plugins/`), registered by auto-discovery
 ([[decisions/provider-registry-decision]], [[decisions/signal-backend-plugin-architecture]]; the Tool family is
 [[features/F-106]]). The frontend has one
@@ -90,7 +101,9 @@ plugins may grow over time or be imported "dynamically" by linking folders in th
 - A plugin mounted at runtime has no translations in the frontend until the image is rebuilt: an accepted limit,
   consistent with "not a hot-plug system".
 - When U lands, about 84 citations of plugin paths in 47 wiki pages will need realigning, as after T-1 — assigned to
-  the historian when the lot enters the target.
+  the historian when the lot enters the target. *Done in step D (2026-10-12, at `145502a39`): 112 citations in 54
+  pages moved to `<name>/plugin.py`; 8 left as written, because they are history (five in the log, a quoted old
+  import, a past-tense account, a dated residual).*
 
 ## Links
 
@@ -104,11 +117,14 @@ plugins may grow over time or be imported "dynamically" by linking folders in th
 
 | Role | Path |
 |------|------|
-| Asset providers today (flat modules) | `backend/app/services/asset_source_providers/` |
+| Asset providers (one folder per plugin since U-1) | `backend/app/services/asset_source_providers/` |
 | FX providers today | `backend/app/services/fx_providers/` |
 | BRIM providers today | `backend/app/services/brim_providers/` |
 | Signal plugins today | `backend/app/services/signal_plugins/` |
 | Risk plugins today | `backend/app/services/risk_plugins/` |
 | Tool plugins today | `backend/app/services/tool_plugins/` |
+| Discovery (`PLUGIN_MODULE_NAME`) | `backend/app/services/provider_registry.py` |
+| Layout gate (U-1) | `backend/test_scripts/test_utilities/test_plugin_layout_gate.py` |
+| Plan 45 of U | `LibreFolio_developer_journal/Release_2/Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md` |
 | The catalogue today, one per language | `frontend/src/lib/i18n/en.json` |
 | The i18n loader | `frontend/src/lib/i18n/index.ts` |
