@@ -22,7 +22,7 @@ Rules:
 
 * a balance is valued at the latest rate on or before the day, so foreign cash is revalued
   every day; the difference from the cash converted at each movement's date is the exchange
-  result on cash;
+  result on cash (:meth:`NativeCash.exchange_results`, by broker and window);
 * a zero amount changes no figure and never needs a rate;
 * the share scales every amount: an owner counts its own share, any other role the whole
   broker (:func:`effective_share`).
@@ -46,6 +46,11 @@ _ONE = Decimal("1")
 _OWNER = "OWNER"
 _INCOME_TYPES = frozenset({"DIVIDEND", "INTEREST"})
 _COST_TYPES = frozenset({"FEE", "TAX"})
+
+# Below this size an exchange result is conversion dust, not a result: the same cash converted
+# twice, once at its movement's date and once through the day's unit rate, can differ in the
+# last of Decimal's 28 digits. A caller showing an exchange result leaves out anything smaller.
+CONVERSION_DUST = Decimal("1e-9")
 
 
 def effective_share(role: Any, share_percentage: Decimal | None) -> Decimal:
@@ -208,20 +213,60 @@ class NativeCash:
             for currency in sorted(by_currency):
                 if currency == self.report_currency:
                     continue
-                balance = by_currency[currency].at(as_of)
-                if balance is None or balance == 0:
-                    continue
-                rate = self._rate_at(currency, as_of)
-                if rate is None:
-                    raise ValueError(f"no {currency}/{self.report_currency} rate on or before {as_of} for a non-zero balance")
-                value += balance * rate
+                foreign = self._foreign_value(by_currency[currency], currency, as_of)
+                if foreign is not None:
+                    value += foreign
             values[broker_id] = value
         return values
+
+    def _foreign_value(self, balance: _Balance, currency: str, day: date_type) -> Decimal | None:
+        """A foreign balance on ``day`` at that day's rate; None while it is absent or zero."""
+        total = balance.at(day)
+        if total is None or total == 0:
+            return None
+        rate = self._rate_at(currency, day)
+        if rate is None:
+            raise ValueError(f"no {currency}/{self.report_currency} rate on or before {day} for a non-zero balance")
+        return total * rate
 
     @property
     def foreign_cash_broker_ids(self) -> frozenset[int]:
         """Brokers with at least one counted movement outside the report currency."""
         return self._foreign_brokers
+
+    def exchange_results(self, date_from: date_type | None, date_to: date_type) -> dict[int, Decimal]:
+        """Each foreign-cash broker's exchange result on cash over ``(date_from, date_to]``.
+
+        What the rates did to the cash the broker held: the change in value of its foreign
+        balances, each at its day's rate, less the window's foreign movements converted at
+        their own dates. Cash in the report currency has none. Every broker of
+        :attr:`foreign_cash_broker_ids` is listed, ascending, a zero result included; an empty
+        window lists none.
+
+        The difference is returned whole: below :data:`CONVERSION_DUST` it is the rounding of
+        two conversions, not a result, and a caller showing it leaves it out.
+        """
+        if date_from is not None and date_from >= date_to:
+            return {}
+        booked: dict[int, Decimal] = {}
+        for movement, value in zip(self.movements, self.converted, strict=True):
+            if movement.currency == self.report_currency or not self._is_counted(movement, value) or not _in_window(movement.date, date_from, date_to):
+                continue
+            booked[movement.broker_id] = booked.get(movement.broker_id, _ZERO) + value * movement.share
+        results: dict[int, Decimal] = {}
+        for broker_id in sorted(self._foreign_brokers):
+            result = _ZERO
+            for currency, balance in sorted(self._balances[broker_id].items()):
+                if currency == self.report_currency:
+                    continue
+                closing = self._foreign_value(balance, currency, date_to)
+                if closing is not None:
+                    result += closing
+                opening = None if date_from is None else self._foreign_value(balance, currency, date_from)
+                if opening is not None:
+                    result -= opening
+            results[broker_id] = result - booked.get(broker_id, _ZERO)
+        return results
 
     def rate_change_days(self, date_from: date_type | None, date_to: date_type) -> tuple[date_type, ...]:
         """Days in ``[date_from, date_to]`` on which the rate of a held foreign currency changes.
