@@ -335,10 +335,14 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   `e2e/fixtures/probe.ts`. Il preludio del wizard di import aspetta i `data-busy` dei passi 1, 2 e 4. Le 28 sonde rimaste
   falliscono in modo visibile, oppure puliscono dopo lo scatto. Gli 8 scatti mancati escono, e gli scenari toccati sono
   16/16. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «10».
-- **M-14 · I numeri degli scatti nella lingua del browser** — basso; M, 12/10: gli importi seguono la locale del browser
-  (`toLocaleString(undefined, …)`), e la galleria gira in en-US, quindi gli scatti it/fr/es mostrano «1,188.58 €».
-  Basterebbe una `locale` di Playwright per lingua. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
-  sezione «9.3».
+- ✅ **M-14 · I numeri degli scatti nella lingua del browser** — nella 1.2, lotto 20 di M (12/10, decisione del
+  developer). Gli scatti di ogni lingua li fa un browser di quella lingua: en-US, it-IT, fr-FR, es-ES. La locale si imposta
+  con `Emulation.setLocaleOverride` dalla sessione CDP del test (`e2e/fixtures/galleryLocale.ts`), in testa a ogni ciclo di
+  lingua e prima che la pagina venga disegnata. I 13 test che fotografano una pagina preparata una volta sola la
+  ridisegnano per lingua. Una guardia fa fallire lo scatto se la pagina è nata con un'altra locale. Galleria completa: 250
+  passati, 1 saltato per scelta, 1 rosso. Il rosso era un cambio di rete della macchina (Tailscale), e lo stesso test,
+  ripetuto 3 volte da solo, è verde. Restano col punto i numeri scritti con `toFixed` (M-18). Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
+  sezione «11».
 - **M-15 · Le sonde della galleria che dovrebbero essere `expect`** — basso; M (test-author), 12/10. Il lotto 19 ha messo
   `appears()`, che è opzionale, anche dove il componente rende sempre l'elemento sul percorso del test. Sono, con le righe
   di `7b3c2b5ab`: `selectTransactionType` (2603, 2608), le viste tabella (4192, 4675), la riga del file nel wizard (3281,
@@ -354,6 +358,19 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   è più veloce della lista, il passo 2 apre tutti i pannelli dei broker chiusi (`:3530`), e i file ci sono ma non si
   vedono. Va disabilitato il pulsante finché i broker non arrivano, oppure il passo 2 deve ricalcolare i pannelli quando la
   lista arriva. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «10.2».
+- **M-17 · Due testi della UI fissi in inglese** — basso; M, 12/10, fuori dal perimetro di M: li corregge I nella 1.2,
+  dopo M-16 (decisione del coordinatore). `components/ui/date/DateRangePicker.svelte:1109` formatta il periodo scelto con
+  la locale `'en'` fissa, quindi il selettore mostra i mesi in inglese in ogni lingua. `components/settings/tabs/GlobalSettingsTab.svelte:726`
+  scrive «Last updated:» in inglese. Si chiude quando la correzione è nel target. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
+  sezione «11.0».
+- **M-18 · I numeri scritti con `toFixed`** — medio; M, 12/10, fuori dal perimetro di M. Un numero composto con
+  `toFixed(n)` non passa per nessuna locale e tiene il punto in ogni lingua: con M-14 gli importi degli scatti it/fr/es
+  sono localizzati, questi numeri accanto no («+4788,01 €» ma «14.07%»). Sono le percentuali, circa 50 righe in una
+  trentina di file (i rendimenti della dashboard, `components/dashboard/KpiSection.svelte:252-255,268`; i livelli di
+  rischio, il PAC, i grafici, le card FX); le dimensioni dei file (`utils/files/upload.ts:56-59`, `formatBytes`: «9.2 KB»);
+  le durate (`components/settings/SchedulerLogModal.svelte:235`, `utils/sync/syncHelpers.ts:110`: «18.7s»). Per le
+  percentuali c'è già un formattatore (`utils/core/formatPercent.ts`). Il quando lo decide il coordinatore. Dettagli:
+  [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezioni «11.2» e «11.3».
 
 ## Q · Documentazione e onboarding (21, 32)
 
