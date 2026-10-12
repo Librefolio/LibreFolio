@@ -9,7 +9,7 @@
 > - **Nel target**:
 >   - checkpoint 1: `883681766`, `3801cf93e`, `5c4c2c0e8`, fusi come `46272c3f0` (treno 32, `dev_release2` = `b20eac991`);
 >   - H: `801b4a168`, `144c9db27`, `fb954577f`, fusi come `8a546c046` (treno 35).
-> - **Aperto**: F, approvato dal developer il 2026-10-11 (§0, esito in §17.11) e in esecuzione (§9). F-0, F-1 e F-2 ✅ (i rossi e il golden della guardia, il modulo, il motore); F-C1 pronto, in verifica dal coordinatore; poi F-3. Un checkpoint dopo F-2, uno a fine F.
+> - **Aperto**: F, approvato dal developer il 2026-10-11 (§0, esito in §17.11) e in esecuzione (§9). F-0, F-1 e F-2 ✅ (i rossi e il golden della guardia, il modulo, il motore); F-C1 ✅, committato (`36b181836`, `aa6b6077a`, `384253663`) e riallineato al treno 41 (`daee275fe`); F-3 ✅ e F-W ✅ (2026-10-12, con la chiave i18n assegnata). F-AI è deciso: la (a) è lo stato attuale, la (b) spetta al developer. F-4 ✅ (2026-10-12): gate, build, E2E, rapporto sul DB mock e tempi. F-5 ✅ (2026-10-12): 13 pagine EN e il testo del runner. Restano il checkpoint F-C2 e T8. Un checkpoint dopo F-2, uno a fine F; F entra nel target solo a F completo.
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`), con le decisioni del developer (§1) e l'autorizzazione testuale (§0).
 > - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base attuale `251067435` (treno 36: solo journal e `.github`, codice identico a `43d92ed23`, verificata il 2026-10-11). Il lotto è partito da `d59762e0a` (treno 30); l'analisi era stata fatta su `fbb57eb41` (treno 28) e riverificata su `e32f47133` (treno 29). I treni 29 e 30 non toccano le superfici del lotto (§8).
@@ -239,12 +239,12 @@ Tutti in `backend/test_scripts/test_services/test_financial/test_portfolio_engin
 | F-0 | Rossi e golden della guardia, generato prima del codice, via `test-author` (§17.8) | ✅ 2026-10-11 (§15) |
 | F-1 | `financial_math/native_cash.py`, `effective_share`, la riga nella docstring | ✅ 2026-10-11 (§15) |
 | F-2 | Il motore: registro nativo, cassa rivalutata, giorni «dirty» della cassa, K/R k2, via gli accumulatori di B13 | ✅ 2026-10-11 (§15) |
-| F-C1 | Checkpoint 3: modulo e motore, con la guardia verde | 🔄 2026-10-11, CHECKPOINT READY al coordinatore |
-| F-3 | Il servizio: card, riepilogo, storie, flussi dei contributi | ⏳ |
-| F-4 | Gate, confronto col golden, rapporto sul DB mock, tempi | ⏳ |
-| F-5 | Doc EN via `docs-writer` (§17.8) | ⏳ |
-| F-W | «FX on cash» negli `other_effects` dei contributi, forma minima (§0); la chiave i18n solo col via del coordinatore | ⏳ |
-| F-AI | Facoltativo: il costo del nome nell'AI Export, al coordinatore; il codice solo col suo via (§0) | ⏳ |
+| F-C1 | Checkpoint 3: modulo e motore, con la guardia verde | ✅ 2026-10-11: `36b181836`, `aa6b6077a`, `384253663`; base riallineata col merge `daee275fe` (treno 41), revisione combinata verde (§15) |
+| F-3 | Il servizio: card, riepilogo, storie, flussi dei contributi | ✅ 2026-10-12 (§15) |
+| F-4 | Gate, confronto col golden, rapporto sul DB mock, tempi | ✅ 2026-10-12 (§15): 58 report cambiati su 76, tutti con cassa estera; identità tenute; E2E 27 + 37 + 9 |
+| F-5 | Doc EN via `docs-writer` (§17.8) | ✅ 2026-10-12 (§15): 13 pagine EN e il testo del runner; build e check-links verdi; translate-validate misura il debito per M (75 errori, 75 avvisi) |
+| F-W | «FX on cash» negli `other_effects` dei contributi, forma minima (§0); la chiave i18n solo col via del coordinatore | ✅ 2026-10-12 (§15), con la chiave `dashboard.fxOnCash` (via del coordinatore, treno 41) |
+| F-AI | Facoltativo: il costo del nome nell'AI Export, al coordinatore; il codice solo col suo via (§0) | ⏳ costo inviato il 2026-10-12 (§15). Nessun bump (decisione del coordinatore); la (a) è lo stato attuale; la (b) la decide il developer, e il testo per T8 è pronto in §15 |
 | F-C2 | Checkpoint 4, fine F | ⏳ |
 | T8 | Indice post-1.2: la sezione I di `BACKLOG_POST_1.2.md` (§11) | ⏳ a fine lotto |
 
@@ -785,7 +785,7 @@ Testo proposto (bozza del 2026-10-10, in inglese come la wiki; la parte della ca
 >   - le traduzioni di `deposited-capital` e `kpi-cards` (M): F-5 ne cambierà le pagine EN.
 >   - Sovrapposizione semantica riverificata sull'albero del target: nessun lettore dei 5 campi tolti dal risultato (`git grep` su `dev_release2`). `lots_analysis_service.py` (T) importa dal motore solo `DerivedViewsBuilder` e `load_configured_fx_pair_sets`, che F-2 non tocca. I test nuovi del target (lotti, FIFO dell'AI Export) non passano dalla cassa estera del motore.
 
-### F-C1 — Checkpoint 3: modulo e motore 🔄 (2026-10-11)
+### F-C1 — Checkpoint 3: modulo e motore ✅ (2026-10-11)
 
 > **Note implementazione**:
 > - 22 percorsi: 15 modificati e 7 nuovi (il golden conta come un file). `git diff --check` pulito; lint fresco sui 20 file Python (ruff, black, py_compile); tutti i gate di F-2 girati sui blob di oggi.
@@ -794,6 +794,413 @@ Testo proposto (bozza del 2026-10-10, in inglese come la wiki; la parte della ca
 >   - C2 `fix(portfolio): revalue foreign cash every day`: il motore, il golden e la guardia, l'helper `_engine_native_cash.py`, i 12 file di test del motore (gli 11 di `test_portfolio_engine/` e vnext), `test_brim_providers.py`, T1c in `test_portfolio_service.py`;
 >   - C3 `docs(journal): record lot 41 steps F-0 to F-2`: questo piano.
 > - Porte 6157 e 6167 libere; nessun sotto-agente al lavoro.
+> - **Verificato e committato dal coordinatore** (autorizzato dal developer a commit e merge locali; il push resta suo): `36b181836` (C1), `aa6b6077a` (C2), `384253663` (C3), albero `fb092cac7074`, uguale alla prova.
+> - **Base riallineata**: il coordinatore ha fuso `dev_release2` (`c7f7b1807`, treno 41: T B3b, PL3, FE1, etichette, C-50; M lotti 14–17; P) nel ramo. Il merge `daee275fe` ha albero `02f1370dcd1e` e non ha avuto conflitti. I 22 blob di F sono intatti: verificati contro il manifesto, 22 su 22.
+> - **La revisione combinata è verde** sulla 6157, un comando alla volta, tutti con exit 0:
+>   - `services financial-math` 127 (`/tmp/libreFolio_l41_f3pre_fm.log`);
+>   - `services portfolio-engine` 40 (`_pe.log`);
+>   - `services roi-fifo-utils` **631**, cioè 608 più i test nuovi di T in `test_financial/` (`_rfu.log`);
+>   - `services ai-export` 1002 (`_aie.log`);
+>   - `services lots-analysis-pure` 121 (`_lap.log`);
+>   - `api portfolio` 51 (`_apip.log`).
+>   Nessun attrito con T. La porta 6157 è libera dopo l'ultimo comando.
+
+### F-3 — Il servizio ✅ (2026-10-12)
+
+> **Progetto**, verificato riga per riga su `daee275fe`:
+> - **Una sola sorgente**: `nc = engine_result.native_cash`, oppure un `NativeCash` vuoto sui ritorni anticipati del motore (`portfolio_engine.py:2502`, `:2522`).
+> - **Gli stessi movimenti dei giri di oggi.**
+>   - Il motore prende gli accessi dell'utente filtrati per `broker_ids`, come `_get_user_broker_access` (`portfolio_service.py:482-492`).
+>   - Il classificatore (`portfolio_engine.py:268-360`) mette in `classified` ogni transazione dello scope una volta sola, alla quota del suo broker (`effective_share`).
+>   - Il passo 10c (`:2708-2714`) tiene `tx.date <= actual_to`, con `actual_to = date_to or today` (`:2566`): è la `valuation_date` del riepilogo.
+>   - La cache a blob rende il risultato intero, `native_cash` compreso (`:2612`).
+>   - `convert_bulk` (`fx.py:1240-1425`) dà a ogni voce l'ultimo cambio ≤ la sua data, qualunque sia il resto della richiesta: una chiamata sola rende gli stessi valori delle chiamate una per una.
+> - **`get_summary`**:
+>   - del giro per accesso (G2, `portfolio_service.py:750-813`) restano i nomi, `broker_txns` e il giro dei lotti;
+>   - periodo `nc.flows(date_from, valuation_date)`, vita intera `nc.flows(None, valuation_date)`. Depositi e prelievi da `absolute_by_type`; il reddito è `DIVIDEND + INTEREST` col segno; commissioni e tasse in assoluto. `income_by_pos` e `fees_taxes_by_pos` vengono dai flussi della vita intera;
+>   - coppie mancanti da `nc.missing_conversions(None, valuation_date)`;
+>   - card (`:977-1012`): `cash_total = nc.value_at(valuation_date)[b]`, oppure il saldo in valuta base se il broker ha solo righe a zero; `cash_balances` da `nc.balances(valuation_date)`; NAV = valore di mercato + cassa + in viaggio;
+>   - testata: `cash_balances` è la somma delle liste delle card, nell'ordine degli accessi.
+> - **Le tre storie**, con `_signed_transaction_sums_by_date(..., native_cash=None)`:
+>   - da `get_report` ricevono il registro del run (`_precomputed_native_cash`);
+>   - chiamate da sole lo costruiscono con `compute_native_cash` all'orizzonte del motore, `date_to or today`. Così vale il vincolo di `value_at` (`rates_until` ≥ ogni data);
+>   - poi `sums_by_date` e `missing_conversions` sui tipi richiesti.
+> - **I contributi**: `nc.flows(date_from, effective_end)` al posto di G4 (`:1774-1808`). Le quantità restano col loro `date_to` (U5). Gli unallocati vanno riordinati come gli accessi, perché l'iterazione del set di oggi (`:2023`) resti la stessa.
+> - **La quota** passa da `effective_share` anche nei contributi (O2 chiuso), e l'import di `UserRole` sparisce. `convert_bulk` resta, per `_convert_to_base`.
+> - **Byte per byte con la sola valuta base.** Le somme Decimal sono esatte in qualunque ordine. L'esponente di una somma è il minimo dei suoi addendi, e le righe del DB hanno tutte esponente −6: togliere le righe a zero da `value_at` non lo cambia. Un broker con sole righe a zero passa dal ripiego; uno senza righe dà `Decimal("0")`. L'ordine delle valute per broker è quello dei movimenti, `(data, id)`, come oggi.
+>
+> **Cambiamenti attesi**, fuori dalla guardia EUR e approvati con la politica (a) (§17):
+> - una riga estera senza cambio alla sua data conta 0 nella cassa della card e nel suo NAV, ed è ancora elencata in nativo. Quindi card = motore, e testata = Σ card;
+> - la testata `cash_balances` elenca anche le valute senza cambio, come le card;
+> - una riga estera a zero non chiede più un cambio, quindi non risulta mancante. Per una posizione senza prezzo con una sola riga così, `period_pnl` dei contributi passa da None a 0;
+> - la card non aggiunge più la coppia mancante datata `valuation_date`: la coppia resta con le date dei movimenti;
+> - **B12** chiuso per le storie e per i flussi dei contributi: chiamati senza `date_to`, si fermano a oggi. In produzione nessun effetto, perché `get_report` passa sempre `effective_date_to` (`:2120`, `:2338-2372`);
+> - **B14** chiuso: i flussi dei contributi e del riepilogo vengono dalle stesse righe, con le stesse coppie mancanti. Lo schema dei contributi non ha un campo per le coppie: la segnalazione resta nel riepilogo;
+> - sulle coppie inverse la cassa della card passa da `saldo / cambio` a `saldo × (1 / cambio)`: al più la 28ª cifra.
+>
+> **Rossi e fermi**, via `test-author`, in un file nuovo di `test_financial/`, raccolto da `roi-fifo-utils` senza registrazione:
+> 1. rosso, politica (a) sulla card: SBD senza cambio alla data del deposito → `cash_total`, NAV e guadagno della card uguali al motore;
+> 2. rosso: una valuta senza nessun cambio → la testata `cash_balances` la elenca come la card, e la coppia mancante ha solo la data del movimento;
+> 3. rosso, B12: le tre storie e i contributi chiamati senza `date_to` ignorano le righe dopo oggi;
+> 4. fermo, B14: il reddito dei contributi con una coppia mancante è uguale a `period_income` del riepilogo;
+> 5. fermo: le storie di `get_report` sono uguali alle chiamate da sole;
+> 6. fermo: un broker EUR con sole righe a zero ha la cassa 0 e la lista `EUR 0`.
+>
+> **Note implementazione** (2026-10-12):
+> - `portfolio_service.py`, +96 −184. La bozza l'ho scritta fuori dalla worktree e l'ho copiata solo dopo aver girato i rossi sul codice di prima. Prima della copia lo sha256 del file era uguale a quello della copia intatta.
+>   - Helper `_engine_native_cash(engine_result, report_currency)`: il registro del run, oppure uno vuoto sui ritorni anticipati.
+>   - `get_summary`:
+>     - G2 → `flows` del periodo e della vita intera;
+>     - le coppie mancanti → `missing_conversions`;
+>     - la card → `value_at` / `balances`;
+>     - la testata `cash_balances` = Σ delle liste delle card, nell'ordine degli accessi.
+>   - `_signed_transaction_sums_by_date(..., native_cash=None)`: usa il registro ricevuto, oppure lo costruisce con `compute_native_cash(rates_until=date_to or today)`; poi `sums_by_date` e `missing_conversions`. Le tre storie hanno `_precomputed_native_cash`, e `get_report` passa `engine_result.native_cash`.
+>   - I contributi:
+>     - `flows(date_from, effective_end)`, al posto delle 4 mappe e del giro per riga;
+>     - gli unallocati riordinati come gli accessi;
+>     - la quota da `effective_share` (O2).
+>   - Tolti i 4 import, le costanti morte e `UserRole`.
+> - **Test** (`test-author`): `test_portfolio_service_native_cash.py`, 9 test, raccolti da `roi-fifo-utils` senza registrazione. Sono 6 rossi (1, 2, 3a–d) e 3 fermi (4, 5, 6). Valute SBD, VUV, TOP e WST, anno 2039, righe B12 a ±5 giorni da oggi.
+> - **Comandi ed evidenza** (corsia 6157, uno alla volta, tutti con exit 0 a parte il rosso voluto):
+>   - **Rossi sul codice di prima**: `… services roi-fifo-utils portfolio_service_native_cash` → **6 failed, 3 passed** (`/tmp/libreFolio_l41_f3_red.log`). Ognuno è rosso per la ragione scritta:
+>     - test 1: card 1090 / 1090 / 90 / 0,09, e Σ card ≠ testata;
+>     - test 2: testata `[EUR 1000]` senza VUV, e VUV/EUR datata `[02-02, 02-05]`;
+>     - 3a–c: un punto in più a t+5;
+>     - 3d: 50 / 10.
+>   - **Dopo la copia**: 9 passed (`_green.log`).
+>   - **La guardia** `native_cash_guard`: 1 passed, byte per byte (`_guard.log`). Copre `get_report`, `get_summary` con le card e gli 8 getter delle serie.
+>   - **Gate**:
+>     - `services roi-fifo-utils` **640** (631 + 9) (`_roi.log`);
+>     - `portfolio-engine` 40 (`_engine.log`);
+>     - `financial-math` 127 (`_fmath.log`);
+>     - `ai-export` 1002 (`_aiexport.log`);
+>     - `lots-analysis-pure` 121 (`_lots.log`);
+>     - `api portfolio` 51 (`_api.log`).
+>   - Porta 6157 libera dopo l'ultimo comando.
+>   - **Lint**: ruff `--no-cache --config pyproject.toml`, black `--check` e py_compile puliti su servizio e test.
+> - **Non girati, col perché**:
+>   - `services risk-all`: il rischio legge da `get_report` solo le posizioni, `net_worth` / `cash_total` / `in_transit` del motore e la storia TWRR, e F-3 non tocca nessuno dei tre;
+>   - `services broker`: usa `BrokerService`, non questo servizio.
+>
+> **⚠️ Fuori pista**:
+> - **I rossi 1 e 2 sono rossi solo in parte**, come previsto in F-2 (T1c già verde col motore).
+>   - Nel test 1 la testata e la data mancante `[01-01]` erano già giuste: il rosso viene dalla card.
+>   - Nel test 2 i valori della card erano già giusti: il rosso viene dalla testata e dalla data in più.
+> - **Due scostamenti del `test-author` dalla specifica**, accettati.
+>   - Test 5: le storie dei depositi hanno almeno 1 punto, non 2. Il deposito di B cade sull'inizio, e l'inizio è escluso: `(start, end]` è la convenzione dei flussi di periodo da G1c (le righe del primo giorno stanno nel NAV d'apertura), già scritta nella docstring di prima. F-3 non la cambia: è un'osservazione, non un buco.
+>   - Test 4: TOP/EUR è controllata per contenimento, perché prima di F-3 la card aggiungeva la data di valutazione. La data esatta la fissa il test 2.
+
+### F-W — «FX on cash» nei contributi ✅ (2026-10-12)
+
+> **Progetto** (forma minima, §0 e §17.8):
+> - **Nel modulo**, `NativeCash.exchange_results(date_from, date_to)` calcola, per ogni broker di `foreign_cash_broker_ids` in ordine crescente:
+>   - il valore delle sue valute estere alla chiusura, meno quello all'apertura, ognuno al cambio del suo giorno;
+>   - meno i movimenti esteri contati in `(date_from, date_to]`, convertiti alla loro data e moltiplicati per la quota.
+>
+>   La valuta del report non ha risultato. Una finestra vuota non elenca nessuno; un risultato zero resta in lista.
+> - **Nel servizio**, in `get_positions_contribution`, quando `period_other_result` esiste:
+>   - una riga `OtherPeriodEffect("FX on cash", "Other", risultato, broker)` per ogni broker, nell'ordine degli accessi;
+>   - il residuo scende della stessa cifra.
+> - **Restano come sono**: il riepilogo, lo schema, l'API (niente `api sync`) e KpiSection.
+>
+> **Note implementazione** (2026-10-12):
+> - **`financial_math/native_cash.py`**, +53 −8:
+>   - `CONVERSION_DUST = Decimal("1e-9")` (:53), con il suo perché;
+>   - `_foreign_value(balance, currency, day)` (:222): il saldo estero al cambio del giorno. Vale None se il saldo è assente o zero; se manca il cambio per un saldo diverso da zero, ValueError.
+>     - `value_at` lo usa con le stesse operazioni e lo stesso messaggio, quindi l'uscita è identica.
+>     - Il saldo conta solo i movimenti convertiti, quindi `exchange_results` solleva soltanto dove già solleverebbe `value_at` (il contratto `rates_until` di F-1 e F-2): nessun nuovo modo di fallire per la vista Performance;
+>   - `exchange_results` (:237-268), citato anche nella docstring del modulo.
+> - **`portfolio_service.py`**:
+>   - l'import di `CONVERSION_DUST` (:86) e il registro del run in una variabile locale (:1700);
+>   - il blocco del residuo (:1986-2019):
+>     - prima le righe FX, nell'ordine degli accessi, saltando quelle con |r| < polvere;
+>     - poi il residuo. Con cassa estera nello scope compare solo se |residuo| ≥ polvere, altrimenti vale la regola di prima, `!= 0`;
+>   - la docstring del metodo.
+> - **Frontend**: una riga di mappatura con `translateOr` in `OtherPeriodEffectsTable.svelte` (`descriptionLabel`, :75) e una in `PerformanceChart.svelte` (`otherEffectDescriptionLabel`, :291).
+> - **i18n**: `dashboard.fxOnCash` nei 4 cataloghi via `dev.py i18n add`, una riga per file (:1712), in coda al namespace `dashboard`:
+>   - EN «FX on cash»;
+>   - IT «Effetto cambio sulla liquidità»;
+>   - FR «Effet de change sur les liquidités»;
+>   - ES «Efecto del tipo de cambio sobre el efectivo».
+> - **Test** (`test-author`, rossi prima del codice):
+>   - `TestExchangeResults`, 48 casi, in `test_native_cash.py` (sezione 11);
+>   - `TestFxOnCashContributionRows`, 12 casi, in `test_portfolio_service_native_cash.py`: 10 rossi e 2 fermi, S6 (il viaggio) e S4 col solo broker E. Valute FJD e KMF, anno 2040, un mese per scenario.
+> - **Comandi ed evidenza** (corsia 6157, uno alla volta, tutti con exit 0 a parte i rossi voluti):
+>   - **Rossi**:
+>     - modulo **48 failed, 127 passed** (`/tmp/libreFolio_l41_fw_red_module.log`), tutti AttributeError su `exchange_results` o `CONVERSION_DUST`;
+>     - servizio **10 failed, 11 passed** (`_red_service.log`). In ogni rosso del servizio il residuo di oggi è esattamente la cifra FX attesa:
+>       - S1 −262,5;
+>       - S2 −362,5, −187,5 e −175;
+>       - S3 −131,25;
+>       - S4 −393,75 = −262,5 − 131,25;
+>       - S5 −113,25 = FX −103,25 più lo spread −10.
+>   - **Verdi**: modulo 175 (`_green_module.log`), servizio 21 (`_green_service.log`).
+>   - **La guardia** `native_cash_guard`: 1 passed, byte per byte (`_gate_guard.log`).
+>   - **Gate**:
+>     - `roi-fifo-utils` **652** (640 + 12) (`_gate_roi.log`);
+>     - `portfolio-engine` 40 (`_gate_engine.log`);
+>     - `financial-math` **175** (127 + 48) (`_gate_fm.log`);
+>     - `ai-export` 1002 (`_gate_aiexport.log`);
+>     - `lots-analysis-pure` 121 (`_gate_lots.log`);
+>     - `api portfolio` 51 (`_gate_api.log`).
+>   - **Frontend**:
+>     - `dev.py front check`: 0 errori, 0 avvisi (`_front_check.log`);
+>     - prettier `--check` pulito sui 2 Svelte e sui 4 cataloghi;
+>     - `dev.py i18n audit`: 4349 chiavi, tutte complete, 0 inutilizzate (`_i18n_audit.log`).
+>   - **Lint** del backend: ruff, black `--check` e py_compile puliti.
+>   - La porta 6157 è libera dopo l'ultimo comando.
+> - **I consumatori di `other_effects`**, verificati:
+>   - `PositionsPanel` e `PerformanceChart.svelte:351-358` mostrano le righe in modo generico;
+>   - per l'AI Export, vedi il Fuori pista.
+>
+> **⚠️ Fuori pista**:
+> - **La polvere di conversione.**
+>   - Il motore converte col cambio unitario, `importo × r`; per le coppie inverse `convert_bulk` divide, `importo / r`. Le due strade differiscono alla 28ª cifra: 5000 a 1/1,1 dà 4545,454545454545454545454546 contro …545.
+>   - Con 1234,56 a 1,1 la polvere non c'è: per questo i test usano 5000.
+>   - Da qui `CONVERSION_DUST` e la regola del residuo: con cassa estera nello scope, né la riga FX né il residuo mostrano una cifra sotto 1e-9.
+>   - Senza cassa estera resta `!= 0` e non c'è aritmetica nuova: la guardia EUR resta byte per byte.
+> - **L'AI Export vede la riga senza codice nuovo.**
+>   - `broker.flows_income_costs` (`ai_export/components/broker_financial.py:376`) mappa ogni riga di `other_effects`. Nell'export di un broker la riga «FX on cash» compare da sola, e il residuo scende.
+>   - Correggo quindi l'ipotesi di §0, «la cifra resta dentro `period_other_result`». Il campo del riepilogo non cambia, quindi restano come sono:
+>     - la riconciliazione (`:405-433`);
+>     - l'export del portafoglio (`portfolio_financial.py:401,438`), che tiene solo Income e Cost.
+>
+>     La lista degli effetti del broker invece mostra la riga. `ai-export`: 1002, verde.
+>   - Il nome nell'export (F-AI) diventa una questione di versione e di probe, non di dati. Lo porto al coordinatore.
+> - **Due limiti documentati**, che restano nel residuo:
+>   1. il risultato di cambio sulla cassa in viaggio (S6: residuo −175, nessuna riga FX);
+>   2. lo spread di un FX_CONVERSION sullo stesso broker (S5: −10 resta nel residuo).
+>
+>   Vanno nel backlog (T8).
+> - **L'ordine delle righe degli unallocati è quello del set**, `set(unalloc_income) | set(unalloc_fees)`, ed è preesistente: già prima di F-3 il giro era un'unione di set.
+>   - F-3 ha tenuto solo l'ordine delle somme, che le lascia identiche byte per byte.
+>   - Il commento di F-3 diceva di più: l'ho corretto in «The unallocated sums keep the access order».
+>   - Va nel backlog (T8).
+> - **Anche `PerformanceChart.svelte`**, oltre alla tabella di §0. Il waterfall (`otherEffectDescriptionLabel`) mappa le stesse descrizioni: senza la riga, nel grafico comparirebbe l'inglese grezzo.
+> - **Scostamenti del `test-author`**, accettati:
+>   - S4 diviso in due: lo scope misto è rosso, il solo E è un fermo;
+>   - S3, col Viewer, fissa la quota 1;
+>   - S7 riconcilia col riepilogo entro `CONVERSION_DUST`;
+>   - nessun test unitario della mappatura Svelte, come per le righe sorelle: la coprono gli E2E di F-4.
+
+### F-AI — Il nome nell'AI Export: il costo ⏳ (inviato il 2026-10-12)
+
+Solo il costo, come chiede §0: niente codice senza il via del coordinatore. Fonti: `.github/instructions/ai-development.instructions.md`, la skill `ai-export-probe-tuning`, `ai_export_composition.md:387-392` e `ai_export_probe_workflow.md`.
+
+> **Note implementazione** (2026-10-12):
+> - **Lo stato di oggi.** L'export di un broker mostra già la riga, per nome:
+>   - `broker.flows_income_costs` mappa ogni riga di `other_effects` (`broker_financial.py:376` → `map_effect_row`, `payloads/portfolio_broker.py:730`; ordine di `sort_effects`, `:740`).
+>   - Il componente passa dal renderer generico (`snapshotDataRenderer.ts`, `renderGenericPayload`): la descrizione esce così com'è, in inglese, come quella delle righe sorelle.
+>   - `broker.reconciliation` e l'export del portafoglio leggono il riepilogo, il cui `period_other_result` non cambia con F-W. L'export del portafoglio tiene solo Income e Cost (`portfolio_financial.py:401,438`).
+> - **La domanda di contratto: un bump di `broker.flows_income_costs`?** (`catalog.py:134`, v1)
+>   - La forma del payload resta la stessa; cambia il contenuto: una riga in più, il residuo più piccolo.
+>   - Nessuna regola scritta chiede un bump per i soli valori, e F-2/F-3 hanno cambiato cifre senza.
+>   - Un bump chiede, nello stesso cambio: il catalogo, `COMPACT_COMPONENT_VERSIONS` (`snapshotDataRenderer.ts:1443`, altrimenti il fallback YAML) e i test che fissano le versioni.
+>   - Consiglio: nessun bump.
+> - **Le opzioni per il portafoglio:**
+>   - **(a) niente**, costo 0. Per nome la riga si vede nell'export del broker; in quello del portafoglio resta dentro `period_other_result`.
+>   - **(b) un campo nuovo** in `portfolio.flows_income` (`catalog.py:109`, da v1 a v2): le righe «FX on cash» per broker, filtrate per descrizione come fa il frontend, perché `OtherPeriodEffect` non ha un codice.
+>     - Serve: payload e builder, catalogo v2, mappa compatta `{1,2}`, i test via `test-author`, i gate `ai-export`, vitest ai-export e `front check`, una riga di doc developer.
+>     - Serve anche un **probe mirato**: `all`, un broker con cassa estera e uno solo EUR, in Compact e Standard. Il probe copia il DB di produzione e usa le credenziali, quindi lo lancia il developer, fuori dalla mia corsia.
+>     - Stima ½ g più il probe. Rischio basso sulle cifre, che non cambiano; medio sul contratto.
+>   - **Facoltativo con (b)**: una frase in `valuation_semantics` (`broker_financial.py:271`, `portfolio_financial.py:301`) sulla cassa estera rivalutata ogni giorno. Costa il bump a v3 delle due provenance e la mappa `{1,2,3}`, circa 2 h.
+> - **Consigliato**: la (a) adesso; la (b) nella sezione I del backlog (T8), salvo il via del coordinatore per la 1.2.
+>
+> **Decisioni del coordinatore** (2026-10-12):
+> 1. **Nessun bump di `broker.flows_income_costs`.** Il `version` di un componente è la versione dell'implementazione (`ai_export_composition.md`, «ComponentSpec»). Qui non cambiano né il builder né la forma del payload: cambiano solo i valori che arrivano dal motore. È lo stesso caso di C-50, dove il payload era invariato e la versione è rimasta la stessa.
+> 2. **La (a) è lo stato attuale. Sulla (b) decide il developer**: il coordinatore la porta nel suo recap.
+>    - La voce di T8 non va nel backlog finché il developer non decide: il testo pronto è qui sotto.
+>    - Se arriva il via, il coordinatore dice quando farla: dopo F-4, o in un lotto a parte dopo l'integrazione di F.
+> 3. **Correzione al costo della (b): la sonda non chiede né il developer né i dati di produzione.** T l'ha già fatta sulla sua corsia, con i dati sintetici, per B3b e per C-50. Il metodo è nel piano 43, al passo 5 di B3b:
+>    - `test db populate --force --clean` nella corsia 6157;
+>    - la sonda ufficiale `ai_export_real_prompt_probe.py`, lanciata da un involucro temporaneo fuori dal repo, sul DB copiato della corsia;
+>    - la scansione dei segreti, e il controllo che UI e sonda diano gli stessi byte.
+>
+>    Per filtrare la riga serve una costante condivisa con chi la produce (oggi il letterale è a `portfolio_service.py:2001`), non una seconda copia del letterale.
+>
+>    La stima della (b) resta ½ g, più la sonda, che ora gira sulla 6157.
+>
+> **Testo pronto per T8** (sezione I di `BACKLOG_POST_1.2.md`), da scrivere solo se il developer non mette la (b) nella 1.2:
+> - **«FX on cash» per nome nell'export del portafoglio.** Oggi la riga compare per nome negli `effects` di `broker.flows_income_costs`. Nell'export del portafoglio resta invece dentro `period_other_result`, perché `portfolio.flows_income` tiene solo Income e Cost (`portfolio_financial.py:401,438`).
+>   - Cura: un campo con le righe «FX on cash» per broker, filtrate con una costante condivisa col servizio. Poi `portfolio.flows_income` passa a v2, con `COMPACT_COMPONENT_VERSIONS` `{1,2}`, e i test.
+>   - Sonda mirata sulla corsia, sui dati sintetici (metodo del piano 43, B3b passo 5).
+>   - Facoltativo: una frase sulla cassa rivalutata nella `valuation_semantics` delle due provenance, con il loro bump a v3.
+>   - Stima ½ g più la sonda. Rischio basso sulle cifre, medio sul contratto.
+>
+> **⚠️ Fuori pista**:
+> - **L'ipotesi di §0 era sbagliata a metà.** «La cifra resta dentro `period_other_result`» vale per il riepilogo e per l'export del portafoglio. Non vale per gli effetti dell'export del broker, dove la riga compare da sola, già con F-W. Il nome nell'AI Export è quindi in parte già fatto.
+> - **Il mio costo della sonda era sbagliato.** Leggendo `ai_export_probe_workflow.md` («Copied Database and Credentials») avevo concluso che la sonda copiasse per forza il DB di produzione, e quindi toccasse al developer. Il coordinatore mi ha corretto (punto 3): la sonda gira sulla corsia, sui dati sintetici, col metodo che T ha usato per B3b e C-50.
+
+### F-4 — Gate, golden, rapporto sul DB mock, tempi ✅ (2026-10-12)
+
+Tutto sulla 6157, un comando alla volta. Prove in `/tmp/libreFolio_l41_f4_*.log`, fuori dal repo.
+
+> **Note implementazione** (2026-10-12):
+> - **I gate di F-W valgono anche per F-4**, perché dopo di loro nessun sorgente è cambiato.
+>   - L'mtime più recente dei sorgenti è 02:36:59, il primo log dei gate è delle 02:37:19.
+>   - I blob (12 caratteri):
+>     - `native_cash.py` `9884e226c88d`;
+>     - `portfolio_service.py` `39cb41d6ad8e`;
+>     - `portfolio_engine.py` `00e6c07415f1`;
+>     - `test_native_cash.py` `bef072035fb0`;
+>     - `test_portfolio_service_native_cash.py` `6f5c12030269`;
+>     - `OtherPeriodEffectsTable.svelte` `0475cad3415e`;
+>     - `PerformanceChart.svelte` `3decff70146e`.
+>   - I conti: guardia 1, `roi-fifo-utils` 652, `portfolio-engine` 40, `financial-math` 175, `ai-export` 1002, `lots-analysis-pure` 121, `api portfolio` 51. `front check` 0 errori e 0 avvisi; `i18n audit` 4349 chiavi, 0 mancanti.
+> - **Il golden della guardia non è mai stato rigenerato.** `fixtures/native_cash_guard/eur_only_golden.json` ha il blob `611964be9fee`, lo stesso di F-0 (un solo commit, `aa6b6077a`), e la guardia passa.
+> - **Build ed E2E**, con la porta verificata libera prima di ogni comando:
+>   - `dev.py front build --debug`: exit 0 in 81 s; svelte-check 0 errori e 0 avvisi (`_f4_front_build.log`). L'`api sync` interno alla build non ha toccato file tracciati;
+>   - `front-portfolio dashboard` 27/27 (`_f4_e2e_dashboard.log`). Copre `OtherPeriodEffectsTable` (via `PositionsPanel.svelte:208`) e il waterfall di `PerformanceChart`;
+>   - `front-broker detail` 37/37 (`_f4_e2e_broker_detail.log`);
+>   - `front-broker list` 9/9 (`_f4_e2e_broker_list.log`).
+> - **Il rapporto sul DB mock** (`_f4_diff.log`, 963 righe).
+>   - **Il metodo.** «Prima» è il codice di `c7f7b1807`, cioè il target senza F, estratto con `git archive`. «Dopo» è la worktree, da F-1 a F-W. Il DB è quello della corsia (76 transazioni), in due copie. Così la differenza isola F.
+>   - 76 report: 38 coppie utente|scope per i periodi `1y` e `all`. I broker con cassa estera sono 1, 3, 4, 5 e 8; solo EUR il 2 e il 6; il 7 non ha cassa.
+>   - **18 identici**, cioè tutti gli scope B2, B6 e B7. **58 cambiati**, solo sui broker con cassa estera.
+>   - Due controlli, entrambi vuoti: «scope solo EUR cambiati» e «cambi di solo rumore».
+>   - **Cosa cambia**:
+>     - la storia: NAV, cassa, book, `broker_nav`, `total_pnl`, ROI/TWRR/MWRR, K/R;
+>     - le candele, `allocation_history` e `broker_pnl_history`;
+>     - `acquisition_funding`, per k2;
+>     - i campi del riepilogo e le righe di `other_effects`.
+>   - **Le identità dopo F** (prima di F fra parentesi):
+>     - |cassa − Σ card| ≤ 2,9e-22 e |patrimonio − Σ card| ≤ 2,8e-22 (prima: fino a **866,5**);
+>     - waterfall ≤ 9,5e-24 (9,4e-24);
+>     - righe FX contro il Δ del P&L di periodo, e lo spostamento del residuo: ≤ 2,8e-22;
+>     - nessun report rompe un'identità a 0,01 o più.
+>   - **Esempio: admin, tutti i broker, `1y`.** Il P&L di periodo scende di 472,16, esattamente la somma delle 5 righe FX:
+>     - B1 −127,14;
+>     - B3 −54,34;
+>     - B4 −94,60;
+>     - B5 −196,08;
+>     - B8 −0,003.
+>
+>     Il residuo resta 937,3212.
+>   - **Esempio: B4, solo USD.** Prima nessun effetto; dopo, l'unica riga «FX on cash», −94,598.
+> - **L'AI Export** (`_f4_ai_detail.log`): 33 snapshot, 31 cambiati; B7 è identico.
+>   - In 21 snapshot di broker la riga «FX on cash» compare negli effetti.
+>   - B2 e B6 cambiano solo nei campi «portafoglio» e «delta» di `concentration_comparison`, cioè nel confronto col portafoglio intero.
+>   - Il resto segue il NAV: i bucket della performance, il drawdown, la concentrazione, i rapporti di `cost_efficiency`.
+> - **Determinismo**: un secondo giro indipendente dà 0/76 report e 0/33 snapshot diversi, da entrambi i lati.
+> - **I tempi**: a freddo, con le cache svuotate, mediane su n=7, admin, periodo `all`. Prima → dopo:
+>   - ALL 0,2039 → 0,1589 s (0,78);
+>   - B1 0,1104 → 0,0928 (0,84);
+>   - B2 0,0691 → 0,0617 (0,89);
+>   - B3 0,0720 → 0,0771 (1,07);
+>   - B4 0,0617 → 0,0677 (1,10);
+>   - B5 0,0854 → 0,0840 (0,98);
+>   - B6 0,0536 → 0,0490 (0,91);
+>   - B7 0,0059 → 0,0058 (0,98);
+>   - B8 0,0308 → 0,0291 (0,94).
+>
+>   La somma dei 76 report a freddo passa da 10,30 a 9,55 s (0,927). La cassa nativa costa 4,4 ms di mediana (massimo 5,7), il 2,7% del totale; sugli scope solo EUR, 0.
+> - **Il DB è stato solo letto**: il `.dump` delle due copie coincide con quello del DB della corsia (7582 righe).
+>
+> **⚠️ Fuori pista**:
+> - **`reconciled` scatta sul rumore.** È preesistente, nell'AI Export, e non è mio.
+>   - `portfolio_financial.py:490` e `broker_financial.py:435` fanno `reconciled = residual_amount == Decimal("0")`. Il residuo è ricalcolato dai campi del riepilogo e non è quantizzato.
+>   - Il conteggio (`_f4_reconciled.log`): da ogni lato 33 flag, 26 veri, 5 falsi e 2 None (B7, senza dati).
+>     - Prima i falsi sono user2|B1, test_user|OWNED (−2e-25), bob|B1, carol|B1 ed eve|B1.
+>     - Dopo sono admin|OWNED (−1e-24), user2|B1, bob|B1, carol|B1 ed eve|B1.
+>     - Due scambi; il |residuo| massimo è 1e-24.
+>   - F quindi non cambia il numero dei falsi: sposta solo quali sono, e sempre su residui di rumore.
+>   - Il danno: un lettore AI vede un residuo che si stampa 0,00 accanto a `reconciled: false`.
+>   - **Proposta**: una tolleranza o la quantizzazione, per esempio |residuo| < 1e-9 come `CONVERSION_DUST` (`native_cash.py:53`).
+>     - Probabilmente chiede il bump di `portfolio.reconciliation` e `broker.reconciliation`, più la mappa `COMPACT_COMPONENT_VERSIONS`.
+>     - Il proprietario è T (AI Export). Lo porto al coordinatore nel checkpoint F-C2; se non entra, va in T8.
+> - **Lo sha dei DB copiati cambia**, uguale per le due copie: è l'intestazione journal_mode/WAL che l'app imposta alla connessione. Il `.dump` identico prova che nessuna riga è cambiata.
+> - **Il rumore dei tempi con n=3.**
+>   - Al primo giro la mediana di ALL sembrava peggiorare (0,207 → 0,333 s), mentre il minimo migliorava (0,193 → 0,169).
+>   - Con n=7 la mediana è 0,204 → 0,159.
+>   - B3 e B4 restano a 1,07 e 1,10: è il costo della cassa nativa, 4–5 ms su report da 60–70 ms.
+> - **Il messaggio del runner** «Shared backend ignored SIGTERM for 5s — killing its process group» è preesistente.
+>   - Compare in circa 20 log precedenti, compresi i gate g12–g40 del coordinatore e i miei di T4 e T2g.
+>   - Non cambia gli esiti.
+> - **L'istantanea del DB** che il runner scrive in `.testLog/00_archive/` è ignorata da `.gitignore:119`. È un artefatto normale, fuori dal checkpoint.
+
+### F-5 — Doc EN via `docs-writer`, e il testo del runner ✅ (2026-10-12)
+
+Solo pagine EN, senza translate-stamp: le traduzioni vanno nel secondo giro di M. Nessuna pagina nuova; `mkdocs.yml` e la nav non cambiano. Prove in `/tmp/libreFolio_l41_f5_*.log`, fuori dal repo.
+
+> **Note implementazione** (2026-10-12):
+> - **Il runner** (`scripts/test_runner/_backend_services.py:571-574`, il solo testo concesso in §0).
+>   - La docstring, il titolo e le due righe `print_info` di `services financial-math` nominano ora anche `native_cash.py` e le sue funzioni pubbliche: `compute_native_cash`, `cash_movement_from_transaction`, `effective_share`, `exchange_results`.
+>   - Il comando e la cartella raccolta non cambiano; `ast.parse` ok.
+>   - La prova a runtime, prima del checkpoint F-C2: `services financial-math` → **175 passed**, con le righe nuove stampate (`/tmp/libreFolio_l41_fc2_fm.log`). Il codice non è cambiato dai gate di F-W (02:37–02:43): dopo, solo il runner e la doc.
+> - **Il brief**: ogni affermazione è stata verificata sul codice prima del lancio, pagina per pagina. Il `docs-writer` ha toccato solo le 13 pagine del brief:
+>   - **teoria**, in `financial-theory/technical-analysis/performance-metrics/portfolio-engine/`:
+>     - `index.en.md`:
+>       - le regole di valutazione (:41);
+>       - Cash(t) come cassa nativa rivalutata (§5);
+>       - il risultato di cambio sulla cassa, con k2 e l'ancora `#exchange-result-on-foreign-cash` (§6);
+>       - la riconciliazione;
+>       - $\mathrm{FXonCash}_b$ fra gli effetti del periodo (§7);
+>       - il pre-frame, che rigioca anche i giorni di cambio;
+>     - `deposited-capital.en.md`:
+>       - la riga della tabella: il cambio sulla cassa è un risultato, non capitale;
+>       - il risultato va in $R_b$, e la perdita oltre $R_b$ esce da $K_b$;
+>       - il transito in valuta e l'esempio D.
+>
+>       Le sezioni di T3 sui flussi interni restano;
+>     - `period-pnl.en.md`: l'«Other» diviso in «FX on cash» (`#fx-on-cash`, con la formula e gli esempi +20 e +25) e residuo, con i limiti che restano nel residuo;
+>     - `nav.en.md` e `book-value.en.md`: il termine Cash(t), lo stesso in NAV e in Book. Il cambio sulla cassa si annulla nell'Unrealized e sta nel Total P&L;
+>   - **developer**:
+>     - `backend/transactions/wac.md`: la regola del layer (D-4), la tabella dei moduli e la sezione su `native_cash`, cioè la firma, i membri di `NativeCash`, `CONVERSION_DUST`, il vincolo di `rates_until` e i chiamanti;
+>     - `architecture/overview.md:76`: il layer contiene anche la cassa nativa;
+>     - `frontend/data-quality-banner.md:141`: le conversioni del riepilogo vengono da `NativeCash.missing_conversions()`;
+>   - **utente**:
+>     - `dashboard/positions.en.md:87` e `kpi-cards.en.md:39`: la riga «FX on cash» di F-W;
+>     - `dashboard/charts.en.md`: l'area Returns e il Total P&L comprendono il cambio sulla cassa;
+>     - `dashboard/index.en.md:99`: la cassa in valuta è valutata ogni giorno;
+>     - `brokers/index.en.md:11`: il cambio sulla cassa conta nel Gain/Loss, non nel capitale. Il paragrafo di T3b resta.
+> - **La revisione sul codice**, prima di accettare:
+>   - **`native_cash.py`**:
+>     - la firma: `report_currency` solo per nome, `rates_until=None`;
+>     - i membri di `NativeCash` e `CONVERSION_DUST` (:53);
+>     - `financial_math/__init__.py` ha solo la docstring, quindi «non riesporta nulla» è vero;
+>   - **il motore**:
+>     - il passo 10c (`portfolio_engine.py:2708-2715`, `rates_until=actual_to`);
+>     - `_revalue_foreign_cash` (:1490-1517);
+>     - l'ordine: dopo la cassa del giorno e prima dei pool (:808-818 nel pre-frame, :993-996 nel frame);
+>     - la riconciliazione (:1220-1239);
+>   - **il servizio**:
+>     - in `get_summary` la cassa della card è `value_at(valuation_date)`, e la testata è `last_state.cash_value` (:721, :1175);
+>     - il riepilogo non converte rettifiche in natura, quindi la riga del banner è giusta;
+>     - F-W (:1986-2019) salta la riga sotto `CONVERSION_DUST`;
+>   - **l'aritmetica**: l'esempio D, il transito (+10 a 0,94), «FX on cash» (+20 e +25), e il residuo (il FX_CONVERSION da −€20 resta lì).
+> - **Le prove**, un comando alla volta, sul giro finale (r3):
+>   - `mkdocs build` (strict): ok, 0 avvisi (`_f5_build_r3.log`);
+>   - `mkdocs check-links`: 95 validi, 0 rotti, 8 risolti a runtime (`_f5_check_links_r3.log`);
+>   - `mkdocs translate-validate` (`_f5_tv_after_r3.log`). Il giro r2 aveva dato 75 errori e 74 avvisi; r3 aggiunge un `size-ratio` (vedi sotto).
+> - **Il debito delle traduzioni**, per M:
+>   - prima: 0 errori, 0 avvisi e 478 file ok (`_f5_tv_before.log`);
+>   - dopo: 75 errori e 75 avvisi, 469 file ok su 624, 0 mancanti. Riguarda 6 pagine EN × 3 lingue: `book-value`, `deposited-capital`, `index`, `nav`, `period-pnl` e `positions`;
+>   - gli errori: 42 `link-missing`, 12 `latex-display-count`, 9 `heading-count`, 9 `heading-level`, 3 `admonition-count`;
+>   - gli avvisi: 30 `heading-emoji`, 18 `link-count`, 15 `latex-inline-count`, 9 `list-bullet-count`, 3 `size-ratio`;
+>   - le pagine IT, FR ed ES non sono toccate.
+>
+> **⚠️ Fuori pista**:
+> - **Due testi vecchi corretti nelle sezioni riscritte**, perché il codice diceva altro:
+>   - la riconciliazione scala i pool **sommati** (:1220-1239), non broker per broker come diceva `index.en.md:164`;
+>   - il pre-frame «senza consumare prezzi o cambi» (`index.en.md:220`) non è più vero: ora rigioca i giorni di cambio.
+> - **Dove il `docs-writer` ha seguito il codice e non il brief** (tutto verificato):
+>   1. la riga del banner perde anche «priced in-kind adjustments», perché il riepilogo non le converte. Le «cash balances» le toglieva già il brief;
+>   2. ε_b è definito sul replay: il valore del giorno meno la cassa rigiocata;
+>   3. `rates_until` è un obbligo del chiamante, che il codice non controlla: dopo quella data vale l'ultimo cambio, e `value_at` alza un errore se il cambio manca;
+>   4. la cassa in testata «coincide» con la somma delle card;
+>   5. il link di `wac.md` punta all'ancora del §6, comune a tutte le lingue: `#exchange-result-on-foreign-cash` esiste solo in EN e rompeva le build IT, FR ed ES;
+>   6. «byte per byte» non compare: è una garanzia dei test (la guardia), non una promessa per l'utente;
+>   7. il cambio della cassa in viaggio resta nel residuo.
+> - **Due miei giri di correzione** (r2 e r3):
+>   - **r2**, quattro frasi che dicevano troppo:
+>     - «ogni movimento entra nella base del capitale» (`deposited-capital.en.md`, riga della tabella);
+>     - «una riga per ogni broker con cassa in valuta» (`positions.en.md:87`, `kpi-cards.en.md:39`, `index.en.md:231`). La riga c'è solo se i cambi hanno mosso quella cassa, perché F-W la salta sotto `CONVERSION_DUST`;
+>   - **r3**: la frase sulla base del capitale tornava in `book-value.en.md:29` e `index.en.md:41`.
+>     - Veniva dal mio brief: «every movement stays at its own date's rate», detto del capitale.
+>     - In realtà ogni movimento si registra al cambio della sua data, ma nella base entrano solo i flussi di capitale (in `index.en.md`, «external cash flow»).
+>   - Il messaggio di commit C5 aveva la stessa svista di r2: corretto prima del checkpoint.
+> - **Il `size-ratio` in più** (r3): la frase più lunga porta `book-value.en.md` da 4.419 a 4.477 caratteri, e la copia FR (3.347) scende dal 75,7% al 74,8%, sotto la soglia del 75%. IT ed ES lo avevano già. L'avviso è vero, perché la pagina FR non ha il contenuto di F-5. Non accorcio il testo solo per passare il controllo.
+> - **La seconda descrizione del runner** è fuori dal ritocco concesso: `_backend_services.py:1070`, `desc="Average cost: movements, conversions through the FX service, diagnostics"`. La propongo al coordinatore in F-C2.
 
 ## 16. Inventario: capitale, investito e guadagno fuori dal motore (T2-inv)
 
@@ -989,7 +1396,7 @@ Somma U, senza C1 e B9: circa 4–5½ giornate.
 
 ### 17.9 Test e gate
 
-- Nuovo `test_financial_math/test_native_cash.py`. Il runner `services financial-math` raccoglie già la cartella (`scripts/test_runner/_backend_services.py:570-578`): nessuna registrazione. Le righe descrittive (`:571-574`) nominano solo il costo medio: il ritocco del solo testo è concesso dentro F (§0).
+- Nuovo `test_financial_math/test_native_cash.py`. Il runner `services financial-math` raccoglie già la cartella (`scripts/test_runner/_backend_services.py:570-578`): nessuna registrazione. Le righe descrittive (`:571-574`) nominano solo il costo medio: il ritocco del solo testo è concesso dentro F (§0). *(Fatto in F-5, §15. La seconda descrizione, `:1070`, è una proposta al coordinatore.)*
 - Casi nuovi del motore in `test_portfolio_engine/`.
 - `test_daily_state_builder.py:549-578` non cambia: un giorno solo, o il cambio mancante.
 - Gate sulla 6157, un comando alla volta:
