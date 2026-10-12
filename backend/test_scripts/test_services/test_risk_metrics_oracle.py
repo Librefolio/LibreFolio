@@ -73,7 +73,7 @@ from backend.app.services.risk.signal_helpers import (
     rolling_single_values,
     undefined_window_warnings,
 )
-from backend.app.services.risk_plugins.historical_var import (
+from backend.app.services.risk_plugins.historical_var.plugin import (
     HistoricalVarAnalytic,
     HistoricalVarParams,
 )

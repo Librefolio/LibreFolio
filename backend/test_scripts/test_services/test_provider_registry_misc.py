@@ -1,7 +1,8 @@
 """
 Small coverage tests for provider registries.
 
-The last section pins the thread-safety contract of plugin discovery and catalogue iteration (V1).
+Two sections pin a contract each: the thread-safety of plugin discovery and catalogue iteration (V1), and the plugin
+folder layout discovery loads (U-1), last.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ import pytest
 
 from backend.app.config import DEFAULT_TEST_DATA_DIR
 from backend.app.services import provider_registry as registry_module
-from backend.app.services.provider_registry import AbstractProviderRegistry, BRIMProviderRegistry, register_provider
+from backend.app.services.provider_registry import AbstractPluginRegistry, AbstractProviderRegistry, BRIMProviderRegistry, PluginDiscoveryFailure, register_provider
 
 
 @dataclass
@@ -544,3 +545,263 @@ def test_catalogue_iteration_survives_a_registration_on_another_thread(plugin_la
 
     assert iterator.error is None, f"{site} walked the live catalogue, and a registration on another thread broke it: {iterator.outcome}\n{iterator.trace}"
     assert sorted(lab.registry.list_plugin_codes()) == ["held", "late"]
+
+
+# ============================================================================
+# PLUGIN FOLDERS (U-1)
+# A plugin is a folder <name>/: __init__.py holds only its docstring, the code is in plugin.py, loaded as
+# <namespace>.<name>.plugin after its package. A single <name>.py module is still discovered, for fixtures and test
+# registries. Every test writes real plugin files under tmp_path and discovers them with the real loaders.
+# ============================================================================
+
+# Prepended to every plugin.py and single-file plugin of the lab: the real plugins' registration path, plus the harness
+# through which the module reaches its throw-away registry.
+_LAB_HEADER = """\
+from backend.app.services.provider_registry import register_plugin
+
+import {harness} as harness
+
+"""
+
+# A plugin body registering one class, under the code the Python expression `code` evaluates to.
+_REGISTERS = """
+@register_plugin(harness.registry)
+class Plugin:
+    plugin_code = {code}
+"""
+
+# The body of a plugin that must never be imported: importing it would be a discovery failure the test sees.
+_NEVER_IMPORTED = 'raise AssertionError("this plugin must never be imported")\n'
+
+
+@dataclass
+class _FolderLab:
+    """A cold registry discovering `plugin_dir` under a namespace of its own: the throw-away twin of a plugin family."""
+
+    registry: type[AbstractPluginRegistry]
+    plugin_dir: Path
+    namespace: str
+    harness: types.ModuleType
+
+    def module(self, name: str, body: str | None = None) -> None:
+        """``<name>.py``, a single-file plugin registering the code ``name``, unless ``body`` replaces its body."""
+        (self.plugin_dir / f"{name}.py").write_text(self._plugin_source(name, body), encoding="utf-8")
+
+    def folder(self, name: str, *, plugin: str | None = None, init: str | None = None, files: dict[str, str] | None = None, without: tuple[str, ...] = ()) -> Path:
+        """``<name>/``: ``__init__.py`` a docstring and ``plugin.py`` registering the code ``name``, unless replaced.
+
+        ``files`` adds more files, written as given (a ``_helper.py``); ``without`` leaves out any of them.
+        """
+        folder = self.plugin_dir / name
+        folder.mkdir()
+        sources = {
+            "__init__.py": f'"""Plugin {name} of the lab: the code is in plugin.py."""\n' if init is None else init,
+            "plugin.py": self._plugin_source(name, plugin),
+            **(files or {}),
+        }
+        for filename, source in sources.items():
+            if filename not in without:
+                (folder / filename).write_text(source, encoding="utf-8")
+        return folder
+
+    def _plugin_source(self, name: str, body: str | None) -> str:
+        return _LAB_HEADER.format(harness=self.harness.__name__) + (_REGISTERS.format(code=repr(name)) if body is None else body)
+
+    def discover(self) -> tuple[list[str], tuple[PluginDiscoveryFailure, ...]]:
+        """Run discovery: the codes registered, in registration order, and the failures."""
+        return self.registry.list_plugin_codes(), self.registry.get_discovery_errors()
+
+    def loaded(self) -> set[str]:
+        """The modules of the lab's namespace in sys.modules (the harness sits beside the namespace, not under it)."""
+        return {module_name for module_name in sys.modules if module_name.startswith(self.namespace + ".")}
+
+
+@pytest.fixture
+def folder_lab(tmp_path: Path) -> Iterator[_FolderLab]:
+    """A cold plugin registry over a real folder under `tmp_path`, under a namespace of its own.
+
+    The class is created per test, so `__init_subclass__` gives it empty storage and a cold discovery. It ignores the
+    stem ``base``, as the signal and risk registries do, and does not raise on discovery errors, so a test reads them.
+    The plugins reach it through a harness module named after the same namespace; every module of that namespace, the
+    harness included, leaves sys.modules at teardown.
+    """
+    namespace = f"lf_folder_lab_{uuid4().hex}"
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+
+    class LabRegistry(AbstractPluginRegistry):
+        @classmethod
+        def _get_plugin_folder(cls) -> str:
+            return "folder_lab_unused"
+
+        @classmethod
+        def _get_plugin_directory(cls) -> Path:
+            return plugin_dir
+
+        @classmethod
+        def _get_module_namespace(cls) -> str:
+            return namespace
+
+        @classmethod
+        def _ignored_module_stems(cls) -> frozenset[str]:
+            return frozenset({"base"})
+
+    harness = types.ModuleType(f"{namespace}_harness")
+    harness.registry = LabRegistry
+    sys.modules[harness.__name__] = harness
+    try:
+        yield _FolderLab(registry=LabRegistry, plugin_dir=plugin_dir, namespace=namespace, harness=harness)
+    finally:
+        for module_name in list(sys.modules):
+            if module_name.startswith(namespace):
+                sys.modules.pop(module_name, None)
+
+
+def test_a_folder_plugin_loads_as_its_plugin_module_after_its_package(folder_lab):
+    """``alpha/`` loads its package from ``__init__.py``, then ``plugin.py`` as ``<ns>.alpha.plugin``, set on the package."""
+    lab = folder_lab
+    folder = lab.folder("alpha")
+
+    codes, failures = lab.discover()
+
+    assert (codes, failures) == (["alpha"], ())
+    package, module = sys.modules[f"{lab.namespace}.alpha"], sys.modules[f"{lab.namespace}.alpha.plugin"]
+    assert lab.registry.get_plugin("alpha").__module__ == module.__name__
+    assert package.plugin is module
+    assert module.__package__ == package.__name__
+    assert module.__file__ == str(folder / "plugin.py")
+    # A real package: its own __init__.py ran, and the folder is its search path, where relative imports resolve.
+    assert package.__file__ == str(folder / "__init__.py")
+    assert package.__doc__ == "Plugin alpha of the lab: the code is in plugin.py."
+    assert list(package.__path__) == [str(folder)]
+    assert lab.loaded() == {package.__name__, module.__name__}
+
+
+def test_a_plugin_module_imports_its_own_sibling_helper_relatively(folder_lab):
+    """``from ._helper import CODE`` in ``plugin.py`` resolves inside the plugin's own folder.
+
+    Two plugins hold a ``_helper.py`` each, same name and a different value: each registers the value of its own.
+    """
+    lab = folder_lab
+    for name in ("alpha", "beta"):
+        lab.folder(name, plugin="from ._helper import CODE\n" + _REGISTERS.format(code="CODE"), files={"_helper.py": f"CODE = {name + '_via_helper'!r}\n"})
+
+    codes, failures = lab.discover()
+
+    assert (codes, failures) == (["alpha_via_helper", "beta_via_helper"], ())
+    for name in ("alpha", "beta"):
+        assert sys.modules[f"{lab.namespace}.{name}._helper"].__file__ == str(lab.plugin_dir / name / "_helper.py")
+
+
+def test_single_file_and_folder_plugins_register_in_name_order(folder_lab):
+    """``a.py``, ``b/`` and ``c.py`` register as a, b, c: by name whichever the form, not files first nor folders first.
+
+    They are written in reverse, so that the order they were created in cannot pass for the order of their names.
+    """
+    lab = folder_lab
+    lab.module("c")
+    lab.folder("b")
+    lab.module("a")
+
+    codes, failures = lab.discover()
+
+    assert (codes, failures) == (["a", "b", "c"], ())
+    assert [lab.registry.get_plugin(code).__module__ for code in codes] == [f"{lab.namespace}.a", f"{lab.namespace}.b.plugin", f"{lab.namespace}.c"]
+
+
+def test_data_folders_and_private_names_are_skipped_without_a_failure(folder_lab):
+    """``static/`` and ``sample_reports/`` hold neither ``__init__.py`` nor ``plugin.py``: data, skipped in silence, the
+    ``.py`` among their files included. ``_private/`` and ``_private_module.py`` are never imported. ``alpha/`` beside
+    them proves that discovery ran."""
+    lab = folder_lab
+    lab.folder("alpha")
+    for data_folder, files in {"static": {"logo.svg": "<svg/>\n"}, "sample_reports": {"statement.csv": "date,amount\n", "make_sample.py": _NEVER_IMPORTED}}.items():
+        (lab.plugin_dir / data_folder).mkdir()
+        for filename, content in files.items():
+            (lab.plugin_dir / data_folder / filename).write_text(content, encoding="utf-8")
+    lab.folder("_private", plugin=_NEVER_IMPORTED)
+    lab.module("_private_module", _NEVER_IMPORTED)
+
+    codes, failures = lab.discover()
+
+    assert (codes, failures) == (["alpha"], ())
+    assert lab.loaded() == {f"{lab.namespace}.alpha", f"{lab.namespace}.alpha.plugin"}
+
+
+def test_a_plugin_folder_missing_one_of_its_files_is_one_failure_naming_it(folder_lab):
+    """``__init__.py`` without ``plugin.py``, and ``plugin.py`` without ``__init__.py``: one failure each, on
+    ``<ns>.<name>.plugin``, naming the folder and the file it lacks. Neither half runs (``no_package/plugin.py`` would
+    register), and ``zulu/``, after both, still loads."""
+    lab = folder_lab
+    lab.folder("no_module", without=("plugin.py",))
+    lab.folder("no_package", without=("__init__.py",))
+    lab.folder("zulu")
+
+    codes, failures = lab.discover()
+
+    assert codes == ["zulu"]
+    messages = {failure.module_name: failure.message for failure in failures}
+    assert len(failures) == 2 and set(messages) == {f"{lab.namespace}.no_module.plugin", f"{lab.namespace}.no_package.plugin"}, failures
+    no_module, no_package = messages[f"{lab.namespace}.no_module.plugin"], messages[f"{lab.namespace}.no_package.plugin"]
+    assert "no_module/" in no_module and "plugin.py" in no_module and "__init__.py" not in no_module, no_module
+    assert "no_package/" in no_package and "__init__.py" in no_package and "plugin.py" not in no_package, no_package
+    assert lab.loaded() == {f"{lab.namespace}.zulu", f"{lab.namespace}.zulu.plugin"}
+
+
+@pytest.mark.parametrize("raising_file", ["plugin.py", "__init__.py"])
+def test_a_plugin_folder_that_raises_is_a_failure_and_leaves_nothing_in_sys_modules(folder_lab, raising_file):
+    """Whichever of its files raises, ``broken/`` is one failure on ``<ns>.broken.plugin``, and neither its package
+    nor its plugin module stays in sys.modules. When the package raises, its ``plugin.py`` (which would register) never
+    runs. ``zulu/``, after it, still loads."""
+    lab = folder_lab
+    message = f"{raising_file} of broken/ raised"
+    if raising_file == "plugin.py":
+        lab.folder("broken", plugin=f"raise RuntimeError({message!r})\n")
+    else:
+        lab.folder("broken", init=f'"""A package that raises."""\nraise RuntimeError({message!r})\n')
+    lab.folder("zulu")
+
+    codes, failures = lab.discover()
+
+    assert codes == ["zulu"]
+    assert [(failure.module_name, failure.error_type, failure.message) for failure in failures] == [(f"{lab.namespace}.broken.plugin", "RuntimeError", message)]
+    assert f"{lab.namespace}.broken" not in sys.modules
+    assert f"{lab.namespace}.broken.plugin" not in sys.modules
+    assert lab.loaded() == {f"{lab.namespace}.zulu", f"{lab.namespace}.zulu.plugin"}
+
+
+@pytest.mark.parametrize("form", ["folder", "module"])
+def test_an_ignored_stem_is_skipped_in_either_form(folder_lab, form):
+    """``base`` is an ignored stem of the lab registry, as of the signal and risk ones: neither ``base/`` nor ``base.py``
+    is imported, and ``alpha/`` beside it loads."""
+    lab = folder_lab
+    if form == "folder":
+        lab.folder("base", plugin=_NEVER_IMPORTED)
+    else:
+        lab.module("base", _NEVER_IMPORTED)
+    lab.folder("alpha")
+
+    codes, failures = lab.discover()
+
+    assert (codes, failures) == (["alpha"], ())
+    assert lab.loaded() == {f"{lab.namespace}.alpha", f"{lab.namespace}.alpha.plugin"}
+
+
+def test_a_name_that_is_both_a_module_and_a_folder_is_a_discovery_failure(folder_lab):
+    """``x.py`` beside ``x/``: one failure saying so, and ``zulu/``, after them, still loads.
+
+    The two names tie, so the folder listing decides which comes first: that one loads, the second is the failure.
+    """
+    lab = folder_lab
+    lab.module("x", _REGISTERS.format(code=repr("x_module")))
+    lab.folder("x", plugin=_REGISTERS.format(code=repr("x_folder")))
+    lab.folder("zulu")
+
+    codes, failures = lab.discover()
+
+    assert len(failures) == 1, failures
+    (clash,) = failures
+    assert "exists both as x.py and as x/" in clash.message, clash
+    loaded_code = {f"{lab.namespace}.x.plugin": "x_module", f"{lab.namespace}.x": "x_folder"}.get(clash.module_name)
+    assert loaded_code is not None, f"the failure is on {clash.module_name}, which is neither x.py nor x/"
+    assert codes == [loaded_code, "zulu"]

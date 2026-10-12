@@ -19,23 +19,23 @@ from backend.app.schemas.signals import (
     SignalStatus,
 )
 from backend.app.services.provider_registry import SignalPluginRegistry
-from backend.app.services.signal_plugins import bollinger as bollinger_module
-from backend.app.services.signal_plugins import ema as ema_module
-from backend.app.services.signal_plugins import macd as macd_module
-from backend.app.services.signal_plugins import rsi as rsi_module
-from backend.app.services.signal_plugins.bollinger import (
+from backend.app.services.signal_plugins.bollinger import plugin as bollinger_module
+from backend.app.services.signal_plugins.bollinger.plugin import (
     BollingerSignalParams,
     BollingerSignalPlugin,
 )
-from backend.app.services.signal_plugins.ema import (
+from backend.app.services.signal_plugins.ema import plugin as ema_module
+from backend.app.services.signal_plugins.ema.plugin import (
     EmaSignalParams,
     EmaSignalPlugin,
 )
-from backend.app.services.signal_plugins.macd import (
+from backend.app.services.signal_plugins.macd import plugin as macd_module
+from backend.app.services.signal_plugins.macd.plugin import (
     MacdSignalParams,
     MacdSignalPlugin,
 )
-from backend.app.services.signal_plugins.rsi import (
+from backend.app.services.signal_plugins.rsi import plugin as rsi_module
+from backend.app.services.signal_plugins.rsi.plugin import (
     RsiSignalParams,
     RsiSignalPlugin,
 )

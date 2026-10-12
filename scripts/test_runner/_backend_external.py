@@ -48,9 +48,8 @@ def _discover_provider_codes(registry_type: str) -> list[str]:
         return []
 
     codes: list[str] = []
-    for py in target_dir.glob("*.py"):
-        if py.name == "__init__.py":
-            continue
+    # A plugin is a folder: its code is in ``<name>/plugin.py`` (helpers are ``_*.py`` beside it, never scanned).
+    for py in target_dir.glob("*/plugin.py"):
         try:
             text = py.read_text(encoding="utf-8")
             match = _PROVIDER_CODE_RE.search(text)
