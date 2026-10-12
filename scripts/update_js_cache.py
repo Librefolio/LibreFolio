@@ -6,7 +6,8 @@ Downloads external JS libraries and font resources to local directories
 for offline use.  Maintains versioned cache with automatic cleanup.
 
 Supported resource types:
-  - "js"   → single-file JS library (MathJax, etc.)
+  - "js"   → single-file JS library (MathJax, etc.), plus the "companions" it
+             loads from beside itself (MathJax's fonts), as its bundle names them
   - "font" → multi-file Google Fonts resource (CSS + woff2 subsets)
 
 Usage:
@@ -22,6 +23,7 @@ import json
 import re
 import shutil
 import sys
+import urllib.parse
 import urllib.request
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -87,6 +89,12 @@ LIBRARIES = {
         "url": "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js",
         "target": "tex-mml-chtml.js",
         "vendor_dir_key": "mkdocs",
+        # The CHTML output loads its fonts from beside the script ([mathjax]/output/chtml/fonts/woff-v2). The script
+        # alone drew every formula in the page's font: letters upright, fractions clipped (R2 M-19).
+        "companions": {
+            "pattern": r"MathJax_[A-Za-z0-9-]+\.woff",
+            "dir": "output/chtml/fonts/woff-v2",
+        },
     },
     "noto-color-emoji": {
         "type": "font",
@@ -385,18 +393,25 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
     return True
 
 
-def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:  # noqa: C901 — flat update pipeline with guard returns, no nested logic
+def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:
     """
     Update a single library.
 
     Returns True if updated, False if already up-to-date.
-    Dispatches to type-specific handler (js or font).
+    Dispatches to type-specific handler (js or font). A js library's companions
+    are checked on every run, whether the script itself changed or not.
     """
     resource_type = config.get("type", "js")
     if resource_type == "font":
         return _download_font_resource(vendor_dir, manifest, name, config, force)
+    updated = _update_js_file(vendor_dir, manifest, name, config, force)
+    if config.get("companions"):
+        updated = _update_companions(vendor_dir, manifest, name, config, force) or updated
+    return updated
 
-    # Original single-file JS logic
+
+def _update_js_file(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:  # noqa: C901 — flat update pipeline with guard returns, no nested logic
+    """The single-file JS logic: True if the script was written, False if up to date or not downloadable."""
     print(f"📦 Checking {name}...")
 
     lib_data = manifest.get("libraries", {}).get(name, {})
@@ -479,6 +494,91 @@ def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, fo
 
     print(f"  ✅ Updated to version {content_hash}")
     return True
+
+
+#: A font file's first bytes, by extension: an error page served with a 200 must not be cached as a font.
+_FILE_SIGNATURES = {".woff": b"wOFF", ".woff2": b"wOF2"}
+
+
+def _usable(file_name: str, content: Optional[bytes]) -> bool:
+    if not content:
+        return False
+    signature = _FILE_SIGNATURES.get(Path(file_name).suffix.lower())
+    return signature is None or content.startswith(signature)
+
+
+def _update_companions(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:  # noqa: C901 — flat download/manifest pipeline, no nested logic
+    """
+    Download the files a JS library loads from beside itself, as its cached script names them.
+
+    The names come from the script (``companions.pattern``) and the address from
+    the library's own URL, so a new version brings its own list. Every file is
+    downloaded again when the script changes. A file that cannot be downloaded
+    keeps its cached copy; without one, it is a hard failure for the library's
+    consumer, as the script is. Files the script no longer names are removed once
+    every named one is in place.
+
+    Returns True when a file was written or removed.
+    """
+    spec = config["companions"]
+    script = vendor_dir / name / config["target"]
+    if not script.exists():
+        return False  # the script's own failure is already recorded
+    names = sorted(set(re.findall(spec["pattern"], script.read_text(encoding="utf-8", errors="replace"))))
+    if not names:
+        _hard_fail(name, f"the cached script names no file like {spec['pattern']}: its companions cannot be listed")
+        return False
+
+    lib = manifest.setdefault("libraries", {}).setdefault(name, {"versions": []})
+    record = lib.get("companions") or {}
+    script_hash = lib.get("current_hash")
+    # No record: nothing says which script the files on disk belong to.
+    refresh = force or not record or record.get("for_hash") != script_hash
+    # An empty dir (or ".") is the script's own folder, never the host's root.
+    rel = spec["dir"].strip("/")
+    target_dir = vendor_dir / name / rel
+    base_url = urllib.parse.urljoin(config["url"], f"{rel}/" if rel else "./")
+
+    files, kept, missing, written = {}, [], [], 0
+    for file_name in names:
+        path = target_dir / file_name
+        if path.exists() and not refresh:
+            files[file_name] = record.get("files", {}).get(file_name) or {
+                "hash": get_file_hash(path.read_bytes()), "size": path.stat().st_size}
+            continue
+        content = download_file(base_url + file_name)
+        if not _usable(file_name, content):
+            (kept if path.exists() else missing).append(file_name)
+            continue
+        if not path.exists() or path.read_bytes() != content:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+            written += 1
+        files[file_name] = {"hash": get_file_hash(content), "size": len(content)}
+
+    if missing:
+        print(f"  ❌ {len(missing)} of {len(names)} companion file(s) not downloaded and not cached")
+        _hard_fail(name, f"{len(missing)} of {len(names)} companion file(s) not downloaded, no cached copy: "
+                         f"{', '.join(missing)}")
+        return written > 0
+    removed = 0
+    if target_dir.exists():
+        # Only what the pattern names is a companion: the folder may hold the script itself, or other files.
+        for stale in sorted(p for p in target_dir.iterdir()
+                            if p.is_file() and re.fullmatch(spec["pattern"], p.name) and p.name not in names):
+            stale.unlink()
+            removed += 1
+    if kept:
+        # Retried on the next run: the record is written only once every file is current.
+        print(f"  ⚠️  {len(kept)} companion file(s) not downloaded, keeping the cached copies")
+    else:
+        lib["companions"] = {"dir": spec["dir"], "for_hash": script_hash, "files": files}
+    size_kb = sum(entry["size"] for entry in files.values()) / 1024
+    if written or removed:
+        print(f"  ✅ Companions: {written} written, {removed} removed ({len(names)} files, {size_kb:.0f} KB)")
+    else:
+        print(f"  ✓ Companions up-to-date ({len(names)} files, {size_kb:.0f} KB)")
+    return bool(written or removed)
 
 
 def update_all_libraries(force: bool = False):
