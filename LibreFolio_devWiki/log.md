@@ -3187,3 +3187,14 @@ M-20 waits for I's plan 48 (FileGrid and FilesTable will be C-63); the unchecked
 read the specs. **Updated**: [[problems/bulk-modal-sticky-z-index]] (not covered → open, re-test after 1.2, C-61),
 [[problems/datatable-column-resize-noop]] (resize proved on the Risk Lab L1° table, `f55b2e42a`; others untested → open,
 C-62). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 70 — M's batch 28: the M-19 spec registered, the gallery's price guard after M-18
+Base `afd7d4821` (the target `b063b16ca` merged into W). Source: M's journal of round 12, §16.7 and §17 (batch 28),
+with the code of `0fe5195e8` and `e8d5a5668`, and T's CP1 note that found the guard (`43_financialMathHome`, before the
+STOP). **Created** [[problems/gallery-price-guard-expected-tofixed-text]] (resolved: red in English on prices over
+1,000, unseen because the runner excludes the gallery; the first control could not fail). **Updated**
+[[problems/docs-mathjax-looked-in-the-page-folder]] and [[problems/mathjax-fonts-missing-from-local-copy]] (the spec is
+in the repository, `front-utility docs-offline-math`), [[decisions/figures-in-the-interface-language]] (a consequence
+for tests), [[decisions/gallery-is-a-release-gate-with-real-data]], [[features/F-069]],
+[[sources/phase00-translation-round12-2026-10]] (batch 28; its stale «M-14 still in progress» line corrected). Graph:
+not updated (P-6).

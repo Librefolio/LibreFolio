@@ -11,6 +11,9 @@ related:
   - problems/raw-html-paths-in-translations
   - decisions/fr-typography-at-build-time
   - problems/docs-mathjax-looked-in-the-page-folder
+  - problems/mathjax-fonts-missing-from-local-copy
+  - problems/gallery-price-guard-expected-tofixed-text
+  - decisions/figures-in-the-interface-language
   - problems/copy-buttons-without-http-fallback
   - problems/mkdocs-material-tables-resist-styling
   - problems/playwright-probes-ignore-timeout
@@ -69,20 +72,39 @@ The plan grew after this page was first written (registered at `dfd8284f3`):
 - **The CHANGELOG's translation**, approved by the developer the same day («si ma fai anche la traduzione delle cose
   non ancora rilasciate…»), has its own plan; its frontend came from T — [[decisions/changelog-translated-by-chapter]].
 
+## Batch 28 (2026-10-12, added at the train-70 ingest)
+
+The work between batch 24 and batch 28 is filed from its own plan, `plan-phase00ChangelogTranslation.prompt.md`: the
+MathJax fonts ([[problems/mathjax-fonts-missing-from-local-copy]]), the CHANGELOG's translation and its first append
+([[decisions/changelog-translated-by-chapter]]), and M-23 ([[decisions/fr-typography-at-build-time]]). Batch 28 (§17)
+closed two items that had waited for the shared runner file and for T's CP1 of M-18:
+
+- **The M-19 spec registered** (`0fe5195e8`): the spec parked outside the repository since batch 25 is now
+  `front-utility docs-offline-math` — [[problems/docs-mathjax-looked-in-the-page-folder]].
+- **The gallery's price guard follows M-18** (`e8d5a5668`): since CP1 the asset cards write prices in the interface's
+  locale, so the guard writes the expected figure in the shot's locale, behind a control that can fail —
+  [[problems/gallery-price-guard-expected-tofixed-text]], a consequence of
+  [[decisions/figures-in-the-interface-language]].
+
 ## Not ingested
 
 - The rest of round 12 (batches 11–18: the pipeline runs, the label and register reviews, the glossary) — operational,
   with no durable knowledge beyond the four notes.
-- M-14 beyond its diagnosis: the per-language browser locale for the gallery is still in progress.
+- M-14 beyond its diagnosis: the per-language browser locale for the gallery was still in progress. *Corrected at the
+  train-70 ingest*: M-14 closed the same day, in batch 20, and is filed on [[problems/playwright-probes-ignore-timeout]]
+  (section «M-14, closed the same day»).
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| Journal of round 12 (§5.7–§5.9, §6, §9.3, §10, §11) | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` |
+| Journal of round 12 (§5.7–§5.9, §6, §9.3, §10, §11, §14–§17) | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` |
 | Backlog section M (M-2 … M-16) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
 | Translation pipeline and its cache | `mkdocs_src/aphra-pipeline/translate_docs.py` |
 | Translation validator | `mkdocs_src/aphra-pipeline/validate_translations.py` |
 | Rendered anchors | `mkdocs_src/aphra-pipeline/page_anchors.py` |
 | French typography hook | `mkdocs_src/hooks/fr_typography.py` |
 | Gallery scenarios and probes | `frontend/e2e/gallery.spec.ts`, `frontend/e2e/fixtures/probe.ts` |
+| The M-19 spec (batch 28) | `frontend/e2e/layout/docs-offline-math.spec.ts` |
+| Its registration in the runner (batch 28) | `scripts/test_runner/_frontend_utility.py` |
+| The gallery's price guard (batch 28) | `frontend/e2e/fixtures/galleryReportSets.ts` |

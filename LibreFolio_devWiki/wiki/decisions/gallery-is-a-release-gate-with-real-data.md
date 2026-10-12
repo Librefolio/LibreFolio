@@ -3,13 +3,14 @@ title: "The gallery is a release gate, shot from real data: no invented fixture,
 category: decision
 status: resolved
 date: 2026-10-07
-updated: 2026-10-10
+updated: 2026-10-12
 tags: [ci, release, gallery, screenshots, playwright, e2e, fixtures, offline, reduced-motion, docs, workstream-m, release-1.2]
 related:
   - features/F-074
   - concepts/ci-release-pipeline
   - problems/playwright-favicon-aborted-by-routes
   - problems/playwright-probes-ignore-timeout
+  - problems/gallery-price-guard-expected-tofixed-text
   - problems/release-images-shipped-debug-frontend
   - decisions/pdf-preview-viewer-only-local-assets
   - sources/phase00-release-images-and-gallery-2026-10
@@ -49,6 +50,8 @@ Then the rules for the new scenarios, approved for groups 3–7 of the repairs:
   from `galleryOfflineData.ts`; aborts the admin's check of the latest GitHub release; and aborts, and fails the test
   on, any third-party host. `expectGalleryOffline` reads the record at the end of each test. The last rule is why the
   PDF viewer had to serve its own engine and fonts ([[decisions/pdf-preview-viewer-only-local-assets]]).
+  *Update (train 70)*: the cards' live prices, answered from that file, are checked as the shot's locale writes them
+  — [[problems/gallery-price-guard-expected-tofixed-text]].
 - **Reduced motion for every shot** (`02ae0e09d`, 2026-10-09). A name too long for its box scrolls as a marquee
   (`scrollOnOverflow.ts`) 2 s after mounting, a loop that freezing animations cannot stop, so shots caught names
   mid-scroll. The gallery's context now has `reducedMotion: 'reduce'`; a full comparison changed 659 of 2,796 PNGs.
