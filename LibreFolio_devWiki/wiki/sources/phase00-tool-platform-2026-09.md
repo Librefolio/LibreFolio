@@ -48,7 +48,8 @@ days, frozen, then reshaped by its first real consumer before reaching `dev_rele
 - **The first pilot was thrown away.** The hand-off described P1 `analyze`: two services (PAC and Rebalancer) on
   one plugin, 5 s budgets. P1 was removed on 2026-09-21 (`b82e59ffa`) on the developer's instruction «togli p1 e poi
   lavora su v2»; since 2026-09-24 every historical section carries «⚠️ Superato → §0.x», and §0 states the planner's
-  live contract: «Se il codice cambia, prevale il codice».
+  live contract ([[decisions/pac-p1-prototype-removed]]; the PAC itself is ingested in
+  [[sources/phase00-pac-implementation-2026-10]]): «Se il codice cambia, prevale il codice».
 - **The dossier's risks, checked today** (`8abce8e87`): the user page no longer publishes the old budgets (§5.5,
   fixed); the memory mode is still invisible in the UI (§5.1) and the client still waits the platform's timeout
   rather than the operation's (§5.4); `claim_engine_window()` still fails at once on the default operation budgets

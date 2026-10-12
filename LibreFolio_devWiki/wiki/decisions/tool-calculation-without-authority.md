@@ -39,7 +39,8 @@ Tool-owned portfolio lookups» (the PAC decision chronicle). The platform bounda
   acknowledgement.
 - **Filling a draft from the user's own data is the renderer's job**, before dispatch, through an ordinary domain
   endpoint. For the PAC planner that endpoint is `POST /api/v1/portfolio/allocation-source` — authenticated,
-  read-only, answered with `Cache-Control: no-store` — and the Tool API never sees the user.
+  read-only, answered with `Cache-Control: no-store` — and the Tool API never sees the user
+  ([[decisions/pac-draft-copies-from-owned-data]]).
 
 ## Why — the dossier's reasons
 
