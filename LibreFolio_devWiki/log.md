@@ -2824,3 +2824,36 @@ the registry), [[features/F-004]], [[features/F-005]], [[features/F-008]], [[fea
 [[concepts/svelte5-runes]], [[problems/legacy-component-language-untracked]] (two earlier instances),
 [[problems/i18n-loading-gate-remounts-app]].
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B6a — the Tool platform (C, folder 16): F-106, three decisions
+Source: `Release_2/Phase_0/16_toolPlatform/` (plan, integration manifest, review dossier, hand-off to D) and the
+capacity round `13_pacAllocator/implementation/plan-phase00Step1Round1-ToolPlatformCapacity.prompt.md`, at the
+commits of the registry section; base `8abce8e87`. Step B6 is split in two: the PAC (folder 13) follows as B6b.
+Checked on the code at HEAD:
+- `ToolPlatformPolicy` defaults (1–4 items, 2 lanes, 8 pending, 4 per user, engine 30 s, 1 GiB) and the operation
+  defaults (engine 4 s); `catalog_version` "2"; `_MAX_SERVICES_PER_PLUGIN = 16`; `duplicate_code` and
+  `import_failed` quarantine;
+- `get_current_user` on the three routes; the `spawn` context, `setsid`, the `ready` frame and the `\x00` ACK,
+  `OwnedProcessTree`, `cgroup_v2_hard` and `process_tree_observed`, `claim_engine_window()`;
+- `@register_plugin(ToolPluginRegistry)` on `PacAllocatorTool`, contract and implementation `1.0.0`;
+  `defineToolRenderer('pac_allocator', '1.0.0', …)` in `registry.ts`;
+- the commits `1656aff69`, `bb0cdc334`, `8e7259ecc`, `570beb386`, `4a38b9061`, `3913fe217`, `b82e59ffa`,
+  `0210f9848`.
+
+The dossier's risks of 2026-09-11, re-checked: the old budgets are gone from the user page (fixed); no screen shows
+the memory mode, and `contracts.ts` still waits the platform's client timeout (both still true, recorded in
+[[features/F-106]]). The generated codec files are git-ignored, so no page cites them.
+Created:
+- [[features/F-106]] (registry: 106 features, INFRASTRUCTURE 17);
+- [[decisions/tool-calculation-without-authority]], [[decisions/tool-item-runs-in-owned-process]],
+  [[decisions/tool-contract-from-pydantic-compiled-renderer]];
+- [[sources/phase00-tool-platform-2026-09]].
+
+Updated: [[features/registry]], [[domains/infrastructure]], [[features/F-059]], [[features/F-105]] (the unused
+`tools.hub` anchor), [[decisions/provider-registry-decision]], [[decisions/plugin-folders-and-split-i18n]],
+[[concepts/backend-only-calculations]].
+
+Also: [[decisions/onboarding-existing-users-seeded-skipped]] records the developer's decision of 2026-10-12, relayed by
+the coordinator — the `import.gapFix` coachmark that older accounts meet once is accepted, not a defect («Va bene così:
+lo step è una novità della 1.2 e il coachmark la presenta una volta sola»); migration 004 does not change.
+Graph: not updated (P-6).

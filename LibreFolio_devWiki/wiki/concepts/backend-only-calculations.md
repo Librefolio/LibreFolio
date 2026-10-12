@@ -17,7 +17,9 @@ All financial calculations in LibreFolio are performed exclusively in the backen
 - Portfolio valuation, totals, gain/loss
 - Any aggregate across multiple assets or time periods
 - Allocation plans of the PAC allocator Tool: the backend searches (SCIP) and an exact Decimal replay referees every
-  number; booked amounts round against the plan ([[decisions/pac-rounding-against-the-plan]])
+  number; booked amounts round against the plan ([[decisions/pac-rounding-against-the-plan]]). Every Tool computes
+  on the backend, in a process of its own, from an explicit scenario ([[features/F-106]],
+  [[decisions/tool-calculation-without-authority]])
 
 **Exception**: the Signal Library ([[F-037]]) computes technical indicators (EMA, RSI, MACD) in the frontend on raw price series received from the API. This is intentional — signals are display-layer transformations, not financial calculations affecting stored data.
 

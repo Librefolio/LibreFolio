@@ -26,7 +26,8 @@ a hot-plugin, solo una modularizzazione estrema» ("it is not a hot-plug system,
 
 Today every plugin family is a package of flat modules under `backend/app/services/` (`asset_source_providers/`,
 `fx_providers/`, `brim_providers/`, `signal_plugins/`, `risk_plugins/`, `tool_plugins/`), registered by auto-discovery
-([[decisions/provider-registry-decision]], [[decisions/signal-backend-plugin-architecture]]). The frontend has one
+([[decisions/provider-registry-decision]], [[decisions/signal-backend-plugin-architecture]]; the Tool family is
+[[features/F-106]]). The frontend has one
 catalogue per language, `frontend/src/lib/i18n/{en,it,fr,es}.json` (5 653 lines in English).
 
 ## Options Considered (D-1, the plugin layout)

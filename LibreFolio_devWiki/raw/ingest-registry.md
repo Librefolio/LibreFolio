@@ -429,3 +429,13 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00OnboardingRound7-AnchorStall.prompt.md` | `176f19707` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]], [[problems/guide-anchor-never-resolves]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00OnboardingRound8-PostReview.prompt.md` | `020c762e0` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]], [[decisions/onboarding-positions-in-browser-per-account]], [[decisions/guide-text-never-announces-another-guide]], [[problems/legacy-layout-gate-missed-runes-state]], [[problems/guide-anchor-never-resolves]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/onboarding-review-dossier.md` | `d614daed9` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]], [[decisions/onboarding-existing-users-seeded-skipped]] |
+
+## 2026-10-12 — step B6a: folder 16, the Tool platform (C), and the capacity round (D) (base `8abce8e87`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/16_toolPlatform/plan-phase00ToolPlatform.prompt.md` | `425cb26d5` | 2026-10-12 | [[sources/phase00-tool-platform-2026-09]], [[features/F-106]], [[decisions/tool-calculation-without-authority]], [[decisions/tool-contract-from-pydantic-compiled-renderer]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/16_toolPlatform/dossier-piattaforma-tool.md` | `09c6171bc` | 2026-10-12 | [[sources/phase00-tool-platform-2026-09]], [[decisions/tool-item-runs-in-owned-process]], [[decisions/tool-contract-from-pydantic-compiled-renderer]], [[features/F-106]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/16_toolPlatform/manifest-integrazione-C.md` | `d614daed9` | 2026-10-12 | [[sources/phase00-tool-platform-2026-09]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/16_toolPlatform/handoff-pac-D.md` | `9e4140376` | 2026-10-12 | [[sources/phase00-tool-platform-2026-09]] — §0 is the PAC live contract, ingested again with folder 13 in step B6b |
+| `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00Step1Round1-ToolPlatformCapacity.prompt.md` | `4cd2cda56` | 2026-10-12 | [[sources/phase00-tool-platform-2026-09]], [[decisions/tool-item-runs-in-owned-process]] |
