@@ -60,6 +60,8 @@ A promoted transfer could enter the portfolio with no cost, its whole value then
 
 - [[decisions/transfer-auto-cost-from-sending-broker]] — the lot's other fix
 - [[entities/transaction-batch-pipeline]] — `validate_cost_basis` in the stage order
+- [[decisions/promote-respects-asset-event-link]] — this check once refused a promote of a split-linked row in Auto, but only by chance;
+  lot 42 refuses it for its own reason
 - Source: [[sources/phase00-transfer-cost-basis-2026-10]]
 
 ## Source files

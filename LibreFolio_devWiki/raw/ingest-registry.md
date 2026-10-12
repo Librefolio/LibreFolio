@@ -408,3 +408,9 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | Source Path | Git Hash at Ingest | Date | Wiki Page |
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/phases/40_transferCostBasis/plan-phase00TransferCostBasis.prompt.md` | `fa109eaa7` | 2026-10-12 | [[sources/phase00-transfer-cost-basis-2026-10]], [[decisions/transfer-auto-cost-from-sending-broker]], [[problems/promote-skipped-cost-basis-check]] |
+
+## 2026-10-12 — step B4: plan 42 (P) (base `94abcf380`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/42_promotePairChecks/plan-phase00PromotePairChecks.prompt.md` | `6c32f4aff` | 2026-10-12 | [[sources/phase00-promote-pair-checks-2026-10]], [[decisions/transfer-pair-same-asset-opposite-quantity]], [[decisions/promote-respects-asset-event-link]], [[problems/bulk-cost-basis-compared-by-reference]], [[problems/legacy-component-language-untracked]], [[concepts/marker-locale-for-catalogue-labels]] |

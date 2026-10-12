@@ -109,6 +109,9 @@ Characterisation tests are the most exposed, because they outlive ordinary tests
 and therefore have the most time to be overtaken by a translation —
 see [[concepts/characterisation-test-latch]].
 
+To prove that a label is not hardcoded, mount the component in a marker locale, where every key shows as
+`⟦key⟧`: [[concepts/marker-locale-for-catalogue-labels]].
+
 ## Source files
 
 | Role | Path |
