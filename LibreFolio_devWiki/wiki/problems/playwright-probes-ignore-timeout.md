@@ -78,6 +78,9 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853
   - **The guard**: an init script stamps each document with the locale it began under (`stampDocumentLocale`), and
     `expectDrawnUnder(page, lang)` — in `screenshot()` and `shootFiles()`, the only two screenshot calls — fails a shot
     whose page was drawn under another locale, or carries no stamp.
+  - *Update (train 78)*: the override moves only `Intl`'s fallback locale and `Accept-Language`; `navigator.language`,
+    which `uiLocale()` reads since M-18, stays en-US — backlog M-24 (low), written into the header of
+    `galleryLocale.ts` (`1e4a3ecd5`).
   - The 13 tests that shoot a page prepared once (3 auth pages, 2 PAC, 8 Files) now redraw it in each language.
   - **The trap**: `@playwright/test` gives every context `locale: 'en-US'`, and Chromium then refuses a second override
     («Another locale override is already in effect»). `test.use({locale: undefined})` falls back to that default; the
