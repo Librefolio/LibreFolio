@@ -5,7 +5,7 @@ Provides functions to normalize country codes to ISO-3166-A3 format.
 Weight validation and quantization is handled by BaseDistribution in schemas/assets.py.
 
 Usage:
-    from backend.app.utils.geo_utils import normalize_country_keys
+    from backend.app.utils.asset.geo import normalize_country_keys
 
     # Normalize country codes in distribution
     data = {"USA": "0.6", "Italy": 0.3, "GB": 0.1}
@@ -26,8 +26,8 @@ from typing import Any, List
 import pycountry
 import structlog
 
+from backend.app.utils.asset.translation import get_babel_locale
 from backend.app.utils.decimal_utils import parse_decimal_value
-from backend.app.utils.translation_utils import get_babel_locale
 
 logger = structlog.get_logger(__name__)
 

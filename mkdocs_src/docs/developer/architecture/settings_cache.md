@@ -2,7 +2,7 @@
 
 Backend services cache provider responses and computed aggregates in **named TTL caches** built
 on [theine](https://github.com/Yiling-J/theine) (Rust-backed core). A small registry in
-`backend/app/utils/cache_utils.py` tracks every cache by name, and three endpoints under
+`backend/app/utils/runtime/cache.py` tracks every cache by name, and three endpoints under
 `/api/v1/settings/cache/*` expose that registry to the UI.
 
 ## 🧱 The named-cache registry
@@ -10,7 +10,7 @@ on [theine](https://github.com/Yiling-J/theine) (Rust-backed core). A small regi
 Services obtain a cache through the registry, never by constructing one ad hoc:
 
 ```python
-from backend.app.utils.cache_utils import get_ttl_cache
+from backend.app.utils.runtime.cache import get_ttl_cache
 
 _fx_fetch_cache = get_ttl_cache("fx_provider_responses", maxsize=200, ttl=300)
 ```

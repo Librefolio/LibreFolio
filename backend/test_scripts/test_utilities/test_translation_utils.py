@@ -2,7 +2,7 @@
 Tests for translation utilities.
 """
 
-from backend.app.utils.translation_utils import get_babel_locale
+from backend.app.utils.asset.translation import get_babel_locale
 
 
 def test_get_babel_locale_returns_requested_language():
