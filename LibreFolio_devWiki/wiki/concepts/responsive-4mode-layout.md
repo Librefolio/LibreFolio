@@ -77,6 +77,20 @@ Also: the asset-list filters became `flex-1 min-w-0` in `oneColumn`, and the ass
 **Rule for a new toolbar or a new label:** give it `PageToolbar` thresholds measured the same way (four languages,
 +16 px, rounded) and add it to the sweep; a threshold guessed in one language will be wrong in another.
 
+## A translation can expire the calibration (2026-10-12)
+
+The thresholds hold only for the labels they were measured with. `7c66234a7` (2026-10-11, «fix(i18n): apply the
+developer's term choices») aligned the catalogues with the documentation glossary, and in Spanish `aiExport` went from
+«Exportar IA» to «Exportación IA». The sweep in workstream V's gate (2026-10-12) was then red in Spanish on two bars, in
+`denseRow`: the «Exportación IA …» group left the Dashboard's bar by up to 11.0 px (at a 1310 px viewport) and the
+asset detail's by up to 11.8 px (at 1210 px). Deterministic — red at one worker too. Backlog V-19.
+
+- **The rule**: a catalogue change that lengthens a toolbar label, in any language, re-runs the sweep
+  (`./dev.py test front-utility toolbar-width-sweep`); a red re-measures that bar's thresholds as above.
+- **The cure, planned** (coordinator, 2026-10-12; workstream I's plan 48, not yet integrated): the `denseRow`
+  thresholds of the D5 calibration — the sweep's own name for it — raised from 950 to 990 on the Dashboard and from
+  850 to 890 on the asset detail.
+
 ## History — the April 2026 model
 
 The first version (Phase 6, `responsiveLayout` born in Step 2c) used four global modes at fixed widths: `wide`
@@ -98,6 +112,7 @@ values.
 | FX list thresholds | `frontend/src/routes/(app)/fx/+page.svelte` |
 | Scrollbar gutter | `frontend/src/app.css` |
 | Width sweep gate | `frontend/e2e/layout/toolbar-width-sweep.spec.ts` |
+| The Spanish label that expired the calibration (`aiExport`) | `frontend/src/lib/i18n/es.json` |
 | Long broker label | `frontend/e2e/portfolio/dashboard-broker-filter-label.spec.ts` |
 | Calibration (step 13 §5) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep13DevNotesFixes.prompt.md` |
 | Gutter (step 15) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep15ToolbarSweepGutter.prompt.md` |
