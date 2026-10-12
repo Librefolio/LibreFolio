@@ -567,6 +567,7 @@
                 </label>
                 <input
                     id="delete-confirm-input"
+                    data-testid="profile-delete-confirm-input"
                     type="text"
                     bind:value={deleteConfirmText}
                     class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
@@ -575,10 +576,10 @@
             </div>
 
             <div class="flex justify-end gap-3">
-                <button on:click={closeDeleteModal} class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+                <button on:click={closeDeleteModal} data-testid="profile-delete-cancel" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
                     {$_('common.cancel')}
                 </button>
-                <button on:click={handleDeleteAccount} disabled={!canDelete || deleting} class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <button on:click={handleDeleteAccount} disabled={!canDelete || deleting} data-testid="profile-delete-confirm" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     {#if deleting}
                         {$_('common.deleting')}
                     {:else}
