@@ -357,7 +357,7 @@ bigger `N`.
     for a deterministic number.
 
     Compared file by file, the difference sits entirely in `asset_source.py` and
-    `asset_source_providers/borsa_italiana.py`: the two modules that talk to the live internet. Test
+    `asset_source_providers/borsa_italiana/plugin.py`: the two modules that talk to the live internet. Test
     and skip counts were identical in all three runs, so nothing changed about *what* ran — only
     which branch the provider took given what the site returned that day.
 

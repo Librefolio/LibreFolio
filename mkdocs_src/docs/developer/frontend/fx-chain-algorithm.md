@@ -343,7 +343,7 @@ No transformation is needed between the DFS output and the API request body.
   `priority` 1…n, so the first one is the primary route.
 - With no route selected, the pair gets one `MANUAL` step
   (`{from: base, to: quote, provider: "MANUAL"}`) at `priority` 999, the backend's
-  `MANUAL_PRIORITY` (`backend/app/services/fx_providers/manual.py`).
+  `MANUAL_PRIORITY` (`backend/app/services/fx_providers/manual/plugin.py`).
 - **Also create intermediate pairs** (shown when a chain is selected) adds, for every chain step
   whose pair is neither configured yet nor the main pair, a 1-step route at `priority` 1,
   deduplicated across chains.

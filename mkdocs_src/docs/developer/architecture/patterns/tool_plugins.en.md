@@ -41,7 +41,8 @@ Paths below are relative to the repository root.
 | `backend/app/services/tools/worker.py` | Child handshake, version-pin checks, validation, computation, and result frames. |
 | `backend/app/services/tools/process_tree.py` | Owned process identities, descendant tracking, and termination checks. |
 | `backend/app/services/tools/resources.py` | Memory-enforcement capability detection and per-job cgroup-v2 memory containment. |
-| `backend/app/services/tool_plugins/pac_allocator.py` | Current packaged plugin with one complete public service and code-based compute dispatch. |
+| `backend/app/services/tool_plugins/pac_allocator/plugin.py` | Current packaged plugin with one complete public service and code-based compute dispatch. |
+| `backend/app/services/tool_plugins/pac_allocator/i18n/` | The service's name and description in English, Italian, French and Spanish: the texts of its `name_i18n_key` and `description_i18n_key`. |
 | `backend/app/api/v1/tools.py` | Bounded transport handlers, authentication dependencies, and disconnect handling. |
 | `backend/app/api/v1/router.py` | Inclusion of the Tool router in the API v1 router. |
 | `backend/app/api/v1/auth.py` | `get_current_user`, the authentication dependency used by all Tool routes. |
@@ -71,7 +72,7 @@ The packaged plugin and its public services are distinct contract levels. `ToolP
 | Packaged plugin | `services` | One to sixteen statically declared `ToolService` values. |
 | Service | `tool_code` | Stable identifier matching `[a-z][a-z0-9_]*`, at most 64 characters. |
 | Service | `name`, `description` | Required human-readable metadata. |
-| Service | `name_i18n_key`, `description_i18n_key` | Optional translation keys; both default to `None`. Preserve them in catalogue and frontend integration. |
+| Service | `name_i18n_key`, `description_i18n_key` | Optional translation keys; both default to `None`. Preserve them in catalogue and frontend integration. Their texts live in the plugin's own `i18n/` fragment ([Folder and translations](#folder-and-translations)); a key the translation catalogue lacks falls back to `name` or `description`. |
 | Service | `category`, `icon_key` | Required identifiers using the Tool code format. |
 | Service | `ui` | `ToolUIDescriptor(kind="custom", component_key=..., version="1.0.0")`, with a service-owned string SemVer at `ui.version`. |
 | Service | `documentation` | `ToolDocumentation(path=..., version=...)`, pointing to a real documentation destination. |
@@ -114,7 +115,7 @@ A reusable calculation library can accept a no-argument checkpoint callback with
 
 ## 🔎 Discovery and version lifecycle
 
-`ToolPluginRegistry` extends `AbstractPluginRegistry`, selects the `tool_plugins` discovery folder, and registers packaged classes with `register_plugin(ToolPluginRegistry)`. Its static declaration is the `services` tuple; publication expands each service into a definition keyed by that service's `tool_code`.
+`ToolPluginRegistry` extends `AbstractPluginRegistry`, selects the `tool_plugins` discovery folder, and registers packaged classes with `register_plugin(ToolPluginRegistry)`. Its static declaration is the `services` tuple; publication expands each service into a definition keyed by that service's `tool_code`. Each package is a folder of `tool_plugins/`, whose `plugin.py` discovery loads (see [Folder and translations](#folder-and-translations)).
 
 Discovery is transactional:
 
@@ -133,6 +134,28 @@ Only resolvable local references are accepted, including discriminator mappings.
 The registry constructs each descriptor with package-owned `contract_version` and `implementation_version`, service-owned `ui` and `documentation`, and a generated fingerprint. Keep all four version/fingerprint concerns deliberate: a fingerprint detects schema/operation changes, the implementation pin identifies the live packaged code, and `descriptor.ui.version` selects a compatible compiled UI contract. None is automatic compatibility negotiation or hot replacement.
 
 The catalogue publishes full schemas, including their local definitions and references. It clamps operation limits to the platform policy and reserves output time within the hard deadline. An unusable effective operation policy makes that definition unavailable in the catalogue projection. Effective limit values are not additional inputs to the schema fingerprint.
+
+### 🗂️ Folder and translations {: #folder-and-translations }
+
+A Tool package is a folder of `tool_plugins/`:
+
+```text
+backend/app/services/tool_plugins/
+└── pac_allocator/
+    ├── __init__.py    ← its docstring and nothing else
+    ├── plugin.py      ← PacAllocatorTool, loaded as backend.app.services.tool_plugins.pac_allocator.plugin
+    └── i18n/          ← en.json, it.json, fr.json, es.json: tools.pacAllocator.name and .description
+```
+
+Registration claims are attributed to that `plugin` module, and a failure is reported under the filename `<name>/plugin.py` (`_safe_filename()` in `backend/app/services/tools/registry.py`, `ToolDiscoveryFailure.filename` in `backend/app/schemas/tools.py`). Import and patch the package's names from its `plugin` module: the package re-exports nothing. A helper only this Tool uses sits beside `plugin.py` as `_*.py`. The layout rules, and the gate that keeps them (`./dev.py test utils gate-plugin-layout`), are in [Plugin Folder Layout](registry_pattern.md#plugin-layout).
+
+A service's translation space is exactly its `name_i18n_key` and `description_i18n_key`, and both keys live in the package's fragment. The rest of a Tool's wording belongs to a frontend subsystem of the translation catalogue: the PAC planner's `tools.pacAllocator.*` to `pacAllocator`, the hub's `tools.*` to `tools`. Name the folder with `--into` when you add the two keys: without it, `add` writes a new Tool's keys into the `tools` subsystem, and `./dev.py test utils gate-plugin-i18n-ownership` fails ([A Plugin's Translations](registry_pattern.md#plugin-translations)).
+
+```bash
+./dev.py i18n add "tools.myTool.name" --en "My tool" --it "…" --fr "…" --es "…" --into tool_plugins/my_tool
+./dev.py i18n add "tools.myTool.description" --en "…" --it "…" --fr "…" --es "…" --into tool_plugins/my_tool
+./dev.py i18n where "tools.myTool.name"   # backend/app/services/tool_plugins/my_tool/i18n/en.json (exists)
+```
 
 ## 🌐 API and result contract
 
@@ -187,7 +210,7 @@ The handler watches for client disconnection and cancels the awaited computation
 
 `ToolDiagnosticsResponse` has `scope="api_process"`, an opaque runtime identifier, the effective policy, loaded descriptors, sanitized registration failures, the memory-enforcement capability (`capabilities.memory`), and a pool snapshot.
 
-Pool fields report availability, active, queued, pending, degraded lanes, completed, and failed counts, plus `resources`: the memory capacity (`workers × memory_limit_bytes`) and the memory limits reserved by the jobs the executor still tracks. They describe one API process, **not global deployment capacity**. The catalogue exposes only coarse unavailable summaries; diagnostics adds safe filenames and bounded failure reasons.
+Pool fields report availability, active, queued, pending, degraded lanes, completed, and failed counts, plus `resources`: the memory capacity (`workers × memory_limit_bytes`) and the memory limits reserved by the jobs the executor still tracks. They describe one API process, **not global deployment capacity**. The catalogue exposes only coarse unavailable summaries; diagnostics adds safe filenames (`<name>/plugin.py` for a plugin folder) and bounded failure reasons.
 
 `_item_finished` increments `completed` for every tracked item task that reaches a terminal state, including cancellation or an exception. `failed` is the subset without a platform-success result, not an additional disjoint total. These counters can advance while physical cleanup remains outstanding; `completed` does not certify process termination or released capacity. Both start at zero when `get_tool_executor()` lazily creates the process-local executor, on the first Tool request the process serves, and they count the items of every principal: they are neither installation-wide totals nor a per-user history.
 
@@ -282,7 +305,7 @@ The following are the `ToolPlatformPolicy` defaults declared in `backend/app/sch
 
 A `ToolOperationPolicy` declares its own values. A field the plugin omits takes the model's default — 4 s engine and soft, 5 s hard, 5 s queue, 2 s cleanup, 20 s request, 25 s client, 128 KiB / 256 KiB, and 1 GiB — so an operation that needs longer budgets must declare them. `effective_operation` (`backend/app/services/tools/catalog.py`) then clamps each operation to the platform. Every limit becomes the smaller of the two values, the soft deadline is also capped at the hard deadline minus the output reserve, and the engine budget at the soft deadline. A clamped soft deadline that is not positive, or a server bound that no longer fits the clamped request deadline, rejects the definition with `invalid_operation_policy`, and the whole service leaves the catalogue. The catalogue publishes, and the executor enforces, only the clamped values.
 
-For example, the `plan` operation of `PacAllocatorTool` (`backend/app/services/tool_plugins/pac_allocator.py`) declares 256 KiB of parameters and 512 KiB of results. The clamp caps them at the platform's 128 KiB and 256 KiB (`max_parameter_bytes` and `max_result_bytes` in `effective_operation`). Its time budgets equal the platform defaults (30 s engine, 44 s soft, 45 s hard, 5 s queue and cleanup, 59 s request, 65 s client), so its server bound has no slack: a request budget one millisecond lower would make the service unavailable.
+For example, the `plan` operation of `PacAllocatorTool` (`backend/app/services/tool_plugins/pac_allocator/plugin.py`) declares 256 KiB of parameters and 512 KiB of results. The clamp caps them at the platform's 128 KiB and 256 KiB (`max_parameter_bytes` and `max_result_bytes` in `effective_operation`). Its time budgets equal the platform defaults (30 s engine, 44 s soft, 45 s hard, 5 s queue and cleanup, 59 s request, 65 s client), so its server bound has no slack: a request budget one millisecond lower would make the service unavailable.
 
 The catalogue and diagnostics routes run under a 20 s request budget. A compute request runs under the largest effective `request_timeout_ms` among its resolvable items (`ToolExecutor.batch_request_timeout_ms`), or 20 s when none resolves. The frontend Tool client applies the catalogue policy's `client_timeout_ms` to the compute request (`prepareToolRun` in `frontend/src/lib/features/tools/contracts.ts`); it remains a client transport budget, not a throughput or completion guarantee.
 
@@ -345,6 +368,7 @@ The following work must be completed and verified before presenting a new Tool a
 - [ ] Declare package-wide contract/implementation versions and a nonempty service tuple; give every service complete metadata, policies, models, UI SemVer, and documentation.
 - [ ] Define strict nested models, operation discriminators without defaults, and matching operation policies.
 - [ ] Register the packaged class and verify service expansion, healthy siblings, failed imports, duplicate-code quarantine, invalid definitions, and closed registration.
+- [ ] Place the package in its folder, `tool_plugins/<name>/plugin.py` beside a docstring-only `__init__.py`, and add each service's `name_i18n_key` and `description_i18n_key` texts to its `i18n/` fragment in the four languages (`./dev.py i18n add … --into tool_plugins/<name>`); `./dev.py test utils gate-plugin-layout` and `gate-plugin-i18n-ownership` hold both.
 - [ ] Implement a zero-argument constructor and synchronous code-based dispatch with bounded checkpoints and job-scoped child work.
 - [ ] Verify input/output adapters, schema references, fingerprints, Unicode and byte limits, safe errors, and unchanged caller scenarios.
 - [ ] Integrate generated codecs and the compiled renderer map; verify acceptance parity, unsupported renderer/version handling, and language-aware documentation links.

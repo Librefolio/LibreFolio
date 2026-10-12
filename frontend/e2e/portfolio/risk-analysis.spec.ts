@@ -269,7 +269,7 @@ const CATALOG = {
         definition('drawdown_summary', 'drawdown', ['asset', 'portfolio'], ['historical'], 'drawdownSummary', 20),
         definition('simulation', 'simulation', ['asset', 'portfolio'], ['current_composition'], 'simulation', 30),
         // Portfolio only, current composition only — copied from the plugin's own
-        // declaration (`risk_plugins/asset_risk_return.py:61`), not guessed. The
+        // declaration (`supported_scopes`/`supported_modes` in `risk_plugins/asset_risk_return/plugin.py`), not guessed. The
         // narrowness is the point: `buildBaseAnalytics` drops any code the
         // catalogue does not advertise *for this scope and this mode*, so a
         // fixture that advertised it for `historical` too would let the panel ask
@@ -795,7 +795,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
             const method = String(analytic.parameters?.method ?? 'hypothetical');
             const assetId = request.scope.kind === 'asset' ? request.scope.asset_id : matrixAssetIds(request)[0];
             if (method === 'historical_replay') {
-                // The portfolio stories of `replayExclusions`, told as `stress.py::_historical`
+                // The portfolio stories of `replayExclusions`, told as `stress/plugin.py::_historical`
                 // answers them. ⚠️ INVENTED, NOT MEASURED: holdings 1 and 2 keep the weights the
                 // `risk_contribution` answer above gives them (0.6 and 0.35), and the 0.05 that
                 // answer calls cash is here a third holding, with no price in the window. Every

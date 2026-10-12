@@ -164,7 +164,7 @@ i rendimenti giornalieri, non i prezzi.
 
 **Cosa sa già fare il motore** (verificato nel codice il 02/10/2026):
 
-- `StressParams.proxy_assets` (`backend/app/services/risk_plugins/stress.py`) accetta fino a 100 coppie
+- `StressParams.proxy_assets` (`backend/app/services/risk_plugins/stress/plugin.py`) accetta fino a 100 coppie
   `{asset_id, proxy_asset_id}`. Il sostituto deve essere diverso dall'originale, e un asset non può essere sostituito
   ed escluso insieme. L'unica politica dichiarata è `manual_proxy_or_exclude` (`schemas/risk_scenarios.py`).
 - `RiskService._prepare_historical_replay_context` (`backend/app/services/risk/service.py`) controlla due cose: che gli
@@ -204,7 +204,7 @@ i rendimenti giornalieri, non i prezzi.
 **Quando riprenderlo.** Quando un utente chiede di rigiocare una crisi con asset più giovani della crisi stessa.
 L'ordine: prima la regola del sostituto sensato e la diagnostica, poi il buco della copertura, poi l'interfaccia.
 
-**Riferimenti**: `stress.py` (`StressParams`, `_historical`); `service.py` (`_prepare_historical_replay_context`);
+**Riferimenti**: `stress/plugin.py` (`StressParams`, `_historical`); `service.py` (`_prepare_historical_replay_context`);
 `schemas/risk.py` (`RiskHistoricalReplayProxyAsset`, `RiskHistoricalReplayAudit`); la guida
 `mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/historical-replay.en.md`; D372 in
 `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md`.
@@ -225,7 +225,7 @@ SciPy production.
 
 ### Contesto
 
-`ComparisonAnalytic` (`backend/app/services/risk_plugins/comparison.py`) calcola già
+`ComparisonAnalytic` (`backend/app/services/risk_plugins/comparison/plugin.py`) calcola già
 active return, tracking error, information ratio, correlazione e beta contro un asset
 reale di confronto. Nella riorganizzazione della UI Risk, **beta e active return
 restano**; **tracking error e information ratio vengono rimossi dalla UI**.
@@ -249,7 +249,7 @@ Senza benchmark persistente e dichiarato, riesporli riproduce il problema attual
 
 ### Riferimenti
 
-- `backend/app/services/risk_plugins/comparison.py`
+- `backend/app/services/risk_plugins/comparison/plugin.py`
 - `frontend/src/lib/components/risk/RiskAnalysisPanel.svelte` (sezione comparison)
 
 ---
@@ -262,7 +262,7 @@ Senza benchmark persistente e dichiarato, riesporli riproduce il problema attual
 
 ### Contesto
 
-`PortfolioOptimizationAnalytic` (`backend/app/services/risk_plugins/portfolio_optimization.py`)
+`PortfolioOptimizationAnalytic` (`backend/app/services/risk_plugins/portfolio_optimization/plugin.py`)
 è implementato e testato (Riskfolio-Lib 7.0.1 + CVXPY, solver CLARABEL/SCS, strategie
 min-variance / max-Sharpe / ERC, covarianze historical / Ledoit-Wolf / OAS) ma **non ha
 alcuna UI**: oggi è raggiungibile solo via API ed è quindi costo puro per ogni
@@ -306,7 +306,7 @@ questi") — è un complemento naturale di `risk_contribution` e **non richiede 
 
 ### Riferimenti
 
-- `backend/app/services/risk_plugins/portfolio_optimization.py`
+- `backend/app/services/risk_plugins/portfolio_optimization/plugin.py`
 - `backend/app/services/risk/quant/optimization_engine.py`
 - `LibreFolio_devWiki/wiki/problems/riskfolio-numpy-vectorbt-dependency-trap.md`
 
@@ -432,7 +432,7 @@ resta fuori scope in modo permanente.
 ### Riferimenti
 
 - `backend/app/services/risk/quant/quantlib_worker.py`
-- `backend/app/services/risk_plugins/simulation.py`
+- `backend/app/services/risk_plugins/simulation/plugin.py`
 
 ---
 
@@ -1037,7 +1037,7 @@ Spawning di un **processo cache dedicato** dal `lifespan()` di FastAPI, che usa 
 ### Contesto
 
 Durante il retest del fix I-bis #26 (Batch 4.c — riordino Step 2/4 in
-`scheduled_investment.py`) è emerso un limite di design attuale del
+`scheduled_investment/plugin.py`) è emerso un limite di design attuale del
 provider `scheduled_investment`:
 
 > **La frequenza di generazione dei prezzi coincide con la frequenza di
@@ -1116,7 +1116,7 @@ da quando parte lo schedule.
 
 - `backend/app/schemas/assets.py` — `FAInterestRatePeriod`,
   nuovo enum `CouponAnchor`.
-- `backend/app/services/asset_source_providers/scheduled_investment.py`
+- `backend/app/services/asset_source_providers/scheduled_investment/plugin.py`
   — Step 3/4 rifattorizzati.
 - `frontend/src/lib/components/assets/editors/ScheduledInvestmentEditor.svelte`.
 - Test: `test_synthetic_yield_integration.py` — parametric su
@@ -1762,7 +1762,7 @@ Ripartiti per **confine di conversione** (verificato per modulo, non stimato):
 | avvio / YAML dell'operatore | `load_risk_scenario_catalog()` singleton | 8 |
 | costruzione del pool worker | `SpawnWorkerPool.__init__` | 5 |
 | `validate_params()` → `ValidationError` | **eseguendolo** | 28 |
-| richiesta motore dentro il `try` | `portfolio_optimization.py:170→221` | 8 |
+| richiesta motore dentro il `try` | `portfolio_optimization/plugin.py:170→221` | 8 |
 | sottoprocesso worker | `SpawnWorkerRemoteError` → `_remote_error_code` | 4 |
 | **il catch-all di `service.py`** | il resto | **110** |
 
@@ -1828,8 +1828,8 @@ enum↔catalogo la tiene viva.
 > rileggesse `undefined_metric` come orfana e ne cancellasse la chiave **riaprirebbe esattamente
 > il difetto che B1(b) ha chiuso**: il fallback silenzioso.
 
-**②** `portfolio_optimization.py:221` ha **lo stesso difetto latente** che B2 ha corretto in
-`simulation.py`: un `except ValueError → INVALID_PARAMETERS` che avvolge **l'intera**
+**②** `portfolio_optimization/plugin.py:221` ha **lo stesso difetto latente** che B2 ha corretto in
+`simulation/plugin.py`: un `except ValueError → INVALID_PARAMETERS` che avvolge **l'intera**
 costruzione della richiesta, quindi converte anche le violazioni di invariante del motore in
 «parametri non validi». **Un `try` allargato è un `except` che presume.** Fuori dal perimetro di
 B, non riparato, misurato.

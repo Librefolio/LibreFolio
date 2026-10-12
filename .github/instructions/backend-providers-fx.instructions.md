@@ -14,11 +14,11 @@ Each provider represents a central bank or financial data source that provides e
 
 | Provider | File | Code | Base Currency | Source |
 |----------|------|------|---------------|--------|
-| **ECB** | `ecb.py` | `ECB` | EUR | XML feed |
-| **FED** | `fed.py` | `FED` | USD | JSON API |
-| **BOE** | `boe.py` | `BOE` | GBP | JSON API |
-| **SNB** | `snb.py` | `SNB` | CHF | JSON API |
-| **MANUAL** | `manual.py` | `MANUAL` | Any | Sentinel (no sync) |
+| **ECB** | `ecb/plugin.py` | `ECB` | EUR | XML feed |
+| **FED** | `fed/plugin.py` | `FED` | USD | JSON API |
+| **BOE** | `boe/plugin.py` | `BOE` | GBP | JSON API |
+| **SNB** | `snb/plugin.py` | `SNB` | CHF | JSON API |
+| **MANUAL** | `manual/plugin.py` | `MANUAL` | Any | Sentinel (no sync) |
 
 ## MANUAL Provider (Sentinel)
 
@@ -36,7 +36,8 @@ FX pairs can have multiple providers with priority ordering. When syncing rates,
 
 The abstract base class `FXProvider` is defined in `backend/app/services/fx.py`. Read that file for the full contract.
 
-1. Create `backend/app/services/fx_providers/my_bank.py`
+1. Create the folder `backend/app/services/fx_providers/my_bank/` with `__init__.py` (the provider's docstring only,
+   no re-export) and `plugin.py` (the code); import its names, and patch them, from `….fx_providers.my_bank.plugin`
 2. Extend `FXProvider` (from `fx.py`)
 3. Decorate with `@register_provider(FXProviderRegistry)`
 4. Implement the required abstract methods and properties (see base class)
