@@ -49,5 +49,5 @@ Examples of sync-safe endpoints: `frontend_catchall()`, `mkdocs_static()` in `ma
 |------|------|
 | Thread isolation (provider calls) | `backend/app/services/asset_source.py` |
 | FX service (async patterns) | `backend/app/services/fx.py` |
-| Example: yfinance provider | `backend/app/services/asset_source_providers/yahoo_finance.py` |
+| Example: yfinance provider | `backend/app/services/asset_source_providers/yahoo_finance/plugin.py` |
 | FastAPI main (sync endpoints) | `backend/app/main.py` |

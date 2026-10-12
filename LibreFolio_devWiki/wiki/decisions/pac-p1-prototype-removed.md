@@ -66,7 +66,7 @@ funzionava e collegarlo **prima di metterci a fare le prove**», and the instruc
 
 | Role | Path |
 |------|------|
-| The plugin with one service and one operation | `backend/app/services/tool_plugins/pac_allocator.py` |
+| The plugin with one service and one operation | `backend/app/services/tool_plugins/pac_allocator/plugin.py` |
 | The report without P1's branch | `backend/app/services/portfolio_service.py` |
 | Report tests (twelve sections, 422 on the old field) | `backend/test_scripts/test_api/test_portfolio_api.py` |
 | Tools user page (the withdrawn Rebalancer) | `mkdocs_src/docs/user/tools/index.en.md` |

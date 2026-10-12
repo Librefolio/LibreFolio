@@ -38,7 +38,7 @@ Phase 6 Step 3 Round 12 identified a critical circular dependency in the origina
 - `InterestType`: `SIMPLE` (I = P₀ × r × Δt) or `COMPOUND` (V_{t-1} × r × Δt)
 - `generate_interest=True` → automatic interest events at maturation dates
 - `FALateInterestConfig` for post-maturity penalty rates
-- Financial math functions (day count, simple/compound interest) live in `scheduled_investment.py` itself
+- Financial math functions (day count, simple/compound interest) live in `scheduled_investment/plugin.py` itself
 
 ### Caching
 - 48h TTL cache keyed by hash of canonical `provider_params` — same params reuse computation
@@ -46,13 +46,13 @@ Phase 6 Step 3 Round 12 identified a critical circular dependency in the origina
 ## Links
 - [[entities/db-models]]
 - Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step3/plan-phase06Step3Round12-AssetEventAndScheduleRedesign.prompt.md`
-- Source: `backend/app/services/asset_source_providers/scheduled_investment.py`
+- Source: `backend/app/services/asset_source_providers/scheduled_investment/plugin.py`
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| ScheduledInvestment provider | `backend/app/services/asset_source_providers/scheduled_investment.py` |
+| ScheduledInvestment provider | `backend/app/services/asset_source_providers/scheduled_investment/plugin.py` |
 | Phase 6 Round 12 plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step3/plan-phase06Step3Round12-AssetEventAndScheduleRedesign.prompt.md` |
 | Maturation engine plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step3/plan-phase06Step3Round12Finale-MaturationEngine.prompt.md` |
 | DB models | `backend/app/db/models.py` |
