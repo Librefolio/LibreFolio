@@ -555,3 +555,148 @@ Spec separato: `frontend/e2e/portfolio/data-quality-legacy.spec.ts`.
   - la riga CHANGELOG della cura di D2;
   - il commit;
   - la riconciliazione dell'indice del backlog con la nuova sezione V.
+
+## 11. Lotto 2: V-1, V-7, V-5, V-6 (12/10)
+
+> **Mandato** (coordinatore, 12/10, dopo il treno 56 `e7d698c4d`, che contiene il lotto 1: `15bfcf1e8`, `2f0b06346`,
+> `b44b28f3d`), «nello spirito della decisione D2 del developer»:
+> 1. V-1 come D2: prima il rosso, poi la cura;
+> 2. V-7: `dashboard-broker-filter-label` su un account usa-e-getta;
+> 3. V-5 e V-6.
+>
+> V-2, V-3 e V-4 restano nel backlog. Nessuna riga nel CHANGELOG: «Sincronizza tassi» (06/10) e il banner STALE_PRICE
+> (D8, 30/09) sono nati dopo la 1.1. Corsia 6175. Checkpoint: manifest coi blob, commit proposti in ASCII.
+>
+> L'autorizzazione di V-1 è un'estensione della D2 decisa dal coordinatore, non una nuova parola del developer.
+
+### 11.1 Stato verificato (HEAD `e7d698c4d`, worktree pulita)
+
+- **V-1**: `frontend/src/routes/(app)/dashboard/+page.svelte:436-463`, ramo `sync_asset_prices` di
+  `handleBannerAction`. Dopo la risposta del sync: i toast, poi `invalidate()` (`:456`) e `await loadAll(true)`;
+  `refreshVersion` resta invariato.
+  - Cura: `refreshVersion += 1` dopo `invalidate()`, solo nel `try`, dopo una risposta. È la stessa forma della cura di
+    D2 (`:381-382`).
+  - Il test va in `stale-price-banner.spec.ts`, che ha già l'account usa-e-getta, `mockprov` con `INVALID_TICKER_12345`
+    e il sync intercettato. Asserisce che, dopo la risposta del sync, il pannello lotti già aperto chiede di nuovo
+    `POST /portfolio/lots/analysis`.
+- **V-7**: `frontend/e2e/portfolio/dashboard-broker-filter-label.spec.ts` entra come `TEST_USER` (`:655`) e crea e
+  cancella un broker suo (`:584-622`).
+  - Il trigger mostra un nome solo con un broker scelto **fra più** (`:676`): l'account usa-e-getta deve possederne
+    due.
+  - Pulizia: broker, poi account (`deleteDisposableUser`).
+- **V-5**: `frontend/e2e/portfolio/data-quality-banners.spec.ts:433`, «(the seed's MISSING_COST_BASIS is one)». Il seed
+  non può produrlo; il fratello che lo spec possiede è il `TRANSACTION_IMPLIED` iniettato (`:409-421`).
+- **V-6**: `mkdocs_src/docs/developer/frontend/data-quality-banner.md`, sezione «Test Coverage»:
+  - `:271-284`: elenco dei test di `data-quality-banners.spec.ts` incompleto;
+  - dopo la cura di V-1, la riga `sync_asset_prices` della tabella delle CTA e la sezione `stale-price-banner`.
+
+### 11.2 Passi
+
+1. Test-author A scrive il test rosso di V-1; test-author B scrive V-7 e V-5. Entrambi senza corsia.
+2. A gira V-1 nella corsia: rosso per la ragione giusta.
+3. La cura di V-1. A rigira: verde a 1 e a 4 worker.
+4. B gira `broker-filter-label` a 1 e a 4 worker.
+5. docs-writer per V-6 e le righe toccate da V-1.
+6. Giro finale `--workers 4 front-portfolio all`; controlli statici; manifest coi blob; checkpoint.
+
+### 11.3 Avanzamento
+- ✅ **Passo 1, V-7 e V-5** (12/10), scritti da test-author B.
+  > **Note implementazione**:
+  > - `dashboard-broker-filter-label.spec.ts`:
+  >   - account usa-e-getta (`registerDisposableUser(request, 'brokerlabel')`, `prepareOnboardingAccount`) con due
+  >     broker suoi: quello dal nome lungo e uno semplice, per avere «uno fra più»;
+  >   - nessuna transazione: il trigger è sempre disegnato e il report parte appena l'account possiede un broker
+  >     (`canAsk`);
+  >   - nuova precondizione: il pannello del filtro elenca anche il secondo broker;
+  >   - pulizia: broker per id senza `force`, poi l'account;
+  >   - header «Ownership» riscritto; via gli import `TEST_USER` e `login`.
+  > - `data-quality-banners.spec.ts` (~`:433`): solo il commento. Il fratello è il `TRANSACTION_IMPLIED` che il test
+  >   inietta.
+  > - Runner: solo il `desc=` di `broker-filter-label`.
+  > - prettier pulito; tsc pulito, con prova che il controllo legge davvero il file.
+- ✅ **Passo 4, V-7 e V-5 in corsia** (12/10).
+  > **Note implementazione**:
+  > - `… --workers 1 front-portfolio broker-filter-label`: **2 passati** (`/tmp/libreFolio_v_b2_v7_w1.log`);
+  > - `--workers 4`: **2 passati**, in contemporanea (`/tmp/libreFolio_v_b2_v7_w4.log`);
+  > - `… --workers 4 front-portfolio banners`: **18 passati**, compreso il test del commento V-5
+  >   (`/tmp/libreFolio_v_b2_v7_banners_w4.log`);
+  > - porta libera.
+  > - Pulizia verificata, in sola lettura, sulle copie del DB archiviate dal runner:
+  >   - nessun account `guides_brokerlabel_*` e nessun broker dello spec;
+  >   - `TEST_USER` (#2) vede solo i broker del seed, #1–#7;
+  >   - nel log del backend: 8 creazioni e 8 cancellazioni di broker, tutte degli account usa-e-getta, nessuna di
+  >     #2; nessun 403 «not fully accessible».
+  > - Resta da provare il giro accanto a `dashboard-cache`: è il giro finale consolidato.
+- ✅ **Passo 1, V-1** (12/10), scritto da test-author A: nuovo test in `stale-price-banner.spec.ts`, ««Sync prices»
+  refreshes the lots panel already open…».
+  > **Note implementazione**:
+  > - Account suo, `seedStaleHolding`, sync intercettato. Precondizioni lette dalle prime risposte: `STALE_PRICE`
+  >   con `sync_asset_prices`; un lotto; testimone sull'id esatto del lotto.
+  > - Attese armate prima del click, legate a «dopo la risposta del sync»: ricarica del report e richiesta principale
+  >   dei lotti, annullabile, 45 s.
+  > - Il passo V-1 richiede la richiesta dei lotti, la sua risposta OK con il lotto, e lo stesso
+  >   `performance.timeOrigin` di prima del click: una ricarica della pagina non passerebbe.
+  > - Runner: solo il `desc=` di `stale-price-banner`. prettier e tsc puliti.
+- ✅ **Passo 2, il rosso di V-1** (12/10): `… --workers 1 front-portfolio stale-price-banner`
+  (`/tmp/libreFolio_v_b2_v1_red.log`).
+  > **Note implementazione**:
+  > - D8 verde (4,4 s). Il nuovo test **rosso solo al passo V-1**, `stale-price-banner.spec.ts:419` (righe 44-52 del
+  >   log): «the open lots panel did not ask again after «Sync prices»: no POST /portfolio/lots/analysis for this
+  >   asset once the sync had answered», `Received: null` dopo 45 s.
+  > - Lo screenshot del fallimento (`frontend/test-results/portfolio-stale-price-bann-58fd0--by-itself-without-a-reload-desktop/test-failed-1.png`)
+  >   mostra la stessa scheda Posizioni, il report ricaricato e il pannello lotti ancora aperto, mai richiesto di nuovo.
+  > - Pulizia verificata; porta libera.
+- ✅ **Passo 3, la cura di V-1** (12/10): `frontend/src/routes/(app)/dashboard/+page.svelte:457-458`.
+  > **Note implementazione**: in `handleBannerAction`, ramo `sync_asset_prices`, subito dopo `invalidate()`, dentro
+  > il `try`, quindi solo dopo una risposta del sync: un commento di una riga e `refreshVersion += 1;`. È la stessa
+  > forma della cura di D2 (`:381-382`). prettier pulito.
+- ✅ **Passo 3, V-1 verde** (12/10).
+  > **Note implementazione**:
+  > - `… --workers 1 front-portfolio stale-price-banner`: **2 passati**, D8 6,0 s e V-1 3,2 s
+  >   (`/tmp/libreFolio_v_b2_v1_green.log`). La richiesta dei lotti parte circa 7 ms dopo la risposta del sync,
+  >   insieme alla ricarica del report. Risposta 200, il lotto c'è ancora, `performance.timeOrigin` invariato.
+  > - `--workers 4`: **2 passati** in contemporanea; richiesta dei lotti dopo circa 9 ms
+  >   (`/tmp/libreFolio_v_b2_v1_w4.log`).
+  > - Bundle servito `nodes/8.CX12q843.js`: nel ramo `sync_asset_prices`,
+  >   `invalidate(); set(refreshVersion, get(refreshVersion) + 1); await loadAll(true);`. Ricostruito all'avvio del
+  >   server (14:31:59), come già visto per D2.
+  > - Pulizia verificata nel DB della corsia; porta libera.
+- ✅ **Passo 6, il giro finale** (12/10).
+  > **Note implementazione**:
+  > - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6175 --data-dir
+  >   /tmp/librefolio-r2-v-dq --workers 4 front-portfolio all` (`/tmp/libreFolio_v_b2_gate_all_w4.log`, 5 min 53 s,
+  >   exit 0):
+  >   - privacy-masking 18/18;
+  >   - **157/157** test e2e a 4 worker. `dashboard-cache:338` (#5) passa in contemporanea con i due test di
+  >     `broker-filter-label` (#3, #4): **V-7 provato**;
+  >   - Vitest 1218/1218;
+  >   - unica riga ❌: l'avviso noto C-49 sul SIGTERM.
+  > - Statici:
+  >   - prettier pulito su `dashboard/+page.svelte` e sui tre spec;
+  >   - svelte-check 0 errori e 0 avvisi (`/tmp/libreFolio_v_b2_svelte_check.log`);
+  >   - gate `htmlSink` e `flagFont` 20/20 (`/tmp/libreFolio_v_b2_gates.log`);
+  >   - `check-orphans` pulito (`/tmp/libreFolio_v_b2_check_orphans.log`).
+  > - Porta 6175 libera.
+- ✅ **Backlog** (12/10): chiuse V-1, V-5 e V-7, con data e rimando al §11. Nuova V-8: il pannello Rischio con un
+  broker sparito, 403 e nessuna rilettura. È la domanda che il coordinatore lascia aperta; separata da V-7, così la
+  voce chiusa non si cancella. V-6 si chiude con la doc.
+- ✅ **Passo 5, V-6 e le righe di V-1 nella doc** (12/10), scritto da docs-writer.
+  > **Note implementazione** (`mkdocs_src/docs/developer/frontend/data-quality-banner.md`, +24/−8):
+  > - riga `sync_asset_prices` della tabella delle CTA: `refreshVersion` come `sync_fx_pair`; i pannelli lotti e rischio
+  >   chiedono di nuovo; dopo un errore, un solo toast e nessuna ricarica;
+  > - sezione `data-quality-banners.spec.ts` riscritta: perché inietta le issue (`TEST_USER`, stati di tutto il
+  >   portafoglio) e tutti i 18 test, per contesto;
+  > - sezione `stale-price-banner.spec.ts`: il secondo test.
+  > - `… dev.py mkdocs build` (strict): exit 0, nessun avviso, 3012 URL di asset risolti
+  >   (`/tmp/libreFolio_v_b2_docs_build.log`).
+  > - `… dev.py mkdocs check-links`: 95 link validi, 0 rotti (`/tmp/libreFolio_v_b2_docs_links.log`).
+  > - Build lanciate solo dopo il giro finale, perché l'avvio di un server ricostruisce `mkdocs_src/site`.
+  >
+  > **⚠️ Fuori pista**: docs-writer ha trovato errori preesistenti, fuori mandato e non corretti. Sono le nuove voci
+  > V-9 (due frasi superate nella doc) e V-10 (due difetti latenti in `data-quality-banners.spec.ts`).
+- ✅ **Backlog** (12/10): chiusa anche V-6; nuove V-9 e V-10.
+
+### 11.4 Checkpoint del lotto 2 — FROZEN
+
+Il manifest coi blob, i commit proposti in ASCII e le prove sono nel messaggio di checkpoint al coordinatore (12/10).
+Le prove sono anche nelle voci di §11.3.
