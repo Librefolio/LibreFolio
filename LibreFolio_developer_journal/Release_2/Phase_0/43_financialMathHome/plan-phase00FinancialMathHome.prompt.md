@@ -1854,10 +1854,80 @@ Passi:
 > - **T-BU1+BU2 chiusa**: BU1 nel treno 50, BU2 nel treno 53.
 > - La riga C-55 della sezione C resta al coordinatore.
 
-### Checkpoint C-55 🧊 (2026-10-12) — FROZEN, in attesa del coordinatore
+### Checkpoint C-55 ✅ (2026-10-12) — committato e integrato dal coordinatore
 - Base `f0f3de0d9`, uguale al target. 4 file modificati, nessun file nuovo.
 - Due commit proposti:
   1. `fix(ai-export): probe accepts an unavailable HHI`: la sonda e il suo file di test (`/tmp/libreFolio_commit_t_c55_1.txt`);
   2. `docs(journal): record C-55`: questo piano e `BACKLOG_POST_1.2.md`, solo la sezione T (`/tmp/libreFolio_commit_t_c55_2.txt`).
 - Niente CHANGELOG e niente bump: la sonda è uno strumento interno e i prompt non cambiano.
 - Esclusi: gli artefatti delle sonde, i semi e gli script in `/tmp`, il DB della corsia.
+
+### Treno 56 (coordinatore, 2026-10-12)
+- C-55 è nel target, col treno 56 (merge `767eb2e31`). La worktree è in fast-forward a `e7d698c4d`.
+
+### CL — CHANGELOG localizzato, parte frontend: analisi (2026-10-12) ✅ approvata
+> **Richiesta** (developer, via coordinatore, testuale): «T prende la parte frontend del CHANGELOG localizzato al posto di I: I resta su asse x, rifinitura UI e M-18, e U può dividere prima i cataloghi».
+> - **Il contratto di M**: `CHANGELOG.{it,fr,es}.md` alla radice; le righe `## [x.y.z] - data` identiche alla sorgente; un capitolo non tradotto manca dal file; il frontend mostra il capitolo tradotto se c'è, altrimenti quello inglese, con la versione come chiave.
+> - Base `e7d698c4d`, worktree pulita, corsia 6164. I file `CHANGELOG*.md` non li tocco.
+
+**Stato attuale, verificato**:
+- `changelog.ts:9` importa `CHANGELOG.md?raw` in modo statico; il parser è a `:40`. La modale si importa in modo statico da `Sidebar.svelte:13` e `AboutTab.svelte:19`.
+  - Quindi l'inglese sta nella shell. Nella build locale è in un chunk da 177 KB, con 106 KB di testo.
+- I test jsdom mockano il modulo: `ChangelogModal.test.ts:40` e `AboutTab.test.ts:96`.
+- Il Dockerfile non costruisce il frontend: copia `frontend/build/` (`Dockerfile:52`), che la CI costruisce con `dev.py front build` (`release.yml:158`, `:209`) su un checkout completo.
+- Non c'è un service worker.
+
+**Prove sulla corsia**, con file temporanei poi cancellati; porta libera e worktree pulita alla fine:
+- **Vitest, ambiente node**: un `import.meta.glob` pigro con `?raw` sui file della radice carica il testo.
+- **Vitest, jsdom**: `Error: Denied ID …/CHANGELOG.md?raw`, la stessa ragione dei mock di oggi.
+- **vite dev sulla 6164**: il glob diventa `import("/@fs/…/CHANGELOG.md?import&raw")`, e la richiesta risponde 200.
+- **Il pattern `[a-z][a-z]`**: sui cataloghi trova esattamente `en/es/fr/it.json`; su `CHANGELOG.[a-z][a-z].md` oggi dà `{}`, senza errori.
+
+**La proposta**:
+1. **Caricamento**:
+   - l'inglese resta com'è;
+   - le traduzioni passano da `import.meta.glob('…/CHANGELOG.[a-z][a-z].md', {query: '?raw', import: 'default'})`, non eager: un chunk per lingua, scaricato solo quando la modale si apre in quella lingua, con una cache per lingua;
+   - un glob eager porterebbe nella shell circa 330 KB in più.
+2. **Fusione**:
+   - l'ordine e l'insieme dei capitoli vengono dall'inglese;
+   - la chiave è la stringa fra le parentesi;
+   - un capitolo tradotto con contenuto vince, altrimenti si mostra l'inglese;
+   - la data viene sempre dall'inglese: una data tradotta diversa non scarta la traduzione (da confermare);
+   - un capitolo tradotto vuoto conta come mancante; un capitolo tradotto senza corrispondente inglese si ignora;
+   - un errore del chunk fa mostrare tutto in inglese.
+   - La lingua è quella della UI (`$locale`, ridotto alla lingua base); `en` o una lingua senza file mostrano solo l'inglese.
+   - Ricerca, espandi/comprimi e indice lavorano sui capitoli mostrati.
+3. **L'etichetta**:
+   - una pillola discreta accanto alla data, solo su un capitolo in inglese dentro una UI tradotta;
+   - `lang` su ogni capitolo e `data-version` per i test;
+   - una chiave nuova, `changelog.notTranslated`: en «Not translated yet», it «Non ancora tradotto», fr «Pas encore traduit», es «Aún sin traducir». Non esiste un valore simile;
+   - al primo caricamento, `common.loading`.
+4. **I test** (test-author):
+   - Vitest node in `changelog.test.ts`: fusione, loader e cache, e una guardia sui file veri (versioni note, ordine, nessuna copia inglese);
+   - jsdom in `ChangelogModal.test.ts`, più il mock in `AboutTab.test.ts`;
+   - un E2E consigliato, `e2e/layout/changelog-locale.spec.ts`, neutro rispetto al contenuto. Va registrato nel runner, che è un file condiviso.
+5. **La stima**: 4–5 h, più 1–1,5 h con l'E2E.
+
+**I conflitti**:
+- La galleria di M (`gallery.spec.ts:1984`) cerca `'Added'`: con i capitoli tradotti non trova risultati in it, fr ed es.
+- I cataloghi sono condivisi con U e M.
+- «Changelog Rules» in `.github/copilot-instructions.md` è del coordinatore.
+
+### CL — via libera (coordinatore, 2026-10-12)
+- Decisioni:
+  1. data diversa: tollerante;
+  2. l'E2E sì, `e2e/layout/changelog-locale.spec.ts`, con la registrazione in `_frontend_utility.py` (solo il mio blocco);
+  3. la chiave subito, in un checkpoint a sé;
+  4. «View on GitHub» sul file inglese;
+  5. DOMPurify sui capitoli tradotti, meglio se su tutti per una sola via, con il `why` di `htmlSink.gate.test.ts:74` aggiornato;
+  6. la doc `about.en.md` con docs-writer; it, fr ed es li fa M;
+  7. la pillola va bene.
+- Ordine: la chiave, poi i rossi via test-author, poi il resto e il checkpoint finale. La galleria la sistema M; «Changelog Rules» la scrive il coordinatore.
+
+#### CL passo 0 — la chiave ✅ (2026-10-12)
+> **Note implementazione**: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py i18n add "changelog.notTranslated" --en "Not translated yet" --it "Non ancora tradotto" --fr "Pas encore traduit" --es "Aún sin traducir"`.
+> - Diff: +2 −1 per catalogo, in coda al namespace `changelog`.
+> - Prettier pulito; i 4 cataloghi hanno la stessa parità di chiavi (4 350).
+> - `dev.py i18n audit`: l'unica chiave «Likely Unused» è `changelog.notTranslated`, com'è giusto finché non entra la modale.
+> - Il gate `utils gate-i18n-usage` prova il classificatore su dati sintetici, non sul catalogo vero, quindi non diventa rosso.
+> - Checkpoint a sé, FROZEN. Commit proposto `/tmp/libreFolio_commit_t_cl_key.txt`.
