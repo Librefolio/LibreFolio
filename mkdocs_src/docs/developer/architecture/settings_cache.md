@@ -57,7 +57,7 @@ Caches register lazily at import time, so the list below is the full registry as
 | `asset_current_fetch` | 300 | 2 min | `asset_source` |
 | `asset_metadata_fetch` | 200 | 30 min | `asset_source` |
 | `fx_provider_responses` | 200 | 5 min | `fx` |
-| `portfolio_blob` | 30 | 24 h | `portfolio_engine` |
+| `portfolio_blob` | 30 | 24 h | `financial_math/portfolio/engine.py` |
 | `portfolio_layer2` | 20 | 30 min | `portfolio_service` |
 | `portfolio_wac` | 200 | 1 h | `portfolio_service` |
 | `upload_metadata` | 500 | 1 h | `static_uploads` |

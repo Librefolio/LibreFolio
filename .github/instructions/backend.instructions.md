@@ -51,8 +51,8 @@ backend/
 ## Financial Math — One Home
 
 Every financial calculation — purchase cost, P&L, capital, NAV, returns, FX valuation, yields — has exactly one
-implementation. Its home is `backend/app/services/financial_math/` (developer decision, 2026-10-11). Some engines still
-live in their historical modules until they are moved there: the table says where each calculation is today.
+implementation. Its home is `backend/app/services/financial_math/` (developer decision, 2026-10-11). The rules of the
+layer — its boundaries, imports and guards — are in `financial-math.instructions.md`, auto-loaded for that folder.
 
 1. **Search before writing.** Before computing anything financial, look in `financial_math/` and in the table below. If
    the calculation exists, call it — with parameters when your case differs — instead of deriving it again.
@@ -62,20 +62,25 @@ live in their historical modules until they are moved there: the table says wher
 4. **Report copies.** Report any copy you meet, old or new, to the coordinator (backlog 38 or the consolidation lot).
    Before closing work that touched financial math, search the project for copies of what you changed.
 
-| Calculation | Where it lives today |
+| Calculation | Where it lives |
 |---|---|
 | Average purchase cost (WAC), cost-basis steps and conversions | `services/financial_math/average_cost.py` |
-| Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions | `services/portfolio_engine.py` |
-| FIFO lots and realized gains | `services/fifo_lot_engine.py` |
-| Simple ROI, TWRR, MWRR, annualization | `utils/financial/roi_utils.py` |
-| Holding value from quantity and price | `utils/financial/valuation_utils.py` |
-| Yield on Cost | `services/yield_on_cost.py` |
+| Cash per broker and currency, its daily value, FX results on cash | `services/financial_math/native_cash.py` |
+| Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions | `services/financial_math/portfolio/` (`daily_state.py`, run by `engine.py`) |
+| FIFO lots and realized gains | `services/financial_math/fifo/` |
+| Lots analysis: lot histories, economic events, average cost lines | `services/financial_math/lots/` |
+| Simple ROI, TWRR, MWRR, annualization | `services/financial_math/returns.py` |
+| Holding value from quantity and price | `services/financial_math/valuation.py` |
+| Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
+| Yield on Cost | `services/financial_math/yield_on_cost.py` |
 | FX conversion | `services/fx.py` (`convert_bulk`) |
 | Technical indicators | `services/signal_plugins/`, `services/signal_runtime.py` |
 | Risk metrics and optimization | `services/risk/quant/` |
 | PAC allocation | `services/pac_allocator/` |
 
-The frontend computes none of these (`.github/copilot-instructions.md`, decision 1).
+Risk, signals and PAC stay where they are, but take the common math — returns, annualization, conversions, average
+cost, valuation — from `financial_math/`. The frontend computes none of these (`.github/copilot-instructions.md`,
+decision 1).
 
 ## Where to Find Things
 
