@@ -43,10 +43,10 @@ warning above debug level. Whether staleness becomes visible therefore depends e
 
 | Caller | What it does with `rate_date` / the flag | Stale FX visible? |
 |---|---|---|
-| Portfolio engine, `_preload_fx_rates()` (`portfolio_engine.py:2629`, call at `:2705`) — every NAV, P&L and Dashboard figure | keeps only the converted amount in `fx_rate_map`; date and flag are **discarded** | **no** |
+| Portfolio engine, `PortfolioCalculationEngine._preload_fx_rates()` (`financial_math/portfolio/engine.py`, called from `calculate()`) — every NAV, P&L and Dashboard figure | keeps only the converted amount in `fx_rate_map`; date and flag are **discarded** | **no** |
 | Series preparation for Risk and Signals (`series_preparation.py:377`) | counts a point as carried-forward FX when `valuation_date − fx_rate_date > STALE_PRICE_THRESHOLD_DAYS` (7, `data_quality_thresholds.py:14`) → `DataQualityReport.carried_forward_fx_points/pairs` (`schemas/portfolio.py:230-232`), surfaced by `risk/service.py:1379` and `signal_service.py:627` | yes, above 7 days |
 | `POST /fx/currencies/convert` (`api/v1/fx.py:524`, call at `:623`) | returns `BackwardFillInfo` with `days_back` | yes, to the API caller |
-| Engine price marks (`portfolio_engine.py:1521`) | `is_stale = days_back > 7` — for **prices**, not FX | n/a |
+| Engine price marks (`DailyStateBuilder._market_value_for()`, `financial_math/portfolio/daily_state.py`) | `is_stale = days_back > STALE_PRICE_THRESHOLD_DAYS` (7) — for **prices**, not FX | n/a |
 
 So the same rate is "stale" in Risk and Signals and "fine" on the Dashboard. `MISSING_FX_RATES` fires only when no
 earlier rate exists at all — and because conversion and data quality share `convert_bulk`, the moment one older
