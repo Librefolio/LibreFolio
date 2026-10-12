@@ -42,7 +42,7 @@ the reason becomes a button that closes the panel; `pointerInside` and `focusInD
 - A keyboard user reading the details keeps them open; a mouse user who moves away sees them close after 30 s.
 - 20 new Vitest cases with fake timers (red before, 34 green after); the `connection-security` E2E, 8 passed.
 - The gallery shoots the open panel and parks the pointer away before a shot (`parkPointer`), which starts the 30 s:
-  that risk was passed to workstream M.
+  that risk was passed to workstream M, who prepared the fix in batch 32 (I5), to apply once T's CP3 is in the target.
 
 ## Source files
 

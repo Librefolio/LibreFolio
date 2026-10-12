@@ -14,7 +14,8 @@ related:
 # Decision: numbers and dates follow the interface language
 
 > **Partly delivered.** CP1 is in `dev_release2` (train 68); CP2 — amounts, dates, chart axes and M-17 — is still to
-> come. This page will be updated when it enters.
+> come. This page will be updated when it enters. *Train 74*: the 1.2 CHANGELOG already announces the whole rule
+> (`e7bfa342f`, ported to it/fr/es in `96d937915`), ahead of CP2 and CP3.
 
 ## Context
 
