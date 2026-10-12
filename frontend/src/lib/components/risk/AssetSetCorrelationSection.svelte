@@ -88,7 +88,7 @@
      *
      * ⚠️ One field does not survive the lift: `levelMetadata` drops `method` on
      * purpose. That costs this section nothing, and for a sharper reason than
-     * the one it gives — the correlation plugin (`risk_plugins/correlation.py`)
+     * the one it gives — the correlation plugin (`risk_plugins/correlation/plugin.py`)
      * assigns `method` exactly once, `"pearson_post_fx"`. The field can print exactly
      * one string forever, and a value that cannot vary is not provenance.
      */

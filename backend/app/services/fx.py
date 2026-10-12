@@ -65,7 +65,7 @@ class FXRateProvider(ABC):
     1. Create a new class inheriting from FXRateProvider
     2. Implement all abstract methods
     3. Add @register_provider(FXProviderRegistry) decorator
-    4. Place in backend/app/services/fx_providers/ directory
+    4. Put it in backend/app/services/fx_providers/<name>/plugin.py, beside an __init__.py holding only its docstring
     5. Provider will be auto-discovered on startup
     6. See docs/fx/provider-development.md for details
     """
