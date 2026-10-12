@@ -2788,3 +2788,39 @@ single-leg update), [[decisions/cash-transfer-split-promote]], [[entities/transa
 [[problems/promote-skipped-cost-basis-check]], [[concepts/svelte5-runes]], [[concepts/assert-on-identity-not-prose]],
 [[features/F-048]].
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B5 — the onboarding (J, folder 21): F-105, six decisions, three problems
+Source: `Release_2/Phase_0/21_onboarding/` — the main plan, Rounds 1–8 and the review dossier (ten files, ~313 KB) at
+the commits of the registry section; base `c7261618d`. Checked on the code at HEAD:
+- the fifteen flows and their versions (`ONBOARDING_FLOW_VERSIONS`, all 1) and the two step lists
+  (`ONBOARDING_FLOW_STEPS`, nine Import steps with `import.gapFix`, four Bulk steps);
+- the tables and the grandfathering in `004_release_1_2_0_schema.py` (docstring §3), and the consolidation `22fa0aed7`;
+- the nine intro step ids (`CORE_TOUR_STEP_IDS`) against the eight `onboarding.tour.steps` keys;
+- `GUIDE_STALL_MS` and `PANEL_FADE_MS` (3 s), `isRendered()` with `checkVisibility`, the motion root
+  `.modal-content, nav`, `onstallend`;
+- the key `lf_{userId}_onboarding_replay_{flow}_v{version}`, `createReplayStorageListener` → `dismissHost()`;
+- `toStore(() => appBootstrap.ready)` in `(app)/+layout.svelte`, and `inert` on the shell during `intro_tour`;
+- `DeferredAppPopups` (requested update first, nothing during a guide, donation before update), identical in
+  `580bd504f` except the requested branch;
+- `startImportAt()`/`setStep()` in the wizard, `handOffToEditor()`, `releaseCreateGuideHost()`;
+- the commits `8d9761db1`, `8a8e686f0`, `580bd504f` (in `dev_release2` with the PAC merge `3913fe217`), `1982c254b`,
+  `64d78e244`, `5e7ae336e`, `cc20b8288`, `f2abf9b47`, `208296923`, `8bd933834`, `93e023f2e`, `020c762e0`.
+
+Corrections against the sources: the dossier's popup lane («suppressed entirely, not queued-and-shown-after») already
+held the prompts and showed them afterwards in the code it reviewed (`580bd504f`); the it/fr/es user pages that Round 8
+found without onboarding sections have them today.
+Created:
+- [[features/F-105]] (registry: 105 features, LAYOUT & SETTINGS 8);
+- [[decisions/onboarding-versioned-progress-per-flow]], [[decisions/onboarding-existing-users-seeded-skipped]],
+  [[decisions/onboarding-guide-observes-never-acts]], [[decisions/onboarding-positions-in-browser-per-account]],
+  [[decisions/guide-text-never-announces-another-guide]], [[decisions/automatic-popups-wait-for-guides]];
+- [[problems/guide-anchor-never-resolves]], [[problems/coachmark-measured-mid-modal-transition]],
+  [[problems/legacy-layout-gate-missed-runes-state]];
+- [[sources/phase00-onboarding-2026-09]].
+
+Updated: [[features/registry]], [[domains/layout-settings]] (F-101, F-104 and F-105 in the cluster table, aligned to
+the registry), [[features/F-004]], [[features/F-005]], [[features/F-008]], [[features/F-092]], [[features/F-101]]
+(R20, the legacy trap of the privacy switch), [[features/F-104]], [[entities/import-wizard-modal]],
+[[concepts/svelte5-runes]], [[problems/legacy-component-language-untracked]] (two earlier instances),
+[[problems/i18n-loading-gate-remounts-app]].
+Graph: not updated (P-6).

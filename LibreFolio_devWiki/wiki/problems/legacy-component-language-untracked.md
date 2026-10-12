@@ -8,6 +8,8 @@ related:
   - concepts/svelte5-runes
   - concepts/marker-locale-for-catalogue-labels
   - sources/phase00-promote-pair-checks-2026-10
+  - problems/legacy-layout-gate-missed-runes-state
+  - features/F-101
 ---
 
 # Problem: the language read inside a helper does not follow a language change
@@ -41,6 +43,18 @@ value is computed with `Intl` in the same environment, so the U+00A0 before «%�
 
 None shipped: the trap was avoided before the fix. Elsewhere it would leave a legacy component's text in the previous
 language until a reload.
+
+## Earlier instances (added 2026-10-12, step B5)
+
+The trap had already bitten twice, three weeks before plan 42:
+
+- **The privacy switch (R20)** — in the usage review of 2026-09-22 the broker list and the broker page did not follow
+  the privacy toggle: in these two legacy components the formatter call inside a template expression compiled into
+  `$.untrack()`. `64d78e244` (2026-09-24) moved their five amounts to `CurrencyAmount.svelte`, a runes component
+  ([[features/F-101]]).
+- **The layout gate** — the same family, in a `$:` statement rather than a template: the `(app)` layout's gate
+  missed the runes field `appBootstrap.ready`, and the requested page flashed before the Welcome redirect
+  (`cc20b8288`, read through `toStore()`) — [[problems/legacy-layout-gate-missed-runes-state]].
 
 ## Source files
 
