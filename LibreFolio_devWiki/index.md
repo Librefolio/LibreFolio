@@ -613,6 +613,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Historical folder H6 — `06_betaTestingReportAndFixing`.** Drift only: the folder moved to `phases/`, four rows re-based; eleven never-ingested plans listed on [[sources/beta-testing-2026-08-05]] | *(none)* |
 | 2026-10-12 | **Historical folder H5 — `Ai_ideas`; the historical folders are covered.** The July brainstorm as a source page only; the MCP assistant pointed to `TODO_FUTURI.md` | [[sources/release2-ai-ideas-2026-07]] *(1 page — 1 source)* |
 | 2026-10-12 | **Historical folders H4 — `03_brokerImportRecovery`, `04_webSearchEngine`.** 03 already covered by the BRIM pages; 04's switch to `ddgs` filed as a decision | *(1 page — 1 decision; see log)* |
 | 2026-10-12 | **Historical folder H3 — `08_newCleanAndDocumentation_audit`.** The second clean audit, added to the first one's source; its P0-1 kept as a problem | *(1 page — 1 problem; see log)* |
