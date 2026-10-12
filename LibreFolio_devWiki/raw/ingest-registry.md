@@ -376,3 +376,14 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` | `f038ce39a` | 2026-10-12 | [[decisions/utils-leaf-functions-only]] (BU2 delivered), [[decisions/ai-export-version-bump-once-per-release]] (the rule written in `4388db8df`) — re-read for the BU2 record only, base `f0f3de0d9` (train 53) |
 | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `63b3e5971` | 2026-10-12 | [[problems/playwright-probes-ignore-timeout]] (M-14 closed) — re-read for §11 (batch 20) only, base `9e31ea2ba` |
 | `LibreFolio_developer_journal/Release_2/Phase_0/44_importWizardBrokerGate/plan-phase00ImportWizardBrokerGate.prompt.md` | `8339b0a06` | 2026-10-12 | [[problems/playwright-probes-ignore-timeout]] (M-16 closed) — read for the fix only, base `9e31ea2ba` |
+
+## 2026-10-12 — train 56: plan 46 (V), C-55, U's decisions (planned), the connection guide (base `e7d698c4d`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` | `b44b28f3d` | 2026-10-12 | [[sources/phase00-data-quality-e2e-2026-10]], [[decisions/data-quality-proved-on-real-data]], [[problems/open-panels-stale-after-fx-sync]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `e7d698c4d` | 2026-10-12 | section V (V-1 … V-7), read for status |
+| `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` | `d5497e40a` | 2026-10-12 | [[problems/ai-export-probe-rejected-unavailable-hhi]] — C-55 sections only |
+| `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/README.md` | `17c50ab50` | 2026-10-12 | [[problems/ai-export-probe-rejected-unavailable-hhi]] (C-55) |
+| The coordinator's diary, decisions D-1, D-4, D-A, D-B, D-C of 2026-10-12, quoted verbatim by the coordinator; the developer's server checklist, item 28 | `untracked` | 2026-10-12 | [[decisions/plugin-folders-and-split-i18n]] — planned; re-ingest from U's plan 45 when it enters the target |
+| `mkdocs_src/docs/admin/connection_checks.en.md` (commit `3eee17616`) | `3eee17616` | 2026-10-12 | [[features/F-102]], [[decisions/connection-security-server-never-upgrades]] — cross-links only |
