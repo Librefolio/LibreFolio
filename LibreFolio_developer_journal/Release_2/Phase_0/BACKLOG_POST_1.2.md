@@ -431,7 +431,9 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   già `problemCount`. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione
   «10», M-18 CP2.
 - **T-EN1 · Testo inglese scritto a mano nei tooltip del grafico dei prezzi** — minimo; T, 12/10 (trovato con M-18).
-  `PriceChartFull.svelte:785-788` scrive «orig.», «(Nd back)» e «fx @» in ogni lingua. Servono chiavi nuove: dopo la
+  `PriceChartFull.svelte:785-788` scrive «orig.», «(Nd back)» e «fx @» in ogni lingua; `ProviderAssignmentSection.svelte:354`
+  scrive «points» nel dettaglio della sonda dello storico (la cifra accanto segue la lingua dal CP3b). Servono chiavi
+  nuove: dopo la
   divisione dei cataloghi di U. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «10», M-18 CP3.
 - **T-EN2 · Le etichette dei segnali what-if sono in inglese, con cifre grezze** — minimo; T, 12/10 (trovato con M-18).

@@ -2724,3 +2724,65 @@ Correzioni al conteggio automatico:
   2. `docs(dev): figures in the interface language`: le 2 pagine;
   3. `docs(journal): record M-18 CP3a`: il piano e il backlog.
 - **Poi il CP3b**, sul target: `ProviderAssignmentSection` (`:333`, `:585`, `:616`, sulla base che contiene il cambio di I) e la validazione combinata unica, compresa la sweep anche in es.
+
+### M-18 CP3b — via (coordinatore, 2026-10-12 22:39)
+- **Il CP3a è committato**: `c17d39d5a` (11 file), `133259913` (le 2 pagine developer), `052b9f8bd` (journal).
+- **Il target del treno 72 è fuso sul ramo**: HEAD `c272d93b4`, merge pulito. Contiene U-2, il lotto 48 di I (clipboard, `ProviderAssignmentSection`) e la 2b di V.
+  - U-2: i cataloghi sono `src/lib/i18n/base/<lang>.json`. `src/lib/i18n/<lang>.json` è generato dagli hook (`predev`, `prebuild`, `precheck`, il `globalSetup` di Vitest) e non è più tracciato.
+  - `package.json` aggiunge solo gli hook: nessuna dipendenza nuova, niente `npm ci`.
+  - Niente chiavi nuove.
+- **I siti di `ProviderAssignmentSection`** (runes; `testResults = $derived.by(buildTestResults)`, quindi reattivo):
+  - `:334`: il prezzo della sonda, `formatFixed(…, 2)`;
+  - `:354`: il conteggio dello storico, `formatFixed(…, 0)`. La parola «points» resta in inglese ed è finita in T-EN1;
+  - `:586` e `:618`: le durate in secondi, `formatFixed(…, 2)`.
+- **Cura pronta**: `/tmp/libreFolio_m18_cp3b_apply.py`, dry-run con 5 operazioni. Rossi: test-author G su `ProviderAssignmentSection.test.ts`.
+- **La validazione combinata unica**, dopo la cura, sulla 6164:
+  - `check-orphans`, `front check`, le 19 Vitest;
+  - `toolbar-width-sweep`, che deve dare 15/15, anche in es;
+  - gli E2E del CP2: broker detail, risk-lab, risk, asset-detail, dashboard, asset-mobile-layout, transactions-modals, files-uploader, fx-editor, asset-classification;
+  - più `connection-security` e `support-copy-and-go` (chiesti dal coordinatore) e `settings`, che aggiungo io perché il CP2 ha toccato `GlobalSettingsTab`.
+
+#### M-18 CP3b passi 1–2 — rossi e cura ✅ (2026-10-12 sera)
+> **Note implementazione**:
+> - **Rossi** (test-author G, `ProviderAssignmentSection.test.ts`): 4. Li ho visti rossi anche io; i 26 esistenti restano verdi.
+>   - italiano due volte (prezzo `1234,50` e `12.345,50`, conteggio `12.345`, tempi `1,23s`, totale `2,47s`);
+>   - il cambio di lingua sul posto en → it → en;
+>   - la guardia inglese, col contratto nuovo `12,345`.
+> - **Cura**: `/tmp/libreFolio_m18_cp3b_apply.py`, 5 operazioni. Verde: 30/30.
+> - **`front check` sulla revisione combinata**: 0 errori e 0 avvisi; prima gira l'hook dei cataloghi di U-2.
+> - **Validazione combinata in corso** (log `/tmp/libreFolio_t1_m18cp3bv_*`).
+
+#### M-18 CP3b passo 3 — la validazione combinata unica ✅ (2026-10-12 notte)
+> **Revisione**: `c272d93b4` (CP2 + CP3a + il target del treno 72: U-2, il lotto 48 di I, la 2b di V) più la cura del CP3b. Corsia 6164, 34 azioni in una sola corsa, tutte `exit=0` (log `/tmp/libreFolio_t1_m18cp3bv_*`).
+> - `check-orphans` pulito; `front check` con 0 errori e 0 avvisi.
+> - **Vitest**: 19 azioni, **11 309 test**. Tra queste core-unit 4 090, component-unit 3 077, tx 887, ai-export 433, asset 762, risk-levels 493 + 248.
+> - **`toolbar-width-sweep`: 15/15, anche in es**, con la cura di I (C5). I 2 rossi di V-19 non ci sono più.
+> - **E2E**:
+>
+>   | azione | passed |
+>   |---|---|
+>   | broker detail | 37 |
+>   | risk-lab | 44 |
+>   | risk | 38 |
+>   | asset-detail | 32 |
+>   | dashboard | 27 |
+>   | asset-mobile-layout | 21 |
+>   | transactions-modals | 19 |
+>   | files-uploader | 8 |
+>   | fx-editor | 4 |
+>   | asset-classification | 4 |
+>   | connection-security | 8 |
+>   | support-copy-and-go | 16 |
+>   | settings | 45 |
+>
+> - **Dopo la validazione il target si è mosso**: `bcd502912` porta i treni 73 (M, W) e 74 (U-3, il catalogo diviso per sottosistema e per plugin).
+>   - Delle mie modifiche (CP2 + CP3) tocca solo `BACKLOG_POST_1.2.md`.
+>   - Con U-3 le chiavi cambiano file sorgente (`chart.tooltip.stale` sta ora in `i18n/charts/`), ma il catalogo generato `src/lib/i18n/<lang>.json` resta allo stesso percorso, quello che importano 7 dei miei test.
+>   - La validazione sopra **non contiene U-3**.
+
+### Checkpoint M-18 CP3b 🧊 (2026-10-12 notte) — FROZEN, in attesa del coordinatore
+- **Base**: `c272d93b4`. **Delta**: 4 file: `ProviderAssignmentSection.svelte` e il suo test, il piano, il backlog (T-EN1 con «points»).
+- **Commit proposti**:
+  1. `fix(i18n): probe figures in the UI language` (`/tmp/libreFolio_commit_t_m18cp3b_1.txt`);
+  2. `docs(journal): record M-18 CP3b` (`/tmp/libreFolio_commit_t_m18cp3b_2.txt`).
+- **Per il CHANGELOG del coordinatore**: M-18 è completo. Le cifre di ogni tipo (percentuali, decimali, byte, durate, importi, date, assi, decimali esatti) seguono la lingua dell'interfaccia; M-17 è risolto. Le voci aperte di backlog sono T-DI, T-ST, T-ICU, T-EN1, T-EN2, T-COL e T-DEAD.
