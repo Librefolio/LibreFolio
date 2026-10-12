@@ -54,6 +54,9 @@ audience of the feature is new sign-ups.
   older accounts as `pending` through the lazy insert: `import.gapFix`, added with the report sets
   ([[features/F-103]], `9336c0e9b`, 2026-10-01), is such a step. Keeping a later addition from older accounts takes a
   migration of its own.
+  *2026-10-12 (developer, via the coordinator): the effect is accepted, not a defect — «Va bene così: lo step è una
+  novità della 1.2 e il coachmark la presenta una volta sola». Migration 004 does not change: an account older than
+  1.2.0 meets the `import.gapFix` coachmark once, the first time an import reaches the step.*
 - **Test users are not real users.** `_grandfather_onboarding_for_test_users` marks the canonical E2E users
   `completed` on every flow and step, because they did go through the flows in earlier runs; its docstring, which
   described the migration backwards, was corrected in `1982c254b`. Seeding the step rows too fixed IWR-006 (pending

@@ -1,7 +1,7 @@
 ---
 title: "Domain: CALCULATIONS"
 category: domain
-features: [F-056, F-057, F-058]
+features: [F-056, F-057, F-058, F-107]
 status: stable
 mkdocs: null
 ---
@@ -31,6 +31,7 @@ ledger ([[decisions/native-cash-daily-revaluation]]).
 | [[F-056]] | FIFO at Runtime (on-demand cost basis) | backend | core — lot matching, realized/unrealized P&L computation | implemented |
 | [[F-057]] | Currency Conversion (triangulation via FX graph) | backend | core — multi-hop cross-currency conversion | implemented |
 | [[F-058]] | ROI Calculations (TWRR + MWRR) | backend | core — portfolio return percentage computation | implemented |
+| [[F-107]] | PAC allocator (a Tool: SCIP search, exact Decimal replay) | fullstack | plans purchases toward target weights; the frontend only builds the scenario and shows the result | documented |
 
 ## Architecture at a glance
 
@@ -60,6 +61,9 @@ graph TD
 - **FIFO-first, fiscal method selection deferred** — Phase 7 ships FIFO only. LIFO, PMC (Prezzo Medio di Carico / Average Cost), and SelectID are deferred to Phase 8+ via [[F-081]]. The API response includes a `method` field from the start so clients can label which method was used.
 - [[decisions/financial-math-one-home]] — one home for every financial calculation, moved by renames first and a cut second, guarded by an AST test (2026-10-12).
 - [[decisions/native-cash-daily-revaluation]] — foreign cash revalued every day; its exchange result is a return, never capital (2026-10-12).
+- [[decisions/pac-scip-searches-exact-replay-certifies]] and [[decisions/pac-lexicographic-fixed-l2-objective]] — the
+  PAC allocator ([[F-107]]) searches with SCIP, certifies every number by an exact replay, and optimises a
+  fixed-reference L2 before anything else; it keeps its own exact engine in `services/pac_allocator/`.
 
 ## Known problems / limitations
 
@@ -84,6 +88,7 @@ No open problems in F-056, F-057 or F-058: they are implemented and correct. The
 | Currency conversion | `backend/app/services/fx.py` |
 | FX conversion API | `backend/app/api/v1/fx.py` |
 | ROI utilities (TWRR/MWRR) | `backend/app/services/financial_math/returns.py` |
+| PAC allocator engine | `backend/app/services/pac_allocator/planner.py` |
 | DB models (Transaction, FxRate, FxConversionRoute) | `backend/app/db/models.py` |
 | Currency graph store (frontend) | `frontend/src/lib/stores/currencyGraphStore.ts` |
 | FIFO decision | `LibreFolio_devWiki/wiki/decisions/fifo-runtime-decision.md` |
