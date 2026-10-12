@@ -14,6 +14,7 @@
     import {Check, FileIcon, Loader2, RefreshCw, X} from 'lucide-svelte';
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
     // Props
     export let open: boolean = false;
@@ -162,7 +163,7 @@
             <!-- File info (metadata below) -->
             <div class="file-info-row">
                 <span class="info-label">{$_('uploads.fileSize') || 'Size'}:</span>
-                <span class="info-value">{formatBytes(file.size)}</span>
+                <span class="info-value">{formatBytes(file.size, $_, $uiLocaleStore)}</span>
             </div>
             <div class="file-info-row">
                 <span class="info-label">{$_('common.type') || 'Type'}:</span>

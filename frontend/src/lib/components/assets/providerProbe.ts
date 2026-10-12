@@ -15,6 +15,7 @@
  * caller keeps ownership of the translated strings.
  */
 import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+import {formatFixed} from '$lib/utils/core/formatFixed';
 
 /**
  * Provider error codes that mean "config is fine, just no data here" — a warning,
@@ -112,7 +113,7 @@ export function buildProbeTooltipHtml(result: ProbeTooltipResult, labels: ProbeT
         let html = '<table style="font-size:12px;border-collapse:collapse;">';
         html += `<tr><th style="${thStyle}">📅 ${labels.date}</th><th style="${thStyle}">💰 ${labels.currentPrice}</th></tr>`;
         html += `<tr><td style="${tdStyle}">${result.priceDate ?? '—'}</td>`;
-        html += `<td style="${tdRight}">${Number(result.priceValue).toFixed(2)} ${ccyLabel}</td></tr>`;
+        html += `<td style="${tdRight}">${formatFixed(Number(result.priceValue), 2)} ${ccyLabel}</td></tr>`;
         html += '</table>';
         return html;
     }
@@ -123,7 +124,7 @@ export function buildProbeTooltipHtml(result: ProbeTooltipResult, labels: ProbeT
         let html = '<table style="font-size:12px;border-collapse:collapse;">';
         html += `<tr><th style="${thStyle}">📅 ${labels.date}</th><th style="${thStyle}">💰 Close${ccyLabel ? ` (${ccyLabel})` : ''}</th></tr>`;
         for (const p of result.samplePrices) {
-            html += `<tr><td style="${tdStyle}">${p.date}</td><td style="${tdRight}">${Number(p.close).toFixed(2)}</td></tr>`;
+            html += `<tr><td style="${tdStyle}">${p.date}</td><td style="${tdRight}">${formatFixed(Number(p.close), 2)}</td></tr>`;
         }
         html += '</table>';
         return html;

@@ -64,6 +64,11 @@ no icon field, `BrokerIcon.svelte` calls `ensureBrokerIconFieldsLoaded(brokerId)
 the broker and merges it into the store; but its icon chain reads only the props (`iconUrl`, `portalUrl`,
 `pluginCode`), so the store fills up and the props never change. Assigned to workstream I, in the UI polish lot.
 
+Two neighbouring items from I's analysis of 2026-10-12 are in the post-1.2 backlog, section C: **C-56** (the same
+chain does not read the store when its props are empty — latent, since every surface passes full props today; keep
+`settledIconFieldIds`, which stops the loop) and **C-57** (`ensurePluginIconsLoaded` in `brokerHelpers.ts` never retries
+after a failed first request, so plugin icons stay missing until the page reloads — to verify).
+
 ## Prevention
 
 - Any page that displays broker icons must call `ensurePluginIconsLoaded()` in `onMount` AND ensure its derived computations that use plugin icons re-run after the call resolves.

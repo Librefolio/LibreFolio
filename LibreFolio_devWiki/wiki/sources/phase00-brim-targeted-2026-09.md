@@ -44,7 +44,7 @@ closures are gone (verified at `586a4f0ea`).
 | Role | Path |
 |------|------|
 | Plan | `LibreFolio_developer_journal/Release_2/phases/18_brimTargeted/plan-phase00BrimTargeted.prompt.md` |
-| Crédit Agricole plugin | `backend/app/services/brim_providers/broker_credit_agricole.py` |
-| eToro plugin | `backend/app/services/brim_providers/broker_etoro.py` |
+| Crédit Agricole plugin | `backend/app/services/brim_providers/broker_credit_agricole/plugin.py` |
+| eToro plugin | `backend/app/services/brim_providers/broker_etoro/plugin.py` |
 | Shared helper | `backend/app/services/brim_providers/_brim_output.py` |
-| Intesa plugin (second consumer) | `backend/app/services/brim_providers/broker_intesa.py` |
+| Intesa plugin (second consumer) | `backend/app/services/brim_providers/broker_intesa/plugin.py` |

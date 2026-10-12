@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-01-01
 tags: [deployment, docker, fastapi, sveltekit, ops]
-related: [decisions/sveltekit-over-react]
+related: [decisions/sveltekit-over-react, decisions/release-image-tags-latest-light, problems/release-images-shipped-debug-frontend]
 ---
 
 # Decision: Single Docker Image — FastAPI Serves Static Frontend
@@ -36,6 +36,9 @@ LibreFolio needs a self-hosted deployment model that is simple to run for non-te
 
 ## Links
 - Source: `Dockerfile`
+- Since 2026-10-06 the pre-built frontend must be a production build: a `frontend` stage checks it before the final
+  stage copies it ([[problems/release-images-shipped-debug-frontend]]); the image is published in a full and a light
+  variant, `latest` being the light one ([[decisions/release-image-tags-latest-light]])
 
 ## Source files
 

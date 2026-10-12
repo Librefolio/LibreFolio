@@ -1,7 +1,7 @@
 ---
 title: "Domain: DASHBOARD"
 category: domain
-features: [F-054, F-055]
+features: [F-054, F-055, F-100, F-111, F-112, F-113]
 status: implemented
 mkdocs: null
 ---
@@ -39,6 +39,10 @@ are surfaced via `DataQualityBanner`, reading the now-populated `data_quality` f
 |------|---------|-------|----------------|--------|
 | [[F-054]] | Dashboard KPI & Overview | fullstack | core — KPI cards + unified `/portfolio/report` fetch | implemented |
 | [[F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | frontend | display — GrowthChart, AllocationHistoryChart, Holdings/Performance panel | documented |
+| [[F-100]] | Yield on Cost (YOC) per position | fullstack | display — trailing-year income per eligible unit in the positions | documented |
+| [[F-111]] | Risk tab of the Dashboard and broker pages (L1–L4) | frontend | display — four progressive risk questions; the simulation rung stays beta | documented |
+| [[F-112]] | Risk Lab of Asset Global | frontend | display — compares a selection of assets | documented |
+| [[F-113]] | Risk tab of Asset Detail (legacy, beta) | frontend | display — one asset's risk; to be rebuilt after 1.2 | implemented |
 
 ## Architecture at a glance
 

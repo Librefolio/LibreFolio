@@ -5,6 +5,7 @@ status: open
 date: 2026-06-25
 tags: [frontend, bulk-modal, z-index, overflow, sticky, import, svelte5, css]
 related:
+  - problems/datatable-actions-column-on-mobile
   - sources/phase-final-bugs-2026-06-25
   - entities/import-wizard-modal
   - features/F-048

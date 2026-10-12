@@ -24,6 +24,7 @@
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     type NumericLike = string | (string | null)[] | null;
     type PositionStatus = 'open_at_period_end' | 'closed_by_period_end';
@@ -185,7 +186,7 @@
         const classes = value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
         return {
             type: 'html' as const,
-            html: `<span class="font-medium tabular-nums ${classes}">${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%</span>`,
+            html: `<span class="font-medium tabular-nums ${classes}">${formatPercent(value, {scale: 100})}</span>`,
         };
     }
 

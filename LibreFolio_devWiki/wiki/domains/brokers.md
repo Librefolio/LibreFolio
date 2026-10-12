@@ -47,8 +47,8 @@ graph TD
     User -->|POST /brokers/:id/files/upload| FileStore[(UploadedFile)]
     FileStore -->|POST /brokers/import/files/:id/parse| BRIMFw[BRIM Framework<br/>brim_provider.py]
     BRIMFw -->|auto-detect| PluginRegistry[BRIMProviderRegistry<br/>11 plugins]
-    PluginRegistry --> IBKR[broker_ibkr.py]
-    PluginRegistry --> Degiro[broker_degiro.py]
+    PluginRegistry --> IBKR[broker_ibkr/plugin.py]
+    PluginRegistry --> Degiro[broker_degiro/plugin.py]
     PluginRegistry --> Other[9 other parsers]
     IBKR -->|parse_file| ParseResult[transactions + warnings<br/>+ extracted_assets]
     Degiro --> ParseResult

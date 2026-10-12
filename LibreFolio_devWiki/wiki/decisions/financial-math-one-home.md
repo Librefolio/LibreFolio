@@ -80,7 +80,7 @@ D-1 … D-11 were approved by the developer as recommended on 2026-10-11 (plan 4
 | `lots/` — `prices`, `conversions`, `economic_events`, `histories`, `average_cost_lines` | lots analysis math | the pure methods of `LotsAnalysisService` |
 
 `utils/financial/` is gone. `lots_analysis_service.py` stays as orchestration (loading, DTOs, data quality),
-`fx.py` stays as FX infrastructure (`convert_bulk` is the primitive). Risk, signals and PAC stay where they are and
+`fx.py` stays as FX infrastructure (`convert_bulk` is the primitive). Risk, signals and PAC ([[features/F-107]]) stay where they are and
 take the common math from the layer.
 
 ### The rule (amended)

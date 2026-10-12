@@ -1954,6 +1954,9 @@ test.describe('Gallery Screenshots', () => {
             }
         });
 
+        // Must stay language-neutral: the modal searches the chapters in the UI's language, so the term is a proper name present in every translated chapter set (CHANGELOG.md, .it, .fr, .es) — an English word like 'Added' finds nothing in it/fr/es.
+        const CHANGELOG_SEARCH_TERM = 'Docker';
+
         test('changelog modal - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
             const isMobile = testInfo.project.name === 'mobile';
@@ -1981,7 +1984,7 @@ test.describe('Gallery Screenshots', () => {
                     await screenshot(page, viewport, lang, theme, 'settings', 'changelog-modal');
 
                     // Second shot: search narrows the index, one fold opened by a hit
-                    await page.getByTestId('changelog-search').fill('Added');
+                    await page.getByTestId('changelog-search').fill(CHANGELOG_SEARCH_TERM);
                     const hits = page.getByTestId('changelog-search-results');
                     await expect(hits).toBeVisible({timeout: 5_000});
                     await hits.locator('[data-testid^="changelog-hit-"]').first().click();
@@ -4775,7 +4778,7 @@ test.describe('Gallery Screenshots', () => {
                 await selectOneYearDateRange(page);
                 await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                 // The live prices are not part of the list's data-busy: wait for this load's, drawn on the cards.
-                await expectOfflinePricesDrawn(page, polled);
+                await expectOfflinePricesDrawn(page, polled, lang);
                 await freezeAnimations(page);
                 await page.waitForTimeout(1500);
                 await screenshot(page, viewport, lang, theme, 'assets', 'list');
@@ -4792,7 +4795,7 @@ test.describe('Gallery Screenshots', () => {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
-                    await expectOfflinePricesDrawn(page, polled);
+                    await expectOfflinePricesDrawn(page, polled, lang);
                     await freezeAnimations(page);
 
                     // Switch to table view
@@ -4820,7 +4823,7 @@ test.describe('Gallery Screenshots', () => {
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
                     // Before the search, while every card stands still: the ETFs it keeps show the fixture's prices.
-                    await expectOfflinePricesDrawn(page, polled);
+                    await expectOfflinePricesDrawn(page, polled, lang);
                     await freezeAnimations(page);
 
                     // Type search text
