@@ -3232,3 +3232,15 @@ open), [[features/F-008]], [[sources/phase00-translation-round12-2026-10]] (batc
 [[problems/fast-forward-blocked-by-a-dirty-file]] (see also). **Paths**: U-2 moved the four catalogues, so 28
 citations of `frontend/src/lib/i18n/<lang>.json` in 13 pages and 5 written as `{en,it,fr,es}` now point to `base/`;
 `$lib/i18n/en.json` imports stay (they name the generated file). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 72 — I's plan 48 (UI polish) and V's step 2b (the E2E cleanup)
+Base `0071b9703` (train 72, gates green). Sources: plan 48 and plan 46 §2b, digested by two explore agents, with the
+quotes, paths and figures re-checked on the files and the code. **Created** [[sources/phase00-ui-polish-2026-10]],
+[[problems/late-img-error-marked-the-visible-icon-failed]] (`2412c3fe4`), [[problems/test-passed-only-on-leftovers-of-other-tests]]
+(WB5, `1ea16aace`, linked to the isolation classes), [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]]
+(V-19, `7f8febd9d`), [[decisions/clipboard-through-one-helper-with-a-gate]] (M-20 and C-63, `65d20910e`),
+[[decisions/security-details-close-after-30-seconds]] (`5e9eff52d`). **Updated** [[problems/broker-icon-race-condition]]
+(the October symptoms had another cause; C-56, C-57 open), [[problems/copy-buttons-without-http-fallback]] (resolved),
+[[concepts/responsive-4mode-layout]] (the cure delivered), [[problems/e2e-writes-leaked-into-shared-state]] (checkpoint
+2b; V-21, V-17, V-18 still open), [[sources/phase00-data-quality-e2e-2026-10]], [[features/F-102]],
+[[decisions/plugin-folders-and-split-i18n]] (I's batch reached `base/` through the rename). Graph: not updated (P-6).
