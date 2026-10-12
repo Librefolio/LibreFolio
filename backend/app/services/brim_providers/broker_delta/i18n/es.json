@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_delta": {
+      "description": "Importa las transacciones de las exportaciones CSV de Delta. Soporte en la medida de lo posible para compraventas contra moneda fiat, transferencias de cripto, dividendos y ajustes de cripto a cripto.",
+      "name": "Delta"
+    }
+  }
+}

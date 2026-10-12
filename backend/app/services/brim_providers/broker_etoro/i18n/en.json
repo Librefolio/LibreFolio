@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_etoro": {
+      "description": "Import eToro's account activity CSV: positions opened and closed (a CFD is read like any other position), dividends, interest, deposits, withdrawals, and withdrawal and conversion fees.",
+      "name": "eToro"
+    }
+  }
+}

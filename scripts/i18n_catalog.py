@@ -586,7 +586,20 @@ def where(key: str, root: Path = ROOT) -> str:
     if branch:
         holders = sorted({merged.owners[k].name for k in branch})
         return f"branch of {len(branch)} key(s) in: {', '.join(holders)}"
-    return f"{display_path(route(key, sources, merged.owners).file(SOURCE_LANGUAGE), root)} (new key)"
+    target = route(key, sources, merged.owners)
+    notice = base_namespace_notice(key, target, merged.owners)
+    return f"{display_path(target.file(SOURCE_LANGUAGE), root)} (new key" + (f"; {notice})" if notice else ")")
+
+
+def base_namespace_notice(key: str, target: Source, owners: Dict[str, Source]) -> Optional[str]:
+    """What ``add`` says when ``key`` opens a top-level namespace in ``base``, which holds only the generic vocabulary.
+
+    ``owners`` are the keys before the addition. ``None`` when the key goes elsewhere or its namespace already exists.
+    """
+    namespace = key.split(".")[0]
+    if target.kind != "base" or any(under(other, namespace) for other in owners):
+        return None
+    return f"'{namespace}' is a new namespace in base, the generic vocabulary: if it belongs to a subsystem or a plugin, use --into, or move it (dev.py i18n move {namespace} --into <subsystem|family/plugin>)"
 
 
 # --------------------------------------------------------------------------------------------------------------

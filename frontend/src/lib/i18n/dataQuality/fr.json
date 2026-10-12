@@ -1,0 +1,41 @@
+{
+  "dataQuality": {
+    "headerInfoOnly": "Note de qualité des données",
+    "headerErrors": "{errors} erreur(s)",
+    "headerWarnings": "{warnings} avertissement(s)",
+    "missingPrice": "{count} actif(s) sans prix de marché — exclus du NAV",
+    "transactionImplied": "{count} actif(s) valorisé(s) au dernier prix de transaction — aucun prix de marché disponible depuis plus de 2 semaines (au {as_of_date})",
+    "currentPriceAssumedAtCost": "Prix actuel indisponible — valeur ouverte estimée au coût, P&L de marché exclu",
+    "currentPriceAssumedAtCostRange": "Aucun prix de marché disponible entre {date_from} et {date_to} — valeur ouverte estimée au coût, P&L de marché exclu",
+    "affectedLots": "Lots concernés :",
+    "stalePrice": "{count} actif(s) avec des prix obsolètes",
+    "missingFx": "Taux FX manquants pour {count} paire(s) — les totaux peuvent être incomplets",
+    "navIncomplete": "NAV incomplet pour {count} jour(s) entre {date_from} et {date_to}",
+    "mwrrNotAvailable": "Le MWRR ne peut pas être calculé pour cette période",
+    "mwrrSeriesUnreliable": "Graphique MWRR non disponible : série diverge de {divergence_pp}pp de la valeur attendue {summary_cum}% (première divergence : {first_bad_date})",
+    "archivedAsset": "Cet actif est archivé — non mis à jour par le planificateur",
+    "rangeBeforeData": "Données disponibles à partir du {date}",
+    "fxPairMissing": "Paire FX non configurée — conversion indisponible",
+    "fxPairNoData": "Aucune donnée disponible",
+    "fxPairPartialGap": "Lacune partielle dans les taux — données à partir du {date}",
+    "cta": {
+      "navigate_asset": "Voir l'actif",
+      "navigate_fx": "Voir FX",
+      "add_fx_pair": "Ajouter paire FX",
+      "sync_fx_pair": "Synchroniser",
+      "sync_asset_prices": "Synchroniser"
+    },
+    "referencePriceFallback": "Prix d'ouverture du lot indisponible à la date exacte — utilisation du dernier prix connu {reference_price} comme référence pour le rendement relatif",
+    "referencePriceUnavailable": "Aucun prix de référence disponible pour l'ouverture d'un lot — rendement relatif impossible à calculer",
+    "shortTransferNotSupported": "Le transfert d'une position short n'est pas encore pris en charge (courtier {broker_id})",
+    "shortAdjustmentNotSupported": "Un ajustement ne peut pas encore ouvrir ou fermer une position short (courtier {broker_id})",
+    "fifoSourceQuantityMissing": "La transaction dépasse la quantité disponible de {missing_quantity} (courtier {broker_id})",
+    "transferPairMissing": "Un transfert n'a pas de transaction associée, ou la paire n'est pas valide",
+    "missingFxRates": "Taux FX manquants pour {count} paire(s) entre {date_from} et {date_to} ({dates_count} date(s)) — synchronisez pour compléter les totaux",
+    "missingFxRatesManual": "Taux FX manquants pour {count} paire(s) manuelle(s) — ajoutez les taux manuellement",
+    "assetIncomeNoEligibleLots": "Aucun lot ouvert éligible pour {economic_type} de {target_amount} {target_currency} le {as_of_date} — revenu non alloué",
+    "assetCostNoEligibleLots": "Aucun lot éligible pour {economic_type} de {target_amount} {target_currency} le {as_of_date} — coût non alloué",
+    "missingFxRatesAfterSync": "Il manque encore des taux FX pour {pairs} entre {date_from} et {date_to} ({dates_count} date(s)) : le fournisseur n’en a renvoyé aucun pour ces dates. Saisissez-les à la main sur la page de la paire.",
+    "missingCostBasis": "{count} actif(s) avec une acquisition sans coût d'achat — comptée à zéro tant que vous ne le saisissez pas"
+  }
+}

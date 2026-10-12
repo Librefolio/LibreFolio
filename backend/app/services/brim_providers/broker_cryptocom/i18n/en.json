@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_cryptocom": {
+      "description": "Best-effort Crypto.com CSV import. Imports clear buys, sells, and rewards; skips internal transfers, swaps, lockups, and ambiguous rows with warnings.",
+      "name": "Crypto.com"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "drawdownSummary": {
+        "name": "Resumen de caídas",
+        "description": "Episodios de caída actual y máxima respecto al pico, fechados y con estado de recuperación, a partir de los rendimientos canónicos del ámbito seleccionado."
+      }
+    }
+  }
+}

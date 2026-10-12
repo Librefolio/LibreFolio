@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_finpension": {
+      "description": "Importa le transazioni dall’export CSV di Finpension. Supporta gli investimenti dei fondi pensione svizzeri.",
+      "name": "Finpension"
+    }
+  }
+}

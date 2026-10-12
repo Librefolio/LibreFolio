@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_saxo": {
+      "description": "Importe les exports CSV de Saxo : achats et ventes d’actions, dividendes, dépôts et retraits d’espèces et droits de garde.",
+      "name": "Saxo"
+    }
+  }
+}

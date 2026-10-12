@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "aroon": {
+      "name": "Aroon",
+      "description": "Recency of highs and lows",
+      "up": "Aroon Up",
+      "upDescription": "How recently the period high occurred.",
+      "down": "Aroon Down",
+      "downDescription": "How recently the period low occurred.",
+      "oscillator": "Aroon Oscillator",
+      "oscillatorDescription": "Difference between Aroon Up and Aroon Down."
+    }
+  }
+}

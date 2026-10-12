@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "historicalKpi": {
+        "name": "Indicateurs de risque historiques",
+        "description": "Volatilité historique, repli maximal, Sharpe et Sortino calculés à partir des rendements canoniques du périmètre sélectionné."
+      }
+    }
+  }
+}

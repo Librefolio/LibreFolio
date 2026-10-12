@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "historicalVar": {
+        "name": "VaR / CVaR storico",
+        "description": "Stime storiche delle perdite al livello di confidenza e orizzonte selezionati."
+      }
+    }
+  }
+}

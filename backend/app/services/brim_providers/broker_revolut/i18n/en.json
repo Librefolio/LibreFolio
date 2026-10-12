@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_revolut": {
+      "description": "Import transactions from Revolut CSV exports. Supports investments, crypto, dividends, and cash movements.",
+      "name": "Revolut"
+    }
+  }
+}

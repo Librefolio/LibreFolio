@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_scalable": {
+      "name": "Scalable Capital broker",
+      "description": "Import the Scalable Capital broker account from Scalable's own CSV export (PRIME) or from the LibreFolio exporter's broker file: trades with their fees and taxes, savings plans, dividends, interest, deposits, withdrawals and transfers to the overnight account."
+    }
+  }
+}
