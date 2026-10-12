@@ -102,10 +102,12 @@ recárgala para volver a leerla.
 
 ## 📜 Modal del registro de cambios {: #changelog-modal }
 
-El **modal del registro de cambios** integrado en la aplicación renderiza el archivo `CHANGELOG.md` incluido. Puedes acceder a él desde dos lugares:
+El **modal del registro de cambios** integrado en la aplicación muestra el registro de cambios incluido en LibreFolio, en el idioma de tu interfaz. Puedes acceder a él desde dos lugares:
 
 - el **número de versión en la parte inferior de la barra lateral** (en cualquier página), y
 - la **etiqueta de versión justo debajo del título de esta página Acerca de** (Configuración → Acerca de).
+
+Cada versión se muestra en tu idioma cuando su traducción está disponible; una versión aún sin traducir aparece en inglés, marcada con una pequeña etiqueta **Aún sin traducir**.
 
 - Un **panel plegable por versión** — solo la versión más reciente se abre de inicio; las secciones y subsecciones también se pliegan.
 - Un **índice de versiones** con chips en la parte superior: al hacer clic en una versión se despliega y se desplaza directamente hasta ella.
