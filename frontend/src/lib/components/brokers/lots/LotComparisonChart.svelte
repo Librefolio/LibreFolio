@@ -17,7 +17,7 @@
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
-    import {formatAxisDate, parseDisplayDate} from '$lib/utils/core/formatAxisDate';
+    import {parseDisplayDate} from '$lib/utils/core/formatAxisDate';
     import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal} from '$lib/types';
@@ -1103,7 +1103,6 @@
         const axisDateRange = xAxisRange ?? (axisFallbackRange ? {min: axisFallbackRange[0], max: axisFallbackRange[1]} : null);
         const xAxisPolicy = buildLotXAxisPolicy(axisDateRange);
         responsiveXAxisCompact = xAxisPolicy.compact;
-        const multiYearAxis = !!axisDateRange && new Date(axisDateRange.min).getFullYear() !== new Date(axisDateRange.max).getFullYear();
         return {
             ...CHART_ANIMATION_CONFIG,
             // With `containLabel: true`, `left` is only the empty inset BEFORE the y labels
@@ -1160,7 +1159,7 @@
                 axisLabel: {
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis),
+                    formatter: xAxisPolicy.formatter,
                     ...(xAxisPolicy.axisLabel ?? {}),
                 },
             },
