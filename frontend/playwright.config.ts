@@ -40,8 +40,9 @@ if (process.env.COVERAGE_JS === '1') {
 }
 
 // How many Playwright workers hit the backend at once. Still 1 by default:
-// fullyParallel is off and the suite shares state, so raising it is a decision
-// taken per-run (or by the test runner), not a silent default.
+// fullyParallel is on, but every test of a lane shares one database and one
+// backend, so raising the workers is a decision taken per run (the test
+// runner's `--workers` exports E2E_WORKERS), not a silent default.
 const E2E_WORKERS = Math.max(1, Number(process.env.E2E_WORKERS || '1') || 1);
 
 // Backend size follows the parallelism actually pointed at it: one uvicorn
@@ -98,7 +99,8 @@ export default defineConfig({
     // Blocks that genuinely share state opt *out* with
     // `test.describe.configure({mode: 'serial'})` and a written reason — the
     // exception catalogue, the twin of `exclusive_because` on the backend.
-    // Currently: brokers/multi-user, asset-event-delete, tx-brim-import.
+    // Currently: brokers/multi-user, files-destructive, fx/fx-destructive,
+    // settings/scheduler («Saving»), transactions/tx-brim-import.
     fullyParallel: true,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
