@@ -42,13 +42,16 @@
  * sentence) in `levels/levelHelpers.test.ts`; the page itself in the Playwright
  * net `portfolio/risk-asset-detail.spec.ts`.
  */
-import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {flushSync, tick} from 'svelte';
 import {get} from 'svelte/store';
+import {locale, waitLocale} from 'svelte-i18n';
 
 import {render, screen, setupI18n} from '$test/component';
 import {CODE_EQUAL_ICU_WARNING_KEYS, icuWarningKeys, plausibleParams, type WarningParams} from '$test/riskWarningCatalogue';
 import {_} from '$lib/i18n';
 import en from '$lib/i18n/en.json';
+import {currentLanguage} from '$lib/stores/app/language';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import RiskResultFrame from './RiskResultFrame.svelte';
 
@@ -382,5 +385,113 @@ describe('RiskResultFrame — a resource_limit refusal is worded by the remedy i
         expect(line).toBe(generic);
         expect(line, 'a raw catalogue key reached the screen').not.toMatch(/risk\.(errors|states)\./);
         expect(line, 'the backend sentence reached the screen').not.toContain(REFUSAL_MESSAGE);
+    });
+});
+
+/**
+ * M-18 CP1: the calculation details in the UI language.
+ *
+ * The details block under every result prints the coverage with `(value * 100).toFixed(1)` and a `%`,
+ * and the annualization factor with `toFixed(2)`: `96.3%` and `251.46` for an Italian reader, who
+ * writes `96,3%` and `251,46`. Numbers follow the UI language (the developer's rule of 2026-10-12): the
+ * coverage goes through `formatPercent`, the factor through `formatFixed`, both defaulting to
+ * `uiLocale()`. Same digits; only the notation moves. The observation count is a whole number below a
+ * thousand, the same in every notation — the control that the block is read at all.
+ *
+ * Expectations. Italian strings come from `Intl.NumberFormat('it', …)` in this runtime, never typed:
+ * the coverage as a percent with one decimal, the factor with two. English is today's exact text:
+ * jsdom's browser is en-US, so the English UI keeps en-US notation.
+ *
+ * Language. Switched as LanguageSelector does — `currentLanguage.set`, which also drives svelte-i18n —
+ * with both dictionaries loaded first. The frame is a runes component, so its template tracks whatever
+ * the formatters read: the in-place test is what proves their default is read reactively.
+ *
+ * Selection. The block by its `data-testid`; the figures are its `<dd>` values that carry a digit, read
+ * as a sorted multiset — the return basis beside them is a translated word and is not read.
+ */
+describe('RiskResultFrame — the calculation details in the UI language (M-18)', () => {
+    const COVERAGE = 0.9632;
+    const ANNUALIZATION = 251.4567;
+    const OBSERVATIONS = 250;
+
+    /** A `RiskResultMetadata` as the backend sends it, with figures that keep a decimal in both notations and sit on no rounding tie. */
+    const METADATA = {
+        analyzed_range: {start: '2025-01-02', end: '2025-12-31'},
+        frequency: 'daily',
+        n_observations: OBSERVATIONS,
+        calendar_days: 363,
+        annualization_factor: ANNUALIZATION,
+        coverage: COVERAGE,
+        currency: 'EUR',
+        return_basis: 'price_only',
+        algorithm_version: 'synthetic-1',
+        computed_at: '2026-01-02T10:00:00+00:00',
+    } as const;
+
+    /** Today's English text, exactly: the count, `toFixed(2)`, and `toFixed(1)` with a `%`. */
+    const ENGLISH = [String(OBSERVATIONS), '251.46', '96.3%'].sort();
+    /** The factor as Italian writes it with two decimals, the coverage as an Italian percent with one. */
+    const italianFactor = new Intl.NumberFormat('it', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(ANNUALIZATION);
+    const italianCoverage = new Intl.NumberFormat('it', {style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1}).format(COVERAGE);
+    const ITALIAN = [String(OBSERVATIONS), italianFactor, italianCoverage].sort();
+
+    function renderWithMetadata(): void {
+        renderFrame({...stressResult([]), status: 'ok', metadata: METADATA} as RiskAnalyticResult);
+    }
+
+    /** The figures of the details block: its `<dd>` values with a digit, sorted. */
+    function detailFigures(): string[] {
+        const block = screen.getByTestId(`${TEST_ID}-metadata`);
+        return [...block.querySelectorAll('dd')]
+            .map((value) => (value.textContent ?? '').trim())
+            .filter((text) => /\d/.test(text))
+            .sort();
+    }
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; Italian joins it, so a switch never waits on a loader.
+        await waitLocale('it');
+        // Control: this runtime has Italian ICU data, so both figures really change notation.
+        expect(ENGLISH, 'Italian notation differs from English for the factor').not.toContain(italianFactor);
+        expect(ENGLISH, 'Italian notation differs from English for the coverage').not.toContain(italianCoverage);
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('English UI (control): 250, 251.46 and 96.3%, today’s exact text', () => {
+        renderWithMetadata();
+
+        expect(detailFigures()).toEqual(ENGLISH);
+    });
+
+    it('mounted with the UI in Italian: the coverage and the annualization factor in Italian notation', async () => {
+        await switchLanguage('it');
+        renderWithMetadata();
+
+        expect(detailFigures()).toEqual(ITALIAN);
+    });
+
+    it('follows an in-place switch of the UI language, en → it → en', async () => {
+        renderWithMetadata();
+        expect(detailFigures(), 'en, mount — today’s text').toEqual(ENGLISH);
+
+        await switchLanguage('it');
+        expect(detailFigures(), 'en → it in place — Italian notation').toEqual(ITALIAN);
+
+        await switchLanguage('en');
+        expect(detailFigures(), 'it → en in place — today’s text again').toEqual(ENGLISH);
     });
 });

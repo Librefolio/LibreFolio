@@ -23,6 +23,8 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     // =========================================================================
     // Types
@@ -111,8 +113,7 @@
     function formatDelta(val: number | null | undefined, suffix: string = ''): string {
         if (val === null || val === undefined) return '—';
         const num = Number(val);
-        const sign = num >= 0 ? '+' : '';
-        return `${sign}${num.toFixed(2)}${suffix}`;
+        return suffix === '%' ? formatPercent(num) : `${formatFixed(num, 2, {signed: true})}${suffix}`;
     }
 
     function deltaColorClass(val: number | null | undefined): string {
