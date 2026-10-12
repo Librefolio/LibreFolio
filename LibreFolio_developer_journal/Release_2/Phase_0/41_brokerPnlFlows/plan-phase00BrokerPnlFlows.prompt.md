@@ -1,18 +1,21 @@
 # Piano — fase 00, 41: il P&L per broker senza salti ai trasferimenti
 
-> **Stato**: 🚧 in esecuzione dal 2026-10-10. Avanzamento in §15.
+> **Stato**: ✅ consegnato il 2026-10-12, in esecuzione dal 2026-10-10. Avanzamento in §15.
 >
-> - **Dal 2026-10-11 il lotto ha tre consegne** (§0):
+> - **Dal 2026-10-11 il lotto ha avuto tre consegne** (§0):
 >   1. il checkpoint 1, col solo engine (T5a, treno 32);
 >   2. poi H, cioè la card dal motore (T2f e T5b);
 >   3. poi l'analisi di F (T7), e F stessa dopo la decisione del developer.
 > - **Nel target**:
 >   - checkpoint 1: `883681766`, `3801cf93e`, `5c4c2c0e8`, fusi come `46272c3f0` (treno 32, `dev_release2` = `b20eac991`);
->   - H: `801b4a168`, `144c9db27`, `fb954577f`, fusi come `8a546c046` (treno 35).
-> - **Aperto**: F, approvato dal developer il 2026-10-11 (§0, esito in §17.11) e in esecuzione (§9). F-0, F-1 e F-2 ✅ (i rossi e il golden della guardia, il modulo, il motore); F-C1 ✅, committato (`36b181836`, `aa6b6077a`, `384253663`) e riallineato al treno 41 (`daee275fe`); F-3 ✅ e F-W ✅ (2026-10-12, con la chiave i18n assegnata). F-AI è deciso: la (a) è lo stato attuale, la (b) spetta al developer. F-4 ✅ (2026-10-12): gate, build, E2E, rapporto sul DB mock e tempi. F-5 ✅ (2026-10-12): 13 pagine EN e il testo del runner. Restano il checkpoint F-C2 e T8. Un checkpoint dopo F-2, uno a fine F; F entra nel target solo a F completo.
+>   - H: `801b4a168`, `144c9db27`, `fb954577f`, fusi come `8a546c046` (treno 35);
+>   - F, checkpoint F-C1: `36b181836`, `aa6b6077a`, `384253663`, poi il merge `daee275fe` del treno 41 nel ramo;
+>   - F, checkpoint F-C2: `a5f41f60c`, `c04e44ff5`, `9a0d9280c`, `a4332b25b`, `56fcf0aac`, fusi come `15cbff6fb` (treno 42), poi il CHANGELOG `5d62658bb`.
+> - **Chiuso**: F, approvato dal developer il 2026-10-11 (§0, esito in §17.11). F-0…F-5, F-W e i checkpoint F-C1 e F-C2 ✅ (§9, §15). T8 ✅ (2026-10-12): la sezione I di `BACKLOG_POST_1.2.md`, consegnata col checkpoint F-C3 insieme a questa nota. La seconda descrizione del runner (`:1070`) è passata a T, con T-1 (§15, «T8 / F-C3»).
+> - **Aperto**: solo F-AI (b), il nome «FX on cash» nell'export del portafoglio, che decide il developer. Se resta fuori dalla 1.2, il testo della voce per il backlog è pronto (§15, «F-AI»).
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`), con le decisioni del developer (§1) e l'autorizzazione testuale (§0).
-> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base attuale `251067435` (treno 36: solo journal e `.github`, codice identico a `43d92ed23`, verificata il 2026-10-11). Il lotto è partito da `d59762e0a` (treno 30); l'analisi era stata fatta su `fbb57eb41` (treno 28) e riverificata su `e32f47133` (treno 29). I treni 29 e 30 non toccano le superfici del lotto (§8).
+> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base attuale `5d62658bb` (treno 42, il CHANGELOG di I): il ramo vi è avanzato in fast-forward il 2026-10-12. F è partito da `251067435` (treno 36: solo journal e `.github`, codice identico a `43d92ed23`, verificata il 2026-10-11). Il lotto è partito da `d59762e0a` (treno 30); l'analisi era stata fatta su `fbb57eb41` (treno 28) e riverificata su `e32f47133` (treno 29). I treni 29 e 30 non toccano le superfici del lotto (§8).
 > - **Corsia**: `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta. Mai le porte 6040 e 6041.
 > - **Origine**: G1a, le linee additive del P&L per broker, nel piano archiviato [`plan-phase00PerformanceCharts.prompt.md`](../../phases/20_performanceCharts/plan-phase00PerformanceCharts.prompt.md) (§3.2).
 
@@ -65,6 +68,8 @@
   - **Come**: base `251067435`; corsia 6157 con `/tmp/librefolio-r2-i-charts`. Il coordinatore ha corretto il suo primo messaggio: `/tmp/librefolio-r2-i` era un errore, quella cartella non si usa. F-0 per primo: i rossi e il golden della guardia, generato prima del codice, via `test-author`. Il piano si aggiorna dopo ogni passo. Checkpoint dopo F-2 (modulo e motore, con la guardia verde) e a fine F. A fine lotto, la sezione I di `BACKLOG_POST_1.2.md`: B9 corretto, le U che restano, il nome nell'AI Export se non entra.
   - **CHANGELOG**: lo propongo io, lo scrive il coordinatore. F-W è un ✨: «The Performance view lists exchange-rate results on cash as their own row».
   - **Data obiettivo del tag**: 22–23/10.
+- **Coordinatore** (2026-10-12, F-C2 verificato e nel treno 42): **lotto F-C3** su `5d62658bb`: T8, la sezione I di `BACKLOG_POST_1.2.md` con tutte le voci tranne F-AI (b), che aspetta il developer, e la nota in questo piano; poi checkpoint e FROZEN. Della `/tmp` pulisco solo i miei file.
+  - **Correzione successiva**: la riga del runner (`_backend_services.py:1070`) passa a T, perché T-1 riscrive tutta la voce `financial-math` e i file del runner ora sono suoi. F-C3 è quindi T8 più questa nota (§15, «T8 / F-C3»).
 
 ## 1. Obiettivo e decisioni del developer
 
@@ -245,8 +250,9 @@ Tutti in `backend/test_scripts/test_services/test_financial/test_portfolio_engin
 | F-5 | Doc EN via `docs-writer` (§17.8) | ✅ 2026-10-12 (§15): 13 pagine EN e il testo del runner; build e check-links verdi; translate-validate misura il debito per M (75 errori, 75 avvisi) |
 | F-W | «FX on cash» negli `other_effects` dei contributi, forma minima (§0); la chiave i18n solo col via del coordinatore | ✅ 2026-10-12 (§15), con la chiave `dashboard.fxOnCash` (via del coordinatore, treno 41) |
 | F-AI | Facoltativo: il costo del nome nell'AI Export, al coordinatore; il codice solo col suo via (§0) | ⏳ costo inviato il 2026-10-12 (§15). Nessun bump (decisione del coordinatore); la (a) è lo stato attuale; la (b) la decide il developer, e il testo per T8 è pronto in §15 |
-| F-C2 | Checkpoint 4, fine F | ⏳ |
-| T8 | Indice post-1.2: la sezione I di `BACKLOG_POST_1.2.md` (§11) | ⏳ a fine lotto |
+| F-C2 | Checkpoint 4, fine F | ✅ 2026-10-12 (§15): C4–C8, nel treno 42 (`15cbff6fb`) |
+| T8 | Indice post-1.2: la sezione I di `BACKLOG_POST_1.2.md` (§11) | ✅ 2026-10-12 (§15, «T8 / F-C3»), senza F-AI (b) |
+| F-C3 | Checkpoint 5: T8 e questa nota; la riga del runner a `:1070` passa a T | ✅ consegnato il 2026-10-12 (§15) |
 
 ## 10. Rischi
 
@@ -355,10 +361,12 @@ Testo proposto (bozza del 2026-10-10, in inglese come la wiki; la parte della ca
 
 ## 14. Backlog
 
+> Le voci aperte dopo la 1.2 sono nella sezione I di [`BACKLOG_POST_1.2.md`](../BACKLOG_POST_1.2.md) (T8, 2026-10-12), con le righe di `5d62658bb`. Qui sotto ogni voce tiene le righe del suo momento (§15, «Righe citate»).
+
 - **B1**: rendere visibile l'avviso sulle quote diverse.
 - **B2**: coppie invertite.
 - **B3**: K/R delle gambe esterne e normali.
-- **B4**: la cassa in valuta estera non viene mai rivalutata. Il registro dell'engine (`portfolio_engine.py:730-740`) somma ogni movimento al cambio della sua data, quindi il guadagno o la perdita di cambio sulla cassa non entra mai nel NAV né nel P&L: né a riposo, né quando la valuta si spende in un BUY o si riconverte con un FX_CONVERSION. La cassa in viaggio invece è al cambio del giorno (`book-value.en.md:23`). Ingrandito dall'inventario, §16.2. **Nella 1.2, dentro F (§0); analisi in §17.**
+- ✅ **B4**: la cassa in valuta estera non viene mai rivalutata. Il registro dell'engine (`portfolio_engine.py:730-740`) somma ogni movimento al cambio della sua data, quindi il guadagno o la perdita di cambio sulla cassa non entra mai nel NAV né nel P&L: né a riposo, né quando la valuta si spende in un BUY o si riconverte con un FX_CONVERSION. La cassa in viaggio invece è al cambio del giorno (`book-value.en.md:23`). Ingrandito dall'inventario, §16.2. **Nella 1.2, dentro F (§0); analisi in §17.** **Chiuso il 2026-10-12** da F: il modulo `36b181836`, il motore `aa6b6077a`, il servizio `c04e44ff5` (treno 42).
 - **B8**: `get_positions_contribution` (`portfolio_service.py:1703-2096`) ha un suo prezzo (`_get_price_at_date`, `:522`: ultima chiusura, senza ripiego sull'ultimo scambio né split) e, su un TRANSFER fra broker, sposta l'unrealized al costo: il mittente segna −ug_start, il destinatario tutto l'unrealized dall'acquisto. La somma delle righe è giusta. **T7**: dopo la 1.2, in U5 con V2/P2 e R4 (§17.6); i suoi flussi per posizione entrano invece in F (B14).
 - **B9**: AI Export, reddito (`ai_export/components/portfolio_income.py:350-379`) e turnover (`broker_cost_efficiency.py:154`) applicano la quota grezza senza ruolo. EDITOR e VIEWER hanno quota 0 per schema (`schemas/brokers.py:364`), mentre engine e servizio usano 1 (`portfolio_engine.py:2494`). Il reddito usa `abs` (`portfolio_income.py:379`) e la docstring (`:335`) dice di rispecchiare `period_income`, che invece ha il segno (`portfolio_service.py:799`).
   - **Corretto il 2026-10-11** (decisione su F, §0). Nell'export del patrimonio lo 0 di Viewer ed Editor è giusto: la Dashboard passa all'export solo i broker di cui l'utente è Owner con quota > 0 (`getOwnedBrokers` e la guardia F2, `dashboard/+page.svelte:719-721`), come dice la doc (`user/brokers/sharing.en.md:53`).
@@ -368,17 +376,21 @@ Testo proposto (bozza del 2026-10-10, in inglese come la wiki; la parte della ca
 - **B5**: nel waterfall, una voce per i trasferimenti al valore di mercato.
 - **B6**: coppie ADJUSTMENT coi flussi al valore di mercato (oggi, se di più giorni, un intervallo «cash» a valore 0).
 - **B7**: uno split durante il viaggio.
-- **B11**: il salto dei giorni ignora i cambi. `dirty_days` (`portfolio_engine.py:902-936`) raccoglie transazioni, flussi, bordi dei viaggi, prezzi e split, ma non le date dei cambi: in un giorno in cui si muove solo il cambio, le posizioni in valuta e la cassa in viaggio restano al valore del giorno prima. Trovato dal test-author sul caso 3 (d2). Preesistente. **T7**: la parte della cassa entra in F; quella dei titoli va in U (U1 o U5), perché romperebbe la guardia (§17.6).
+- **B11**: il salto dei giorni ignora i cambi. `dirty_days` (`portfolio_engine.py:902-936`) raccoglie transazioni, flussi, bordi dei viaggi, prezzi e split, ma non le date dei cambi: in un giorno in cui si muove solo il cambio, le posizioni in valuta e la cassa in viaggio restano al valore del giorno prima. Trovato dal test-author sul caso 3 (d2). Preesistente. **T7**: la parte della cassa entra in F; quella dei titoli va in U (U1 o U5), perché romperebbe la guardia (§17.6). **La parte della cassa è chiusa** (`aa6b6077a`, treno 42); quella dei titoli resta, nella sezione I del backlog.
 - **B12** (2026-10-11, righe del codice di H), latente: le righe con data futura in una chiamata diretta senza `date_to`. Lì il motore si ferma a oggi, ma due letture del servizio tengono tutte le righe del broker:
   - `_signed_transaction_sums_by_date` (`portfolio_service.py:1533`), per le storie di redditi, costi e depositi;
   - `get_positions_contribution` (`:1775`).
   - Nessun effetto in produzione: `get_report` passa sempre `effective_date_to` (`:2120`, `:2299-2372`). In `get_summary` lo stesso caso lo ripara T2g (§15 T1d/T2g). Da riguardare in T7, la seconda insieme a B8.
   - Nessuna validazione impedisce una data futura. Se debba esserci, è una scelta di prodotto fuori dal lotto.
   - **T7**: le storie e i flussi dei contributi in F (§17.4); le quantità dei contributi in U5, con B8.
-- **B13** (T7): gli accumulatori del motore (`per_realized`, `per_income`, `per_fees_taxes`, `unalloc_income`, `unalloc_fees`: `portfolio_engine.py:792-796`, `:1069`, `:1100-1113`, campi `:1834-1838` di `PortfolioCalculationResult`) non hanno un lettore in produzione: in `get_positions_contribution` (`portfolio_service.py:1755-1760`) sono dict locali con lo stesso nome. Li leggono solo i test (`test_portfolio_engine_vnext.py:664-692`; `test_portfolio_engine/test_signed_income.py:211-213`, `:250-257`, `:402-403`). `per_realized` doppia `realized_sales`. **In F**: li sostituisce la vista dei flussi; i test passano a quella, con gli stessi numeri.
-- **B14** (T7): nei contributi una coppia di cambio mancante si perde in silenzio (`portfolio_service.py:1789`), mentre il riepilogo la segnala (`:780`). **In F.**
+  - **Storie e flussi dei contributi chiusi** da F-3 (`c04e44ff5`, treno 42). Le quantità dei contributi restano, nella sezione I del backlog.
+- ✅ **B13** (T7): gli accumulatori del motore (`per_realized`, `per_income`, `per_fees_taxes`, `unalloc_income`, `unalloc_fees`: `portfolio_engine.py:792-796`, `:1069`, `:1100-1113`, campi `:1834-1838` di `PortfolioCalculationResult`) non hanno un lettore in produzione: in `get_positions_contribution` (`portfolio_service.py:1755-1760`) sono dict locali con lo stesso nome. Li leggono solo i test (`test_portfolio_engine_vnext.py:664-692`; `test_portfolio_engine/test_signed_income.py:211-213`, `:250-257`, `:402-403`). `per_realized` doppia `realized_sales`. **In F**: li sostituisce la vista dei flussi; i test passano a quella, con gli stessi numeri. **Chiuso** (`aa6b6077a`, treno 42).
+- ✅ **B14** (T7): nei contributi una coppia di cambio mancante si perde in silenzio (`portfolio_service.py:1789`), mentre il riepilogo la segnala (`:780`). **In F.** **Chiuso** (`c04e44ff5`, treno 42): i flussi dei contributi e quelli del riepilogo vengono dalle stesse righe, con le stesse coppie mancanti. Lo schema dei contributi non ha un campo per le coppie, quindi il segnale resta nel riepilogo.
 - **B15** (T7): il PAC rifà la custodia per conto suo, quantità e cassa nativa per broker e valuta (`portfolio_allocation_source.py:46-68`, `:107-133`). Lo stesso vale per la cassa della pagina del broker (§16, punto 9: `transaction_service.get_cash_balances`, `broker_service.py:392`; file fuori dal lotto). **Dopo la 1.2**, in U.
 - **B16** (T7), latente: depositi e costi in valore assoluto in un consumatore, con segno in un altro. Il validatore impone il segno negativo a BUY, WITHDRAWAL, FEE e TAX (`schemas/transactions.py:189-190`), quindi oggi non cambia nulla. Nessuna azione: F tiene i segni di ogni consumatore.
+- **B17** (F-W, 2026-10-12): il risultato di cambio sulla cassa in viaggio resta nel residuo «Other» (test S6: residuo −175, nessuna riga FX). §15 «F-W», «Fuori pista».
+- **B18** (F-W, 2026-10-12): lo spread di un FX_CONVERSION sullo stesso broker resta nel residuo (test S5: −10). Idem.
+- **B19** (F-W, 2026-10-12), preesistente: nei contributi le righe degli unallocati seguono l'ordine del set (`set(unalloc_income) | set(unalloc_fees)`), non quello d'accesso. La cura cambia l'ordine delle righe, non le cifre. Idem.
 
 ## 15. Avanzamento
 
@@ -387,6 +399,7 @@ Testo proposto (bozza del 2026-10-10, in inglese come la wiki; la parte della ca
 > - Da T2a–T2e a T1c: `b20eac991`, cioè il motore del checkpoint 1. Vale anche per i punti di §16 corretti in T1c.
 > - Da T2f in poi, e i punti di §16.2 rivisti per T2f: il codice di H, quello del checkpoint 2 (T5b).
 > - Da T7 (§17), e le ancore di §14 riallineate allora: `251067435`, dove il codice è identico a `43d92ed23`.
+> - Da F-C3, la sezione I del backlog e B17–B19 di §14: `5d62658bb`.
 
 ### T0 — Piano nel journal ✅ (2026-10-10)
 
@@ -1202,6 +1215,44 @@ Solo pagine EN, senza translate-stamp: le traduzioni vanno nel secondo giro di M
 > - **Il `size-ratio` in più** (r3): la frase più lunga porta `book-value.en.md` da 4.419 a 4.477 caratteri, e la copia FR (3.347) scende dal 75,7% al 74,8%, sotto la soglia del 75%. IT ed ES lo avevano già. L'avviso è vero, perché la pagina FR non ha il contenuto di F-5. Non accorcio il testo solo per passare il controllo.
 > - **La seconda descrizione del runner** è fuori dal ritocco concesso: `_backend_services.py:1070`, `desc="Average cost: movements, conversions through the FX service, diagnostics"`. La propongo al coordinatore in F-C2.
 
+### F-C2 — Checkpoint 4, fine F ✅ (2026-10-12), nel treno 42
+
+> **Note implementazione**:
+> - Consegnato FROZEN al coordinatore il 2026-10-12: 25 percorsi, cinque commit proposti (C4–C8), col manifest e i messaggi.
+> - **Verificato dal coordinatore**:
+>   - i 25 blob coincidono col manifest, la partizione C4–C8 è esatta, la scansione privacy è pulita (1.988 righe);
+>   - ha letto `exchange_results`, la riga «FX on cash» col residuo e i conti degli esempi della doc (+25 EUR, tabella D): tutto torna.
+> - **Nel target**:
+>   - C4 `a5f41f60c` (i risultati di cambio nel modulo e il testo del runner), C5 `c04e44ff5` (il servizio), C6 `9a0d9280c` (il frontend e la chiave i18n), C7 `a4332b25b` (la doc EN), C8 `56fcf0aac` (questo piano). L'albero è `dce102dc320c`, quello del manifest;
+>   - treno 42: il merge `15cbff6fb`, poi il CHANGELOG `5d62658bb` con le due righe di I;
+>   - il ramo è avanzato a `5d62658bb` in fast-forward.
+> - **Le decisioni del coordinatore** sui tre punti del checkpoint:
+>   1. il debito di traduzione di F-5 passa a M, nel giro finale;
+>   2. `reconciled` sul rumore (F-4, «Fuori pista») diventa C-53, del coordinatore, che consiglia al developer di farlo nella 1.2, a T dopo T-1. I non lo tocca;
+>   3. il testo del runner a `:1070` è approvato con la formulazione di F-5. Poi è passato a T (qui sotto).
+
+### T8 / F-C3 — La sezione I del backlog ✅ (2026-10-12)
+
+> **Note implementazione**:
+> - **Base**: HEAD `5d62658bb` (treno 42), worktree pulita prima dei due file.
+> - **La sezione I di `BACKLOG_POST_1.2.md`**, riscritta da capo, solo nelle sue righe:
+>   - l'introduzione: il lotto è chiuso e resta solo F-AI (b); i rimandi alle voci che stanno altrove (la sezione T, il gruppo I del backlog 38) e a quelle lasciate fuori di proposito: F-AI (b), che aspetta il developer, B16 (latente), C-53 (del coordinatore), il debito di traduzione di F-5 (di M);
+>   - ✅ F (B4, B13, B14), coi commit;
+>   - aperte: B1, B2, B3, B5, B6, B7, B8, B10, B11 (i titoli), B12 (le quantità), B15, e le nuove B17, B18, B19;
+>   - ogni ancora riverificata su `5d62658bb`.
+> - **Questo piano**: stato e base in testa, §9 (F-C2, T8, F-C3), §14 (il rimando al backlog, B4, B13 e B14 chiusi, B11 e B12 chiusi a metà, B17–B19), «Righe citate», §17.9.
+> - Solo documenti: nessun test e nessun server; `git diff --check` pulito. Consegnato al coordinatore col checkpoint F-C3: 2 percorsi, un commit proposto.
+>
+> **⚠️ Fuori pista**:
+> - **La riga del runner è passata a T.** Il coordinatore l'aveva messa in F-C3, poi l'ha tolta: T-1 riscrive tutta la voce `financial-math` del runner (le righe descrittive `:569-573` e la `desc` di `:1070`), e un file condiviso ha un solo autore. Non l'avevo ancora toccata: niente da annullare.
+> - **P1, R4, W1 e X5 sui prezzi restano fra due piani.** Il piano di T li segna «F» (P1 `:240`, R4 `:136`, W1 `:226`), ma F non li ha fatti: §17.6 li mette in U4, in U5 con B8, in U7 e in U1. Nella sezione I sono un rimando; la correzione del piano di T la propongo al coordinatore.
+> - **P-3 del backlog è chiudibile** con F (`c04e44ff5`): i flussi dei contributi vengono dalle stesse righe del riepilogo, che segnala le coppie mancanti (B14). È nella sezione P: lo propongo al coordinatore.
+> - **La riga 41 dell'indice** (`BACKLOG_POST_1.2.md:47`) dice ancora «§14 Backlog (B1–B12) | lotto in corso (F)». È del coordinatore: propongo «§14 Backlog (B1–B19) | chiuso: F nel treno 42; voci aperte nella sezione I».
+> - **T-U1** («Esclude i giri del portafoglio, che chiude F (O2, X5)») va stretta a «X5 sui movimenti»: le quattro conversioni dei prezzi (`portfolio_service.py:822`, `:851`, `:1795`, `:1813`) restano in U1 e U5. Proposta al coordinatore.
+> - **Il commento PURE del runner** (`:1071-1072`) parla di «the module». Con due moduli può diventare «each module's only I/O is convert_bulk, which every test replaces on its module with a double»: solo un suggerimento per T-1.
+> - **Il significato di B5** l'ho ripreso dall'analisi del 2026-10-10 (D2, D5): nella vista del mittente il residuo del waterfall è MV(t) − costo, in quella del destinatario costo − MV(t).
+> - **Le righe di §14 sono scivolate** da quando sono state scritte (per esempio `get_positions_contribution` da `:1703` a `:1642`, `_get_price_at_date` da `:522` a `:525`). Nel backlog uso quelle di `5d62658bb`; qui restano quelle del loro momento.
+
 ## 16. Inventario: capitale, investito e guadagno fuori dal motore (T2-inv)
 
 Classi: **(a)** misura la stessa cosa del motore → migra; **(b)** ha regole che il motore non ha → prima nel motore, con un test, poi migra; **(c)** misura di proposito altro → resta, documentata.
@@ -1396,7 +1447,7 @@ Somma U, senza C1 e B9: circa 4–5½ giornate.
 
 ### 17.9 Test e gate
 
-- Nuovo `test_financial_math/test_native_cash.py`. Il runner `services financial-math` raccoglie già la cartella (`scripts/test_runner/_backend_services.py:570-578`): nessuna registrazione. Le righe descrittive (`:571-574`) nominano solo il costo medio: il ritocco del solo testo è concesso dentro F (§0). *(Fatto in F-5, §15. La seconda descrizione, `:1070`, è una proposta al coordinatore.)*
+- Nuovo `test_financial_math/test_native_cash.py`. Il runner `services financial-math` raccoglie già la cartella (`scripts/test_runner/_backend_services.py:570-578`): nessuna registrazione. Le righe descrittive (`:571-574`) nominano solo il costo medio: il ritocco del solo testo è concesso dentro F (§0). *(Fatto in F-5, §15. La seconda descrizione, `:1070`, approvata dal coordinatore il 2026-10-12, è poi passata a T con T-1, che riscrive la voce `financial-math` del runner: §15, «T8 / F-C3».)*
 - Casi nuovi del motore in `test_portfolio_engine/`.
 - `test_daily_state_builder.py:549-578` non cambia: un giorno solo, o il cambio mancante.
 - Gate sulla 6157, un comando alla volta:
