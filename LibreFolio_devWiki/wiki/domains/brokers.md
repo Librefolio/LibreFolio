@@ -76,6 +76,7 @@ Pending gaps (Phase 7, see [[connections/transactions-connections]]):
 ## What comes next
 
 - [[F-048]] Staging Modal — manual `create-many`/`edit-many` modes done (Phase 7 Part 4); BRIM `create-brim` mode arriving in Part 5.
+  *Delivered: the import wizard hands its rows to the bulk workspace, in 1.0.0 (C-64, 2026-10-12).*
 - [[F-049]] BRIM Import UI — the asset matching wizard (in-progress in Phase 7).
 - [[F-050]] File Preview System — inline preview panel for uploaded broker report files. *Delivered on 2026-06-04 (lint 2026-10-12).*
 - [[F-083]] Multi-File Multi-Broker Import — batch-import multiple files from multiple brokers in one workflow.

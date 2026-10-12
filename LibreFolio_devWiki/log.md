@@ -3198,3 +3198,14 @@ in the repository, `front-utility docs-offline-math`), [[decisions/figures-in-th
 for tests), [[decisions/gallery-is-a-release-gate-with-real-data]], [[features/F-069]],
 [[sources/phase00-translation-round12-2026-10]] (batch 28; its stale «M-14 still in progress» line corrected). Graph:
 not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 1 — the unfinished features against today's code
+Base `0bd1a8368`. Asked by the coordinator before the tag, so that the wiki says what 1.2 really contains. Two explore
+agents read the code and the history of the 14 features not `implemented` or `documented`; F-048's findings were
+re-checked by hand, on the code and on the trees of `v1.0.0` and `v1.1.0`. **Updated** [[features/F-048]]
+(`in-progress` → `documented`: its four open items were delivered and shipped in 1.0.0, `dce60a5ee`; residuals K-1 …
+K-4 in backlog 38), [[features/registry]] (row, note, statistics: 99 shipped, none in progress),
+[[domains/transactions]], [[domains/brokers]], `index.md` (Domains row). Unchanged after the check: F-077, F-079,
+F-081, F-082, F-084, F-087, F-091, F-094 and F-108 (contract only) stay `planned`; F-085, F-093 and F-096 stay `idea`.
+Listed to the coordinator, not touched: F-090 (parts built under F-051, the provider-change modal and the reverse
+lookup not), F-094 (borderline), page drift on F-082, F-090 and F-096. Graph: not updated (P-6).
