@@ -82,6 +82,9 @@ Risk, signals and PAC stay where they are, but take the common math — returns,
 cost, valuation — from `financial_math/`. The frontend computes none of these (`.github/copilot-instructions.md`,
 decision 1).
 
+`utils/` holds leaf functions only: they never import services; anything that needs FX, assets or other services
+belongs to a service layer, such as `financial_math/` (developer decision D-P7, 2026-10-12).
+
 ## Where to Find Things
 
 | What | Where |
