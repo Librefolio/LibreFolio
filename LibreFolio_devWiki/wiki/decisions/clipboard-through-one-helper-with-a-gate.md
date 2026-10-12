@@ -44,6 +44,7 @@ fallback, and the grid said «copied» even when nothing was (C-63). M-20 went t
 - Copy works on every address the connection-security indicator can describe ([[features/F-102]]); the 1.2
   CHANGELOG says so: «Copy buttons work over plain HTTP too».
 - A new copy button that bypasses the helper fails the unit suite, not a user on HTTP.
+- C-63 and M-20 are closed in the backlog (`2166eeb90`).
 - Tests: the gate and the helper, 8 red before and green after (`125 passed`); `support-copy-and-go.spec.ts` red
   against the old helper (4 failed) and green after (16 passed).
 

@@ -1,5 +1,5 @@
 ---
-title: "Each plugin a folder with its own translations; the i18n catalogues split by subsystem (U-1 and U-2 delivered, the split itself planned)"
+title: "Each plugin a folder with its own translations; the i18n catalogues split by subsystem (U-1, U-2 and U-3 delivered; U-4 and U-5 to come)"
 category: decision
 status: accepted
 date: 2026-10-12
@@ -59,6 +59,25 @@ related:
 >   [[problems/git-merge-stash-failed-on-locked-index]].
 > - *Train 72*: I's batch 48, written against the old catalogue paths, reached `base/` at the merge — the pure rename
 >   did its job ([[sources/phase00-ui-polish-2026-10]]).
+
+> **Update (train 74, 2026-10-12, at `bcd502912`): U-3 is in the code — the catalogue is split.** `f2a394a0f`
+> («refactor(i18n): catalogue per subsystem and plugin»):
+>
+> - **Three kinds of source, as decided.** `base/` keeps 288 generic keys; 17 subsystem folders, each with its
+>   `prefixes.txt` (aiExport, app, assets, auth, brokers, charts, dashboard, dataQuality, files, fx, importWizard,
+>   onboarding, pacAllocator, risk, settings, tools, transactions), hold 3 844; the `i18n/` folders of 71 plugins
+>   hold 219. The merged catalogue is identical in the four languages, keys and values (`check --strict --against`).
+> - **Two choices, the coordinator's (D-U3-1, D-U3-2, 2026-10-12)**: the 22 `risk.warnings.*` stay in the `risk`
+>   subsystem, the single vocabulary of the warnings; the 9 `risk.analytics.*` that the interface uses by name stay in
+>   the plugins' fragments, as planned.
+> - **A second gate**, `utils gate-plugin-i18n-ownership` (`test_plugin_i18n_ownership_gate.py`), reads the real
+>   registries and proves four rules: every key of a fragment lies in its plugin's space (R1); every key a plugin
+>   declares in its exclusive space lives in its fragment (R2); no fragment holds another plugin's key (R3); every
+>   catalogue key under an exclusive space lives in that plugin's fragment (R4).
+> - **`dev.py i18n where` and `add`** pick the source that owns a key: with the split, `base/<lang>.json` is the
+>   generic vocabulary, no longer «the» catalogue.
+> - **Still to come**: U-4, the documentation (after T's CP3, which writes M-18's rule in the same page), and U-5,
+>   the final gates and the handoff.
 
 > **Planned, not in the code.** Decided on 2026-10-12; at `e7d698c4d` (train 56) nothing of it is implemented and
 > workstream U's plan (45) is not in the target yet. The decisions are quoted from the coordinator's diary, which is
@@ -141,7 +160,9 @@ plugins may grow over time or be imported "dynamically" by linking folders in th
   import, a past-tense account, a dated residual).*
 - U-2 moved the four catalogues to `base/`: the wiki's citations of `frontend/src/lib/i18n/<lang>.json` were realigned
   at the train-71 ingest (28 in 13 pages, plus 5 written as `{en,it,fr,es}`). Imports such as
-  `$lib/i18n/en.json` stay: they name the generated file, which the tests do import.
+  `$lib/i18n/en.json` stay: they name the generated file, which the tests do import. *Since U-3* `base/` holds only
+  the generic keys: a page that cites it for a subsystem's keys names where they were; `dev.py i18n where <key>` names
+  where they are.
 
 ## Links
 
@@ -164,7 +185,10 @@ plugins may grow over time or be imported "dynamically" by linking folders in th
 | Discovery (`PLUGIN_MODULE_NAME`) | `backend/app/services/provider_registry.py` |
 | Layout gate (U-1) | `backend/test_scripts/test_utilities/test_plugin_layout_gate.py` |
 | Plan 45 of U | `LibreFolio_developer_journal/Release_2/Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md` |
-| The catalogue's sources (U-2), one file per language | `frontend/src/lib/i18n/base/en.json` |
+| The generic vocabulary (`base`, U-2; 288 keys since U-3) | `frontend/src/lib/i18n/base/en.json` |
+| A subsystem's declared prefixes (U-3) | `frontend/src/lib/i18n/risk/prefixes.txt` |
+| A plugin's fragment (U-3) | `backend/app/services/risk_plugins/asset_risk_return/i18n/en.json` |
+| The ownership gate `utils gate-plugin-i18n-ownership` | `backend/test_scripts/test_utilities/test_plugin_i18n_ownership_gate.py` |
 | The builder (`build`, `check`, `where`) | `scripts/i18n_catalog.py` |
 | The npm and Vitest hook | `frontend/scripts/i18n-catalog-build.mjs` |
 | The generated files, ignored | `frontend/.gitignore` |

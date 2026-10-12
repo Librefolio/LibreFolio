@@ -74,7 +74,8 @@ languages, desktop and mobile.
 ## Still open
 
 - With CP2 (amounts, dates, chart axes), the header of `galleryLocale.ts` («the app formats with it wherever it passes
-  no locale») goes out of date; T's note leaves it to M.
+  no locale») goes out of date; T's note leaves it to M. *Done (train 74)*: M rewrote it in batch 31 (`172211a89`) —
+  the app writes every figure in `uiLocale()`, and the browser locale still decides the English shots.
 
 ## Source files
 

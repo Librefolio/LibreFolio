@@ -44,7 +44,8 @@ sweep passed 15 of 15, and the served bundle was checked for the new values.
   case, not from where a sweep's grid happens to fall.
 - When two measurements of the same element disagree by a constant, look for a layout input measured at load, such
   as the scrollbar gutter, before suspecting the code.
-- Left in the backlog: 48-1, the AI Export button padded wider than its neighbours in the same bar.
+- Left in the backlog: 48-1, the AI Export button padded wider than its neighbours in the same bar. V-19 itself is
+  closed in the backlog (`2166eeb90`).
 
 ## Source files
 
