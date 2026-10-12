@@ -590,3 +590,9 @@ are each file's last commit at the base. Paths are relative to the repository ro
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/02-verdetti-per-strumento.md` | `245aabf97` | 2026-10-12 | [[decisions/risk-tool-verdicts]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/06-matematica-librerie-e-reimplementazioni.md` | `0e704af4e` | 2026-10-12 | [[decisions/risk-library-versus-own-maths]] |
+
+## 2026-10-12 — folder 02 (Risk), step R6 (base `843c9a9d2`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/README.md` | `33d5a599b` | 2026-10-12 | [[sources/phase00-risk-analysis-backend]] — drift only |
