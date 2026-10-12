@@ -77,7 +77,7 @@ via `CHANGED_POINTS_PAYLOAD_CAP`). Semantics:
 
 Backend implementation in `backend/app/schemas/refresh.py` + `backend/app/services/asset_source.py`.
 Frontend's live-poll now merges the polled point directly into the chart store
-without triggering a full series reload (commit `ddb1fcfb` — "silent-sync detour
+without triggering a full series reload (commit `93a88be2c` — "silent-sync detour
 removed"). The previous "silent sync" pattern compared the provider fetch with the
 freshly-written DB row and produced spurious `changed_points=None`.
 
