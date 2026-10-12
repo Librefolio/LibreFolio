@@ -1,0 +1,60 @@
+---
+applyTo: "backend/app/services/financial_math/**"
+---
+
+# Financial Math Layer (backend)
+
+`backend/app/services/financial_math/` is the one home of LibreFolio's financial calculations (developer decision,
+2026-10-11; `.github/copilot-instructions.md`, decision 10). This file holds the rules of the layer. The map of what
+lives where, inside and outside the layer, is in `backend.instructions.md`, section «Financial Math — One Home».
+
+## Modules
+
+| Module | Calculation |
+|---|---|
+| `average_cost.py` | average purchase cost (WAC): pools, cost-basis steps, conversions, the conversions that could not be made |
+| `native_cash.py` | cash per broker and currency: balances, value in the report currency on any day, period flows, FX results |
+| `returns.py` | simple ROI, TWRR and MWRR, as point values and daily series; cumulative and annualized returns |
+| `valuation.py` | value of a holding from quantity, price and `quote_base_quantity` |
+| `price_marks.py` | daily mark of an asset: market quote, same-day trade average, last observation carried forward |
+| `yield_on_cost.py` | Yield on Cost of holdings, replayed from the transaction ledger |
+| `fifo/` | FIFO lots: `models`, `eligibility`, `engine` (`run_fifo_lot_engine`) |
+| `portfolio/` | daily portfolio state: `models`, `classifier`, `daily_state`, `derived_views`, `data_quality`, `engine` |
+| `lots/` | lots analysis math: `prices`, `conversions`, `economic_events`, `histories`, `average_cost_lines` |
+
+## Rules
+
+1. **A calculation owns its whole problem.** It takes the plain data of the problem (movements, currencies, dates) and
+   calls the infrastructure it needs: `fx.convert_bulk`, the base currency from `settings_service`, the thresholds of
+   `data_quality_thresholds`, the cache. It reads its own data from the database only at named points: the portfolio
+   engine (`portfolio/engine.py`, and the configured FX pairs of `portfolio/data_quality.py`) and the Yield on Cost
+   loaders.
+2. **Callers call the layer, never the other way round.** The layer never imports orchestration services
+   (`portfolio_service`, `broker_service`, `transaction_service`, `lots_analysis_service`), the API, AI Export, risk,
+   PAC or signals.
+3. **No silent fallback.** A missing rate, price or cost is reported — `MissingConversion`, `missing_fx`, a data-quality
+   issue — and the value is unavailable: never a number, never the unconverted amount.
+4. **No re-exports.** Every `__init__.py` of the layer holds only its docstring. Import a name from the module that
+   defines it: tests patch module globals (`convert_bulk`, caches) on the module that reads them, and a re-export would
+   make the patch mute.
+5. **One implementation.** Before writing a calculation, search the layer; if it exists, call it, with parameters when
+   your case differs. Never keep a local or partial copy elsewhere, and report any copy you find.
+6. **The frontend computes none of these quantities.** Interactive measures (the measuring tool, what-if) are the only
+   exceptions, and each must be declared where it lives.
+
+## Adding a calculation
+
+- Put it next to the calculations it relates to. A new problem gets a new module; a large engine becomes a
+  sub-package with one module per step.
+- Write its unit tests. Keep them pure where possible: replace `convert_bulk` on the module that reads it.
+- Update the module map in `financial_math/__init__.py`, the table above, and the map in `backend.instructions.md`.
+
+## Guards and tests
+
+- `backend/test_scripts/test_services/test_financial_math/test_layer_boundaries.py` (`services financial-math`)
+  parses every module of the layer: forbidden imports, docstring-only `__init__.py`, and the absence of the old homes
+  (`services/portfolio_engine.py`, `services/fifo_lot_engine.py`, `services/price_resolver.py`,
+  `services/yield_on_cost.py`, `utils/financial/`).
+- Targeted selectors: `services financial-math`, `services roi-fifo-utils`, `services portfolio-engine`,
+  `services lots-analysis-pure`, `utils roi-utils`. The test files keep their historical paths and names.
+- Developer guide: `mkdocs_src/docs/developer/backend/financial_math.md`.

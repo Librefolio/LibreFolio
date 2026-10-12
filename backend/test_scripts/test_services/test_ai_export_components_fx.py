@@ -640,7 +640,7 @@ class TestExposureQuoteBaseQuantity:
         """A bond-like asset quoted per 100 face value (`quote_base_quantity=100`):
         native_amount must apply the same `(quantity / quote_base_quantity) * price`
         scaling the portfolio valuation engine itself uses
-        (`backend.app.utils.financial.valuation_utils.compute_holding_value`),
+        (`backend.app.services.financial_math.valuation.compute_holding_value`),
         never a raw `quantity * price` (which would be 100x too large here)."""
         broker = await _make_broker(session, test_user, name="QuoteBaseBroker")
         bond_asset = await _make_asset(session, currency="USD", ticker="BONDQ", quote_base_quantity=100)

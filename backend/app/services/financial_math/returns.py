@@ -1,5 +1,5 @@
 """
-ROI Financial Utilities — pure math, no I/O.
+Returns: Simple ROI, TWRR, MWRR (XIRR) and annualization — pure math, no I/O.
 
 Provides TWRR, MWRR (XIRR), and Simple ROI calculations.
 
@@ -35,15 +35,6 @@ class NAVSnapshot(NamedTuple):
 
     date: date
     nav: Decimal
-
-
-@dataclass(frozen=True)
-class ROIResult:
-    """Combined ROI result."""
-
-    simple_roi: Decimal
-    twrr: Decimal | None
-    mwrr: Decimal | None
 
 
 @dataclass(frozen=True)

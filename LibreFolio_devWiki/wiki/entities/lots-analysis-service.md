@@ -77,7 +77,7 @@ stays here only to create the lots.
 | Role | Path |
 |------|------|
 | Service | `backend/app/services/lots_analysis_service.py` |
-| Engine it orchestrates | `backend/app/services/fifo_lot_engine.py` |
+| Engine it orchestrates | `backend/app/services/financial_math/fifo/engine.py` |
 | WAC lines (since 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | Public DTO | `backend/app/schemas/portfolio.py` |
 | Service-level tests | `backend/test_scripts/test_services/test_financial/test_lots_analysis_service.py` |

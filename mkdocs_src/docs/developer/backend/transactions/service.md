@@ -199,11 +199,11 @@ Current flow:
 
 ```mermaid
 flowchart LR
-    TX[transaction_service.py<br/>CRUD + stored trade prices] --> FIFO[fifo_lot_engine.py<br/>realized matching from trades]
-    TX --> Resolver[price_resolver.py<br/>MARKET / TRADE_AVG / CARRIED / MISSING]
+    TX[transaction_service.py<br/>CRUD + stored trade prices] --> FIFO["financial_math/fifo/<br/>realized matching from trades"]
+    TX --> Resolver["financial_math/price_marks.py<br/>MARKET / TRADE_AVG / CARRIED / MISSING"]
     Prices[price_history] --> Resolver
     Resolver --> Lots[lots_analysis_service.py<br/>open-lot valuation + price history]
-    Resolver --> Portfolio[portfolio_service / portfolio_engine<br/>portfolio marks]
+    Resolver --> Portfolio["portfolio_service / financial_math/portfolio/<br/>portfolio marks"]
 ```
 
 So the transaction layer can affect marks only by storing transaction facts (BUY/SELL amounts, priced ADJUSTMENT cost basis). It never reads current prices and never performs estimated-at-cost valuation.

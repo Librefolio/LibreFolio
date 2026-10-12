@@ -55,8 +55,9 @@ aggregation**, never for permissions:
 - **0 % is a valid share**: a 0 % OWNER keeps full admin rights but contributes nothing to the
   owner's aggregated numbers.
 - Aggregation scales by share **only for OWNERs** — EDITOR/VIEWER rows always carry share 0 by
-  schema rule yet see full data, so the engine uses scale 1 for them
-  (`portfolio_service.py`, `portfolio_engine.py`). Role/share edits change every scaled number
+  schema rule yet see full data, so the engine uses scale 1 for them (`effective_share()` in
+  `financial_math/native_cash.py`, called by `portfolio_service.py` and
+  `financial_math/portfolio/engine.py`). Role/share edits change every scaled number
   but not the underlying data, so they also join the cache fingerprint for instant invalidation.
 
 ### 🔒 The "Last Owner" Rule

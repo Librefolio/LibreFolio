@@ -81,7 +81,7 @@ ingests don't flag them as "incomplete" or regressions.
 | Role | Path |
 |------|------|
 | Service (get_summary, shared helper) | `backend/app/services/portfolio_service.py` |
-| Engine (position_states_end) | `backend/app/services/portfolio_engine.py` |
+| Engine (position_states_end) | `backend/app/services/financial_math/portfolio/daily_state.py` |
 | API (single /report entrypoint) | `backend/app/api/v1/portfolio_api.py` |
 | Implementation notes | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/lowDashboard/Low-dashboard_implementation_notes.md` |
 | Original architecture proposal | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |

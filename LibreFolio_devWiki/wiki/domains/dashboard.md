@@ -102,8 +102,8 @@ Later ideas:
 | Dashboard page | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | API endpoint | `backend/app/api/v1/portfolio_api.py` |
 | Service | `backend/app/services/portfolio_service.py` |
-| Engine | `backend/app/services/portfolio_engine.py` |
-| ROI utilities | `backend/app/utils/financial/roi_utils.py` |
+| Engine | `backend/app/services/financial_math/portfolio/engine.py` |
+| ROI utilities | `backend/app/services/financial_math/returns.py` |
 | Frontend store | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
 | Positions panel | `frontend/src/lib/components/dashboard/PositionsPanel.svelte` |
 | Archived M1/M2 plans | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/` |

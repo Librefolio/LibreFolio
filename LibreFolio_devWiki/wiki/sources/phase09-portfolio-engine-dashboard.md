@@ -60,10 +60,10 @@ Phase 09 Milestone 2 delivers the production-grade portfolio calculation engine 
 | MWRR fix analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md` |
 | P&L breakdown analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/pnl_breakdown_analysis.md` |
 | Dashboard UI plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_ui_dashboard.md` |
-| Engine | `backend/app/services/portfolio_engine.py` |
+| Engine | `backend/app/services/financial_math/portfolio/engine.py` |
 | Service | `backend/app/services/portfolio_service.py` |
 | API | `backend/app/api/v1/portfolio_api.py` |
 | Frontend store | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
-| ROI utilities | `backend/app/utils/financial/roi_utils.py` |
-| FIFO utilities (fifo_utils.py, deleted 2026-09-03 → the FIFO engine) | `backend/app/services/fifo_lot_engine.py` |
+| ROI utilities | `backend/app/services/financial_math/returns.py` |
+| FIFO utilities (fifo_utils.py, deleted 2026-09-03 → the FIFO engine) | `backend/app/services/financial_math/fifo/engine.py` |
 | WAC utilities (wac_utils.py, deleted 2026-10-07 → the average-cost function) | `backend/app/services/financial_math/average_cost.py` |

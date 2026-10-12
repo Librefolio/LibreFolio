@@ -27,7 +27,7 @@ setup_test_database()
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import backend.app.services.portfolio_engine as portfolio_engine_module
+import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
@@ -41,12 +41,13 @@ from backend.app.schemas.portfolio import (
     StalePriceAsset,
 )
 from backend.app.services.broker_service import BrokerService
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.portfolio_service import (
     PortfolioService,
     _portfolio_l2_cache,
 )
 from backend.app.utils.datetime_utils import utcnow
-from backend.app.utils.financial.valuation_utils import compute_holding_value
 
 # =============================================================================
 # FIXTURES
@@ -1014,7 +1015,7 @@ class TestAccessFingerprintCacheBust:
 
 class TestPortfolioFxCacheIdentity:
     """compute_portfolio_fx_cache_identity() is the shared FX fingerprint for both
-    portfolio cache layers (L1 blob in portfolio_engine.py, L2 report in
+    portfolio cache layers (L1 blob in financial_math/portfolio/engine.py, L2 report in
     portfolio_service.py). Its dependency set is deliberately BOUNDED: only
     currencies actually present in a scope's transactions/held-asset
     currencies/price history, paired with the target currency. A global,
@@ -1299,13 +1300,13 @@ class TestPortfolioBlobCacheFxSensitivity:
         portfolio_engine_module._portfolio_blob_cache.clear()
 
         build_calls = {"n": 0}
-        original_build = portfolio_engine_module.DailyStateBuilder.build
+        original_build = DailyStateBuilder.build
 
         def counting_build(builder_self):
             build_calls["n"] += 1
             return original_build(builder_self)
 
-        monkeypatch.setattr(portfolio_engine_module.DailyStateBuilder, "build", counting_build)
+        monkeypatch.setattr(DailyStateBuilder, "build", counting_build)
 
         engine = portfolio_engine_module.PortfolioCalculationEngine(session)
         date_to = date(2033, 1, 10)
@@ -1337,13 +1338,13 @@ class TestPortfolioBlobCacheFxSensitivity:
         request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
 
         build_calls = {"n": 0}
-        original_build = portfolio_engine_module.DailyStateBuilder.build
+        original_build = DailyStateBuilder.build
 
         def counting_build(builder_self):
             build_calls["n"] += 1
             return original_build(builder_self)
 
-        monkeypatch.setattr(portfolio_engine_module.DailyStateBuilder, "build", counting_build)
+        monkeypatch.setattr(DailyStateBuilder, "build", counting_build)
 
         engine = portfolio_engine_module.PortfolioCalculationEngine(session)
 
@@ -2991,7 +2992,7 @@ class TestPortfolioServiceGetReport:
     async def test_get_report_narrower_date_to_not_corrupted_by_wider_blob_cache(self, session, test_user, broker_with_access, test_asset):
         """Regression test for dashboard KPI cards showing 0-delta for a custom date range.
 
-        Root cause: the L1 portfolio "blob" cache (portfolio_engine.py) is keyed by
+        Root cause: the L1 portfolio "blob" cache (financial_math/portfolio/engine.py) is keyed by
         tx/price fingerprints, NOT by date range. Its old "contained" condition
         (blob_to >= actual_to) returned a wider cached blob unmodified whenever a
         narrower date_to was requested with an identical fingerprint — which happens
