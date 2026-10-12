@@ -1663,6 +1663,22 @@ test.describe('Gallery Screenshots', () => {
             expect(guard.catalogueReads, `the offline guard did not answer a provider catalogue read made under ${new URL(page.url()).origin}`).toBeGreaterThan(reads);
         }
 
+        /**
+         * Rest the pointer on the open details' own right padding: on the indicator, whose pointer holds the details' 30 s
+         * countdown (ConnectionSecurityIndicator, plan 48 C3), and on nothing that reacts to it — the toggle has a hover
+         * background, the link a hover colour, the reason a title. parkPointer's right edge would leave the indicator and
+         * start the countdown before the shot. Ends on the spot being the details themselves, and on no tooltip shown.
+         */
+        async function restPointerOnDetails(page: Page, details: Locator): Promise<void> {
+            const box = await details.boundingBox();
+            if (!box) throw new Error('the details are not on screen');
+            const spot = {x: Math.floor(box.x + box.width) - 4, y: Math.round(box.y + box.height / 2)};
+            await page.mouse.move(spot.x, spot.y);
+            const onDetails = await details.evaluate((element, {x, y}) => document.elementFromPoint(x, y) === element, spot);
+            expect(onDetails, 'the pointer rests on the details themselves, not on the reason, the link or anything over them').toBe(true);
+            await expect(page.getByTestId('tooltip-content'), 'a tooltip lies over the shot').toHaveCount(0);
+        }
+
         test('connection indicator on a local network - all languages and themes', async ({page, baseURL}, testInfo) => {
             const viewport = getViewport(testInfo);
             const lane = laneOrigin(baseURL);
@@ -1719,11 +1735,14 @@ test.describe('Gallery Screenshots', () => {
                 await canvasStill(page.getByTestId('growth-chart'), 'the growth chart');
                 await imagesSettled(page.getByTestId('app-shell'));
                 await waitForMotionSettled(page.getByTestId('app-shell'), 'the page');
-                await parkPointer(page);
+                // The pointer stays on the indicator, so the details' countdown never starts before the shot.
+                await restPointerOnDetails(page, details);
                 await expectNoToast(page);
                 await expect(line, 'the whole line is on screen: the level, the reason and the link').toBeInViewport({ratio: 1});
                 await expectUncovered(link, 'the How to connect securely link');
                 await screenshot(page, viewport, lang, theme, 'security', 'connection-indicator');
+                // Nothing reopens the details without a click: open now, so open in the picture.
+                await expect(toggle, 'the details stayed open through the shot').toHaveAttribute('aria-expanded', 'true');
 
                 // The next combination's language and theme are set from the header, which the open drawer covers: it closes
                 // as a user closes it, by picking the page it shows.
