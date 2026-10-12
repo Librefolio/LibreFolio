@@ -621,6 +621,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **C-64, part 2 — the coordinator's decisions.** `c7cf528c4` dated by its commit (2026-04-24) in four places, F-099's status row by `9b9fcbb65` (2026-05-30); a registry link to a page that never existed replaced | *(none)* |
 | 2026-10-12 | **C-64, part 2 — the exact remap.** With the commit map of the 2026-09-04 history rewrite: 74 pre-rewrite hashes mapped to today's commits — 48 citations in the pages and the index, 165 in the ingest registry; the log keeps the old ones | *(none)* |
 | 2026-10-12 | **C-64, part 2 — dates and hashes in conflict.** No event, commit or decision dated two ways; a history rewrite left pre-rewrite hashes: six remapped by subject and date (17 citations), 23 listed for the coordinator | *(none)* |
 | 2026-10-12 | **Train 72 — I's plan 48 and V's step 2b.** The broker icon's late `<img>` event, the copy helper and its gate, the security details' 30 s, the Spanish toolbar and the scrollbar gutter; the E2E cleanup and the test it unmasked | [[sources/phase00-ui-polish-2026-10]] *(6 pages — 1 source, 2 decisions, 3 problems; see log)* |

@@ -19,7 +19,7 @@ related:
 
 > Authoritative semantics for `PATCH /assets/{id}` when the request changes
 > `currency` and the asset has any price/event history. Implemented in
-> commit `c7cf528c4` (2026-04-23, Phase 7 Part 3 Closure Batch 3 / R3-3 / R3-3b).
+> commit `c7cf528c4` (2026-04-24, Phase 7 Part 3 Closure Batch 3 / R3-3 / R3-3b).
 
 ## Context
 
