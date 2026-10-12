@@ -90,6 +90,7 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/figures-in-the-interface-language]] | **T, M-18.** «Lingua della UI per tutto»: one reactive source, `uiLocale()`, the browser's region only when it speaks the UI language, en-GB for English; CP1 delivered (percentages, decimals, bytes, durations), CP2 to come | 2026-10-12 | i18n, locale, numbers |
 | [[decisions/changelog-translated-by-heading-pieces]] | **M, batch 25.** The CHANGELOG translated by pieces keyed by their headings (`changelog.py`, 30,000-character units); version lines copied; a translation that changes the structure refused; the open chapter informational until its tag | 2026-10-12 | translation, aphra, changelog |
 | [[decisions/e2e-gaps-of-1-2-before-release]] | **V, plan 46 §12.4.** Eight E2E gaps of 1.2 (real Risk query, FX on cash, account deletion, YoC, the PDF preview offline, the transfer in Auto, PAC; Scalable later): «Tutte e 7 nella 1.2», order 2-1-6-4-7-5-3 — planned | 2026-10-12 | testing, e2e, release-1.2 |
 | [[decisions/changelog-translated-by-chapter]] | **T, CL.** The English CHANGELOG decides which releases exist; `CHANGELOG.<xx>.md` load lazily per language, a translated chapter with content replaces its twin, the rest stays English with «Not translated yet»; one DOMPurify path | 2026-10-12 | changelog, i18n, lazy-loading |
@@ -588,6 +589,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Train 68 in the wiki — M-18 CP1 (T).** Figures in the interface language through `uiLocale()`; the rest of the rule (amounts, dates, axes, M-17) in CP2 | *(1 page — 1 decision; see log)* |
 | 2026-10-12 | **Folder 02, step R0 — the Risk features.** The Risk subsystem had no feature code: engine F-110, the four-level Risk tab F-111, the Lab F-112, the legacy Asset Detail tab F-113; the folder's source page from its README | [[sources/phase00-risk-integration-2026-09]] *(5 pages — 4 features, 1 source; see log)* |
 | 2026-10-12 | **Train 67 in the wiki — M's batch 26.** The first append to the translated CHANGELOG, ported by hand and stamped; M-23 (French spacing in the app's changelog) recorded as open, planned in 1.2 | *(none)* |
 | 2026-10-12 | **Train 66 in the wiki.** V-16 resolved (bcrypt off the event loop); M's batch 25: the CHANGELOG translated by pieces, the MathJax fonts, a fast-forward over a dirty file; the ✨ line «The changelog speaks your language»; the changelog decision corrected | *(3 pages — 1 decision, 2 problems; see log)* |
