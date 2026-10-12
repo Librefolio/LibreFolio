@@ -26,6 +26,7 @@
     import {clearComparisonAssetRuntimeParams} from '$lib/charts/loadComparisonData';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {humanizeKey} from '$lib/utils/text';
+    import {translateOr} from '$lib/utils/core/translateOr';
     import {INPUT_FIELD_ORDER, formatSignalProblem, getParamNumber, getParamString} from './chartSignalsHelpers';
 
     import {numericArrows} from '$lib/actions/numericArrows';
@@ -609,7 +610,7 @@
                                                         oninput={(e) => updateSignalParam(signal.id, desc.key, Number(e.currentTarget.value))}
                                                     />
                                                     {#if desc.suffix}
-                                                        <span class="text-[10px] text-gray-400">{desc.suffix}</span>
+                                                        <span class="text-[10px] text-gray-400">{translateOr($t, `signals.units.${desc.suffix}`, desc.suffix)}</span>
                                                     {/if}
                                                 </div>
                                             {:else if desc.type === 'select'}

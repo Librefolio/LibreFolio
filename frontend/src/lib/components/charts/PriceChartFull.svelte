@@ -783,10 +783,10 @@
                 html += `<br/>💰 ${formatFixed(marker.value, 4)}${currBadge}`;
                 if (isConverted) {
                     const origBadge = ` <span style="font-size:10px;opacity:0.7">(${marker.originalCurrencyFlag ?? ''} ${escapeHtml(marker.originalCurrency ?? '')})</span>`;
-                    html += `<br/><span style="font-size:10px;opacity:0.7">orig. ${formatFixed(marker.originalValue!, 4)}${origBadge}</span>`;
+                    html += `<br/><span style="font-size:10px;opacity:0.7">${$t('chart.tooltip.originalValue', {values: {value: formatFixed(marker.originalValue!, 4)}})}${origBadge}</span>`;
                     if (marker.fxRateDate) {
-                        const backfillHint = marker.fxDaysBack && marker.fxDaysBack > 0 ? ` (${marker.fxDaysBack}d back)` : '';
-                        html += `<br/><span style="font-size:10px;opacity:0.6">fx @ ${marker.fxRateDate}${backfillHint}</span>`;
+                        const backfillHint = marker.fxDaysBack && marker.fxDaysBack > 0 ? ` ${$t('chart.tooltip.fxDaysBack', {values: {days: formatFixed(marker.fxDaysBack, 0)}})}` : '';
+                        html += `<br/><span style="font-size:10px;opacity:0.6">${$t('chart.tooltip.fxRateDate', {values: {date: marker.fxRateDate}})}${backfillHint}</span>`;
                     }
                 }
             }
