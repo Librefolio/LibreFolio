@@ -312,6 +312,18 @@ def front_tx_wac_unit_toggle(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("transactions/tx-wac-unit-toggle.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_transfer_auto_cost(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run TX Transfer Auto Cost E2E tests (CHANGELOG 1.2: a transfer in Auto takes the sender's average cost)."""
+    print_section("Frontend TX Transfer Auto Cost Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-transfer-auto-cost.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_event_picker(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run TX Event Picker E2E tests (card-style dropdown, delta, slider, visibility)."""
     print_section("Frontend TX Event Picker Tests")
@@ -635,6 +647,14 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-wac-fx", front_tx_wac_fx, name="TX WAC FX Tests", desc="WAC FX sync modal, qualifying table cross-currency arrow, tooltip format, stale banner", tests="transactions/tx-wac-fx.spec.ts")
     add_test(cat, "tx-wac-mode", front_tx_wac_mode, name="TX WAC Mode Tests", desc="WAC auto/manual toggle, blur-without-change stays auto, placeholder with validate hint", tests="transactions/tx-wac-mode.spec.ts")
     add_test(cat, "tx-wac-unit-toggle", front_tx_wac_unit_toggle, name="TX WAC Unit Toggle Tests", desc="Cost basis Total/Per-unit display toggle, round-trip conversion, commit payload stays per-unit, localStorage persistence", tests="transactions/tx-wac-unit-toggle.spec.ts")
+    add_test(
+        cat,
+        "tx-transfer-auto-cost",
+        front_tx_transfer_auto_cost,
+        name="TX Transfer Auto Cost Tests",
+        desc="CHANGELOG 1.2, each test on a disposable account with its own brokers and manual asset (A buys 10 @ 100 + 10 @ 200, average 150, quoted 180): a TRANSFER A → B entered in the editor's form with the cost basis left in Auto — the form and the editor cell propose 150, the commit sends the receiving side in Auto and the server answers it averaged A at 150, the saved receiving row costs 150, the Dashboard report and Positions table (average-cost column shown through the column menu) give B 150 per unit; T1 the whole position (B 20 @ 150, gain 600 not 3600, nothing left on A), T2 a partial one (B 8 @ 150, A keeps 12 @ 150)",
+        tests="transactions/tx-transfer-auto-cost.spec.ts",
+    )
     add_test(cat, "tx-event-picker", front_tx_event_picker, name="TX Event Picker Tests", desc="Event picker card-style dropdown, delta, slider range, type visibility", tests="transactions/tx-event-picker.spec.ts")
     add_test(cat, "tx-brim-import", front_tx_brim_import, name="TX BRIM Import Wizard Tests", desc="Import Wizard flow: open, select file, parse, resolve assets, import to BulkModal", tests="transactions/tx-brim-import.spec.ts")
     add_test(cat, "tx-ca-contract", front_tx_ca_contract, name="TX Import Plugin Contract Tests", desc="plugin->frontend channels: notices, evidence, field todos, split hints, asset notices", tests="transactions/tx-import-ca-contract.spec.ts")
