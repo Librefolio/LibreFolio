@@ -129,7 +129,7 @@ default so that no construction can fall back to silent zero costs.
 
 | Role | Path |
 |------|------|
-| Constructor (current signature) | `backend/app/services/portfolio_engine.py` (`DailyStateBuilder.__init__`, `_market_value_for`) |
+| Constructor (current signature) | `backend/app/services/financial_math/portfolio/daily_state.py` (`DailyStateBuilder.__init__`, `_market_value_for`) |
 | Sibling test (fixed, same signature update) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_daily_state_builder.py` |
 | Replacement coverage (LAST_BUY_PRICE; `TestLastBuyPrice` until 2026-07-31, when commit `1c5082f81` made the unified price resolver the single valuation brain — now `TestResolverValuation`) | `backend/test_scripts/test_services/test_portfolio_engine_vnext.py` |
 | Shared `average_costs` helper for builder tests (2026-10-07) | `backend/test_scripts/test_services/_engine_average_costs.py` |

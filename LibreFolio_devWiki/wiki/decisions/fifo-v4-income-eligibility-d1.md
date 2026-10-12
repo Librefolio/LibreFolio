@@ -69,5 +69,5 @@ included same-day BUYs, excluded same-day SELLs, and credited income to brokers 
 | Final feasibility pivot (whole-pool) | `.../v4-fee_tax_integration/feasibility-analysis-v4.1.md` §4.1-4.3 |
 | Rejected grace-window draft | `.../v4-fee_tax_integration/feasibility-analysis-v3.md` §22 |
 | Executable plan | `.../v4-fee_tax_integration/implementation-plan-v5.md` Fase 1.1-1.4 |
-| Engine implementation | `backend/app/services/fifo_lot_engine.py` |
+| Engine implementation | `backend/app/services/financial_math/fifo/eligibility.py`, `backend/app/services/financial_math/fifo/engine.py` |
 | User-facing doc | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.en.md` §"Income Allocation Across Lots" |

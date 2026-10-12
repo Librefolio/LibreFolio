@@ -64,8 +64,8 @@ YOC(asset, broker, T) =  Σ gross income per eligible unit, over [T − 364, T]
 
 | Role | Path |
 |------|------|
-| Calculation, dependency identity | `backend/app/services/yield_on_cost.py` |
-| D-1 eligible quantity (shared) | `backend/app/services/fifo_lot_engine.py` |
+| Calculation, dependency identity | `backend/app/services/financial_math/yield_on_cost.py` |
+| D-1 eligible quantity (shared) | `backend/app/services/financial_math/fifo/eligibility.py` |
 | `YieldOnCostResult`, reasons, `PortfolioHolding.yield_on_cost` | `backend/app/schemas/portfolio.py` |
 | Caller (holdings, cache identity) | `backend/app/services/portfolio_service.py` |
 | Tests | `backend/test_scripts/test_services/test_financial/test_yield_on_cost.py` |

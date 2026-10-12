@@ -131,7 +131,7 @@ independent of the Holdings/Performance renaming, but ships in the same refactor
 | Tab container | `frontend/src/lib/components/dashboard/PositionsPanel.svelte` |
 | Treemap zoom/pan guard | `frontend/src/lib/components/charts/echartsTreemapZoomGuard.ts` |
 | Service (date-aware wiring) | `backend/app/services/portfolio_service.py` |
-| Engine (position_states_end) | `backend/app/services/portfolio_engine.py` |
+| Engine (position_states_end) | `backend/app/services/financial_math/portfolio/daily_state.py` |
 | Schemas (`OtherPeriodEffect`, extended `AssetPeriodContribution`) | `backend/app/schemas/portfolio.py` |
 | Backend tests | `backend/test_scripts/test_services/test_financial/test_portfolio_service.py` |
 | API test | `backend/test_scripts/test_api/test_portfolio_api.py` |

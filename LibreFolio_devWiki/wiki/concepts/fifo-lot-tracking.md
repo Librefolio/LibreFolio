@@ -32,4 +32,4 @@ The original quantity/custody-only tracking described above was extended (not re
 | File |
 |------|
 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_ui_broker_holdings.md` |
-| `backend/app/services/fifo_lot_engine.py` |
+| `backend/app/services/financial_math/fifo/engine.py` |

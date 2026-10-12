@@ -57,6 +57,6 @@ The supporting analysis documents (`ARCHITECTURE_CURRENT_STATE.md`, `ARCH_ANALYS
 | MWRR analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md` |
 | P&L breakdown analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/pnl_breakdown_analysis.md` |
 | Asset contribution gap analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/report_asset_level_contribution_gap_analysis.md` |
-| Engine implementation | `backend/app/services/portfolio_engine.py` |
+| Engine implementation | `backend/app/services/financial_math/portfolio/daily_state.py`, `backend/app/services/financial_math/portfolio/engine.py` |
 | Service implementation | `backend/app/services/portfolio_service.py` |
 | vNext unit tests | `backend/test_scripts/test_services/test_portfolio_engine_vnext.py` |
