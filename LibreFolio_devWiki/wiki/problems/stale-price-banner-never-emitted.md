@@ -56,6 +56,7 @@ reports partial portfolio results while a filtered asset is stale.
 - **K-24** (assigned): `developer/frontend/data-quality-banner.md` still says "All 5 codes can appear together"
   (`:234`); the user Dashboard page says manual assets are "valued at purchase cost", while the engine uses the last
   trade price.
+  *Closed on 2026-10-09 (workstream Q, S23, train 27): both sentences are corrected (lint 2026-10-12).*
 - The FX twin of this rule — rates carried forward without a bound — is not a Dashboard issue:
   [[problems/fx-backward-fill-unbounded-stale-rates]] (option C there).
 

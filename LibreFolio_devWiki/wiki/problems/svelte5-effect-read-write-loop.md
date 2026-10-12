@@ -1,6 +1,7 @@
 ---
 title: "Svelte 5 $effect Read-Write Loop — effect_update_depth_exceeded"
 category: problem
+status: resolved
 tags: [svelte5, frontend, runes, effect, reactivity, infinite-loop]
 severity: critical
 resolved: true

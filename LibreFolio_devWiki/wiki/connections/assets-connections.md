@@ -2,6 +2,7 @@
 
 > Dependencies and relationships between Asset domain features.
 > See [[connections/dependency-graph]] for the full project view.
+> The domain narrative is [[domains/assets]].
 
 ---
 
@@ -33,7 +34,7 @@ graph TD
 ## Key Dependency Chains
 
 - **Price chain**: F-024 (create asset) → F-026 (assign provider) → F-027 (sync) → F-030 (stored) → F-033 (displayed)
-- **Event chain**: F-027 sync run → provider emits events → F-031 stored → displayed as markers in F-033 chart → linked to transactions via F-051
+- **Event chain**: F-027 sync run → provider emits events → F-031 stored → displayed as markers in F-033 chart → linked to transactions via [[F-051]]
 - **Search-to-create**: F-028 (search providers in parallel) → auto-fills F-024 create form + auto-suggests F-026 provider assignment
 - **Scheduled investment**: F-034 is both an asset type AND a provider — it generates synthetic price series from a schedule definition
 

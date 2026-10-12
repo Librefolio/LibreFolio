@@ -1,6 +1,7 @@
 ---
 title: "Babel Currency Symbol Returns Code Instead of Symbol in Non-English Locale"
 category: problem
+status: resolved
 tags: [backend, python, babel, currency, locale, i18n]
 severity: high
 resolved: true

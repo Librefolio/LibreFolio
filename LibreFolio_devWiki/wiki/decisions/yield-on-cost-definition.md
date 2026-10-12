@@ -52,7 +52,8 @@ YOC(asset, broker, T) =  Σ gross income per eligible unit, over [T − 364, T]
 
 - YOC is stable under re-imports, partial sales and transfers, and it says why when it cannot be computed.
 - It is cached with the report: `compute_yield_on_cost_dependency_identity()` hashes what the value depends on.
-- Theory page in English only (IT/FR/ES translation debt, backlog I-08).
+- Theory page in English only (IT/FR/ES translation debt, backlog I-08). *Translated since: `yield-on-cost.{it,fr,es}.md`
+  exist, and I-08 was closed on 2026-10-12 after M's translation rounds (lint 2026-10-12).*
 
 ## Links
 

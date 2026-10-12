@@ -131,6 +131,7 @@ The service does not return prompt text, labels, translations, or user notes. `f
   were removed after a 114/114 exact-output comparison.
 - The final UI intentionally separates remembered draft state from effective export state: response language is refreshed from locale, web research is false, and Snapshot notes are absent even when the raw draft remains stored.
 - The panel is portalized to `document.body` with `z-index: 9000`; owned portalized select events, Escape behavior, outside-click closing, repositioning, and trigger-focus restoration are handled by the menu component rather than by the four routes.
+- News-driver analysis keeps the evidence of a movement apart from its cause: [[decisions/ai-export-news-driver-analysis]].
 
 ## History
 
