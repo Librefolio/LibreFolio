@@ -48,7 +48,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk/signal_helpers.py` | Adapters reused by the five risk-family [signal plugins](../../architecture/patterns/signal_plugin_guide.md) (drawdown and rolling return, volatility, Sharpe, beta). |
 | `backend/app/services/risk/quant/` | The simulation and optimization boundary: engine request and result models, content-keyed caches, spawn worker pools, the QuantLib and Riskfolio workers, the NumPy block bootstrap. |
 | `backend/app/services/risk/scenario_catalog/` | Built-in YAML scenarios and the loader that runs at startup. |
-| `backend/app/services/risk_plugins/` | The analytics, one module each. |
+| `backend/app/services/risk_plugins/` | The analytics, one folder each: the code in `<analytic_code>/plugin.py`, the `risk.analytics.*` name and description in its `i18n/` fragment. |
 | `backend/app/services/provider_registry.py` | `RiskAnalyticRegistry` and the `register_plugin` decorator. |
 | `backend/app/services/series_preparation.py` | Joint calendar, target-currency conversion, simple returns, carried points. |
 | `backend/app/services/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
@@ -235,7 +235,7 @@ The HTTP status is reserved for what concerns the whole request:
 
 ## 🧩 The Plugin Contract {: #plugin-contract }
 
-An analytic is one class in `backend/app/services/risk_plugins/` that extends `RiskAnalytic`
+An analytic is one class, in `backend/app/services/risk_plugins/<analytic_code>/plugin.py`, that extends `RiskAnalytic`
 (`backend/app/services/risk/base.py`). It receives validated parameters and a prepared,
 **DB-free** `RiskExecutionContext`, and returns a `RiskComputation`. It does not open a database
 session or fetch prices: the service did that before calling it.
@@ -246,7 +246,7 @@ session or fetch prices: the service did that before calling it.
 |---|---|
 | `analytic_code` | Stable id matching `^[a-z][a-z0-9_]*$`: the registry key and the `analytic_code` of requests and results. |
 | `algorithm_version` | Non-empty string copied into every result's `metadata.algorithm_version`; the simulation and optimization caches key on it. Bump it when the numbers change. |
-| `name_i18n_key`, `description_i18n_key` | Frontend catalogue keys published by `GET /catalog` (by convention `risk.analytics.<name>.name` and `.description`). |
+| `name_i18n_key`, `description_i18n_key` | Frontend catalogue keys published by `GET /catalog` (by convention `risk.analytics.<name>.name` and `.description`); their texts live in the analytic's `i18n/` fragment ([Adding a Risk Analytic](#adding-an-analytic)). |
 | `output_kind` | The `RiskOutputKind` of the output model it returns. |
 | `supported_scopes`, `supported_modes` | Non-empty, unique tuples of `RiskScopeKind` and `RiskMode`; the service refuses any other combination before running. |
 | `params_model` | A Pydantic model with `ConfigDict(extra="forbid")`; its JSON Schema is published as `parameters_schema`. |
@@ -275,8 +275,9 @@ to the context's values when left at `None`.
 `RiskAnalyticRegistry` (`backend/app/services/provider_registry.py`) specializes the shared plugin
 registry described in [Registry Pattern](../../architecture/patterns/registry_pattern.md):
 
-- **Discovery** imports every `risk_plugins/*.py` once, on first use, under the registry's lock;
-  `__init__.py`, files starting with `_` and a module named `base` are skipped.
+- **Discovery** loads every analytic folder's `plugin.py`, as
+  `backend.app.services.risk_plugins.<analytic_code>.plugin`, once, on first use, under the
+  registry's lock; names starting with `_` and the name `base` are skipped.
 - **Registration** is the `@register_plugin(RiskAnalyticRegistry)` decorator. It runs
   `validate_definition()`, so an incomplete declaration fails when the module is imported: every
   attribute present, a canonical lowercase code, non-empty version and i18n keys, enum-typed kind,
@@ -448,7 +449,7 @@ section, `quant/` paths are under `backend/app/services/risk/` and `risk_plugins
 
 ### 🎛️ Simulation Parameters {: #simulation-parameters }
 
-`SimulationParams` (`risk_plugins/simulation.py`):
+`SimulationParams` (`risk_plugins/simulation/plugin.py`):
 
 | Parameter | Default | Rule |
 |---|---|---|
@@ -490,14 +491,14 @@ All these checks run after the service's parameter validation and observation ga
 |---|---|---|---|
 | Assets with a usable return series, both processes (excluded holdings do not count) | `MAX_SIMULATION_ASSETS = 100` | `quant/models.py`, checked by the plugin before the request is built | `unavailable` · `resource_limit` |
 | Bootstrap window: aligned observations | `MAX_HISTORY_OBSERVATIONS = 5_000` | `quant/models.py`, checked by the plugin | `unavailable` · `resource_limit` |
-| Bootstrap block longer than the window | Block, converted to observations, above the history's count | `risk_plugins/simulation.py` | `unavailable` · `invalid_parameters` |
+| Bootstrap block longer than the window | Block, converted to observations, above the history's count | `risk_plugins/simulation/plugin.py` | `unavailable` · `invalid_parameters` |
 | Sobol dimension, QMC only: assets × horizon days | `MAX_SOBOL_DIMENSION = 21_201` | `quant/models.py`, checked by the GBM builder `_build_parametric_request()` | `unavailable` · `resource_limit` |
 | Percentile matrix: paths × (horizon + 1) | 20 000 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
 | Stochastic workload: paths × horizon × assets | 200 000 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
 | Bootstrap history: observations × assets | 250 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
 | Optimization returns: observations × assets | 2 000 000 | `quant/optimization_engine.py` | `unavailable` · `resource_limit` |
 
-`simulation` builds every `resource_limit` with `_resource_limit()` (`risk_plugins/simulation.py`).
+`simulation` builds every `resource_limit` with `_resource_limit()` (`risk_plugins/simulation/plugin.py`).
 The builders call it directly; the three engine budgets raise `SimulationResourceLimitError` in
 `quant/engine.py`, which the plugin catches around `run_simulation()` and re-raises through
 `_resource_limit()` with its `metric`, `actual` and `limit`. The refusal's `details` carry these
@@ -587,8 +588,12 @@ simulation.
 ## 🌍 Warnings, Errors and Localization {: #localization }
 
 The backend sends machine-readable codes plus an English fallback; the frontend owns the wording
-in its four catalogues (`frontend/src/lib/i18n/{en,it,fr,es}.json`, see
-[Internationalization](../../frontend/i18n.md)).
+in its translation catalogue, generated from its sources (see
+[Internationalization](../../frontend/i18n.md)). The `risk` subsystem
+(`frontend/src/lib/i18n/risk/<lang>.json`, declared prefix `risk`) holds the panels' wording, the
+`risk.errors.*` sentences and the `risk.warnings.*` vocabulary every analytic shares; each
+analytic's fragment (`backend/app/services/risk_plugins/<analytic_code>/i18n/<lang>.json`) holds
+its own `risk.analytics.<name>.*` keys.
 
 - **Warnings.** A `RiskWarning` has a stable `code`, an English `message`, `details`,
   `degrades_result` (default `true`) and a translatable `message_i18n_key` (pattern
@@ -611,7 +616,9 @@ in its four catalogues (`frontend/src/lib/i18n/{en,it,fr,es}.json`, see
 - **Gate.** `test_risk_warnings_i18n.py` scans `backend/app/services/risk/` and
   `backend/app/services/risk_plugins/`. It fails when a `RiskWarning` is built without a
   **literal** `message_i18n_key` (a key assembled at runtime would also escape the i18n audit),
-  and when a key has no sentence in one of the four catalogues.
+  and when a key has no sentence in one of the four languages: it reads the merged sources with
+  `load_catalog(language, fallback=False)` (`scripts/i18n_catalog.py`), so a missing translation
+  is not filled from English.
 
 ---
 
@@ -702,6 +709,7 @@ flight in the store. The lab never shows an amount of money: an asset set has no
 ## ➕ Adding a Risk Analytic {: #adding-an-analytic }
 
 ```python
+# backend/app/services/risk_plugins/my_analytic/plugin.py
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.risk import RiskMode, RiskOutputKind, RiskScopeKind
@@ -734,9 +742,13 @@ class MyAnalytic(RiskAnalytic):
         return RiskComputation(output=output, method="my_method")
 ```
 
-1. **Module.** Create `backend/app/services/risk_plugins/<analytic_code>.py`. Its name must not
-   start with `_` and must not be `base.py`. Discovery imports it; there is nothing else to
-   register.
+1. **Folder.** Create `backend/app/services/risk_plugins/<analytic_code>/`, with the code in
+   `plugin.py` and an `__init__.py` that holds the analytic's docstring and nothing else. The
+   folder's name must not start with `_` and must not be `base`. Discovery loads `plugin.py` as
+   `backend.app.services.risk_plugins.<analytic_code>.plugin`; there is nothing else to register.
+   Import and patch the analytic's names from that module — the package re-exports nothing — and
+   keep a helper only this analytic uses beside `plugin.py`, as `_*.py`
+   ([Plugin Folder Layout](../../architecture/patterns/registry_pattern.md#plugin-layout)).
 2. **Declaration.** A parameters model with `ConfigDict(extra="forbid")`, every
    [class attribute](#class-attributes), and the `@register_plugin(RiskAnalyticRegistry)`
    decorator. A statistical analytic takes `min_observations = RISK_MIN_OBSERVATIONS`, never a
@@ -758,10 +770,20 @@ class MyAnalytic(RiskAnalytic):
 6. **Heavy work.** Anything that needs QuantLib, Riskfolio-Lib or long CPU time overrides
    `execute()` and goes through a spawn worker pool, like `simulation` and
    `portfolio_optimization`. Never import those libraries in the web process.
-7. **Words.** Add `risk.analytics.<name>.name` and `.description`, and every `risk.warnings.*` key
-   the analytic emits, to the four frontend catalogues. Build each `RiskWarning` with a literal
-   `message_i18n_key` and an English `message`, and put asset ids in `details.asset_ids` so the
-   service can name them.
+7. **Words.** Put `risk.analytics.<name>.name` and `.description` in the four languages in the
+   analytic's own fragment, `risk_plugins/<analytic_code>/i18n/`. A new analytic needs `--into`,
+   since the keys under `risk.analytics` belong to plugins only and `add` will not guess:
+
+    ```bash
+    ./dev.py i18n add risk.analytics.myAnalytic.name --en "My analytic" --it "…" --fr "…" --es "…" --into risk_plugins/my_analytic
+    ./dev.py i18n add risk.analytics.myAnalytic.description --en "…" --it "…" --fr "…" --es "…" --into risk_plugins/my_analytic
+    ```
+
+    Every `risk.warnings.*` key the analytic emits belongs to the shared warning vocabulary of the
+    `risk` subsystem, where `./dev.py i18n add` writes it without `--into`. Build each `RiskWarning`
+    with a literal `message_i18n_key` and an English `message`, and put asset ids in
+    `details.asset_ids` so the service can name them. `./dev.py i18n where <key>` names the file
+    that holds a key, or the one `add` would use.
 8. **Tests** (paths under `backend/test_scripts/`):
     - pure plugin tests next to the existing ones: `test_services/test_risk_analytics.py` builds
       contexts with `make_context()` and `make_prepared_set()`;
@@ -770,13 +792,15 @@ class MyAnalytic(RiskAnalytic):
       in `test_services/test_risk_analytics.py` and `test_risk_catalog_requires_auth_and_lists_plugins`
       in `test_api/test_risk_api.py`. A `PRIMARY` or `PRIMARY_AND_BENCHMARK` reader also goes into
       `PRIMARY_READERS` or `PRIMARY_AND_BENCHMARK_READERS` in `test_risk_analytics.py`, and a
-      statistical analytic into `FLOOR_ANALYTICS` (its module into `CONSUMERS`) in
+      statistical analytic into `FLOOR_ANALYTICS` (its `plugin.py` into `CONSUMERS`) in
       `test_services/test_data_quality_thresholds.py`;
     - a new service test file goes into `RISK_SERVICE_TEST_PATHS` in
       `scripts/test_runner/_backend_services.py`; `./dev.py test check-orphans` lists the test
       files no runner registers;
     - run `./dev.py test services risk-all`, `./dev.py test schemas risk` and
-      `./dev.py test api risk`.
+      `./dev.py test api risk`, then `./dev.py test utils gate-plugin-layout` and
+      `./dev.py test utils gate-plugin-i18n-ownership`, which hold the folder and keep the
+      analytic's keys in its fragment.
 9. **Surface it** (optional). A panel asks for it through `buildBaseAnalytics()` — capability-gated,
    so the code is inert on scopes it does not support — or through an on-demand `runGuarded()`.
    Co-located Vitest files and the `frontend/e2e/portfolio/risk-*.spec.ts` specs cover the UI.
@@ -804,6 +828,7 @@ class MyAnalytic(RiskAnalytic):
 | Simulation, optimization, workers | `test_services/test_risk_simulation.py`, `test_services/test_risk_optimization.py`, `test_services/test_risk_spawn_worker.py` | `services risk-simulation`, `services risk-optimization`, `services risk-workers` |
 | Metrics against references | `test_services/test_risk_metrics.py`, `test_services/test_risk_metrics_oracle.py` | `services risk-all`, `services risk-oracle` |
 | Thresholds and warning wording | `test_services/test_data_quality_thresholds.py`, `test_services/test_risk_warnings_i18n.py` | `services risk-all` |
+| Plugin folders and their translations | `test_utilities/test_plugin_layout_gate.py`, `test_utilities/test_plugin_i18n_ownership_gate.py` | `utils gate-plugin-layout`, `utils gate-plugin-i18n-ownership` |
 | Schemas | `test_schemas/test_risk_schemas.py` | `schemas risk` |
 | API | `test_api/test_risk_api.py` | `api risk` |
 | End-to-end | `frontend/e2e/portfolio/risk-analysis.spec.ts`, `risk-lab.spec.ts`, `risk-asset-detail.spec.ts`, `risk-benchmark-shared.spec.ts` | `front-portfolio risk`, `front-portfolio risk-lab`, `front-portfolio risk-asset-detail`, `front-portfolio risk-benchmark-shared` |

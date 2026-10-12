@@ -128,7 +128,7 @@ const HEADER_HIDE_SLACK = 8;
 const READ_TIMEOUT = 20_000;
 /**
  * The calculation: the copied facts read again, then `POST /tools/…` to the solver. The tool's own contract waits at most 65 s
- * (backend tool_plugins/pac_allocator.py, `client_timeout_ms`); past that the planner shows its own error, which the state
+ * (backend tool_plugins/pac_allocator/plugin.py, `client_timeout_ms`); past that the planner shows its own error, which the state
  * assertion then names. The engine needs milliseconds for a draft this size.
  */
 const CALCULATION_TIMEOUT = 75_000;

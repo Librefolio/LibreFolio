@@ -22,8 +22,11 @@ The FX module has the most extensive frontend test coverage, with 7 Playwright s
 # Run all front-fx tests
 ./dev.py test front-fx all
 
-# List available tests
-./dev.py test front-fx --list
+# List the units (actions), each with its description
+./dev.py test front-fx --help
+
+# List the Playwright tests of every unit, without running them (Vitest files are not listed)
+./dev.py test front-fx all --list
 
 # Run a specific test file
 ./dev.py test front-fx fx-detail

@@ -66,12 +66,12 @@ export interface OfflineFxProvider {
  * Only `target_currencies` comes from a network call in the backend (`get_supported_currencies`). FED and BOE answer it
  * from a static map in their own code (`CURRENCY_SERIES`), reproduced here whole. ECB and SNB load it live:
  *
- * - the SNB carries its live list as audited on 2026-08-05 — the call `snb.py` makes, `GET
+ * - the SNB carries its live list as audited on 2026-08-05 — the call `snb/plugin.py` makes, `GET
  *   https://data.snb.ch/api/cube/devkum/dimensions/en`, mapped 25 currencies
  *   (LibreFolio_developer_journal/Release_2/phases/05_cleanAudit/mkdocsAudit/03_fx-market-data.md:157-160);
  * - the ECB carries the currencies its documentation page names (mkdocs_src/docs/user/fx/providers/ecb.en.md, "including:"
  *   — the page at its `docs_url`). The same audit counted 44 live (`data-api.ecb.europa.eu`) but recorded no list, and the
- *   repository holds none more complete: `ecb.py`'s own `test_currencies` is a subset of this one. So a subset of the live
+ *   repository holds none more complete: `ecb/plugin.py`'s own `test_currencies` is a subset of this one. So a subset of the live
  *   list, which every pair the gallery opens is covered by.
  *
  * Every list is sorted and holds the base currency, as `get_supported_currencies` returns it.

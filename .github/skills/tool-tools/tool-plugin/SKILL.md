@@ -43,9 +43,10 @@ inside a current Tool computation.
 
 ## Static declaration and discovery
 
-Put the thin wrapper in `backend/app/services/tool_plugins/` and register it with
+Put the thin wrapper in its own folder, `backend/app/services/tool_plugins/<name>/`
+(`__init__.py` with the docstring only, `plugin.py` with the code), and register it with
 `@register_plugin(ToolPluginRegistry)`. Reuse this registry specialization; do not
-introduce another discovery system.
+introduce another discovery system. Import and patch from `….<name>.plugin`.
 
 `contract_version` and `implementation_version` belong to the packaged plugin and are
 shared by its services. A plugin may expose one or more complete public calculations;
@@ -55,7 +56,9 @@ selector to disguise separate services.
 Required metadata for every `ToolService`:
 
 - Stable lowercase `tool_code`.
-- Plain `name`/`description`, optional `name_i18n_key`/`description_i18n_key`.
+- Plain `name`/`description`, optional `name_i18n_key`/`description_i18n_key`, whose texts live
+  in the plugin's own `i18n/` (`./dev.py i18n add … --into tool_plugins/<name>`); the tool's
+  UI vocabulary stays in its catalogue subsystem (e.g. `pacAllocator`).
 - Category and compiled icon key.
 - `ToolUIDescriptor(kind="custom", component_key=..., version="x.y.z")`. UI version
   is an independent SemVer compatibility contract, not the plugin implementation
