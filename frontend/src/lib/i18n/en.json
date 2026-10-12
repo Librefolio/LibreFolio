@@ -1708,7 +1708,8 @@
     "pnlAxisWithYear": "{label} ''{year}",
     "unrealizedAssetEffect": "Assets in {currency}",
     "unrealizedFxEffect": "{from} → {to} rate",
-    "unrealizedUnsplit": "{currency}, not split"
+    "unrealizedUnsplit": "{currency}, not split",
+    "fxOnCash": "FX on cash"
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",

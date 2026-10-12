@@ -38,6 +38,7 @@ $$
 - `estimated=True` means TRADE-origin. A stale carried MARKET quote is stale, not estimated.
 - Marks stay in native currency; each consumer converts to $C^*$ at valuation date $t$.
 - Cost-basis FX remains pinned to the transaction date.
+- Cash stays in the currency it was recorded in, broker by broker, and is valued at the rate of $t$ (§5); each cash movement is still booked, and each external cash flow enters the capital, at the rate of its own date.
 - WAC is **never** used as valuation price.
 
 See [Price Resolution](price-resolution.md) for the resolver contract and data-quality semantics.
@@ -115,6 +116,14 @@ $$
 \mathrm{UGL}(t) = \mathrm{NAV}(t) - \mathrm{Book}(t)
 $$
 
+$\mathrm{Cash}(t)$ is each broker's cash, kept in the currencies it was recorded in and valued at the rate of $t$:
+
+$$
+\mathrm{Cash}(t) = \sum_{b \in S} \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t)
+$$
+
+where $N_{b,c}(t)$ is the balance of broker $b$ in currency $c$ after its movements dated on or before $t$, scaled by the broker's [ownership share](../../../../user/brokers/sharing.md), and $\mathrm{fx}(c, C^*, t)$ is the latest rate on or before $t$ ($1$ for $c = C^*$). The same term is in NAV and in Book, so the exchange-rate effect on cash cancels in UGL: it is booked as an exchange result (§6) and belongs to the Total P&L.
+
 ---
 
 ## 📐 6. Three-Pool Cash Model — Per-Broker $(K_b, R_b, W)$ {: #6-three-pool-cash-model-per-broker-k_b-r_b-w }
@@ -145,6 +154,22 @@ Three accumulator pools track cash provenance. $K$ and $R$ are maintained **per-
 
 If departure and arrival dates differ, the transfer is in-transit: subtracted from $s$ at departure day, added to $d$ at arrival day. Between those dates, $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$ by the in-transit amount — handled by proportional reconciliation.
 
+### 💱 Exchange Result on Foreign Cash {: #exchange-result-on-foreign-cash }
+
+Each cash movement enters the broker's cash, and its pools, at the rate of its own date; the balance held afterwards follows the rate (§5). On every day $t$ on which the rate of a foreign currency held as cash in $S$ changes — its first known rate included — after that day's cash movements and before that day's transactions update the pools, each broker $b$ holding foreign cash is revalued:
+
+$$
+\varepsilon_b(t) = \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t) - \mathrm{Cash}^{\text{replay}}_b(t)
+$$
+
+$$
+\mathrm{Cash}^{\text{replay}}_b \mathrel{+}= \varepsilon_b, \qquad
+R_b \mathrel{+}= \varepsilon_b, \qquad
+\text{if } R_b < 0\text{: } K_b \mathrel{+}= R_b,\; R_b = 0
+$$
+
+$\mathrm{Cash}^{\text{replay}}_b(t)$ is the cash the replay carries for $b$: its value at the previous revaluation plus every later movement at the rate of its own date. A gain goes to the returns; a loss consumes them first and then the capital, exactly like a FEE. The capital baseline does not move: an exchange result is a result, not a contribution, so it is in NAV, Total P&L, ROI, TWRR and MWRR, never in the deposited capital.
+
 ### 🧮 Aggregation for output
 
 $$
@@ -161,7 +186,14 @@ $$
 \mathrm{Cash}_{\text{like}}(t) \approx \sum_{b \in S} K_b(t) + \sum_{b \in S} R_b(t)
 $$
 
-Proportional per-broker scaling applied if drift $> 0.01$ (from FX rounding or in-transit timing).
+Both pools are first clamped at zero per broker. If the pools are not empty and the drift still exceeds $0.01$, the **summed** pools are scaled to $\mathrm{Cash}_{\text{like}}$, the cash plus the cash in transit — an aggregate scaling, not a per-broker one, each result floored at zero:
+
+$$
+\mathrm{CashFromCapital}(t) = \sum_{b \in S} K_b(t) \cdot \frac{\mathrm{Cash}_{\text{like}}(t)}{\sum_{b \in S} K_b(t) + \sum_{b \in S} R_b(t)}, \qquad
+\mathrm{CashFromReturns}(t) = \mathrm{Cash}_{\text{like}}(t) - \mathrm{CashFromCapital}(t)
+$$
+
+Otherwise $\mathrm{CashFromCapital}(t) = \min\bigl(\sum_b K_b(t),\, \mathrm{Cash}_{\text{like}}(t)\bigr)$ and $\mathrm{CashFromReturns}$ is the rest, floored at zero. The exchange results on cash at rest are booked into the pools (above), so the drift left comes from in-transit timing: cash in transit — and the move of its exchange rate while it travels — is in no broker's pools.
 
 ---
 
@@ -190,7 +222,13 @@ $$
 \mathrm{PnL}_{period} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Unallocated fees/income without `asset_id` are grouped per broker as other period effects.
+Since UGL cannot contain the exchange result on cash (§5), Other splits into each broker's exchange result over the period and what remains:
+
+$$
+\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
+$$
+
+Unallocated fees/income without `asset_id` are grouped per broker as other period effects, and so is $\mathrm{FXonCash}_b$: one row per broker holding foreign cash, shown when its result is not zero. See [Period P&L — FX on Cash](period-pnl.md#fx-on-cash).
 
 ---
 
@@ -217,7 +255,7 @@ Where $w_{\text{pre}}$ is the WAC in $C^*$ **before** the pool reduction (same v
 | Pre-frame | $[t_{\mathrm{first}},\ t_0)$ | Cash, qty, WAC, pools — no market evaluation |
 | Frame | $[t_0,\ t_1]$ | Full daily: prices, FX, position states, portfolio states |
 
-Pre-frame transactions update accumulators (cash ledger, WAC pools, 3-pool K/R/W) without consuming price or FX data. This enables efficient range-based caching.
+Pre-frame transactions update accumulators (cash ledger, WAC pools, 3-pool K/R/W) without any market evaluation: no price is read and no position is valued. Each movement is converted at the rate of its own date, as in the frame, and on every day the rate of a held foreign currency changes, the cash is revalued at that day's rate and the exchange result enters the pools (§6), so the pools are correct at $t_0$. This enables efficient range-based caching.
 
 ---
 

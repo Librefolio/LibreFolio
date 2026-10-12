@@ -39,6 +39,7 @@ from backend.app.services.portfolio_engine import (
 )
 from backend.app.services.price_resolver import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
+from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 
 # =============================================================================
 # HELPERS — mirror the established conventions in this test directory
@@ -136,6 +137,13 @@ def _builder(**overrides) -> DailyStateBuilder:
             target_currency=defaults["target_currency"],
             fx_rate_map=defaults["fx_rate_map"],
             split_linked_tx_ids=defaults.get("split_linked_tx_ids"),
+            date_to=defaults["date_to"],
+        )
+    if "native_cash" not in defaults:
+        defaults["native_cash"] = engine_native_cash(
+            defaults["classified_txs"],
+            target_currency=defaults["target_currency"],
+            fx_rate_map=defaults["fx_rate_map"],
             date_to=defaults["date_to"],
         )
     return DailyStateBuilder(**defaults)

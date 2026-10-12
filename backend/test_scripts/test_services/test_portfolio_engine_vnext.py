@@ -6,7 +6,7 @@ Validates the core architectural invariants:
 2. Valuation hierarchy and transaction-reference propagation
 3. 3-pool event-driven (K, R, W)
 4. Position states emission (start + end snapshots)
-5. Period accumulators (realized, income, fees)
+5. Realized sales (proceeds and historical cost)
 6. Pre-frame / frame separation
 """
 
@@ -29,6 +29,7 @@ from backend.app.services.portfolio_engine import (
 )
 from backend.app.services.price_resolver import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
+from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 
 
 def _tx(*, tx_id=1, broker_id=1, asset_id=1, tx_type=TransactionType.BUY, dt=date(2025, 1, 2), quantity=Decimal("0"), amount=None, currency="EUR", cbo=None, cbo_ccy=None):
@@ -107,6 +108,7 @@ def _build(
         asset_types={1: "ETF", 2: "ETF"},
         asset_currencies=resolved_currencies,
         average_costs=engine_average_costs(txs, asset_currencies=resolved_currencies, target_currency="EUR", fx_rate_map=fx_rate_map or {}, split_linked_tx_ids=split_linked_tx_ids, date_to=date_to),
+        native_cash=engine_native_cash(txs, target_currency="EUR", fx_rate_map=fx_rate_map or {}, date_to=date_to),
         target_currency="EUR",
         date_from=date_from,
         date_to=date_to,
@@ -238,6 +240,7 @@ class TestResolverValuation:
             asset_types={1: "ETF"},
             asset_currencies={1: "EUR"},
             average_costs=engine_average_costs([], asset_currencies={1: "EUR"}, target_currency="EUR", fx_rate_map={}),
+            native_cash=engine_native_cash([], target_currency="EUR", fx_rate_map={}, date_to=date(2025, 1, 15)),
             target_currency="EUR",
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 15),
@@ -268,6 +271,7 @@ class TestResolverValuation:
             asset_types={1: "BOND"},
             asset_currencies={1: "EUR"},
             average_costs=engine_average_costs([], asset_currencies={1: "EUR"}, target_currency="EUR", fx_rate_map={}),
+            native_cash=engine_native_cash([], target_currency="EUR", fx_rate_map={}, date_to=date(2025, 1, 5)),
             target_currency="EUR",
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 5),
@@ -654,42 +658,28 @@ class TestPositionStates:
 
 
 # =============================================================================
-# 5. PERIOD ACCUMULATORS
+# 5. REALIZED SALES
 # =============================================================================
 
 
-class TestPeriodAccumulators:
-    """Verify realized, income, fees accumulation during frame."""
+class TestRealizedSales:
+    """Verify a SELL in the frame is replayed as a ``RealizedSale``: its proceeds and the historical cost it took from the pool."""
 
     def test_sell_realized(self):
-        """SELL in frame → per_realized accumulated."""
+        """SELL in frame → one RealizedSale for the position, realized gain = proceeds - cost."""
         txs = [
             _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
             _c(_tx(tx_id=2, tx_type=TransactionType.SELL, quantity=Decimal("-5"), amount=Decimal("750"), dt=date(2025, 1, 5))),
         ]
         result = _build(txs)
         # Realized = proceeds(750) - cost_basis(5 * WAC=100 = 500) = 250
-        key = (1, 1)
-        assert key in result.per_realized
-        assert result.per_realized[key] == Decimal("250")
-
-    def test_income_attributed(self):
-        """DIVIDEND with asset_id → per_income."""
-        txs = [
-            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1, quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 5))),
-        ]
-        result = _build(txs)
-        assert result.per_income.get((1, 1)) == Decimal("50")
-
-    def test_unallocated_fees(self):
-        """FEE without asset_id → unalloc_fees."""
-        txs = [
-            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.FEE, asset_id=None, quantity=Decimal("0"), amount=Decimal("-10"), dt=date(2025, 1, 5))),
-        ]
-        result = _build(txs)
-        assert result.unalloc_fees.get(1) == Decimal("10")
+        sales = [s for s in result.realized_sales if s.asset_id == 1 and s.broker_id == 1]
+        assert len(sales) == 1, sales
+        sale = sales[0]
+        assert sale.date == date(2025, 1, 5)
+        assert sale.proceeds == Decimal("750")
+        assert sale.cost == Decimal("500")
+        assert sale.proceeds - sale.cost == Decimal("250")
 
 
 # =============================================================================

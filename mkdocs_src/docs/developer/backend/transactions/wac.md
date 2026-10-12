@@ -58,7 +58,8 @@ calculations. Its package docstring (`__init__.py`) sets the rule:
   such as the FX service for conversions, instead of receiving values its caller
   prepared.
 - **Callers depend on the layer, not the reverse.** Engines, services and API
-  handlers call it; it does not depend on them.
+  handlers call it; it does not depend on them. Callers import each function from
+  the module that defines it: the package re-exports nothing.
 - **New financial calculations are born here.** The existing pure helpers in
   `backend/app/utils/financial/` (`roi_utils.py`, `valuation_utils.py`) will move
   into this layer in a later refactor, not as part of the work that created it.
@@ -66,6 +67,10 @@ calculations. Its package docstring (`__init__.py`) sets the rule:
 | Module | Calculation |
 |--------|-------------|
 | `average_cost.py` | Average cost of positions: historical cost in the report and asset currencies, the pool after every movement, and the conversions that could not be made |
+| `native_cash.py` | Native cash of every broker: balances in their own currencies, their value in the report currency on any day, the exchange result on cash, the period flows by type and position, and the conversions that could not be made |
+
+Each module has one entry point: [`compute_average_costs()`](#compute-average-costs)
+and [`compute_native_cash()`](#compute-native-cash).
 
 The layer's tests are pure — no database, no server, every test replaces
 `convert_bulk` with a double — and live in
@@ -207,7 +212,109 @@ back to the asset currency.
 
 ---
 
-## 🔌 Callers {: #callers }
+## 💶 The Native-Cash Function {: #compute-native-cash }
+
+```python
+async def compute_native_cash(
+    session: Any,
+    movements: Sequence[CashMovement],
+    *,
+    report_currency: str,
+    rates_until: date_type | None = None,
+) -> NativeCash:
+```
+
+`financial_math/native_cash.py` is the single reconstruction of every broker's
+cash. It keeps each broker's cash in the currencies it was recorded in, and the
+engine, the summary and the history endpoints all read it. Below, **T** is
+`report_currency`.
+
+### 📥 Movements and Shares
+
+| Name | Meaning |
+|------|---------|
+| `CashMovement` | One change of a broker's cash, as stored: `movement_id`, `transaction_type`, `date`, `broker_id`, `asset_id` (`None` without a position), `currency`, the signed `amount`, and `share`, the part of the broker the caller counts (default 1). `native` is `amount × share` |
+| `cash_movement_from_transaction(tx, *, share=1)` | The movement of a `Transaction`, or `None` when it records no amount or no currency. A zero amount is kept: it belongs to the broker's history but changes no balance |
+| `effective_share(role, share_percentage)` | The share a user counts: an `OWNER` its `share_percentage` (`None` counts the whole broker, a zero share is kept), any other role — editor, viewer — the whole broker |
+| `rates_until` | The last day the balances are valued on; `None` means each currency's last movement |
+
+### 💱 One Conversion Call
+
+All the conversions go to the FX service in **one**
+`convert_bulk(..., raise_on_error=False)` call:
+
+- every non-zero movement in a currency other than T, at its own date — for the flows;
+- one unit of each foreign currency on every day from its first movement through
+  `rates_until` — for the balances.
+
+When every non-zero amount is already in T, no call is made and `session` is not
+used: cash held only in the report currency never needs a rate.
+
+| Rule | Effect |
+|------|--------|
+| Latest rate | A balance is valued at the latest rate on or before the day, so foreign cash is revalued every day |
+| Zero amount | Changes no figure and never needs a rate |
+| Share | Scales every amount |
+| Missing conversion | Never becomes a zero: the movement stays out of values and flows, its own-currency balance still counts it, and its pair is reported as `MissingCashConversion(pair, dates)` (`USD/EUR` for dollars with T = EUR) with every date it was needed on |
+
+!!! warning "`rates_until` must reach every movement and every valued day"
+
+    The engine passes the run's end date, on or after every movement it reads. The
+    function does not check it: a day after `rates_until` is valued at the last rate
+    requested, and `value_at()` raises `ValueError` when a non-zero foreign balance
+    has no rate at all on or before the day.
+
+### 📤 The `NativeCash` Result
+
+A movement is **counted** when its amount is not zero and its conversion was made.
+Windows are `(date_from, date_to]`; `None` leaves that side open.
+
+| Member | Returns |
+|--------|---------|
+| `value_at(day)` | Each broker's cash on `day` in T, every foreign balance at that day's rate. Only brokers with a counted movement on or before `day` appear |
+| `balances(as_of=None)` | Each broker's balance in each currency, in that currency; zero and unconverted movements included |
+| `flows(date_from, date_to)` | `CashFlows`, the window's movements at their own dates: `signed_by_type`, `absolute_by_type`, `income_by_position` and `costs_by_position` keyed `(broker_id, asset_id)`, `unallocated_income` and `unallocated_costs` by broker. Income (DIVIDEND, INTEREST) keeps its sign, costs (FEE, TAX) are absolute |
+| `sums_by_date(date_from, date_to, transaction_types)` | Counted movements summed by date and type, dates ascending |
+| `missing_conversions(date_from, date_to, transaction_types)` | One `MissingCashConversion` per pair |
+| `exchange_results(date_from, date_to)` | Each foreign-cash broker's exchange result on cash, ascending by broker, zeros included; `{}` for an empty window |
+| `rate_change_days(date_from, date_to)` | The days in `[date_from, date_to]` on which the rate of a held foreign currency changes; a currency's first rate counts |
+| `foreign_cash_broker_ids` | Brokers with a counted movement outside T |
+
+The exchange result is what the rates did to the cash a broker held: the change in
+value of its foreign balances, each at its day's rate, less the window's foreign
+movements converted at their own dates.
+
+```text
+result(b) = Σ over c ≠ T of [ N(b, c, t1) × r(c, t1) − N(b, c, t0) × r(c, t0) ]
+          − Σ over b's counted movements m in (t0, t1], currency ≠ T, of converted(m) × share(m)
+```
+
+`CONVERSION_DUST` (`1e-9`): the same cash converted twice — at its movement's date
+and through the day's unit rate — can differ in the last of `Decimal`'s 28 digits.
+`exchange_results()` returns the difference whole; a caller showing an exchange
+result leaves out anything smaller.
+
+### 🔌 Native-Cash Callers
+
+| Caller | Use |
+|--------|-----|
+| `PortfolioCalculationEngine.calculate()` (`portfolio_engine.py`, step 10c) | Builds it once per run from the classified transactions dated up to the run's end, each at its broker's `effective_share()`, with `rates_until` = the run's end; hands it to `DailyStateBuilder(native_cash=...)` and exposes it as `PortfolioCalculationResult.native_cash` |
+| `DailyStateBuilder._revalue_foreign_cash()` | On every `rate_change_days()` day, pre-frame included, after the day's cash movements and before its transactions: books `value_at(day)` minus the replayed cash of each `foreign_cash_broker_ids` broker into that broker's cash and `R_b` (a negative `R_b` drains into `K_b`, like a FEE), never into the capital baseline → [Portfolio Engine — §6 Three-Pool Cash Model](../../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w) |
+| `PortfolioService.get_summary()` | Reads the engine's: broker card cash = `value_at(end)`, per-currency chips = `balances(end)`, summed over the cards for the headline chips; period and lifetime deposits, withdrawals, income, fees and taxes = `flows()`; missing pairs = `missing_conversions(None, end)`. The headline cash is the engine's, revalued on the same days, so it matches the sum of the cards |
+| `PortfolioService._signed_transaction_sums_by_date()`, behind `get_income_history()`, `get_cost_history()` and `get_deposit_history()` | `sums_by_date()` and `missing_conversions()`; the report passes the engine's native cash, a standalone call builds its own with `rates_until` = `date_to`, or today |
+| `PortfolioService.get_positions_contribution()` | Reads the engine's: period income and costs by position and broker = `flows()`. When the period's Other can be computed, one **FX on cash** row per broker = `exchange_results(date_from, end)`, in broker access order, and the reconciliation residual drops by the same amount. With foreign cash in scope, neither a row nor the residual is shown below `CONVERSION_DUST`; a scope with cash only in T shows any non-zero residual |
+
+The tests are in
+`backend/test_scripts/test_services/test_financial_math/test_native_cash.py`, run
+with the layer's command:
+
+```bash
+./dev.py test services financial-math
+```
+
+---
+
+## 🔌 Average-Cost Callers {: #callers }
 
 | Caller | Positions | `report_currency` | `asset_leg` |
 |--------|-----------|-------------------|-------------|
@@ -569,4 +676,5 @@ class WACPreviewResultItem:
 - 📊 **[Lots Analysis Service](lots_analysis_service.md)** — WAC lines and their gaps
 - 🛡️ **[Data Quality Banner](../../frontend/data-quality-banner.md)** — How missing pairs and missing cost bases reach the Dashboard
 - 📖 **[Weighted Average Cost Theory](../../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)** — Financial methodology
+- 💱 **[Three-Pool Cash Model](../../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)** — Capital and returns pools per broker, and how the engine books the exchange result on cash
 - 🧠 **[FIFO Lot Engine](fifo_lot_engine.md)** — Per-lot alternative to a blended average
