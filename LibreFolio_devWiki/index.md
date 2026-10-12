@@ -90,6 +90,13 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/web-link-finder-ddgs]] | **Folder 04.** The web link finder uses `ddgs` instead of a DuckDuckGo HTML scraper whose 202 «anomaly» pages were cached as empty results; SearXNG dropped (`ae417b9ab`) | 2026-07-28 | backend, search, ddgs |
+| [[decisions/signal-indicator-warmup-sizing]] | **Folder 01 (signals migration).** Each plugin's warm-up measured across periods 2–200 against the reference (1e-6): KAMA `max(30, period + 1)`, ADX 18 × period (`5b9dddb45`) | 2026-07-23 | signals, indicators, warm-up |
+| [[decisions/risk-library-versus-own-maths]] | **Folder 02, analysis 06.** A library only where our maths duplicates it badly (rolling, CVaR, matrices), our own where it composes; correctness decides; riskfolio-lib first as the oracle | 2026-09-16 | risk, metrics, riskfolio |
+| [[decisions/risk-tool-verdicts]] | **Folder 02, analysis 02.** Every tool judged by the four questions — core, fixed, cut (TE, IR), deferred (optimization); today's code partly reverses it | 2026-09-16 | risk, tools, verdicts |
+| [[decisions/histogram-grid-pinned-to-var-cut]] | **Folder 02, round 1 (A).** The histogram grid is shifted so one edge falls on the VaR cut — the red area is the declared percentage; an oracle pins the maths before vectorising (`f5fe80d44`) | 2026-09-18 | risk, var, histogram |
+| [[decisions/asset-set-one-preparation-not-fan-out]] | **Folder 02, round 2.** The Lab asks one `ASSET_SET` request (one preparation, one calendar), not one per asset: «Il fan-out non era caro: era sbagliato» (`d3afb92b6`) | 2026-09-21 | risk, lab, asset-set |
+| [[decisions/l3-reads-current-composition]] | **Folder 02, S3.** L3 measures today's composition replayed over the past, and every card names its mode; arithmetic annualisation (`afd480a89`) | 2026-09-18 | risk, l3, beta |
 | [[decisions/risk-answers-four-questions]] | **Folder 02, the thesis.** Risk answers «is my portfolio what I think it is?»: four questions, one per level (L1 hurt, L2 diversification, L3 paid for risk, L4 what if) | 2026-09-16 | risk, levels, thesis |
 | [[decisions/figures-in-the-interface-language]] | **T, M-18.** «Lingua della UI per tutto»: one reactive source, `uiLocale()`, the browser's region only when it speaks the UI language, en-GB for English; CP1 delivered (percentages, decimals, bytes, durations), CP2 to come | 2026-10-12 | i18n, locale, numbers |
 | [[decisions/changelog-translated-by-heading-pieces]] | **M, batch 25.** The CHANGELOG translated by pieces keyed by their headings (`changelog.py`, 30,000-character units); version lines copied; a translation that changes the structure refused; the open chapter informational until its tag | 2026-10-12 | translation, aphra, changelog |
@@ -217,6 +224,7 @@
 
 | Page | Summary | Tags |
 |------|---------|------|
+| [[concepts/risk-contracts-k1-k9]] | **Folder 02, round 1.** The contracts K1–K9 between the Risk streams (histogram bins, asset types, benchmark selector, portfolio slice, primitives, simulation axes, doc slugs, acquired KPIs, replay) and where each lives today | — | risk, contracts |
 | [[concepts/risk-binding-decisions]] | **Folder 02.** The decisions that bind Risk work (D8…D384, the thesis, the 1.2 CHANGELOG rules), in English, with where each lives | — | risk, decisions |
 | [[concepts/marker-locale-for-catalogue-labels]] | Prove a label is not hardcoded: mount in the marker locale `qaa`, where every key shows as `⟦key⟧`; a literal shows itself; plus a test that the keys exist in the four catalogues | testing, i18n, frontend |
 | [[concepts/brim-texts-translated-by-code]] | Plugin names and descriptions, notices, evidence captions and refusals are translated through keys built from stable codes (`brimPlugins.*`, `importWizard.brimNotice.*`, `brimEvidence.*`, `parseRefusal.*`), English as the fallback; guarded by backend tests | brim, i18n, plugins |
@@ -288,6 +296,17 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/base-currency-setting-silently-defaulted-eur]] | **Folder 08 (second clean audit), P0-1.** Swapped arguments and a non-existent key made every base-currency lookup fall back to EUR; `get_effective_base_currency()` (`08b99c3ac`) | resolved | backend, settings, currency |
+| [[problems/asset-events-lost-on-price-cache-hit]] | **Folder 05 (clean audit).** A price-cache hit returned early and skipped the request that also carried the events: «No data» on an asset with events; events-only fall-through (`b45f5afbb`) | resolved | frontend, assets, cache |
+| [[problems/spa-logout-cross-user-cache-leak]] | **Folder 01.** After an SPA logout stores kept the previous account's data; `ClientSessionState` resets them, scopes keys per user, drops stale responses (`5b9dddb45`) | resolved | frontend, auth, session |
+| [[problems/stale-version-file-shadows-git-describe]] | **Folder 09, R2.** A leftover `VERSION` is read before `git describe` and nothing removes it: the reported version freezes on a dev host; design defect, open | open | backend, version, docker |
+| [[problems/privacy-gate-blind-to-formatter-consumers]] | **Folder 09, P4-11.** The money-render gate missed a formatter's consumers: the Growth chart showed amounts in privacy mode; mask at the formatter (`804bc9903`) | resolved | privacy, charts, gate |
+| [[problems/missing-event-detail-read-as-consent]] | **Folder 09, §2.5.** `{accepted: true}` as a default read a missing sync detail as consent; now an omission means cancel (`ff9038487`) | resolved | frontend, events, defaults |
+| [[problems/annualization-factor-not-coverage]] | **Folder 02, round 1 (A).** A fixed factor of 252 overstated Sharpe; «coverage» would have looked fine; `f` now observed from the data, used for volatility and the risk-free rate | resolved | risk, annualization |
+| [[problems/echarts-stacked-band-null-base]] | **Folder 02, R5.** A stacked band's base null on weekends → ECharts stacks on the origin; bridge base and delta, out of the tooltip (`840bdbc0d`) | resolved | charts, echarts |
+| [[problems/replay-baseline-shortened-by-late-starter]] | **Folder 02, R5.** A late-starting asset moved the replay's joint baseline, halving everyone's crisis; auto-exclusion instead (`a766a9d5d`) | resolved | risk, replay |
+| [[problems/risk-stress-buckets-hand-listed]] | **Folder 02, R5.** The stress editor listed 9 of 17 asset types; a missing bucket got a silent 0 % shock; buckets from the enum (`a5f6776aa`) | resolved | risk, stress |
+| [[problems/runner-catalog-merge-not-line-union]] | **Folder 02, register R2-116.** A line-by-line union of a test-runner catalogue conflict would have dropped a new action; graft the additions and check `--help` | resolved | testing, git, merge |
 | [[problems/mathjax-fonts-missing-from-local-copy]] | **M, batch 25.** The vendored MathJax had no fonts: after M-19, formulas drew in the page's font; companions listed from the script's text and checked every run (`92fb9c83e`); M-22, Mermaid, still needs internet | resolved | docs, mathjax, vendoring |
 | [[problems/fast-forward-blocked-by-a-dirty-file]] | **M, batch 25.** Git refuses a fast-forward over a locally modified file the target also changes; save outside, reset the file to HEAD, fast-forward, `git merge-file -p` on copies | resolved | git, worktree, coordination |
 | [[problems/e2e-writes-leaked-into-shared-state]] | **V, work 3.** E2E tests left a saved language on `TEST_USER`, the scheduler's five global keys, and EUR-USD rates fetched from the network; 2a (train 64): reserved MOCKFX pairs, disposable accounts, keys restored in `finally`; A4–A7 to come | open | testing, e2e, isolation |
@@ -457,6 +476,9 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/release2-ai-ideas-2026-07]] | `Release_2/Ai_ideas/` — the July brainstorm: signals and risk in the backend first, an AI assistant through MCP later (deferred: `TODO_FUTURI.md`, QuarkAI) | 2026-10-12 | release2, ai, mcp, roadmap |
+| [[sources/phase00-clean-audit-2026-08]] | `Release_2/phases/05_cleanAudit/` — the August code-cleanliness audit: mostly healthy, the debt in a few places, remediation S1–S3, the full suite made runnable | 2026-10-12 | phase0, audit, cleanliness |
+| [[sources/phase00-feedback-jobs-2026-09]] | `Release_2/Phase_0/09_feedbackJobs/` — the September backlog in 16 sprints, each area mapped to the lot that delivered it; what is still open (P4-7, P4-9, P4-10, R2, §2.4, SP14, SP15) | 2026-10-12 | phase0, feedback, backlog |
 | [[sources/phase00-risk-integration-2026-09]] | `Release_2/Phase_0/02_riskfolioIntegration/` — Risk Analysis replanned and rebuilt (two rounds), paused until after 1.2 (D382); README ingested in step R0, the rest in R1–R6 | 2026-10-12 | phase0, risk, levels, lab |
 | [[sources/phase00-chart-axis-day-labels-2026-10]] | `Release_2/Phase_0/47_chartAxisDayLabels/` — workstream I: the day back on line-chart x-axes, localized labels, the stale P&L lines | 2026-10-12 | phase0, charts, echarts, workstream-i |
 | [[sources/phase00-docs-english-12-2026-10]] | `Release_2/Phase_0/32_docsEnglish12/` — workstream Q: the English docs aligned with 1.2 (Q1, Q2, S1–S23), the developer's reviews, the drifts found in the code | 2026-10-12 | phase0, docs, mkdocs, workstream-q |
@@ -591,6 +613,21 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Historical folder H6 — `06_betaTestingReportAndFixing`.** Drift only: the folder moved to `phases/`, four rows re-based; eleven never-ingested plans listed on [[sources/beta-testing-2026-08-05]] | *(none)* |
+| 2026-10-12 | **Historical folder H5 — `Ai_ideas`; the historical folders are covered.** The July brainstorm as a source page only; the MCP assistant pointed to `TODO_FUTURI.md` | [[sources/release2-ai-ideas-2026-07]] *(1 page — 1 source)* |
+| 2026-10-12 | **Historical folders H4 — `03_brokerImportRecovery`, `04_webSearchEngine`.** 03 already covered by the BRIM pages; 04's switch to `ddgs` filed as a decision | *(1 page — 1 decision; see log)* |
+| 2026-10-12 | **Historical folder H3 — `08_newCleanAndDocumentation_audit`.** The second clean audit, added to the first one's source; its P0-1 kept as a problem | *(1 page — 1 problem; see log)* |
+| 2026-10-12 | **Historical folder H2 — `05_cleanAudit`.** The August audit summarised; one solved problem kept (events lost on a price-cache hit) | [[sources/phase00-clean-audit-2026-08]] *(2 pages — 1 source, 1 problem; see log)* |
+| 2026-10-12 | **Historical folder H1 — `01_signalMigration`.** Drift: four July rows re-baselined (path moved to `phases/`); gaps: indicator warm-up sizing, the SPA logout leak | *(2 pages — 1 decision, 1 problem; see log)* |
+| 2026-10-12 | **Folder 09, step F2 — the areas and the visual review; folder 09 covered.** No gap in the areas; R2 of the visual review filed as an open design defect | *(1 page — 1 problem; see log)* |
+| 2026-10-12 | **Folder 09, step F1 — the structural backlog and the static analysis.** Statuses checked on the code; two solved defects kept as problems | *(2 pages — 2 problems; see log)* |
+| 2026-10-12 | **Folder 09, step F0 — the feedback jobs.** The September backlog and its sprints, each area mapped to the lot and the wiki source that cover it | [[sources/phase00-feedback-jobs-2026-09]] *(1 page — 1 source)* |
+| 2026-10-12 | **Folder 02, step R6 — the archive G0–G6.** Drift only: archived on 2026-09-16, one alignment since; what still holds and what is superseded, on [[sources/phase00-risk-analysis-backend]]. Folder 02 covered (R0–R6) | *(none)* |
+| 2026-10-12 | **Folder 02, step R5 — the analysis documents.** The per-tool verdicts (and where today's code departs from them), the rule for library versus own maths | *(2 pages — 2 decisions; see log)* |
+| 2026-10-12 | **Folder 02, step R4 — the first round, `implementation/`.** The contracts K1–K9 and their homes, the histogram pinned on the VaR cut, the observed annualisation factor | *(3 pages — 1 concept, 1 decision, 1 problem; see log)* |
+| 2026-10-12 | **Folder 02, step R3b — the post-merge review R5.** Stress buckets from the enum, replay auto-exclusion, the band chart's null base | *(3 pages — 3 problems; see log)* |
+| 2026-10-12 | **Folder 02, step R3a — `implementation_2/`, the contract and the levels.** One asset-set preparation, L3 on today's composition, a merge recipe for the runner's catalogue | *(3 pages — 2 decisions, 1 problem; see log)* |
+| 2026-10-12 | **Train 69 in the wiki — M-23 (M's batch 27).** The in-app changelog typesets French like the docs: M-23 resolved in 1.2 | *(none)* |
 | 2026-10-12 | **Folder 02, step R2 — the decisions that bind Risk.** The thesis as a decision page; the README's binding list in English as a concept page, linked from F-110…F-112 | *(2 pages — 1 decision, 1 concept; see log)* |
 | 2026-10-12 | **Folder 02, step R1 — what is open in Risk.** The README's open items, re-checked where possible on the code, as «Still open (paused, after 1.2 — D382)» on [[features/F-110]], [[features/F-111]], [[features/F-112]] | *(none)* |
 | 2026-10-12 | **Train 68 in the wiki — M-18 CP1 (T).** Figures in the interface language through `uiLocale()`; the rest of the rule (amounts, dates, axes, M-17) in CP2 | *(1 page — 1 decision; see log)* |
