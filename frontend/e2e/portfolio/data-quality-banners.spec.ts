@@ -431,7 +431,8 @@ test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
         // navigate_asset issues render one "go to asset" link per affected asset — the count is
         // the assertion, because a single link for two assets was the original bug. It is taken
         // inside this row: every navigate_asset issue renders its links under the same test-id
-        // prefix, and other issues' links share the page (the seed's MISSING_COST_BASIS is one).
+        // prefix, and other issues' links share the page (the TRANSACTION_IMPLIED issue injected
+        // above is one, and this test owns it).
         const navLinks = row.getByTestId('data-quality-nav-assets-MISSING_PRICE').locator('[data-testid^="data-quality-nav-asset-"]');
         await expect(navLinks).toHaveCount(2);
         await expect(row.getByTestId('data-quality-nav-asset-901234')).toBeVisible();
