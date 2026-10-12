@@ -378,6 +378,8 @@
             if (!transportError) {
                 invalidateFxRoutes();
                 invalidate();
+                // The open lots and risk panels ask again too, as after «Aggiorna»: new rates change their figures.
+                refreshVersion += 1;
                 try {
                     await loadAll(true, true);
                     remaining = dataQualityIssues.find((candidate) => candidate.cta_action === 'sync_fx_pair' && coversRequestedPair(candidate));
