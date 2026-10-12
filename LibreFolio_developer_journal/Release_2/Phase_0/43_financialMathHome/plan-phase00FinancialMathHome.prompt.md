@@ -1590,3 +1590,86 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
   - `docs(journal)`: piano e indice.
 - **Riga di CHANGELOG** proposta al coordinatore, in «🐛 Fixed» › «🤖 AI Export and signal contracts».
 - **Dopo il checkpoint**: BU1 e BU2, cominciando dall'elenco dei file.
+
+### Treno 47 (coordinatore, 2026-10-12)
+- C-53 è nel target: merge `e25eb913d`, CL `5d0585595`, commit `876d2b430`, `45691452a`, `25e358eb0`.
+- Il reperto HHI sul broker senza posizioni è registrato come C-55, da verificare dopo la 1.2.
+
+### BU1/BU2 — analisi (2026-10-12) 🧊 in attesa dell'ok
+- **Base**: `5d0585595`. 74 file importano i moduli di `utils/` (45 nell'app, 28 nei test, più `dev.py`). Nessuna migrazione, `scripts/` o `frontend/scripts` li importa.
+- **Nessun test patcha** `clear_cache` o altre globali di `cache_utils`. L'unica patch su un modulo è in `test_version.py` (`version_utils.get_git_version`, sull'oggetto modulo).
+- **Dipendenze fra moduli**: `currency_utils` → `geo_utils`, `translation_utils`; `geo_utils` → `decimal_utils`, `translation_utils`; `decimal_utils` → `db.models`. Quindi oggi geo e currency caricano i modelli del DB al momento dell'import.
+- **Stringhe**:
+  - `.github/workflows/release.yml:131`: la CI importa `backend.app.utils.version`;
+  - il runner (`_backend_utils.py`, `print_info`);
+  - `dev.py`: 3 import pigri di `version`;
+  - `TODO_FUTURI.md:1006`, `:1025`;
+  - commenti in `frontend/e2e/utilities.spec.ts:9-12` e `frontend/src/lib/i18n/index.ts:12`;
+  - 4 pagine dev;
+  - 13 righe «Source files» della devWiki, in 11 pagine;
+  - il campione di import permesso nella guardia (`test_layer_boundaries.py:169`).
+- **Proposta**:
+  - `utils/asset/{sector,geo,identifier,translation}.py`, `utils/fx/currency.py`, `utils/platform/{version,network,cache}.py`;
+  - datetime, json e decimal restano nella radice di `utils/`;
+  - senza il suffisso `_utils` dentro le cartelle;
+  - BU2: `db/precision.py` coi 4 troncamenti, e via i 3 import pigri di `clear_cache` in `fx.py`.
+
+### BU1/BU2 — via libera (coordinatore, 2026-10-12)
+- **(a)** datetime, json e decimal restano nella radice di `utils/`.
+- **(b)** Dentro le cartelle i file non hanno il suffisso `_utils`.
+- **(c)** La terza cartella è `utils/runtime/`, scelta del developer («runtime»), non `platform`.
+- **(d)** L'import pigro di `version` in `config.py:321` entra in BU2, se il ciclo non esiste.
+- **File condivisi assegnati**:
+  - le righe `print_info` del runner (`_backend_utils.py`);
+  - `.github/workflows/release.yml:131`, col `python -c` provato in locale;
+  - i 3 import pigri di `dev.py`;
+  - `TODO_FUTURI.md:1006` e `:1025`;
+  - due commenti del frontend (`frontend/e2e/utilities.spec.ts:9-12`, `frontend/src/lib/i18n/index.ts:12`);
+  - la regola su `utils/` e la mappa in `backend.instructions.md`;
+  - la doc, con docs-writer: `financial_math.md:123`, `release-pipeline.md:181`, `settings_cache.md:5`, `:13`. M toccherà `release-pipeline.md` dopo, quindi va chiusa presto.
+- **La devWiki la scrive solo W** (l'historian del passo 3), dopo che BU1 entra nel target. Nel gate `check_source_paths.py` resterà alto per quelle righe, ed è previsto.
+- **Ordine**: la base `all-backend`; BU1 (sole rinomine) con i suoi gate e un checkpoint; il commit del coordinatore; poi BU2 con i suoi gate e il checkpoint finale. `fx.py` e `config.py` li toccano tutti e due i commit.
+
+#### Base prima di BU ✅ (2026-10-12)
+> `all-backend` sulla 6164, su `5d0585595`: 7/7, **12 409 passed, 28 skipped, 0 failed** (23 min 11 s). Presi anche gli statici: ruff, black, dead code e gli hash di `api sync`.
+
+#### BU1 — le cartelle di `utils/` ✅ (2026-10-12)
+> **Note implementazione**:
+> - **Rinomine con `mv`** (script `/tmp/libreFolio_bu1_apply.py`):
+>   - `asset/{sector,geo,identifier,translation}.py`;
+>   - `fx/currency.py`;
+>   - `runtime/{version,network,cache}.py`.
+>   - I 3 `__init__.py` nuovi hanno solo la docstring. La docstring della radice è riscritta con la regola della foglia e la mappa.
+> - **Import in 32 file** (21 dell'app, 2 moduli spostati, 8 test, il runner). In 7 file `ruff --select I --fix` ha riordinato gli import.
+>   - `dev.py`, che non è pulito per black già nella base, l'ho toccato a mano: 3 righe, e i reperti di ruff restano 43.
+> - **Condivisi assegnati**:
+>   - le 6 righe `print_info` del runner;
+>   - `.github/workflows/release.yml:131`: il `python -c` provato in locale scrive `v1.1.0-1264-g5d0585595-dirty`, e il `VERSION` creato è stato tolto;
+>   - `TODO_FUTURI.md:1006`, `:1025`;
+>   - due commenti del frontend;
+>   - la regola su `utils/` con la mappa in `backend.instructions.md`.
+> - **Doc** (docs-writer): 4 righe (`financial_math.md:123`, `release-pipeline.md:181`, `settings_cache.md:5`, `:13`); build stretto e check-links verdi.
+> - **Testo**: aggiornate 6 menzioni dei vecchi nomi, nei commenti e nei percorsi delle fixture (`portfolio_allocation_source.py:155`, `test_system_api.py:11`, `test_i18n_usage_gate.py`, 4 righe).
+>   - Il gate i18n legge le sorgenti con `rglob("*.py")`, quindi trova anche i moduli spostati.
+> - **Gate**:
+>   - import dell'app ok;
+>   - mirati: geo-utils 4, version 11, sector-normalization 60, currency-utils 23, cache-utils 20, translation-utils 2, gate-i18n-usage 195, financial-math 212, api system 86;
+>   - API, dead code, ruff e black come la base.
+>   - `all-backend` sulla 6164: 7/7, **12 409 passed, 28 skipped, 0 failed** (25 min 14 s), identico alla base in ognuna delle 23 invocazioni. Porta libera.
+> - **In coda dopo BU2** (coordinatore, 2026-10-12, trovata da W): scrivere la regola delle versioni dell'AI Export, «un solo +1 rispetto all'ultima versione rilasciata finché la release non esce; se cambiano solo i valori, nessun bump».
+>   - Va in 2 o 3 righe di `ai-development.instructions.md` (assegnato) e in un paragrafo di `ai_export_composition.md` (docs-writer).
+>   - Link alla devWiki: `decisions/ai-export-version-bump-once-per-release` (treno 49).
+>   - La metto nel checkpoint di BU2.
+
+#### BU1 — correzione prima del commit (coordinatore, 2026-10-12) ✅
+> **⚠️ Fuori pista**: `utils/runtime/version.py` calcolava la radice con quattro `.parent`, scritti per la vecchia posizione. Dopo lo spostamento arrivavano a `backend/`.
+> - In sviluppo il difetto non si vede: il `VERSION` non c'è e `git describe` trova il repo anche da una sottocartella.
+> - Nell'immagine, senza `.git`, l'app avrebbe cercato `/app/backend/VERSION` invece di `/app/VERSION` (`Dockerfile:111`), e la versione sarebbe stata `unknown`.
+> - L'ha trovato il coordinatore nella verifica. Né i miei gate né i 12 409 test potevano vederlo.
+> **Note implementazione**:
+> - **Rossi** (test-author) in `test_version.py`:
+>   - `test_git_describe_runs_in_repository_root` (`git describe` girava in `backend/`);
+>   - `test_image_layout_reads_version_file_without_git`: un albero come quello dell'immagine in `tmp_path`, il modulo copiato, `app/VERSION`, nessun git nel `PATH`. Stampava `unknown`.
+> - **Cura**: `_project_root()` restituisce `Path(__file__).resolve().parents[__name__.count(".")]`. Dipende dal nome puntato del modulo, non dalla profondità a mano, quindi resta giusta anche se il file si sposta ancora.
+> - **Verde**: `utils version` 13 (11 + 2), `api system` 86, `brim-parse-race` 42. Nessun `VERSION` lasciato nel repo.
+> - **Lezione**: in una rinomina si cercano anche i percorsi calcolati dal file stesso (`__file__`, `parents`), oltre agli import.
