@@ -567,6 +567,8 @@ def check_frontend_needs_build() -> bool:
             project_root / "frontend" / "vite.config.ts",
             project_root / "frontend" / "svelte.config.js",
             project_root / "frontend" / "tailwind.config.js",
+            # Bundled by the changelog modal: CHANGELOG.md inline, each CHANGELOG.<xx>.md as a lazy chunk.
+            *sorted(project_root.glob("CHANGELOG*.md")),
         ]
         for f in config_files:
             if f.exists() and f.stat().st_mtime > build_time:

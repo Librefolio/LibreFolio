@@ -68,11 +68,6 @@ const REVIEWED_SINKS: readonly ReviewedSink[] = [
     {file: 'src/lib/components/transactions/wac/WacPreviewSection.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/components/transactions/modals/TransactionBulkModal.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/components/table/DataTableColumnFilter.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
-    {
-        file: 'src/lib/components/layout/ChangelogModal.svelte',
-        expr: 'renderHighlighted(…)',
-        why: 'NOT an escape: marked renders the bundled CHANGELOG.md (a ?raw import resolved at build time — repository content, never user or provider data) and its output is not sanitised. The search needle is only regex-escaped to match; it is never inserted, <mark> wraps text already there.',
-    },
     {file: 'src/lib/components/files/FilePreviewModal.svelte', expr: 'renderedMarkdown', why: 'DOMPurify-sanitised marked output; the KaTeX pass that follows renders the text content of $$…$$ paragraphs, and KaTeX escapes its input (trust off).'},
     {file: 'src/lib/components/charts/SignalOptionContent.svelte', expr: 'renderedSubtitle', why: 'renderInlineMathText(subtitle): the server signal-catalog subtitle is escaped by escapeHtml before KaTeX renders its $…$ spans.'},
     {
