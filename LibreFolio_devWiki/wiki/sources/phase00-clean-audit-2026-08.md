@@ -32,11 +32,20 @@ do not remove)?
   by construction, because the services category recreated an empty database before the API category
   ([[concepts/test-isolation-classes]]).
 
+## The second audit (folder 08, 2026-09-02 → 09-07)
+
+`phases/08_newCleanAndDocumentation_audit/` re-checked every item of this audit on the live code, with static
+analysis only: 31 of its 32 fixes still held. It then closed P0 5/5, P1 18/18, P2 9/9 and P3 28/28 (documentation,
+gallery, translations) and ran a sub-audit of the docs; the eight structural P4 tasks, never started on purpose, went
+to folder 09 ([[sources/phase00-feedback-jobs-2026-09]]). Its P0-1 is
+[[problems/base-currency-setting-silently-defaulted-eur]].
+
 ## Source files
 
 | Role | Path |
 |------|------|
 | README | `LibreFolio_developer_journal/Release_2/phases/05_cleanAudit/README.md` |
 | Index of the reports | `LibreFolio_developer_journal/Release_2/phases/05_cleanAudit/INDEX.md` |
+| The second audit's index | `LibreFolio_developer_journal/Release_2/phases/08_newCleanAndDocumentation_audit/00_INDEX.md` |
 | The full suite made runnable | `LibreFolio_developer_journal/Release_2/phases/05_cleanAudit/17_stabilizzazione_suite_completa.md` |
 | API runner (database populated before the API category) | `scripts/test_runner/_backend_api.py` |
