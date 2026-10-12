@@ -11,6 +11,10 @@ window.MathJax = {
     }
 };
 
+// Material emits document$ on every page load, before lib-loader.js has loaded MathJax: MathJax typesets the page on
+// its own when it starts, so until then there is nothing to call.
 document$.subscribe(() => {
-    MathJax.typesetPromise()
+    if (typeof MathJax.typesetPromise === "function") {
+        MathJax.typesetPromise()
+    }
 })
