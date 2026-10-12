@@ -72,7 +72,7 @@ No open problems in F-056, F-057 or F-058: they are implemented and correct. The
 ## What comes next
 
 - [[F-081]] Fiscal Sale Method — allow users to choose FIFO / LIFO / PMC / SelectID per fiscal jurisdiction. This will be an additive change to F-056, not a rewrite.
-- [[F-091]] Multi-Worker Cache Server — if the deployment model moves to multiple hosts, the in-process cache (currently `theine` per-process) would need a Redis backend. The abstraction in `cache_utils.py` makes this a provider-swap change.
+- [[F-091]] Multi-Worker Cache Server — if the deployment model moves to multiple hosts, the in-process cache (currently `theine` per-process) would need a Redis backend. The abstraction in `utils/runtime/cache.py` (`cache_utils.py` until 2026-10-12) makes this a provider-swap change.
 
 ## Source files
 

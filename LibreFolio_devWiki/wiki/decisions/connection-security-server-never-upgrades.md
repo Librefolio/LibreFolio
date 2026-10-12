@@ -54,7 +54,7 @@ behind a reverse proxy even that is a header anyone can forge.
 | Indicator (sidebar shield, admin cookie line) | `frontend/src/lib/components/layout/ConnectionSecurityIndicator.svelte` |
 | Endpoint `GET /system/connection` | `backend/app/api/v1/system.py` |
 | Response schema | `backend/app/schemas/system.py` |
-| Address classes (never returned) | `backend/app/utils/network_utils.py` |
+| Address classes (never returned) | `backend/app/utils/runtime/network.py` |
 | Cookie `Secure` decision | `backend/app/api/v1/auth.py` |
 | Cookie mode setting | `backend/app/config.py` |
 | E2E | `frontend/e2e/layout/connection-security.spec.ts` |
