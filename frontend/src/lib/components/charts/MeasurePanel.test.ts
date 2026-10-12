@@ -343,7 +343,8 @@ describe('MeasurePanel — summary table (expanded card)', () => {
         // The FX branch pushes a second, ghost row for the native currency leg.
         const original = container.querySelector('[data-row-id="main-original"]');
         expect(original).not.toBeNull();
-        expect(original!.textContent ?? '').toContain('1000.0000'); // 100 * 10
+        // 100 * 10, grouped the way the UI locale writes it (M-18): en-US here, jsdom's browser under the English UI.
+        expect(original!.textContent ?? '').toContain('1,000.0000');
     });
 
     it('adds one row per primary-axis overlay signal (ghost and currency variants)', async () => {

@@ -99,6 +99,9 @@ not collect it.
 - **Left after 1.2** (backlog section V): V-1 the same refresh gap after «Sync prices»; V-2 the lots panel publishes no
   `data-busy`; V-3 the orphan TRANSFER; V-4 E2 must be rebuilt if P-10 is closed; V-5 an outdated comment about the
   seed; V-6 the developer doc lists only part of the banner tests; V-7 the neighbour-spec red above.
+  *Update (trains 58 and 64 in the wiki, 2026-10-12)*: V-1, V-5, V-6 and V-7 were closed by V's batch 2 (train 58: `a0722f755`, `4e710a1f9`,
+  `6f5a3bcff` — V-7's spec now runs on a disposable account that owns two brokers), V-9 and V-10 by work 3 (`973ca3961`,
+  `8994100b4`); the isolation audit that followed is [[problems/e2e-writes-leaked-into-shared-state]].
 
 ## Links
 
@@ -117,7 +120,7 @@ not collect it.
 | E4, legacy rows | `frontend/e2e/portfolio/data-quality-legacy.spec.ts` |
 | Legacy-row helper (test database only) | `backend/test_scripts/test_db/legacy_cost_rows.py` |
 | B1 (S7) and L4 | `backend/test_scripts/test_services/test_financial/test_portfolio_cost_currency.py` |
-| MOCKFX provider | `backend/app/services/fx_providers/mockfx.py` |
+| MOCKFX provider | `backend/app/services/fx_providers/mockfx/plugin.py` |
 | Runner actions `data-quality-real`, `data-quality-legacy` | `scripts/test_runner/_frontend_portfolio.py` |
 | `data-column-id` (D3) | `frontend/src/lib/components/table/DataTable.svelte` |
 | `kpi-unrealized-delta` test id | `frontend/src/lib/components/dashboard/KpiSection.svelte` |

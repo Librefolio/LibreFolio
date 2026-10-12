@@ -31,7 +31,7 @@ from backend.app.schemas.assets import (
 )
 from backend.app.schemas.common import Currency
 from backend.app.schemas.prices import FAAssetEventPoint
-from backend.app.services.asset_source_providers.scheduled_investment import (
+from backend.app.services.asset_source_providers.scheduled_investment.plugin import (
     ScheduledInvestmentProvider,
     _compute_late_interest_value,
     _generate_schedule_values,

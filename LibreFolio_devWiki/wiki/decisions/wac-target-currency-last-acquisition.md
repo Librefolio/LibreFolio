@@ -64,7 +64,7 @@ choose it:
 |--------|-----------------|
 | Transaction preview / automatic cost basis (`TransactionService._compute_wac_for_auto_items()`, via `compute_wac_iterative()`) | The `cost_basis_override.code` sent as a hint (the sentinel above), otherwise **the last acquisition's currency** — this rule |
 | `POST /portfolio/wac` (`portfolio_api.py`, via `compute_wac_iterative()`) | **The last acquisition's currency** — this rule |
-| PAC planner (`portfolio_allocation_source.py`, via `compute_wac_iterative()`) | The report currency T, passed as `target_currency_override` |
+| PAC planner ([[features/F-107]]; `portfolio_allocation_source.py`, via `compute_wac_iterative()`) | The report currency T, passed as `target_currency_override` |
 | Portfolio engine → Dashboard purchase cost, realized/unrealized P&L, holdings' WAC per unit, Yield on Cost | The report currency T |
 | Lots analysis WAC lines | The analysis report currency T |
 | Broker summary (`GET /brokers/{id}/summary`) | T = the asset's own currency, one call per currency group |

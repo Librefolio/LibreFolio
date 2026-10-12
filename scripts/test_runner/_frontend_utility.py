@@ -48,6 +48,9 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/core/__tests__/entityLink.test.ts",
             "src/lib/utils/core/__tests__/translateOr.test.ts",
             "src/lib/utils/core/__tests__/formatPercent.test.ts",
+            "src/lib/utils/core/__tests__/formatFixed.test.ts",
+            "src/lib/stores/app/uiLocale.test.ts",
+            "src/lib/utils/files/upload.test.ts",
             "src/lib/utils/core/__tests__/positionKey.test.ts",
             "src/lib/utils/core/__tests__/finiteNumber.test.ts",
             "src/lib/utils/core/__tests__/formatAxisDate.test.ts",
@@ -200,6 +203,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/modals/ModalBase.test.ts",
             "src/lib/components/ui/modals/ModalBase.escapeLayers.test.ts",
             "src/lib/components/ui/modals/SyncResultRow.test.ts",
+            "src/lib/components/ui/media/FileEditModal.test.ts",
+            "src/lib/components/ui/media/FileUploader.test.ts",
             "src/lib/components/ui/modals/PageSyncModal.test.ts",
             "src/lib/components/ui/feedback/ToastContainer.test.ts",
             "src/lib/components/ui/feedback/Tooltip.test.ts",
@@ -470,6 +475,18 @@ def front_connection_security(verbose: bool = False, ui: bool = False, headed: b
     return _run_playwright("layout/connection-security.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
 
 
+def front_docs_offline_math(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the documentation's formulas without internet: nested pages in English and Italian, MathJax and its fonts from the site's own copy (M-19)."""
+    print_section("Frontend Docs Offline Math Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/docs-offline-math.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_files_destructive(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run files destructive-route E2E tests (single/bulk delete, failure, BRIM)."""
     print_section("Frontend Files Destructive Tests")
@@ -664,6 +681,15 @@ def populate_registry(registry: dict) -> None:
         desc="The sidebar's connection indicator from the browser's view and the server's (GET /system/connection): secure on localhost, local network on a mapped .lan name, uncertain on a public name the server sees as local, not secure with the menu dot when the server sees a public source; details, docs link (plan 36)",
         prereq="Populated DB + test users",
         tests="layout/connection-security.spec.ts",
+    )
+    add_test(
+        cat,
+        "docs-offline-math",
+        front_docs_offline_math,
+        name="Docs Offline Math",
+        desc="The documentation draws its formulas without internet: on a nested page in English and its Italian twin a folder deeper, every origin but the lane's refused, lib-loader.js loads MathJax from the site's root (/mkdocs/javascripts/vendor/mathjax/tex-mml-chtml.js, 200), every formula gets its mjx-container, every MathJax font is a 200 from the site's copy (vendor/mathjax/output/chtml/fonts/woff-v2/) with at least one MJX face loaded and none in error, MathJax is never asked of another origin (jsDelivr included), and mathjax.js raises no typesetPromise page error (M-19, batch 25)",
+        prereq="Docs site built with the MathJax copy and its fonts (dev.py cache js, then dev.py mkdocs build)",
+        tests="layout/docs-offline-math.spec.ts",
     )
     add_test(cat, "files-destructive", front_files_destructive, name="Files Destructive Tests", desc="Single + bulk file delete, confirm/cancel, delete failure, BRIM delete + empty state (disposable rows, self-restoring)", prereq="Login working", tests="files-destructive.spec.ts")
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")

@@ -101,21 +101,21 @@ from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk.base import RiskAnalytic, RiskExecutionContext, RiskUnavailableError
 from backend.app.services.risk.metrics import historical_var_cvar
 from backend.app.services.risk.service import RiskService, _AnalyticPlan, _ScopeInputs
-from backend.app.services.risk_plugins.asset_risk_return import AssetRiskReturnAnalytic
-from backend.app.services.risk_plugins.asset_set_comparison import (
+from backend.app.services.risk_plugins.asset_risk_return.plugin import AssetRiskReturnAnalytic
+from backend.app.services.risk_plugins.asset_set_comparison.plugin import (
     AssetSetComparisonAnalytic,
     AssetSetComparisonParams,
 )
-from backend.app.services.risk_plugins.asset_set_drawdown import (
+from backend.app.services.risk_plugins.asset_set_drawdown.plugin import (
     AssetSetDrawdownAnalytic,
     AssetSetDrawdownParams,
 )
-from backend.app.services.risk_plugins.asset_set_kpi import AssetSetKpiAnalytic, AssetSetKpiParams
-from backend.app.services.risk_plugins.asset_set_risk_return import (
+from backend.app.services.risk_plugins.asset_set_kpi.plugin import AssetSetKpiAnalytic, AssetSetKpiParams
+from backend.app.services.risk_plugins.asset_set_risk_return.plugin import (
     AssetSetRiskReturnAnalytic,
     AssetSetRiskReturnParams,
 )
-from backend.app.services.risk_plugins.asset_set_var import AssetSetVarAnalytic, AssetSetVarParams
+from backend.app.services.risk_plugins.asset_set_var.plugin import AssetSetVarAnalytic, AssetSetVarParams
 from backend.app.services.series_preparation import prepare_asset_series_set
 
 # ---------------------------------------------------------------------------

@@ -27,6 +27,7 @@
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {safeDecimal, safeNumber, safeScalar, safeString} from '$lib/types';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     interface Holding {
         asset_id: number;
@@ -140,11 +141,10 @@
 
     function percentChangeCell(value: number | null) {
         if (value == null) return '—';
-        const pct = (value * 100).toFixed(2);
         const classes = value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
         return {
             type: 'html' as const,
-            html: `<span class="font-medium ${classes}">${value >= 0 ? '+' : ''}${pct}%</span>`,
+            html: `<span class="font-medium ${classes}">${formatPercent(value, {scale: 100})}</span>`,
         };
     }
 
@@ -360,7 +360,7 @@
                 resizable: true,
                 sortable: true,
                 getValue: (row) => row.navWeight ?? 0,
-                cell: (row) => (row.navWeight == null ? '—' : `${row.navWeight.toFixed(1)}%`),
+                cell: (row) => formatPercent(row.navWeight, {signed: false, digits: 1}),
             },
             {
                 id: 'quantity',

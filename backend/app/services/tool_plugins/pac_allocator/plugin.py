@@ -66,7 +66,7 @@ _PLAN_RESULT_BYTES = 512 * 1024
 
 # LibreFolio's own code, told apart from libraries in a failure site; paths are
 # shown from the repository root, library files by name only.
-_BACKEND_ROOT = Path(__file__).resolve().parents[3]
+_BACKEND_ROOT = Path(__file__).resolve().parents[4]
 _REPO_ROOT = _BACKEND_ROOT.parent
 
 # Time reserved *after* the solver returns, for the exact replay and the report.

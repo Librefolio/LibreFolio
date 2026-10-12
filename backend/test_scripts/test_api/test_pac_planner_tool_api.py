@@ -43,14 +43,14 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.pac_allocator import PAC_PLAN_INPUT_ADAPTER, PAC_PLAN_OUTPUT_ADAPTER
 from backend.app.services import user_service
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
-from backend.app.services.tool_plugins.pac_allocator import _log_engine_failure
+from backend.app.services.tool_plugins.pac_allocator.plugin import _log_engine_failure
 from backend.test_scripts.test_db_config import verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30.0
-# The plan operation's client deadline is 65 s (tool_plugins/pac_allocator.py):
+# The plan operation's client deadline is 65 s (tool_plugins/pac_allocator/plugin.py):
 # the transport must outwait it, or a slow worker reads as a transport error.
 COMPUTE_TIMEOUT = 70.0
 PASSWORD = "PacToolApiPass123!"
@@ -243,7 +243,7 @@ async def test_pac_compute_plans_a_buying_scenario_to_a_proven_optimum(test_serv
     assert [setting["value"] for stage in stages for setting in stage["settings"] if setting["name"] == "time_budget"] == [f"{solver_time_budget_seconds:g}"] * len(stages)
     # The worker publishes exactly what the planner computes in process. That
     # budget is part of what it publishes, so the in-process call claims the same
-    # window, as tool_plugins/pac_allocator.py does, instead of solver.py's
+    # window, as tool_plugins/pac_allocator/plugin.py does, instead of solver.py's
     # fallback for a caller with no window to claim.
     in_process = plan_pac_allocation(PAC_PLAN_INPUT_ADAPTER.validate_python(_buying_request()), solver_time_budget_seconds=solver_time_budget_seconds)
     assert plan == PAC_PLAN_OUTPUT_ADAPTER.dump_python(in_process, mode="json", by_alias=True)
@@ -466,7 +466,7 @@ async def test_pac_compute_plans_the_compact_twin_like_the_explicit_request(test
 # changes.
 
 ENGINE_FAILURE_EVENT = "PAC planner engine failure"
-ENGINE_FAILURE_LOGGER = "backend.app.services.tool_plugins.pac_allocator"
+ENGINE_FAILURE_LOGGER = "backend.app.services.tool_plugins.pac_allocator.plugin"
 # Not keyword arguments of the log call: the event name, and what the capture adds.
 CAPTURE_KEYS = frozenset({"event", "log_level", "logger"})
 OWN_FILE = "backend/test_scripts/test_api/test_pac_planner_tool_api.py"

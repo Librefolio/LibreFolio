@@ -42,6 +42,6 @@ Before fix: any primary provider hiccup (BOE bot protection, network timeout) ca
 | Role | Path |
 |------|------|
 | FX service (fallback logic) | `backend/app/services/fx.py` |
-| MockFX providers (test infra) | `backend/app/services/fx_providers/mockfx.py` |
+| MockFX providers (test infra) | `backend/app/services/fx_providers/mockfx/plugin.py` |
 | FX fallback tests | `backend/test_scripts/test_api/test_fx_sync.py` |
 
