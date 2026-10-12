@@ -251,3 +251,31 @@ runner registration); the cache sandbox points the changelog at `tmp_path`.
    >   - **Negative control**: with the site's `vendor/mathjax/output/` renamed away, both fail on the font assertion
    >     with its message («a 404 there is a font the site does not have: ./dev.py cache js, then ./dev.py mkdocs
    >     build»). The folder was restored (22 fonts) and the spec parked again; 6158 and 6168 are free.
+10. ✅ The first append, batch 26 — 2026-10-12 18:00. Committed: batch 25 is `2aecd5a6f`…`81e221f4e` (tree
+    `8c50c8df95eb`), train 66; the branch fast-forwarded to `b91d6d902`, which adds one line to [1.2.0] → ✨ Added,
+    after «Connection security in the sidebar»: «**The changelog speaks your language.** …, marked “Not translated
+    yet”.»
+    > **Note implementazione**: the dry-run planned `CHANGELOG.md#1.2.0/added` ×3, ~50.4K tokens each. A model run
+    > would also re-translate the whole 16.8 KB piece over its hand review (batch 25, step 6). So the line was ported by
+    > hand instead (`release-pipeline/scripts/b26_changelog_line_port.py`), inserted after the translated
+    > connection-security bullet with one occurrence asserted. The label is read from `changelog.notTranslated` in each
+    > catalogue: «Non ancora tradotto», «Pas encore traduit», «Aún sin traducir». Each file keeps its own words and
+    > marks:
+    > - it: «il changelog» (as `about.it.md` and the other lines), «l'app», “…”;
+    > - fr: «journal des modifications», «l'application», « … » with plain spaces, as the whole file has them;
+    > - es: «registro de cambios», «la aplicación», «…», tú.
+    >
+    > Then:
+    > - `translate-stamp --file CHANGELOG.md` stamped `1.2.0/added` ×3, and the next dry-run was empty (pages and
+    >   CHANGELOG);
+    > - `translate-validate` 630 files 0/0, `translate-diff` 642/642 clean, `git diff --check` clean;
+    > - the review scan (`b26_changelog_review.py`) matches batch 25's last pass: 0 labels differing, the same 14
+    >   legitimate glossary hits, the same 3 bold-count artefacts in 1.1.0.
+    >
+    > U's two unit descriptions for `_backend_utils.py` (`translation-cache`, `translation-validator`) were checked
+    > against the tests and the code at the coordinator's request: ok, sent to U.
+    > - **⚠️ Fuori pista — French spacing in the app's changelog (M-23)**: `mkdocs_src/hooks/fr_typography.py` puts the
+    >   no-break spaces into French pages at build time («the sources never change»), and the translations keep plain
+    >   spaces. The in-app modal renders `CHANGELOG.fr.md` without MkDocs (`frontend/src/lib/features/changelog/changelog.ts`
+    >   applies no such rule), so a line there can break before `;` `:` `?` `!` `%` or inside « ». The same rules belong
+    >   in the modal's renderer, for French. That is outside M's scope; filed as M-23.

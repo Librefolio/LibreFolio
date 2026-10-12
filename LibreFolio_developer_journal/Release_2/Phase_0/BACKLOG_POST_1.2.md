@@ -489,6 +489,13 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   MathJax: una copia in `vendor/` scaricata da `scripts/update_js_cache.py` e un caricatore con ripiego; resta da
   scegliere il formato da copiare, perché il modulo ESM di Mermaid ne carica altri. Dettagli:
   [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md), passo «8».
+- **M-23 · Il changelog dell'app in francese senza spazi non separabili** — basso; M, 12/10, fuori dal perimetro di M
+  (il renderer del modale). Le traduzioni tengono spazi normali, e per le pagine della documentazione li cambia in
+  spazi non separabili `mkdocs_src/hooks/fr_typography.py`, al momento della build. Il modale del changelog legge
+  `CHANGELOG.fr.md` senza MkDocs (`frontend/src/lib/features/changelog/changelog.ts`), quindi lì una riga può andare
+  a capo prima di `;` `:` `?` `!` `%` o dentro « ». Le stesse regole dell'hook vanno applicate al testo del modale in
+  francese; i sorgenti restano come sono. Dettagli: [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md),
+  passo «10».
 
 ## Q · Documentazione e onboarding (21, 32)
 
