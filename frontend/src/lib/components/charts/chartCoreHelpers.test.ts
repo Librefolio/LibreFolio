@@ -1,9 +1,20 @@
 import {readFileSync} from 'node:fs';
 import * as echarts from 'echarts';
-import {describe, expect, it, vi} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 
+// The Y-axis labels follow the interface locale (M-18, last block): the UI language regionalised by
+// `navigator.language`. Node's tag follows the host's ICU locale, so it is pinned to en-US — jsdom's
+// own — before any import, as the CP1 formatter tests do.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
 import type {RenderedSignal} from '$lib/charts/signals';
-import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, assignOverlaySignalAxes, buildOverlaySignalSeries, buildSecondaryYAxes, collectConfigurableSecondaryAxes, computeRightMargin, secondaryAxisSettingsKey} from './chartCoreHelpers';
+import {currentLanguage} from '$lib/stores/app/language';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
+import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, assignOverlaySignalAxes, buildOverlaySignalSeries, buildPriceYAxis, buildSecondaryYAxes, collectConfigurableSecondaryAxes, computeRightMargin, getChartColors, secondaryAxisSettingsKey} from './chartCoreHelpers';
 import type {ConfigurableAxisDescriptor} from './chartCoreHelpers';
 import {exchangeRateAxisLabel, percentageAxisLabel, priceAxisLabel, secondaryAxisLabel, type AxisLabelTranslator} from './axisLabelHelpers';
 import {CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
@@ -2124,7 +2135,8 @@ describe('canonical overlay axis and reference helpers', () => {
             // forks on `entry.ladder` and builds the shared responsive policy on the time branch
             // only (`axisType: 'time'`); `isCandlesSubmode` and its category policy are gone. The
             // policy is still computed from the entry's dates at the container width.
-            expect(updateChartData).toMatch(/if \(entry\.ladder\) \{[\s\S]*?\} else \{\s*const xAxisPolicy = buildResponsiveXAxisPolicy\(\{\s*width: chartContainer\?\.clientWidth \?\? 0,\s*values: entry\.dates,\s*locale: \$locale \?\? undefined,\s*axisType: 'time',\s*\}\);/);
+            // Why (re-pin, M-18): every figure, dates included, is written in the interface locale, so the policy takes `uiLocale()` instead of svelte-i18n's `$locale ?? undefined`.
+            expect(updateChartData).toMatch(/if \(entry\.ladder\) \{[\s\S]*?\} else \{\s*const xAxisPolicy = buildResponsiveXAxisPolicy\(\{\s*width: chartContainer\?\.clientWidth \?\? 0,\s*values: entry\.dates,\s*locale: uiLocale\(\),\s*axisType: 'time',\s*\}\);/);
             // Why (re-pin, S7): the time branch now tests `responsiveXAxisCompact` directly
             // instead of a `wasCompact` copy. The check still runs before the flag is
             // overwritten, so a compact-to-desktop update still goes through applyFullOption
@@ -4278,5 +4290,149 @@ describe('canonical overlay axis and reference helpers', () => {
             areaStyle: {origin: 0},
         });
         expect(series?.areaStyle.color).toContain('0.2');
+    });
+});
+
+/**
+ * M-18 CP2: the Y-axis labels in the interface language.
+ *
+ * `buildPriceYAxis` — the price axis of PriceChartFull and CandlestickChart — and `buildSecondaryYAxes` —
+ * RSI, MACD and every other independent axis — write their ticks with `toFixed`, which goes through no
+ * locale: a French reader gets `12.3%` and `0.1234` beside amounts written `1 234,56`. Every figure is
+ * written in the interface language (the developer's decision M-18, 2026-10-12), through the formatters of
+ * CP1, whose locale defaults to `uiLocale()`:
+ *
+ *     price axis, percentage view    formatPercent(v, {digits: 1, signed: false})
+ *     price axis, |v| ≥ 1000         formatFixed(v / 1000, 1) + 'k'
+ *     price axis, |v| ≥ 1            formatFixed(v, 2)
+ *     price axis, |v| < 1            formatFixed(v, 4, {trim: true})
+ *     secondary axes, |v| ≥ 100      formatFixed(v, 0)
+ *     secondary axes, |v| ≥ 1        formatFixed(v, 2)
+ *     secondary axes, |v| < 1        formatFixed(v, 4, {trim: true})
+ *
+ * The digits stay `toFixed`'s; only the notation moves. English on an en-US browser keeps today's text
+ * below 1,000 (the guard) and gains its thousands separator from 1,000: the new contract, pinned where a
+ * case reaches it.
+ *
+ * Expectations. Localized strings come from `formatPercent`/`formatFixed` given an explicit locale, never
+ * typed; English is typed where it is today's exact text, or the grouped text of the new contract. Each
+ * French case also checks that French differs from English, so a runtime without French ICU data cannot
+ * make the comparison vacuous.
+ *
+ * Language. Switched as LanguageSelector does — `currentLanguage.set` — before the axis is built; the
+ * `afterEach` puts English back, because the language is module state shared by the whole file.
+ */
+describe('Y-axis labels in the interface language (M-18)', () => {
+    type AxisLabelFormatter = (value: number) => string;
+
+    const COLORS = getChartColors(false);
+    const FR = {locale: 'fr'} as const;
+
+    /** The tick formatter of the price axis, in its percentage view or in its absolute one. */
+    function priceAxisLabel(isPercentage: boolean): AxisLabelFormatter {
+        return buildPriceYAxis({mode: 'auto', isPercentage}, COLORS).axisLabel.formatter;
+    }
+
+    /** The tick formatter of an independent axis: the RSI's. */
+    function secondaryAxisLabel(): AxisLabelFormatter {
+        const layout = buildSecondaryYAxes(assignOverlaySignalAxes([signal({id: 'rsi', axisKey: 'rsi', axisRole: 'independent', axisLabel: 'RSI'})]), false);
+        return axisNamed(layout, 'RSI').axisLabel.formatter;
+    }
+
+    /** What `format` writes for each value, keyed by the value, so one diff names every tick that moved. */
+    function ticks(format: AxisLabelFormatter, values: readonly number[]): Record<string, string> {
+        return Object.fromEntries(values.map((value) => [String(value), format(value)]));
+    }
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    /** The percentage view: a share, a loss, zero. */
+    const PERCENT_TICKS = [12.34, -5.27, 0];
+    /** The absolute view, every branch at least once: thousands, units, fractions, zero. */
+    const PRICE_TICKS = [2_500, -2_500, 12.3456, 1, -45.678, 0.1234, 0.5, 0];
+    /** An independent axis, every branch at least once: hundreds, units, fractions, zero. */
+    const SECONDARY_TICKS = [123.4, 12.3456, -45.678, 0.1234, 0.5, 0];
+
+    it('English UI on an en-US browser (guard): below 1,000 every label is today’s exact text', async () => {
+        await uiLanguage('en');
+
+        expect(ticks(priceAxisLabel(true), PERCENT_TICKS)).toEqual({'12.34': '12.3%', '-5.27': '-5.3%', '0': '0.0%'});
+        expect(ticks(priceAxisLabel(false), PRICE_TICKS)).toEqual({'2500': '2.5k', '-2500': '-2.5k', '12.3456': '12.35', '1': '1.00', '-45.678': '-45.68', '0.1234': '0.1234', '0.5': '0.5', '0': '0'});
+        expect(ticks(secondaryAxisLabel(), SECONDARY_TICKS)).toEqual({'123.4': '123', '12.3456': '12.35', '-45.678': '-45.68', '0.1234': '0.1234', '0.5': '0.5', '0': '0'});
+    });
+
+    it('English UI on an en-US browser: from 1,000 a label is grouped — the new contract', async () => {
+        await uiLanguage('en');
+        const grouped = {
+            percent: formatPercent(1234.5, {digits: 1, signed: false, locale: 'en-US'}),
+            thousands: `${formatFixed(1234.567, 1, {locale: 'en-US'})}k`,
+            secondary: formatFixed(1234.56, 0, {locale: 'en-US'}),
+        };
+        // Control: the grouped text, which today's `toFixed` (`1234.5%`, `1234.6k`, `1235`) is not.
+        expect(grouped).toEqual({percent: '1,234.5%', thousands: '1,234.6k', secondary: '1,235'});
+
+        expect({percent: priceAxisLabel(true)(1234.5), thousands: priceAxisLabel(false)(1_234_567), secondary: secondaryAxisLabel()(1234.56)}).toEqual(grouped);
+    });
+
+    it('French UI: the percentage view of the price axis writes French percentages', async () => {
+        await uiLanguage('fr');
+        const expected = {
+            '12.34': formatPercent(12.34, {digits: 1, signed: false, ...FR}),
+            '-5.27': formatPercent(-5.27, {digits: 1, signed: false, ...FR}),
+            '0': formatPercent(0, {digits: 1, signed: false, ...FR}),
+            '1234.5': formatPercent(1234.5, {digits: 1, signed: false, ...FR}),
+        };
+        // Control: this runtime carries French data, so the French text is not the English one.
+        expect(expected['12.34'], 'French differs from English').not.toBe('12.3%');
+
+        expect(ticks(priceAxisLabel(true), [...PERCENT_TICKS, 1234.5]), spelled(expected)).toEqual(expected);
+    });
+
+    it('French UI: the absolute view of the price axis — thousands as k, units with two decimals, fractions with up to four — in French notation', async () => {
+        await uiLanguage('fr');
+        const expected = {
+            '2500': `${formatFixed(2.5, 1, FR)}k`,
+            '-2500': `${formatFixed(-2.5, 1, FR)}k`,
+            '1234567': `${formatFixed(1234.567, 1, FR)}k`,
+            '12.3456': formatFixed(12.3456, 2, FR),
+            '1': formatFixed(1, 2, FR),
+            '-45.678': formatFixed(-45.678, 2, FR),
+            '0.1234': formatFixed(0.1234, 4, {trim: true, ...FR}),
+            '0.5': formatFixed(0.5, 4, {trim: true, ...FR}),
+            '0': formatFixed(0, 4, {trim: true, ...FR}),
+        };
+        expect(expected['12.3456'], 'French differs from English').not.toBe('12.35');
+
+        expect(ticks(priceAxisLabel(false), [...PRICE_TICKS, 1_234_567]), spelled(expected)).toEqual(expected);
+    });
+
+    it('French UI: the secondary axes (RSI, MACD, …) in French notation', async () => {
+        await uiLanguage('fr');
+        const expected = {
+            '1234.56': formatFixed(1234.56, 0, FR),
+            '123.4': formatFixed(123.4, 0, FR),
+            '12.3456': formatFixed(12.3456, 2, FR),
+            '-45.678': formatFixed(-45.678, 2, FR),
+            '0.1234': formatFixed(0.1234, 4, {trim: true, ...FR}),
+            '0.5': formatFixed(0.5, 4, {trim: true, ...FR}),
+            '0': formatFixed(0, 4, {trim: true, ...FR}),
+        };
+        expect(expected['0.1234'], 'French differs from English').not.toBe('0.1234');
+
+        expect(ticks(secondaryAxisLabel(), [1234.56, ...SECONDARY_TICKS]), spelled(expected)).toEqual(expected);
     });
 });

@@ -12,6 +12,8 @@
  * @module charts/geographyMapHelpers
  */
 
+import {formatPercent} from '$lib/utils/core/formatPercent';
+
 /** Both directions of the ISO-A3 ↔ GeoJSON feature-name mapping. */
 export interface GeoNameMaps {
     iso3ToGeoName: Record<string, string>;
@@ -139,7 +141,7 @@ export function buildGeoLabel(params: GeoLabelParams, deps: GeoLabelDeps): strin
     if (params.value != null && !isNaN(params.value) && params.value > 0) {
         const absAmt = iso3 ? deps.amounts[iso3] : undefined;
         const amtLine = absAmt != null && absAmt > 0 ? `\n${deps.formatAmount(absAmt, deps.currency)}` : '';
-        return `${prefix}${displayName}: ${params.value}%${amtLine}`;
+        return `${prefix}${displayName}: ${formatPercent(params.value, {digits: 2, signed: false, trim: true})}${amtLine}`;
     }
     return `${prefix}${displayName}`;
 }

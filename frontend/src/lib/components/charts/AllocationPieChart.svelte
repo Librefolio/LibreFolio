@@ -29,6 +29,8 @@
     import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
     import {buildAllocationRingData, buildAllocationRings, type AllocationRingDatum} from '$lib/components/charts/allocationRings';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Types & Props
@@ -88,6 +90,8 @@
         renderChart({skipAnimation: true});
     });
     let lastDark: boolean | null = null;
+    /** The interface locale of the last full build: its legend names and formatters belong to it. */
+    let lastLocale: string | null = null;
     let chartFullyInitialized = false;
     // Tracks the distinct set of raw type keys (mode='type') used to build richStyles
     // during the last FULL render — the fast-path data-only update below must NOT be
@@ -126,6 +130,8 @@
         // re-fired when the parent rebuilt the slices. Same defect that made
         // SemiDonutChart render blank — see its $effect for the reference fix.
         void data.map((slice) => ({...slice}));
+        // Labels and amounts are written in the interface locale: a language switch redraws them (M-18).
+        void uiLocale();
 
         if (chartContainer) {
             tick().then(() => {
@@ -256,7 +262,10 @@
         // icon actually registers (see lastRawTypeKeys declaration above for why).
         const currentRawTypeKeys = mode === 'type' ? [...new Set(chartData.map((d) => d.rawName.toUpperCase()))].sort().join(',') + (rings ? '|rings' : '') : '';
         const sameTypeSet = mode !== 'type' || currentRawTypeKeys === lastRawTypeKeys;
-        if (chartFullyInitialized && lastDark === isDark && sameTypeSet) {
+        // A language switch rebuilds in full, as a theme switch does: the legend's name map and
+        // the label formatters were built for the previous language (M-18).
+        const locale = uiLocale();
+        if (chartFullyInitialized && lastDark === isDark && lastLocale === locale && sameTypeSet) {
             // Bugfix: preserve the FULL data item (not just {name, value}) — formatters
             // (tooltip especially) read params.data.rawName/amount, and stripping them
             // here silently broke the fallback path for any type whose translated name
@@ -442,12 +451,12 @@
                     // Same precision as the member's own figure: two decimals beside one read
                     // as two different quantities (review of R12, 24/09/2026).
                     const parentTotal = roundedPercent(params.data?.primaryTotal ?? 0);
-                    parentLine = `<br/><span style="font-size:11px;opacity:0.7">↳ ${parentLabel} ${parentTotal}%</span>`;
+                    parentLine = `<br/><span style="font-size:11px;opacity:0.7">↳ ${parentLabel} ${formatPercent(parentTotal, {digits: 2, signed: false, trim: true})}</span>`;
                 }
-                return `${iconHtml}${translated}: ${params.value}%${amountLine}${parentLine}`;
+                return `${iconHtml}${translated}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}${parentLine}`;
             }
             // Sector: display name already contains the emoji prefix
-            return `${escapeHtml(String(params.name ?? ''))}: ${params.value}%${amountLine}`;
+            return `${escapeHtml(String(params.name ?? ''))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}`;
         };
 
         const option: echarts.EChartsOption = {
@@ -512,7 +521,7 @@
             const captionConfig = {
                 show: true,
                 position: 'outside' as const,
-                formatter: (params: any) => `${params.data?.caption ?? params.name}\n${params.value}%`,
+                formatter: (params: any) => `${params.data?.caption ?? params.name}\n${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}`,
                 fontSize: 11,
                 lineHeight: 14,
                 color: isDark ? '#cbd5e1' : '#374151',
@@ -533,6 +542,7 @@
         lastRings = mode === 'type' ? rings : false;
         chartFullyInitialized = true;
         lastDark = isDark;
+        lastLocale = locale;
         if (needsInitialLayoutStabilityPass) {
             needsInitialLayoutStabilityPass = false;
             scheduleFirstRenderStabilityFix(chartInstance, chartContainer);

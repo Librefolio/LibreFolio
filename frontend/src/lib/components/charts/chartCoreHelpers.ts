@@ -10,6 +10,8 @@ import type {RenderedSignal} from '$lib/charts/signals';
 import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
 import type {ECharts} from 'echarts';
 import {buildBandSeries, buildBarSeries, buildSignalReferencePrimitives, COLORS, hexToRgba} from './lineChartHelpers';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 
 // =============================================================================
 // Types
@@ -84,11 +86,11 @@ export function buildPriceYAxis(config: YAxisConfig, colors: ChartColors, opts: 
             color: colors.label,
             fontSize: 14,
             formatter: isPercentage
-                ? (v: number) => `${v.toFixed(1)}%`
+                ? (v: number) => formatPercent(v, {digits: 1, signed: false})
                 : (v: number) => {
-                      if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
-                      if (Math.abs(v) >= 1) return v.toFixed(2);
-                      return v.toFixed(4).replace(/\.?0+$/, '');
+                      if (Math.abs(v) >= 1000) return `${formatFixed(v / 1000, 1)}k`;
+                      if (Math.abs(v) >= 1) return formatFixed(v, 2);
+                      return formatFixed(v, 4, {trim: true});
                   },
         },
         splitLine: {
@@ -261,9 +263,9 @@ export function buildSecondaryYAxes(
                 color,
                 fontSize: 10,
                 formatter: (value: number) => {
-                    if (Math.abs(value) >= 100) return value.toFixed(0);
-                    if (Math.abs(value) >= 1) return value.toFixed(2);
-                    return value.toFixed(4).replace(/\.?0+$/, '');
+                    if (Math.abs(value) >= 100) return formatFixed(value, 0);
+                    if (Math.abs(value) >= 1) return formatFixed(value, 2);
+                    return formatFixed(value, 4, {trim: true});
                 },
             },
             splitLine: {show: false},

@@ -20,6 +20,9 @@ import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
 import {getBackendSignalProblem, type SignalProblem} from '$lib/charts/signals/signalProblem';
 import {truncateName} from '$lib/utils/text';
 import {aggregateLineSeries, bucketEventMarkers, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /** A resolved logical date span the chart is currently showing. */
 export interface LogicalVisibleRange {
@@ -208,11 +211,11 @@ export function extractCalendarReturnViewsByAsset(rawItems: unknown, assetIds: r
 
 /**
  * Localized "Month YYYY" label for a `YYYY-MM-DD` date. Anchored to UTC so the
- * month never drifts across a timezone boundary. `locale` defaults to the host
- * default (what the component uses); tests pass an explicit locale to stay
+ * month never drifts across a timezone boundary. `locale` defaults to the
+ * interface locale (`uiLocale()`, M-18); tests pass an explicit locale to stay
  * deterministic regardless of the machine's locale.
  */
-export function formatMonthLabel(date: string, locale?: string | string[]): string {
+export function formatMonthLabel(date: string, locale: string | string[] = uiLocale()): string {
     return new Intl.DateTimeFormat(locale, {
         month: 'long',
         year: 'numeric',
@@ -567,15 +570,15 @@ export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResol
  */
 export function buildDeltaHtml(value: number, firstValue: number, isPercentage: boolean): string {
     const color = (n: number) => (n >= 0 ? '#10b981' : '#ef4444');
-    const sign = (n: number) => (n >= 0 ? '+' : '');
 
+    // In the interface locale (M-18); a zero carries no sign, as with `formatPercent` everywhere.
     if (isPercentage) {
-        return ` <span style="font-size:10px;color:${color(value)}">(Δ ${sign(value)}${value.toFixed(2)}%)</span>`;
+        return ` <span style="font-size:10px;color:${color(value)}">(Δ ${formatPercent(value)})</span>`;
     }
 
     const deltaAbs = value - firstValue;
     const deltaPct = firstValue !== 0 ? ((value - firstValue) / firstValue) * 100 : 0;
-    return ` <span style="font-size:10px;color:${color(deltaAbs)}">(Δ ${sign(deltaAbs)}${deltaAbs.toFixed(4)} / ${sign(deltaPct)}${deltaPct.toFixed(2)}%)</span>`;
+    return ` <span style="font-size:10px;color:${color(deltaAbs)}">(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${formatPercent(deltaPct)})</span>`;
 }
 
 /**

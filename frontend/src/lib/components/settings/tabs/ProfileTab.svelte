@@ -3,7 +3,6 @@
     import {_} from '$lib/i18n';
     import {auth, currentUser} from '$lib/stores/app/auth';
     import {userSettings} from '$lib/stores/app/settings';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
     import {goto} from '$app/navigation';
@@ -14,13 +13,14 @@
     import {notify} from '$lib/stores/app/notify.svelte';
     import {ImagePickerWrapper} from '$lib/components/ui/media';
     import {onMount} from 'svelte';
+    import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
-    // Format date for display, in the app's language. The template passes it: read there, the store is
-    // tracked, and the date follows a language change.
-    function formatDate(dateStr: string | undefined, lang: string | undefined): string {
+    // Format date for display, in the interface locale (M-18). The template passes it: read there, the
+    // store is tracked, and the date follows a language change.
+    function formatDate(dateStr: string | undefined, locale: string): string {
         if (!dateStr) return '-';
         const date = new Date(dateStr);
-        return date.toLocaleDateString(lang || undefined, {
+        return date.toLocaleDateString(locale, {
             year: 'numeric',
             month: 'long',
             day: 'numeric',
@@ -477,7 +477,7 @@
 
             <!-- Right: Value -->
             <div class="text-sm text-gray-600 dark:text-gray-300 sm:text-right">
-                {formatDate($currentUser?.created_at, $currentLanguage)}
+                {formatDate($currentUser?.created_at, $uiLocaleStore)}
             </div>
         </div>
     </div>

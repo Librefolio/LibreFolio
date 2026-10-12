@@ -16,7 +16,8 @@
 
 <script lang="ts">
     import {Clock3} from 'lucide-svelte';
-    import {locale, t} from '$lib/i18n';
+    import {t} from '$lib/i18n';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     let {item, batch = null}: ToolExecutionMetricsProps = $props();
 
@@ -34,7 +35,7 @@
         {key: 'serialization_ms', label: 'tools.metrics.serialization', fallback: 'Output serialization'},
     ] as const satisfies readonly {key: keyof ToolItemMetrics; label: string; fallback: string}[];
 
-    const numberFormat = $derived(new Intl.NumberFormat($locale ?? 'en'));
+    const numberFormat = $derived(new Intl.NumberFormat(uiLocale()));
 
     function duration(value: number | null): string {
         return value === null

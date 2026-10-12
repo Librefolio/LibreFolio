@@ -11,6 +11,8 @@
  * Design: `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md`, §4.
  */
 
+import {uiLocale} from '$lib/stores/app/uiLocale';
+
 /** One export a report-set plugin reads (from `GET /brokers/import/plugins`). */
 export interface SetRoleInfo {
     code: string;
@@ -278,13 +280,13 @@ export function dayBefore(isoDate: string): string {
     return isoOfDay(dayNumber(isoDate) - 1);
 }
 
-/** The day of an ISO date or instant, in the browser's locale like the tables' dates; `—` when absent. */
+/** The day of an ISO date or instant, in the interface locale like the tables' dates (M-18); `—` when absent. */
 export function formatIsoDay(iso: string | null | undefined): string {
     if (!iso) return '—';
     const day = String(iso).slice(0, 10);
     const [year, month, date] = day.split('-').map(Number);
     if (!year || !month || !date) return day;
-    return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(undefined, {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
+    return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(uiLocale(), {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
 }
 
 interface TimelinePreview {

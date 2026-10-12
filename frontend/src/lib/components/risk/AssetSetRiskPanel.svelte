@@ -80,7 +80,6 @@
     import SelectPopover from '$lib/components/ui/select/SelectPopover.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import {singleValue} from '$lib/risk/riskTypes';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
@@ -100,6 +99,7 @@
     import {applyBulkAction, labBenchmarkId, labL3Waits, MAX_SELECTED_ASSETS, readPersistedSelection, resolveInitialSelectionWithSource, writePersistedSelection, type BulkAction, type SelectionSource} from './assetSetSelection';
     import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, fitPeriodOffer, isSelectable, mergeEligibilityAnswers, type DayRange, type EligibilityView, type EligibilityVerdicts} from './eligibility';
     import {buildSyncTargets, labQualityAction} from './syncTargets';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface AssetOption {
         id: number;
@@ -299,7 +299,7 @@
 
     /** The verdicts in the reader's language, for the "+" and the chips. */
     let eligibilityView = $derived.by(() => {
-        const formatDay = dayFormatter($currentLanguage);
+        const formatDay = dayFormatter(uiLocale());
         const view = new Map<number, EligibilityView>();
         for (const [assetId, item] of verdicts.items) view.set(assetId, describeEligibility(item, verdicts, targetCurrency, $t, formatDay));
         return view;
@@ -340,7 +340,7 @@
     });
 
     let fitOffer = $derived(fitPeriodOffer(selectionVerdicts, selectedAssetIds));
-    let fitDay = $derived(dayFormatter($currentLanguage));
+    let fitDay = $derived(dayFormatter(uiLocale()));
     let fitNames = $derived.by(() => (fitOffer ? fitOffer.recoverable.map((assetId) => selectionLabels.get(assetId) ?? `#${assetId}`).join(', ') : ''));
 
     /** What the quick actions may bring in: the catalogue without what the engine rules out. */

@@ -206,19 +206,12 @@
      * Two decimals for an index that is not a percentage.
      *
      * Goes through `formatPercent` with the unit switched off rather than
-     * `toLocaleString`, and the reason is a defect this file briefly had.
+     * `toLocaleString`, so it is written like every percentage beside it: in the
+     * interface locale (`uiLocale()`, M-18).
      *
-     * `toLocaleString(undefined, …)` formats in the BROWSER's locale, so on an
-     * Italian browser it writes `14,97` while every percentage beside it —
-     * `formatPercent`, which ends in `toFixed` — writes `49.3%`. The two sat in
-     * the same row of cards, three centimetres apart, under an Italian
-     * interface: one comma, two dots.
-     *
-     * The app-locale-versus-browser-locale split is a known debt and it is not
-     * this surface's to pay. What this surface must not do is DOUBLE it: a
-     * second, parallel formatting path turns one debt in one place into two
-     * conventions disagreeing on one screen, which is harder to fix and worse to
-     * read. One convention, one owner, one repair.
+     * A second, parallel formatting path is how this file once wrote `14,97` (the
+     * browser's locale) three centimetres from `49.3%` under one interface: one
+     * comma, two dots. One convention, one owner.
      */
     function index(value: number): string {
         return formatPercent(value, {signed: false, digits: 2, suffix: ''});

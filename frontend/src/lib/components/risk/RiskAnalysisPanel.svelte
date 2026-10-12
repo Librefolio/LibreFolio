@@ -34,6 +34,7 @@
     import {numericArrows} from '$lib/actions/numericArrows';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import * as riskHelpers from './riskAnalysisHelpers';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
     interface Props {
         scope: RiskScope;
         dateStart: string;
@@ -119,7 +120,7 @@
         {value: 'mc', label: 'MC'},
         {value: 'qmc', label: 'QMC'},
     ];
-    const pathOptions = [1024, 2048, 4096, 8192, 16384].map((value) => ({value: String(value), label: value.toLocaleString()}));
+    const pathOptions = $derived([1024, 2048, 4096, 8192, 16384].map((value) => ({value: String(value), label: value.toLocaleString(uiLocale())})));
     const simulationTabs = $derived([
         {id: 'evolution', label: $t('risk.simulation.evolution'), testId: 'risk-simulation-view-evolution'},
         {id: 'terminal_distribution', label: $t('risk.simulation.terminalDistribution'), testId: 'risk-simulation-view-terminal'},

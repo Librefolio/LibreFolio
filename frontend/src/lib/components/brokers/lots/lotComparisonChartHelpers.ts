@@ -23,6 +23,7 @@ import {finiteNumber} from '$lib/utils/core/finiteNumber';
 import {mapDateToBucket, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
 import {normalizeZero, formatAxisNumber, addOrNull} from './lotChartShared';
 import {maskCurrencyParts, maskFormattedNumber} from '$lib/utils/privacy/maskable';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /** The two value provenances a lot's series can carry. */
 export type LotValueSource = 'MARKET_PRICE' | 'ESTIMATED_AT_COST';
@@ -197,9 +198,9 @@ export function incomeEventColor(type: 'DIVIDEND' | 'INTEREST', isDark: boolean)
  * Format a value that is already a percentage: the sign-normalised number with a
  * `%` suffix, using two fraction digits only for small non-integers (|v| < 10 and
  * not whole), one otherwise. `locale` is exposed for deterministic tests; it
- * defaults to the machine locale, matching the component.
+ * defaults to the interface locale (`uiLocale()`, M-18).
  */
-export function formatAxisPercent(value: number, locale?: string): string {
+export function formatAxisPercent(value: number, locale: string = uiLocale()): string {
     const normalized = normalizeZero(value);
     const abs = Math.abs(normalized);
     const decimals = abs < 10 && abs % 1 !== 0 ? 2 : 1;
@@ -216,7 +217,7 @@ export function formatAxisPercent(value: number, locale?: string): string {
  * hid the currency — ruled out on 2026-09-22 (privacy hides the number, not the currency).
  * The sign stays outside the mask, as in D8. `locale` is exposed for deterministic tests.
  */
-export function formatAxisCurrency(value: number, currency: string, locale?: string): string {
+export function formatAxisCurrency(value: number, currency: string, locale: string = uiLocale()): string {
     const normalized = normalizeZero(value);
     try {
         const formatter = new Intl.NumberFormat(locale, {
@@ -242,7 +243,7 @@ export function formatAxisCurrency(value: number, currency: string, locale?: str
  * Unmasked, the output is exactly the shared `formatAxisNumber`; masked, the locale's own
  * sign stays outside the placeholder, as in D8.
  */
-export function formatAxisAmount(value: number, locale?: string): string {
+export function formatAxisAmount(value: number, locale: string = uiLocale()): string {
     return maskFormattedNumber(formatAxisNumber(normalizeZero(value), locale));
 }
 

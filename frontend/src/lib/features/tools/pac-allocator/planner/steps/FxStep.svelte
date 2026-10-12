@@ -6,7 +6,7 @@
 <script lang="ts">
     import {onDestroy, onMount} from 'svelte';
     import {Download, ExternalLink, LoaderCircle, Plus} from 'lucide-svelte';
-    import {t, locale} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import FxSyncModal from '$lib/components/fx/FxSyncModal.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
@@ -87,7 +87,7 @@
     function rateHelp(fx: DraftFx): string {
         return $t(`${KEY}.rateHelp`, {
             default: 'Rate stored in LibreFolio, dated {date}{hasSource, select, yes { (source: {source})} other {}}. It is read again just before the calculation.',
-            values: {date: formatPlannerDate(fx.referenceDate, $locale), hasSource: fx.source ? 'yes' : 'no', source: fx.source ?? ''},
+            values: {date: formatPlannerDate(fx.referenceDate), hasSource: fx.source ? 'yes' : 'no', source: fx.source ?? ''},
         });
     }
 
@@ -95,7 +95,7 @@
         const copied = fx?.copiedRate ?? null;
         return $t(`${KEY}.manualHelp`, {
             default: 'Your rate: the calculation uses it as typed and never reads it again. {hasCopy, select, yes {LibreFolio has {rate}, dated {date}: «Auto» brings it back.} other {In «Auto» the calculation uses the rate stored in LibreFolio, when there is one.}}',
-            values: {hasCopy: copied ? 'yes' : 'no', rate: formatPlannerFxRate(copied), date: formatPlannerDate(fx?.referenceDate, $locale)},
+            values: {hasCopy: copied ? 'yes' : 'no', rate: formatPlannerFxRate(copied), date: formatPlannerDate(fx?.referenceDate)},
         });
     }
 

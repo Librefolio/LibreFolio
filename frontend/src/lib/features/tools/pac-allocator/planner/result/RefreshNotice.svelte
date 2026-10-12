@@ -1,6 +1,6 @@
 <script lang="ts">
     import {RefreshCw} from 'lucide-svelte';
-    import {t, locale} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import type {RefreshSummary} from '../copies';
     import {formatCopyStamp} from '../format';
     import {BADGE, NOTICE} from '../ui';
@@ -14,7 +14,7 @@
 
     let {summary, asOf, testid = 'pac-planner-refresh-notice'}: Props = $props();
 
-    const stamp = $derived(formatCopyStamp(asOf, summary.readAt, $locale));
+    const stamp = $derived(formatCopyStamp(asOf, summary.readAt));
     /** Counts and names only: no amount is shown here. */
     const changes = $derived.by(() => {
         const parts = [

@@ -32,6 +32,8 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {debug} from '$lib/debug';
     import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface AllocationComponent {
         name: string;
@@ -204,7 +206,7 @@
         void data;
         void dimension;
         void refDataVersion;
-        void $currentLanguage;
+        void uiLocale();
         if (chartContainer) {
             tick().then(() => {
                 setupVisibilityObservers();
@@ -216,7 +218,7 @@
                             const policy = buildResponsiveXAxisPolicy({
                                 width: chartContainer.clientWidth,
                                 values: dataset.dates,
-                                locale: $currentLanguage,
+                                locale: uiLocale(),
                                 axisType: 'time',
                             });
                             const wasCompact = responsiveXAxisCompact;
@@ -545,7 +547,7 @@
     }
 
     function formatMonthLabel(date: string): string {
-        return new Intl.DateTimeFormat($currentLanguage, {
+        return new Intl.DateTimeFormat(uiLocale(), {
             month: 'long',
             year: 'numeric',
             timeZone: 'UTC',
@@ -594,7 +596,7 @@
      */
     function buildFamilyTooltipRows(styling: readonly SeriesStyle[], dataset: AggregatedAllocationDataset, idx: number, theme: TooltipTheme, remainingLabel: string): string {
         const valueAt = (key: string) => dataset.rawDataByName[key]?.[idx] ?? 0;
-        const percent = (value: number) => `${value.toFixed(1)}%`;
+        const percent = (value: number) => formatPercent(value, {digits: 1, signed: false});
         const families = styling
             .map((family) => {
                 const members = family.members.map((key) => ({key, value: valueAt(key), pure: key.toUpperCase() === family.id})).filter((member) => member.value > 0.01);
@@ -633,7 +635,7 @@
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: chartContainer?.clientWidth ?? 0,
             values: dataset.dates,
-            locale: $currentLanguage,
+            locale: uiLocale(),
             axisType: 'time',
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
@@ -768,7 +770,7 @@
             yAxis: {
                 type: 'value',
                 max: 100,
-                axisLabel: {color: textColor, fontSize: 14, formatter: (value: number) => `${value}%`},
+                axisLabel: {color: textColor, fontSize: 14, formatter: (value: number) => formatPercent(value, {digits: 2, signed: false, trim: true})},
                 axisLine: {show: false},
                 splitLine: {lineStyle: {color: gridColor, type: 'dashed'}},
             },

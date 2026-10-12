@@ -36,7 +36,6 @@
     import {onMount} from 'svelte';
     import {AlertTriangle} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
     import AssetPickerPanel from '$lib/components/ui/select/AssetPickerPanel.svelte';
     import {assetSelectOrder, type PickerVerdict} from '$lib/components/ui/select/assetPicker';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
@@ -44,6 +43,7 @@
     import {queryEligibility} from '$lib/stores/risk/riskStore.svelte';
     import {resolveRiskBenchmark, riskBenchmark, type RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import {EMPTY_VERDICTS, dayFormatter, describeEligibility, type EligibilityVerdicts} from './eligibility';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Props {
         /** What this page measures: left out of the list, except the current choice. */
@@ -139,7 +139,7 @@
     let askedView = $derived.by((): ReadonlyMap<number, PickerVerdict> | undefined => {
         const known = question !== null && answer?.key === question.key && !answer.failed ? answer.verdicts : null;
         if (!known || !currency) return undefined;
-        const formatDay = dayFormatter($currentLanguage);
+        const formatDay = dayFormatter(uiLocale());
         const view = new Map<number, PickerVerdict>();
         for (const [assetId, item] of known.items) view.set(assetId, describeEligibility(item, known, currency, $t, formatDay));
         return view;
