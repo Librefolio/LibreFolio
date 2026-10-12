@@ -27,7 +27,7 @@ un téléphone en données mobiles.
    [Derrière un proxy inverse](#reverse-proxy).
 3. **Interrogez le serveur.** Dans un nouvel onglet, ouvrez `https://<your address>/api/v1/system/connection` :
    la réponse contient `"cookie_secure":true` ([Le point de vue du serveur](#server-view)).
-4. **Si vous le souhaitez, regardez le cookie.** Dans les outils de développement du navigateur, le
+4. **Regardez le cookie.** Dans les outils de développement du navigateur, le
    cookie `session` est marqué `Secure` ([Le cookie de session](#session-cookie)).
 5. **Depuis l'extérieur, ouvrez l'adresse HTTPS.** Sur le téléphone, Wi-Fi coupé, la page se charge
    et, une fois connecté, l'indicateur affiche 🟢 **Connexion : sécurisée**. Gardez Tailscale coupé

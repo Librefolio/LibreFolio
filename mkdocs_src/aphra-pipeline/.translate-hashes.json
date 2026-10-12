@@ -4549,7 +4549,7 @@
     }
   },
   "admin/docker_advanced.en.md": {
-    "md5": "066ced70f4ccab433ca7c10071e36ecd",
+    "md5": "e776cb7ece05b7765accbde13362f152",
     "langs_done": [
       "es",
       "fr",
@@ -4568,7 +4568,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **REQUIRED — Structural (missing bold marker)**: The structural diff report flags a BOLD_MARKERS mismatch (`source=45, translated=44, Δ-1`). The specific loss is in the section \"User & Permissions\". The source reads:\n\n   > That UID/GID comes from the `UID` and `GID` **build arguments**:\n\n   The translation drops the bold formatting on \"build arguments\":\n\n   > Quell'UID/GID proviene dagli argomenti di build `UID` e `GID`\n\n   **Fix (required):** restore the bold mark-up → \"Quell'UID/GID proviene dagli **argomenti di build** `UID` e `GID`\". This is the objective one-unit gap counted in the diff and it must be corrected.\n\n2. **Minor style — awkward doubling of \"solo\"**: In the \"The frontend is a debug build\" warning, the translation reads:\n\n   > `./dev.py docker build` ricompila il frontend da solo solo quando le sue sorgenti sono cambiate, non quando l'ultima build era di debug.\n\n   The back-to-back \"da solo solo\" reads poorly. **Fix:** \"ricompila il frontend automaticamente solo quando le sue sorgenti sono cambiate, non quando l'ultima build era di debug.\"\n\n3. **Minor — English word \"stop\" kept as-is (noun)**: In \"Data Directory\":\n\n   > Sopravvive a stop, riavvio e rimozione del container\n\n   Here \"stop\" functions as a nominalized English command name. **Fix:** \"Sopravvive all'arresto, al riavvio e alla rimozione del container\" (or keep \"allo stop\" only if the command name is deliberately intended; \"arresto\" is the standard Italian noun).\n\n4. **Minor — \"cedere la directory dei dati\" sounds unusual**: In \"User & Permissions\":\n\n   > Il container si avvia come root solo per cedere la directory dei dati all'utente LibreFolio\n\n   \"cedere\" implies \"giving up/ceding ownership\" rather than handing over for management. **Fix:** \"affidare la directory dei dati all'utente LibreFolio\" (and accordingly \"Il passaggio di consegna\" → \"L'affidamento avviene a ogni avvio…\"). This preserves the source sense of \"hand the data directory over to\".\n\nEverything else — heading anchors (`{: #resolution-priority }`, `{: #docker-exec }`, `{: #post-migration-fixes }`), all Markdown links, admonitions (`??? tip`, `!!! warning`, `??? example`), fenced code blocks with untouched English code/comments, and the two-port table — is preserved correctly. Terminology matches the glossary where applicable (e.g. *stale* → \"obsoleto\", *overview* → \"Panoramica\", *broker* → \"broker\", *cache* → \"cache\", *asset* → \"asset\"). No translator's notes were added, which is correct.\n</improvements>\n</translation_critique>",
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=45, translated=44 (Δ-1)\n  L7: src=1 trn=0\n    EN: - **`docker-compose.prod.yml`** runs the official image from GHCR: the installation guide saves it as `docker-compose.ym\n    TR: \n  L9: src=0 trn=1\n    EN: \n    TR: - **`docker-compose.yml`**, nel repository, esegue un'immagine che costruisci tu stesso con `./dev.py docker build`, e m\n  L12: src=1 trn=0\n    EN: **Docker group (Linux).** Your user must be in the `docker` group to run Docker commands without `sudo`:\n    TR: \n  L13: src=0 trn=1\n    EN: \n    TR: **Gruppo Docker (Linux).** Il tuo utente deve essere nel gruppo `docker` per eseguire i comandi Docker senza `sudo`:\n  L18: src=1 trn=0\n    EN: Then **log out and log back in**, or run `newgrp docker` to activate the group in the current session. Without this, all\n    TR: \n  L19: src=0 trn=1\n    EN: \n    TR: Poi **disconnettiti e riconnettiti**, oppure esegui `newgrp docker` per attivare il gruppo nella sessione corrente. Senz\n  L20: src=1 trn=0\n    EN: **`.env` file.** LibreFolio requires a `.env` file next to the Compose file, and `./dev.py docker build` refuses to proc\n    TR: \n  L21: src=0 trn=1\n    EN: \n    TR: **File `.env`.** LibreFolio richiede un file `.env` accanto al file Compose, e `./dev.py docker build` rifiuta di proced\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 🐳 Advanced Docker Guide\n    ## ⚠️ Prerequisites\n    ## 🏗️ Architecture\n    ## 📄 `docker-compose.yml`\n      ### 🔝 Resolution Priority {: #resolution-priority }\n      ### 🔧 Service: `librefolio`\n      ### 💾 Data Directory: `LibreFolio-data/`\n      ### 👤 User & Permissions\n    ## 🛠️ CLI Commands\n      ### 📡 `docker exec` — Running Commands Inside the Container {: #docker-exec }\n    ## 🩹 Post-Migration Fixes {: #post-migration-fixes }\n      ### ⏹️ Running the Fixes with the Server Stopped\n    ## 🧪 Test Mode\n    ## 🏭 Production Considerations\n      ### 🎮 1. Customizing `docker-compose.yml`\n      ### 🔒 2. Security and Exposure (Tailscale and Reverse Proxy)\n      ### 💾 3. Database Backup\n      ### 🔑 4. Environment Variables",
         "structural_issues": 1,
-        "elapsed_s": 300.2
+        "elapsed_s": 300.2,
+        "stamped_at": "2026-10-12T12:50:37.894926+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:04:04.144828+00:00",
@@ -4579,7 +4581,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Diagramme Mermaid non traduit.** Les libellés visibles restent en anglais. Remplacer :\n```mermaid\ngraph LR\n    CodeDefaults[1. Code Defaults] --> EnvFile[2. .env File]\n    HostShell[3. Host Env Variables]\n    DockerCompose[4. docker-compose.yml environment block]\n\n    EnvFile --> HostShell\n    HostShell --> DockerCompose\n```\npar :\n```mermaid\ngraph LR\n    CodeDefaults[1. Valeurs par défaut du code] --> EnvFile[2. Fichier .env]\n    HostShell[3. Variables d'environnement de l'hôte]\n    DockerCompose[4. Bloc environment de docker-compose.yml]\n\n    EnvFile --> HostShell\n    HostShell --> DockerCompose\n```\nNe pas modifier les identifiants de nœuds (`CodeDefaults`, `EnvFile`, etc.).\n\n- **Violation du glossaire : `overview` → `vue d'ensemble`.** Le lien `[Architecture overview → Docker image](../developer/architecture/overview.md#docker-image)` doit devenir `[Vue d'ensemble de l'architecture → Image Docker](../developer/architecture/overview.md#docker-image)`.\n\n- **Phrase anglaise visible non traduite.** `obtient la même réponse *not available*` doit utiliser le français, par cohérence avec le paragraphe précédent : `obtient la même réponse *pas disponible*` (ou `*indisponible*`).\n\n- **Terme du glossaire `broker report` → `rapport de courtier`.** Les occurrences `rapports de courtiers` / `rapports de courtiers originaux` devraient suivre exactement le composé du glossaire : `rapports de courtier` / `rapports de courtier originaux`.\n\n- **Termes anglais visibles dans la prose.** `runtime-only` et `placeholders` restent en anglais alors qu’ils sont traduisibles : `L'image est **exclusivement destinée à l'exécution**` et `Pour les espaces réservés `${…}``. Ces corrections améliorent la naturalité sans toucher au code.\n\n- **Anglicismes de `build`.** Des formulations comme `votre build allégé`, `une build de debug`, `la build de production` sont peu naturelles en français. Préférer `votre version allégée`, `une version de débogage`, `la version de production`. Le terme `build` peut rester dans les commandes et noms de fichiers.\n\n- **`reverse proxy`.** Dans la prose française, `proxy inverse` est plus idiomatique : `ou derrière un proxy inverse classique comme Nginx ou Traefik`. Conserver `reverse proxy` seulement si c’est un choix terminologique assumé.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 235.5
+        "elapsed_s": 235.5,
+        "stamped_at": "2026-10-12T12:50:37.894926+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:04:04.145074+00:00",
@@ -4590,7 +4594,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Glossary deviation: `overview → resumen`.**  \n   The link text `[Descripción general de la arquitectura → Imagen de Docker]` does not use the mandatory mapping.  \n   **Correction:** `[Resumen de la arquitectura → Imagen de Docker]` (or `[Resumen de arquitectura → Imagen de Docker]`).\n\n2. **Glossary deviation: `stale → obsoleto`.**  \n   In the SQLite warning, `puede producir una copia de seguridad inconsistente o desactualizada` uses `desactualizada` for `stale`.  \n   **Correction:** `puede producir una copia de seguridad inconsistente u obsoleta`.\n\n3. **Terminology ambiguity: `log` vs `registry`.**  \n   The translation renders both `log` and `registry` as `registro`:  \n   - `los archivos de registro` / `el registro es la salida del contenedor`  \n   - `En el registro, en cambio, latest es la variante ligera...`  \n   This is confusing in a Docker context.  \n   **Correction:** Use `log` (or `registro de log`) for container logs: `los archivos de log`, `el log es la salida del contenedor`. Keep `registro` for Docker registry.\n\n4. **Semantic accuracy: `Docker deployment`.**  \n   `personalizan su implementación de Docker` can be read as “their Docker implementation,” not “deployment.”  \n   **Correction:** `personalizan su despliegue de Docker`.\n\n5. **Visible Mermaid labels remain untranslated.**  \n   The rendered diagram still shows English labels: `Code Defaults`, `Env File`, `Host Env Variables`, `docker-compose.yml environment block`. These are user-visible content.  \n   **Correction:** Translate the labels while preserving the Mermaid node IDs, for example:  \n   ```mermaid\n   graph LR\n       CodeDefaults[1. Valores predeterminados del código] --> EnvFile[2. Archivo .env]\n       HostShell[3. Variables de entorno del host]\n       DockerCompose[4. Bloque environment de docker-compose.yml]\n\n       EnvFile --> HostShell\n       HostShell --> DockerCompose\n   ```\n\n6. **Naturalness / clarity: `runtime-only`.**  \n   `La imagen es **solo de ejecución**` is understandable but ambiguous.  \n   **Correction:** `La imagen es **solo para tiempo de ejecución**` or `La imagen es **solo de runtime**`.\n\n7. **Idiomatic improvement: session restart.**  \n   `cierra sesión y vuelve a iniciarla` is grammatically possible but less natural than the standard phrase.  \n   **Correction:** `cierra sesión y vuelve a iniciar sesión`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 286.2
+        "elapsed_s": 286.2,
+        "stamped_at": "2026-10-12T12:50:37.894926+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -6228,7 +6234,7 @@
     }
   },
   "admin/configuration.en.md": {
-    "md5": "b8f23a9752b10399d8095f6bae00ee19",
+    "md5": "3be3e50482bad884461ed061dcdef6f1",
     "langs_done": [
       "es",
       "fr",
@@ -6249,7 +6255,9 @@
         "structural_issues": 0,
         "elapsed_s": 184.8,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. LINE_COUNT: source=157, translated=124 (Δ-33, >15% difference)\n\nSOURCE_OUTLINE (for reference):\n  # 📝 Configuration\n    ## 🔧 Create the `.env` File\n    ## ✏️ Main Options\n    ## 💻 Parameters Set by the Tools\n    ## 🔎 Optional: Web Search for New Assets\n    ## 🔝 Which Value Wins\n    ## 📂 Where the Data Goes\n    ## 🔗 Related",
-        "final_structural_issues": 1
+        "final_structural_issues": 1,
+        "stamped_at": "2026-10-12T12:50:37.894926+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:06:17.590372+00:00",
@@ -6260,7 +6268,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **[Terminologie obligatoire — `fallback`]** Le texte source dit « `never` is the fallback. » et le glossaire impose `fallback → fallback`. La traduction utilise « `never` est la solution de repli. » Il faut corriger en : « `never` est le fallback. » La formulation « solution de secours » peut rester pour « way out », mais pas pour le terme normalisé `fallback`.\n\n- **[Terminologie obligatoire — `import wizard`]** Le source « broker import wizard » est traduit par « assistant d’import de courtier ». Le glossaire impose `import wizard → assistant d'importation`. Corriger en : « depuis l’assistant d’importation de courtier » (ou « l’assistant d’importation du courtier » selon le sens retenu).\n\n- **[Précision sémantique]** « The options you change from inside the app are Global Settings instead. » est rendu par « sont plutôt les [Paramètres globaux] ». « plutôt » affaiblit la relation voulue. Préférer : « Les options que vous modifiez depuis l’application relèvent des [Paramètres globaux]. » ou « sont les [Paramètres globaux] ».\n\n- **[Précision sémantique]** Dans la ligne `LIBREFOLIO_DATA_DIR`, « Docker le fixe à `/app/backend/data/prod-docker` » peut être lu comme « Docker le répare ». Utiliser plutôt : « Docker le définit à `/app/backend/data/prod-docker` » ou « Docker le fige à… ».\n\n- **[Grammaire / naturel]** « ajoutez `proxy_set_header …` au `location` qui fait proxy vers LibreFolio » est maladroit, car `location` est une directive/bloc Nginx. Corriger en : « à la directive `location` qui fait proxy vers LibreFolio » ou « au bloc `location` qui fait proxy vers LibreFolio ».\n\n- **[Clarté]** Dans « Où vont les données », « Il contient la base de données… » a un pronom ambigu. Préférer : « Ce dossier contient la base de données… ».\n\n- **[Naturel]** « les exécuteurs de tests » pour « test runners » est compréhensible mais peu idiomatique. Préférer : « les outils d’exécution des tests » ou « les lanceurs de tests ».\n\n- **[Clarté]** « ajoutez une variable à `.env` uniquement pour la modifier » est ambigu, car « la » peut renvoyer à la variable ou au réglage. Préférer : « uniquement pour modifier ce réglage » ou « pour en changer la valeur ».\n\n- **[Style]** Pour « the browser drops the cookie », « le navigateur rejette le cookie » est acceptable, mais « le navigateur abandonne le cookie » ou « ne conserve pas le cookie » est légèrement plus proche du sens.\n\n- **[Structure]** Aucun rapport de différences structurelles objectif n’a été fourni. Les titres, liens, blocs de code, tableaux, admonitions, l’ancre `{: #session-cookie-secure }` et les emojis semblent bien conservés. Continuer à laisser inchangés les jetons techniques et UI tels que `Secure`, `auto`, `always`, `never`, `X-Forwarded-Proto`, `$scheme`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 171.5
+        "elapsed_s": 171.5,
+        "stamped_at": "2026-10-12T12:50:37.894926+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:06:17.590705+00:00",
@@ -6271,7 +6281,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Mandatory glossary term missing:** `fallback` must remain `fallback`. In the `never` bullet, replace `\"never\" es la alternativa` with `\"never\" es el fallback`. The glossary explicitly maps `fallback → fallback`.\n\n2. **Mandatory glossary term not applied:** `broker report` must be `informe del bróker`. In the `LIBREFOLIO_DATA_DIR` row, replace `\"informes de bróker\"` with `\"informes del bróker\"`:  \n   `Carpeta de la base de datos, subidas, informes del bróker y registros; ...`\n\n3. **Semantic inaccuracy:** `Case and spaces around the value do not matter` does not mean only uppercase. The translation `Las mayúsculas y los espacios...` is inaccurate. Use:  \n   `El uso de mayúsculas y minúsculas y los espacios alrededor del valor no importan`  \n   or `Las mayúsculas/minúsculas y los espacios alrededor del valor no importan`.\n\n4. **Grammar/syntax issue:** In the risk-worker table, `\"más ejecutan más trabajos a la vez\"` is unnatural and lacks a clear subject. Replace with:  \n   `más procesos ejecutan más trabajos a la vez`  \n   or `cuantos más, más trabajos se ejecutan a la vez`.\n\n5. **Terminology consistency for financial UI terms:** `Default Currency` is rendered as `**Moneda predeterminada**`. In this financial context, and to align with glossary patterns such as `valuation currency → divisa de valoración`, it should likely be `**Divisa predeterminada**`. Use this unless the application UI already fixes `Moneda predeterminada` as the official string.\n\n6. **Inconsistent translation of `plain HTTP`:** The repeated `HTTP simple` is understandable but less precise in a security context. Prefer `HTTP sin cifrar` or `HTTP no seguro`. Examples:  \n   - `LibreFolio mismo sirve HTTP simple` → `LibreFolio en sí sirve HTTP sin cifrar`  \n   - `Por HTTP simple` → `Por HTTP sin cifrar`  \n   - `bloque server de HTTP simple` → `bloque server de HTTP sin cifrar`\n\n7. **Minor accuracy/grammar issue:** `el puerto abierto en el host` is missing the verb nuance of `the port opened on the host`. Better:  \n   `el puerto que se abre en el host`\n\n8. **Minor grammar correction:** `un valor del tipo incorrecto` is less idiomatic. Use:  \n   `un valor de tipo incorrecto`\n\n9. **Minor style correction:** `Los valores predeterminados sirven para la mayoría de las instalaciones` sounds like purpose rather than suitability. Better:  \n   `Los valores predeterminados son adecuados para la mayoría de las instalaciones`\n\n10. **Minor consistency improvement:** `asistente de importación de bróker` could be `asistente de importación del bróker` for naturalness and consistency with `informe del bróker`, though this is less critical than the glossary-mandated `informes del bróker`.\n\n11. **Minor participle correction:** `procesos trabajadores separados, iniciados en el primer uso` is slightly dangling. Better:  \n    `procesos trabajadores separados, que se inician en el primer uso`\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 227.5
+        "elapsed_s": 227.5,
+        "stamped_at": "2026-10-12T12:50:37.894926+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -9374,7 +9386,7 @@
     }
   },
   "user/connection-security.en.md": {
-    "md5": "e49d051c71b814df38af5bb7bb3b2669",
+    "md5": "95e2f75069a6b18cd309088ec6762d57",
     "langs_done": [
       "es",
       "fr",
@@ -9394,7 +9406,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 188.6,
-        "stamped_at": "2026-10-12T11:36:38.501970+00:00",
+        "stamped_at": "2026-10-12T13:17:57.454941+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -9407,7 +9419,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 281.6,
-        "stamped_at": "2026-10-12T11:36:38.501970+00:00",
+        "stamped_at": "2026-10-12T13:17:57.454941+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -9420,7 +9432,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 224.4,
-        "stamped_at": "2026-10-12T11:36:38.501970+00:00",
+        "stamped_at": "2026-10-12T13:17:57.454941+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -9984,7 +9996,7 @@
     }
   },
   "user/transactions/import/scalable.en.md": {
-    "md5": "d416b443f442a3a2105fa5aef76a3eda",
+    "md5": "e46c9cfb3cf581481cb5c94244ef48d2",
     "langs_done": [
       "es",
       "fr",
@@ -10004,7 +10016,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 161.8,
-        "stamped_at": "2026-10-12T10:53:12.220391+00:00",
+        "stamped_at": "2026-10-12T12:50:37.894926+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -10017,7 +10029,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 214.2,
-        "stamped_at": "2026-10-12T10:53:12.220391+00:00",
+        "stamped_at": "2026-10-12T12:50:37.894926+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -10030,13 +10042,13 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 160.9,
-        "stamped_at": "2026-10-12T10:53:12.220391+00:00",
+        "stamped_at": "2026-10-12T12:50:37.894926+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "admin/connection_checks.en.md": {
-    "md5": "c05f28593d2a00520468e255638ba15a",
+    "md5": "0e7649a9b4b734ddbdc9588878351025",
     "langs_done": [
       "es",
       "fr",
@@ -10045,15 +10057,15 @@
     "last_translated": "2026-10-12T11:36:38.501970+00:00",
     "langs": {
       "it": {
-        "stamped_at": "2026-10-12T11:36:38.501970+00:00",
+        "stamped_at": "2026-10-12T13:17:57.454941+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
-        "stamped_at": "2026-10-12T11:36:38.501970+00:00",
+        "stamped_at": "2026-10-12T13:17:57.454941+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
-        "stamped_at": "2026-10-12T11:36:38.501970+00:00",
+        "stamped_at": "2026-10-12T13:17:57.454941+00:00",
         "stamped_by": "translate-stamp"
       }
     }
