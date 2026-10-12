@@ -166,7 +166,7 @@ _ALLOWED_SHAPES = (
     "from backend.app.services import fx",
     "from backend.app.services.settings_service import get_effective_base_currency",
     "from backend.app.services.data_quality_thresholds import QUANTITY_DUST_THRESHOLD",
-    "import backend.app.utils.cache_utils",
+    "import backend.app.utils.runtime.cache",
     "from backend.app.db.models import Transaction",
     "from backend.app.schemas.portfolio import LotAnalysisType",
     "from backend.app.services.financial_math.fifo.models import FifoLot",

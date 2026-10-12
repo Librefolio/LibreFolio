@@ -26,7 +26,7 @@ from backend.app.services.financial_math.portfolio.models import ClassifiedTrans
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
 from backend.app.services.fx import convert_bulk
 from backend.app.services.settings_service import get_effective_base_currency
-from backend.app.utils.cache_utils import get_ttl_cache
+from backend.app.utils.runtime.cache import get_ttl_cache
 
 logger = structlog.get_logger(__name__)
 
