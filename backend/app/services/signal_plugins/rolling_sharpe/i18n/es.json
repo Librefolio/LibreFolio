@@ -1,0 +1,10 @@
+{
+  "signals": {
+    "riskRollingSharpe": {
+      "name": "Ratio de Sharpe móvil",
+      "description": "Rendimiento excedente anualizado por unidad de volatilidad muestral sobre una ventana móvil.",
+      "output": "Ratio de Sharpe",
+      "outputDescription": "Rendimiento excedente diario medio anualizado dividido por la volatilidad muestral."
+    }
+  }
+}

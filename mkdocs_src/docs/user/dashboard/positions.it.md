@@ -65,7 +65,7 @@ Quanto reddito ti paga ciascuna unità, rispetto a quanto è costata? **YOC** co
 - **Un valore per asset e broker**, sull'anno che termina alla data finale: spostare la data iniziale non lo cambia.
 - **Lordo, non al netto delle imposte**: le transazioni separate di imposte e commissioni non vengono sottratte.
 - **Passa il mouse su un valore** per il reddito per unità, il periodo e i tassi di cambio usati — ogni pagamento al tasso della propria data.
-- **`0.00%`** significa reddito registrato a zero; un semplice **`-`** significa nessun reddito nell'ultimo anno.
+- **`0,00%`** significa reddito registrato a zero; un semplice **`-`** significa nessun reddito nell'ultimo anno.
 
 🔗 **Teoria**: [Rendimento sul Costo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) — le regole esatte, e come YOC differisce dal rendimento da dividendi o dal CAGR
 

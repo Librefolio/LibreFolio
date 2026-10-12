@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_investengine": {
+      "description": "Importa las transacciones de la exportación CSV de InvestEngine. Admite compras, ventas y dividendos en GBP.",
+      "name": "InvestEngine"
+    }
+  }
+}

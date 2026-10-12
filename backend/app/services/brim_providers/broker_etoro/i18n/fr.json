@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_etoro": {
+      "description": "Importe le CSV d’activité du compte eToro : positions ouvertes et clôturées (un CFD se lit comme toute autre position), dividendes, intérêts, dépôts, retraits et frais de retrait et de conversion.",
+      "name": "eToro"
+    }
+  }
+}

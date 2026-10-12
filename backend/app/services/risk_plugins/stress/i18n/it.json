@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "stress": {
+        "name": "Stress test",
+        "description": "Applica shock ipotetici o replica un periodo storico."
+      }
+    }
+  }
+}

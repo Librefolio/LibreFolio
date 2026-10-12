@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "natr": {
+      "name": "NATR",
+      "description": "Volatilità percentuale del prezzo",
+      "output": "NATR"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_danske_bank": {
+      "description": "Importa un conto di risparmio azionario di Danske Bank (Finlandia): le transazioni del deposito titoli (XLSX) e l’estratto conto di liquidità (CSV), caricati insieme e uniti in un solo import.",
+      "name": "Danske Bank"
+    }
+  }
+}

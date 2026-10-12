@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetDrawdown": {
+        "name": "Caídas por activo",
+        "description": "Cuánto cayó cada activo seleccionado desde su máximo, cuánto duró y si se ha recuperado."
+      }
+    }
+  }
+}

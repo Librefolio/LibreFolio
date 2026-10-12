@@ -159,7 +159,7 @@ broker's `icon_url`, `portal_url` and default plugin, so that its icon follows
   each), the first preselected — the choice holds for one file (`fileKey`) and resets with the
   next; none: `noTarget` with the names of the plugins that read the file, or `noReader` when none
   does;
-- **Remove the file**, **Keep it here** and **Move to ‹broker›** (only with a target, with the chosen
+- **Remove**, **Keep it here** and **Move** (only with a target, with the chosen
   broker's icon), and a counter in the header (`File {current} of {total}`) when several files are
   questioned;
 - closing — Escape or a click on the backdrop — answers *keep*; while a move or a removal runs

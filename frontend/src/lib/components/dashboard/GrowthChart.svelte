@@ -28,7 +28,7 @@
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
-    import {_, locale} from '$lib/i18n';
+    import {_} from '$lib/i18n';
     import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {clampGrowthLogicalRange, type GrowthLogicalRange} from './growthChartRange';
     import {planLadderAxis, ladderAxisOption, type LadderAxisPlan} from './growthLadderAxis';
@@ -45,6 +45,8 @@
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
     import {buildOhlcQuad} from '$lib/components/charts/candlestickChartHelpers';
     import {ChartLine, ChartCandlestick, Coins} from 'lucide-svelte';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Props
@@ -301,7 +303,7 @@
             const policy = buildResponsiveXAxisPolicy({
                 width: chartContainer.clientWidth,
                 values: activeChartData.dates,
-                locale: $locale ?? undefined,
+                locale: uiLocale(),
                 axisType: 'time',
             });
             const wasCompact = responsiveXAxisCompact;
@@ -739,7 +741,7 @@
      * arriving prop (`pnlCandles`) therefore re-rendered against an entry computed before
      * its data existed — every candle a `'-'` gap, forever, surviving re-entry.
      *
-     * Deliberately EXCLUDED, and the exclusion matters: `eurLabels`, `pnlLabels`, `$locale`
+     * Deliberately EXCLUDED, and the exclusion matters: `eurLabels`, `pnlLabels`, `uiLocale()`
      * and `baseCurrency`. They are in the render effect's dependency list (labels must
      * re-render on a language switch) but the aggregation never reads them — only
      * `pctValuesRaw`, which is split from the labels for exactly this reason. Invalidating on them would trade a
@@ -1272,7 +1274,7 @@
             plotWidthPx: plotWidthPxMeasured,
             leftRoomPx: plotLeftPx,
             rightRoomPx: plotRightRoomPx,
-            locale: $locale ?? 'en',
+            locale: uiLocale(),
             rung: entry.rung ?? candleWidth,
             quarterLabel: (quarter) => $_('dashboard.pnlAxisQuarter', {values: {quarter}}),
             labelWithYear: (label, year) => $_('dashboard.pnlAxisWithYear', {values: {label, year}}),
@@ -1351,7 +1353,7 @@
     }
 
     function formatTooltipMonth(date: string): string {
-        const activeLocale = $locale ?? 'en';
+        const activeLocale = uiLocale();
         const [year, month, day] = date.split('-').map(Number);
         return new Intl.DateTimeFormat(activeLocale, {
             month: 'long',
@@ -1795,7 +1797,7 @@
             const xAxisPolicy = buildResponsiveXAxisPolicy({
                 width: chartContainer?.clientWidth ?? 0,
                 values: entry.dates,
-                locale: $locale ?? undefined,
+                locale: uiLocale(),
                 axisType: 'time',
             });
             if (responsiveXAxisCompact && !xAxisPolicy.compact) {
@@ -1947,7 +1949,7 @@
         void costHistory;
         void depositHistory;
         void acquisitionFunding;
-        void $locale;
+        void uiLocale();
         // Read here, not in renderChart: the render runs inside `tick().then`, where a read
         // registers no dependency, so the privacy toggle would not redraw the axis.
         void shouldMaskAmount();
@@ -2101,7 +2103,7 @@
             : buildResponsiveXAxisPolicy({
                   width: chartContainer?.clientWidth ?? 0,
                   values: activeChartData?.dates ?? dates,
-                  locale: $locale ?? undefined,
+                  locale: uiLocale(),
                   axisType: 'time',
               });
         responsiveXAxisCompact = xAxisPolicy?.compact ?? false;
@@ -2117,7 +2119,7 @@
 
         const formatTick =
             viewMode === 'pct'
-                ? (v: number) => `${v.toFixed(1)}%`
+                ? (v: number) => formatPercent(v, {digits: 1, signed: false})
                 : (v: number) => {
                       // D18: the scaled value prints exactly, so two ticks never share a label
                       // (`5.5k`, `1.25M`) and a whole one has no decimals (`2k`, `1M`). D23: the
@@ -2127,7 +2129,7 @@
                       const abs = Math.abs(v);
                       const [scale, suffix]: [number, string] = abs >= 1_000_000 ? [1_000_000, 'M'] : abs >= 1_000 ? [1_000, 'k'] : [1, ''];
                       const scaled = v === 0 ? 0 : v / scale;
-                      return maskFormattedNumber(`${scaled.toLocaleString(undefined, {maximumSignificantDigits: 15})}${suffix}`);
+                      return maskFormattedNumber(`${scaled.toLocaleString(uiLocale(), {maximumSignificantDigits: 15})}${suffix}`);
                   };
         // Tick 0 is the computed lower edge, which D25 hides with `showMinLabel: false`. But
         // `containLabel` still measures the hidden label, and D18 prints that raw edge in full
@@ -2163,7 +2165,7 @@
         const fmtCurrency = (v: number | null | undefined, signed = false) => {
             if (v == null) return '—';
             // `-0 === 0`, so a negative zero becomes +0: `signDisplay: 'auto'` would print it `-0.00`.
-            const formatted = (v === 0 ? 0 : v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: signed ? 'exceptZero' : 'auto'});
+            const formatted = (v === 0 ? 0 : v).toLocaleString(uiLocale(), {minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: signed ? 'exceptZero' : 'auto'});
             return `${baseCurrency} ${maskFormattedNumber(formatted)}`;
         };
 
@@ -2318,7 +2320,7 @@
                         .filter((p: any) => p.value != null)
                         .map((p: any) => {
                             const rawVal = Array.isArray(p.value) ? p.value[1] : p.value;
-                            const val = `${Number(rawVal).toFixed(2)}%`;
+                            const val = formatPercent(Number(rawVal), {signed: false});
                             return buildTooltipRow(escapeHtml(String(p.seriesName ?? '')), val, p.color);
                         })
                         .join('');

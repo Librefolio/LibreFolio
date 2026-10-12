@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_danske_bank": {
+      "description": "Importa una cuenta de ahorro en acciones de Danske Bank (Finlandia): las transacciones de custodia (XLSX) y el extracto de efectivo (CSV), subidos juntos y combinados en una sola importación.",
+      "name": "Danske Bank"
+    }
+  }
+}

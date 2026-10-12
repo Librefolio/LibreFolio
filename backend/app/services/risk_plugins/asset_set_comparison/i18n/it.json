@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetComparison": {
+        "name": "Confronto per asset",
+        "description": "Come ogni asset selezionato si è mosso rispetto al benchmark scelto."
+      }
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "auth": {
+    "login": "Iniciar Sesión",
+    "logout": "Cerrar Sesión",
+    "register": "Registrarse",
+    "username": "Nombre de Usuario",
+    "email": "Correo Electrónico",
+    "password": "Contraseña",
+    "confirmPassword": "Confirmar Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "registerTitle": "Crear una cuenta",
+    "noAccount": "¿No tienes una cuenta?",
+    "hasAccount": "¿Ya tienes una cuenta?",
+    "registerHere": "Regístrate aquí",
+    "loginHere": "Inicia sesión",
+    "usernameOrEmail": "Nombre de Usuario o Email",
+    "accountCreated": "¡Cuenta creada con éxito! Por favor, inicia sesión.",
+    "registrationFailed": "El registro falló. Por favor, inténtalo de nuevo.",
+    "registrationDisabled": "El registro de nuevos usuarios está actualmente desactivado por el administrador.",
+    "passwordRecovery": "Recuperación de Contraseña",
+    "emailRecoveryNotAvailable": "La recuperación por correo electrónico aún no está disponible. Por favor, usa la terminal del servidor para restablecer tu contraseña.",
+    "serverTerminalInstructions": "Ejecuta este comando en el servidor:",
+    "contactAdministrator": "Contacta a tu administrador del sistema si no tienes acceso al servidor.",
+    "backToLogin": "Volver al Inicio de Sesión",
+    "validation": {
+      "usernameMinLength": "El nombre de usuario debe tener al menos 3 caracteres",
+      "passwordsNoMatch": "Las contraseñas no coinciden",
+      "invalidEmail": "Por favor, introduce un correo electrónico válido",
+      "invalidEmailDomain": "El dominio del correo no es válido o no se puede usar",
+      "usernameTaken": "Este nombre de usuario ya está en uso",
+      "emailTaken": "Este correo electrónico ya está registrado",
+      "passwordTooWeak": "La contraseña no cumple los requisitos de seguridad"
+    },
+    "passwordStrength": {
+      "veryWeak": "Muy Débil",
+      "weak": "Débil",
+      "fair": "Aceptable",
+      "strong": "Fuerte",
+      "veryStrong": "Muy Fuerte",
+      "requirements": "Requisitos de la contraseña:",
+      "rules": {
+        "minLength": "Al menos 8 caracteres",
+        "hasUppercase": "Una letra mayúscula",
+        "hasLowercase": "Una letra minúscula",
+        "hasNumber": "Un número",
+        "hasSpecial": "Un carácter especial"
+      }
+    },
+    "serverUnreachable": {
+      "title": "El servidor no responde",
+      "body": "Esta página sigue abierta y tu sesión no se ha cerrado. Vuelve a intentarlo en un momento."
+    },
+    "invalidCredentials": "Nombre de usuario o contraseña no válidos",
+    "invalidInput": "Datos no válidos",
+    "loginFailed": "No se pudo iniciar sesión",
+    "accountDisabled": "Esta cuenta está desactivada: pide a un administrador que la reactive."
+  }
+}

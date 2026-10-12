@@ -1,6 +1,6 @@
 # Source: SP-C Bugfix Chain (11 plans) — BulkModal + Suggest + WAC Preview
 
-> **Ingested**: 2026-06-02 | **Anchor**: `84f8bd07`
+> **Ingested**: 2026-06-02 | **Anchor**: `ec0ac90a3`
 > **Status**: ALL ✅ COMPLETED (2026-05-18 → 2026-06-01)
 > **Parent plan**: [[sources/r2-sp-c-bulkmodal-suggest-ux]]
 

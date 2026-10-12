@@ -380,11 +380,11 @@ export function replaySectionView(result: RiskAnalyticResult | null | undefined)
 }
 
 /** A replay date as the block writes it, e.g. «15 ott 2008». UTC, so the day never shifts. */
-export function formatReplayDate(iso: string, language: string): string {
-    return new Intl.DateTimeFormat(language, {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${iso}T00:00:00Z`));
+export function formatReplayDate(iso: string, locale: string): string {
+    return new Intl.DateTimeFormat(locale, {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${iso}T00:00:00Z`));
 }
 
 /** A share of the value, with one decimal: «12,0%». */
-export function formatReplayShare(fraction: number, language: string): string {
-    return new Intl.NumberFormat(language, {style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1}).format(fraction);
+export function formatReplayShare(fraction: number, locale: string): string {
+    return new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1}).format(fraction);
 }

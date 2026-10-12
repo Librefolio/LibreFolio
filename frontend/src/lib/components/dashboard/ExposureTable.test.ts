@@ -50,9 +50,14 @@ vi.stubGlobal('localStorage', {
 
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {flushSync, tick} from 'svelte';
+import {get} from 'svelte/store';
+import {locale, waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import {getUserStorageKey} from '$lib/utils/storage';
 import ExposureTable from './ExposureTable.svelte';
 
@@ -527,9 +532,9 @@ describe('ExposureTable — Yield on Cost', () => {
  * through the user-scoped visibility override the test above already exercises.
  *
  * Unmasked expectations come from the same formatting calls the component makes,
- * with privacy off — the host locale decides their separators — and are checked
- * once against the digits put in. Masked ones are literals: a placeholder has no
- * locale. Every step checks the flag and a fresh formatter call before the table,
+ * with privacy off — the interface locale decides their separators (M-18) — and are
+ * checked once against the digits put in. Masked ones are literals: a placeholder has
+ * no locale. Every step checks the flag and a fresh formatter call before the table,
  * so a red names its layer. `browser: false` in the shared `$app/environment`
  * mock keeps `setPrivacyEnabled` in memory.
  */
@@ -619,7 +624,9 @@ describe('ExposureTable — privacy (D5′)', () => {
         expect(getCurrencyInfo('EUR').symbol).toBe('€');
 
         setPrivacyEnabled(false);
-        quantityClear = `${QUANTITY.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6})} 📈`;
+        // Why (re-pin, M-18 CP2): the quantity is written in the interface locale — en-US here, the
+        // English UI on jsdom's en-US browser — no longer in the host's.
+        quantityClear = `${QUANTITY.toLocaleString(uiLocale(), {minimumFractionDigits: 0, maximumFractionDigits: 6})} 📈`;
         priceClear = formatCurrencyAmountPlain(PRICE, 'EUR', {sensitivity: 'public'});
         pmcClear = formatCurrencyAmountPlain(WAC, 'EUR', {sensitivity: 'public'});
         valueClear = formatCurrencyAmountPlain(VALUE, 'EUR');
@@ -658,5 +665,127 @@ describe('ExposureTable — privacy (D5′)', () => {
 
         await setPrivacy(false);
         expectClear('on → off');
+    });
+});
+
+/**
+ * M-18 CP2: the quantity in the interface language.
+ *
+ * The quantity cell writes its figure with `toLocaleString(undefined, …)`, the browser's locale: an
+ * Italian on an en-US browser reads `12,345.6789` beside a weight written `30,9%`. Every figure is
+ * written in the interface language (the developer's decision M-18, 2026-10-12), through `uiLocale()`:
+ * the same digits — up to six decimals, none forced — in the interface locale. Privacy is off here; the
+ * mask is the subject of the describe above.
+ *
+ * Barrier. The NAV weight in the same row already follows the interface language (`formatPercent`,
+ * CP1). Read first, it proves the row rendered in Italian, so a quantity still in English is the
+ * quantity's own formatter and not a table that never redrew.
+ *
+ * Expectations come from `Intl` in an explicit locale: the quantity as `toLocaleString` writes it with
+ * the cell's options, the weight through `formatPercent`. English is the control: the en-US text,
+ * grouped from 1,000 as it is today.
+ *
+ * Language. Switched as LanguageSelector does — `currentLanguage.set`, which also drives svelte-i18n —
+ * with both dictionaries loaded; the `afterEach` puts English back.
+ */
+describe('ExposureTable — the quantity in the interface language (M-18)', () => {
+    /** Grouped from 10,000 — Italian groups only from there — and with four decimals, so both separators are read. */
+    const QUANTITY = 12_345.6789;
+    /** `holding(11, …)` values the position at 11 000: on this NAV it weighs 30.94%. */
+    const NAV = 35_555;
+    const WEIGHT = (11_000 / NAV) * 100;
+
+    function mount(): void {
+        render(ExposureTable, {holdings: [{...holding(11, 1, {yieldOnCost: noIncomeYieldOnCost()}), quantity: String(QUANTITY)}], navAmount: NAV, displayCurrency: 'EUR'});
+    }
+
+    /** Barrier: the row is rendered with both columns read below. */
+    async function mounted(): Promise<void> {
+        await waitFor(() => expect(rowEl(11, 1)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('dt-header-quantity')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('dt-header-weight')).toBeInTheDocument());
+    }
+
+    /** The trimmed text of the cell of `columnId` in the row of asset 11, found through its header's index. */
+    function cellText(columnId: string): string {
+        const headers = [...document.querySelectorAll<HTMLElement>('thead th[data-testid^="dt-header-"]')];
+        const index = headers.findIndex((header) => header.dataset.testid === `dt-header-${columnId}`);
+        if (index < 0) throw new Error(`column ${columnId} not rendered`);
+        const cells = [...rowEl(11, 1).querySelectorAll<HTMLElement>('td.td-data')];
+        if (cells.length !== headers.length) throw new Error(`${cells.length} data cells for ${headers.length} headers`);
+        return (cells[index].textContent ?? '').trim();
+    }
+
+    /** The two figures of the row. */
+    function readRow(): {weight: string; quantity: string} {
+        return {weight: cellText('weight'), quantity: cellText('quantity')};
+    }
+
+    /** What the row must read in `localeTag`, from the calls the cells make. */
+    function expectedIn(localeTag: string): {weight: string; quantity: string} {
+        return {
+            weight: formatPercent(WEIGHT, {signed: false, digits: 1, locale: localeTag}),
+            quantity: `${QUANTITY.toLocaleString(localeTag, {minimumFractionDigits: 0, maximumFractionDigits: 6})} 📈`,
+        };
+    }
+
+    const ENGLISH = expectedIn('en-US');
+    const ITALIAN = expectedIn('it');
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; Italian joins it, so a switch never waits on a loader.
+        await waitLocale('it');
+        // Controls: this runtime has Italian data, so both figures change notation; and the English
+        // quantity carries the digits put in.
+        expect(ITALIAN.quantity, 'the Italian quantity differs from English').not.toBe(ENGLISH.quantity);
+        expect(ITALIAN.weight, 'the Italian weight differs from English').not.toBe(ENGLISH.weight);
+        expect(ENGLISH.quantity.replace(/\D/g, '')).toBe('123456789');
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('English UI on an en-US browser (control): the quantity is today’s text, grouped from 1,000', async () => {
+        expect(uiLocale(), 'control: the interface locale is en-US').toBe('en-US');
+        mount();
+        await mounted();
+
+        expect(readRow()).toEqual(ENGLISH);
+    });
+
+    it('mounted with the UI in Italian on an en-US browser: the quantity in Italian notation, beside a weight that already is', async () => {
+        await switchLanguage('it');
+        mount();
+        await mounted();
+
+        const row = readRow();
+        expect(row.weight, 'barrier: the weight in the same row is Italian, so the row rendered in Italian').toBe(ITALIAN.weight);
+        expect(row.quantity).toBe(ITALIAN.quantity);
+    });
+
+    it('follows an in-place switch of the UI language, en → it → en', async () => {
+        mount();
+        await mounted();
+        expect(readRow(), 'en, mount — today’s text').toEqual(ENGLISH);
+
+        await switchLanguage('it');
+        const italian = readRow();
+        expect(italian.weight, 'barrier: the weight followed the switch').toBe(ITALIAN.weight);
+        expect(italian.quantity, 'en → it in place — Italian notation').toBe(ITALIAN.quantity);
+
+        await switchLanguage('en');
+        expect(readRow(), 'it → en in place — today’s text again').toEqual(ENGLISH);
     });
 });
