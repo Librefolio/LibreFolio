@@ -28,6 +28,7 @@ import {singleValue, type RiskDataQualityReport} from '$lib/risk/riskTypes';
 import {maskCurrencyParts} from '$lib/utils/privacy/maskable';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+import {formatFixed} from '$lib/utils/core/formatFixed';
 
 /**
  * The scenario description in the user's current language. A scenario carries a
@@ -139,7 +140,7 @@ export function normalizeQualityIssue(issue: NonNullable<RiskDataQualityReport['
 
 /** A ratio metric to two decimals, or an em-dash when the value is absent. */
 export function formatRatio(value: number | null | undefined): string {
-    return value == null ? '—' : value.toFixed(2);
+    return value == null ? '—' : formatFixed(value, 2);
 }
 
 /**

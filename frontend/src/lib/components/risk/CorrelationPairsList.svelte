@@ -28,6 +28,7 @@
     import type {RiskCorrelationOutput} from '$lib/risk/riskTypes';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {buildLookup, pairKey, topPairs, type CorrelationPair} from './correlationHelpers';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
 
     interface Props {
         output: RiskCorrelationOutput;
@@ -88,7 +89,7 @@
                 >
                     <span class="flex items-center gap-2">
                         <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">{index + 1}</span>
-                        <span class="w-11 shrink-0 font-mono text-sm font-semibold tabular-nums {toneClass(pair)}">{pair.value.toFixed(2)}</span>
+                        <span class="w-11 shrink-0 font-mono text-sm font-semibold tabular-nums {toneClass(pair)}">{formatFixed(pair.value, 2)}</span>
                         <span class="rounded px-1.5 py-0.5 text-[11px] font-medium {tagClass(pair)}" data-testid={pair.nearIdentical ? `risk-correlation-pair-near-identical-${pair.rowAssetId}-${pair.columnAssetId}` : undefined}>
                             {tag(pair)}
                         </span>

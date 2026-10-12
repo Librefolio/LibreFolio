@@ -19,6 +19,7 @@
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {ChevronDown, ChevronRight, CheckCircle, XCircle, ClipboardList, X} from 'lucide-svelte';
     import {clearTimer} from '$lib/utils/core/clearTimer';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
 
     // =========================================================================
     // Types matching backend JSONL format
@@ -232,7 +233,7 @@
 
     function formatDuration(seconds: number): string {
         if (!seconds && seconds !== 0) return '—';
-        if (seconds < 60) return `${seconds.toFixed(1)}s`;
+        if (seconds < 60) return `${formatFixed(seconds, 1)}s`;
         const m = Math.floor(seconds / 60);
         const s = Math.round(seconds % 60);
         return `${m}m${s}s`;

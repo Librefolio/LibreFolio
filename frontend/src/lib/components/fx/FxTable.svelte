@@ -18,6 +18,8 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {displayFxDelta, displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {fxProvidersVersion} from '$lib/stores/currencyGraphStore';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     // =========================================================================
     // Types
@@ -112,14 +114,12 @@
 
     function formatDelta(val: number | null, suffix: string = ''): string {
         if (val === null) return '—';
-        const sign = val >= 0 ? '+' : '';
-        return `${sign}${val.toFixed(4)}${suffix}`;
+        return `${formatFixed(val, 4, {signed: true})}${suffix}`;
     }
 
     function formatDeltaPct(val: number | null): string {
         if (val === null) return '—';
-        const sign = val >= 0 ? '+' : '';
-        return `${sign}${val.toFixed(2)}%`;
+        return formatPercent(val);
     }
 
     function deltaColorClass(val: number | null): string {
@@ -185,7 +185,7 @@
                 header: $t('fx.rate'),
                 cell: (row) => {
                     const r = getRate(row);
-                    return r !== null ? {type: 'html', html: `<span class="font-mono font-bold">${r.toFixed(4)}</span>`} : {type: 'html', html: `<span data-fx-rate-state="missing" class="text-gray-400 dark:text-gray-500">${$t('fx.rateNotAvailable')}</span>`};
+                    return r !== null ? {type: 'html', html: `<span class="font-mono font-bold">${formatFixed(r, 4)}</span>`} : {type: 'html', html: `<span data-fx-rate-state="missing" class="text-gray-400 dark:text-gray-500">${$t('fx.rateNotAvailable')}</span>`};
                 },
                 type: 'number',
                 getValue: (row) => getRate(row),
