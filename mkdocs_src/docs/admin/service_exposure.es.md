@@ -120,6 +120,8 @@ No hay nada que compartir: con Tailscale activado en el servidor, el puerto `604
 
 Con Tailscale activado en tu teléfono o PC, escribe la IP de Tailscale del servidor (o su nombre MagicDNS) seguida del puerto en el navegador, por ejemplo `http://100.a.b.c:6040`.
 
+Para comprobar el resultado, consulta [Comprobar la seguridad de la conexión](connection_checks.md#indicator).
+
 ⚠️ **Límites:** cada dispositivo desde el que te conectes necesita Tailscale activado, y solo accedes al servidor, no al resto de tu LAN doméstica (el Nivel 2 añade eso).
 
 ---
@@ -290,6 +292,8 @@ To give access to this node you can edit the tailnet policy file, or visit:
 1. Abre el enlace en tu navegador, inicia sesión en Tailscale y aprueba Funnel para este nodo.
 2. La terminal mostrará entonces tu URL pública.
 3. Espera unos minutos a que se propaguen los registros MagicDNS antes de abrirla desde una red externa.
+
+Para comprobar el resultado, consulta [Comprobar la seguridad de la conexión](connection_checks.md#checklist).
 
 ⚠️ **Límites:** una máquina tiene un solo nombre público, que deben compartir todos los servicios que publiques desde ella. El Nivel 4 le da a cada servicio el suyo.
 
@@ -558,6 +562,8 @@ Press Ctrl+C to exit.
 
 El servicio ya está en línea: espera unos minutos a que se propaguen los registros MagicDNS y luego abre la URL.
 No hay nada que configurar en LibreFolio: Funnel envía `X-Forwarded-Proto: https` y socat lo transmite, así que con el valor predeterminado `SESSION_COOKIE_SECURE=auto` LibreFolio marca su [cookie de sesión](configuration.md) como `Secure`. `never` es solo para un proxy que declara HTTPS a un navegador en HTTP sin cifrar.
+
+Para comprobar el resultado, consulta [Comprobar la seguridad de la conexión](connection_checks.md#checklist).
 
 ??? question "🛠️ El contenedor se reinicia en bucle o está marcado como unhealthy"
 

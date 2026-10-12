@@ -123,6 +123,8 @@ reachable from your tailnet at the server's Tailscale IP.
 
 With Tailscale switched on on your phone or PC, type the server's Tailscale IP (or its MagicDNS name) followed by the port in the browser, for example `http://100.a.b.c:6040`.
 
+To check the result, see [Checking Connection Security](connection_checks.md#indicator).
+
 ⚠️ **Limits:** every device you connect from needs Tailscale switched on, and you reach only the server, not the rest of your home LAN (Level 2 adds that).
 
 ---
@@ -298,6 +300,8 @@ To give access to this node you can edit the tailnet policy file, or visit:
 1. Open the link in your browser, log in to Tailscale and approve Funnel for this node.
 2. The terminal then shows your public URL.
 3. Wait a few minutes for the MagicDNS records to propagate before you open it from an outside network.
+
+To check the result, see [Checking Connection Security](connection_checks.md#checklist).
 
 ⚠️ **Limits:** one machine has one public name, which every service you publish from it must share. Level 4 gives each service its own.
 
@@ -569,6 +573,8 @@ Nothing to configure in LibreFolio: Funnel sends `X-Forwarded-Proto: https` and 
 so with the default `SESSION_COOKIE_SECURE=auto` LibreFolio marks its
 [session cookie](configuration.md) `Secure`. `never` is only for a proxy that
 claims HTTPS to a browser on plain HTTP.
+
+To check the result, see [Checking Connection Security](connection_checks.md#checklist).
 
 ??? question "🛠️ The container restarts in a loop or is marked unhealthy"
 
