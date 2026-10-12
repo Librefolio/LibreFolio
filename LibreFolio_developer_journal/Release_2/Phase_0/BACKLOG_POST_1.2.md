@@ -592,6 +592,20 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   come sono. L'HTML del modale coincide byte per byte con quello dell'hook sui 4 capitoli francesi; 136 test Vitest nuovi
   (`front-utility core-unit`). Dettagli: [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md),
   passo «11».
+- **M-24 · La galleria non fissa `navigator.language`** — basso; M (sonda della preparazione di I5), 12/10, riga di
+  backlog per decisione del coordinatore. Dal M-18 l'app scrive le cifre con `uiLocale()`, che legge
+  `navigator.language`.
+  - **Cosa fissa la galleria:** il locale del browser, con `Emulation.setLocaleOverride`
+    (`frontend/e2e/fixtures/galleryLocale.ts`). Quell'override sposta solo il locale di ripiego di `Intl` e
+    l'Accept-Language.
+  - **Oggi:** nel Chromium headless della galleria `navigator.language` resta `en-US` (misurato su macOS con LANG C,
+    it_IT ed en_GB), quindi gli scatti inglesi escono americani, come previsto.
+  - **Il rischio:** con `dev.py mkdocs gallery --headed` o `--ui`, o dove Chromium risponde altrimenti (non misurato),
+    gli scatti inglesi uscirebbero britannici, e nessun test diventerebbe rosso.
+  - **La guardia:** il timbro di `stampDocumentLocale` registra anche `navigator.language`, ed `expectDrawnUnder`
+    controlla che ne venga il locale atteso per ogni lingua.
+
+  Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezioni «21.2» e «23».
 
 ## Q · Documentazione e onboarding (21, 32)
 
