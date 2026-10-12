@@ -43,7 +43,7 @@ reached only from the review's **Import**, and only for a [report set](#report-s
 
 1. **Upload** — The user uploads one or more broker export files. They can be dragged into the broker page or accessed from the Files tab. The wizard sends every file of one session with the same `batch_id`: the files uploaded together for one broker form a [report set](#report-sets) when a report-set plugin reads them.
 
-2. **Plugin Detection** — BRIM auto-discovers `BRIMProvider` classes from `backend/app/services/brim_providers/` and asks every plugin's `can_parse(file_path)`; the plugins that accept the file are stored in its sidecar as `compatible_plugins`, highest `detection_priority` first. The wizard pre-selects a plugin per file: the report-set plugin that recognises it, else the broker's `default_import_plugin` when compatible, else the first compatible plugin. The Generic CSV provider (`broker_generic_csv`, `detection_priority` 0) is not a catch-all: it recognises columns from their header names and aliases (`HEADER_MAPPINGS`, no manual mapping), and its `can_parse` accepts only a `.csv` whose header row names both a date and a type column. A file that no plugin recognises is offered every plugin; parsing it with a single-file plugin re-runs that plugin's `can_parse`, whose refusal answers HTTP 400 with the plugin's reason ([`cannot_parse_reason`](../../architecture/patterns/brim_plugin_guide.md#cannot-parse-reason)) and moves the file to `failed/`. The file's list of compatible plugins is stored with the app version that detected it (`plugins_signature`): after an update, the first read of an original detected by another version detects it again and saves the new list, so a plugin added or changed since the upload is offered for older files (combined files are never detected again). See [The lifecycle of `compatible_plugins`](../../architecture/patterns/brim_plugin_guide.md#compatible-plugins-lifecycle).
+2. **Plugin Detection** — BRIM auto-discovers `BRIMProvider` classes from the plugin folders of `backend/app/services/brim_providers/` (`<code>/plugin.py`, see [Plugin layout and translations](#plugin-layout)) and asks every plugin's `can_parse(file_path)`; the plugins that accept the file are stored in its sidecar as `compatible_plugins`, highest `detection_priority` first. The wizard pre-selects a plugin per file: the report-set plugin that recognises it, else the broker's `default_import_plugin` when compatible, else the first compatible plugin. The Generic CSV provider (`broker_generic_csv`, `detection_priority` 0) is not a catch-all: it recognises columns from their header names and aliases (`HEADER_MAPPINGS`, no manual mapping), and its `can_parse` accepts only a `.csv` whose header row names both a date and a type column. A file that no plugin recognises is offered every plugin; parsing it with a single-file plugin re-runs that plugin's `can_parse`, whose refusal answers HTTP 400 with the plugin's reason ([`cannot_parse_reason`](../../architecture/patterns/brim_plugin_guide.md#cannot-parse-reason)) and moves the file to `failed/`. The file's list of compatible plugins is stored with the app version that detected it (`plugins_signature`): after an update, the first read of an original detected by another version detects it again and saves the new list, so a plugin added or changed since the upload is offered for older files (combined files are never detected again). See [The lifecycle of `compatible_plugins`](../../architecture/patterns/brim_plugin_guide.md#compatible-plugins-lifecycle).
 
 3. **Parse & Preview** — The selected plugin's `parse()` method returns a `BRIMParseOutput` containing standardized `TXCreateItem` objects, warnings, extracted assets, optional field TODOs, and optional per-asset notices. **Nothing is saved yet.** The user sees a table of parsed transactions before proceeding. A report set is first combined into one file (step 3a, see [Report sets](#report-sets)), and that combined file is what gets parsed; its parse also returns the bank's truth points (`checkpoints`, `verifications`) and the broker's `history_start`.
 
@@ -63,7 +63,7 @@ reached only from the review's **Import**, and only for a [report set](#report-s
 
 ### 🧺 Report sets {: #report-sets }
 
-Some banks split one account across several exports — Danske Bank (`broker_danske_bank.py`) is read
+Some banks split one account across several exports — Danske Bank (`broker_danske_bank/plugin.py`) is read
 from a custody export and a cash export. A **report-set plugin** declares the export roles it combines
 (`report_roles`; `is_report_set_plugin` is true when the list is not empty), and its exports are
 imported as one set:
@@ -267,10 +267,41 @@ Notices and todos can both carry `BRIMEvidence` — the source rows as a small t
 carries a small set of keys the correction step reads directly (`split_hint`,
 `split_suggestions`, `compare_nominal`, …).
 
-The full contract, with worked examples from `broker_credit_agricole.py`, is in
+The full contract, with worked examples from `broker_credit_agricole/plugin.py`, is in
 [Talking to the import wizard](../../architecture/patterns/brim_plugin_guide.md#talking-to-the-import-wizard).
 
 Plugins are auto-discovered once per process, the first time the registry is used (see *Plugin discovery* under *Concurrency & off-loading* above). See the [BRIM Plugin Guide](../../architecture/patterns/brim_plugin_guide.md) for a complete walkthrough of creating a new plugin.
+
+### 🗂️ Plugin layout and translations {: #plugin-layout }
+
+Each plugin is a folder of `backend/app/services/brim_providers/`, named after its `provider_code`:
+
+```text
+backend/app/services/brim_providers/
+├── __init__.py                                   ← the family's docstring
+├── _brim_io.py, _brim_output.py, _scalable.py    ← helpers shared by the plugins (discovery skips them)
+├── static/                                       ← icons, served under /api/v1/uploads/plugin/brim/…
+├── sample_reports/                               ← every plugin's sample exports, read by the tests
+└── broker_directa/
+    ├── __init__.py   ← its docstring and nothing else
+    ├── plugin.py     ← the code, loaded as backend.app.services.brim_providers.broker_directa.plugin
+    └── i18n/         ← en.json, it.json, fr.json, es.json: brimPlugins.broker_directa.name and .description
+```
+
+The package re-exports nothing: code and tests import a plugin's names from its `plugin` module,
+and patch them there. The UI shows a plugin's name and description in the user's language, from
+`brimPlugins.<code>.name` and `.description`, and falls back to its English `provider_name` and
+`description` when a key is missing. Those two keys live in the plugin's own `i18n/` fragment,
+which the frontend build merges into the translation catalogue;
+`./dev.py test utils gate-plugin-i18n-ownership` keeps them there, and every plugin's code equal
+to its folder's name.
+A plugin mounted into a container with a docker-compose volume therefore has its code but not its
+translations, and shows the English fallback (post-1.2 backlog, U-B1). The wizard's wording of a
+plugin's notices and refusals (`importWizard.brimNotice.<code>`, `importWizard.brimEvidence.<code>`,
+`importWizard.parseRefusal.<code>`) belongs to no plugin: it lives in the `importWizard` subsystem.
+
+How to write the folder and its keys: [BRIM Plugin Guide → Auto-Discovery](../../architecture/patterns/brim_plugin_guide.md#auto-discovery)
+and [Register the name and description](../../architecture/patterns/brim_plugin_guide.md#plugin-name-i18n).
 
 ---
 
@@ -282,7 +313,7 @@ own: [Crédit Agricole](credit_agricole.md), [Danske Bank](danske_bank.md) and
 
 ### 🇳🇱 DEGIRO {: #plugin-degiro }
 
-`broker_degiro.py` reads the **Account Statement** CSV in any language. Its message language, its
+`broker_degiro/plugin.py` reads the **Account Statement** CSV in any language. Its message language, its
 linked `FX_CONVERSION` pairs and the orders list it claims without importing are in the
 [BRIM Plugin Guide](../../architecture/patterns/brim_plugin_guide.md#linked-pairs); this is the
 layout behind them.
@@ -315,7 +346,7 @@ layout behind them.
 
 ### 🇮🇹 Intesa Sanpaolo {: #plugin-intesa }
 
-`broker_intesa.py` reads two exports, CSV or XLSX (`_brim_io.read_rows`), told apart by content:
+`broker_intesa/plugin.py` reads two exports, CSV or XLSX (`_brim_io.read_rows`), told apart by content:
 
 - **Portfolio snapshot** (*patrimonio*), when the first 40 rows contain
   `controvalore di carico fiscale`. A row with `Descrizione` and `ISIN` cells opens a section
@@ -340,7 +371,7 @@ layout behind them.
 
 ### 📊 eToro {: #plugin-etoro }
 
-`broker_etoro.py` reads the **Account Activity** sheet of the eToro account statement, saved as CSV:
+`broker_etoro/plugin.py` reads the **Account Activity** sheet of the eToro account statement, saved as CSV:
 eToro itself downloads the statement as XLS.
 
 - **Detection**: a `.csv` whose first line contains `date`, `type`, `details`, `amount`, `units`
@@ -365,7 +396,7 @@ eToro itself downloads the statement as XLS.
 
 ### 🏛️ Fineco {: #plugin-fineco }
 
-`broker_fineco.py` reads the *Movimenti Dossier Titoli* report, CSV only.
+`broker_fineco/plugin.py` reads the *Movimenti Dossier Titoli* report, CSV only.
 
 - **Detection**: within the first 15 lines, `operazione`, `data valuta`, `isin`, `controvalore`
   and the `dossier` metadata marker. The header is the first row whose first cell is `Operazione`;

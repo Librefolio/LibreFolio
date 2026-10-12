@@ -2,7 +2,7 @@
 
 `broker_credit_agricole` imports the two Italian exports of Crédit Agricole, each as CSV or XLSX:
 the account movements (*Lista Movimenti Conto*) and the securities movements (*Lista Movimenti
-Deposito Titoli*). It lives in `backend/app/services/brim_providers/broker_credit_agricole.py` and
+Deposito Titoli*). It lives in `backend/app/services/brim_providers/broker_credit_agricole/plugin.py` and
 is the plugin with the richest wizard integration — a causale registry, evidence tables, blocking
 and splitting field todos — which the
 [BRIM Plugin Guide](../../architecture/patterns/brim_plugin_guide.md#talking-to-the-import-wizard)

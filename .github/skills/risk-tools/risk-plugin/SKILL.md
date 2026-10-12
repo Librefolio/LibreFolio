@@ -13,7 +13,8 @@ description: "Use this skill when creating, extending, or reviewing a LibreFolio
 
 A risk analytic answers **one risk question** — how much can it hurt, how diversified is it,
 is it paid for its risk, what if… — over an asset, an asset set or a portfolio. It lives in
-`backend/app/services/risk_plugins/` (one file per analytic), extends `RiskAnalytic`
+`backend/app/services/risk_plugins/<analytic_code>/` (one folder per analytic: `plugin.py` holds the
+code, `i18n/` its `risk.analytics.<id>.*` texts), extends `RiskAnalytic`
 (`backend/app/services/risk/base.py`), and is auto-discovered via
 `@register_plugin(RiskAnalyticRegistry)`.
 
@@ -48,12 +49,15 @@ analytic never opens a session or fetches prices.
 
 ## 🛠️ Rough shape of the work
 
-1. Create `backend/app/services/risk_plugins/<analytic_code>.py` with the parameters model and
-   the decorated `RiskAnalytic` subclass.
+1. Create the folder `backend/app/services/risk_plugins/<analytic_code>/`: `__init__.py`
+   (docstring only, no re-export) and `plugin.py` with the parameters model and the decorated
+   `RiskAnalytic` subclass. Import and patch from `….<analytic_code>.plugin`.
 2. Implement `compute()` (light work) or override `execute()` (worker pools).
 3. Reuse an output model, or add a new output kind end to end (schema union, OpenAPI
    discriminator, `./dev.py api sync`).
-4. Add the i18n keys, the pure plugin tests and the pinned catalogue lists; review the
+4. Add the i18n keys — the analytic's own `risk.analytics.<id>.*` in its `i18n/`
+   (`./dev.py i18n add … --into risk_plugins/<analytic_code>`); a new `risk.warnings.*` sentence in
+   the shared `risk` subsystem — the pure plugin tests and the pinned catalogue lists; review the
    code-keyed decisions in `RiskService`.
 5. Surface it in a panel if needed, and document it (theory page, user page, analytics table).
 
@@ -68,7 +72,7 @@ This skill is intentionally **high-level and durable**. For the precise, current
 - **Registry Pattern** — `mkdocs_src/docs/developer/architecture/patterns/registry_pattern.md`
 - **Instructions** — `.github/instructions/backend-risk.instructions.md`
 - **Reference code** — `backend/app/services/risk/base.py`, `risk/analytic_helpers.py`, and
-  analytics such as `risk_plugins/historical_kpi.py` and `risk_plugins/correlation.py`.
+  analytics such as `risk_plugins/historical_kpi/plugin.py` and `risk_plugins/correlation/plugin.py`.
 
 Do not rely on this page for method signatures or exact conventions — they can change; the
 developer guide is kept up to date.

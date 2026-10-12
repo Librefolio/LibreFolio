@@ -3,7 +3,7 @@
 How to create a new **Broker Report Import Manager** plugin to support a new broker's CSV/Excel export format.
 
 **Base class**: `BRIMProvider` (in `backend/app/services/brim_provider.py`)
-**Plugin folder**: `backend/app/services/brim_providers/`
+**Plugin folder**: `backend/app/services/brim_providers/<code>/` — the code in `plugin.py`, beside an `__init__.py` holding only its docstring (see [Auto-Discovery](#auto-discovery))
 **Registry**: `BRIMProviderRegistry`
 
 ---
@@ -25,7 +25,8 @@ Paste this entire page plus the [Generic CSV Provider](../../backend/brim/generi
     ```
 
     The LLM will produce a complete, working plugin skeleton. Test it with the probe endpoint,
-    then add it to `brim_providers/` and restart — it will be auto-discovered.
+    then save it as `brim_providers/<code>/plugin.py`, beside an `__init__.py` holding only a
+    docstring, and restart — it will be auto-discovered.
 
 ---
 
@@ -176,7 +177,7 @@ mandatory for every new plugin:
   with `self._open_text(file_path)` (add `newline=""` when the stream feeds `csv` and
   line endings must be kept) or through `_brim_io.read_rows`. The test suite enforces
   it (class `TestWindows1252Invariance`): `test_no_plugin_opens_files_with_a_fixed_encoding`
-  fails on any `open(..., encoding=...)` in a `broker_*.py`, and
+  fails on any `open(..., encoding=...)` in a module of a `broker_*/` plugin folder, and
   `test_sample_parses_identically_when_saved_as_windows_1252` requires every non-ASCII
   CSV sample, re-saved as Windows-1252, to be detected and parsed identically by each
   plugin that accepts the original.
@@ -198,7 +199,7 @@ mandatory for every new plugin:
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `provider_code` | `@property → str` | Unique identifier (e.g., `"directa_csv"`). Must `return` a **string literal** — see below |
+| `provider_code` | `@property → str` | Unique identifier, and the name of the plugin's folder (e.g., `"broker_directa"`). Must `return` a **string literal** — see below |
 | `provider_name` | `@property → str` | Display name, in English (e.g., `"Directa CSV"`); the UI shows the value of `brimPlugins.<code>.name`, in the user's language — see [Register the name and description](#plugin-name-i18n) |
 | `description` | `@property → str` | Brief description for the UI, in English; the UI shows the value of `brimPlugins.<code>.description` |
 | `can_parse(file_path)` | `→ bool` | Quick check if this plugin can parse the file (check extension, header row) |
@@ -210,7 +211,7 @@ mandatory for every new plugin:
     expression. Two tools read the code **from the source, without importing the module**:
 
     - the R13 test in `frontend/src/lib/components/ui/select/optionFilter.test.ts` (run by
-      `./dev.py test front-utility core-unit`) scrapes every `broker_*.py` for what
+      `./dev.py test front-utility core-unit`) scrapes every `broker_*/plugin.py` for what
       `provider_code`, `provider_name` and `description` return, and fails on anything but
       string literals (adjacent literals and a parenthesised run of literals are accepted;
       an f-string, a name, a call or a `+` are not);
@@ -383,7 +384,7 @@ Defined on `BRIMProvider` — call these instead of re-implementing:
 ## 💻 Implementation Example
 
 ```python
-# backend/app/services/brim_providers/my_broker.py
+# backend/app/services/brim_providers/broker_mybroker/plugin.py
 
 from pathlib import Path
 from backend.app.services.brim_provider import BRIMProvider
@@ -396,7 +397,7 @@ class MyBrokerProvider(BRIMProvider):
 
     @property
     def provider_code(self) -> str:
-        return "my_broker_csv"
+        return "broker_mybroker"
 
     @property
     def provider_name(self) -> str:
@@ -433,15 +434,38 @@ class MyBrokerProvider(BRIMProvider):
         )
 ```
 
-### 🔍 Auto-Discovery
+### 🔍 Auto-Discovery {: #auto-discovery }
 
-Place the file in `brim_providers/` and restart the app. The `BRIMProviderRegistry` will automatically discover and register it. The plugin will appear in the [ImportPluginSelect](../../frontend/components/core-ui/select.md#importpluginselect) dropdown, under its English `provider_name` until it has its [catalogue keys](#plugin-name-i18n).
+A plugin is a folder named after its `provider_code` — here `brim_providers/broker_mybroker/`:
 
-A module whose name starts with an underscore is not a plugin: `auto_discover` skips it
-(`provider_registry.py`), and the R13 test reads only `broker_*.py`. That is where code shared by
-several plugins lives — `_brim_io.py` and `_brim_output.py` for any plugin, `_scalable.py` for the
-two Scalable Capital plugins, whose `broker_*.py` files hold only their properties (the string
-literals R13 reads among them) and calls to it.
+```text
+backend/app/services/brim_providers/
+├── _brim_io.py, _brim_output.py, _scalable.py   ← helpers shared by the plugins
+├── static/                                      ← icons, served under /api/v1/uploads/plugin/brim/…
+├── sample_reports/                              ← every plugin's sample exports (see below)
+└── broker_mybroker/
+    ├── __init__.py   ← its docstring and nothing else: """BRIM import plugin ``broker_mybroker``: …"""
+    ├── plugin.py     ← the code above
+    └── i18n/         ← en.json, it.json, fr.json, es.json: its name and description (see below)
+```
+
+Restart the app: the `BRIMProviderRegistry` finds the folder, loads `plugin.py` as
+`backend.app.services.brim_providers.broker_mybroker.plugin`, and registers the class. The plugin will appear in the [ImportPluginSelect](../../frontend/components/core-ui/select.md#importpluginselect) dropdown, under its English `provider_name` until it has its [catalogue keys](#plugin-name-i18n). How discovery reads a folder, and the gate that keeps every plugin in one, are in [Plugin Folder Layout](registry_pattern.md#plugin-layout).
+
+- **The folder is the code.** Name the folder exactly as `provider_code` returns: the UI reads the
+  plugin's texts under `brimPlugins.<code>`, the fragment that holds them is the folder's, and
+  `./dev.py test utils gate-plugin-i18n-ownership` fails on a BRIM plugin whose code is not its
+  folder's name. Keep the `broker_` prefix: the encoding test above and the R13 test read only
+  `broker_*/` folders.
+- **A name that starts with an underscore is not a plugin**: `auto_discover` skips it
+  (`provider_registry.py`). That is where code shared by several plugins lives, at the family root —
+  `_brim_io.py` and `_brim_output.py` for any plugin, `_scalable.py` for the two Scalable Capital
+  plugins, whose `plugin.py` files hold only their properties (the string literals R13 reads among
+  them) and calls to it. A helper only your plugin uses goes in its folder, as `_*.py` beside
+  `plugin.py`.
+- **Import and patch** the plugin's names from its `plugin` module,
+  `backend.app.services.brim_providers.broker_mybroker.plugin`: the package re-exports nothing, so
+  a test that patches the package fails ([Importing and Patching a Plugin](registry_pattern.md#plugin-imports)).
 
 ---
 
@@ -451,15 +475,15 @@ Copy the structure of an existing, well-tested plugin rather than starting from 
 
 | File | Best example of |
 |------|-----------------|
-| `backend/app/services/brim_providers/broker_directa.py` | Equity/ETF, index-based columns, Italian types, ISIN grouping, tax/fee linking |
-| `backend/app/services/brim_providers/broker_generic_csv.py` | Column auto-detection, locale-aware number parsing |
-| `backend/app/services/brim_providers/broker_coinbase.py` | Crypto assets (symbol, no ISIN), staking as `ADJUSTMENT`, separate fee tx |
-| `backend/app/services/brim_providers/broker_revolut.py` | **One plugin, two formats** (invest + crypto) via header detection |
-| `backend/app/services/brim_providers/broker_intesa.py` | CSV/XLSX, two layouts in one plugin; patrimonio snapshot → liquidity `DEPOSIT` when present + per-holding `ADJUSTMENT` seed with per-unit `cost_basis_override` |
-| `backend/app/services/brim_providers/broker_credit_agricole.py` | **Richest wizard integration**: two layouts in one plugin, 4-tier causale registry, evidence tables, `info` notices, blocking and splitting field todos — read it before designing any `field_todos`. Also: automatic cash counter-entries, par-100 bond maturity split, succession rows as cashless `ADJUSTMENT` |
-| `backend/app/services/brim_providers/broker_saxo.py` | Mixed trade/cash rows, verb-in-text events, localized verbs |
-| `backend/app/services/brim_providers/broker_danske_bank.py` | **Report set** (custody XLSX + cash CSV): roles, a pure `combine` with pairing, zones and truth points, the parse of its combined file, Finnish notices — see [Multi-report plugins](#report-sets) |
-| `backend/app/services/brim_providers/broker_degiro.py` | **One layout in many languages**: the Account Statement read by column position, the notice language picked from the header (`_detect_language`), **linked `FX_CONVERSION` pairs** (see [Linked pairs](#linked-pairs)), and its orders list (the Transactions export) claimed and answered with one notice instead of transactions (the rule's extension in [Flow](#flow)) |
+| `backend/app/services/brim_providers/broker_directa/plugin.py` | Equity/ETF, index-based columns, Italian types, ISIN grouping, tax/fee linking |
+| `backend/app/services/brim_providers/broker_generic_csv/plugin.py` | Column auto-detection, locale-aware number parsing |
+| `backend/app/services/brim_providers/broker_coinbase/plugin.py` | Crypto assets (symbol, no ISIN), staking as `ADJUSTMENT`, separate fee tx |
+| `backend/app/services/brim_providers/broker_revolut/plugin.py` | **One plugin, two formats** (invest + crypto) via header detection |
+| `backend/app/services/brim_providers/broker_intesa/plugin.py` | CSV/XLSX, two layouts in one plugin; patrimonio snapshot → liquidity `DEPOSIT` when present + per-holding `ADJUSTMENT` seed with per-unit `cost_basis_override` |
+| `backend/app/services/brim_providers/broker_credit_agricole/plugin.py` | **Richest wizard integration**: two layouts in one plugin, 4-tier causale registry, evidence tables, `info` notices, blocking and splitting field todos — read it before designing any `field_todos`. Also: automatic cash counter-entries, par-100 bond maturity split, succession rows as cashless `ADJUSTMENT` |
+| `backend/app/services/brim_providers/broker_saxo/plugin.py` | Mixed trade/cash rows, verb-in-text events, localized verbs |
+| `backend/app/services/brim_providers/broker_danske_bank/plugin.py` | **Report set** (custody XLSX + cash CSV): roles, a pure `combine` with pairing, zones and truth points, the parse of its combined file, Finnish notices — see [Multi-report plugins](#report-sets) |
+| `backend/app/services/brim_providers/broker_degiro/plugin.py` | **One layout in many languages**: the Account Statement read by column position, the notice language picked from the header (`_detect_language`), **linked `FX_CONVERSION` pairs** (see [Linked pairs](#linked-pairs)), and its orders list (the Transactions export) claimed and answered with one notice instead of transactions (the rule's extension in [Flow](#flow)) |
 
 ## 📥 Canonical imports
 
@@ -512,8 +536,8 @@ transaction breaks these rules, so flip source signs as needed:
   crypto↔crypto trade, an on-chain transfer in/out, or a crypto-denominated fee — model it as
   a **cashless `ADJUSTMENT`** (`quantity` +/-, `cash=None`) so the position still updates.
   This is what keeps every crypto row schema-valid, because `ADJUSTMENT` forbids a cash
-  amount. Reference: `broker_bitvavo.py`, `broker_cointracking.py`, `broker_delta.py`,
-  `broker_cryptocom.py` (note `cryptocom` emits `INTEREST` for fiat-valued rewards but a
+  amount. Reference: `broker_bitvavo/plugin.py`, `broker_cointracking/plugin.py`, `broker_delta/plugin.py`,
+  `broker_cryptocom/plugin.py` (note `cryptocom` emits `INTEREST` for fiat-valued rewards but a
   cashless `ADJUSTMENT` for coin-only rewards).
 - Prefer **skipping a row with a warning** over emitting a schema-invalid transaction.
 
@@ -530,7 +554,7 @@ transaction breaks these rules, so flip source signs as needed:
 
     A broker can also ship **one layout in many languages**: DEGIRO's Account Statement has
     the same twelve columns in every language, so the layout cannot tell the language, but
-    the header can. `broker_degiro.py` (`_detect_language`) counts, for each language, how
+    the header can. `broker_degiro/plugin.py` (`_detect_language`) counts, for each language, how
     many of the file's named columns are among that language's header names
     (`_HEADER_WORDS`; `ISIN` and `FX`, the same everywhere, do not count) and picks the best
     language only with at least three matches and no tie (`_MIN_LANGUAGE_MATCHES`). A word
@@ -589,7 +613,7 @@ transaction breaks these rules, so flip source signs as needed:
 
     Bond nominal note: for bonds `quantity` is the face value (e.g. `50000`) and the seed
     per-unit cost lands near `1.0` — that is correct, the engine handles the /100 quote
-    scaling elsewhere. Canonical example: `broker_intesa.py` (patrimonio seed).
+    scaling elsewhere. Canonical example: `broker_intesa/plugin.py` (patrimonio seed).
 
 !!! tip "Matured-bond redemption: close at par, surplus → INTEREST"
 
@@ -624,7 +648,7 @@ transaction breaks these rules, so flip source signs as needed:
     - **`held_qty > 0` → `source == "position"`**: exact close, **no verify flag**. This is
       the normal case — the nominal lives in the position, so there is nothing for the user
       to check. If the file is not chronologically ordered, pre-compute the position in a
-      first pass (see `broker_credit_agricole.py`).
+      first pass (see `broker_credit_agricole/plugin.py`).
     - **no position → `source == "derived"`**: the nominal is inferred from `ctv/price` (a
       best effort, imprecise because the quoted price embeds the premium — e.g. `30105/100.40
       = 29985` vs a true `30000`). This happens on a **partial download** (a "last 3 months"
@@ -647,17 +671,17 @@ transaction breaks these rules, so flip source signs as needed:
       reduce a position instead of inflating paid-in capital (consistent with the
       securities-export fallback). With no held position and no reported price, assume a par
       (100) redemption so the derived nominal equals the cash (`SELL` with `quantity < 0`,
-      flagged for the user to verify). See `broker_credit_agricole.py`
+      flagged for the user to verify). See `broker_credit_agricole/plugin.py`
       (`_parse_account_movements`, `income_identity_by_date`, `_ACCT_MATURITY_CAUSALI`).
     - A price **at or below par** yields `surplus_cash == 0` → emit a single plain SELL
       (pass-through); don't invent negative income.
     - Keep the plugin's usual cash model: if BUYs get a balancing `DEPOSIT` and SELLs a
       `WITHDRAWAL`, the par principal nets to zero and only the `INTEREST` surplus adds cash.
 
-    Reference plugins: `broker_credit_agricole.py` (`TITOLI SCADUTI` in the securities export
+    Reference plugins: `broker_credit_agricole/plugin.py` (`TITOLI SCADUTI` in the securities export
     with the position pre-computed from succession legs, **and** the account cash-only
     `TITOLI SCADUTI O ESTRATTI` with the nominal recovered from the same-day coupon) and
-    `broker_fineco.py` (`Rimborso` above par, nominal from the row).
+    `broker_fineco/plugin.py` (`Rimborso` above par, nominal from the row).
 
 ## 🔗 Linked pairs from a plugin {: #linked-pairs }
 
@@ -666,7 +690,7 @@ currency and the cash that arrives in another. A plugin emits both legs as `FX_C
 gives them the same `link_uuid`; the batch turns the shared id into reciprocal
 `related_transaction_id`s and never stores the id itself (see
 [Transaction Service → Linked Pairs](../../backend/transactions/service.md#linked-pairs)).
-`broker_degiro.py` is the first plugin to emit pairs (`_pair_fx_legs`, `_fx_pair`): Swissquote
+`broker_degiro/plugin.py` is the first plugin to emit pairs (`_pair_fx_legs`, `_fx_pair`): Swissquote
 skips its conversion legs with a warning, and the Generic CSV refuses the paired types.
 
 **What the batch accepts** — `resolve_create_links` in `transaction_batch_stages.py`, with
@@ -836,7 +860,7 @@ one, and its total is bundled for exactly the same reason.
 ### 🗝️ `context` keys the frontend understands
 
 `context` is a free `Dict[str, Any]`, but a handful of keys are a **contract** with the
-correction step. All of them are currently produced by `broker_credit_agricole.py`, which is
+correction step. All of them are currently produced by `broker_credit_agricole/plugin.py`, which is
 the reference implementation:
 
 | Key | Type | Effect in the wizard |
@@ -991,8 +1015,8 @@ provider-local because each export needs wording grounded in its own terminology
     Invoke `attach_maturity_notices` from every `_parse_*` layout branch; adding another
     supported layout means adding the call there too.
 
-Crédit Agricole and Intesa are the concrete references: see `broker_credit_agricole.py` and
-`broker_intesa.py`. Add or generalize a shared output helper only when a real second consumer
+Crédit Agricole and Intesa are the concrete references: see `broker_credit_agricole/plugin.py` and
+`broker_intesa/plugin.py`. Add or generalize a shared output helper only when a real second consumer
 needs the same semantics; otherwise keep the logic provider-local.
 
 ## 🚪 Opening-date gate
@@ -1036,7 +1060,7 @@ files uploaded together for one broker and recognised by the plugin form a **set
 other.
 
 Every default of the contract keeps a plugin single-file, so the existing plugins do not change.
-The reference implementation is `backend/app/services/brim_providers/broker_danske_bank.py`; the
+The reference implementation is `backend/app/services/brim_providers/broker_danske_bank/plugin.py`; the
 framework lives in `backend/app/services/brim_report_sets.py` (members, preview, combine, history
 start) and `backend/app/services/brim_gap_fix.py` (the corrections), the schemas in
 `backend/app/schemas/brim.py`, and the wizard side in
@@ -1420,21 +1444,34 @@ A report-set plugin's members are never parsed alone: declare its samples as set
 ## 🌐 Register the name and description (required) {: #plugin-name-i18n }
 
 `provider_name` and `description` are written in English, and the UI shows them in the user's
-language: every plugin ships two keys in each of the four catalogues
-(`frontend/src/lib/i18n/{en,it,fr,es}.json`).
+language: every plugin ships two keys, in English, Italian, French and Spanish, in its own fragment
+`brim_providers/<code>/i18n/{en,it,fr,es}.json`. The frontend build merges the fragments into the
+catalogue it loads ([A Plugin's Translations](registry_pattern.md#plugin-translations)). Each file
+holds the plugin's keys with their full path:
+
+```json
+{"brimPlugins": {"broker_mybroker": {"name": "My Broker (CSV)", "description": "Import transactions from My Broker CSV exports"}}}
+```
 
 | Key | In `en` | In `it`, `fr`, `es` |
 |-----|---------|---------------------|
 | `brimPlugins.<code>.name` | `provider_name`, character for character | A brand name stays as it is (`DEGIRO`, `Interactive Brokers`); only generic words are translated (`Generic CSV` → `CSV generico`; `Scalable Capital overnight account` → `Scalable Capital conto deposito`) |
 | `brimPlugins.<code>.description` | `description`, character for character | Translated |
 
-Add them with the i18n tool, which writes the four catalogues in one go — here for the plugin of
-the [Implementation Example](#implementation-example):
+Add them with the i18n tool, which writes the four languages in one go — here for the plugin of
+the [Implementation Example](#implementation-example). `--into` names the plugin's folder: a new
+code under `brimPlugins` belongs to no plugin yet, so without it `add` refuses the key and asks
+for the target.
 
 ```bash
-./dev.py i18n add "brimPlugins.my_broker_csv.name" --en "My Broker (CSV)" --it "My Broker (CSV)" --fr "My Broker (CSV)" --es "My Broker (CSV)"
-./dev.py i18n add "brimPlugins.my_broker_csv.description" --en "Import transactions from My Broker CSV exports" --it "…" --fr "…" --es "…"
+./dev.py i18n add "brimPlugins.broker_mybroker.name" --en "My Broker (CSV)" --it "My Broker (CSV)" --fr "My Broker (CSV)" --es "My Broker (CSV)" --into brim_providers/broker_mybroker
+./dev.py i18n add "brimPlugins.broker_mybroker.description" --en "Import transactions from My Broker CSV exports" --it "…" --fr "…" --es "…" --into brim_providers/broker_mybroker
+./dev.py i18n where "brimPlugins.broker_mybroker.name"   # backend/app/services/brim_providers/broker_mybroker/i18n/en.json (exists)
 ```
+
+The first key creates the fragment; from then on `add` finds it by itself for another key of the
+plugin. Never edit `frontend/src/lib/i18n/<lang>.json`: it is generated, and a hand edit stops the
+build until the change is moved to its source.
 
 - **Who reads them.** `brimPluginName` and `brimPluginDescription`
   (`frontend/src/lib/utils/brim/pluginText.ts`): the plugin select (`ImportPluginSelect`, in the
@@ -1449,12 +1486,16 @@ the [Implementation Example](#implementation-example):
   plugin's name in the UI language as `plugin_name`, before `importWizard.parseRefusal.<code>` is
   filled in ([Saying why with a code](#cannot-parse-detail)).
 - **The tests.** `TestPluginTextCatalogues`, in `test_brim_providers.py`
-  (`./dev.py test external brim-providers`), holds the catalogues to the registry: the English
-  keys equal each plugin's `provider_name` and `description`, the Italian, French and Spanish ones
-  are filled in for every plugin, and no catalogue keeps a code that no registered plugin has.
-  Change a property and its English key together, and remove the keys with the plugin
-  (`./dev.py i18n remove`). The two lookups and their fallbacks are pinned by `pluginText.test.ts`
-  (`./dev.py test front-transaction tx-unit`).
+  (`./dev.py test external brim-providers`), reads the merged sources without a frontend build
+  (`load_catalog(language, fallback=False)` from `scripts/i18n_catalog.py`) and holds them to the
+  registry: the English keys equal each plugin's `provider_name` and `description`, the Italian,
+  French and Spanish ones are filled in for every plugin, and no catalogue keeps a code that no
+  registered plugin has. Change a property and its English key together (`./dev.py i18n update`),
+  and remove the keys with the plugin (`./dev.py i18n remove`, which deletes the fragment once it
+  is empty). `./dev.py test utils gate-plugin-i18n-ownership` keeps the two keys in the plugin's
+  own fragment and its code equal to its folder's name
+  ([The Ownership Gate](registry_pattern.md#plugin-i18n-gate)). The two lookups and their
+  fallbacks are pinned by `pluginText.test.ts` (`./dev.py test front-transaction tx-unit`).
 
 ## 🖼️ Favicons
 

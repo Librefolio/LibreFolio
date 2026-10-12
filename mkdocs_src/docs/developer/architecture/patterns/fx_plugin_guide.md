@@ -3,7 +3,7 @@
 How to create a new **FX Rate Provider** to fetch exchange rates from a new central bank or data source.
 
 **Base class**: `FXRateProvider` (in `backend/app/services/fx.py`)
-**Plugin folder**: `backend/app/services/fx_providers/`
+**Plugin folder**: `backend/app/services/fx_providers/<name>/` — the code in `plugin.py`, beside an `__init__.py` holding only its docstring (see [Plugin Folder](#plugin-folder))
 **Registry**: `FXProviderRegistry`
 
 ---
@@ -27,8 +27,9 @@ Paste this entire page into an LLM with the central bank or API documentation an
     description_i18n, warning_i18n if applicable. Use asyncio.to_thread for sync HTTP calls.
     ```
 
-    After scaffolding, test with a manual sync from the FX settings page. Place the file in
-    `fx_providers/` and restart — it will appear automatically as a selectable provider.
+    After scaffolding, test with a manual sync from the FX settings page. Save it as
+    `fx_providers/<name>/plugin.py`, beside an `__init__.py` holding only a docstring, and
+    restart — it will appear automatically as a selectable provider.
 
 ---
 
@@ -100,7 +101,7 @@ graph TD
 ## 💻 Implementation Example
 
 ```python
-# backend/app/services/fx_providers/my_central_bank.py
+# backend/app/services/fx_providers/my_central_bank/plugin.py
 
 from datetime import date
 from decimal import Decimal
@@ -156,16 +157,32 @@ class MyCentralBankProvider(FXRateProvider):
         return result
 ```
 
+### 🗂️ Plugin Folder {: #plugin-folder }
+
+A provider is a folder of `fx_providers/`. Restart the app: `FXProviderRegistry` loads its
+`plugin.py` as `backend.app.services.fx_providers.my_central_bank.plugin`. Import and patch the
+provider's names from that module — `from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY`,
+`patch("backend.app.services.fx_providers.ecb.plugin.httpx")`: the package
+re-exports nothing, so a patch aimed at it fails. A helper only this provider uses sits beside
+`plugin.py` as `_*.py`. Discovery, the layout and the gate that keeps it
+(`./dev.py test utils gate-plugin-layout`) are in [Plugin Folder Layout](registry_pattern.md#plugin-layout).
+
+FX providers have no catalogue keys, so no `i18n/` folder: the texts a provider shows travel with
+it through the API, in every language it declares (`description_i18n`, `warning_i18n`).
+
 ### 🖼️ Static Assets (Icons)
 
-Place provider icons in `backend/app/services/fx_providers/static/mcb/`:
+Place provider icons in the family's `backend/app/services/fx_providers/static/mcb/`, not in the
+provider's folder:
 
 ```
 fx_providers/
 ├── static/
 │   └── mcb/
 │       └── logo.svg    ← served at /api/v1/uploads/plugin/fx/mcb/logo.svg
-└── my_central_bank.py
+└── my_central_bank/
+    ├── __init__.py     ← its docstring and nothing else
+    └── plugin.py       ← the code above
 ```
 
 ---

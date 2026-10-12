@@ -18,8 +18,11 @@ These Playwright tests cover the broker management UI and multi-user collaborati
 # Run all front-user tests
 ./dev.py test front-user all
 
-# List available tests
-./dev.py test front-user --list
+# List the units (actions), each with its description
+./dev.py test front-user --help
+
+# List the Playwright tests of every unit, without running them (Vitest files are not listed)
+./dev.py test front-user all --list
 
 # Run a specific test file
 ./dev.py test front-user brokers
