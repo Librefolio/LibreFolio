@@ -656,3 +656,12 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Ai_ideas/roadmap_and_signals_brainstorm.md` | `e7c33c85a` | 2026-10-12 | [[sources/release2-ai-ideas-2026-07]] |
 | `LibreFolio_developer_journal/Release_2/Ai_ideas/mcp_server_architecture_draft.md` | `07be11cbc` | 2026-10-12 | [[sources/release2-ai-ideas-2026-07]] |
 | `LibreFolio_developer_journal/Release_2/Ai_ideas/phase_0_detailed_roadmap.md` | `7992471b6` | 2026-10-12 | [[sources/release2-ai-ideas-2026-07]] |
+
+## 2026-10-12 — historical folder H6, 06_betaTestingReportAndFixing (base `6e3d1368c`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/00_20260805_betaTester_report.md` | `91e88b8d1` | 2026-10-12 | [[sources/beta-testing-2026-08-05]] — re-baseline (moved) |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/01_tassonomia_findings.md` | `91e88b8d1` | 2026-10-12 | [[sources/beta-testing-2026-08-05]] — re-baseline (moved) |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/02_riconciliazione_credit_agricole.md` | `91e88b8d1` | 2026-10-12 | [[sources/beta-testing-2026-08-05]] — re-baseline (moved) |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/INDEX.md` | `91e88b8d1` | 2026-10-12 | [[sources/beta-testing-2026-08-05]] — re-baseline (edited) |

@@ -3174,3 +3174,9 @@ rule a source page only, no `idea` features: **Created** [[sources/release2-ai-i
 then risk, the rolling chart — and the MCP assistant deferred to `TODO_FUTURI.md`, «QuarkAI»). **Updated**
 [[decisions/signal-backend-plugin-architecture]] (a link). With H5, the plan of folder 09 and the historical folders
 (F0–F2, H1–H5) is complete. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H6 — 06_betaTestingReportAndFixing (drift)
+Base `6e3d1368c`. The four July rows (hashes that no longer resolve, old `Phase_0/` path) re-based on `91e88b8d1` and
+the `phases/` path; three reports moved unchanged, `INDEX.md` edited. Eleven files never ingested, listed on
+[[sources/beta-testing-2026-08-05]]; their topics already have pages, so no new page — a content check of the ten plans
+stays a candidate for a later lint. Graph: not updated (P-6).
