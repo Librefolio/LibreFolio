@@ -8,6 +8,7 @@ related:
   - features/F-008
   - problems/playwright-probes-ignore-timeout
   - problems/line-chart-axes-lost-the-day
+  - problems/gallery-price-guard-expected-tofixed-text
 ---
 
 # Decision: numbers and dates follow the interface language
@@ -43,6 +44,9 @@ rischio sulla 1.2».
 - Chart formatters run outside Svelte's tracking: the effect that builds the options must read the locale itself
   (CP2, with the axes of [[problems/line-chart-axes-lost-the-day]]).
 - Known limit, backlog T-DI: native `<input type="date">` stays in the browser's language.
+- A test that pins a figure as `toFixed` writes it breaks under the rule: the gallery's price guard went red in English
+  on prices over 1,000, and since M's batch 28 (`e8d5a5668`, train 70) it expects the figure as the shot's locale
+  writes it — [[problems/gallery-price-guard-expected-tofixed-text]].
 
 ## Source files
 
