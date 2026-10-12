@@ -14,7 +14,7 @@ related:
 
 ## Summary
 
-A GitHub Actions release pipeline (`release.yml`) was introduced (commit `dadcc4de2`) and refined through 8 subsequent commits (up to `b79735e2`). The pipeline automates the full build→test→docker→push→release sequence. Trigger modes: push to `dev`, published releases, manual `workflow_dispatch`. Node.js upgraded to 24 in CI; Vite upgraded to 7.3.5; `package-lock.json` added for reproducible frontend builds; `crypto.randomUUID` polyfill added for older browser compatibility. Playwright gallery generation: workers reduced to 8, network-idle timeout added; screenshot cache enabled in CI for faster re-runs.
+A GitHub Actions release pipeline (`release.yml`) was introduced (commit `dadcc4de2`) and refined through 8 subsequent commits (up to `db04ff6bf`). The pipeline automates the full build→test→docker→push→release sequence. Trigger modes: push to `dev`, published releases, manual `workflow_dispatch`. Node.js upgraded to 24 in CI; Vite upgraded to 7.3.5; `package-lock.json` added for reproducible frontend builds; `crypto.randomUUID` polyfill added for older browser compatibility. Playwright gallery generation: workers reduced to 8, network-idle timeout added; screenshot cache enabled in CI for faster re-runs.
 
 ## Key Takeaways
 
