@@ -490,3 +490,12 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | Source Path | Git Hash at Ingest | Date | Wiki Page |
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md` | `170d16333` | 2026-10-12 | [[decisions/plugin-folders-and-split-i18n]], [[features/F-059]] — partial: U-1 recorded as delivered; U-2 and U-3 when they enter |
+
+## 2026-10-12 — step B7: folder 27 (release images, gallery) and folder 32 (the English docs for 1.2) (base `3f9de8bdb`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00ReleaseImages.prompt.md` | `742e381ec` | 2026-10-12 | [[sources/phase00-release-images-and-gallery-2026-10]], [[problems/release-images-shipped-debug-frontend]], [[decisions/release-image-tags-latest-light]], [[decisions/http-gzip-in-the-app]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslatedCodeIndent.prompt.md` | `5fa0cf12a` | 2026-10-12 | [[sources/phase00-release-images-and-gallery-2026-10]], [[problems/translation-cleanup-flattened-code-indent]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00ReleaseGallery.prompt.md` | `5983714f5` | 2026-10-12 | [[sources/phase00-release-images-and-gallery-2026-10]], [[decisions/gallery-is-a-release-gate-with-real-data]], [[problems/playwright-favicon-aborted-by-routes]], [[decisions/pdf-preview-viewer-only-local-assets]], [[decisions/release-image-tags-latest-light]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/32_docsEnglish12/plan-phase00DocsEnglish12.prompt.md` | `425cb26d5` | 2026-10-12 | [[sources/phase00-docs-english-12-2026-10]], [[decisions/user-docs-plain-dev-manual-technical]], [[problems/docs-claimed-what-the-code-did-not-do]] |
