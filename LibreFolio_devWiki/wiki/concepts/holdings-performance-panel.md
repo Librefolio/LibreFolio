@@ -116,8 +116,9 @@ independent of the Holdings/Performance renaming, but ships in the same refactor
 - `frontend/src/routes/(app)/dashboard/+page.svelte` — hosts the panel, feeds data from `portfolioStore`
 - `backend/app/services/portfolio_service.py` — `get_summary()`, `get_positions_contribution()`,
   `_compute_period_summary_metrics()`
-- `backend/app/services/portfolio_engine.py` — `position_states_end`, `dataQuality.transactionImplied` now
-  includes `as_of_date` in `message_params`
+- `backend/app/services/financial_math/portfolio/daily_state.py` — `position_states_end`;
+  `backend/app/services/financial_math/portfolio/data_quality.py` — `dataQuality.transactionImplied` now
+  includes `as_of_date` in `message_params` (both in `portfolio_engine.py` until 2026-10-12)
 
 ## Source files
 

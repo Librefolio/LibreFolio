@@ -153,8 +153,9 @@ Since 2026-10-07: the engine makes two batched `convert_bulk` calls per run (the
 
 ## Where It Applies
 
-- `PortfolioCalculationEngine.calculate()` in `portfolio_engine.py` — builds the positions (`build_cost_positions()`) and makes the one `compute_average_costs()` call (since 2026-10-07)
-- `DailyStateBuilder` in `portfolio_engine.py` — per-tx unified loop; since 2026-10-07 it replays the precomputed steps (`_next_cost_step()`) instead of accumulating its own pools
+- `PortfolioCalculationEngine.calculate()` in `financial_math/portfolio/engine.py` — builds the positions (`build_cost_positions()`, `derived_views.py`) and makes the one `compute_average_costs()` call (since 2026-10-07)
+- `DailyStateBuilder` in `financial_math/portfolio/daily_state.py` — per-tx unified loop; since 2026-10-07 it replays the precomputed steps (`_next_cost_step()`) instead of accumulating its own pools
+- (Both were in `portfolio_engine.py` until 2026-10-12.)
 - Pre-frame loop: WAC computed for all historical transactions before t0
 - Frame loop [t0, t1]: WAC available at every day for cost basis and 3-pool updates
 

@@ -31,7 +31,8 @@ deliberately rejected/accepted as trade-offs during Milestone 2.
 
 ## Options Considered
 
-1. **Newton-Raphson only** (current implementation in `roi_utils.py::calculate_mwrr()`) — fast, simple,
+1. **Newton-Raphson only** (current implementation in `financial_math/returns.py::calculate_mwrr()`, `roi_utils.py`
+   until 2026-10-12) — fast, simple,
    sufficient for the actual shape of cash-flow sequences LibreFolio portfolios produce (personal/household
    portfolios, not high-frequency trading books). Convergence failures are handled by falling back to a capped
    result rather than raising.
@@ -54,7 +55,7 @@ risk for the specific class of pathological inputs described in the analysis doc
 
 ## Consequences
 
-- MWRR computation stays a single, simple code path (`roi_utils.py::calculate_mwrr()`), consistent with the
+- MWRR computation stays a single, simple code path (`financial_math/returns.py::calculate_mwrr()`), consistent with the
   rest of the engine's preference for straightforward, testable arithmetic over generalized numerical libraries
   (see [[concepts/twrr-mwrr-algorithms]]).
 - If LibreFolio ever supports very high-frequency or adversarial cash-flow patterns (e.g. algorithmic trading
