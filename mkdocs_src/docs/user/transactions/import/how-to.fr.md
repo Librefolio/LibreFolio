@@ -60,9 +60,9 @@ Lorsque vous cliquez sur **Suivant : Sélectionner**, l'assistant vérifie chaqu
 
 Choisissez ensuite :
 
-- **Déplacer vers ‹courtier›**, avec l'icône de ce courtier — le fichier est téléversé vers ce courtier, dans la même session, et retiré du mauvais courtier. Si le déplacement échoue, une erreur le signale et le fichier reste où il était ;
+- **Déplacer**, avec l'icône du courtier choisi sous **Le déplacer vers** — le fichier est téléversé vers ce courtier, dans la même session, et retiré du mauvais courtier. Si le déplacement échoue, une erreur le signale et le fichier reste où il était ;
 - **Le garder ici** — le fichier reste, et l'assistant le lit avec un autre plugin qui le peut, comme avant : vous le voyez dans la colonne **Plugin** de l'étape **Sélectionner** ;
-- **Retirer le fichier** — le fichier est supprimé.
+- **Retirer** — le fichier est supprimé.
 
 Une invite par fichier, l'une après l'autre (*Fichier 1 sur 3*) ; la fermer conserve le fichier. Si vous supprimez tous les fichiers que vous venez de téléverser, l'assistant reste sur **Téléverser**, prêt pour d'autres. Lorsqu'aucun de vos courtiers n'a de plugin par défaut qui lit le fichier, l'invite nomme les plugins qui le lisent — ou indique qu'aucun ne le peut — et propose seulement de le conserver ou de le supprimer.
 

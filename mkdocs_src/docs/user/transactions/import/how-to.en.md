@@ -73,12 +73,12 @@ to another broker*). From top to bottom, it shows:
 
 Then choose:
 
-- **Move to ‹broker›**, with that broker's icon — the file is uploaded to that broker, in the same
-  session, and removed from the wrong one. If the move fails, an error says so and the file stays
-  where it was;
+- **Move**, with the icon of the broker chosen under **Move it to** — the file is uploaded to that
+  broker, in the same session, and removed from the wrong one. If the move fails, an error says so
+  and the file stays where it was;
 - **Keep it here** — the file stays, and the wizard reads it with another plugin that can, as
   before: you see it in the **Plugin** column of **Select Files**;
-- **Remove the file** — the file is deleted.
+- **Remove** — the file is deleted.
 
 One prompt per file, in turn (*File 1 of 3*); closing it keeps the file. If you remove every file
 you have just uploaded, the wizard stays on **Upload**, ready for others. When none of your brokers
