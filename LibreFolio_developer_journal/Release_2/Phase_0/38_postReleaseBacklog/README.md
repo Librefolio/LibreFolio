@@ -31,7 +31,7 @@
 | K | `phases/25_taxonomySelect/` (step 23 e verifica d'archivio) | K-1 … K-26 |
 | P | `phases/30_wacUnification/`, `phases/39_autoCostNoPosition/` | P-1 … P-11 |
 | I | `phases/20_performanceCharts/`, `19_yieldOnCost/`, `24_privacyGlobal/` | I-01 … I-12 |
-| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-52 |
+| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-53 |
 
 In fondo: le voci del backlog del coordinatore **tracciate altrove** e quelle **chiuse alla verifica del 09/10**.
 
@@ -289,7 +289,10 @@ Origine: [30_wacUnification](../../phases/30_wacUnification/plan-phase00WacUnifi
 - **P-2 · Anteprima WAC: etichetta sbagliata per le righe di split e ramo `add_at_wac` morto** — basso.
   `WacPreviewSection.svelte:571-585` riconosce solo `add`, `reduce` e `add_at_wac`: una riga `split_rescale`
   (`portfolio_service.py:230-236`) mostra «Diluizione», e `add_at_wac` non esiste più dal #32.
-- **P-3 · Contributo per posizione: dividendi e costi senza cambio esclusi senza segnale** — basso.
+- ✅ **P-3 · Contributo per posizione: dividendi e costi senza cambio esclusi senza segnale** — chiusa il 12/10 da F
+  (B14 di I, `c04e44ff5`, treno 42): i flussi dei contributi e quelli del riepilogo vengono dalle stesse righe della
+  cassa nativa, e le coppie mancanti arrivano all'utente dal riepilogo, nel banner dei dati. Lo schema dei contributi
+  resta senza un canale suo. Era: basso.
   `portfolio_service.py:1794-1805` salta il movimento senza registrare la coppia, e `PositionsContribution`
   (`schemas/portfolio.py:443-450`) non ha un canale per dirlo.
 - **P-4 · Fuso orario: verificare il database IANA nell'immagine Docker** — basso. `_check_timezone`
@@ -597,14 +600,21 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   libera: nessun test ne soffre. Nessun endpoint SSE (gli `StreamingResponse` sono backup e download). Da capire chi
   trattiene lo shutdown di uvicorn (connessioni aperte del browser, lavori del lifespan) e se lo stesso succede con
   `docker stop`, che dopo 10 s manda SIGKILL e salta gli hook di chiusura.
-- **C-50 · L'AI Export di un Asset espone il nome interno `portfolio_weight_ratio`** — basso, da valutare per la 1.2
-  (T, sonda di B3b, 11/10). Nella tabella `portfolio_role.unavailable` di `asset.position_scope` (da `ea0558b3c`) il
+- ✅ **C-50 · L'AI Export di un Asset espone il nome interno `portfolio_weight_ratio`** — chiusa l'11/10 da T
+  (`dd0a8d497`, treno 39): il renderer passa `field` e `missing_fields` per i nomi pubblici; il payload resta canonico,
+  quindi nessuna versione nuova. Era: basso, da valutare per la 1.2 (T, sonda di B3b, 11/10). Nella tabella `portfolio_role.unavailable` di `asset.position_scope` (da `ea0558b3c`) il
   campo esce col nome interno invece di quello pubblico (`PUBLIC_RATIO_FIELD_NAMES` in `snapshotDataRenderer.ts`), e il
   controllo pubblico della sonda fallisce appena una gamba non ha valore corrente.
 - **C-51 · I dati sintetici scrivono la vecchia forma di `classification_params`** — basso (T, 11/10).
   `populate_mock_data.py:793-881`: l'AI Export degli Asset sintetici 4–8 risponde 503 su `asset.identity`. Tocca le
   sonde e gli scatti futuri dell'AI Export (C-41), non gli utenti.
 - **C-52 · La CLI della sonda dell'AI Export non sa scegliere l'Asset né l'utente sintetico** — minimo (T, 11/10).
+- **C-53 · L'AI Export dice «non riconciliato» per un residuo di rumore** — basso, preesistente (I, F-4, 12/10).
+  `portfolio_financial.py:490` e `broker_financial.py:435` provano `residual_amount == Decimal("0")` su un residuo non
+  quantizzato: nel DB mock 5 snapshot su 33 danno `reconciled` falso, con un residuo massimo di 1e-24, prima e dopo F.
+  Proposta di I: la tolleranza `CONVERSION_DUST` (1e-9, `financial_math/native_cash.py`) e il bump di versione dei due
+  componenti, con `COMPACT_COMPONENT_VERSIONS` nello stesso cambio. Decisione del developer: nella 1.2 (consiglio del
+  coordinatore: a T dopo T-1) o dopo.
 
 ## Tracciate altrove
 
