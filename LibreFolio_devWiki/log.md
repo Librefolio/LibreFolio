@@ -3084,3 +3084,11 @@ Graph: not updated (P-6).
 Base `d877a4e14`. Source: step 11 of `27_releaseImages/plan-phase00ChangelogTranslation.prompt.md` (`1ed372534`) and
 the code of `99aa2f4ec`, `53673ae9f`. **Updated**: [[decisions/fr-typography-at-build-time]] and [[features/F-109]]
 (M-23 open → resolved in 1.2: `typesetFrench()` in `changelog.ts`). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R3a — implementation_2, the contract and the levels
+Base `4549376b8`. Sources: `implementation_2/` top files (00, A, F1, F2, PRIMITIVE, S1–S5, `_comune`, REGISTRO,
+R5-tempo2), digested by an explore agent and checked here (quotes by grep; hashes and paths verified). **Created**:
+[[decisions/asset-set-one-preparation-not-fan-out]], [[decisions/l3-reads-current-composition]],
+[[problems/runner-catalog-merge-not-line-union]]. **Updated**: [[features/F-111]], [[features/F-112]],
+[[sources/phase00-risk-integration-2026-09]]. Overtaken in the journal, noted on the pages: the contract's table of
+`ASSET_SET` plugins. Next: R3b, the post-merge review R5 and the progress logs. Graph: not updated (P-6).
