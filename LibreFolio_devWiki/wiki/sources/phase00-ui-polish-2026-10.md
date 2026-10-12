@@ -44,8 +44,8 @@ and resumed at 19:24.
 ## Not ingested
 
 - A counter race found in `asset-detail.spec.ts`, which the coordinator split off: «(a), ma come lotto 49 separato,
-  subito dopo il checkpoint del lotto 48» ("(a), but as a separate lot 49, right after lot 48's checkpoint") — to be
-  ingested with lot 49.
+  subito dopo il checkpoint del lotto 48» ("(a), but as a separate lot 49, right after lot 48's checkpoint") — ingested at train 78:
+  [[problems/request-counter-read-before-the-handler-counted]].
 - Backlog 48-1 (the AI Export button padded wider than its neighbours), left for after 1.2.
 
 ## Source files
