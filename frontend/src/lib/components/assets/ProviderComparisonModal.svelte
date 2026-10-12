@@ -21,6 +21,7 @@
     import {X} from 'lucide-svelte';
     import {assetTypeBadgeClass, getAssetTypeIconUrl, sectorI18nKey} from '$lib/utils/assetTypes';
     import IdentifierPrimaryChooser, {type IdentifierChoice} from './IdentifierPrimaryChooser.svelte';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     // =========================================================================
     // Types
@@ -225,7 +226,7 @@
             .sort(([, a], [, b]) => (b as number) - (a as number))
             .map(([key, val]) => ({
                 key,
-                pct: ((val as number) * 100).toFixed(2) + '%',
+                pct: formatPercent(val as number, {scale: 100, signed: false}),
             }));
     }
 

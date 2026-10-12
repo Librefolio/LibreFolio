@@ -106,6 +106,7 @@
     import {onboardingGuide, type ImportGuideStepId} from '$lib/features/onboarding/onboardingGuide.svelte';
 
     import type {TransactionCreateItem, BrimFile, BrimParseResponse, BrimPlugin, BrimSetCombineResponse, BrimSetPreview, FilePreviewResponse} from '$lib/types';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
 
     // =========================================================================
     // Props
@@ -2342,7 +2343,7 @@ ${arrow}<span>${label}</span></span>`,
                     const q = mt.tx.quantity;
                     if (!q || q === '0') return {type: 'html', html: '<span class="text-gray-400">—</span>'};
                     const n = parseFloat(q);
-                    const formatted = isNaN(n) ? q : parseFloat(n.toFixed(8)).toString();
+                    const formatted = isNaN(n) ? q : formatFixed(n, 8, {trim: true});
                     return {type: 'html', html: `<span class="font-mono text-sm">${formatted}</span>`};
                 },
             },

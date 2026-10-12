@@ -52,6 +52,9 @@ A pre-existing duplicate sync when an asset is created from the Assets page — 
 - [[problems/asset-classification-wiped-by-partial-save]], [[features/F-104]] — new.
 - [[problems/ghcr-browser-cors-auth-flow]] — unchanged (already cites the archived Round 5 plan).
 
+
+The backlog these jobs came from, and where its other areas went: [[sources/phase00-feedback-jobs-2026-09]].
+
 ## Source files
 
 | Role | Path |
