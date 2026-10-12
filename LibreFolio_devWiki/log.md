@@ -2761,3 +2761,30 @@ Updated:
 - [[decisions/financial-math-single-average-cost]], [[decisions/bulk-pairs-new-with-saved]].
 
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B4 — plan 42 (P): the checks of promoted pairs, C-46…C-48, the localisation mini-lot
+Source: `Release_2/Phase_0/42_promotePairChecks/plan-phase00PromotePairChecks.prompt.md` @ git:`6c32f4aff`; base
+`94abcf380`. Checked on the code at HEAD:
+- `pairAssetMismatch` and `pairQuantityMismatch` in `_validate_linked_pair`, and both keys in the four catalogues;
+- `_promoted_state_issues`;
+- `TXPromoteSuggestInput.asset_event_id`;
+- `costBasisValue` in `fieldEq`;
+- `findPromoteMatch`'s exact opposite and `eventA`/`eventB`;
+- the selection bar's `assetQuantitiesCancel`;
+- `tolerance_days` with `ge=0`, and the window in the 💡's key;
+- the marker locale `qaa` in `DataEditor.test.ts`;
+- `$currentLanguage` in the broker card's and sharing panel's template expressions.
+
+The four commits and their merges (trains 32, 34, 37, 38) are in HEAD. Two paths read in the plan's notes were corrected
+to the tree: `components/charts/calendarReturnWindow.ts` and `utils/__tests__/txPayloadHelpers.test.ts`.
+Created:
+- [[decisions/transfer-pair-same-asset-opposite-quantity]], [[decisions/promote-respects-asset-event-link]];
+- [[problems/bulk-cost-basis-compared-by-reference]], [[problems/legacy-component-language-untracked]];
+- [[concepts/marker-locale-for-catalogue-labels]];
+- [[sources/phase00-promote-pair-checks-2026-10]].
+
+Updated: [[decisions/bulk-pairs-new-with-saved]] (C-47), [[decisions/pair-description-tags-validation]] (C-42, the
+single-leg update), [[decisions/cash-transfer-split-promote]], [[entities/transaction-batch-pipeline]],
+[[problems/promote-skipped-cost-basis-check]], [[concepts/svelte5-runes]], [[concepts/assert-on-identity-not-prose]],
+[[features/F-048]].
+Graph: not updated (P-6).
