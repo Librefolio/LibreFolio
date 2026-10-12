@@ -2902,3 +2902,32 @@ Updated: [[features/registry]], [[domains/calculations]], [[features/F-106]], [[
 Note for step D: the B6a and B6b pages cite `backend/app/services/tool_plugins/pac_allocator.py`, which U-1 moved to
 `tool_plugins/pac_allocator/plugin.py` in the target (train 61); they follow the map with the other plugin paths.
 Graph: not updated (P-6).
+
+## [2026-10-12] lint | Steps D and C — the plugin paths after U-1, and F-078
+Base `145502a39` (train 62). U-1 is `2eed3d26c` («one folder per plugin», train 61 `bd8ee8e4d`): the 84 first-party
+plugins moved with `git mv` to `<family>/<name>/plugin.py` (82 renames at 100 %, 2 at 99 %), each beside an
+`__init__.py` that is only its docstring; discovery loads `plugin.py` (`PLUGIN_MODULE_NAME` in
+`provider_registry.py`), the family helpers stay at the family root, and `test_plugin_layout_gate.py` guards the
+layout, the imports and the strings. `frontend/src/lib/i18n/` still holds one catalogue per language: U-2 and U-3 are
+later steps of plan 45.
+
+**Before**: `check_source_paths` gave 54 missing paths in this worktree (104 occurrences, 63 pages) — on the target 44: 42
+plugin modules (BRIM 16, risk 8, signal 6, FX 6, asset 6), `tool_plugins/pac_allocator.py` cited by steps B6a and
+B6b, and the old `admin.py` of F-078; the other 10 are git-ignored artifacts that a worktree does not have.
+
+**D — the map** (delivered with the checkpoint, outside the repository): 120 citations — 99 paths, 20 bare file
+names, one dotted import — in 56 pages. 112 moved to `<name>/plugin.py` in 54 pages, every new path checked with `git ls-files`; by
+hand, [[features/F-013]]'s layer sentence and a note on the convention in [[features/F-059]]. 8 left as written, being
+history: five in this log, the old import quoted as the problem of [[decisions/provider-shutdown-generic]], a past-tense
+account in [[sources/beta-testing-2026-08-05]] and a dated residual in [[sources/phase00-brim-targeted-2026-09]].
+[[decisions/plugin-folders-and-split-i18n]] now records U-1 as delivered and the translations as still planned.
+
+**C — F-078**: [[features/F-078]] (`planned`) was delivered in another form on 2026-09-09 (`ef722b552`, U4 of the urgent
+import and UX fixes, [[sources/phase00-feedback-import-urgent-2026-09]]): a sortable uploader column with an avatar and
+name filter, kept in the URL, for every user rather than admins only, with names from the existing
+`GET /api/v1/users/search`. `backend/app/api/v1/admin.py` never existed (`git log --all` is empty), so its row gave way
+to the files that do; `get_upload_by_user()` is still called only by its tests. F-078 → `implemented`; registry: 93
+implemented or documented, 10 planned.
+
+**After**: 10 missing in this worktree, all git-ignored artifacts; on main the check should reach 0.
+Graph: not updated (P-6).

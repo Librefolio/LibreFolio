@@ -138,6 +138,6 @@ without requiring a page reload.
 | Transaction service | `backend/app/services/transaction_service.py` |
 | Asset source (wipe logic) | `backend/app/services/asset_source.py` |
 | Schemas (common FxBackwardFillInfo) | `backend/app/schemas/common.py` |
-| Scheduled investment provider | `backend/app/services/asset_source_providers/scheduled_investment.py` |
+| Scheduled investment provider | `backend/app/services/asset_source_providers/scheduled_investment/plugin.py` |
 | Asset currency change modal | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
 | Navigation store | `frontend/src/lib/stores/app/navigationStore.ts` |

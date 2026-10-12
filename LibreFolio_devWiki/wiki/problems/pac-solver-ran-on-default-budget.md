@@ -57,7 +57,7 @@ No release shipped with it: `plan` had been wired the day before (`b82e59ffa`, 2
 
 | Role | Path |
 |------|------|
-| Engine window claim | `backend/app/services/tool_plugins/pac_allocator.py` |
+| Engine window claim | `backend/app/services/tool_plugins/pac_allocator/plugin.py` |
 | Budget passed down | `backend/app/services/pac_allocator/planner.py` |
 | Fallback budget and SCIP limits | `backend/app/services/pac_allocator/solver.py` |
 | Engine window | `backend/app/services/tools/base.py` |

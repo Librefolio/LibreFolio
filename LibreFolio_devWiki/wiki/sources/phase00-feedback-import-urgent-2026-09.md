@@ -33,6 +33,8 @@ first, added a "recommend LibreFolio" share feature, and replaced the browser-si
 - **E5** — creating a broker with an existing name answers **409** with a recovery hint (`backend/app/api/v1/brokers.py`).
 - **E7/E8** — the bulk shortfall warning points to every affected row; rows are sorted chronologically for display.
 - **E9** — the "up to date" toast shows the remote version, not the installed one.
+- **U4** — a sortable uploader column with an avatar/name filter on the Files page: the delivered form of
+  [[features/F-078]] (recognised in step C, 2026-10-12).
 - **Rounds 2–4 — share LibreFolio**: [[features/F-104]] (copy-and-go, five platforms, platform boundaries).
 - **Round 5 — GHCR**: [[problems/ghcr-browser-cors-auth-flow]] (filed 2026-09-09).
 - **Integration rules** recorded by the manifest, still the practice of the release coordinator: integrate per file

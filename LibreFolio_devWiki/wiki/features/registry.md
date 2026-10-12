@@ -2,7 +2,7 @@
 
 > Authoritative list of all LibreFolio features with permanent codes.
 > Codes are assigned at first mention and **never change** even if the feature is renamed/split/superseded.
-> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git); 2026-10-12 (step B5: F-105 guided onboarding; step B6a: F-106 Tool platform; step B6b: F-107 PAC allocator, F-108 Rebalancer planned)
+> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git); 2026-10-12 (step B5: F-105 guided onboarding; step B6a: F-106 Tool platform; step B6b: F-107 PAC allocator, F-108 Rebalancer planned; step C: F-078 implemented)
 >
 > **Macro-level navigation**: for product-level domain narratives (what each domain does, how features cluster, data-flow diagrams), see [`wiki/domains/`](../domains/) — 11 domain pages covering all features.
 
@@ -185,7 +185,7 @@
 | [[F-075]] | TanStack Table v9 Migration | frontend | `superseded` | — |
 | [[F-076]] | Log Level Policy & TRACE Level | backend | `implemented` | — |
 | [[F-077]] | Mobile DataTable Touch Drag Column Reorder | frontend | `planned` | — |
-| [[F-078]] | User Filter in Files Page | fullstack | `planned` | — |
+| [[F-078]] | User Filter in Files Page (an uploader column filter, for every user) | fullstack | `implemented` | — |
 | [[F-079]] | GDPR Broker Access Compliance | fullstack | `planned` | — |
 | [[F-080]] | Candlestick Chart / Volume Bars | frontend | `implemented` | — |
 | [[F-081]] | Fiscal Sale Method (FIFO/LIFO/PMC/SelectID) | fullstack | `planned` | — |
@@ -215,8 +215,8 @@
 
 > Recomputed from the rows above on 2026-10-09 (the previous table still counted 96 features and listed F-052/F-053
 > as planned), and again on 2026-10-12 after the lint (F-050, F-089, F-092 shipped; F-075 superseded) and after
-> steps B5, B6a and B6b (F-105 to F-108 added). "PLANNED / IDEA" is the section where a feature was first registered, not
-> its status: eleven of its rows have shipped and one is superseded.
+> steps B5, B6a and B6b (F-105 to F-108 added). "PLANNED / IDEA" is the section where a feature was first
+> registered, not its status: twelve of its rows have shipped (F-078 recognised in step C) and one is superseded.
 
 | Domain | Total | implemented/documented | in-progress | planned | idea | superseded |
 |--------|-------|----------------------|-------------|---------|------|------------|
@@ -231,8 +231,8 @@
 | DASHBOARD | 3 | 3 | 0 | 0 | 0 | 0 |
 | CALCULATIONS | 4 | 4 | 0 | 0 | 0 | 0 |
 | INFRASTRUCTURE | 17 | 17 | 0 | 0 | 0 | 0 |
-| PLANNED/IDEA (first registered) | 26 | 11 | 0 | 11 | 3 | 1 |
-| **TOTAL** | **108** | **92** | **1** | **11** | **3** | **1** |
+| PLANNED/IDEA (first registered) | 26 | 12 | 0 | 10 | 3 | 1 |
+| **TOTAL** | **108** | **93** | **1** | **10** | **3** | **1** |
 
 ## Key source files
 
