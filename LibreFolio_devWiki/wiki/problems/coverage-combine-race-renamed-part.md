@@ -104,6 +104,8 @@ The causes are in the backlog, not fixed here:
   the runner can have.
 - Any coverage artefact can be written empty (see [[problems/e2e-python-coverage-lost-above-two-workers]]). Count
   what was combined and name what was not.
+- The project's `sitecustomize` must hand over to an interpreter's own, or Homebrew's Python breaks:
+  [[problems/sitecustomize-shadows-homebrew-python]].
 
 ## Impact
 

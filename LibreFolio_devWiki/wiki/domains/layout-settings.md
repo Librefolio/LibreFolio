@@ -58,7 +58,7 @@ graph TD
 
 ## What comes next
 
-- [[F-092]] Default Language/Currency for New Users — admin sets a system default that pre-fills new user preferences; small addition to the Global Settings page.
+- [[F-092]] Default Language/Currency for New Users — admin sets a system default that pre-fills new user preferences; small addition to the Global Settings page. *Delivered (`2a8e5bf1c`, 2026-07-17) and documented in `admin/settings` (lint 2026-10-12).*
 - No major structural changes planned — this domain is intentionally stable as the foundation for all other domains.
 
 ## Source files

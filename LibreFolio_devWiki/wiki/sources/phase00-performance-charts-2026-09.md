@@ -45,7 +45,7 @@ were read through their status headers, decisions and closing checks.
   ECharts axis formatters, so behaviour tests are the only guard there (residual I-05).
 - **D28** — the `#rolling-return` link stays; the red `check-links` result in IT/FR/ES is translation debt, not an
   exception to register.
-- F-084 (per-lot transaction gain chart with a FIFO/LIFO selector) was **not** built by this work.
+- [[F-084]] (per-lot transaction gain chart with a FIFO/LIFO selector) was **not** built by this work.
 
 ## Residuals (backlog 38)
 

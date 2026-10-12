@@ -2,7 +2,7 @@
 
 > Authoritative list of all LibreFolio features with permanent codes.
 > Codes are assigned at first mention and **never change** even if the feature is renamed/split/superseded.
-> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code)
+> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git)
 >
 > **Macro-level navigation**: for product-level domain narratives (what each domain does, how features cluster, data-flow diagrams), see [`wiki/domains/`](../domains/) — 11 domain pages covering all features.
 
@@ -118,7 +118,7 @@
 | [[F-047]] | Transaction List Page (DataTable + filters + dual-form modals) | frontend | `implemented` | — |
 | [[F-048]] | Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done) | fullstack | `in-progress` | — |
 | [[F-049]] | BRIM Import UI (asset matching and review wizard) | fullstack | `documented` | [`dev/fe/import-wizard.md`](developer/frontend/components/features/import-wizard.md) |
-| [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | `planned` | — |
+| [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | `documented` | `user/files/index.en.md` |
 | [[F-051]] | Transaction ↔ AssetEvent Link | backend | `implemented` | — |
 
 ---
@@ -179,7 +179,7 @@
 
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
-| [[F-075]] | TanStack Table v9 Migration | frontend | `planned` | — |
+| [[F-075]] | TanStack Table v9 Migration | frontend | `superseded` | — |
 | [[F-076]] | Log Level Policy & TRACE Level | backend | `implemented` | — |
 | [[F-077]] | Mobile DataTable Touch Drag Column Reorder | frontend | `planned` | — |
 | [[F-078]] | User Filter in Files Page | fullstack | `planned` | — |
@@ -193,10 +193,10 @@
 | [[F-086]] | Client-side Image Preview Cache (LazyImage) | frontend | `implemented` | — |
 | [[F-087]] | Smooth Signal Line Style | frontend | `planned` | — |
 | [[F-088]] | Rolling (Return-over-N) Return chart mode | fullstack | `documented` | `user/assets/detail/chart.en.md` |
-| [[F-089]] | FX Provider Per-Plugin Documentation | infra | `planned` | — |
+| [[F-089]] | FX Provider Per-Plugin Documentation | infra | `documented` | `user/fx/providers/index.en.md` |
 | [[F-090]] | AssetEvent → Transaction Link (Enrichment) | backend | `planned` | — |
 | [[F-091]] | Multi-Worker Cache Server | backend | `planned` | — |
-| [[F-092]] | Default Language/Currency for New Users | backend | `planned` | — |
+| [[F-092]] | Default Language/Currency for New Users | backend | `documented` | `admin/settings.en.md` |
 | [[F-093]] | Coupon Policy Field | backend | `idea` | — |
 | [[F-094]] | Sync Date Range Dialog | frontend | `planned` | — |
 | [[F-095]] | Asset Delete — Transaction Count Link | fullstack | `documented` | `user/assets/index.en.md` |
@@ -210,24 +210,25 @@
 ## Statistics
 
 > Recomputed from the rows above on 2026-10-09 (the previous table still counted 96 features and listed F-052/F-053
-> as planned). "PLANNED / IDEA" is the section where a feature was first registered, not its status: nine of its
-> rows have shipped.
+> as planned), and again on 2026-10-12 after the lint (F-050, F-089, F-092 shipped; F-075 superseded). "PLANNED /
+> IDEA" is the section where a feature was first registered, not its status: eleven of its rows have shipped and one
+> is superseded.
 
-| Domain | Total | implemented/documented | in-progress | planned | idea |
-|--------|-------|----------------------|-------------|---------|------|
-| AUTH | 4 | 4 | 0 | 0 | 0 |
-| LAYOUT & SETTINGS | 7 | 7 | 0 | 0 | 0 |
-| BROKERS | 7 | 7 | 0 | 0 | 0 |
-| FX | 9 | 9 | 0 | 0 | 0 |
-| ASSETS | 13 | 13 | 0 | 0 | 0 |
-| SIGNALS | 9 | 9 | 0 | 0 | 0 |
-| TRANSACTIONS | 6 | 4 | 1 | 1 | 0 |
-| SCHEDULER | 2 | 2 | 0 | 0 | 0 |
-| DASHBOARD | 3 | 3 | 0 | 0 | 0 |
-| CALCULATIONS | 3 | 3 | 0 | 0 | 0 |
-| INFRASTRUCTURE | 16 | 16 | 0 | 0 | 0 |
-| PLANNED/IDEA (first registered) | 25 | 9 | 0 | 13 | 3 |
-| **TOTAL** | **104** | **86** | **1** | **14** | **3** |
+| Domain | Total | implemented/documented | in-progress | planned | idea | superseded |
+|--------|-------|----------------------|-------------|---------|------|------------|
+| AUTH | 4 | 4 | 0 | 0 | 0 | 0 |
+| LAYOUT & SETTINGS | 7 | 7 | 0 | 0 | 0 | 0 |
+| BROKERS | 7 | 7 | 0 | 0 | 0 | 0 |
+| FX | 9 | 9 | 0 | 0 | 0 | 0 |
+| ASSETS | 13 | 13 | 0 | 0 | 0 | 0 |
+| SIGNALS | 9 | 9 | 0 | 0 | 0 | 0 |
+| TRANSACTIONS | 6 | 5 | 1 | 0 | 0 | 0 |
+| SCHEDULER | 2 | 2 | 0 | 0 | 0 | 0 |
+| DASHBOARD | 3 | 3 | 0 | 0 | 0 | 0 |
+| CALCULATIONS | 3 | 3 | 0 | 0 | 0 | 0 |
+| INFRASTRUCTURE | 16 | 16 | 0 | 0 | 0 | 0 |
+| PLANNED/IDEA (first registered) | 25 | 11 | 0 | 10 | 3 | 1 |
+| **TOTAL** | **104** | **89** | **1** | **10** | **3** | **1** |
 
 ## Key source files
 

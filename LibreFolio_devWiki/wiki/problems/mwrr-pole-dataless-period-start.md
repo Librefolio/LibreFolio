@@ -1,6 +1,7 @@
 ---
 title: "MWRR pole when the period starts on a data-less day"
 category: problem
+status: resolved
 date: 2026-09-02
 tags: [backend, roi, mwrr, xirr, fifo, portfolio]
 related:
