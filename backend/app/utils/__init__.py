@@ -9,7 +9,8 @@ Layout:
 
 * ``datetime_utils`` — UTC datetime helpers.
 * ``json_utils`` — JSON-safety checks for payloads.
-* ``decimal_utils`` — decimal parsing, and the truncation to the database precision.
+* ``decimal_utils`` — decimal parsing (the truncation to the database precision is in
+  ``backend.app.db.precision``).
 * ``asset/`` — sectors, geographic areas, identifiers, and the locale of their display names.
 * ``fx/`` — currencies: ISO codes, display names, symbols and flags.
 * ``runtime/`` — the instance's version, the client's network address, and in-memory TTL caches.

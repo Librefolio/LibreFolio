@@ -21,7 +21,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.app.config import PROJECT_ROOT
-from backend.app.utils.decimal_utils import get_model_column_precision, truncate_priceHistory
+from backend.app.db.precision import get_model_column_precision, truncate_priceHistory
 
 # Add project root to path
 sys.path.insert(0, str(PROJECT_ROOT))
