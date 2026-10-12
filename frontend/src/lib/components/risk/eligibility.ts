@@ -13,6 +13,7 @@
 import type {z} from 'zod';
 import type {schemas} from '$lib/api';
 import {safeScalar, safeString} from '$lib/types/common';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 export type EligibilityLevel = z.infer<typeof schemas.RiskEligibilityLevel>;
 export type EligibilityReason = z.infer<typeof schemas.RiskEligibilityReason>;
@@ -117,10 +118,10 @@ export function fitPeriodOffer(verdicts: EligibilityVerdicts, selected: readonly
 }
 
 /**
- * A calendar day in the reader's language. The engine's dates are plain days,
+ * A calendar day in the interface locale (`uiLocale()`, M-18). The engine's dates are plain days,
  * so they are read as UTC: a local midnight would move them by one in some zones.
  */
-export function dayFormatter(locale: string | undefined): (isoDay: string) => string {
+export function dayFormatter(locale: string = uiLocale()): (isoDay: string) => string {
     const format = new Intl.DateTimeFormat(locale, {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'});
     return (isoDay) => {
         const day = new Date(`${isoDay}T00:00:00Z`);

@@ -1,5 +1,6 @@
 import type {ECharts} from 'echarts';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 
 /**
  * echartsTooltipHelpers.ts — Shared tooltip and lifecycle utilities for ALL ECharts charts.
@@ -89,9 +90,9 @@ export function buildTooltipDivider(borderColor: string): string {
  * @param topN - How many to show individually.
  * @param theme - Tooltip theme for colors.
  * @param otherLabel - Label for the "Other" row (e.g. "Other (5)")
- * @param formatValue - Format a number into display string (default: "X.1%")
+ * @param formatValue - Format a number into display string (default: a one-decimal percentage in the interface locale)
  */
-export function buildTooltipTopN(items: {name: string; value: number; color: string}[], topN: number, theme: TooltipTheme, otherLabel: string, formatValue: (v: number) => string = (v) => `${v.toFixed(1)}%`): string {
+export function buildTooltipTopN(items: {name: string; value: number; color: string}[], topN: number, theme: TooltipTheme, otherLabel: string, formatValue: (v: number) => string = (v) => formatPercent(v, {digits: 1, signed: false})): string {
     if (items.length === 0) return '';
 
     const sorted = [...items].sort((a, b) => b.value - a.value);
@@ -123,7 +124,7 @@ export function buildTooltipTopN(items: {name: string; value: number; color: str
  * @param remainingLabel - Label for the grouped row (e.g. "Remaining", "Resto").
  * @param formatValue - Value formatter.
  */
-export function buildTooltipByThreshold(items: {name: string; value: number; color: string}[], threshold: number, theme: TooltipTheme, remainingLabel: string, formatValue: (v: number) => string = (v) => `${v.toFixed(1)}%`): string {
+export function buildTooltipByThreshold(items: {name: string; value: number; color: string}[], threshold: number, theme: TooltipTheme, remainingLabel: string, formatValue: (v: number) => string = (v) => formatPercent(v, {digits: 1, signed: false})): string {
     if (items.length === 0) return '';
 
     const sorted = [...items].sort((a, b) => b.value - a.value);

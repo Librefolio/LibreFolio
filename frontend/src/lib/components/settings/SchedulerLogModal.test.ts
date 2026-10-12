@@ -24,7 +24,9 @@
  * as a success tick.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {flushSync, tick} from 'svelte';
 import {readable} from 'svelte/store';
+import {waitLocale} from 'svelte-i18n';
 import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 
 // Partial on purpose: `$lib/stores/app/language`, reached through `formatFixed` → `uiLocale`, reads the
@@ -46,6 +48,7 @@ vi.mock('$lib/utils/providerHelpers', () => ({
 
 import SchedulerLogModal from './SchedulerLogModal.svelte';
 import {zodiosApi} from '$lib/api';
+import {currentLanguage} from '$lib/stores/app/language';
 import {writeExportToClipboard} from '$lib/utils/clipboard';
 
 const httpGet = vi.mocked(zodiosApi.axios.get);
@@ -466,6 +469,84 @@ describe('the row header', () => {
         await mountWith([priceRun({status: 'partial'})]);
 
         expect(row('current_price')).toHaveAttribute('data-status', 'partial');
+    });
+});
+
+/**
+ * M-18 CP2 — when a run happened, in the interface language.
+ *
+ * Every figure follows the UI language (the developer's rule of 2026-10-12). The row header writes the
+ * run's time through `new Intl.DateTimeFormat(undefined, {month: 'short', day: 'numeric', hour: '2-digit',
+ * minute: '2-digit'})` — the browser's locale — so an Italian UI on an English browser read
+ * `Jan 15, 09:00 AM`. The cure: the interface locale, `uiLocale()`; a timestamp that cannot be parsed is
+ * still printed as it came (the row header's own test).
+ *
+ * The time publishes no handle: it is the one leaf of the row whose text carries a wall-clock time
+ * (`hh:mm`) — the duration reads `1.3s`, the summary `2/2 ✓`. Expectations are Intl's output in this
+ * runtime with the component's options, never typed; jsdom's browser is en-US, so the English UI keeps
+ * en-US. The language is switched as LanguageSelector does (`currentLanguage.set`) and put back after each
+ * test; this file's translator stays the identity, which no figure reads. SchedulerLogModal is a runes
+ * component: the in-place test proves the time is read reactively, in both shapes of a row header — the
+ * clickable one of a run with a detail and the static one of a run without.
+ */
+describe('the time of a run, in the interface language (M-18 CP2)', () => {
+    const TS = '2026-01-15T08:00:00Z';
+    const STAMP: Intl.DateTimeFormatOptions = {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'};
+    /** The run's time as Intl writes it in `locale`. */
+    const stampIn = (locale: string): string => new Intl.DateTimeFormat(locale, STAMP).format(new Date(TS));
+
+    /** The one leaf of a run's row whose text carries a wall-clock time. */
+    function shownStamp(job: string): string {
+        const stamps = [...row(job).querySelectorAll('*')]
+            .filter((element) => element.children.length === 0)
+            .map((element) => (element.textContent ?? '').trim())
+            .filter((text) => /\d{1,2}:\d{2}/.test(text));
+        if (stamps.length !== 1) throw new Error(`expected one time in the ${job} row, found ${JSON.stringify(stamps)}`);
+        return stamps[0];
+    }
+
+    /** Change the UI language as LanguageSelector does, then flush. */
+    async function switchLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('English UI on an en-US browser (control): the time as today', async () => {
+        await mountWith([priceRun({ts: TS})]);
+
+        expect(shownStamp('current_price')).toBe(stampIn('en-US'));
+    });
+
+    it('mounted with the UI in Italian: the Italian time', async () => {
+        await switchLanguage('it');
+        const expected = stampIn('it');
+        expect(expected, 'control: the Italian time differs from the English one').not.toBe(stampIn('en-US'));
+
+        await mountWith([priceRun({ts: TS})]);
+
+        expect(shownStamp('current_price')).toBe(expected);
+    });
+
+    it('follows an in-place switch of the UI language, en → it → en, in both shapes of a row header', async () => {
+        await mountWith([priceRun({ts: TS}), historyRun({ts: TS, assets: [], fx: []})]);
+        expect(row('current_price'), 'premise: the price run has a detail, so a clickable header').toHaveAttribute('data-has-detail', 'true');
+        expect(row('history_sync'), 'premise: the history run has none, so a static header').toHaveAttribute('data-has-detail', 'false');
+        const read = () => ({clickable: shownStamp('current_price'), static: shownStamp('history_sync')});
+        const both = (locale: string) => ({clickable: stampIn(locale), static: stampIn(locale)});
+        expect(read(), 'en, mount — today’s text').toEqual(both('en-US'));
+
+        await switchLanguage('it');
+        expect(read(), 'en → it in place — the Italian time').toEqual(both('it'));
+
+        await switchLanguage('en');
+        expect(read(), 'it → en in place — today’s text again').toEqual(both('en-US'));
     });
 });
 

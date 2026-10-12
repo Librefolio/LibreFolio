@@ -54,8 +54,21 @@
  * is listed beside the set its batch still forms. The function is stubbed with its final signature and
  * returns [], so every "lists" below is red and every "never lists" a guard; at the end of the file,
  * loaded through `s9()`. The wizard's side is U1 in tx-import-report-set.spec.ts.
+ *
+ * M-18 CP2 (the developer's rule of 2026-10-12: every figure in the interface language): `formatIsoDay`,
+ * the day the badges and the wizard's messages print, is written in the interface locale — the UI
+ * language regionalised by the browser — and no longer in the browser's own. Node's `navigator.language`
+ * follows the host's ICU locale, so it is pinned to en-US before any import, as jsdom's always is: the
+ * English UI then writes en-US. Its block follows `dayBefore`, loaded through `c2()`.
  */
-import {describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
+
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 
 // ---------------------------------------------------------------------------
 // The pinned shapes
@@ -161,6 +174,7 @@ interface ReportSetsModule {
     setBlocksAnalysis(set: ReportSetGroup, selectedIds: ReadonlySet<string>, state?: SetPreviewState): boolean;
     parseIsoPeriod(value: string | null | undefined): {years: number; months: number; days: number} | null;
     dayBefore(isoDate: string): string;
+    formatIsoDay(iso: string | null | undefined): string;
     buildSetTimeline(preview: TimelinePreview, roleOrder: string[]): SetTimeline | null;
 }
 
@@ -735,6 +749,75 @@ describe('dayBefore', () => {
     ])('the day before %s is %s, on the calendar', async (value, expected) => {
         const dayBefore = await c2('dayBefore');
         expect(dayBefore(value)).toBe(expected);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// formatIsoDay — the day in the interface language (M-18 CP2)
+// ---------------------------------------------------------------------------
+
+/**
+ * `formatIsoDay` writes the day of a set — its upload, a checkpoint, a verification — in the files'
+ * badges and the wizard's messages. It wrote it with `toLocaleDateString(undefined, {timeZone: 'UTC', …})`,
+ * the browser's locale, so an Italian UI on an English browser read `09/30/2026`, month first. The cure
+ * writes it in `uiLocale()`, still in UTC and still with two digits. Expectations are Intl's output with
+ * the function's own options, never typed, but for today's English text; the day is the 30th, so a
+ * day-first and a month-first notation cannot agree by accident.
+ */
+describe('formatIsoDay — the day in the interface language (M-18 CP2)', () => {
+    const DAY_OPTIONS: Intl.DateTimeFormatOptions = {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'};
+    const DAY = '2026-09-30';
+    /** 30 September 2026, as Intl writes it in `locale`. */
+    const dayIn = (locale: string): string => new Date(Date.UTC(2026, 8, 30)).toLocaleDateString(locale, DAY_OPTIONS);
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'it' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('English UI on an en-US browser (control): month first, today’s text', async () => {
+        const formatIsoDay = await c2('formatIsoDay');
+        await uiLanguage('en');
+
+        expect(formatIsoDay(DAY)).toBe(dayIn('en-US'));
+        expect(formatIsoDay(DAY)).toBe('09/30/2026');
+    });
+
+    it('Italian UI: day first, without passing a locale — for a day and for an instant alike', async () => {
+        const formatIsoDay = await c2('formatIsoDay');
+        await uiLanguage('it');
+        expect(dayIn('it'), 'control: the Italian day differs from the English one').not.toBe(dayIn('en-US'));
+
+        expect(formatIsoDay(DAY)).toBe(dayIn('it'));
+        // An instant is read as its own calendar day, whatever its time and the runner's timezone.
+        expect(formatIsoDay('2026-09-30T23:30:00Z')).toBe(dayIn('it'));
+    });
+
+    it('follows the UI language from one call to the next: it → fr → en', async () => {
+        const formatIsoDay = await c2('formatIsoDay');
+        const written: Record<string, string> = {};
+        for (const lang of ['it', 'fr', 'en'] as const) {
+            await uiLanguage(lang);
+            written[lang] = formatIsoDay(DAY);
+        }
+
+        expect(written).toEqual({it: dayIn('it'), fr: dayIn('fr'), en: dayIn('en-US')});
+    });
+
+    it('an absent day is a dash and an unreadable one is shown as it came, in any language (control)', async () => {
+        const formatIsoDay = await c2('formatIsoDay');
+        await uiLanguage('it');
+
+        expect(formatIsoDay(null)).toBe('—');
+        expect(formatIsoDay(undefined)).toBe('—');
+        expect(formatIsoDay('')).toBe('—');
+        expect(formatIsoDay('not-a-day')).toBe('not-a-day');
     });
 });
 

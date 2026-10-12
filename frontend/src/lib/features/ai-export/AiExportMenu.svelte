@@ -14,6 +14,7 @@
     import type {AiExportCatalogCompatibilityResult} from './catalog/compatibility';
     import type {AiExportDomain, AiExportSelectionId} from './catalog/shared';
     import {aiExportResponseLanguageFromLocale} from './ui';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     export interface AiExportMenuLabels {
         readonly triggerLabel: string;
@@ -327,7 +328,7 @@
                 {disabled}
                 {loading}
                 labels={labels.options}
-                locale={$currentLanguage}
+                locale={uiLocale()}
                 onprepare={(options) => void prepare(options)}
                 oncopyanyway={() => void copyAnyway()}
                 onusecompact={(options) => void prepare(options)}

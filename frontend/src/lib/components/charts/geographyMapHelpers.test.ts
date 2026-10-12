@@ -7,9 +7,20 @@
  *
  * Deliberately NOT asserted: anything ECharts draws, and any translated string —
  * `buildGeoLabel` receives its localized name through an injected `getInfo`, so
- * the values compared below are the ones the test itself supplies.
+ * the values compared below are the ones the test itself supplies. Its percentage
+ * is written in the interface language (M-18), pinned in the last block of its
+ * describe under a switched UI.
  */
-import {describe, expect, it, vi} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
+
+// The interface locale is the UI language regionalised by `navigator.language` (M-18). Node's tag
+// follows the host's ICU locale, so it is pinned to en-US — jsdom's own — before any import.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 import {buildChoroplethData, buildGeoLabel, buildGeoNameMaps, centroidOf, choroplethMax, computeUnknownPct, type GeoLabelDeps} from './geographyMapHelpers';
 
 describe('computeUnknownPct', () => {
@@ -175,5 +186,57 @@ describe('buildGeoLabel', () => {
     it('falls back to the feature name when info carries no localized name', () => {
         const label = buildGeoLabel({name: 'United States', value: 5}, deps({getInfo: () => ({flag_emoji: '🇺🇸'}), amounts: {}}));
         expect(label).toBe('🇺🇸 United States: 5%');
+    });
+
+    /**
+     * M-18 CP2: the percentage in the interface language.
+     *
+     * The label interpolates the number, `${params.value}%`, so a French map reads `12.35%` beside amounts
+     * written `1 234,00 €`. Every figure is written in the interface language (the developer's decision
+     * M-18, 2026-10-12): the percentage becomes `formatPercent(value, {digits: 2, signed: false, trim:
+     * true})` — the decimals the value has (`buildChoroplethData` rounds it to two), in the interface
+     * locale. English keeps today's text: `12.35%`, `12.3%`, `30%`.
+     *
+     * Expectations from `Intl` in an explicit locale: a percent with at most two decimals, after
+     * `toFixed(2)`. The name and the amount line are this file's fixtures, unchanged by the language.
+     */
+    describe('the percentage in the interface language (M-18)', () => {
+        /** Values with two decimals, one, and none: every shape `buildChoroplethData` hands the label. */
+        const VALUES = [12.35, 12.3, 30];
+
+        /** A percentage as the label must write it in `localeTag`: the decimals it has, up to two. */
+        const percentIn = (value: number, localeTag: string) => new Intl.NumberFormat(localeTag, {style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 2}).format(Number(value.toFixed(2)) / 100);
+
+        /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+        function spelled(value: unknown): string {
+            return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+        }
+
+        /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+        async function uiLanguage(lang: 'en' | 'fr'): Promise<void> {
+            currentLanguage.set(lang);
+            await waitLocale(lang);
+        }
+
+        afterEach(async () => {
+            // The language is module-level state shared by every test of the file.
+            await uiLanguage('en');
+        });
+
+        it('English UI on an en-US browser (guard): today’s text, with the decimals the value has', async () => {
+            await uiLanguage('en');
+
+            expect(VALUES.map((value) => buildGeoLabel({name: 'United States', value}, deps({amounts: {}})))).toEqual(['🇺🇸 Stati Uniti: 12.35%', '🇺🇸 Stati Uniti: 12.3%', '🇺🇸 Stati Uniti: 30%']);
+        });
+
+        it('French UI: the percentage in French notation, with the decimals the value has, the amount line after it', async () => {
+            await uiLanguage('fr');
+            const expected = [...VALUES.map((value) => `🇺🇸 Stati Uniti: ${percentIn(value, 'fr')}`), `🇺🇸 Stati Uniti: ${percentIn(12.5, 'fr')}\nEUR 1234`];
+            // Control: this runtime carries French data, so the French text is not the English one.
+            expect(percentIn(12.35, 'fr'), 'French differs from English').not.toBe('12.35%');
+
+            const written = [...VALUES.map((value) => buildGeoLabel({name: 'United States', value}, deps({amounts: {}}))), buildGeoLabel({name: 'United States', value: 12.5}, deps())];
+            expect(written, spelled(expected)).toEqual(expected);
+        });
     });
 });

@@ -54,6 +54,11 @@ export interface FormatPercentOptions {
     /** Digits after the decimal point. */
     digits?: number;
     /**
+     * Make `digits` a maximum: insignificant trailing zeros are dropped (`44.5%`, `44%`).
+     * For a value already rounded upstream, written with the digits it has.
+     */
+    trim?: boolean;
+    /**
      * Unit written after the number. Defaults to `%`.
      *
      * Pass `'pp'` for a difference between two percentages, and `''` for a bare
@@ -65,14 +70,14 @@ export interface FormatPercentOptions {
      * Locale to write the number in. Defaults to the interface locale (`uiLocale()`,
      * `$lib/stores/app/uiLocale`), so the number reads the way the interface
      * language writes numbers — `12.50%` in English, `12,50 %` in French, decimal
-     * comma and a narrow no-break space before the sign — through `Intl` for `%`,
+     * comma and a no-break space before the sign — through `Intl` for `%`,
      * and through `formatFixed` before any other suffix. A legacy component passes
      * `$uiLocaleStore` here, read in its template, so a language switch reaches it.
      */
     locale?: string;
 }
 
-export function formatPercent(value: number | null | undefined, {scale = 1, signed = true, empty = '—', digits = 2, suffix = '%', locale = uiLocale()}: FormatPercentOptions = {}): string {
+export function formatPercent(value: number | null | undefined, {scale = 1, signed = true, empty = '—', digits = 2, suffix = '%', trim = false, locale = uiLocale()}: FormatPercentOptions = {}): string {
     if (value == null || !Number.isFinite(value)) return empty;
     const scaled = value * scale;
     // `-0` survives arithmetic and prints as "-0.00%", which reads as a loss that
@@ -82,6 +87,6 @@ export function formatPercent(value: number | null | undefined, {scale = 1, sign
     // Rounded first, as `toFixed` rounds the value itself: dividing by 100 before Intl rounds
     // would move a figure sitting on a tie (`1.2345` at three digits) to the other side. A tiny
     // negative keeps its minus (`-0.00%`), as it did with `toFixed`.
-    if (suffix === '%') return sign + new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: digits, maximumFractionDigits: digits}).format(Number(normalized.toFixed(digits)) / 100);
-    return `${sign}${formatFixed(normalized, digits, {locale})}${suffix}`;
+    if (suffix === '%') return sign + new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: trim ? 0 : digits, maximumFractionDigits: digits}).format(Number(normalized.toFixed(digits)) / 100);
+    return `${sign}${formatFixed(normalized, digits, {locale, trim})}${suffix}`;
 }

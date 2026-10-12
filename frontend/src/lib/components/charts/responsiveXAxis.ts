@@ -1,4 +1,5 @@
 import {parseDisplayDate} from '$lib/utils/core/formatAxisDate';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /**
  * The third argument ECharts passes to an axis-label formatter: a time axis sends
@@ -31,6 +32,7 @@ export interface ResponsiveXAxisPolicy {
 interface ResponsiveXAxisInput {
     width: number;
     values: readonly (number | string)[];
+    /** Default: the interface locale (`uiLocale()`, M-18). */
     locale?: string;
     axisType: 'category' | 'time';
     horizontalPadding?: number;
@@ -45,7 +47,7 @@ interface AxisDateFormats {
 }
 
 function axisDateFormats(locale: string | undefined): AxisDateFormats {
-    const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(locale || undefined, options);
+    const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(locale || uiLocale(), options);
     return {
         dayMonth: format({day: 'numeric', month: 'short'}),
         dayMonthYear: format({day: 'numeric', month: 'short', year: '2-digit'}),

@@ -5,9 +5,8 @@
  * than one year and the day alone would be ambiguous). An unparseable input is
  * echoed back through `String(value)` rather than rendered as "Invalid Date".
  *
- * The locale is passed in (the `$currentLanguage` store value) so this stays a
- * pure function; an empty locale falls back to the environment default, matching
- * the original `toLocaleDateString($currentLanguage || undefined, …)` call.
+ * The locale is passed in; an empty one falls back to the interface locale
+ * (`uiLocale()`, M-18), never to the browser's.
  *
  * The three lot charts each carried this verbatim — twice as `formatAxisDate`
  * and once, confusingly, as `formatShortDate`. Note it is NOT the same as
@@ -30,6 +29,8 @@
  * `LotCustodyModal` was the one copy that already did this; the others rendered
  * the wrong day for half the planet.
  */
+
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /** A bare calendar day: no time, no zone, nothing to convert. */
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -70,5 +71,5 @@ export function parseDisplayDate(value: number | string): Date | null {
 export function formatAxisDate(locale: string | undefined, value: number | string, withYear = false): string {
     const date = parseDisplayDate(value);
     if (!date) return String(value);
-    return date.toLocaleDateString(locale || undefined, withYear ? {year: 'numeric', month: 'short', day: 'numeric'} : {month: 'short', day: 'numeric'});
+    return date.toLocaleDateString(locale || uiLocale(), withYear ? {year: 'numeric', month: 'short', day: 'numeric'} : {month: 'short', day: 'numeric'});
 }

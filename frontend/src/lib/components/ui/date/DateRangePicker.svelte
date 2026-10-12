@@ -29,6 +29,7 @@
     import {dateArrowStep, resetDateArrowHold} from '$lib/utils/core/dateArrowStep';
 
     import {portal} from '$lib/actions/portal';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
     // =========================================================================
     // Types
     // =========================================================================
@@ -1106,7 +1107,7 @@
         if (iso === 'max') return displayDate(todayIso());
         if (compact) return iso; // YYYY-MM-DD — fits narrow cells
         const d = new Date(iso + 'T00:00:00');
-        return d.toLocaleDateString('en', {day: '2-digit', month: 'short', year: 'numeric'});
+        return d.toLocaleDateString(uiLocale(), {day: '2-digit', month: 'short', year: 'numeric'});
     }
 
     /** Highlights object for CalendarMonth instances */

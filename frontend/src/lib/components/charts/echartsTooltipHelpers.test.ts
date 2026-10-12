@@ -24,6 +24,9 @@
  *     asserted on their clamping arithmetic, which is the part that has bugs.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import {
     buildDot,
     buildFittedTooltipRow,
@@ -201,6 +204,86 @@ describe('buildTooltipByThreshold', () => {
             id,
         );
         expect(html).not.toContain('Remaining (');
+    });
+});
+
+/**
+ * M-18 CP2: the default value formatter in the interface language.
+ *
+ * Without a `formatValue`, `buildTooltipTopN` and `buildTooltipByThreshold` print a share as
+ * `${v.toFixed(1)}%`: `52.3%` for a French reader, who writes `52,3 %`. Every figure is written in the
+ * interface language (the developer's decision M-18, 2026-10-12), so the default becomes
+ * `formatPercent(v, {digits: 1, signed: false})`, whose locale defaults to `uiLocale()`. A share carries no
+ * `+`; the grouped row is formatted by the same default.
+ *
+ * Read as the value cells of the rows (`<b>…</b>`), in the order the builders lay them out. Expectations
+ * come from `formatPercent` given an explicit locale, never typed; English is today's exact text, jsdom's
+ * browser being en-US.
+ */
+describe('default value formatter in the interface language (M-18)', () => {
+    /** Two shares above 5% and two below, whose sum sits on no rounding tie. */
+    const ITEMS = [
+        {name: 'Equity', value: 52.34, color: '#1'},
+        {name: 'Bonds', value: 31.27, color: '#2'},
+        {name: 'Cash', value: 4.12, color: '#3'},
+        {name: 'Gold', value: 3.41, color: '#4'},
+    ];
+    /** The two small shares, summed as the builders sum them. */
+    const SMALL = 4.12 + 3.41;
+
+    /** The value cells of a tooltip, in order. */
+    function valuesOf(html: string): string[] {
+        return [...html.matchAll(/<b>([^<]*)<\/b>/g)].map((match) => match[1]);
+    }
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    /** The shares as the default formatter must write them in `locale`. */
+    const share = (value: number, locale: string) => formatPercent(value, {digits: 1, signed: false, locale});
+
+    it('English UI on an en-US browser (guard): both builders print today’s text, the grouped row included', async () => {
+        await uiLanguage('en');
+
+        expect(valuesOf(buildTooltipTopN(ITEMS, 2, THEME, 'Other'))).toEqual(['52.3%', '31.3%', '7.5%']);
+        expect(valuesOf(buildTooltipByThreshold(ITEMS, 5, THEME, 'Remaining'))).toEqual(['52.3%', '31.3%', '7.5%']);
+    });
+
+    it('French UI: buildTooltipTopN writes every share, the grouped one included, as a French percentage with no sign', async () => {
+        await uiLanguage('fr');
+        const expected = [share(52.34, 'fr'), share(31.27, 'fr'), share(SMALL, 'fr')];
+        // Control: this runtime carries French data, so the French text is not today's English one.
+        expect(expected[0], 'French differs from English').not.toBe('52.3%');
+
+        expect(valuesOf(buildTooltipTopN(ITEMS, 2, THEME, 'Other')), spelled(expected)).toEqual(expected);
+    });
+
+    it('French UI: buildTooltipByThreshold writes the kept shares and the remaining sum as French percentages', async () => {
+        await uiLanguage('fr');
+        const expected = [share(52.34, 'fr'), share(31.27, 'fr'), share(SMALL, 'fr')];
+        expect(expected[2], 'French differs from English').not.toBe('7.5%');
+
+        expect(valuesOf(buildTooltipByThreshold(ITEMS, 5, THEME, 'Remaining')), spelled(expected)).toEqual(expected);
+    });
+
+    it('a formatter the caller passes still wins, in French too', async () => {
+        await uiLanguage('fr');
+        const raw = (value: number) => `v=${value}`;
+
+        expect(valuesOf(buildTooltipTopN(ITEMS, 2, THEME, 'Other', raw))).toEqual(['v=52.34', 'v=31.27', `v=${SMALL}`]);
     });
 });
 
