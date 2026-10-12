@@ -1798,3 +1798,74 @@ class TestGalleryHandsTheSetupToPlaywright:
         # a refused reuse never turns into a populate after all.
         assert launch == {}
         assert gallery_lane.events == ([] if cause == "missing-db" else ["ensure-users"])
+
+
+# ── Frontend build staleness — the root CHANGELOG files are inputs of the build (lot CL) ──
+#
+# `cli_base.check_frontend_needs_build()` says whether `frontend/build` must be
+# rebuilt by comparing the mtime of `build/index.html` with what the build reads:
+# `frontend/src`, the frontend config files and the Tool codegen inputs. The
+# frontend also bundles the root CHANGELOG files — `CHANGELOG.md` inline through
+# vite's `?raw`, each `CHANGELOG.<lang>.md` as a lazy chunk — so a changelog
+# edited after the last build must make the build stale as well: otherwise the
+# app keeps serving the old text, and an E2E that reads the file
+# (`layout/changelog-locale.spec.ts`) disagrees with the bundle it runs against.
+# The project root is a tree under `tmp_path` and every mtime is set with
+# `os.utime`: no clock, no sleep, no repository file touched.
+
+#: The build's mtime, and the instants an hour either side of it where every other input is placed.
+BUILD_MTIME = 1_800_000_000
+OLDER_MTIME = BUILD_MTIME - 3600
+NEWER_MTIME = BUILD_MTIME + 3600
+
+
+@pytest.fixture
+def frontend_project(monkeypatch, tmp_path) -> dict[str, Path]:
+    """A built frontend under a ``tmp_path`` project root, every input an hour older than the build.
+
+    Inputs: one ``frontend/src`` file, ``frontend/package.json`` and the root
+    markdown files a test may move forward — the two changelogs and a README that
+    is not one. The Tool codegen inputs are absent here, verified rather than
+    assumed: they could otherwise answer either way for the guards below.
+    """
+    files = {
+        "index.html": tmp_path / "frontend" / "build" / "index.html",
+        "source": tmp_path / "frontend" / "src" / "app.html",
+        "package.json": tmp_path / "frontend" / "package.json",
+        "CHANGELOG.md": tmp_path / "CHANGELOG.md",
+        "CHANGELOG.it.md": tmp_path / "CHANGELOG.it.md",
+        "README.md": tmp_path / "README.md",
+    }
+    for path in files.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic build input\n", encoding="utf-8")
+        os.utime(path, (OLDER_MTIME, OLDER_MTIME))
+    os.utime(files["index.html"], (BUILD_MTIME, BUILD_MTIME))
+    monkeypatch.setattr(cli_base, "get_project_root", lambda: tmp_path)
+    assert [path for path in cli_base._tool_contract_sources(tmp_path) if path.exists()] == [], "a Tool codegen input exists under the fake root"
+    return files
+
+
+class TestFrontendBuildStaleness:
+    """``cli_base.check_frontend_needs_build()``: the build is stale once any input it bundles is newer than it."""
+
+    def test_every_input_older_than_the_build_leaves_it_up_to_date(self, frontend_project):
+        assert cli_base.check_frontend_needs_build() is False
+
+    def test_a_frontend_source_newer_than_the_build_needs_a_rebuild(self, frontend_project):
+        # The positive control of the guards: the fake root is the one being read,
+        # and a newer input does make the answer True.
+        os.utime(frontend_project["source"], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True
+
+    @pytest.mark.parametrize("changelog", ["CHANGELOG.md", "CHANGELOG.it.md"], ids=["inline-english", "lazy-translation"])
+    def test_a_root_changelog_newer_than_the_build_needs_a_rebuild(self, frontend_project, changelog):
+        os.utime(frontend_project[changelog], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True, f"{changelog} is bundled by the frontend: editing it after the build must make the build stale"
+
+    def test_a_newer_root_file_that_is_not_a_changelog_leaves_it_up_to_date(self, frontend_project):
+        os.utime(frontend_project["README.md"], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is False
