@@ -616,3 +616,13 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | Source Path | Git Hash at Ingest | Date | Wiki Page |
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/08_review_visiva_20260922.md` | `d614daed9` | 2026-10-12 | [[problems/stale-version-file-shadows-git-describe]], [[sources/phase00-feedback-jobs-2026-09]] |
+
+## 2026-10-12 — historical folder H1, 01_signalMigration (base `62471add2`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/README.md` | `8da24ef22` | 2026-10-12 | re-baseline of the July row (path moved, hash was `untracked`) |
+| `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md` | `8da24ef22` | 2026-10-12 | re-baseline of the July row |
+| `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/contract-phase00AiExportTaskProfiles.md` | `8da24ef22` | 2026-10-12 | re-baseline of the July row |
+| `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportMigrationEquivalence.md` | `8da24ef22` | 2026-10-12 | re-baseline of the July row |
+| `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/plan-phase00SignalsBackendMigrationImplementation.prompt.md` | `8da24ef22` | 2026-10-12 | [[decisions/signal-indicator-warmup-sizing]], [[problems/spa-logout-cross-user-cache-leak]] — gaps only |
