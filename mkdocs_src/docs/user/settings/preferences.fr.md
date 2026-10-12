@@ -8,7 +8,7 @@ L'onglet **Préférences** contrôle **l'apparence et le comportement de l'appli
 
 | Paramètre | Catégorie | Description |
 |---------|----------|-------------|
-| **Langue** | 🌍 Affichage | Langue de l'interface — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. S'applique dès que vous l'enregistrez |
+| **Langue** | 🌍 Affichage | Langue de l'interface — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. S'applique dès que vous l'enregistrez, et décide aussi de l'écriture des nombres et des dates |
 | **Devise par défaut** | 💰 Devise | Votre propre devise de référence. Le Tableau de bord, la page Courtiers et la page de chaque courtier, ainsi que l'onglet **Corrélation** de la page Actifs s'ouvrent dans cette devise, et l'export IA d'une paire de devises l'utilise aussi ; une devise que vous choisissez sur le Tableau de bord reste valable pour la session. Elle est également proposée lorsque vous créez quelque chose de nouveau — un actif, le premier solde de trésorerie d'un nouveau courtier, un plan PAC. Ce menu liste toutes les devises |
 | **Thème** | 🎨 Apparence | ☀️ Clair / 🌙 Sombre / 🖥️ Auto (suit votre système d'exploitation) |
 
@@ -20,6 +20,14 @@ article table:first-of-type td:nth-child(-n + 2) {
     min-width: 11rem;
 }
 </style>
+
+!!! info "🌍 Les nombres et les dates suivent la langue de l'interface"
+
+    Les montants, les pourcentages et les dates s'écrivent comme la langue de l'interface les écrit : par exemple
+    `14.788,01` et `12 ott 2026` en italien, `14 788,01` et `12 oct. 2026` en français, `14.788,01` et `12 oct 2026` en espagnol.
+    Le navigateur n'ajoute que sa région, et seulement s'il utilise la même langue : en anglais, un navigateur réglé
+    sur l'anglais américain écrit `14,788.01` et `Oct 12, 2026`, et un navigateur dans une autre langue reçoit le format
+    britannique, `14,788.01` et `12 Oct 2026`.
 
 Choisissez une catégorie dans la barre latérale — sur un téléphone, dans le menu **Catégorie** — pour n'afficher que ses paramètres ;
 **Tous les paramètres** affiche tout.
@@ -117,9 +125,9 @@ le signe, de sorte qu'un gain se lit toujours comme un gain et une perte comme u
 
 | Normalement | Avec le mode confidentialité |
 |---|---|
-| `1,234.56 € 🇪🇺 EUR` | `••• € 🇪🇺 EUR` |
-| `-1,234.56 € 🇪🇺 EUR` | `-••• € 🇪🇺 EUR` |
-| `€1,234.56` ou `1.234,56 €` | `€•••` ou `••• €` |
+| `1 234,56 € 🇪🇺 EUR` | `••• € 🇪🇺 EUR` |
+| `-1 234,56 € 🇪🇺 EUR` | `-••• € 🇪🇺 EUR` |
+| `€1,234.56` ou `1 234,56 €` | `€•••` ou `••• €` |
 | `—` (aucune valeur) | `—` |
 
 `•••` correspond toujours aux trois mêmes points — même le **K** ou le **M** d'un chiffre abrégé disparaît — afin de ne jamais
@@ -131,7 +139,7 @@ révéler l'ordre de grandeur. Cela couvre :
   **[Analyse des lots FIFO](../dashboard/positions.md#fifo-lots-analysis)** — chaque montant sauf les
   prix unitaires, dans les tableaux, la modale de détail du lot et les graphiques, ainsi que les quantités que vous détenez
   (la colonne **Qté** des Positions, les quantités des lots). Un lot partiellement clôturé affiche sa part ouverte, par
-  exemple `••• (60%)`.
+  exemple `••• (60 %)`.
 - **Transactions** — le montant en trésorerie de chaque transaction.
 - **[Allocateur PAC](../tools/pac-allocator/index.md#reading-the-result)** — chaque montant et
   quantité du résultat, ainsi que les limites d'achat d'une route.
