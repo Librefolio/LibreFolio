@@ -6,7 +6,7 @@ Tests the FinancialSector enum and normalization functions.
 
 import pytest
 
-from backend.app.utils.sector_fin_utils import FinancialSector, normalize_sector, validate_sector
+from backend.app.utils.asset.sector import FinancialSector, normalize_sector, validate_sector
 
 # ============================================================
 # FinancialSector Enum Tests

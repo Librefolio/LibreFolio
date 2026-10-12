@@ -178,7 +178,7 @@ pipenv run ./dev.py install        # root npm install, npm ci in frontend/, Play
 pipenv run ./dev.py front build
 ```
 
-The VERSION step writes `VERSION` with the function the app itself uses, `get_git_version()` in `backend/app/utils/version.py` (`git describe --tags --always --dirty`). The image has no `.git/`, so the `Dockerfile` copies this file to report the version at runtime. The step runs before any step that could write tracked files, so `--dirty` cannot stamp the image version with a spurious `-dirty`.
+The VERSION step writes `VERSION` with the function the app itself uses, `get_git_version()` in `backend/app/utils/runtime/version.py` (`git describe --tags --always --dirty`). The image has no `.git/`, so the `Dockerfile` copies this file to report the version at runtime. The step runs before any step that could write tracked files, so `--dirty` cannot stamp the image version with a spurious `-dirty`.
 
 ### 🧪 2. Documentation Checks, Gallery and Rebuilds
 

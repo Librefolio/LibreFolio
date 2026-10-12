@@ -14,8 +14,8 @@ import structlog
 from babel.core import get_global
 from babel.numbers import get_currency_name, get_currency_symbol
 
-from backend.app.utils.geo_utils import iso2_to_flag_emoji
-from backend.app.utils.translation_utils import get_babel_locale
+from backend.app.utils.asset.geo import iso2_to_flag_emoji
+from backend.app.utils.asset.translation import get_babel_locale
 
 logger = structlog.get_logger(__name__)
 

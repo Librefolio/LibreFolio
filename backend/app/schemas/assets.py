@@ -55,9 +55,9 @@ from backend.app.schemas.common import (
 )
 from backend.app.schemas.prices import FAAssetEventPoint, FACurrentValue, FAHistoricalData, FAPricePoint
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
-from backend.app.utils.geo_utils import normalize_country_keys
-from backend.app.utils.identifier_utils import normalize_other_identifiers
-from backend.app.utils.sector_fin_utils import normalize_sector
+from backend.app.utils.asset.geo import normalize_country_keys
+from backend.app.utils.asset.identifier import normalize_other_identifiers
+from backend.app.utils.asset.sector import normalize_sector
 
 # ============================================================================
 # ENUMS FOR FINANCIAL CALCULATIONS

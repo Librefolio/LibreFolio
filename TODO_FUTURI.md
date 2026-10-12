@@ -1003,7 +1003,7 @@ Spawning di un **processo cache dedicato** dal `lifespan()` di FastAPI, che usa 
 
 1. **`backend/app/utils/cache_server.py`** (nuovo): `CacheManager(BaseManager)` con metodi `cache_get/set/delete/clear/get_or_create` registrati. Il server process usa theine direttamente.
 
-2. **`cache_utils.py`**: `NamedCache` riceve un flag `_remote_manager`. Se attivo, delega get/set/delete via proxy al cache server. Se non attivo (single-worker), usa theine locale come oggi. Zero cambiamenti nei callsite (`get_ttl_cache()` API invariata).
+2. **`utils/runtime/cache.py`**: `NamedCache` riceve un flag `_remote_manager`. Se attivo, delega get/set/delete via proxy al cache server. Se non attivo (single-worker), usa theine locale come oggi. Zero cambiamenti nei callsite (`get_ttl_cache()` API invariata).
 
 3. **`main.py` `lifespan()`**: Se `workers > 1`, spawna il cache server subprocess prima di avviare l'app. Passa l'indirizzo socket via env var. Shutdown: termina il subprocess.
 
@@ -1022,7 +1022,7 @@ Spawning di un **processo cache dedicato** dal `lifespan()` di FastAPI, che usa 
 ### File coinvolti
 
 - `backend/app/utils/cache_server.py` (nuovo)
-- `backend/app/utils/cache_utils.py` (adattare `NamedCache`)
+- `backend/app/utils/runtime/cache.py` (adattare `NamedCache`)
 - `backend/app/main.py` (spawn/shutdown cache process)
 
 

@@ -313,7 +313,7 @@ def _constraint_ref(code: str) -> ConstraintRef:
     return ConstraintRef(explanation_key=f'tools.allocation.constraints.{code.lower()}')
 """
 
-# utils/sector_fin_utils.py:24-33: display names, spaces included. The frontend strips
+# utils/asset/sector.py:24-33: display names, spaces included. The frontend strips
 # them (`sectorI18nKey`, assetTypes.ts:427) before building `sectors.${…}`.
 SECTORS_PY = """
 class FinancialSector(str, Enum):
@@ -672,7 +672,7 @@ class TestBackendFamiliesAndVocabulary:
     (``_CODE_LITERAL``): the reason ``"deeperTechnical"`` (``:92``), the provider codes
     behind ``providerErrors.${code}`` (``resolveProviderError.ts:48``, ``"NO_DATA"``) and
     the sector names behind ``sectors.${sectorI18nKey(entry.name)}``
-    (``AllocationPieChart.svelte:177``; ``"Health Care"`` at ``sector_fin_utils.py:24-33``
+    (``AllocationPieChart.svelte:177``; ``"Health Care"`` at ``utils/asset/sector.py:24-33``
     loses its space at ``assetTypes.ts:427``) could never prove a key.
     """
 
@@ -719,7 +719,7 @@ export function resolveProviderError(op: Operation): string {
         assert {"flat_series", "deeperTechnical", "FETCH_ERROR"} <= harvest_vocabulary(backend)
 
     def test_a_title_case_name_is_vocabulary_without_its_spaces(self, tmp_path):
-        vocab = harvest_vocabulary(_tree(tmp_path / "backend", {"utils/sector_fin_utils.py": SECTORS_PY}))
+        vocab = harvest_vocabulary(_tree(tmp_path / "backend", {"utils/asset/sector.py": SECTORS_PY}))
         assert {"HealthCare", "ConsumerDiscretionary", "Technology"} <= vocab
         # Only the collapsed name: the phrase itself is no code, and a sentence is no name.
         assert "Health Care" not in vocab
@@ -743,7 +743,7 @@ export function resolveProviderError(op: Operation): string {
 
     def test_a_title_case_sector_reaches_its_key(self, tmp_path):
         usage = collect_from_source(_tree(tmp_path / "src", {"AllocationPieChart.svelte": self.PIE}))
-        usage.vocabulary = harvest_vocabulary(_tree(tmp_path / "backend", {"utils/sector_fin_utils.py": SECTORS_PY}))
+        usage.vocabulary = harvest_vocabulary(_tree(tmp_path / "backend", {"utils/asset/sector.py": SECTORS_PY}))
         assert classify("sectors.HealthCare", usage, set()) == USED
         assert classify("sectors.Cryptocurrency", usage, set()) == UNVERIFIED
 

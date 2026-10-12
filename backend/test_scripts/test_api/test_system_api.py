@@ -8,7 +8,7 @@ Covers:
 - get_frontend_deps: frontend dependency list from package.json
 - GET /api/v1/system/info: system info endpoint
 - GET /api/v1/system/plugin-diagnostics: session required (live HTTP), failure-list shape for a logged-in user
-- classify_ip / client_address (utils/network_utils.py): the class of a client address, and which address (plan 36, §2.1)
+- classify_ip / client_address (utils/runtime/network.py): the class of a client address, and which address (plan 36, §2.1)
 - GET /api/v1/system/connection: session required, {client_class, cookie_secure} live and in-process (plan 36, §2.1)
 """
 
@@ -40,7 +40,7 @@ from backend.app.api.v1.system import (
 from backend.app.config import TEST_LANE_HEADER, get_settings
 from backend.app.db.models import User
 from backend.app.schemas.system import PluginDiagnosticsResponse
-from backend.app.utils.network_utils import classify_ip, client_address
+from backend.app.utils.runtime.network import classify_ip, client_address
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success, unique_id
 

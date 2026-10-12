@@ -32,8 +32,8 @@ from sqlalchemy import (
 )
 from sqlmodel import Field, Relationship, SQLModel
 
+from backend.app.utils.asset.identifier import normalize_other_identifiers
 from backend.app.utils.datetime_utils import utcnow
-from backend.app.utils.identifier_utils import normalize_other_identifiers
 
 # =============================================================================
 # CURRENCY VALIDATION HELPER

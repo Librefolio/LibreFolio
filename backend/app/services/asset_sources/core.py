@@ -50,7 +50,7 @@ from backend.app.schemas.provider import (
     FAProviderKind,
     FAVolumeKind,
 )
-from backend.app.utils.cache_utils import get_ttl_cache
+from backend.app.utils.runtime.cache import get_ttl_cache
 
 # Initialize structured logger
 logger = get_logger(__name__)
