@@ -45,8 +45,8 @@ graph TD
 ### 1. `grouped` — Dashboard 📊
 * Single amber/sky container grouping all issues.
 * Issues are sorted by severity: **Error** 🔴 → **Warning** 🟡 → **Info** 🔵.
-* The header adapts dynamically: `"1 error"`, `"2 warnings"`, or `"Data quality note"` (for info-only alerts).
-* First 3 issues are visible; an expand button appears when there are more.
+* The header counts errors and warnings only, naming just the non-zero counts: `"1 error(s)"`, `"2 warning(s)"` or `"1 error(s), 2 warning(s)"` (`dataQuality.headerErrors`, `dataQuality.headerWarnings`). With neither — info issues only — it reads `"Data quality note"` (`dataQuality.headerInfoOnly`).
+* The banner starts collapsed, showing only its header (`let expanded = $state(false)`). The header is itself the toggle: a button (test id `data-quality-toggle`, with `aria-expanded` and a chevron) that opens and closes the whole list. Once open, the errors and warnings — the issues the header counts — sit indented under it (`data-quality-actionable`); the info issues follow apart, not indented (`data-quality-info`), below a thin rule when errors or warnings precede them.
 
 ```svelte
 <DataQualityBanner issues={dataQualityIssues} mode="grouped" onaction={handleBannerAction} />
@@ -110,7 +110,7 @@ In grouped mode, `navigate_asset` renders one link per affected asset; every oth
 * the assets whose first `BUY` or `SELL` (`first_position_dates`, the earliest over their brokers) is at most `TRANSACTION_IMPLIED_GRACE_DAYS` (14, `backend/app/services/data_quality_thresholds.py`) days before the end date: a normal placement lag, e.g. a bond bought at issue before its first quote. An asset with no `BUY` or `SELL` gets no grace period;
 * the assets without a provider (no `AssetProviderAssignment`): valuing them at their last trade price is their intended behaviour.
 
-The list holds one entry per open position, so an asset held at two brokers counts twice in `count`. `as_of_date` is the date of the last daily state. The English message of `dataQuality.transactionImplied` reads "still valued at cost"; the engine values these assets at their latest trade price.
+The list holds one entry per open position, so an asset held at two brokers counts twice in `count`. `as_of_date` is the date of the last daily state. The English message of `dataQuality.transactionImplied` reads "{count} asset(s) valued at their last transaction price — no market price available for over 2 weeks (as of {as_of_date})": the engine does value these assets at their latest trade price, and the "over 2 weeks" matches the 14-day grace period, which counts from the first `BUY` or `SELL`, not from the latest quote.
 
 **`STALE_PRICE` rule.** `PortfolioService.get_summary` builds the list and passes it to `build_data_quality_report` as `stale_prices_dto`. An asset is listed when, at the end date, all of these hold:
 
