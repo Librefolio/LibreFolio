@@ -7,6 +7,8 @@
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
     import {errorDisplayCode, warningSentence, type RiskResultWarning} from './levels/levelHelpers';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     interface Props {
         title: string;
@@ -40,12 +42,12 @@
     }
 
     function percent(value: number | null | undefined): string {
-        return value == null ? '—' : `${(value * 100).toFixed(1)}%`;
+        return value == null ? '—' : formatPercent(value, {scale: 100, signed: false, digits: 1});
     }
 
     function fixed(value: number | readonly (number | null)[] | null | undefined): string {
         const scalar = singleValue(value);
-        return scalar == null ? '—' : scalar.toFixed(2);
+        return scalar == null ? '—' : formatFixed(scalar, 2);
     }
 </script>
 
