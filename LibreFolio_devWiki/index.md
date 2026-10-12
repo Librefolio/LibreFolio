@@ -20,7 +20,7 @@
 | [[domains/scheduler]] | SCHEDULER | F-052–F-053 | implemented (registry corrected 2026-10-09) |
 | [[domains/dashboard]] | DASHBOARD | F-054–F-055, F-100 | implemented |
 | [[domains/calculations]] | CALCULATIONS | F-056–F-058 | stable |
-| [[domains/infrastructure]] | INFRASTRUCTURE | F-059–F-074 | stable |
+| [[domains/infrastructure]] | INFRASTRUCTURE | F-059–F-074, F-106 | stable |
 
 ---
 
@@ -28,7 +28,7 @@
 
 | Page | Description |
 |------|-------------|
-| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (105 features across 12 domains, 2026-10-12) |
+| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (106 features across 12 domains, 2026-10-12) |
 
 ## Individual Feature Pages
 
@@ -43,6 +43,7 @@
 
 | Page | Title | Domain | Status |
 |------|-------|--------|--------|
+| [[features/F-106]] | Tool platform — atomic Tool plugins with an explicit scenario, an owned process per item, generated codecs and compiled renderers | Infrastructure | documented |
 | [[features/F-105]] | Guided onboarding — Welcome setup, intro tour and contextual guides; versioned progress per flow, positions in the browser | Layout & Settings | documented |
 | [[features/F-100]] | Yield on Cost (YOC) per position — trailing-year ledger income per eligible unit over the residual average cost | Dashboard | documented |
 | [[features/F-101]] | Global Privacy Mode — mask at the formatter, sign and currency kept, device-scoped | Layout & Settings | documented |
@@ -82,6 +83,9 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/tool-calculation-without-authority]] | **C, Tool platform.** A Tool receives only an explicit scenario — no user, database, provider or service layer — and writes nothing; three authenticated endpoints, diagnostics for every active user; drafts are filled by the renderer through domain endpoints | 2026-09-08 | tools, authority, isolation, api |
+| [[decisions/tool-item-runs-in-owned-process]] | **C and D, Tool platform.** A fresh `spawn` process per item, no pool, cache or dedup; handshake, owned process tree, capacity back only after confirmed cleanup; budgets from 5/5/4 s to 30/44/45 s and 1 GiB per job (developer, 2026-09-16); not a sandbox | 2026-09-10 | tools, multiprocessing, budgets, memory |
+| [[decisions/tool-contract-from-pydantic-compiled-renderer]] | **C, Tool platform.** Pydantic as the only contract source, a generated fingerprint, four version identities, git-ignored Zod codecs, compiled renderers with no generic form; duplicate codes quarantine every claimant | 2026-09-08 | tools, pydantic, codegen, versioning |
 | [[decisions/onboarding-versioned-progress-per-flow]] | **J, onboarding.** One versioned row per user and flow, per-step rows for Import and Bulk; due while `pending` or older than the current version; `expected_version` and 409; `003` edited while unshipped, consolidated into `004` (`22fa0aed7`) | 2026-09-10 | onboarding, db, alembic, versioning |
 | [[decisions/onboarding-existing-users-seeded-skipped]] | **J, onboarding.** Accounts older than 1.2.0: Welcome `completed`, every guide and step `skipped` (`004`); the developer approved it on a paragraph that described the opposite — «an unvalidated decision that happens to be correct» | 2026-09-21 | onboarding, migration, grandfathering, process |
 | [[decisions/onboarding-guide-observes-never-acts]] | **J, onboarding.** A guide never clicks, fills or saves; the Import guide is wiring, not scripting, and hands `import.bulk` to Bulk, where Save All stays the user's; replays write no status; the shell is `inert` only during the intro tour | 2026-09-10 | onboarding, coachmark, import-wizard, ux |
@@ -409,6 +413,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/phase00-tool-platform-2026-09]] | `Release_2/Phase_0/16_toolPlatform/` + the capacity round of `13_pacAllocator/` — workstream C's plan, manifest, review dossier and hand-off; D's budgets | 2026-10-12 | phase0, tools, plugins, multiprocessing, capacity |
 | [[sources/phase00-onboarding-2026-09]] | `Release_2/Phase_0/21_onboarding/` — workstream J: the foundation, Rounds 1–8 and the review dossier; fifteen flows, the developer's review of 2026-09-24, «Cosa resta aperto» | 2026-10-12 | phase0, onboarding, coachmark, settings, alembic |
 | [[sources/phase00-promote-pair-checks-2026-10]] | `Release_2/Phase_0/42_promotePairChecks/` — workstream P: promoted pairs (D1, D2), `fieldEq`, the 💡; the distribution editor; C-46…C-48; the localisation mini-lot | 2026-10-12 | phase0, promote, transfer, bulk-editor, i18n |
 | [[sources/phase00-transfer-cost-basis-2026-10]] | `Release_2/phases/40_transferCostBasis/` — workstream P: the cost of transfers in Auto and of promotes; archived after the 09/10 ingest | 2026-10-12 | phase0, wac, cost-basis, transfer, promote |
@@ -536,6 +541,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Step B6a — the Tool platform (C, folder 16).** F-106 registered: a Tool computes an explicit scenario without authority, each item in an owned process, against generated codecs and a compiled renderer; the dossier's risks checked on today's code; the `gapFix` effect accepted by the developer | [[sources/phase00-tool-platform-2026-09]] *(5 pages — 1 feature, 3 decisions, 1 source; see log)* |
 | 2026-10-12 | **Step B5 — the onboarding (J, folder 21).** F-105 registered: versioned progress per flow, existing users seeded `skipped`, the guide that never acts, positions in the browser, no text announcing a guide, the popup lane; the anchor stall, the mid-transition measure, the legacy layout gate | [[sources/phase00-onboarding-2026-09]] *(11 pages — 1 feature, 6 decisions, 3 problems, 1 source; see log)* |
 | 2026-10-12 | **Step B4 — plan 42 (P).** TRANSFER pairs that cancel, promotes that respect event links, `fieldEq` by value, the 💡's same-day window; a marker locale for hardcoded labels and a legacy-component trap | [[sources/phase00-promote-pair-checks-2026-10]] *(6 pages — 2 decisions, 2 problems, 1 concept, 1 source; see log)* |
 | 2026-10-12 | **Step B3 — plan 40 (P).** A transfer's receiving side in Auto takes the sending broker's average when the units left; a promote asks for a missing cost | [[sources/phase00-transfer-cost-basis-2026-10]] *(3 pages — 1 decision, 1 problem, 1 source; see log)* |
