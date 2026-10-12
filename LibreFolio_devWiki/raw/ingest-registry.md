@@ -681,3 +681,11 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md` | `0a5285dc0` | 2026-10-12 | §10, U-2 → [[decisions/plugin-folders-and-split-i18n]], [[features/F-008]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `78c67f1b6` | 2026-10-12 | U-B6 → [[decisions/plugin-folders-and-split-i18n]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `6180aefd0` | 2026-10-12 | §18, batch 29 → [[sources/phase00-translation-round12-2026-10]] |
+
+## 2026-10-12 — train 72, I's plan 48 and V's step 2b (base `0071b9703`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` | `f1e904b83` | 2026-10-12 | [[sources/phase00-ui-polish-2026-10]] and the five pages it links |
+| `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` | `3d7635efb` | 2026-10-12 | §2b → [[sources/phase00-data-quality-e2e-2026-10]], [[problems/e2e-writes-leaked-into-shared-state]], [[problems/test-passed-only-on-leftovers-of-other-tests]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `6e9f2c47a` | 2026-10-12 | V-17 … V-23, 48-1 → the pages above |

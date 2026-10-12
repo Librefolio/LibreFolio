@@ -57,6 +57,8 @@ related:
 >   only after `dev.py i18n build` or `npm run i18n:build`; the cure is a Vite plugin that watches the sources.
 >   On the merge that carried U into the target, Git stalled once on a lock —
 >   [[problems/git-merge-stash-failed-on-locked-index]].
+> - *Train 72*: I's batch 48, written against the old catalogue paths, reached `base/` at the merge — the pure rename
+>   did its job ([[sources/phase00-ui-polish-2026-10]]).
 
 > **Planned, not in the code.** Decided on 2026-10-12; at `e7d698c4d` (train 56) nothing of it is implemented and
 > workstream U's plan (45) is not in the target yet. The decisions are quoted from the coordinator's diary, which is
