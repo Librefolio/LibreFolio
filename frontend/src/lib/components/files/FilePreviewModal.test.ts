@@ -218,6 +218,47 @@ beforeAll(() => {
     HTMLElement.prototype.scrollTo = vi.fn();
 });
 
+/**
+ * The clipboard surface, stubbed per test and put back after it. jsdom has none of
+ * `navigator.clipboard`, `window.isSecureContext`, `document.execCommand`: each stub
+ * is an own property, and `restoreStubs()` (in `afterEach`) deletes it again — or
+ * restores what was there — newest first.
+ */
+const stubbed: {target: object; key: string; before: PropertyDescriptor | undefined}[] = [];
+
+function stubProperty(target: object, key: string, value: unknown) {
+    stubbed.push({target, key, before: Object.getOwnPropertyDescriptor(target, key)});
+    Object.defineProperty(target, key, {value, configurable: true, writable: true});
+}
+
+function restoreStubs() {
+    for (const {target, key, before} of stubbed.splice(0).reverse()) {
+        if (before) Object.defineProperty(target, key, before);
+        else Reflect.deleteProperty(target, key);
+    }
+}
+
+/**
+ * Plain HTTP as Chromium presents it: not a secure context, and no
+ * `navigator.clipboard` at all. The legacy `execCommand('copy')` succeeds and
+ * records what the hidden textarea held at that moment.
+ */
+function onPlainHttp() {
+    const captured: (string | undefined)[] = [];
+    const execCommand = vi.fn((_command: string) => {
+        captured.push(document.querySelector('textarea')?.value);
+        return true;
+    });
+    stubProperty(window, 'isSecureContext', false);
+    stubProperty(navigator, 'clipboard', undefined);
+    stubProperty(document, 'execCommand', execCommand);
+    return {execCommand, captured};
+}
+
+afterEach(() => {
+    restoreStubs();
+});
+
 /** Minimal-but-valid FilePreviewResponse per type; every builder is overridable. */
 type Preview = Record<string, unknown>;
 
@@ -484,12 +525,29 @@ describe('FilePreviewModal — interactions', () => {
     it('copy writes the current text content to the clipboard', async () => {
         await setupI18n();
         const writeText = vi.fn().mockResolvedValue(undefined);
-        Object.defineProperty(globalThis.navigator, 'clipboard', {value: {writeText}, configurable: true});
+        stubProperty(navigator, 'clipboard', {writeText});
+        // The browser exposes `navigator.clipboard` only in a secure context, and says so here.
+        stubProperty(window, 'isSecureContext', true);
 
         mount({preview: textPreview({text_content: 'copy me\nsecond'})});
         await fireEvent.click(screen.getByTestId('file-preview-copy'));
 
         expect(writeText).toHaveBeenCalledWith('copy me\nsecond');
+    });
+
+    it('copy on plain HTTP goes through the legacy execCommand path with the current text', async () => {
+        await setupI18n();
+        mount({preview: textPreview({text_content: 'copy me\nsecond'})});
+        // No textarea on the page before the click: the one the stub reads can only be the copy's.
+        expect(document.querySelector('textarea')).toBeNull();
+        const http = onPlainHttp();
+
+        await fireEvent.click(screen.getByTestId('file-preview-copy'));
+
+        await waitFor(() => expect(http.execCommand).toHaveBeenCalledTimes(1));
+        expect(http.execCommand).toHaveBeenCalledWith('copy');
+        expect(http.captured).toEqual(['copy me\nsecond']);
+        expect(document.querySelector('textarea')).toBeNull();
     });
 
     it('changing the sheet calls onSheetChange with the chosen sheet name', async () => {

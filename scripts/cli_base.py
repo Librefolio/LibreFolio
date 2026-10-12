@@ -17,6 +17,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
 
+from scripts.i18n_catalog import generated_catalogs, plugin_i18n_dirs
+
 # =============================================================================
 # Terminal Colors
 # =============================================================================
@@ -556,6 +558,11 @@ def check_frontend_needs_build() -> bool:
     try:
         build_time = (build_dir / "index.html").stat().st_mtime
 
+        # The translation catalogue (src/lib/i18n/<lang>.json) is generated, not tracked: a checkout or a clean that
+        # lacks it needs the build that writes it, even when the bundle itself is fresh (E2E fixtures read it).
+        if any(not path.exists() for path in generated_catalogs(project_root)):
+            return True
+
         # Check all source files
         for src_file in src_dir.rglob("*"):
             if src_file.is_file() and src_file.name not in _BUILD_GENERATED_SOURCES and src_file.stat().st_mtime > build_time:
@@ -569,6 +576,9 @@ def check_frontend_needs_build() -> bool:
             project_root / "frontend" / "tailwind.config.js",
             # Bundled by the changelog modal: CHANGELOG.md inline, each CHANGELOG.<xx>.md as a lazy chunk.
             *sorted(project_root.glob("CHANGELOG*.md")),
+            # The translation catalogue is merged from sources under src/ (seen above) and from the plugins' i18n/.
+            project_root / "scripts" / "i18n_catalog.py",
+            *sorted(path for folder in plugin_i18n_dirs(project_root) for path in folder.glob("*.json")),
         ]
         for f in config_files:
             if f.exists() and f.stat().st_mtime > build_time:

@@ -8,7 +8,7 @@ La pestaña **Preferencias** controla **cómo se ve y se comporta la aplicación
 
 | Ajuste | Categoría | Descripción |
 |---------|----------|-------------|
-| **Idioma** | 🌍 Visualización | Idioma de la interfaz — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Se aplica en cuanto lo guardas |
+| **Idioma** | 🌍 Visualización | Idioma de la interfaz — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Se aplica en cuanto lo guardas, y también decide cómo se escriben los números y las fechas |
 | **Divisa predeterminada** | 💰 Divisa | Tu propia divisa base. El Panel, la página de Brókeres y la página de cada bróker, y la pestaña **Correlación** de la página de Activos se abren en ella, y la Exportación IA de un par de divisas también la usa; una divisa que elijas en el Panel se mantiene durante la sesión. También se propone cuando creas algo nuevo — un activo, el primer saldo de efectivo de un bróker nuevo, un plan PAC. Este menú enumera todas las divisas |
 | **Tema** | 🎨 Apariencia | ☀️ Claro / 🌙 Oscuro / 🖥️ Auto (sigue tu sistema operativo) |
 
@@ -20,6 +20,14 @@ article table:first-of-type td:nth-child(-n + 2) {
     min-width: 11rem;
 }
 </style>
+
+!!! info "🌍 Los números y las fechas siguen el idioma de la interfaz"
+
+    Los importes, los porcentajes y las fechas se escriben como los escribe el idioma de la interfaz: por ejemplo
+    `14.788,01` y `12 ott 2026` en italiano, `14 788,01` y `12 oct. 2026` en francés, `14.788,01` y `12 oct 2026` en español. El
+    navegador solo añade su región, y solo si usa el mismo idioma: en inglés, un navegador configurado en inglés
+    estadounidense escribe `14,788.01` y `Oct 12, 2026`, y un navegador en otro idioma recibe el formato británico,
+    `14,788.01` y `12 Oct 2026`.
 
 Elige una categoría en la barra lateral — en un teléfono, en el menú **Categoría** — para mostrar solo su configuración;
 **Toda la configuración** muestra todo.
@@ -117,9 +125,9 @@ el signo, de modo que una ganancia sigue leyéndose como ganancia y una pérdida
 
 | Normalmente | Con el modo privacidad |
 |---|---|
-| `1,234.56 € 🇪🇺 EUR` | `••• € 🇪🇺 EUR` |
-| `-1,234.56 € 🇪🇺 EUR` | `-••• € 🇪🇺 EUR` |
-| `€1,234.56` o `1.234,56 €` | `€•••` o `••• €` |
+| `1234,56 € 🇪🇺 EUR` | `••• € 🇪🇺 EUR` |
+| `-1234,56 € 🇪🇺 EUR` | `-••• € 🇪🇺 EUR` |
+| `€1,234.56` o `1234,56 €` | `€•••` o `••• €` |
 | `—` (sin valor) | `—` |
 
 `•••` son siempre los mismos tres puntos — incluso la **K** o la **M** de una cifra abreviada desaparece — de modo que
@@ -131,7 +139,7 @@ nunca revela el orden de magnitud. Cubre:
   **[Análisis de lotes FIFO](../dashboard/positions.md#fifo-lots-analysis)** — cada importe excepto los
   precios por unidad, en las tablas, el modal de Detalle del lote y los gráficos, y las cantidades que posees
   (la columna **Cant.** de Posiciones, las cantidades de los lotes). Un lote parcialmente cerrado muestra su parte abierta, por
-  ejemplo `••• (60%)`.
+  ejemplo `••• (60 %)`.
 - **Transacciones** — el importe en efectivo de cada transacción.
 - **[Asignador PAC](../tools/pac-allocator/index.md#reading-the-result)** — cada importe y
   cantidad del resultado, y los límites de compra de una ruta.

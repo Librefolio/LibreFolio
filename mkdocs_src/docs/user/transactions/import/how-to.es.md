@@ -73,12 +73,12 @@ a otro bróker*). De arriba abajo, muestra:
 
 Después elige:
 
-- **Mover a ‹bróker›**, con el icono de ese bróker — el archivo se sube a ese bróker, en la misma
-  sesión, y se elimina del equivocado. Si el movimiento falla, un error lo indica y el archivo permanece
-  donde estaba;
+- **Mover**, con el icono del bróker elegido en **Moverlo a** — el archivo se sube a ese bróker, en
+  la misma sesión, y se elimina del equivocado. Si el movimiento falla, un error lo indica y el archivo
+  permanece donde estaba;
 - **Dejarlo aquí** — el archivo se queda, y el asistente lo lee con otro plugin que sí puede, como
   antes: lo ves en la columna **Plugin** de **Seleccionar**;
-- **Quitar el archivo** — el archivo se borra.
+- **Quitar** — el archivo se borra.
 
 Un aviso por archivo, por turno (*Archivo 1 de 3*); cerrarlo mantiene el archivo. Si eliminas todos los archivos
 que acabas de subir, el asistente se queda en **Subir**, listo para otros. Cuando ninguno de tus brókeres

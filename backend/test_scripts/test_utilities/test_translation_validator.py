@@ -103,6 +103,19 @@ red now. One was red on it and named a defect, fixed since: ``test_an_empty_newe
 (``_diff_changelog`` applied the policy to the chapters that have a piece, so a newest chapter with nothing in it yet
 handed its open status down to the released chapter below it, which ``translate-validate`` counted).
 
+Batch 30 (I2, after M-18) made ``inline-code-missing`` ignore the space before ``%`` as well. Since M-18 the app writes
+a French or Spanish percentage with one (``+16,36 %``: U+00A0 in the app, a plain space in the doc sources), and the
+translations quote such figures in code spans as the app writes them. ``_PERCENT_SPACE`` drops a plain, U+00A0 or
+U+202F space between a digit and ``%`` before the comparison, as ``_DIGIT_GROUPING`` drops the grouping. Pinned
+through ``check_inline_code``: not reported, the three spaces, a zero, a masked amount, an amount with its percentage,
+a French amount grouped with U+202F, and two controls that passed before (an amount with no ``%``, the Italian
+``+16,36%``); still reported, named as the source writes them, a translated identifier, a changed digit and a ``%``
+turned into ``€``. Written against the new code, not red first. With ``_PERCENT_SPACE`` monkeypatched in memory to a
+pattern that never matches (the pipeline file untouched), 7 red, every case with a space before ``%``; 179 green, the
+two controls and the three reports among them. With it monkeypatched instead to forgive the number before a sign and
+the sign itself, the changed digit and the ``€`` are red and the identifier stays green: no number normalization
+reaches it, only a check that stops comparing would silence it.
+
 PURE: strings in memory and docs trees under ``tmp_path``. An autouse fixture points
 ``validate_translations.DOCS_DIR`` at an empty tree under ``tmp_path`` in every test, so no check resolves a link
 against ``mkdocs_src/docs``; the repository's docs and ``.translate-hashes.json`` are never opened (the Aphra pipeline
@@ -580,6 +593,27 @@ class TestInlineCode:
         vt = validate_translations
         assert vt.check_inline_code(f"A fee of `{en}` EUR.\n", f"Una commissione di `{localized}` EUR.\n", CACHE_KEY, LANG) == []
 
+    @pytest.mark.parametrize(
+        ("en", "localized"),
+        [
+            pytest.param("+16.36%", "+16,36 %", id="space-before-percent"),
+            pytest.param("+16.36%", "+16,36\u00a0%", id="nbsp-before-percent"),
+            pytest.param("+16.36%", "+16,36\u202f%", id="narrow-nbsp-before-percent"),
+            pytest.param("0.00%", "0,00 %", id="zero-percent"),
+            pytest.param("••• (60%)", "••• (60 %)", id="masked-amount-and-percent"),
+            pytest.param("+91.31 € (+16.36%)", "+91,31 € (+16,36 %)", id="amount-and-percent"),
+            pytest.param("+12,450.30 (+24.85%)", "+12\u202f450,30 (+24,85 %)", id="fr-narrow-nbsp-grouping-and-percent"),
+            pytest.param("1,234.56 € 🇪🇺 EUR", "1234,56 € 🇪🇺 EUR", id="control-grouping-without-percent"),
+            pytest.param("+16.36%", "+16,36%", id="control-it-no-space-before-percent"),
+        ],
+    )
+    def test_the_space_before_a_percent_sign_may_be_localized(self, validate_translations, en, localized):
+        """Since M-18 the app writes a French or Spanish percentage with a space before % (U+00A0; the doc sources
+        write a plain one), and the translations quote it as the app writes it. The two controls passed before
+        ``_PERCENT_SPACE``: an amount with no %, and the Italian percentage, written with no space."""
+        vt = validate_translations
+        assert vt.check_inline_code(f"The card reads `{en}`.\n", f"La scheda riporta `{localized}`.\n", CACHE_KEY, LANG) == []
+
     def test_a_changed_number_is_still_reported(self, validate_translations):
         """Check and severity only: the spelling the message gives is the next test's."""
         vt = validate_translations
@@ -599,6 +633,21 @@ class TestInlineCode:
         issues = vt.check_inline_code(source, translated, CACHE_KEY, LANG)
         assert _kinds(issues) == [("inline-code-missing", vt.Severity.WARN)]
         assert shown in issues[0].message, issues[0].message
+
+    @pytest.mark.parametrize(
+        ("en", "localized"),
+        [
+            pytest.param("MARKET_PRICE", "PRECIO_MERCADO", id="translated-identifier"),
+            pytest.param("16.36%", "16,37 %", id="changed-digit"),
+            pytest.param("50%", "50 €", id="percent-changed-to-euro"),
+        ],
+    )
+    def test_a_changed_identifier_digit_or_sign_is_still_reported(self, validate_translations, en, localized):
+        """The space before % is forgiven, not what changes around it; each span is named as the source writes it."""
+        vt = validate_translations
+        issues = vt.check_inline_code(f"The card reads `{en}`.\n", f"La scheda riporta `{localized}`.\n", CACHE_KEY, LANG)
+        assert _kinds(issues) == [("inline-code-missing", vt.Severity.WARN)]
+        assert f"`{en}`" in issues[0].message, issues[0].message
 
     def test_spans_inside_fenced_code_are_ignored(self, validate_translations):
         vt = validate_translations

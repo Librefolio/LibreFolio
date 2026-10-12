@@ -855,3 +855,245 @@ T's CP1 of M-18 (train 68); the file passes to I next, for its `clipboardSink` g
 >   the coordinator asked: 6 passed (4.4 min), 48 of 48 shots, the guard green in the four languages, desktop and
 >   mobile. Verdict: environment.
 > - Prettier and a strict `tsc` on the two e2e files: clean.
+
+### 18. ✅ Batch 29: the translation round before the tag — the proposal, and S1 — 2026-10-12 20:40
+
+**18.1 ✅ The proposal (read-only, coordinator's request at 20:28; approved at 20:37, in its order)**
+> **Note implementazione**: on `b063b16ca` (train 70), today's translation debt is zero. Evidence in
+> `release-pipeline/runs/b29/`; the full text is in `release-pipeline/b29_translation_round_proposal.md`.
+> - `translate --dry-run` is empty for the pages and the CHANGELOG.
+> - A scan that ignores the cache (`release-pipeline/scripts/b29_stale_scan.py`) takes, for each EN page and each
+>   it/fr/es, the EN delta since the translation's last commit: 0 pages, so no stamp can hide one.
+> - Since train 44 (`7b3c2b5ab`, the last full round) 9 translated EN pages changed, each with it/fr/es moved in the
+>   same range (batches 21–25).
+> - The stamp audit with the token check: 220 stamped pairs, 0 unported.
+> - The UI-label scan: 370 rows, the same set as batches 23 and 25.
+>
+> **The round, as approved:**
+> - **S1, now:** `financial-theory/fundamentals/day-count.{en,it,fr,es}.md:10`. Its only v1 plugin path among the
+>   translated pages; U's move is in the base.
+> - **I1, after I's batch 48 is in the target:** `user/transactions/import/how-to` §«A file in the wrong broker»
+>   quotes the modal's labels. Port it/fr/es with the catalogues' labels and stamp, then re-run the label scan against
+>   I's catalogues.
+> - **I2, after T's CP2:**
+>   - figures quoted as the UI writes them, still in English format in it/fr/es (it 6, fr 12, es 12, in 4–5 pages:
+>     the privacy table of `user/settings/preferences`, `user/dashboard/kpi-cards`, `positions`,
+>     `user/brokers/index`), corrected only where they are UI output, with the app's own Intl;
+>   - one sentence in `user/settings/preferences`, written by M in EN and in the 3 languages so it describes the final
+>     behaviour: the interface language also decides how numbers and dates are written, and English with no region
+>     uses en-GB. T does not touch the doc pages (coordinator).
+> - **I3:** U-4 changes developer pages only (EN), so it leaves no translation debt.
+> - **I4, last:** the CHANGELOG [1.2.0], ported by hand and stamped, with no pipeline run. The coordinator passes the
+>   M-18 lines at CP2 and M-20's with I's batch. The open chapter becomes blocking with the tag.
+> - **I5, queued as before:** the gallery regenerated after CP2 and I's batch; the `galleryLocale.ts` docstring after
+>   CP2.
+
+**18.2 ✅ S1: `day-count`'s plugin path**
+> **Note implementazione**: in the four languages, line 10's code span
+> `backend/app/services/asset_source_providers/scheduled_investment.py` now reads `…/scheduled_investment/plugin.py`,
+> where `calculate_day_count_fraction()` lives since U's move (`2eed3d26c`).
+> - The edit was by hand, the same path everywhere; the sentence around it still holds.
+> - Before the stamp, the dry-run planned the page ×3 (~8.7K tokens each).
+> - `translate-stamp --file financial-theory/fundamentals/day-count.en.md` stamped it/fr/es, and only that cache entry
+>   changed. Then the dry-run was empty.
+> - Gates (script `b29_final_gates.sh`, load 31–49): `translate-validate` 630 files 0/0, `translate-diff` 642 of 642
+>   clean, strict build 0 (all 3,012 relative asset URLs resolve), `check-links` 95 valid, `git diff --check` clean.
+
+### 19. ✅ Batch 30: I2, the figures as the UI writes them since M-18, and the formats sentence — 2026-10-12 22:00
+
+Base `c57acf510` (train 71). T's CP2 formats (coordinator, 21:44; the full list in `/tmp/libreFolio_m18cp2_examples.txt`):
+
+- `en` → `en-GB` unless the browser is in English; `it`, `fr` and `es` are bare;
+- French groups with U+202F; French and Spanish put U+00A0 before `%`;
+- Italian and Spanish do not group four digits.
+
+The kit was prepared at 21:00, outside the repo (`release-pipeline/i2/`, with a README).
+
+**19.1 ✅ The figures**
+> **Note implementazione**: `release-pipeline/scripts/i2_figures.mjs` scans every figure of the docs (2,979) and computes
+> the text the app writes for it in the page's language, with the app's own formula: `toFixed` first, then `Intl`, as
+> in `formatFixed`, `formatPercent` and the amounts.
+> - **Chromium:** 2,951 of 2,951 expected texts equal in Chromium 149 and in Node (ICU 78.3).
+> - **The decisions** are rules by page and figure (`i2/i2_rules.json`), so they survive line shifts.
+> - **Classes:** UI output (in code spans, or a sentence quoting the UI), input examples, prose, theory.
+>
+> **Written:** 34 figures in 11 files.
+> - `user/dashboard/kpi-cards` fr/es: the lines in code, e.g. `+91,31 € (+16,36 %)`, `-558,10 €`,
+>   `+12 450,30 (+24,85 %)`;
+> - `user/dashboard/positions` and `user/brokers/index`, it/fr/es: `0,00%` / `0,00 %`;
+> - `user/settings/preferences`, it/fr/es: the privacy table's amounts (`1234,56 €`, `1 234,56 €`) and `••• (60 %)`.
+>
+> **Spaces:** plain in the sources (`--spaces plain`), as every translation; the French hook adds U+202F in prose.
+>
+> **The privacy table's third row, by hand, in all four:** `€1,234.56` is the English UI's prefix; the suffix is now
+> written in the page language's format (`1234,56 €`, French `1 234,56 €`).
+>
+> **Left as written:**
+> - prose percentages, the doc's own text;
+> - the CSV values `Italy;12,5`;
+> - IP ranges;
+> - the catalogue's warning *dépasse 100%*;
+> - theory pages (ISO dates, formulas);
+> - `admin/`;
+> - the English pages, which already follow `en-GB`.
+
+**19.2 ✅ The validator accepts a localized percentage in a code span**
+> **Note implementazione**:
+> - **The gap:** `translate-validate`'s `inline-code-missing` compared code spans without the digit grouping, but not
+>   without the space French and Spanish put before `%`, so each localized percentage would have been a warning.
+> - **The fix:** `_PERCENT_SPACE` in `mkdocs_src/aphra-pipeline/validate_translations.py`. An identifier that changes,
+>   a digit, or the sign still warns.
+> - **Tests (test-author):** 12 cases in `test_translation_validator.py`, `utils translation-validator` 186 passed. With
+>   the pattern disabled in memory, the 7 cases with a space before `%` go red.
+
+**19.3 ✅ `user/settings/preferences`: numbers and dates follow the interface language**
+> **Note implementazione**: written by M in EN, it, fr and es, as the coordinator decided (20:37):
+> - a clause at the end of the **Language** cell;
+> - an `!!! info` after the table, giving the same examples in all four pages (T's formats: `14.788,01` /
+>   `12 ott 2026`, `14 788,01` / `12 oct. 2026`, `14.788,01` / `12 oct 2026`) and the region rule (a US-English browser
+>   writes `14,788.01` and `Oct 12, 2026`; a browser in another language gets the British `12 Oct 2026`).
+>
+> Same examples, same order, so the code spans match across the four files. The page is stamped (before: ×3,
+> ~32.7K tokens each).
+
+**19.4 ✅ Gates** (`release-pipeline/scripts/b30_final_gates.sh`, load 14–25)
+> - dry-run empty after the stamp;
+> - `utils translation-validator` 186;
+> - `translate-validate` 630 files 0/0, with the localized percentages in code;
+> - `translate-diff` 642 of 642 clean;
+> - strict build 0 (all 3,012 asset URLs resolve); `check-links` 95; `git diff --check` clean;
+> - the I2 re-scan plans 0 figures, and every UI difference left has its rule;
+> - the label scan: 370 rows, the same set as batch 29 (3 accepted rows moved 8 lines down).
+>
+> **⚠️ Fuori pista — the catalogue is generated now:** since U's split (train 71), `frontend/src/lib/i18n/<lang>.json`
+> exists only after a build. The label scan (M's tool, outside the repo) now reads the catalogue assembled in memory by
+> `scripts/i18n_catalog.py`'s `load_catalog`.
+
+### 20. ✅ Batch 31: I1, the wrong-broker modal's labels; the CHANGELOG's `169bd60f3`; the `galleryLocale.ts` docstring — 2026-10-12 22:10
+
+Base `32d27501c` (train 72: I's batch 48, V's 2b, the CHANGELOG commit `169bd60f3`).
+
+**20.1 ✅ I1**
+> **Note implementazione**: I's batch 48 changed two keys of the catalogue (read with `scripts/i18n_catalog.py`'s
+> `catalogs_at`, before and after the train):
+> - `importWizard.brokerMismatch.move`: «Move to {broker}» → **Move** (it «Sposta», fr «Déplacer», es «Mover»);
+> - `importWizard.brokerMismatch.remove`: «Remove the file» → **Remove** («Rimuovi», «Retirer», «Quitar»).
+>
+> The Move button still shows the chosen broker's icon (`ImportBrokerMismatchModal.svelte`).
+> - `user/transactions/import/how-to.{en,it,fr,es}.md` §«A file in the wrong broker»: «**Move**, with the icon of the
+>   broker chosen under **Move it to**» and «**Remove**», by hand in the four languages, with the catalogues' labels.
+> - `developer/frontend/components/features/import-wizard.md:162` likewise (EN only).
+> - The page is stamped. Before: ×3, ~52.6K tokens each.
+> - The label scan against the new catalogues: 2 more pairs checked per language, all matching; 0 new differing rows
+>   against batch 30.
+
+**20.2 ✅ The CHANGELOG, `169bd60f3`, by hand, then stamped**
+> **Note implementazione**: two edits in `CHANGELOG.{it,fr,es}.md`:
+> - **✨ «Connection security in the sidebar»** gains the clause on the details closing by themselves after 30 seconds
+>   unless the pointer or the focus is on them;
+> - **🐛 «Dialogs and menus»** gains M-20's bullet, «Copy buttons work over plain HTTP too», with the names the files
+>   and the security guide use: «HTTP in chiaro», «HTTP simple», «HTTP sin cifrar», and Settings › About as each file
+>   writes it.
+>
+> `translate-stamp --file CHANGELOG.md` stamped 6 pieces (`1.2.0/added` and `1.2.0/fixed/dialogs-and-menus`, ×3). Before,
+> the dry-run planned them at ~50.7K and ~5.5K tokens each.
+> Script: `release-pipeline/scripts/b31_changelog_port.py`.
+
+**20.3 ✅ `frontend/e2e/fixtures/galleryLocale.ts:4-7`**
+> **Note implementazione**: the docstring now describes the final behaviour: since M-18 the app writes every figure in
+> `uiLocale()` (the interface language, plus the browser's region only when the browser speaks that language). The
+> browser locale still decides the English shots (`Oct 12, 2026` against `12 Oct 2026`), and pinning it per language
+> keeps each shot independent of the machine. Prettier clean.
+> - **⚠️ Fuori pista, to check at I5:** further down, §«Before the page is drawn» says «A language switch redraws no
+>   number already on screen». Since M-18 the figures read `uiLocale()` tracked, so a switch of the interface language
+>   redraws them. The rule the section draws (set the browser locale before the load) and its stamp check still hold.
+>   The sentence was left as it is, outside the assigned lines.
+> - **⚠️ Fuori pista (22:25, I5 preparation, step 21.2):** a probe showed that the gallery's headless Chromium answers
+>   `navigator.language` with en-US whatever the browser locale this file pins. So the pin does not decide the English
+>   shots, and lines 4–9 say otherwise. The corrected text is approved for I5.
+
+**20.4 ✅ Gates** (`release-pipeline/scripts/b31_final_gates.sh`, load 27–50)
+> - dry-run empty after the stamps;
+> - `translate-validate` 630 files 0/0; `translate-diff` 642 of 642 clean;
+> - strict build 0 (all 3,012 asset URLs resolve); `check-links` 95; `git diff --check` clean.
+
+### 21. ✅ I5 prepared, read-only — 2026-10-12 22:25 (approved at 22:26; applied once T's CP3 is in the target)
+
+**21.1 ✅ The security panel's shot (`security/connection-indicator`)**
+> **Note implementazione**: the details' 30 s countdown (I's batch 48, `ConnectionSecurityIndicator.svelte`) is held
+> while the pointer is anywhere on the indicator.
+> - **Before `parkPointer`:** after the click the pointer stays inside the indicator. The sidebar's bottom block is
+>   anchored, so the toggle rises and the pointer lands on the details. The settles before the shot therefore cost
+>   nothing.
+> - **From `parkPointer` (`gallery.spec.ts:1722`):** it moves the pointer to the right edge, out of the indicator, and
+>   the countdown starts.
+>   - Up to the capture: about 1 s typically, about 37 s in the worst case of waits that pass late.
+>   - Up to 20 s of those are inside `screenshot()`, whose waits swallow their timeouts, and they come after the last
+>     check that needs the details. A close there gives a picture of a closed line, with no red.
+> - **Approved fix, for I5:**
+>   - `restPointerOnDetails` rests the pointer on the details' own right padding: on the indicator, and on nothing
+>     with a hover style (checked with `elementFromPoint`);
+>   - `aria-expanded` is asserted after the capture.
+> - **At I5, two controls in the first combination only:** positive (rest + 31 s → green) and negative
+>   (`parkPointer` + 31 s → red).
+> - **Patch:** `release-pipeline/i5/i5_proposed.patch`, with notes in `release-pipeline/i5/I5_PREP.md`. Prettier is
+>   clean, and an in-memory type check gives 0 diagnostics in the two files.
+
+**21.2 ✅ `galleryLocale.ts`, «A language switch redraws no number already on screen»**
+> **Note implementazione**: I probed the gallery's headless Chromium 149 on desktop and mobile, with LANG C, it_IT and
+> en_GB, on macOS in Italian.
+> - **What the override reaches:** `navigator.language` stays en-US whatever the CDP override, the reload or the
+>   machine. The override moves only the locale `Intl` falls back on, at once in the same document, and the
+>   Accept-Language.
+> - **So `uiLocale()` never sees the gallery's browser locale.**
+>   - English shots are en-US.
+>   - The others take the bare language, which writes as it-IT, fr-FR and es-ES do. I checked amounts, percentages,
+>     compact numbers, dates and times.
+> - **The sentence is wrong since M-18:** a switch of the interface language redraws what `uiLocale()` writes. The
+>   approved text replaces it at I5.
+> - **⚠️ Fuori pista:** lines 4–9, written in batch 31 (20.3), say the browser locale this file pins decides the
+>   English shots. `navigator.language` decides them, and the pin does not reach it. The same I5 patch corrects them.
+> - **Backlog, at I5 (coordinator):** an M-* line for a guard on `navigator.language`. It would turn red, instead of
+>   producing British English shots, wherever Chromium answers otherwise.
+
+### 22. ✅ Batch 32: I4's M-18 part — the CHANGELOG's `e7bfa342f`, by hand, then stamped — 2026-10-12 22:55
+
+Base `1bb4abe68`: the target with `e7bfa342f`; T's CP2 and CP3 are not in it yet.
+
+**22.1 ✅ Two lines in `CHANGELOG.{it,fr,es}.md`**
+> **Note implementazione**: the two lines go where the English has them.
+> - **🔄 Changed, first bullet:** «Numbers and dates follow the interface language everywhere.»
+> - **🐛 «Sign-in, language, app icons and small screens»,** after the file-size line: «The last English dates and
+>   dotted decimals are gone.» (M-17 and the exact decimals).
+>
+> **Examples as the UI writes them** (coordinator; Chromium 149's Intl, `release-pipeline/b32/probe_example_bytes.txt`):
+> - the French amount `14 788,01` groups with U+202F, in all three files;
+> - the zero is `0,00%` in Italian and `0,00 %` with U+00A0 in French and Spanish;
+> - dates and the British and US examples are plain.
+>
+> **Names from the catalogues and the files:**
+> - **Admin › Impostazioni globali** / **Admin › Paramètres globaux** / **Administración › Configuración global**;
+> - *Aggiornato* / *Mis à jour* / *Actualizado* (`common.updated`);
+> - rapporti split / ratios de split / ratios de desdoblamiento;
+> - PMC / PRU / PMC;
+> - «correzione / correction / corrección gap-fix»;
+> - the data editor's prices «non aggiornati / obsolètes / obsoletos».
+>
+> **Before the port**, the dry-run planned 2 pieces × 3: `1.2.0/changed` at ~17.2K tokens and
+> `1.2.0/fixed/sign-in-language-app-icons-and-small-screens` at ~16.2K, each.
+> Script: `release-pipeline/scripts/b32_changelog_port.py`.
+>
+> - **⚠️ Fuori pista:** the English example `14 788,01` holds a plain space where the UI writes U+202F. I noted it for
+>   the coordinator, who owns the English file. Changing it would move the piece's md5 and need a new stamp.
+
+**22.2 ✅ Stamp and gates** (`release-pipeline/scripts/b32_final_gates.sh`, load 18–43; logs in `release-pipeline/runs/b32/`)
+> - **Stamp:** `translate-stamp --file CHANGELOG.md` stamped 6 pieces (the two pieces ×3). Only those two cache entries
+>   changed (md5 `ca14a14c`→`d46a1fd9` and `461cc54b`→`53268d15`).
+> - **Dry-run:** empty, for the pages and the CHANGELOG.
+> - **Validation:** `translate-validate --hide-localized` 630 files 0/0. On the CHANGELOG alone (`--file CHANGELOG.md`):
+>   3 files OK, 0 errors, 0 warnings, 0 localized.
+> - **`translate-diff`:** 642 of 642 clean.
+> - **Build:** strict build 0 (all 3,012 relative asset URLs resolve).
+> - **Links:** `check-links` 95 valid.
+> - **`git diff --check`:** clean.
+> - **Ports:** 6158, 6168 and 6042 free.
