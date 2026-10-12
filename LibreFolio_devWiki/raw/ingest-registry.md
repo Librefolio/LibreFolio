@@ -665,3 +665,11 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/01_tassonomia_findings.md` | `91e88b8d1` | 2026-10-12 | [[sources/beta-testing-2026-08-05]] — re-baseline (moved) |
 | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/02_riconciliazione_credit_agricole.md` | `91e88b8d1` | 2026-10-12 | [[sources/beta-testing-2026-08-05]] — re-baseline (moved) |
 | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/INDEX.md` | `91e88b8d1` | 2026-10-12 | [[sources/beta-testing-2026-08-05]] — re-baseline (edited) |
+
+## 2026-10-12 — train 70, M's batch 28 (base `afd7d4821`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `21c3a3adc` | 2026-10-12 | §16.7, §17 → [[sources/phase00-translation-round12-2026-10]], [[problems/gallery-price-guard-expected-tofixed-text]], [[problems/docs-mathjax-looked-in-the-page-folder]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `21c3a3adc` | 2026-10-12 | the M-19 line only (spec registered) → [[problems/docs-mathjax-looked-in-the-page-folder]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` | `d00c06685` | 2026-10-12 | the CP1 note on the gallery's guard (before the STOP) → [[problems/gallery-price-guard-expected-tofixed-text]] |
