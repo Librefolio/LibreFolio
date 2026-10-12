@@ -2022,7 +2022,7 @@ Passi:
 > - Niente `translate-stamp`: it, fr ed es li traduce M. Il debito: la prima frase e il paragrafo nuovo, fra le due liste.
 > - Effetto sul rendering: il paragrafo separa le due liste, che prima uscivano fuse in una sola.
 
-### Checkpoint CL 🧊 (2026-10-12) — FROZEN, in attesa del coordinatore
+### Checkpoint CL ✅ (2026-10-12) — committato dal coordinatore, treno 60
 - Base `37304d716`. 11 file modificati e 1 nuovo, `e2e/layout/changelog-locale.spec.ts`.
 - Quattro commit proposti:
   1. `feat(changelog)`: il codice, i test e il blocco del runner;
@@ -2030,3 +2030,402 @@ Passi:
   3. `docs(user)`: `about.en.md`;
   4. `docs(journal)`: questo piano.
 - Niente CHANGELOG. Il `CHANGELOG.it.md` sintetico è stato cancellato.
+
+### Treno 60 (coordinatore, 2026-10-12)
+- Il CHANGELOG localizzato è committato sul ramo di T: `8f67f89de`, `ee8a19384`, `b02bf6c54`, `fba291f53` (albero `7d4b685304f4`). Entra nel treno 60.
+
+### M-18 — i numeri scritti con `toFixed`: analisi (2026-10-12) — superata dalla nuova regola qui sotto
+> **Richiesta**: dal developer, via coordinatore, testuale: «T prende M-18 in parallelo: I resta sulla rifinitura UI».
+> - Le fonti: il giro 12 di M, §11 (`27_releaseImages/plan-phase00TranslationRound12.prompt.md:658`, `:663`).
+> - Base `fba291f53`, corsia 6164.
+
+**Lo stato verificato**:
+- Nel frontend ci sono 138 `toFixed`, fuori dai test.
+- `formatPercent` (`utils/core/formatPercent.ts:71`) ha già l'opzione `locale`; senza, stampa la forma fissa `12.50%`. Ci sono 51 chiamate senza `locale`, in 16 file, che quindi stampano il punto: per esempio il «−10.7%» del laboratorio rischio. Altre 12 passano `$currentLanguage`.
+- **Due regole convivono per la locale dei numeri.**
+  - La locale della macchina: gli importi (`currencyFormat.ts:39`, `:61`, `toLocaleString(undefined…)`), le date (`formatDateTime.ts:16-18`) e gli assi dei lotti. Quest'ultima la scrive `lotChartShared.ts:85-90`: «the machine locale, which is what both charts deliberately use for numbers (as opposed to `$currentLanguage`, which they use for words)».
+  - La lingua della UI: le 12 chiamate di `formatPercent` con `$currentLanguage` (`DistributionEditor`, `BrokerSharingPanel`, `BrokerCard`, la pagina del broker) e il PAC.
+- I test seguono la macchina, cioè en-US qui e in CI. `currencyFormat.test.ts:39` calcola l'atteso con lo stesso `toLocaleString(undefined…)`.
+- Con Intl, en-US resta com'è (`14.07%`) salvo il raggruppamento da 1 000 % in su. Le altre lingue:
+  - it: `14,07%`;
+  - fr: `14,07 %`, con uno spazio stretto;
+  - es: `14,07 %`.
+
+**L'inventario**: script `/tmp/libreFolio_m18_classify.py`, dati `/tmp/libreFolio_m18_inventory.json`. «ᶠᵖ» = chiamata a `formatPercent` senza `locale`; «†» = file nato dopo la 1.1.
+### Percentuali — 99 punti, 46 file
+- `components/assets/AssetCard.svelte`: 236
+- `components/assets/AssetPriceSummary.svelte`: 117
+- `components/assets/ProviderComparisonModal.svelte`: 228
+- `components/brokers/lots/LotComparisonChart.svelte`: 642ᶠᵖ,859ᶠᵖ
+- `components/brokers/lots/LotCustodyModal.svelte`: 353ᶠᵖ,358ᶠᵖ,389ᶠᵖ,401ᶠᵖ
+- `components/brokers/lots/LotWacPriceChart.svelte`: 1047ᶠᵖ,1473ᶠᵖ,1608
+- `components/brokers/lots/UnifiedLotsTable.svelte`: 216ᶠᵖ
+- `components/brokers/lots/unifiedLotsTableHelpers.ts`: 88ᶠᵖ
+- `components/charts/GeographyMap.svelte`: 292
+- `components/charts/LineChart.svelte`: 673
+- `components/charts/MeasurePanel.svelte`: 296,303,308
+- `components/charts/ScatterChart.svelte` †: 110ᶠᵖ,151ᶠᵖ
+- `components/charts/SemiDonutChart.svelte`: 236,251
+- `components/charts/candlestickChartHelpers.ts`: 92
+- `components/charts/chartCoreHelpers.ts`: 87
+- `components/charts/echartsTooltipHelpers.ts`: 94,126
+- `components/charts/priceChartHelpers.ts`: 573,578
+- `components/dashboard/AllocationHistoryChart.svelte`: 597
+- `components/dashboard/ContributionTable.svelte`: 188
+- `components/dashboard/ExposureTable.svelte`: 143,363
+- `components/dashboard/ExposureTreemap.svelte`: 591,598
+- `components/dashboard/GrowthChart.svelte`: 2113,2314
+- `components/dashboard/KpiCard.svelte`: 70
+- `components/dashboard/KpiSection.svelte`: 252,253,254,255,268,299ᶠᵖ,351ᶠᵖ
+- `components/dashboard/YieldOnCostCell.svelte` †: 100,134
+- `components/fx/FxCard.svelte`: 224
+- `components/fx/FxPriceSummary.svelte`: 46
+- `components/fx/FxTable.svelte`: 122
+- `components/risk/AssetRiskScenariosView.svelte`: 56
+- `components/risk/AssetSetLossComparisonSection.svelte` †: 107ᶠᵖ,112ᶠᵖ
+- `components/risk/CorrelationHeatmap.svelte`: 489
+- `components/risk/RiskAnalysisPanel.svelte`: 654ᶠᵖ,655ᶠᵖ,677ᶠᵖ,678ᶠᵖ,688ᶠᵖ,699ᶠᵖ,700ᶠᵖ,733ᶠᵖ,734ᶠᵖ,817ᶠᵖ,835ᶠᵖ,836ᶠᵖ,871ᶠᵖ,873ᶠᵖ,874ᶠᵖ,948ᶠᵖ,1063ᶠᵖ,1064ᶠᵖ,1065ᶠᵖ,1074ᶠᵖ,1075ᶠᵖ,1076ᶠᵖ,1077ᶠᵖ
+- `components/risk/RiskResultFrame.svelte`: 43
+- `components/risk/RiskReturnLevel.svelte` †: 107ᶠᵖ,112ᶠᵖ
+- `components/risk/levels/L1HowMuchItHurts.svelte` †: 91ᶠᵖ
+- `components/risk/levels/L2Diversification.svelte` †: 197ᶠᵖ,224ᶠᵖ
+- `components/risk/levels/RiskLevelSection.svelte` †: 249
+- `components/risk/levels/RiskLevelsPanel.svelte` †: 312,313
+- `components/risk/levels/l1/UnderwaterChart.svelte` †: 50ᶠᵖ
+- `components/risk/levels/l1/l1Helpers.ts` †: 195ᶠᵖ
+- `components/risk/levels/l4/L4Replay.svelte` †: 274
+- `components/risk/levels/l4/L4Shock.svelte` †: 164,175
+- `components/risk/levels/l4/L4Simulation.svelte` †: 143,218
+- `components/risk/levels/shareFormat.ts` †: 25ᶠᵖ,27ᶠᵖ,31ᶠᵖ
+- `features/tools/pac-allocator/planner/format.ts` †: 225ᶠᵖ,233ᶠᵖ
+- `utils/currency/fxConversionHelper.ts`: 126
+
+### Byte — 3 punti, 1 file
+- `utils/files/upload.ts`: 57,58,59
+
+### Durate — 5 punti, 4 file
+- `components/assets/ProviderAssignmentSection.svelte`: 585,616
+- `components/settings/CachePanel.svelte`: 92
+- `components/settings/SchedulerLogModal.svelte`: 235
+- `utils/sync/syncHelpers.ts`: 110
+
+### Altri decimali mostrati — 56 punti, 29 file
+- `components/assets/AssetCard.svelte`: 223,230
+- `components/assets/AssetPriceSummary.svelte`: 96,109
+- `components/assets/AssetTable.svelte`: 115
+- `components/assets/ProviderAssignmentSection.svelte`: 333
+- `components/assets/providerProbe.ts`: 115,126
+- `components/charts/CandlestickChart.svelte`: 513
+- `components/charts/LineChart.svelte`: 675,676,677,757,768
+- `components/charts/MeasurePanel.svelte`: 297,298,530
+- `components/charts/PriceChartFull.svelte`: 782,785,850,1011
+- `components/charts/candlestickChartHelpers.ts`: 93,94,95,100
+- `components/charts/chartCoreHelpers.ts`: 89,90,91,264,265,266
+- `components/dashboard/KpiSection.svelte`: 138
+- `components/fx/FxCard.svelte`: 219
+- `components/fx/FxPriceSummary.svelte`: 39
+- `components/fx/FxTable.svelte`: 116,188
+- `components/risk/AssetRiskScenariosView.svelte`: 57
+- `components/risk/CorrelationHeatmap.svelte`: 487,506
+- `components/risk/CorrelationPairsList.svelte` †: 91
+- `components/risk/RiskResultFrame.svelte`: 48
+- `components/risk/levels/RiskLevelSection.svelte` †: 255
+- `components/risk/riskAnalysisHelpers.ts`: 142
+- `components/transactions/events/AssetEventPicker.svelte`: 179
+- `components/transactions/events/EventCreateMiniModal.svelte`: 157
+- `components/transactions/modals/ImportWizardModal.svelte`: 2345
+- `components/transactions/modals/TransactionBulkModal.svelte`: 1908,1913,3432
+- `components/transactions/modals/TransactionFormModal.svelte`: 1701
+- `components/transactions/wac/WacPreviewSection.svelte`: 314,567,588
+- `utils/currency/fxConversionHelper.ts`: 116,118
+- `utils/transactions/pairCellHtml.ts` †: 24
+
+### Interni (restano) — 26 punti, 17 file
+- `components/assets/scheduleSerialization.ts`: 119,127
+- `components/charts/geographyMapHelpers.ts`: 38,71
+- `components/risk/levels/l1/l1Helpers.ts` †: 35,196
+- `components/risk/levels/l4/L4Shock.svelte` †: 144
+- `components/risk/levels/l4/TornadoChart.svelte` †: 89
+- `components/risk/levels/shareFormat.ts` †: 30
+- `components/transactions/events/EventCreateMiniModal.svelte`: 76,86
+- `components/transactions/modals/ImportWizardModal.svelte`: 1648,1782
+- `components/ui/TweenedValue.svelte`: 17,56
+- `components/ui/input/DistributionEditor.svelte`: 193,277,386
+- `components/ui/media/ImageEditModal.svelte`: 419
+- `features/tools/pac-allocator/planner/result/model.ts` †: 152
+- `features/tools/pac-allocator/planner/steps/AssetEditor.svelte` †: 102
+- `utils/core/formatPercent.ts`: 78
+- `utils/core/parseDecimalInput.ts`: 110
+- `utils/transactions/importDedup.ts`: 180
+- `utils/transactions/splitRowCharges.ts`: 72,86
+
+Correzioni al conteggio automatico:
+- `KpiSection.svelte:138` (`absRoiPct`) è una percentuale, perché la riga `:382` la stampa con «%».
+- In `UnifiedLotsTable.svelte` la chiamata vera è a `:89`, `sharedFormatPercent(value, {scale: 100})`. La riga `:216` usa l'alias.
+
+**La proposta**:
+1. **La locale dei numeri**: quella della macchina, come gli importi e le date. Così una percentuale non si scontra con l'importo che ha accanto («+4788,01 €» / «14,07%»), qualunque sia la coppia fra browser e lingua della UI.
+2. **Un punto solo per la regola**: `utils/core/numberLocale.ts` → `numberLocale()`, che oggi restituisce `undefined`, cioè la macchina.
+   - I test lo mockano a `fr` o `it` per i rossi.
+   - Se un giorno la regola diventa la lingua della UI, si cambia lì.
+3. **`formatPercent`**: senza `locale` usa `numberLocale()` e localizza.
+   - Le 51 chiamate senza `locale` si correggono senza toccarle. Fra queste c'è `UnifiedLotsTable.svelte:89`, quindi il file di I non si tocca.
+   - La forma fissa non serve a nessun export: l'unico clipboard dei lotti copia l'id.
+4. **`formatFixed(value, digits, {signed, locale})`**: un file nuovo in `utils/core/`, cioè il `toFixed` localizzato. Lo usano i byte, le durate e gli altri decimali.
+5. **Le 48 percentuali scritte a mano** passano a `formatPercent`, con `scale`, `digits`, `signed` e `suffix` del sito. Il segno `−` (U+2212) del rischio si tiene.
+6. **I byte**: `formatBytes` usa `formatFixed`, con le etichette di oggi. **Le durate**: `formatFixed` più il simbolo di oggi (`s`, `h`). Nessuna chiave i18n nuova.
+7. **Gli interni restano**: 26 punti, fra input, chiavi, payload, CSS, confronti e dati numerici dei grafici.
+
+**Da decidere**:
+- (a) La macchina, come consiglio, oppure la lingua della UI. La seconda vorrebbe dire cambiare anche importi e date: fuori portata.
+- (b) Le 12 chiamate con `$currentLanguage`: allinearle alla regola (consiglio) oppure lasciarle.
+- (c) Gli altri decimali (56) adesso, come consiglio, perché nella stessa card il tasso e la variazione % si scontrerebbero; oppure dopo la 1.2.
+- (d) Anche `currencyFormat.ts:39`, `:61` passa per `numberLocale()`: nessun cambio di comportamento, una sola fonte.
+
+**I test** (test-author, prima i rossi):
+- Unità (node): `formatFixed`; il default di `formatPercent` con `numberLocale` mockato; `formatBytes`; `formatElapsed`.
+- Componenti (jsdom), uno per famiglia, con `numberLocale` = `fr` o `it`:
+  - percentuali: `KpiSection`;
+  - byte: una cella di dimensione;
+  - durate: `SyncResultRow`;
+  - altri decimali: `FxCard`.
+- Da aggiornare: `formatPercent.test.ts`, che oggi fissa la forma senza locale.
+
+**La stima**: circa 1 giorno; 4–5 h in meno se gli altri decimali vanno dopo la 1.2.
+
+**I conflitti**:
+- `UnifiedLotsTable.svelte`: nessuna riga, grazie al punto 3.
+- `KpiSection.svelte`: le righe `:138`, `:252-255`, `:268`, `:382`, non la `:304` di V.
+- I cataloghi: nessuna chiave nuova.
+- La galleria di M: le percentuali in it, fr ed es cambiano negli scatti.
+
+**Il CHANGELOG 🐛**: i punti che c'erano nella 1.1.
+- In 1.1: la dashboard (KPI, esposizione, contributi, crescita, allocazione), i grafici di prezzo, linea e candele con la misura, asset e FX (card, tabelle, riepiloghi), i lotti (custodia, grafici WAC e confronto, tabella), le transazioni (WAC, cambio, modali), le dimensioni dei file, il registro dello scheduler e le durate dei sync, la cache, il pannello di analisi del rischio e la heatmap delle correlazioni.
+- Nati nella 1.2: i livelli di rischio L1–L4, lo scatter, lo Yield on Cost e il PAC.
+
+### M-18 — nuova regola: la lingua della UI per tutto (developer, 2026-10-12)
+> **Decisione** del developer, testuale: «Lingua della UI per tutto, importi e date compresi: lavoro più grande, con più rischio sulla 1.2».
+> - Del coordinatore: (b) le 12 chiamate con `$currentLanguage` passano dalla fonte unica; (c) i 56 decimali si fanno adesso; (d) `currencyFormat` passa dalla fonte unica.
+> - **Analisi rifatta, senza codice**, letta sul target `55304116f` con `git grep` in sola lettura: il target ha 12 file del frontend che mancano alla mia base (`responsiveXAxis.ts`, i grafici). Script `/tmp/libreFolio_m18b_grep.sh`.
+
+**1. La fonte unica**: `uiLocale()`, in un modulo `.svelte.ts` che legge `currentLanguage` con `fromStore`, così è reattiva.
+- **La mappa**: lingua della UI L, tag principale del browser B (`navigator.language`).
+  - Se la lingua di B è L, si usa B, con la sua regione.
+  - Altrimenti si usa il default di L: `it`, `fr`, `es`, e per l'inglese **`en-GB`** (proposta).
+  - Si guarda solo il tag principale: Chrome mette `en-US` come lingua secondaria a quasi tutti, e un italiano con la UI inglese finirebbe nelle convenzioni americane.
+- **Le conseguenze sulle date**, provate con Node:
+  - `en` da solo equivale a en-US: `10/12/2026`, `Oct 12, 2026`, `2:05 PM`;
+  - en-GB: `12/10/2026`, `12 Oct 2026`, `14:05`;
+  - i numeri sono identici nei due casi.
+- **Le regioni contano anche per i numeri**:
+  - it-CH `4788.01` (col punto);
+  - fr-CH `4'788,01`;
+  - es-MX `4,788.01`;
+  - fr-CA ha le date `2026-10-12`.
+- **La galleria** (`GALLERY_LOCALES`: en-US, it-IT, fr-FR, es-ES) dà lo stesso risultato della lingua da sola: importi e date negli scatti non cambiano.
+- **Il segno meno** è ASCII in tutte e quattro le lingue e nelle loro regioni comuni. U+2212 compare solo in locale che non sono della UI, come lo svedese.
+
+**2. La reattività**
+- Con i formattatori che leggono `uiLocale()` per default, ogni chiamata fatta in un template, in un `$derived` o in un `$effect` segue il cambio di lingua senza toccare il sito: le 52+13 di `currencyFormat`, le 64 di `formatPercent` e le altre. Il badge della quota (`brokers-detail.spec.ts:1644`, `:1655`) funziona già così.
+- **Dove la lettura va resa esplicita**:
+  - **I grafici**: l'effect che costruisce le opzioni deve leggere la locale, perché i formatter di ECharts girano fuori dal tracciamento.
+    - Cinque grafici oggi non dipendono da nessuna lingua: `AllocationPieChart`, `GeographyMap`, `ScatterChart`†, `SemiDonutChart`, `ExposureBars`†.
+    - Gli altri 12 leggono `$currentLanguage` o `$locale`: passano a `uiLocale()`, e per ognuno va verificato che la lettura stia dentro l'effect.
+  - **Le stringhe costruite in un callback asincrono e salvate in `$state`** restano nella lingua di quel momento. Sono transitorie: il dettaglio della sonda (`ProviderAssignmentSection:333`) e i toast.
+- Nessun `$:` legacy e nessuno store Svelte 4 formatta numeri o date: ho cercato, sono 0.
+
+**3. L'inventario esteso** (†: nato nella 1.2)
+- **Importi**:
+  - `currencyFormat.ts:39`, `:61`, con 65 chiamate in 27 file che non si toccano;
+  - 15 `toLocaleString(undefined…)` o `Intl.NumberFormat(undefined…)`: `LotGanttChart:283`, `ExposureTable:153`, `GrowthChart:2130`, `:2166`, `KpiSection:347`, `PerformanceChart:175`, `:188`, `:194`, `DataTableColumnFilter:170`, `:171`, `FixFlaggedStep:426`, `txDisplayHelpers:20`, `DataEditor:205`, `planner/format.ts`†`:254`, `resolveValidationMessage:193`;
+  - senza argomenti: `RiskAnalysisPanel:122`.
+- **Date**:
+  - `formatDateTime.ts`, 3 chiamate;
+  - 9 siti con `undefined`: `SchedulerLogModal:222`, `dataTableLogic:328`, `:344`, `AssetEventPicker:188`, `EventCreateMiniModal:155`, `ImportWizardModal:3773`, `TransactionBulkModal:1900`, `:1901`, `importReportSets`†`:287`, la pagina del broker `:443`;
+  - 5 senza argomenti: `dataTableLogic:326`, `:342`, `GlobalSettingsTab:726` («Last updated:», M-17), `:755`, la pagina dell'asset `:3524`;
+  - fissi: `DataEditor:106` (`'en-US'`, i giorni della settimana) e `DateRangePicker:1109` (`'en'`, M-17).
+- **Siti già nella lingua della UI, da far passare dalla fonte**: 27.
+  - assi: `formatAxisDate` (5 chiamate), `formatAxisNumber` (3);
+  - lotti: `lotComparisonChartHelpers:206`, `:222`, `lotGanttChartHelpers:105`, `unifiedLotsTableHelpers:63`;
+  - grafici: `priceChartHelpers:216`, `responsiveXAxis`†`:48`, `growthLadderAxis`†`:169`, `GrowthChart:1356`;
+  - rischio: `eligibility`†`:124`, `TornadoChart`†`:63`, `scenarioHelpers`†`:384`, `:389`, `riskAnalysisHelpers:166`;
+  - `ProfileTab:23`;
+  - PAC e Tool: `planner/format`†`:286`, `:304`, `KpiCards`†`:115-118`, `BackendTimingBar`†`:79-80`, `ToolDiagnosticsPanel`†`:65`, `ToolExecutionMetrics`†`:37`;
+  - `aiExportOptions:81`;
+  - `LotComparisonChart:229`, `:235`, `:384`, `LotCustodyModal:68`, `LotGanttChart:258`, `AllocationHistoryChart:548`.
+- **Assi**: `lotChartShared.ts:85-98`, dove la regola «numeri dalla macchina» va riscritta; `responsiveXAxis`†, che nomina già i giorni nella lingua dell'app, passa dalla fonte; le cifre degli assi della famiglia N, cioè `chartCoreHelpers`, `LineChart`, `PriceChartFull` e `Candlestick`.
+- **Il prompt dell'AI Export**: nessuna formattazione con la locale. `snapshotDataRenderer:226` usa `'en'` solo per leggere le cifre minori di una valuta, e resta così. I byte del prompt non cambiano; li sorvegliano `promptRenderer.test` e la sonda.
+- **PDF ed export**: nel frontend non ce ne sono. Il backup è binario, e i clipboard copiano id, URL, il prompt e le info di sistema.
+- **I date picker**:
+  - i nomi dei mesi e dei giorni vengono dalle chiavi i18n e vanno bene;
+  - `DateRangePicker:1109` passa dalla fonte (sovrapposizione con M-17);
+  - gli `<input type="date">` nativi (`RiskAnalysisPanel:902`, `:906`) seguono il browser: è un limite noto.
+- **Le famiglie della prima analisi** restano tutte: percentuali (48 a mano, 51 di default, 12 con `$currentLanguage`), byte (3), durate (5), altri decimali (56), interni (26).
+- **Documentazione da riscrivere**: `lotChartShared.ts:85-90`, `formatDateTime.ts:16-18` e `L2Diversification.svelte:211`, che chiama questo «a known debt».
+
+**4. I test**
+- **Da rifare**:
+  - `formatPercent.test.ts`, 34 asserzioni: senza `locale` la forma non è più fissa;
+  - `GrowthChart.test.ts`: il contratto D23/D23b «la locale del browser», con `inLocale` che modifica `Number.prototype.toLocaleString`, diventa quello della UI;
+  - `currencyFormat.test.ts` calcola l'atteso con `undefined`: va calcolato con la fonte. In inglese l'esito è identico.
+- **Restano validi**:
+  - i 2 E2E del badge: `fr` col browser en-US dà `fr` da solo, come `$currentLanguage` oggi;
+  - `growthLadderAxis.test` e `TornadoChart.test`, che usano locale esplicite;
+  - il prezzo live di `asset-detail`, la cui describe è in inglese;
+  - gli altri E2E che passano a it, fr o es, che non asseriscono numeri né date.
+- **La galleria**: importi e date non cambiano. Percentuali, byte, durate e decimali sì, in it, fr ed es.
+- **Rossi nuovi**:
+  - la mappa;
+  - uno per famiglia, in it o fr col browser en-US: percentuali, byte, durate, decimali, importi, date, assi;
+  - la reattività: un test di componente, e un E2E della dashboard da en a it che controlla importo e percentuale di un KPI.
+
+**5. Stima, rischi e taglio**
+- **CP1**, circa 1 giorno: la fonte, poi percentuali, byte, durate e i decimali fuori dai grafici.
+- **CP2**, circa 1,5 giorni: importi, date, assi, il ridisegno dei grafici, le cifre dei grafici e i contratti dei test.
+- **Rischi**:
+  - l'ampiezza: circa 400 siti, toccati per lo più attraverso i default;
+  - la scelta per l'inglese (en-US o en-GB);
+  - qualche grafico che non si ridisegna;
+  - i contratti D23 di GrowthChart e dei lotti, cioè il piano 47 di I;
+  - un cambio visibile per chi ha browser e UI diversi, ed è voluto;
+  - gli input data nativi.
+
+#### M-18 — aggiunta: M-17 passa a T, e i file di I (coordinatore, 2026-10-12)
+- **M-17** (🐛, c'era già nella 1.1.0) entra nel perimetro.
+  - `DateRangePicker.svelte:1109`: il `'en'` fisso passa a `uiLocale()`.
+  - `GlobalSettingsTab.svelte:726`: «Last updated:» diventa `{$_('common.updated')}:`. La chiave esiste in tutti e 4 i cataloghi («Updated», «Aggiornato», «Mis à jour», «Actualizado»): nessuna chiave nuova.
+  - Le date di `GlobalSettingsTab.svelte:726` e `:755` passano dalla fonte.
+  - `DataEditor.svelte:106`: il giorno della settimana, oggi `'en-US'`, passa dalla fonte.
+  - Le altre date trovate da I erano già nell'inventario esteso.
+- **I file di I** (per circa 2 giorni) e le mie righe, lette sul target:
+  - `ConnectionSecurityIndicator`, `utils/clipboard.ts`, `AboutTab`, `AskAdminModal`, `FilesTable`: nessuna riga mia.
+  - `BrokerIcon`, `brokerIconChain` e `ImportBrokerMismatchModal` non esistono sul target: sono file nuovi di I, nessuna riga mia.
+  - `FilePreviewModal:123` (`formatBytes`), `FileGrid:73` (`formatDateTime`) e `:177` (`formatBytes`), `UnifiedLotsTable` (`formatCurrencyAmountPlain` e `formatPercent`): passano dai default dei formattatori, **senza modifiche**.
+  - `ProviderAssignmentSection`: le righe **`:333`** (prezzo), **`:585`** e **`:616`** (durate). Le sposto nel CP2, su una base che contiene il cambio di I a `:591-596`.
+- **Così il CP1 non tocca nessun file di I.**
+- **M-17 nel CP2**, con le altre date. Se lo vuoi prima, può entrare nel CP1: i suoi 3 file non sono di I.
+- **CHANGELOG**: la riga 🐛 di I, «The date range picker and the settings dates follow the app's language», si può fondere con la 🐛 di M-18; più una riga 🔄 per chi ha browser e UI in lingue diverse.
+
+### M-18 CP1 — via libera (coordinatore, 2026-10-12)
+- **Decisioni**: l'inglese senza regione ripiega su `en-GB` (developer); si usa solo il tag principale del browser (coordinatore); M-17 e `ProviderAssignmentSection` vanno nel CP2.
+- Base `55304116f`: il coordinatore mi ha fatto avanzare in fast-forward; il piano è rimasto modificato. Il CP1 non tocca nessun file di I.
+- **Note di I**, recepite:
+  - in un componente **legacy** la lettura dentro un helper è untracked (wiki `problems/legacy-component-language-untracked`);
+  - `formatBytes` ha le unità con `get(_)`;
+  - test: si monta in `en`, poi `currentLanguage.set('it')`, e l'atteso si calcola con `Intl`.
+- **Il disegno del CP1**:
+  1. `stores/app/uiLocale.ts`:
+     - `resolveUiLocale(lingua, tagBrowser)` è pura. Se la lingua coincide si tiene il tag; altrimenti `en` → `en-GB`, e le altre lingue restano da sole;
+     - `uiLocaleStore` = `derived(currentLanguage, …)` serve ai template **legacy** (`$uiLocaleStore`);
+     - `uiLocale()` = `fromStore(uiLocaleStore).current` serve al codice runes e ai default dei formattatori.
+  2. `utils/core/formatFixed.ts`: `formatFixed(value, digits, {signed, locale = uiLocale()})`, cioè il `toFixed` localizzato.
+  3. `formatPercent`: `locale = uiLocale()` per default; il `%` passa da `Intl`, le altre unità da `formatFixed`. La forma fissa non c'è più.
+  4. `formatBytes(bytes, translate, locale = uiLocale())` e le durate passano da `formatFixed`.
+  5. Le 12 chiamate con `$currentLanguage`:
+     - nei componenti runes (`DistributionEditor` ×4, `BrokerSharingPanel` ×6) si toglie l'argomento;
+     - in quelli legacy (`BrokerCard`, la pagina del broker) diventa `$uiLocaleStore`.
+  6. I `formatBytes` nei legacy (`FileUploader`, `FileEditModal`, la pagina `files`) ricevono `$_` e `$uiLocaleStore` nel template.
+  7. I 70 `toFixed` del CP1, in 35 file, passano a `formatPercent` o `formatFixed`.
+- Chiesta al coordinatore l'assegnazione di `_frontend_utility.py`, solo per aggiungere i Vitest nuovi alle liste.
+
+#### M-18 CP1 — blocco ambiente (2026-10-12, 17:23)
+> **⚠️ Fuori pista (ambiente, non codice)**: il `brew upgrade` del developer ha rotto `node` (`dyld: Library not loaded: libsimdjson.33.dylib`).
+> - Per ordine del coordinatore, niente comandi frontend nuovi; un rosso con quell'errore è dell'ambiente.
+> - Ho detto a test-author di fermare i comandi e di riferire quali rossi ha già visto prima del guasto.
+> - La cura (`/tmp/libreFolio_m18_cp1_apply.py`, 42 file, e `/tmp/libreFolio_m18_cp1_core.py`) è pronta e la prova a secco è passata, ma **non l'applico** finché ogni rosso non è stato visto rosso.
+> - Nota dal coordinatore: T-SG e T-DI sono già nella mia sezione del backlog (`bf831ef10`). Non vanno duplicate; le voci nuove vanno in fondo.
+
+#### M-18 CP1 passo 1 — i rossi ✅ (2026-10-12)
+> **Note implementazione** (test-author): tutti i rossi visti rossi su `node` sano (v26.11.1), in sequenza fra le 17:41 e le 17:46. Log in `/tmp/libreFolio_m18_reds_final_*.log`.
+> - **Runner**:
+>   - `front-utility core-unit`: 7 rossi (`formatPercent.test.ts`), 3 767 passed;
+>   - `front-utility component-unit`: 4 rossi (`KpiSection` ×2, `SyncResultRow` ×2), 2 994 passed;
+>   - `front-portfolio risk-frame-component`: 2 rossi (`RiskResultFrame`), 18 passed.
+> - **File nuovi**, con `node_modules/.bin/vitest run`: 34 rossi e 2 controlli verdi. I file sono `stores/app/uiLocale.test.ts`, `utils/core/__tests__/formatFixed.test.ts` e `utils/files/upload.test.ts` (node), e `components/ui/media/FileEditModal.test.ts` (jsdom, legacy).
+> - **I motivi**:
+>   - la forma inglese fissa (`'+12.50%'` invece di `'+12,50 %'`; `'1234.50%'` invece di `'1,234.50%'`);
+>   - i moduli mancanti;
+>   - nessun aggiornamento quando la lingua cambia sul posto.
+> - **Indicazioni per la cura**:
+>   - per il `%`, pre-arrotondare come `toFixed`: altrimenti `formatPercent(1.2345, {digits: 3})` dà `+1.235%`;
+>   - nei template legacy servono **sia** `$_` **sia** `$uiLocaleStore`, perché il catalogo francese arriva dopo il cambio di lingua;
+>   - `KpiSection.test.ts:212` (`'+20000.00%'`) va aggiornato al raggruppamento.
+>
+> **⚠️ Fuori pista**: nella finestra del guasto è fallita una sola corsa, `component-unit` alle 17:21:30, per `dyld`. È stata ripetuta.
+
+#### M-18 CP1 passi 2–4 — cura, verdi, E2E ✅ (2026-10-12)
+> **Note implementazione**:
+> - **La cura**:
+>   - `/tmp/libreFolio_m18_cp1_core.py`: i moduli nuovi `stores/app/uiLocale.ts` e `utils/core/formatFixed.ts`; `formatPercent` con `locale = uiLocale()`;
+>   - `/tmp/libreFolio_m18_cp1_apply.py`: 42 file, cioè i 70 `toFixed`, le 12 chiamate con `$currentLanguage` e i `formatBytes` legacy con `$t`/`$_` e `$uiLocaleStore`.
+>   - Dopo la cura restano solo i `toFixed` interni del CP1: `L4Shock:145`, `EventCreateMiniModal:77,87` e `ImportWizardModal:1649,1783`.
+>   - Nessun file di I toccato.
+> - **Runner**: in `_frontend_utility.py`, core-unit + `formatFixed.test.ts`, `uiLocale.test.ts`, `upload.test.ts`; component-unit + `FileEditModal.test.ts`, `FileUploader.test.ts`.
+> - **Verdi** (6164, in sequenza): 19 azioni Vitest, circa 10 930 test.
+>   - core-unit 124 file, **3 825**; component-unit 114 file, **3 006**; risk-frame-component 20.
+>   - Più le altre 16 azioni Vitest di ai-export, asset, broker, fx, portfolio, transaction, user e onboarding, tutte verdi.
+>   - `check-orphans` pulito. `dev.py front check`: 0 errori e 0 avvisi. Prettier pulito su tutti i file.
+> - **E2E** (6164):
+>   - il badge della quota in `brokers-detail`: 2 passed (in francese all'apertura, e passando in francese sul posto);
+>   - `asset-classification`: 4 passed;
+>   - `tx-import-asset-inspector`: 5 passed.
+> - **Sovrapposizioni**: il target è ora a `0c8412745` (treno 67) e ha cambiato 418 file, nessuno dei miei. Non aggiunge `toFixed`, non passa `$currentLanguage` a `formatPercent` e non ha mock parziali nuovi di `$lib/i18n`.
+>
+> **⚠️ Fuori pista**:
+> - **Arrotondamento**: Intl arrotonda il decimale più corto che rilegge il valore (`1.45` → `1.5`), mentre `toFixed` arrotonda il valore stesso (`1.4`). Quindi `formatFixed` e `formatPercent` pre-arrotondano con `toFixed`. Per il `%` serve anche a evitare lo spostamento dato da `/100` (`1.2345` a tre cifre).
+> - **Negativo minuscolo**: resta `-0.00` / `-0.00%`, come con `toFixed` (`formatPercent.test.ts:65`). Ho tolto un `|| 0`.
+> - **Riparazioni di test** (test-author):
+>   - il registro di `moneyRenderSites`: due snippet riscritti;
+>   - il mock di `$lib/i18n` in `SchedulerLogModal.test.ts`, ora parziale con `importOriginal`;
+>   - `MeasurePanel.test.ts:346` → `'1,000.0000'`;
+>   - `KpiSection.test.ts:212` → `'+20,000.00%'`;
+>   - le descrizioni di `formatPercent.test.ts:166` e `:212`.
+> - **`FileUploader.test.ts`** è arrivato dopo la cura. Per vederlo rosso ho tolto per poco `$t, $uiLocaleStore` da `FileUploader.svelte:242`: i 2 test del cambio sul posto sono falliti, il controllo e il montaggio in italiano no. Poi ho rimesso la riga e verificato.
+> - **Il segno sullo zero**: le percentuali e i decimali scritti a mano mettevano `+` anche sullo zero (`+0.00%`). Ora seguono la regola condivisa di `formatPercent`: niente segno sullo zero. Nessun test del CP1 lo fissava. I rischi del livello L4 tengono il loro `−`/`+`.
+
+### Checkpoint M-18 CP1 🧊 (2026-10-12) — inviato dopo «riparti» (19:24), FROZEN fino al commit
+- Base `55304116f`. 52 file modificati e 7 nuovi; nessuno è di I.
+- Due commit proposti:
+  1. `fix(i18n): write figures in the interface language`: codice, test e righe del runner (`/tmp/libreFolio_commit_t_m18cp1_1.txt`);
+  2. `docs(journal): record M-18 CP1`: questo piano (`/tmp/libreFolio_commit_t_m18cp1_2.txt`).
+- I testi del CHANGELOG li scrive il coordinatore all'integrazione; le proposte sono nel messaggio.
+- **Trovato rileggendo, per il CP2** (⚠️ scarto dalla regola del developer):
+  - con un browser il cui tag primario è un `en` nudo, `resolveUiLocale` (`uiLocale.ts:42`) tiene `en`, e `en` scrive le date all'americana (10/12/2026, 2:05 PM). La regola dice: inglese senza regione → `en-GB`;
+  - nel CP1 non si vede: per numeri, percentuali, byte e durate `en`, `en-GB` ed `en-US` scrivono uguale;
+  - **cura, primo passo del CP2**, col suo rosso via test-author: tenere il tag del browser solo se porta una regione.
+- Restano per il CP2:
+  - importi, date e assi, con il ridisegno dei grafici;
+  - M-17;
+  - `ProviderAssignmentSection` (`:333`, `:352`, `:585`, `:616`);
+  - le cifre dei grafici;
+  - la regola in `lotChartShared.ts:85-90`, `formatDateTime.ts:16-18` e `L2Diversification.svelte:211`.
+
+### ⏸️ STOP del developer (2026-10-12) — FROZEN fino a «riparti»
+- **Fatto**:
+  - il CP1 è completo e verde (§M-18 CP1, passi 2–4);
+  - dopo il passo 4, altri tre E2E sulla 6164, tutti verdi: `front-portfolio risk` 38 passed, `front-portfolio risk-lab` 44 passed, `front-transaction tx-fx-implied-rate` 3 passed (log `/tmp/libreFolio_t1_m18cp1e2e2_*`);
+  - il materiale del checkpoint, in `/tmp`: il manifest (`libreFolio_m18cp1_manifest.final.txt`, 59 blob) e i due messaggi di commit (`libreFolio_commit_t_m18cp1_{1,2}.txt`, ASCII).
+- **A metà**:
+  - il checkpoint CP1 non è stato inviato al coordinatore;
+  - il blob del piano nel manifest è vecchio: questa nota cambia il file, quindi va ricalcolato prima dell'invio.
+- **Trovato, da decidere** (il file non è mio):
+  - la guardia `frontend/e2e/fixtures/galleryReportSets.ts:565` (`expectOfflinePricesDrawn`, scatto «Asset list page» della galleria) si aspetta sulla card il prezzo scritto con `Number(price.value).toFixed(2)`;
+  - con il CP1 la card lo scrive con `formatFixed`, nella lingua della UI. Quindi la guardia diventa rossa:
+    - in it, fr ed es sempre;
+    - in inglese per i prezzi da 1 000 in su (`4116.60` → `4,116.60`, `10956.03` → `10,956.03`).
+  - Le altre E2E che fissano cifre usano valori sotto 1 000 con la UI inglese e il browser en-US, quindi non cambiano.
+  - **Cura proposta**, una riga. Due strade:
+    - confrontare le sole cifre (`replace(/\D/g, '')`), come fa già `tx-import-degiro.spec.ts:583-584`;
+    - oppure formattare il prezzo atteso con `GALLERY_LOCALES[lang]`.
+  - La docstring di `galleryLocale.ts:4-7` («the app formats with it wherever it passes no locale») invecchia con il CP2: la aggiorna M.
+- **Prossimo passo, dopo «riparti»**:
+  1. ricalcolare il blob del piano nel manifest e inviare il checkpoint CP1, con le proposte per il CHANGELOG e la guardia della galleria;
+  2. restare FROZEN fino all'integrazione;
+  3. poi il CP2.
+- **Stato**:
+  - nessun server; porta 6164 libera; nessun sotto-agente in volo;
+  - worktree con 59 voci (52 file modificati, 7 nuovi), nessuno di I.
+- **▶️ Riparti** (2026-10-12 19:24, coordinatore):
+  - il checkpoint CP1 parte subito, col blob del piano ricalcolato;
+  - poi FROZEN sul CP1 fino al commit, quindi il CP2;
+  - la run completa con coverage del coordinatore gira sulla 6176: se un mio E2E scade, prima lo rilancio da solo, poi indago.

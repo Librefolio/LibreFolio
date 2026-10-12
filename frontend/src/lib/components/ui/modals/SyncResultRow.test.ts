@@ -30,8 +30,12 @@
  * skipped note is found by its testid rather than by the `italic` it happens to
  * be styled with.
  */
-import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {flushSync, tick} from 'svelte';
+import {get} from 'svelte/store';
+import {locale, waitLocale} from 'svelte-i18n';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {currentLanguage} from '$lib/stores/app/language';
 import type {SyncResult, SyncStatus} from '$lib/utils/sync/syncHelpers';
 
 // jsdom has neither a clipboard nor `execCommand`, and what the row promises is
@@ -351,5 +355,102 @@ describe('SyncResultRow — the parts the caller supplies', () => {
         expect(rowOf('slow')).toHaveTextContent('2.5s');
         expect(rowOf('fast')).toHaveTextContent('800ms');
         expect(rowOf('untimed').textContent).not.toMatch(/\dm?s/);
+    });
+});
+
+// =========================================================================
+// The elapsed time in the UI language (M-18 CP1)
+// =========================================================================
+
+/**
+ * The seconds a sync took, written the reader's way.
+ *
+ * `formatElapsed` printed `toFixed(1)` and an `s`: `2.5s` for an Italian reader, who writes `2,5s`.
+ * It now writes the number through `formatFixed`, whose locale defaults to the UI's (M-18, the
+ * developer's rule of 2026-10-12). Same digit, same unit; only the notation moves. Below a second the
+ * time stays in whole milliseconds, which no language writes differently.
+ *
+ * Expectations. The Italian number comes from `Intl.NumberFormat('it', …)` in this runtime, never
+ * typed; the unit is the formatter's own `s`. English is today's exact text: jsdom's browser is en-US,
+ * so the English UI keeps en-US notation.
+ *
+ * Language. Switched as LanguageSelector does — `currentLanguage.set`, which also drives svelte-i18n —
+ * with both dictionaries loaded first. The row is a runes component, so its template tracks whatever
+ * the formatter reads: the in-place test is what proves the default is read reactively, not merely
+ * right at mount.
+ *
+ * Selection. The row by its `data-row-id`; the time is the one leaf of the row whose whole text is a
+ * number and a unit, as the row publishes no handle of its own for it. Nothing translated is read.
+ */
+describe('SyncResultRow — the elapsed time in the UI language (M-18)', () => {
+    /** 2.5 s: a decimal in every notation, and no rounding involved. */
+    const SECONDS_MS = 2500;
+    const UNDER_A_SECOND_MS = 800;
+    const ENGLISH = {seconds: '2.5s', milliseconds: '800ms'};
+
+    /** The Italian text of a time of a second or more: the number from Intl, the unit as the formatter writes it. */
+    const italianSeconds = (ms: number): string => `${new Intl.NumberFormat('it', {minimumFractionDigits: 1, maximumFractionDigits: 1}).format(ms / 1000)}s`;
+
+    /** The elapsed time a row shows: its one leaf whose whole text is a number and `s` or `ms`. */
+    function elapsedOf(id: string): string {
+        const times = [...rowOf(id).querySelectorAll('*')]
+            .filter((element) => element.children.length === 0)
+            .map((element) => (element.textContent ?? '').trim())
+            .filter((text) => /^\d[\d.,\u00a0\u202f]*m?s$/.test(text));
+        if (times.length !== 1) throw new Error(`expected one elapsed time in row ${id}, found ${JSON.stringify(times)}`);
+        return times[0];
+    }
+
+    function mountTimedRows(): void {
+        mount(res('seconds', 'ok', {elapsed_ms: SECONDS_MS}));
+        mount(res('milliseconds', 'ok', {elapsed_ms: UNDER_A_SECOND_MS}));
+    }
+
+    const shownTimes = () => ({seconds: elapsedOf('seconds'), milliseconds: elapsedOf('milliseconds')});
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; Italian joins it, so a switch never waits on a loader.
+        await waitLocale('it');
+        // Control: this runtime has Italian ICU data, so the two notations really differ.
+        expect(italianSeconds(SECONDS_MS), 'Italian notation differs from English').not.toBe(ENGLISH.seconds);
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('English UI (control): 2.5s and 800ms, today’s exact text', () => {
+        mountTimedRows();
+
+        expect(shownTimes()).toEqual(ENGLISH);
+    });
+
+    it('mounted with the UI in Italian: the seconds in Italian notation, the milliseconds as they were', async () => {
+        await switchLanguage('it');
+        mountTimedRows();
+
+        expect(shownTimes()).toEqual({seconds: italianSeconds(SECONDS_MS), milliseconds: ENGLISH.milliseconds});
+    });
+
+    it('follows an in-place switch of the UI language, en → it → en', async () => {
+        mountTimedRows();
+        expect(shownTimes(), 'en, mount — today’s text').toEqual(ENGLISH);
+
+        await switchLanguage('it');
+        expect(shownTimes(), 'en → it in place — the seconds in Italian notation').toEqual({seconds: italianSeconds(SECONDS_MS), milliseconds: ENGLISH.milliseconds});
+
+        await switchLanguage('en');
+        expect(shownTimes(), 'it → en in place — today’s text again').toEqual(ENGLISH);
     });
 });

@@ -1,0 +1,177 @@
+// @vitest-environment jsdom
+/**
+ * FileUploader — the size of a picked file in the UI language, in a legacy component (M-18 CP1).
+ *
+ * The twin of FileEditModal.test.ts, for the uploader that lists every file the user picks with its size.
+ * The size is printed by `formatBytes`, which wrote `toFixed(1)` — `1.5 KB` for an Italian reader, who
+ * writes `1,5 KB` — and now writes its number through `formatFixed`, with a `locale` defaulting to
+ * `uiLocale()`, and its unit through `translate`, defaulting to `get(_)`.
+ *
+ * The trap this file guards (wiki: problems/legacy-component-language-untracked). FileUploader is a legacy
+ * component (`export let`, `createEventDispatcher`, no runes), and a legacy template compiles a call inside
+ * an expression to `$.untrack`, tracking only what the expression names. So the template names both sources
+ * — `formatBytes(file.size, $t, $uiLocaleStore)` — and only an in-place switch can tell: a mount in the new
+ * language passes either way. Why both: `$uiLocaleStore` moves the moment the language does, while the
+ * catalogue that carries the unit arrives later on the first switch to a language. FileEditModal.test.ts
+ * measured it on a prototype: without the translator in the expression, the first switch to French ends as
+ * `1,5 KB` — French number, English unit.
+ *
+ * Steps. English at mount, today's exact text. Italian at mount, and English → Italian in place: the number
+ * follows (Italian keeps the `KB` of English, so these steps are about the number alone). The first switch to
+ * French, whose catalogue is not loaded yet: the number and the unit both follow once it arrives. That test
+ * runs last and checks its own precondition — no other test of this file loads French.
+ *
+ * The file gets in the way a user puts it in: picked through the uploader's own input (`file-input`), with
+ * the `files` testing-library sets on the change event. A control checks the file is listed before its size
+ * is read.
+ *
+ * Expectations. The number comes from `Intl.NumberFormat` in this runtime, never typed; the unit is read from
+ * the shipped catalogue of the step's language — `common.kilobytes`, a plain message `$t` returns as it is —
+ * so no translation is written here. The controls check that the Italian number and the French unit differ
+ * from English: otherwise a step would compare equal strings and prove nothing.
+ *
+ * Selection. The uploader by its `data-testid`; the size is its one leaf whose whole text is a number and a
+ * unit, as the list publishes no handle of its own for it. jsdom's browser is en-US, so the English UI keeps
+ * en-US notation.
+ */
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {flushSync, tick} from 'svelte';
+import {get} from 'svelte/store';
+import {dictionary, locale, waitLocale} from 'svelte-i18n';
+
+// `uploadFile` shares the module of `formatBytes`; nothing here uploads, and the API client stays out of the graph.
+vi.mock('$lib/api', () => ({axiosInstance: {post: vi.fn()}}));
+
+import {fireEvent, render, screen, setupI18n} from '$test/component';
+import enCatalogue from '$lib/i18n/en.json';
+import frCatalogue from '$lib/i18n/fr.json';
+import itCatalogue from '$lib/i18n/it.json';
+import {currentLanguage} from '$lib/stores/app/language';
+import FileUploader from './FileUploader.svelte';
+
+type UiLanguage = 'en' | 'it' | 'fr';
+
+/** The shipped catalogues the unit is read from, as the component's `$t` reads it. */
+const CATALOGUES = {en: enCatalogue, it: itCatalogue, fr: frCatalogue};
+
+const FILE_NAME = 'statement.pdf';
+
+/** 1.5 KB exactly: one decimal in every notation, no rounding involved. */
+const SIZE_BYTES = 1536;
+const SIZE_KB = 1.5;
+
+/** Today's English text: the number exactly as `toFixed(1)` printed it, the unit as the English catalogue has it. */
+const ENGLISH = `1.5 ${CATALOGUES.en.common.kilobytes}`;
+
+/** The kilobyte unit of `lang`'s shipped catalogue: what `$t('common.kilobytes')` returns in that language. */
+function unitIn(lang: UiLanguage): string {
+    return CATALOGUES[lang].common.kilobytes;
+}
+
+/** The size as `formatBytes` must write it in `lang`: the number from Intl, the unit from the catalogue of `lang`. */
+function expectedSize(lang: UiLanguage): string {
+    const number = new Intl.NumberFormat(lang, {minimumFractionDigits: 1, maximumFractionDigits: 1}).format(SIZE_KB);
+    return `${number} ${unitIn(lang)}`;
+}
+
+/** `text` with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+function spelled(text: string): string {
+    return text.replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
+/** Flush synchronously, then once more through the microtask the app itself waits on. */
+async function settle(): Promise<void> {
+    flushSync();
+    await tick();
+}
+
+/** Mount the uploader and pick one file through its own input, as the browser's file dialog hands it over. */
+async function mountWithFile(): Promise<void> {
+    render(FileUploader);
+    const file = new File([new Uint8Array(SIZE_BYTES)], FILE_NAME, {type: 'application/pdf'});
+    expect(file.size, 'control: the file has the size put in').toBe(SIZE_BYTES);
+
+    await fireEvent.change(screen.getByTestId('file-input'), {target: {files: [file]}});
+    await settle();
+
+    expect(screen.getByTestId('file-uploader'), 'control: the picked file is listed').toHaveTextContent(FILE_NAME);
+}
+
+/** The size the uploader lists: its one leaf whose whole text is a number and a unit. */
+function shownSize(): string {
+    const uploader = screen.getByTestId('file-uploader');
+    const sizes = [...uploader.querySelectorAll('*')]
+        .filter((element) => element.children.length === 0)
+        .map((element) => (element.textContent ?? '').trim())
+        .filter((text) => /^\d[\d.,\u00a0\u202f]*\s\S+$/.test(text));
+    if (sizes.length !== 1) throw new Error(`expected one size in the uploader, found ${JSON.stringify(sizes)}`);
+    return sizes[0];
+}
+
+/** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+async function switchLanguage(lang: UiLanguage): Promise<void> {
+    currentLanguage.set(lang);
+    await waitLocale(lang);
+    await settle();
+    expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+    expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+}
+
+beforeAll(async () => {
+    await setupI18n();
+    // Italian joins English up front, so a switch to it never waits on a loader. French is left to the
+    // test that switches to it: the arrival of its catalogue is that test's subject.
+    await waitLocale('it');
+    // Controls: today's English is what the formatter writes in English, this runtime has Italian ICU
+    // data, and the French unit differs from the English one.
+    expect(expectedSize('en'), 'English, from Intl and the catalogue').toBe(ENGLISH);
+    expect(expectedSize('it'), 'Italian differs from English').not.toBe(ENGLISH);
+    expect(unitIn('fr'), 'the French kilobyte unit differs from the English one').not.toBe(unitIn('en'));
+});
+
+afterEach(async () => {
+    // The language is module-level state shared by every test of the file.
+    await switchLanguage('en');
+});
+
+describe('FileUploader — the size of a picked file in the UI language, in a legacy component (M-18)', () => {
+    it('English UI (control): 1.5 and the English unit, today’s exact text', async () => {
+        await mountWithFile();
+
+        expect(shownSize()).toBe(ENGLISH);
+    });
+
+    it('mounted with the UI in Italian: the size in Italian notation', async () => {
+        await switchLanguage('it');
+        await mountWithFile();
+
+        const expected = expectedSize('it');
+        expect(shownSize(), spelled(expected)).toBe(expected);
+    });
+
+    it('follows an in-place switch of the UI language, en → it → en: the number', async () => {
+        await mountWithFile();
+        expect(shownSize(), 'en, mount — today’s text').toBe(ENGLISH);
+
+        await switchLanguage('it');
+        expect(shownSize(), `en → it in place — Italian notation, ${spelled(expectedSize('it'))}`).toBe(expectedSize('it'));
+
+        await switchLanguage('en');
+        expect(shownSize(), 'it → en in place — today’s text again').toBe(ENGLISH);
+    });
+
+    it('follows the first in-place switch to French, whose catalogue arrives after the language: the number and the unit', async () => {
+        expect(Object.keys(get(dictionary).fr ?? {}), 'precondition: the French catalogue is not loaded yet — another test of this file loaded it first').toHaveLength(0);
+        await mountWithFile();
+        expect(shownSize(), 'en, mount — today’s text').toBe(ENGLISH);
+
+        // As LanguageSelector does: the language moves at once, the catalogue follows when it has loaded.
+        currentLanguage.set('fr');
+        await settle();
+        await waitLocale('fr');
+        await settle();
+        expect(get(locale), 'control: the svelte-i18n locale is fr').toBe('fr');
+
+        expect(shownSize(), `en → fr in place — French notation and unit, ${spelled(expectedSize('fr'))}`).toBe(expectedSize('fr'));
+    });
+});

@@ -62,6 +62,16 @@ not ingested here, except where a wiki page was stale because of them (the lots'
   ships. The plan records its application to C-53 («regola del developer: +1 rispetto alla 1.1»).
 - The BU1 folder name: `utils/runtime/`, the developer's choice; `utils/platform/` in the plan was the earlier proposal.
 
+## CL — the localized changelog frontend (added in step B8)
+
+After C-55 the plan records one more job of T's, not about financial math (registered at `fba291f53`): the frontend
+of the localized CHANGELOG, which the developer moved from I to T on 2026-10-12. T analysed the bundle (the English
+changelog is inline in the shell; jsdom cannot import `?raw` files), proposed lazy per-language chunks and a merge
+keyed on the version, and delivered it in steps — the key `changelog.notTranslated` (`a8691bd27`, train 57), the
+red tests, the cure (`8f67f89de`), the runner's rebuild on a changelog change (`ee8a19384`), the user guide
+(`b02bf6c54`). A synthetic `CHANGELOG.it.md`, never tracked, proved the translated branch in the build and the E2E, then
+was deleted. Pages: [[features/F-109]] (registered in step B8) and [[decisions/changelog-translated-by-chapter]].
+
 ## Source files
 
 | Role | Path |
