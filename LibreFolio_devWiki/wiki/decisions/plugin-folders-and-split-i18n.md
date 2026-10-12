@@ -1,5 +1,5 @@
 ---
-title: "Each plugin a folder with its own translations; the i18n catalogues split by subsystem (U-1 delivered, the i18n split planned)"
+title: "Each plugin a folder with its own translations; the i18n catalogues split by subsystem (U-1 and U-2 delivered, the split itself planned)"
 category: decision
 status: accepted
 date: 2026-10-12
@@ -11,6 +11,7 @@ related:
   - decisions/i18n-key-rationalization
   - decisions/financial-math-one-home
   - decisions/utils-leaf-functions-only
+  - features/F-008
 ---
 
 # Decision: plugins as folders, translations split by subsystem
@@ -25,6 +26,38 @@ related:
 > U-2 (a catalogue built from sources) and U-3 (one catalogue per subsystem and plugin) are later steps of plan 45, and
 > `frontend/src/lib/i18n/` still holds one catalogue per language.
 
+> **Update (train 71, 2026-10-12, at `c57acf510`): U-2 is in the code — the catalogue is built from its sources.**
+> `1b31f9057` («feat(i18n): build the catalogue from its sources»):
+>
+> - **Generated, never edited.** The catalogue the app loads, `frontend/src/lib/i18n/<lang>.json`, is generated and
+>   ignored by git, with its stamp `.generated`. Its sources are `frontend/src/lib/i18n/base/<lang>.json` (the four
+>   catalogues of before, moved by a pure rename in the same commit so that other workstreams' edits followed it at
+>   merge), a folder per subsystem whose `prefixes.txt` lists the key prefixes it owns, and an `i18n/` folder beside
+>   a plugin's `plugin.py`. A key belongs to the plugin that defines it, otherwise to the subsystem with the longest
+>   declared prefix, otherwise to `base`; a key defined twice is an error. Today only `base/` exists: the subsystem
+>   and plugin folders are U-3's.
+> - **The builder**, `scripts/i18n_catalog.py` (stdlib only, so the npm hooks can run the system `python3`), fills a
+>   missing language from English with a warning (D-4). `check` is strict, and `check --against <rev>` proves the
+>   merged catalogue equal to the one at a revision: the generated files matched the old ones byte for byte.
+>   `dev.py i18n where <key>` names the source that holds, or would hold, a key.
+> - **Read-only and stamped.** The generated files are written read-only (0444), and `.generated` keeps their
+>   sha256. A build that finds a generated file matching neither what it writes nor what the last build wrote stops:
+>   «generated file(s) edited by hand; move the change to its source (`dev.py i18n where <key>`), then build again»
+>   (`--force` overrides it).
+> - **Who builds it.** The npm pre-hooks (`predev`, `prebuild`, `precheck`…) and Vitest's `globalSetup`, through
+>   `frontend/scripts/i18n-catalog-build.mjs`; `dev.py` calls the library itself (`front build`, `front check`, knip,
+>   `i18n build`). A missing generated file makes the frontend build stale, because the E2E fixtures read it.
+> - **The gate**: `utils gate-i18n-catalog` (`test_i18n_catalog_gate.py`, pure) proves every rule both ways on
+>   synthetic trees, then checks the repository's own sources and ignore rule.
+> - **Found on the way** (plan 45, §10): the new staleness check met a `CatalogError` in a test project without i18n
+>   sources, and the staleness function's `except Exception` turned it into «no build needed». Now
+>   `generated_catalogs()` returns nothing where there is no `base/`. The three reds came from the full backend run,
+>   not from the targeted gates, which ran on the real tree.
+> - **Still open**: U-3, the split itself; and U-B6 (low, after 1.2) — a hand edit of a source reaches `npm run dev`
+>   only after `dev.py i18n build` or `npm run i18n:build`; the cure is a Vite plugin that watches the sources.
+>   On the merge that carried U into the target, Git stalled once on a lock —
+>   [[problems/git-merge-stash-failed-on-locked-index]].
+
 > **Planned, not in the code.** Decided on 2026-10-12; at `e7d698c4d` (train 56) nothing of it is implemented and
 > workstream U's plan (45) is not in the target yet. The decisions are quoted from the coordinator's diary, which is
 > not in the repository, as the coordinator relayed them.
@@ -38,7 +71,7 @@ a hot-plugin, solo una modularizzazione estrema» ("it is not a hot-plug system,
 Until U-1, every plugin family was a package of flat modules under `backend/app/services/` (`asset_source_providers/`,
 `fx_providers/`, `brim_providers/`, `signal_plugins/`, `risk_plugins/`, `tool_plugins/`), registered by auto-discovery
 ([[decisions/provider-registry-decision]], [[decisions/signal-backend-plugin-architecture]]; the Tool family is
-[[features/F-106]]). The frontend has one
+[[features/F-106]]). Until U-2 the frontend had one
 catalogue per language, `frontend/src/lib/i18n/{en,it,fr,es}.json` (5 653 lines in English).
 
 ## Options Considered (D-1, the plugin layout)
@@ -104,6 +137,9 @@ plugins may grow over time or be imported "dynamically" by linking folders in th
   the historian when the lot enters the target. *Done in step D (2026-10-12, at `145502a39`): 112 citations in 54
   pages moved to `<name>/plugin.py`; 8 left as written, because they are history (five in the log, a quoted old
   import, a past-tense account, a dated residual).*
+- U-2 moved the four catalogues to `base/`: the wiki's citations of `frontend/src/lib/i18n/<lang>.json` were realigned
+  at the train-71 ingest (28 in 13 pages, plus 5 written as `{en,it,fr,es}`). Imports such as
+  `$lib/i18n/en.json` stay: they name the generated file, which the tests do import.
 
 ## Links
 
@@ -126,5 +162,10 @@ plugins may grow over time or be imported "dynamically" by linking folders in th
 | Discovery (`PLUGIN_MODULE_NAME`) | `backend/app/services/provider_registry.py` |
 | Layout gate (U-1) | `backend/test_scripts/test_utilities/test_plugin_layout_gate.py` |
 | Plan 45 of U | `LibreFolio_developer_journal/Release_2/Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md` |
-| The catalogue today, one per language | `frontend/src/lib/i18n/en.json` |
+| The catalogue's sources (U-2), one file per language | `frontend/src/lib/i18n/base/en.json` |
+| The builder (`build`, `check`, `where`) | `scripts/i18n_catalog.py` |
+| The npm and Vitest hook | `frontend/scripts/i18n-catalog-build.mjs` |
+| The generated files, ignored | `frontend/.gitignore` |
+| The gate `utils gate-i18n-catalog` | `backend/test_scripts/test_utilities/test_i18n_catalog_gate.py` |
+| Backlog U-B6 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
 | The i18n loader | `frontend/src/lib/i18n/index.ts` |
