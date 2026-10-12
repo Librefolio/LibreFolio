@@ -419,6 +419,12 @@ market-value totals — open value, unrealized P&L, potential gain and loss — 
 summing the open lots that have them, with their coverage stated in
 `value_coverage_status`, `valued_open_lot_count` and `unavailable_open_lot_count`.
 
+`portfolio.reconciliation` and `broker.reconciliation` state `residual`, the exact
+period P&L minus its components, and `reconciled`: `null` if a term is missing, true
+below `CONVERSION_DUST` (`1e-9`) in absolute value, since `period_other_result` closes
+the decomposition up to `Decimal` rounding. A residual under the currency's minor unit
+prints as `0` (`monetary_residuals_zeroed`), so `reconciled` true beside `0` is normal.
+
 The generic compact renderer prints ratio fields under public names:
 `PUBLIC_RATIO_FIELD_NAMES`, applied by `genericFieldName()` to SUMMARY rows and table
 columns, turns `portfolio_weight_ratio` into `portfolio_weight_percent`,
