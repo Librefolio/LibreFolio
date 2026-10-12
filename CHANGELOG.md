@@ -127,6 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Merging two new rows into a cash transfer or a currency exchange no longer saves the outgoing side as a positive amount.
 - The warning for an empty manual cost basis no longer promises a lot at zero cost: such a row is refused on save, and the warning now says so; for a gift it asks for the donor's original cost, not 0.
 - The 💡 merge suggestions follow the *Max Δ days* slider: at 0 (the same day only) the search failed silently and suggested nothing, and moving the slider did not search again until a row changed.
+- **The import wizard keeps Next disabled until your brokers have loaded**, so a quick click no longer opens file selection with the uploaded files hidden.
 
 #### 🧩 Asset providers and feedback
 
