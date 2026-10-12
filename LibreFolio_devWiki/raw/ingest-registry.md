@@ -718,3 +718,10 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md` | `873d45175` | 2026-10-13 | §10, U-4 → [[decisions/plugin-folders-and-split-i18n]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `33bf5ef1b` | 2026-10-13 | batch 33 → [[sources/phase00-translation-round12-2026-10]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `1e1708528` | 2026-10-13 | M-24, U-B5, U-B7, 49-1 → the pages above |
+
+## 2026-10-13 — train 79, T-EN1 and T-EN2 (base `b1a17b49b`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` | `0e291aa4e` | 2026-10-13 | «T-EN» → [[decisions/figures-in-the-interface-language]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `581588d39` | 2026-10-13 | T-EN1, T-EN2 closed; T-ISO, T-FB → [[decisions/figures-in-the-interface-language]] |
