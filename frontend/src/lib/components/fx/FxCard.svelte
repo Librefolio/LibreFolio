@@ -17,6 +17,8 @@
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     // =========================================================================
     // Props
@@ -216,12 +218,12 @@
         {#if lastRate !== null}
             <div class="flex items-baseline gap-2">
                 <span class="text-xl font-mono font-bold text-gray-800 dark:text-gray-100">
-                    {lastRate.toFixed(4)}
+                    {formatFixed(lastRate, 4)}
                 </span>
                 {#if deltaPercent !== null}
                     <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
                         {deltaPercent >= 0 ? '▲' : '▼'}
-                        {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
+                        {formatPercent(deltaPercent)}
                     </span>
                 {/if}
             </div>

@@ -13,6 +13,7 @@
     import {AlertTriangle, File as FileIcon, ImageIcon, Pencil, RefreshCw, Upload, X} from 'lucide-svelte';
     import {isImageFile} from '$lib/utils/files/imageCrop';
     import {formatBytes} from '$lib/utils/files/upload';
+    import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
     export let maxSizeMB: number = 10;
     export let multiple: boolean = true;
@@ -238,7 +239,7 @@
                                 <Pencil size={14} />
                             </button>
                         {/if}
-                        <span class="file-size">{formatBytes(file.size)}</span>
+                        <span class="file-size">{formatBytes(file.size, $t, $uiLocaleStore)}</span>
                         <button type="button" class="remove-btn" on:click|stopPropagation={() => removeFile(index)} title={$t('common.remove') || 'Remove'}>
                             <X size={14} />
                         </button>
