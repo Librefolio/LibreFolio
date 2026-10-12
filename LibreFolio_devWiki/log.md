@@ -2931,3 +2931,34 @@ implemented or documented, 10 planned.
 
 **After**: 10 missing in this worktree, all git-ignored artifacts; on main the check should reach 0.
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B7 — folder 27 (release images, gallery) and folder 32 (the English docs for 1.2)
+Base `3f9de8bdb` (train 63). Sources: three plans of workstream M in `27_releaseImages/` — the release images
+(`742e381ec`), the translated code blocks (`5fa0cf12a`), the release pipeline with its gallery, R12 and batches 5–12
+(`5983714f5`) — and the plan of workstream Q in `32_docsEnglish12/` (`425cb26d5`). The fourth plan of folder 27, the
+translation round, already has [[sources/phase00-translation-round12-2026-10]]; its batches 23–24 are left to step B8.
+Every symbol, path and commit was checked on this tree; every cited commit is an ancestor of HEAD.
+
+**Created (11)**: [[problems/release-images-shipped-debug-frontend]] (a debug frontend in both images, and full = light
+because the site was built before the gallery; full − light = 2,961,040 bytes, the PNGs), [[decisions/release-image-tags-latest-light]]
+(«è corretto che la latest punti anche alla light…»; `-rc.N` prereleases, the symmetric tag check),
+[[decisions/http-gzip-in-the-app]] (level 6, −63 % cold, −84 % warm), [[problems/translation-cleanup-flattened-code-indent]]
+(`_clean_translation` step 7 on the whole document; `code_blocks.py`, ERROR `code-block-indent`),
+[[decisions/gallery-is-a-release-gate-with-real-data]] (D1–D4, disposable accounts, the offline guard, reduced motion,
+tall screens), [[problems/playwright-favicon-aborted-by-routes]] (`_isFavicon` + any route; `?lf-gallery`),
+[[decisions/pdf-preview-viewer-only-local-assets]] (`1028a1978`; the fallback loop from `5b887dd3a`),
+[[decisions/user-docs-plain-dev-manual-technical]], [[problems/docs-claimed-what-the-code-did-not-do]] (nine drifts, each
+with its fixing commit), [[sources/phase00-release-images-and-gallery-2026-10]], [[sources/phase00-docs-english-12-2026-10]].
+
+**Updated**: [[features/F-074]] (1.2 gallery rules, fixtures, status row), [[features/F-062]] (variants, frontend guard,
+gzip), [[features/F-050]] (the 1.2 PDF preview), [[features/F-070]] (code-block indentation), [[features/F-069]] (the
+1.2 English alignment, anchorless links from English-only pages, the serve fallback), [[concepts/ci-release-pipeline]]
+(prerelease rules, links), [[decisions/docs-anchors-from-the-render]] (English-only pages link without anchors),
+[[decisions/single-docker-image]] (links), [[problems/playwright-probes-ignore-timeout]] (sibling link). No feature
+changed status.
+
+**Corrections to the plans' wording, from the code**: `dev.py` no longer imports the translation commands inside
+`except ImportError` — since `5dca6e2cf` (2026-10-08) it checks `_has()` first, so the reason given for a stdlib-only
+`code_blocks.py` is recorded as history; the session cookie described as never `Secure` on 2026-10-08 follows
+`SESSION_COOKIE_SECURE` since `11be06988`; the Tools pages Q found English-only are translated today.
+Graph: not updated (P-6).

@@ -120,6 +120,8 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853
 - [[problems/compactcashcell-decimal-separator-feedback-loop]] and [[sources/phase00-e2e-import-infra-2026-10]] — the
   same trap met before, outside the gallery
 - [[entities/import-wizard-modal]] — the wizard whose step 1 race is described above
+- [[problems/playwright-favicon-aborted-by-routes]] — the other Playwright 1.61 trap of the gallery, and
+  [[decisions/gallery-is-a-release-gate-with-real-data]] for the rules the gallery runs under
 - Source: [[sources/phase00-translation-round12-2026-10]]
 
 ## Source files
