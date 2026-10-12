@@ -8,15 +8,27 @@
  * a bad clamp would hide.
  *
  * The month label is asserted with an explicit locale so the expected string is
- * deterministic regardless of the machine's locale.
+ * deterministic regardless of the machine's locale; without one it follows the
+ * interface language (M-18), pinned in the last describe, which also writes the
+ * tooltip delta in French.
  */
-import {describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 
+// The interface locale is the UI language regionalised by `navigator.language` (M-18). Node's tag
+// follows the host's ICU locale, so it is pinned to en-US — jsdom's own — before any import.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
 import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
 import es from '$lib/i18n/es.json';
+import {currentLanguage} from '$lib/stores/app/language';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import type {LineDataPoint} from './LineChart.svelte';
 import type {EventMarker} from './PriceChartFull.svelte';
 import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from './calendarReturnWindow';
@@ -1264,10 +1276,13 @@ describe('buildDeltaHtml', () => {
         expect(buildDeltaHtml(-2.5, 0, true)).toContain('(Δ -2.50%)');
     });
 
-    it('exactly 0 counts as non-negative (green, + sign)', () => {
+    it('exactly 0 counts as non-negative: green, and no sign (M-18)', () => {
         const html = buildDeltaHtml(0, 0, true);
         expect(html).toContain('#10b981');
-        expect(html).toContain('(Δ +0.00%)');
+        // Why (re-pin, M-18 CP2): the delta goes through `formatPercent`, whose rule (CP1) is that a zero
+        // is not a gain: `(Δ +0.00%)` becomes `(Δ 0.00%)`. The colour is unchanged.
+        expect(html).toContain('(Δ 0.00%)');
+        expect(html).not.toContain('+');
     });
 
     it('shows both the absolute and percentage delta in absolute view', () => {
@@ -1285,7 +1300,9 @@ describe('buildDeltaHtml', () => {
 
     it('reports a 0% relative delta when the first value is 0 (no divide-by-zero)', () => {
         const html = buildDeltaHtml(10, 0, false);
-        expect(html).toContain('(Δ +10.0000 / +0.00%)');
+        // Why (re-pin, M-18 CP2): the relative delta goes through `formatPercent`, and a zero carries no
+        // `+` (CP1): `+0.00%` becomes `0.00%`. The absolute delta keeps its `+`: it is a gain.
+        expect(html).toContain('(Δ +10.0000 / 0.00%)');
     });
 });
 
@@ -1384,5 +1401,116 @@ describe('splitGhostLabel — the name and the currency apart, nothing cut (K st
     it.each(['💱 Apple (🇺🇸 USD)', '💱 iShares World (Acc) (🇪🇺 EUR)', '💱 Apple', 'Apple (🇺🇸 USD)', 'Apple'])('agrees with formatTruncatedGhostLabel on what a ghost label is: rejoined, a label too short to cut reads the same — %s', (label) => {
         const {name, currency} = splitGhostLabel(label);
         expect(currency === null ? name : `${name} ${currency}`).toBe(formatTruncatedGhostLabel(label));
+    });
+});
+
+/**
+ * M-18 CP2: the tooltip delta and the month label in the interface language.
+ *
+ * `buildDeltaHtml` writes the `(Δ …)` suffix of the main tooltip row with `toFixed`, so a French reader
+ * gets `(Δ +2.50%)` beside amounts written `1 234,50`; `formatMonthLabel`, called without a locale — as
+ * PriceChartFull's tooltip header calls it — writes the month in the machine's language instead of the
+ * interface's. Every figure follows the interface language (the developer's decision M-18, 2026-10-12):
+ *
+ *   - percentage view: `(Δ ${formatPercent(value)})`;
+ *   - absolute view: `(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${formatPercent(deltaPct)})`;
+ *   - the colours stay derived from the sign, a zero green;
+ *   - `formatMonthLabel(date)` defaults to the interface locale; an explicit locale still wins.
+ *
+ * Expectations come from `formatPercent`/`formatFixed` and `Intl.DateTimeFormat` given an explicit
+ * locale, never typed; each case checks that the language under test differs from English, so a runtime
+ * without its data cannot make the comparison vacuous.
+ */
+describe('buildDeltaHtml and formatMonthLabel in the interface language (M-18)', () => {
+    const FR = {locale: 'fr'} as const;
+    const GREEN = '#10b981';
+    const RED = '#ef4444';
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'it' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    /** What a delta suffix shows: the colour it is painted in and its `(Δ …)` text. */
+    function deltaOf(html: string): {color: string; text: string} {
+        const match = /color:\s*(#[0-9a-f]{3,8})[^>]*>([^<]*)</i.exec(html);
+        return {color: match?.[1] ?? `(no colour in ${html})`, text: match?.[2] ?? `(no text in ${html})`};
+    }
+
+    /** The month as `Intl` writes it in `locale`, with the options and the UTC anchor `formatMonthLabel` uses. */
+    function monthIn(locale: string, date: string): string {
+        return new Intl.DateTimeFormat(locale, {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${date}T00:00:00Z`));
+    }
+
+    it('French UI, percentage view: the delta is a French percentage — `+` on a gain, none on a zero — in the colour of its sign', async () => {
+        await uiLanguage('fr');
+        const cases = [
+            {value: 2.5, color: GREEN},
+            {value: -2.5, color: RED},
+            {value: 0, color: GREEN},
+            {value: 1234.5, color: GREEN},
+        ];
+        const expected = cases.map(({value, color}) => ({color, text: `(Δ ${formatPercent(value, FR)})`}));
+        // Control: this runtime carries French data, so the French text is not today's English one.
+        expect(expected[0].text, 'French differs from English').not.toBe('(Δ +2.50%)');
+
+        expect(
+            cases.map(({value}) => deltaOf(buildDeltaHtml(value, 0, true))),
+            spelled(expected),
+        ).toEqual(expected);
+    });
+
+    it('French UI, absolute view: the absolute delta with four decimals and its sign, the relative one as a French percentage', async () => {
+        await uiLanguage('fr');
+        const cases = [
+            {value: 110, first: 100, color: GREEN},
+            {value: 90, first: 100, color: RED},
+            {value: 10, first: 0, color: GREEN},
+            {value: 2234.5, first: 1000, color: GREEN},
+        ];
+        // The two deltas as the helper computes them: the difference, and its share of the first value
+        // (0 when there is none).
+        const expected = cases.map(({value, first, color}) => {
+            const deltaPct = first !== 0 ? ((value - first) / first) * 100 : 0;
+            return {color, text: `(Δ ${formatFixed(value - first, 4, {signed: true, ...FR})} / ${formatPercent(deltaPct, FR)})`};
+        });
+        expect(expected[0].text, 'French differs from English').not.toBe('(Δ +10.0000 / +10.00%)');
+
+        expect(
+            cases.map(({value, first}) => deltaOf(buildDeltaHtml(value, first, false))),
+            spelled(expected),
+        ).toEqual(expected);
+    });
+
+    it('without a locale, the month label is written in the interface language — French, then Italian — not the machine’s', async () => {
+        const written: Record<string, string> = {};
+        for (const lang of ['fr', 'it'] as const) {
+            await uiLanguage(lang);
+            written[lang] = formatMonthLabel('2024-01-15');
+        }
+        const expected = {fr: monthIn('fr', '2024-01-15'), it: monthIn('it', '2024-01-15')};
+        // Control: both languages name the month differently from English.
+        expect(Object.values(expected), 'French and Italian differ from English').not.toContain(monthIn('en-US', '2024-01-15'));
+
+        expect(written).toEqual(expected);
+    });
+
+    it('English UI on an en-US browser: the month label without a locale is today’s English; an explicit locale still wins in French', async () => {
+        await uiLanguage('en');
+        expect(formatMonthLabel('2024-01-15')).toBe('January 2024');
+
+        await uiLanguage('fr');
+        expect(formatMonthLabel('2024-01-15', 'de-DE')).toBe('Januar 2024');
     });
 });

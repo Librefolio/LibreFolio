@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_danske_bank": {
+      "description": "Importe un compte d’épargne en actions de Danske Bank (Finlande) : les transactions du compte-titres (XLSX) et le relevé de liquidités (CSV), téléversés ensemble et réunis en un seul import.",
+      "name": "Danske Bank"
+    }
+  }
+}

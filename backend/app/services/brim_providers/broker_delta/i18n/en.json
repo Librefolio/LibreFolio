@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_delta": {
+      "description": "Import transactions from Delta CSV exports. Best-effort support for fiat-backed trades, crypto transfers, dividends, and crypto-to-crypto adjustments.",
+      "name": "Delta"
+    }
+  }
+}

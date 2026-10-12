@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_directa": {
+      "description": "Importa las transacciones de la exportación de Directa SIM (CSV o XLSX). Admite todos los tipos de transacción italianos, incluidos dividendos de ETF, cupones de bonos, impuestos y operaciones de compraventa.",
+      "name": "Directa SIM"
+    }
+  }
+}

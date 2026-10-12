@@ -28,7 +28,9 @@ synthetic trees under ``tmp_path``:
    the ancestor lies within that plugin's own branch (``plugin_namespace``), that plugin; when they belong only to
    plugins otherwise, a refusal naming them and asking for ``--into``; else the longest prefix, else ``base``.
    ``set_key(into=...)`` takes ``base``, a subsystem, or exactly ``<family>/<plugin>`` in a family discovery reads,
-   with its ``plugin.py``; ``where`` names the file.
+   with its ``plugin.py``; ``where`` names the file. A new key that opens a top-level namespace in ``base``, the
+   generic vocabulary, carries ``base_namespace_notice`` (in ``where`` too); a key whose namespace exists, whoever
+   holds it, or that goes to a subsystem or a plugin carries none.
 7. Edits. ``move``, ``split`` (rerunnable), ``remove_key`` and ``set_key`` keep the merged catalogue valid, and
    unchanged where they only rearrange it; they rewrite only the files they touch, refuse whole when the result would
    be invalid, and delete the files of a plugin source they empty.
@@ -856,17 +858,55 @@ def test_route_on_the_shapes_of_the_real_catalogue(tmp_path, key, outcome):
     assert found == outcome
 
 
+def notice(namespace: str) -> str:
+    """What ``where`` and ``add`` say of a key that opens a new top-level namespace in ``base``."""
+    return f"'{namespace}' is a new namespace in base, the generic vocabulary: if it belongs to a subsystem or a plugin, use --into, or move it (dev.py i18n move {namespace} --into <subsystem|family/plugin>)"
+
+
 @pytest.mark.parametrize(
     ("key", "answer"),
     [
         pytest.param("risk.title", "frontend/src/lib/i18n/risk/en.json (exists)", id="an-existing-key"),
         pytest.param("risk.analytics", "branch of 3 key(s) in: probe_plugins/stress, probe_plugins/var", id="a-branch"),
         pytest.param("risk.analytics.stress.note", "backend/app/services/probe_plugins/stress/i18n/en.json (new key)", id="a-new-key-for-a-plugin"),
-        pytest.param("newspace.key", "frontend/src/lib/i18n/base/en.json (new key)", id="a-new-key-for-base"),
+        pytest.param("common.close", "frontend/src/lib/i18n/base/en.json (new key)", id="base-receives-a-key-of-an-existing-namespace"),
+        pytest.param("newspace.key", f"frontend/src/lib/i18n/base/en.json (new key; {notice('newspace')})", id="a-new-key-for-base"),
+        pytest.param("portfolio.title", "frontend/src/lib/i18n/portfolio/en.json (new key)", id="a-new-key-for-a-subsystem-without-keys-yet"),
     ],
 )
 def test_where_names_the_file_that_holds_or_would_hold_a_key(tmp_path, key, answer):
-    assert catalog.where(key, root=healthy_tree(tmp_path)) == answer
+    root = healthy_tree(tmp_path)
+    # A subsystem that declares its namespace before it holds a key.
+    make_subsystem(root, "portfolio", "portfolio\n")
+
+    assert catalog.where(key, root=root) == answer
+
+
+@pytest.mark.parametrize(
+    ("key", "into", "expected"),
+    [
+        pytest.param("newspace.key", None, notice("newspace"), id="a-new-namespace-routed-to-base"),
+        pytest.param("newspace.deep.key", None, notice("newspace"), id="the-namespace-is-the-first-segment"),
+        pytest.param("toplevel", None, notice("toplevel"), id="a-new-top-level-key"),
+        pytest.param("ap.title", None, notice("ap"), id="a-namespace-that-only-begins-like-an-existing-one"),
+        pytest.param("newspace.key", "base", notice("newspace"), id="a-new-namespace-into-base"),
+        pytest.param("common.close", None, None, id="a-namespace-base-has"),
+        pytest.param("brimPlugins.newbroker.name", "base", None, id="a-namespace-only-a-plugin-holds"),
+        pytest.param("risk.newthing", "base", None, id="a-namespace-subsystems-and-plugins-hold"),
+        pytest.param("newspace.key", "risk", None, id="a-new-namespace-into-a-subsystem"),
+        pytest.param("newspace.key", "probe_plugins/stress", None, id="a-new-namespace-into-a-plugin"),
+        pytest.param("portfolio.title", None, None, id="a-new-namespace-a-subsystem-declares-before-it-has-keys"),
+    ],
+)
+def test_base_namespace_notice_speaks_only_for_a_new_namespace_going_to_base(tmp_path, key, into, expected):
+    """``owners`` are the keys before the addition; the target is the one ``add`` would write to."""
+    root = healthy_tree(tmp_path)
+    make_subsystem(root, "portfolio", "portfolio\n")
+    langs, sources = catalog.load(root)
+    owners_now = catalog.merge(langs, sources, root=root, strict=True).owners
+    target = catalog.resolve_target(into, sources, root) if into else catalog.route(key, sources, owners_now)
+
+    assert catalog.base_namespace_notice(key, target, owners_now) == expected
 
 
 def test_set_key_writes_a_new_key_where_route_says_and_nowhere_else(tmp_path):

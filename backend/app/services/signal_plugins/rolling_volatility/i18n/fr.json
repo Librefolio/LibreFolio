@@ -1,0 +1,10 @@
+{
+  "signals": {
+    "riskRollingVolatility": {
+      "name": "Volatilité glissante",
+      "description": "Volatilité d’échantillon annualisée sur une fenêtre glissante de rendements quotidiens du prix seul.",
+      "output": "Volatilité",
+      "outputDescription": "Écart-type d’échantillon annualisé, en points de pourcentage."
+    }
+  }
+}

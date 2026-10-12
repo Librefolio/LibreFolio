@@ -2,13 +2,25 @@
  * candlestickChartHelpers — pure unit tests (node env, no jsdom).
  *
  * Everything here is arithmetic CandlestickChart performs before handing data to
- * ECharts. The numeric formatters use toFixed (locale-independent), so the
- * expected strings are asserted directly. The tooltip-value decoder is the one
+ * ECharts. The numeric formatters write their figures in the interface language
+ * (M-18): the English cases run under an English UI on an en-US browser, where the
+ * text is today's except for the thousands separator, and are asserted directly;
+ * the last describe switches the UI to French. The tooltip-value decoder is the one
  * with a real trap — ECharts prepends the category ordinal — so it gets an
  * explicit 5-element regression case.
  */
-import {describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 
+// The interface locale is the UI language regionalised by `navigator.language` (M-18). Node's tag
+// follows the host's ICU locale, so it is pinned to en-US — jsdom's own — before any import.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import type {LineDataPoint} from './LineChart.svelte';
 import {buildCandleSeriesData, buildOhlcQuad, computePercentageBase, formatCandlePrice, formatVolume, hasRenderableVolume, isBullishBar, parseCandleTooltipValue, toPercent} from './candlestickChartHelpers';
 
@@ -152,14 +164,19 @@ describe('isBullishBar', () => {
 });
 
 describe('formatCandlePrice', () => {
-    it('formats percentage mode as a signed two-decimal percent', () => {
+    it('formats percentage mode as a signed two-decimal percent, with no sign on a zero', () => {
         expect(formatCandlePrice(5, true)).toBe('+5.00%');
-        expect(formatCandlePrice(0, true)).toBe('+0.00%');
+        // Why (re-pin, M-18 CP2): percentage mode goes through `formatPercent`, whose rule (CP1) is that a
+        // zero is not a gain: `+0.00%` becomes `0.00%`, and a negative zero prints as a plain one.
+        expect(formatCandlePrice(0, true)).toBe('0.00%');
+        expect(formatCandlePrice(-0, true)).toBe('0.00%');
         expect(formatCandlePrice(-3.5, true)).toBe('-3.50%');
     });
 
     it('uses 2 decimals for magnitudes >= 100', () => {
-        expect(formatCandlePrice(1234.5, false)).toBe('1234.50');
+        // Why (re-pin, M-18 CP2): the digits are written in the interface locale, en-US here, which
+        // groups from 1,000: `1234.50` becomes `1,234.50`. Below 1,000 the text is today's.
+        expect(formatCandlePrice(1234.5, false)).toBe('1,234.50');
         expect(formatCandlePrice(-100, false)).toBe('-100.00');
     });
 
@@ -194,6 +211,94 @@ describe('formatVolume', () => {
     it('formats sub-thousand volumes as a bare integer', () => {
         expect(formatVolume(999)).toBe('999');
         expect(formatVolume(0)).toBe('0');
+    });
+
+    it('groups a volume of a thousand millions or more, as the interface locale writes it (M-18)', () => {
+        // New contract (M-18 CP2): the digits are written in the interface locale, en-US here, which
+        // groups from 1,000 — `2500.00M` becomes `2,500.00M`.
+        expect(formatVolume(2_500_000_000)).toBe('2,500.00M');
+    });
+});
+
+/**
+ * M-18 CP2: the candle tooltip and the volume labels in the interface language.
+ *
+ * `formatCandlePrice` and `formatVolume` are built on `toFixed`, so a French reader gets `1234.50` and
+ * `2.50M` beside amounts written `1 234,50`. Every figure is written in the interface language (the
+ * developer's decision M-18, 2026-10-12), through the formatters of CP1:
+ *
+ *   - percentage mode is `formatPercent(v)`: `+` on a gain, no sign on a zero;
+ *   - absolute mode keeps its precision by magnitude — 2 decimals from 100, 4 from 1, below 1 up to 6
+ *     with the trailing zeros trimmed but at least one kept (`0` reads `0.0` in English, `0,0` in French);
+ *   - a volume keeps its M with two decimals, its K with one, and is whole below a thousand.
+ *
+ * Expectations come from `formatPercent`/`formatFixed` given an explicit locale, never typed; each case
+ * also checks that French differs from English, so a runtime without French data proves nothing.
+ */
+describe('formatCandlePrice and formatVolume in the interface language (M-18)', () => {
+    const FR = {locale: 'fr'} as const;
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('French UI: percentage mode is a French percentage — `+` on a gain, no sign on a zero', async () => {
+        await uiLanguage('fr');
+        const expected = {gain: formatPercent(5, FR), zero: formatPercent(0, FR), loss: formatPercent(-3.5, FR), grouped: formatPercent(1234.5, FR)};
+        // Controls: French differs from English, and a zero carries no sign in either.
+        expect(expected.gain, 'French differs from English').not.toBe('+5.00%');
+        expect(expected.zero).not.toMatch(/^[+\-\u2212]/);
+
+        const written = {gain: formatCandlePrice(5, true), zero: formatCandlePrice(0, true), loss: formatCandlePrice(-3.5, true), grouped: formatCandlePrice(1234.5, true)};
+        expect(written, spelled(expected)).toEqual(expected);
+    });
+
+    it('French UI: absolute mode keeps its precision by magnitude — 2, 4, up to 6 decimals and at least one — in French notation', async () => {
+        await uiLanguage('fr');
+        const expected = {
+            '1234.5': formatFixed(1234.5, 2, FR),
+            '-100': formatFixed(-100, 2, FR),
+            '1': formatFixed(1, 4, FR),
+            '-5.25': formatFixed(-5.25, 4, FR),
+            '0.5': formatFixed(0.5, 6, {trim: true, ...FR}),
+            '0.123456': formatFixed(0.123456, 6, {trim: true, ...FR}),
+            '-0.05': formatFixed(-0.05, 6, {trim: true, ...FR}),
+            // At least one decimal: a bare zero keeps one, as English keeps `0.0`.
+            '0': formatFixed(0, 1, FR),
+        };
+        expect(expected['0'], 'French differs from English').not.toBe('0.0');
+
+        const written = Object.fromEntries([1234.5, -100, 1, -5.25, 0.5, 0.123456, -0.05, 0].map((value) => [String(value), formatCandlePrice(value, false)]));
+        expect(written, spelled(expected)).toEqual(expected);
+    });
+
+    it('French UI: volumes in M with two decimals, in K with one, whole below a thousand — in French notation', async () => {
+        await uiLanguage('fr');
+        const expected = {
+            '2500000000': `${formatFixed(2500, 2, FR)}M`,
+            '2500000': `${formatFixed(2.5, 2, FR)}M`,
+            '1234567': `${formatFixed(1.234567, 2, FR)}M`,
+            '12345': `${formatFixed(12.345, 1, FR)}K`,
+            '1500': `${formatFixed(1.5, 1, FR)}K`,
+            '999': formatFixed(999, 0, FR),
+            '0': formatFixed(0, 0, FR),
+        };
+        expect(expected['1500'], 'French differs from English').not.toBe('1.5K');
+
+        const written = Object.fromEntries([2_500_000_000, 2_500_000, 1_234_567, 12_345, 1500, 999, 0].map((volume) => [String(volume), formatVolume(volume)]));
+        expect(written, spelled(expected)).toEqual(expected);
     });
 });
 

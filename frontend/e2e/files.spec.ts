@@ -79,7 +79,7 @@ async function openPdfPreview(page: Page, fileId: string) {
     return stage;
 }
 
-async function createBroker(page: Page, name = `Preview Broker ${Date.now()}`): Promise<number> {
+async function createBroker(page: Page, name = `Preview Broker ${uniqueSuffix()}`): Promise<number> {
     const response = await page.request.post(`${API}/brokers`, {
         data: [
             {
@@ -225,8 +225,20 @@ async function waitForPreviewReady(page: Page): Promise<void> {
 }
 
 test.describe('Files Page', () => {
+    /**
+     * Static files a test of this file uploaded, deleted after it: whoever writes, cleans up. In afterEach, not in a
+     * `finally`: the after-hooks run in a time slot of their own, so the file is deleted even when the test ran out of
+     * time — a `finally` shares the test's slot, and was itself cut by the timeout it followed.
+     */
+    let ownedStaticFiles: string[] = [];
+
     test.beforeEach(async ({page}) => {
+        ownedStaticFiles = [];
         await login(page, TEST_USER);
+    });
+
+    test.afterEach(async ({page}) => {
+        for (const fileId of ownedStaticFiles) await deleteStaticFile(page, fileId);
     });
 
     test.describe('Page Access and Navigation', () => {
@@ -371,8 +383,13 @@ test.describe('Files Page', () => {
             await expect(page.locator('.file-item')).toBeVisible();
             await expect(page.locator('.file-name')).toContainText('generic_simple.csv');
 
-            // Click the upload submit button
+            // Click the upload submit button. Armed before the click (a response is an edge, not a state): the id it
+            // carries is the file this test deletes.
+            const uploadResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `${API}/uploads`, {timeout: 30_000});
             await page.getByTestId('file-upload-submit').click();
+            const upload = await uploadResponse;
+            expect(upload.ok(), `POST ${API}/uploads from the Files page: HTTP ${upload.status()}`).toBe(true);
+            ownedStaticFiles.push(((await upload.json()) as {file: {id: string}}).file.id);
 
             // The page now reports the upload (`file.uploaded`, no toast: the
             // list itself is the user-visible proof). Waiting on the event is
@@ -555,22 +572,22 @@ test.describe('Files Page', () => {
 
     test.describe('File Preview', () => {
         /**
-         * Static files a test of this block uploaded, deleted after it: whoever writes, cleans up. In afterEach, not in
-         * a `finally`: the after-hooks run in a time slot of their own, so the file is deleted even when the test ran out
-         * of time — a `finally` shares the test's slot, and was itself cut by the timeout it followed.
+         * The broker a test of this block created, deleted with its BRIM files after it. In afterEach for the reasons of
+         * `ownedStaticFiles`, and one more: a cleanup throwing from a `finally` would replace the red it follows.
          */
-        let ownedStaticFiles: string[] = [];
+        let ownedBrokerId: number | undefined;
 
         test.beforeEach(() => {
-            ownedStaticFiles = [];
+            ownedBrokerId = undefined;
         });
 
         test.afterEach(async ({page}) => {
-            for (const fileId of ownedStaticFiles) await deleteStaticFile(page, fileId);
+            if (ownedBrokerId !== undefined) await deleteOwnedBrokerAndFiles(page, ownedBrokerId);
         });
 
         test('opens markdown preview from static list view', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-${Date.now()}.md`, '# Hello preview\n\nThis is a markdown preview smoke test.\n', 'text/markdown');
+            ownedStaticFiles.push(fileId);
 
             await openStaticListView(page);
 
@@ -589,6 +606,7 @@ test.describe('Files Page', () => {
 
         test('opens image preview from static grid view', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-${Date.now()}.png`, TEST_PNG, 'image/png');
+            ownedStaticFiles.push(fileId);
 
             await openStaticGridView(page);
 
@@ -602,6 +620,7 @@ test.describe('Files Page', () => {
 
         test('shows preview detail message when API returns detail', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-error-${Date.now()}.md`, '# Broken preview\n', 'text/markdown');
+            ownedStaticFiles.push(fileId);
 
             await page.route('**/api/v1/uploads/*/preview', async (route) => {
                 await route.fulfill({
@@ -623,6 +642,7 @@ test.describe('Files Page', () => {
 
         test('zoomed image preview scrolls vertically inside the modal', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-scroll-${Date.now()}.png`, TEST_AVATAR_PNG, 'image/png');
+            ownedStaticFiles.push(fileId);
 
             await openStaticGridView(page);
 
@@ -645,6 +665,7 @@ test.describe('Files Page', () => {
 
         test('pdf preview hides comment button', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-${Date.now()}.pdf`, TEST_PDF, 'application/pdf');
+            ownedStaticFiles.push(fileId);
 
             await openStaticGridView(page);
 
@@ -668,6 +689,7 @@ test.describe('Files Page', () => {
 
         test('pdf preview requests nothing from third-party hosts', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-hosts-${uniqueSuffix()}.pdf`, TEST_PDF, 'application/pdf');
+            ownedStaticFiles.push(fileId);
             // Every request of the browser context, from before the preview opens: the page's and the viewer's own. Its
             // engine runs in a worker — a module worker made from a blob — whose requests reach the context's events too
             // (checked in Playwright 1.61; the positive control below re-proves it on every run). Observed only: nothing
@@ -681,7 +703,6 @@ test.describe('Files Page', () => {
                 await openPdfPreview(page, fileId);
             } finally {
                 page.context().off('request', record);
-                await deleteStaticFile(page, fileId);
                 // Reported even when the preview never got ready: a viewer stuck on a slow CDN is this test's subject too.
                 const thirdParty = requests.filter((url) => THIRD_PARTY_HOSTS.has(new URL(url).hostname));
                 expect.soft(thirdParty, `the PDF preview reached third-party hosts (${[...THIRD_PARTY_HOSTS].join(', ')}):\n${thirdParty.join('\n')}`).toEqual([]);
@@ -695,6 +716,7 @@ test.describe('Files Page', () => {
 
         test('pdf preview falls back to the CDN when the local engine is unreachable', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-fallback-${uniqueSuffix()}.pdf`, TEST_PDF, 'application/pdf');
+            ownedStaticFiles.push(fileId);
             // Our engine unreachable: its probe (a HEAD) and any fetch of it are aborted, so the viewer keeps its CDN defaults.
             const localEngine: string[] = [];
             await page.route(isLocalPdfEngine, async (route) => {
@@ -728,7 +750,6 @@ test.describe('Files Page', () => {
                 await openPdfPreview(page, fileId);
             } finally {
                 page.context().off('request', record);
-                await deleteStaticFile(page, fileId);
             }
 
             expect(
@@ -746,109 +767,100 @@ test.describe('Files Page', () => {
 
         test('pdf preview offers no editing mode', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-editing-${uniqueSuffix()}.pdf`, TEST_PDF, 'application/pdf');
-            try {
-                const stage = await openPdfPreview(page, fileId);
-                // The toolbar is drawn: whatever is hidden below is hidden, not still to come.
-                await expect(stage.locator('[data-epdf-i="search-button"]')).toBeVisible();
-                // A preview is only a viewer (developer's decision): Insert adds stamps, signatures and images, Form fills the
-                // document's fields, Redact blacks out its content — all edits of a file the preview cannot save. The viewer
-                // lists on its root every control it hides (`data-epdf-hid`: each one of a category turned off) and hides them
-                // by that list, at any width, as a mode tab and as an entry of the modes menu alike. Read as a state, so a red
-                // names the modes still offered.
-                const root = stage.locator('[data-epdf]');
-                await expect(root, "the viewer's root is not where it was: check how it marks the controls it hides").toHaveCount(1);
-                const editing = ['insert-mode', 'mode:insert', 'add-signature', 'add-rubber-stamp', 'form-mode', 'mode:form', 'redact-mode', 'mode:redact'];
-                await expect
-                    .poll(
-                        async () => {
-                            const hidden = new Set(((await root.getAttribute('data-epdf-hid')) ?? '').split(/\s+/));
-                            return editing.filter((control) => !hidden.has(control));
-                        },
-                        {message: 'the viewer still offers these editing controls', timeout: 5_000},
-                    )
-                    .toEqual([]);
-                // On screen, at this width: no tab opens an editing mode, no mode dropdown, and no modes menu left to open one
-                // from — the menu shows only Insert, Form and Redact here, and its button hides once all of them are hidden
-                // (the viewer's own rule for a control that depends on a menu). Clicking it would test nothing.
-                for (const control of ['insert-mode', 'form-mode', 'redact-mode', 'mode-select-button', 'overflow-tabs-button']) {
-                    await expect(stage.locator(`[data-epdf-i="${control}"]`), `${control} is on screen`).toBeHidden();
-                }
-                // Signature and rubber stamp sit in Insert's own toolbar: with Insert out of reach, nowhere on screen.
-                await expect(stage.locator('[data-epdf-i="add-signature"]')).toBeHidden();
-                await expect(stage.locator('[data-epdf-i="add-rubber-stamp"]')).toBeHidden();
-            } finally {
-                await deleteStaticFile(page, fileId);
+            ownedStaticFiles.push(fileId);
+            const stage = await openPdfPreview(page, fileId);
+            // The toolbar is drawn: whatever is hidden below is hidden, not still to come.
+            await expect(stage.locator('[data-epdf-i="search-button"]')).toBeVisible();
+            // A preview is only a viewer (developer's decision): Insert adds stamps, signatures and images, Form fills the
+            // document's fields, Redact blacks out its content — all edits of a file the preview cannot save. The viewer
+            // lists on its root every control it hides (`data-epdf-hid`: each one of a category turned off) and hides them
+            // by that list, at any width, as a mode tab and as an entry of the modes menu alike. Read as a state, so a red
+            // names the modes still offered.
+            const root = stage.locator('[data-epdf]');
+            await expect(root, "the viewer's root is not where it was: check how it marks the controls it hides").toHaveCount(1);
+            const editing = ['insert-mode', 'mode:insert', 'add-signature', 'add-rubber-stamp', 'form-mode', 'mode:form', 'redact-mode', 'mode:redact'];
+            await expect
+                .poll(
+                    async () => {
+                        const hidden = new Set(((await root.getAttribute('data-epdf-hid')) ?? '').split(/\s+/));
+                        return editing.filter((control) => !hidden.has(control));
+                    },
+                    {message: 'the viewer still offers these editing controls', timeout: 5_000},
+                )
+                .toEqual([]);
+            // On screen, at this width: no tab opens an editing mode, no mode dropdown, and no modes menu left to open one
+            // from — the menu shows only Insert, Form and Redact here, and its button hides once all of them are hidden
+            // (the viewer's own rule for a control that depends on a menu). Clicking it would test nothing.
+            for (const control of ['insert-mode', 'form-mode', 'redact-mode', 'mode-select-button', 'overflow-tabs-button']) {
+                await expect(stage.locator(`[data-epdf-i="${control}"]`), `${control} is on screen`).toBeHidden();
             }
+            // Signature and rubber stamp sit in Insert's own toolbar: with Insert out of reach, nowhere on screen.
+            await expect(stage.locator('[data-epdf-i="add-signature"]')).toBeHidden();
+            await expect(stage.locator('[data-epdf-i="add-rubber-stamp"]')).toBeHidden();
         });
 
         test('pdf preview document menu offers only fullscreen', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-docmenu-${uniqueSuffix()}.pdf`, TEST_PDF, 'application/pdf');
-            try {
-                const stage = await openPdfPreview(page, fileId);
-                await expect(stage.locator('[data-epdf-i="search-button"]')).toBeVisible();
-                // A preview is only a viewer (developer's decision: everything off but full screen and copying text). The
-                // document menu («≡») keeps Full screen; opening, closing, printing, protecting, capturing and exporting the
-                // file are off. The file stays one click away through the dialog's own Download.
-                await stage.locator('[data-epdf-i="document-menu-button"]').click();
-                // Open, proved by the entry that stays.
-                await expect(stage.locator('[data-epdf-i="document:fullscreen"]'), 'the document menu did not open').toBeVisible();
-                // Listed, and not shown: the viewer turns a category off by hiding its entries, not by unmounting them.
-                const off = ['document:open', 'document:close', 'document:print', 'document:protect', 'document:capture', 'document:export'];
-                for (const entry of off) {
-                    await expect(stage.locator(`[data-epdf-i="${entry}"]`), `the document menu no longer lists ${entry} at all: check how the viewer hides it`).toBeAttached();
-                }
-                // What the open menu shows, read as a state: Full screen, and nothing else. A red names every entry still
-                // offered — these six, or one a newer viewer adds.
-                await expect
-                    .poll(() => stage.locator('[role="menuitem"]').evaluateAll((items) => items.filter((item) => item.checkVisibility()).map((item) => item.getAttribute('data-epdf-i') ?? item.textContent?.trim() ?? '?')), {
-                        message: 'the document menu offers more than Full screen',
-                        timeout: 5_000,
-                    })
-                    .toEqual(['document:fullscreen']);
-            } finally {
-                await deleteStaticFile(page, fileId);
+            ownedStaticFiles.push(fileId);
+            const stage = await openPdfPreview(page, fileId);
+            await expect(stage.locator('[data-epdf-i="search-button"]')).toBeVisible();
+            // A preview is only a viewer (developer's decision: everything off but full screen and copying text). The
+            // document menu («≡») keeps Full screen; opening, closing, printing, protecting, capturing and exporting the
+            // file are off. The file stays one click away through the dialog's own Download.
+            await stage.locator('[data-epdf-i="document-menu-button"]').click();
+            // Open, proved by the entry that stays.
+            await expect(stage.locator('[data-epdf-i="document:fullscreen"]'), 'the document menu did not open').toBeVisible();
+            // Listed, and not shown: the viewer turns a category off by hiding its entries, not by unmounting them.
+            const off = ['document:open', 'document:close', 'document:print', 'document:protect', 'document:capture', 'document:export'];
+            for (const entry of off) {
+                await expect(stage.locator(`[data-epdf-i="${entry}"]`), `the document menu no longer lists ${entry} at all: check how the viewer hides it`).toBeAttached();
             }
+            // What the open menu shows, read as a state: Full screen, and nothing else. A red names every entry still
+            // offered — these six, or one a newer viewer adds.
+            await expect
+                .poll(() => stage.locator('[role="menuitem"]').evaluateAll((items) => items.filter((item) => item.checkVisibility()).map((item) => item.getAttribute('data-epdf-i') ?? item.textContent?.trim() ?? '?')), {
+                    message: 'the document menu offers more than Full screen',
+                    timeout: 5_000,
+                })
+                .toEqual(['document:fullscreen']);
         });
 
         test('pdf preview blocks every editing and export command', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-commands-${uniqueSuffix()}.pdf`, TEST_PDF, 'application/pdf');
-            try {
-                const stage = await openPdfPreview(page, fileId);
-                // A command reaches the user through a button, a menu entry or a keyboard shortcut — undo, redo and the
-                // screenshot are keyboard-only here, through a handler the viewer installs on the document. Every path asks the
-                // viewer's command plugin, which refuses a command of a disabled category; so the category is the one block
-                // that covers them all. Read off the categories, not off `resolve(id).disabled`: that one also follows the
-                // moment (nothing to undo yet) and the PDF's own permissions (print, copy), so it is no contract.
-                const off = ['document:open', 'document:close', 'document:print', 'document:protect', 'document:capture', 'document:export', 'capture:screenshot', 'history:undo', 'history:redo', 'mode:insert', 'mode:form', 'mode:redact', 'redaction:redact-text'];
-                // What stays (developer's decision): full screen, the «≡» menu that holds it, and copying selected text.
-                const kept = ['document:fullscreen', 'document:menu', 'selection:copy', 'selection:copy-to-clipboard'];
-                const verdicts = await stage.locator('embedpdf-container').evaluate(
-                    async (element, ids) => {
-                        type ViewerCommands = {getDisabledCategories(): string[]; resolve(id: string): {categories?: string[]}};
-                        type ViewerRegistry = {getPlugin(id: string): {provides?: () => ViewerCommands} | null};
-                        const registry = await (element as unknown as {registry: Promise<ViewerRegistry>}).registry;
-                        const commands = registry.getPlugin('commands')?.provides?.();
-                        if (!commands) return {'(viewer)': 'no commands plugin'};
-                        const disabled = commands.getDisabledCategories();
-                        return Object.fromEntries(
-                            ids.map((id) => {
-                                try {
-                                    return [id, (commands.resolve(id).categories ?? []).some((category) => disabled.includes(category)) ? 'blocked' : 'available'];
-                                } catch (error) {
-                                    return [id, `unknown to the viewer: ${String(error)}`];
-                                }
-                            }),
-                        );
-                    },
-                    [...off, ...kept],
-                );
-                expect(verdicts, 'a command the preview turns off is still available, or one it keeps is blocked').toEqual({
-                    ...Object.fromEntries(off.map((id) => [id, 'blocked'])),
-                    ...Object.fromEntries(kept.map((id) => [id, 'available'])),
-                });
-            } finally {
-                await deleteStaticFile(page, fileId);
-            }
+            ownedStaticFiles.push(fileId);
+            const stage = await openPdfPreview(page, fileId);
+            // A command reaches the user through a button, a menu entry or a keyboard shortcut — undo, redo and the
+            // screenshot are keyboard-only here, through a handler the viewer installs on the document. Every path asks the
+            // viewer's command plugin, which refuses a command of a disabled category; so the category is the one block
+            // that covers them all. Read off the categories, not off `resolve(id).disabled`: that one also follows the
+            // moment (nothing to undo yet) and the PDF's own permissions (print, copy), so it is no contract.
+            const off = ['document:open', 'document:close', 'document:print', 'document:protect', 'document:capture', 'document:export', 'capture:screenshot', 'history:undo', 'history:redo', 'mode:insert', 'mode:form', 'mode:redact', 'redaction:redact-text'];
+            // What stays (developer's decision): full screen, the «≡» menu that holds it, and copying selected text.
+            const kept = ['document:fullscreen', 'document:menu', 'selection:copy', 'selection:copy-to-clipboard'];
+            const verdicts = await stage.locator('embedpdf-container').evaluate(
+                async (element, ids) => {
+                    type ViewerCommands = {getDisabledCategories(): string[]; resolve(id: string): {categories?: string[]}};
+                    type ViewerRegistry = {getPlugin(id: string): {provides?: () => ViewerCommands} | null};
+                    const registry = await (element as unknown as {registry: Promise<ViewerRegistry>}).registry;
+                    const commands = registry.getPlugin('commands')?.provides?.();
+                    if (!commands) return {'(viewer)': 'no commands plugin'};
+                    const disabled = commands.getDisabledCategories();
+                    return Object.fromEntries(
+                        ids.map((id) => {
+                            try {
+                                return [id, (commands.resolve(id).categories ?? []).some((category) => disabled.includes(category)) ? 'blocked' : 'available'];
+                            } catch (error) {
+                                return [id, `unknown to the viewer: ${String(error)}`];
+                            }
+                        }),
+                    );
+                },
+                [...off, ...kept],
+            );
+            expect(verdicts, 'a command the preview turns off is still available, or one it keeps is blocked').toEqual({
+                ...Object.fromEntries(off.map((id) => [id, 'blocked'])),
+                ...Object.fromEntries(kept.map((id) => [id, 'available'])),
+            });
         });
 
         test('pdf preview closes when its viewer is left empty', async ({page}) => {
@@ -885,6 +897,7 @@ test.describe('Files Page', () => {
 
         test('opens table preview for BRIM files', async ({page}) => {
             const brokerId = await createBroker(page);
+            ownedBrokerId = brokerId;
             const fileId = await uploadBrimFile(page, brokerId, `preview-${Date.now()}.csv`, ['date,type,amount,currency', '2025-01-01,DEPOSIT,1000,EUR', '2025-01-03,WITHDRAWAL,-50,EUR', ''].join('\n'), 'text/csv');
 
             await navigateTo(page, '/files?tab=brim');

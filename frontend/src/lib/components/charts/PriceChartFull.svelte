@@ -29,7 +29,6 @@
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
     import {aggregateLineSeries, aggregateOHLCV, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
     import {
         buildDeltaHtml,
@@ -52,6 +51,8 @@
         type CalendarReturnPointContext,
         type LogicalVisibleRange,
     } from './priceChartHelpers';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Event Marker types and constants
@@ -300,7 +301,7 @@
             void overlaySignalInfoMap;
             void mainIconUrl;
             void mainAssetType;
-            void $currentLanguage;
+            void uiLocale();
             tick().then(renderChart);
         }
     });
@@ -452,7 +453,7 @@
                             const policy = buildResponsiveXAxisPolicy({
                                 width: chartContainer?.clientWidth ?? 0,
                                 values: lastRenderedDates,
-                                locale: $currentLanguage,
+                                locale: uiLocale(),
                                 axisType: 'category',
                             });
                             const wasCompact = responsiveXAxisCompact;
@@ -779,10 +780,10 @@
             if (marker.value !== undefined) {
                 const isConverted = marker.originalValue !== undefined && marker.originalCurrency !== undefined;
                 const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${marker.currencyFlag ?? ''} ${escapeHtml(marker.currency)})${isConverted ? ' 💱' : ''}</span>` : '';
-                html += `<br/>💰 ${marker.value.toFixed(4)}${currBadge}`;
+                html += `<br/>💰 ${formatFixed(marker.value, 4)}${currBadge}`;
                 if (isConverted) {
                     const origBadge = ` <span style="font-size:10px;opacity:0.7">(${marker.originalCurrencyFlag ?? ''} ${escapeHtml(marker.originalCurrency ?? '')})</span>`;
-                    html += `<br/><span style="font-size:10px;opacity:0.7">orig. ${marker.originalValue!.toFixed(4)}${origBadge}</span>`;
+                    html += `<br/><span style="font-size:10px;opacity:0.7">orig. ${formatFixed(marker.originalValue!, 4)}${origBadge}</span>`;
                     if (marker.fxRateDate) {
                         const backfillHint = marker.fxDaysBack && marker.fxDaysBack > 0 ? ` (${marker.fxDaysBack}d back)` : '';
                         html += `<br/><span style="font-size:10px;opacity:0.6">fx @ ${marker.fxRateDate}${backfillHint}</span>`;
@@ -847,7 +848,7 @@
                             let html = buildTooltipHeader(bucketDate, activeResolution, bucketInfo);
 
                             if (params.data?.bucketValue !== undefined) {
-                                html += `<br/>💰 ${Number(params.data.bucketValue).toFixed(4)}`;
+                                html += `<br/>💰 ${formatFixed(Number(params.data.bucketValue), 4)}`;
                             }
 
                             if (activeResolution === 'daily' && marker) {
@@ -882,7 +883,7 @@
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: rect.width,
             values: dates,
-            locale: $currentLanguage,
+            locale: uiLocale(),
             axisType: 'category',
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
@@ -1009,7 +1010,7 @@
                                 labelHtml = `${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}`;
                             }
                         }
-                        let rowHtml = buildFittedTooltipRow(labelHtml, `${currencyHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNoteHtml}`);
+                        let rowHtml = buildFittedTooltipRow(labelHtml, `${currencyHtml}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`);
                         if (p.seriesName === mainSeriesName) {
                             const context = mainPointContext?.get(date);
                             if (context) {

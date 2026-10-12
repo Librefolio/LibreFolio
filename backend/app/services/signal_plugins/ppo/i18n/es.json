@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "ppo": {
+      "name": "PPO",
+      "description": "Momentum porcentual entre medias",
+      "line": "PPO",
+      "lineDescription": "Diferencia porcentual entre media rápida y lenta.",
+      "signal": "Línea de señal",
+      "signalDescription": "Suavizado EMA de la línea PPO.",
+      "histogram": "Histograma",
+      "histogramDescription": "Distancia entre PPO y su línea de señal."
+    }
+  }
+}

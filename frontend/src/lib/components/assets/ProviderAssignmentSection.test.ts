@@ -14,6 +14,15 @@
  * and the `data-testid` / `data-status` the component publishes. Never a
  * translated label, never a CSS class, never geometry (jsdom has no layout).
  *
+ * The probe's figures (M-18 CP3b) are read where the component writes them: the
+ * current price and the history count that open their results' details, each
+ * result's time and the total, all in the interface locale (`uiLocale()`, through
+ * `formatFixed`). Nothing finer than the `provider-test-result` row is published,
+ * so those figures are found by structure — inside the row, and in the list that
+ * holds the rows — and the labels that tell the rows apart are compared through
+ * the catalogue (`$_`), never as literals. Every expected figure is written by
+ * `Intl` itself.
+ *
  * The pure probe classifiers/formatters (`isSoftProbeFailure`,
  * `summarizeProbeError`, `buildProbeTooltipHtml`, …) are covered exhaustively in
  * `providerProbe.test.ts`; here we only prove the component wires them up.
@@ -86,6 +95,8 @@ import ProviderAssignmentSection from './ProviderAssignmentSection.svelte';
 import {zodiosApi} from '$lib/api';
 import {_} from '$lib/i18n';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
+import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 // --- Provider fixtures --------------------------------------------------
 // mockprov must be filtered out of the options; yahoo has an icon + help url +
@@ -417,6 +428,197 @@ describe('ProviderAssignmentSection — Test Configuration probe', () => {
         await fireEvent.click(testBtn());
         await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'failed'));
         expect(onchange.mock.calls.at(-1)?.[0]).toMatchObject({testStatus: 'failed'});
+    });
+});
+
+// =========================================================================
+describe('ProviderAssignmentSection — the probe figures in the interface language (M-18)', () => {
+    /*
+     * Four figures, each written through `formatFixed` in the interface locale, `uiLocale()`: the current
+     * price that opens its result's detail (two decimals), the history's point count that opens its own
+     * (no decimals, grouped the interface's way — the word after it stays English, backlog, and is not
+     * read), each result's time and the total (seconds, two decimals). On jsdom's en-US browser the
+     * interface locale is `en-US` for the English UI and bare `it` for the Italian one: an en-US browser
+     * lends Italian no region.
+     *
+     * Handles. The rows are `provider-test-result` and nothing finer is published, so the rest is
+     * structure: a row is its label, its detail and its time — three spans, in that order — and the
+     * total is the one line of the rows' list that holds no row. The labels only prove which row is
+     * which, read through the catalogue.
+     */
+    type ProbeResponse = z.infer<typeof schemas.FAProviderProbeResponse>;
+
+    /** What the synthetic probe answers: the price as the backend sends it (a decimal string), the history's point count, each operation's time and the total. */
+    interface ProbeInput {
+        price: string;
+        count: number;
+        resultMs: number;
+        totalMs: number;
+    }
+
+    /** The probe's figures, as read off the section or as the expectation writes them. */
+    interface Figures {
+        /** The current price, as its result's detail opens. */
+        price: string;
+        /** The history's point count, as its result's detail opens. */
+        count: string;
+        /** Each result's time as written beside it: the current price's, then the history's. */
+        times: string[];
+        /** The total line, its label included. */
+        total: string;
+    }
+
+    function figuresResponse({price, count, resultMs, totalMs}: ProbeInput): ProbeResponse {
+        return {
+            provider_code: 'yahoo',
+            identifier: 'AAPL',
+            total_execution_time_ms: totalMs,
+            current_price: {success: true, value: price, currency: 'USD', as_of_date: '2024-01-02', execution_time_ms: resultMs},
+            history: {success: true, points_count: count, date_range: '2020-01-01..2024-01-01', execution_time_ms: resultMs},
+        };
+    }
+
+    /** `value` with exactly `digits` decimals, as `Intl` writes it in `locale`: the oracle, never a literal. */
+    function fixed(value: number, digits: number, locale: string): string {
+        return new Intl.NumberFormat(locale, {minimumFractionDigits: digits, maximumFractionDigits: digits}).format(value);
+    }
+
+    function normalize(text: string | null | undefined): string {
+        return (text ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** A catalogue word as the section words it: `$_`, in whatever language the catalogue speaks. */
+    function word(key: string): string {
+        return normalize(get(_)(key));
+    }
+
+    /** The figures as they must read in `locale`. */
+    function expected({price, count, resultMs, totalMs}: ProbeInput, locale: string): Figures {
+        const time = `(${fixed(resultMs / 1000, 2, locale)}s)`;
+        return {
+            price: fixed(Number(price), 2, locale),
+            count: fixed(count, 0, locale),
+            times: [time, time],
+            total: `${word('assets.probe.totalTime')}: ${fixed(totalMs / 1000, 2, locale)}s`,
+        };
+    }
+
+    /** A result row's parts, by structure: its label, its detail and its time — the row's three spans, in that order. */
+    function partsOf(row: HTMLElement): {label: string; detail: string; time: string} {
+        const spans = [...row.children].filter((child) => child.tagName === 'SPAN');
+        expect(spans, 'a result row is its label, its detail and its time: three spans').toHaveLength(3);
+        const [label, detail, time] = spans.map((span) => normalize(span.textContent));
+        return {label, detail, time};
+    }
+
+    /** The figure a detail opens with: everything before its first space. */
+    function opening(detail: string): string {
+        return detail.split(' ')[0];
+    }
+
+    /** The list of results: the rows' nearest common ancestor. */
+    function resultListOf(rows: HTMLElement[]): HTMLElement {
+        for (let node = rows[0].parentElement; node; node = node.parentElement) {
+            const candidate = node;
+            if (rows.every((row) => candidate.contains(row))) return candidate;
+        }
+        throw new Error('the result rows share no list');
+    }
+
+    /** The total line, by structure: the one child of the results list that holds no result (the in-flight line is gone once the probe has settled). */
+    function totalLineOf(rows: HTMLElement[]): string {
+        const lines = [...resultListOf(rows).children].filter((child) => !rows.some((row) => child.contains(row)));
+        expect(lines, 'besides its results, the list holds one line: the total').toHaveLength(1);
+        return normalize(lines[0].textContent);
+    }
+
+    /** The figures as the section wrote them. */
+    function figures(): Figures {
+        const rows = screen.getAllByTestId('provider-test-result');
+        expect(rows, 'barrier: one result per operation the synthetic response carries, two').toHaveLength(2);
+        const [price, history] = rows.map((row) => partsOf(row));
+        expect([price.label, history.label], 'the results are not the current price then the history (labels read through the catalogue)').toEqual([`${word('common.currentPrice')}:`, `${word('assets.probe.history')}:`]);
+        return {price: opening(price.detail), count: opening(history.detail), times: [price.time, history.time], total: totalLineOf(rows)};
+    }
+
+    /** Mounts the section, runs the manual probe `input` answers, and waits until it has settled. */
+    async function probeWith(input: ProbeInput): Promise<void> {
+        probeFn().mockResolvedValue(figuresResponse(input));
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+        await fireEvent.click(testBtn());
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'passed'));
+    }
+
+    /** The interface language switched in place, as the language selector does, then Svelte's update boundary. */
+    async function switchTo(language: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(language);
+        await tick();
+        flushSync();
+    }
+
+    afterEach(async () => {
+        currentLanguage.set('en');
+        await setupI18n('en');
+    });
+
+    it.each([{price: '1234.5'}, {price: '12345.5'}])('Italian UI: the current price $price, a history of 12345 points, each result’s 1234 ms and the 2468 ms total, all in Italian notation', async ({price}) => {
+        const input: ProbeInput = {price, count: 12345, resultMs: 1234, totalMs: 2468};
+        // An Italian UI is the catalogue and the language store together, as the language selector moves
+        // them; the store is a plain writable in this file, so the catalogue is switched beside it.
+        await setupI18n('it');
+        currentLanguage.set('it');
+        expect(uiLocale(), 'control: an Italian UI on jsdom’s en-US browser writes bare Italian').toBe('it');
+
+        await probeWith(input);
+
+        expect(figures(), 'the probe’s figures are not in Italian notation: the section still writes them with toFixed, a point in every language').toEqual(expected(input, 'it'));
+    });
+
+    it('follows an in-place switch while mounted: English (en-US, the count grouped from 1,000 on — the new contract) → Italian → English; the results recompute and every figure follows', async () => {
+        // A price below 1,000, so its English form is the one it always had; the count from 1,000 on is
+        // grouped in English too — the new contract, pinned by the English case below.
+        const input: ProbeInput = {price: '123.456', count: 12345, resultMs: 1234, totalMs: 2468};
+        await probeWith(input);
+        const english = figures();
+
+        // Only the language store moves; the catalogue stays English. A catalogue switch re-runs every
+        // `$t` read — `buildTestResults` among them — and would refresh the figures even through a locale
+        // read the section does not track: here the interface locale is the only road to them.
+        await switchTo('it');
+        expect(uiLocale(), 'control: the switch reached the interface locale').toBe('it');
+        const italian = figures();
+
+        await switchTo('en');
+        expect(uiLocale(), 'control: and back, en-US on this browser').toBe('en-US');
+        const englishAgain = figures();
+
+        expect({english, italian, englishAgain}, 'the figures do not follow the interface language in place: the derived results and the times must be rewritten at each switch').toEqual({
+            english: expected(input, 'en-US'),
+            italian: expected(input, 'it'),
+            englishAgain: expected(input, 'en-US'),
+        });
+    });
+
+    it('English UI on an en-US browser: below 1,000 the figures read as before (123.46, 1.23s, 2.47s); a history count from 1,000 on is now grouped (12,345 points) — the new contract', async () => {
+        const input: ProbeInput = {price: '123.456', count: 12345, resultMs: 1234, totalMs: 2468};
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser writes en-US').toBe('en-US');
+        const english = expected(input, 'en-US');
+        // Premises. Below 1,000, en-US writes exactly what toFixed wrote: those figures are guards the cure
+        // must not move. From 1,000 on en-US groups, so the count is where the English contract changes.
+        const toFixedTime = `(${(input.resultMs / 1000).toFixed(2)}s)`;
+        expect({price: english.price, times: english.times, total: english.total}, 'premise: below 1,000, en-US writes what toFixed wrote').toEqual({
+            price: Number(input.price).toFixed(2),
+            times: [toFixedTime, toFixedTime],
+            total: `${word('assets.probe.totalTime')}: ${(input.totalMs / 1000).toFixed(2)}s`,
+        });
+        expect(english.count, 'premise: en-US groups a count from 1,000 on, which the bare number does not').not.toBe(String(input.count));
+
+        await probeWith(input);
+        const written = figures();
+
+        expect({price: written.price, times: written.times, total: written.total}, 'guard: below 1,000 the English figures read as they always did').toEqual({price: english.price, times: english.times, total: english.total});
+        expect(written.count, 'new contract: the history count is grouped the interface’s way, 12,345 points in en-US').toBe(english.count);
     });
 });
 
