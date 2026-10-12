@@ -114,6 +114,6 @@ already in the taxonomy or belongs to the feature pages. They are listed in
 | Taxonomy of findings | `.../01_tassonomia_findings.md` |
 | Reconciliation | `.../02_riconciliazione_credit_agricole.md` |
 | Index and P1-P8 status | `.../INDEX.md` |
-| BRIM provider | `backend/app/services/brim_providers/broker_credit_agricole.py` |
+| BRIM provider | `backend/app/services/brim_providers/broker_credit_agricole/plugin.py` |
 | Provider tests | `backend/test_scripts/test_external/test_brim_providers.py` |
 | mkdocs | `mkdocs_src/docs/developer/backend/brim/` |

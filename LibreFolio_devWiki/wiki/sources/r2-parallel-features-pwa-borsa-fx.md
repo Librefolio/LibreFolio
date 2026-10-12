@@ -124,7 +124,7 @@ Uses the `borsa-italiana-scraping` library (optional dependency). Follows the st
 ### Source files
 | Role | Path |
 |------|------|
-| Provider implementation | `backend/app/services/asset_source_providers/borsa_italiana.py` |
+| Provider implementation | `backend/app/services/asset_source_providers/borsa_italiana/plugin.py` |
 | Provider schema (enum) | `backend/app/schemas/provider.py` |
 | Service registry | `backend/app/services/asset_source.py` |
 | Frontend search integration | `frontend/src/lib/components/assets/AssetSearchAutocomplete.svelte` |

@@ -70,7 +70,7 @@ reports partial portfolio results while a filtered asset is stale.
 | `StalePriceAsset`, `DataQualityStatus` derivation | `backend/app/schemas/portfolio.py` |
 | Risk: stale assets → partial results | `backend/app/services/risk/service.py` |
 | Current price write-back | `backend/app/services/asset_sources/price_query.py` |
-| Mock provider refusal | `backend/app/services/asset_source_providers/mockprov.py` |
+| Mock provider refusal | `backend/app/services/asset_source_providers/mockprov/plugin.py` |
 | Dashboard CTA branch | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | Banner (icon per CTA) | `frontend/src/lib/components/ui/feedback/DataQualityBanner.svelte` |
 | Lab action mapping | `frontend/src/lib/components/risk/syncTargets.ts` |

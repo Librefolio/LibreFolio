@@ -76,7 +76,7 @@ I-11 limits of the events CSV round-trip · I-12 event delete not scoped to the 
 | Income colours, axis labels | `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md` |
 | Tooltip i18n escape | `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsBugfix-TooltipI18nEscape.prompt.md` |
 | Engine series | `backend/app/services/financial_math/portfolio/daily_state.py`, `backend/app/services/financial_math/portfolio/derived_views.py` |
-| Rolling return plugin | `backend/app/services/signal_plugins/calendar_rolling_return.py` |
+| Rolling return plugin | `backend/app/services/signal_plugins/calendar_rolling_return/plugin.py` |
 | Growth chart | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
 | Tooltip HTML gate | `frontend/src/htmlInterpolation.gate.test.ts` |
 | Privacy money-site gate | `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` |
