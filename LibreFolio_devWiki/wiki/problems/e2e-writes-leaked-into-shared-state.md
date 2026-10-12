@@ -96,9 +96,14 @@ The category gates at four workers were green but for V-19 (the Spanish toolbar,
 workstream I), one mobile case red only under load, and WB5; `front-transaction all` passed 327 of 327 on the
 re-run.
 
-**Still open** (after 2b): V-21, the probes and forbidden selectors left in the cleaned specs, and the File Preview
+**Then open** (after 2b): V-21, the probes and forbidden selectors left in the cleaned specs, and the File Preview
 tests, which never delete their upload; V-17's two runner points; V-18. With A1–A7 done, the seven E2E gaps of 1.2
-come next.
+came next — delivered in train 76 ([[decisions/e2e-gaps-of-1-2-before-release]]).
+
+*Train 76*: `files.spec.ts` now registers every upload and deletes it, with the BRIM broker of its import test, in
+`afterEach` (`eb269ecde`) — V-21's upload item. **Still open**: V-25 (`tx-delete` uses up a seed FEE and a seed pair,
+and one test leaves a broker on purpose), 12 upload files left by an earlier run that the populate step does not
+clean, the rest of V-21 (probes and forbidden selectors, which leak nothing), V-17's two runner points, V-18.
 
 ## Prevention
 
