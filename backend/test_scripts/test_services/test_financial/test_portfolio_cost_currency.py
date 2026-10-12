@@ -11,16 +11,18 @@ Five groups:
 - ``TestIssue32ReportCurrencyCost`` (S1–S3): the #32 numbers. S1 and S3 are RED before the
   fix (the engine adds a purchase paid in the report currency at cost 0); S2, the same
   history reported in the asset currency, is GREEN before and after.
-- ``TestCostDiagnostics`` (S4–S6): a cost that cannot be known is reported, never a silent
-  zero. RED before the fix.
+- ``TestCostDiagnostics`` (S4–S7): a cost that cannot be known is reported, never a silent
+  zero. RED before the fix. S7, units that arrive by TRANSFER without a cost basis (a linked
+  pair or an orphan in-leg), is written after the fix: GREEN.
 - ``TestAverageCostInvariants`` (I1–I7): single-currency figures and the facade/lots contracts
   that must not move. GREEN before and after; exact Decimal equality on finite quotients.
-- ``TestLotsAverageCostLines`` (L1–L3): the lots page's WAC lines in the report currency. L1,
+- ``TestLotsAverageCostLines`` (L1–L4): the lots page's WAC lines in the report currency. L1,
   bought with the report currency, is exact without any rate (GREEN before and after); L2, a
   purchase that cannot be converted, is reported (pair, banner issue, DEGRADED) and leaves the
   lines blank until its pool empties — RED before the fix, which drew the unconverted cost; L3,
   an acquisition without cost basis, does the same with a MISSING_COST_BASIS issue for the
-  asset — RED before the fix, which counted it at zero cost.
+  asset — RED before the fix, which counted it at zero cost. L4, S7's linked transfer on the
+  lots page, raises the same issue for the asset — written after the fix: GREEN.
 - ``TestPeriodUnrealizedBreakdown`` (B1–B4): the period's unrealized change split by asset
   currency into the assets' own change, the exchange-rate effect on their cost and what cannot
   be split; the rows add up to ``period_unrealized_gain_loss_delta`` exactly. Written after the
@@ -118,6 +120,11 @@ PERIOD_FX_OUTSIDE = date(2021, 4, 15)  # a price, no movement, before the period
 PERIOD_FX_FROM = date(2021, 6, 1)
 PERIOD_FX_TO = date(2021, 6, 30)
 
+# S7, L4: 10 bought at broker A, then 4 arrive at broker B by a TRANSFER without cost basis.
+TRANSFER_NO_COST_BUY = date(2022, 7, 4)
+TRANSFER_NO_COST_DAY = date(2022, 7, 6)
+TRANSFER_NO_COST_END = date(2022, 7, 8)
+
 # I1, I4, I7: single currency — BUY 10 for 1000, BUY 10 for 2000, SELL 5 for 1000.
 SINGLE_BUY_1 = date(2020, 2, 3)
 SINGLE_BUY_2 = date(2020, 4, 1)
@@ -211,9 +218,21 @@ async def _open_book(session: AsyncSession, *, asset_currency: str, label: str) 
     return Book(user=user, broker=broker, asset=asset)
 
 
-def _tx(book: Book, tx_type: TransactionType, day: date, quantity: str, amount: str = "0", currency: str | None = None, *, cbo: str | None = None, cbo_currency: str | None = None, asset_event_id: int | None = None) -> Transaction:
+async def _add_broker(session: AsyncSession, book: Book, *, label: str) -> Broker:
+    """A second broker for the book's user, 100% OWNER like the book's own."""
+    marker = uuid4().hex[:12]
+    broker = Broker(name=f"CostCcy {label} {marker}")
+    session.add(broker)
+    await session.flush()
+    session.add(BrokerUserAccess(broker_id=broker.id, user_id=book.user.id, role=UserRole.OWNER, share_percentage=Decimal("1")))
+    await session.flush()
+    return broker
+
+
+def _tx(book: Book, tx_type: TransactionType, day: date, quantity: str, amount: str = "0", currency: str | None = None, *, cbo: str | None = None, cbo_currency: str | None = None, asset_event_id: int | None = None, broker: Broker | None = None) -> Transaction:
+    """A row of the book's asset at ``broker`` — the book's own broker by default."""
     return Transaction(
-        broker_id=book.broker.id,
+        broker_id=(broker or book.broker).id,
         asset_id=book.asset.id,
         type=tx_type,
         date=day,
@@ -272,13 +291,39 @@ async def _seed_single_currency(session: AsyncSession) -> Book:
     return book
 
 
+async def _seed_transfer_without_cost(session: AsyncSession, *, case: str) -> tuple[Book, Broker]:
+    """S7, L4: 10 bought for 200 EUR at the book's broker A, then 4 arrive at a broker B by a TRANSFER without cost basis.
+
+    ``paired``: the in-leg is linked to a TRANSFER −4 out of A, the same day — the app stores the
+    outgoing leg without a cost basis too. ``orphan``: the in-leg alone, with no
+    ``related_transaction_id`` — what is left once its out-leg is gone. Both legs move no cash
+    (amount 0, no currency), like S5's ADJUSTMENT. One price, 30 EUR, on the last day.
+    """
+    book = await _open_book(session, asset_currency="EUR", label=f"transfer-no-cost {case}")
+    broker_b = await _add_broker(session, book, label=f"transfer-no-cost {case} B")
+    await _add_prices(session, book.asset, {TRANSFER_NO_COST_END: "30"})
+    txs = {"buy": _tx(book, TransactionType.BUY, TRANSFER_NO_COST_BUY, "10", "-200", "EUR")}
+    if case == "paired":
+        txs["transfer_out"] = _tx(book, TransactionType.TRANSFER, TRANSFER_NO_COST_DAY, "-4")
+    txs["transfer_in"] = _tx(book, TransactionType.TRANSFER, TRANSFER_NO_COST_DAY, "4", broker=broker_b)
+    await _add_txs(session, book, **txs)
+    if case == "paired":
+        # A linked pair references itself both ways: the ids exist only after the first flush.
+        book.txs["transfer_out"].related_transaction_id = book.txs["transfer_in"].id
+        book.txs["transfer_in"].related_transaction_id = book.txs["transfer_out"].id
+        await session.flush()
+    return book, broker_b
+
+
 async def _summary(session: AsyncSession, book: Book, *, currency: str = REPORT, date_to: date, date_from: date | None = None) -> PortfolioSummary:
     return await PortfolioService(session).get_summary(user_id=book.user.id, target_currency_override=currency, date_from=date_from, date_to=date_to)
 
 
-def _holding(summary: PortfolioSummary, book: Book) -> PortfolioHolding:
-    rows = [holding for holding in summary.holdings if holding.asset_id == book.asset.id and holding.broker_id == book.broker.id]
-    assert len(rows) == 1, f"expected one holding for asset {book.asset.id} at broker {book.broker.id}, got {len(rows)}"
+def _holding(summary: PortfolioSummary, book: Book, *, broker: Broker | None = None) -> PortfolioHolding:
+    """The book's asset at ``broker`` — the book's own broker by default."""
+    broker_id = (broker or book.broker).id
+    rows = [holding for holding in summary.holdings if holding.asset_id == book.asset.id and holding.broker_id == broker_id]
+    assert len(rows) == 1, f"expected one holding for asset {book.asset.id} at broker {broker_id}, got {len(rows)}"
     return rows[0]
 
 
@@ -300,6 +345,21 @@ def _mentions(summary: PortfolioSummary, currency: str) -> list[str]:
             texts = [*issue.affected_fx_pairs, *(str(value) for value in issue.message_params.values())]
             found += [f"issue {issue.code}: {text}" for text in texts if currency in text]
     return found
+
+
+def _missing_cost_basis_issue(book: Book) -> dict[str, object]:
+    """The MISSING_COST_BASIS issue naming the book's asset, the one to fix — L3's fields, the CTA's target included."""
+    return {
+        "code": "MISSING_COST_BASIS",
+        "severity": "warning",
+        "message_i18n_key": "dataQuality.missingCostBasis",
+        "message_params": {"count": 1},
+        "affected_asset_ids": [book.asset.id],
+        "affected_asset_names": [book.asset.display_name],
+        "cta_action": "navigate_asset",
+        "cta_target": str(book.asset.id),
+        "group_key": "missing_cost_basis",
+    }
 
 
 async def _lots_wac_lines(session: AsyncSession, book: Book, *, date_to: date) -> LotsAnalysisResponse:
@@ -421,7 +481,7 @@ class TestIssue32ReportCurrencyCost:
 
 
 # =============================================================================
-# S4–S6 — a cost that cannot be known is reported, never a silent zero
+# S4–S7 — a cost that cannot be known is reported, never a silent zero
 # =============================================================================
 
 
@@ -572,6 +632,46 @@ class TestCostDiagnostics:
             "day before the period": False,
         }
         print_success("S6: KGS/EUR with the purchase day and the period's valuation days only")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("case", "expected_at_a", "expected_open_cost_basis"),
+        [
+            # A gave 4 of its 10 units away: 6 at 20, worth 6 × 30.
+            pytest.param("paired", {"quantity": Decimal("6"), "wac_per_unit": Decimal("20"), "current_value": Decimal("180"), "gain_loss": Decimal("60")}, Decimal("120"), id="paired"),
+            # No out-leg: A keeps its 10 units at 20, worth 10 × 30.
+            pytest.param("orphan", {"quantity": Decimal("10"), "wac_per_unit": Decimal("20"), "current_value": Decimal("300"), "gain_loss": Decimal("100")}, Decimal("200"), id="orphan"),
+        ],
+    )
+    async def test_s7_transfer_in_without_cost_basis_raises_missing_cost_basis(self, session, case, expected_at_a, expected_open_cost_basis):
+        """S7: 4 units arrive at broker B by a TRANSFER without cost basis — linked to a −4 out of A, or an orphan in-leg.
+
+        As S5's ADJUSTMENT: the arrival costs zero, says so with MISSING_COST_BASIS for the asset,
+        and B has no WAC nor P&L. A keeps what it paid: 20 per unit, complete.
+        """
+        print_section(f"S7 — MISSING_COST_BASIS from a TRANSFER-in ({case})")
+        book, broker_b = await _seed_transfer_without_cost(session, case=case)
+
+        summary = await _summary(session, book, date_to=TRANSFER_NO_COST_END)
+
+        at_a = _holding(summary, book)
+        at_b = _holding(summary, book, broker=broker_b)
+        issues = summary.data_quality.issues if summary.data_quality is not None else []
+        expected_issue = _missing_cost_basis_issue(book)
+        observed = {
+            "A": {"quantity": at_a.quantity, "wac_per_unit": at_a.wac_per_unit, "current_value": at_a.current_value, "gain_loss": at_a.gain_loss},
+            "B": {"quantity": at_b.quantity, "wac_per_unit": at_b.wac_per_unit, "current_value": at_b.current_value, "gain_loss": at_b.gain_loss},
+            "open_cost_basis": _amount(summary.open_cost_basis),
+            "MISSING_COST_BASIS issues": [{name: getattr(issue, name) for name in expected_issue} for issue in issues if issue.code == "MISSING_COST_BASIS"],
+        }
+        # The whole portfolio belongs to this test, so "one asset" is a count it created.
+        assert observed == {
+            "A": expected_at_a,
+            "B": {"quantity": Decimal("4"), "wac_per_unit": None, "current_value": Decimal("120"), "gain_loss": None},  # 4 × 30: the valuation itself is complete
+            "open_cost_basis": expected_open_cost_basis,  # A's known cost; B's 4 units count at zero
+            "MISSING_COST_BASIS issues": [expected_issue],
+        }
+        print_success(f"S7 ({case}): MISSING_COST_BASIS for the asset, B incomplete, A at 20 per unit")
 
 
 # =============================================================================
@@ -786,7 +886,7 @@ class TestAverageCostInvariants:
 
 
 # =============================================================================
-# L1–L3 — the lots page's WAC lines in the report currency
+# L1–L4 — the lots page's WAC lines in the report currency
 # =============================================================================
 
 
@@ -948,6 +1048,38 @@ class TestLotsAverageCostLines:
             "calculation_status": expected_status,
         }
         print_success(f"L3: {expected_status}, issues: {expected_issues}")
+
+    @pytest.mark.asyncio
+    async def test_l4_a_transfer_in_without_cost_basis_is_reported_by_the_lots_analysis(self, session):
+        """L4: S7's linked transfer on the lots page — the arrival of unknown cost is a MISSING_COST_BASIS issue for the asset.
+
+        The FIFO engine moves A's lot to B and raises nothing: the unknown cost in the WAC lines
+        alone turns the analysis DEGRADED. Not the orphan: an orphan TRANSFER fails the FIFO lots
+        (TRANSFER_PAIR_MISSING); S7 covers it on the dashboard.
+        """
+        print_section("L4 — lots analysis, a linked TRANSFER-in without cost basis")
+        book, _broker_b = await _seed_transfer_without_cost(session, case="paired")
+
+        response = await _lots_wac_lines(session, book, date_to=TRANSFER_NO_COST_END)
+
+        expected_issue = _missing_cost_basis_issue(book)
+        quality = response.data_quality
+        assert quality is not None
+        observed = {
+            # Every issue, the engine's included: the unknown cost is reported once, although it sits
+            # in two lines (B's and the cumulative one).
+            "issue codes": [issue.code for issue in quality.issues],
+            "MISSING_COST_BASIS issues": [{name: getattr(issue, name) for name in expected_issue} for issue in quality.issues if issue.code == "MISSING_COST_BASIS"],
+            "missing_fx_pairs": quality.missing_fx_pairs,
+            "calculation_status": response.calculation_status,
+        }
+        assert observed == {
+            "issue codes": ["MISSING_COST_BASIS"],
+            "MISSING_COST_BASIS issues": [expected_issue],
+            "missing_fx_pairs": [],
+            "calculation_status": "DEGRADED",
+        }
+        print_success("L4: MISSING_COST_BASIS for the asset, DEGRADED")
 
 
 # =============================================================================

@@ -46,6 +46,30 @@ def front_portfolio_stale_price_banner(verbose: bool = False, ui: bool = False, 
     return _run_playwright("portfolio/stale-price-banner.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_data_quality_legacy(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the MISSING_COST_BASIS legacy-rows E2E test (release item 22) on the desktop project, the runner default."""
+    print_section("Frontend Portfolio Data Quality Legacy Rows Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/data-quality-legacy.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_portfolio_data_quality_real(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the data-quality E2E tests on real data (items 21-23 of release 1.2) on the desktop project, the runner default."""
+    print_section("Frontend Portfolio Data Quality Real-Data Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/data-quality-real.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_broker_filter_label(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the dashboard broker-filter label E2E test (K step 15, item b) on the desktop project, the runner default."""
     print_section("Frontend Portfolio Broker Filter Label Tests")
@@ -336,6 +360,22 @@ def populate_registry(registry: dict) -> None:
         name="Stale Price Banner Tests",
         desc="STALE_PRICE (D8): a provider-priced holding last quoted 10 days ago raises the dashboard warning, and its sync CTA posts one item per affected asset over the dashboard range, stays busy while the sync runs, then reloads the report — on a disposable account, with the provider sync intercepted",
         tests="portfolio/stale-price-banner.spec.ts",
+    )
+    add_test(
+        cat,
+        "data-quality-legacy",
+        front_portfolio_data_quality_legacy,
+        name="Data Quality Legacy Rows Tests",
+        desc="Item 22 (MISSING_COST_BASIS) with rows an older version left behind — a TRANSFER pair and an ADJUSTMENT adding quantity without cost basis, written into the lane's test DB by backend/test_scripts/test_db/legacy_cost_rows.py — reach the yellow dashboard banner with one link per affected asset, show — for P&L, P&L % and average cost on the units of unknown cost while the paid ones keep their figures, raise the same warning in the lots panel, and the asset link opens the asset page — on a disposable account",
+        tests="portfolio/data-quality-legacy.spec.ts",
+    )
+    add_test(
+        cat,
+        "data-quality-real",
+        front_portfolio_data_quality_real,
+        name="Data Quality Real-Data Tests",
+        desc="Items 21-23 on disposable accounts with real data: a missing FX rate is a banner row with its pair and dates, a dash in the P&L, P&L % and average-cost cells and an issue in the lots panel, until MOCKFX «Sync rates» stores the rate and clears it everywhere (the lots panel already open refreshes by itself); an acquisition without cost basis (P-10) is a banner row linking the asset, with dashes on the dashboard and the broker page, cleared by an explicit cost; the unrealized change tooltip splits the period by currency into the asset and the exchange-rate effect",
+        tests="portfolio/data-quality-real.spec.ts",
     )
     add_test(
         cat,
