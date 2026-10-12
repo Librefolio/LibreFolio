@@ -46,6 +46,8 @@ the other parts are ingested in steps R1–R6.
 - [[decisions/risk-answers-four-questions]], [[concepts/risk-binding-decisions]] (step R2).
 - From `implementation_2/` (step R3): [[decisions/asset-set-one-preparation-not-fan-out]],
   [[decisions/l3-reads-current-composition]], [[problems/runner-catalog-merge-not-line-union]].
+- From the post-merge review R5 (step R3b): [[problems/risk-stress-buckets-hand-listed]],
+  [[problems/replay-baseline-shortened-by-late-starter]], [[problems/echarts-stacked-band-null-base]].
 
 ## Source files
 
