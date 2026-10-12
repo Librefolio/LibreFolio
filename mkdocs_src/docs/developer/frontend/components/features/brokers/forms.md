@@ -54,7 +54,7 @@ rejects a create whose name is taken. `BrokerModal` turns the backend's English 
 localized one (`localizeDuplicateName`), chosen by who owns the existing broker, and appends the
 recovery guidance:
 
-| Backend message | Key (`en.json`) | English text |
+| Backend message | Key (`frontend/src/lib/i18n/brokers/en.json`) | English text |
 |---|---|---|
 | `You already have a broker named '<name>'` | `brokers.duplicateNameOwn` | You already have a broker named "{name}". |
 | `Broker '<name>' already exists (owned by '<owner>')` | `brokers.duplicateNameOwned` | Broker "{name}" already exists (owned by "{owner}"). |

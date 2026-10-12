@@ -64,7 +64,7 @@ interface RiskRequest {
  * Today the euro on this page is *latent*, not present: for an `AssetSetRiskScope`
  * the backend builds `asset_values={}` and `scope_value=None`
  * (`risk/service.py`), so the replay plugin returns `impact_amount=None` on every
- * row (`stress.py:542`) and leaves `portfolio_return` null (`:480-494`), which
+ * row (`stress/plugin.py:542`) and leaves `portfolio_return` null (`:480-494`), which
  * makes the top-level amount unreachable too (`:564`). So loading the page and
  * finding no `€` would prove nothing — it would stay green with the rule
  * deleted, because the data simply is not there.
@@ -335,7 +335,7 @@ function unnamedAsset(assetId: number): string {
  * whoever edited it last.
  *
  * `historical_kpi` carried one of those drifts until that test was written: it
- * was declared `['historical']` while `historical_kpi.py:119` advertises
+ * was declared `['historical']` while `historical_kpi/plugin.py:119` advertises
  * `(HISTORICAL, CURRENT_COMPOSITION)`. Corrected here rather than tolerated in
  * the guard — a guard with an exemption list is a guard that stops guarding. The
  * correction is inert on this page (the code is `ASSET`/`PORTFOLIO`-scoped, so an
@@ -852,7 +852,7 @@ function assetSetKpiOutput(request: RiskRequest, analytic: RiskAnalyticRequest, 
     return {
         kind: 'kpi_set',
         // An echo of the request parameter, which the page never overrides, so
-        // the plugin's own default (`asset_set_kpi.py:59-60`) is what comes back.
+        // the plugin's own default (`asset_set_kpi/plugin.py:59-60`) is what comes back.
         drawdown_confidence_level: Number(analytic.parameters?.drawdown_confidence_level ?? 0.95),
         items: covered.map((assetId, index) => {
             // The same figure `asset_set_drawdown` reports, because both are
@@ -971,7 +971,7 @@ function assetSetLevelOutput(request: RiskRequest, analytic: RiskAnalyticRequest
  * whether it still refuses to show it.
  *
  * `portfolio_return` is the other half of the same bait, and it is deliberately
- * NOT what the backend does here: `stress.py:480-494` leaves it null on an
+ * NOT what the backend does here: `stress/plugin.py:480-494` leaves it null on an
  * unweighted scope, and `L4Replay:207` therefore *withholds* the whole sentence
  * rather than degrading it. Reproduce that faithfully and `output.impact_amount`
  * becomes unreachable by construction — its absence would then prove nothing
@@ -980,7 +980,7 @@ function assetSetLevelOutput(request: RiskRequest, analytic: RiskAnalyticRequest
  * the only thing left between the payload and a euro on screen.
  *
  * Shape-faithful in every other respect: a replay carries no `dimension` and no
- * `configured_buckets` (`stress.py:561-567`), which is what makes `tornadoRows`
+ * `configured_buckets` (`stress/plugin.py:561-567`), which is what makes `tornadoRows`
  * take its per-asset branch — the branch that reads `impact_amount`. A bucket
  * row carries `amount: null` and would have quietly disarmed the row half of
  * this test. And the holding the replay left out ({@link replayLeftOutAssetId})
@@ -1002,7 +1002,7 @@ function replayOutput(request: RiskRequest) {
             asset_id: assetId,
             // Spread so the bars differ from each other; `contribution_return` is
             // omitted because an unweighted scope has no weights to contribute
-            // with (`stress.py:541`), which sends `tornadoRows` to `shock_return`.
+            // with (`stress/plugin.py:541`), which sends `tornadoRows` to `shock_return`.
             shock_return: REPLAY_RETURN + index / 1000,
             impact_amount: MONEY_AMOUNT,
             metadata_fallback: false,
@@ -1016,7 +1016,7 @@ function replayOutput(request: RiskRequest) {
  *
  * Since 24/09 the engine leaves out, on its own, every holding whose quotes do not
  * cover the window, and on an unweighted scope it is *omitted* from the replay, with
- * no weight (`stress.py::_historical`). Leaving one out of every replay is what gives
+ * no weight (`stress/plugin.py::_historical`). Leaving one out of every replay is what gives
  * the no-money tests their presence barrier since D372 retired the one-line audit:
  * `risk-replay-excluded` is drawn from `historical_replay_audit` alone, which no other
  * analytic carries — and it is one more place a weight, a share of a portfolio that
@@ -1028,7 +1028,7 @@ function replayLeftOutAssetId(request: RiskRequest): number | null {
     return assetIds.length >= 2 ? assetIds[assetIds.length - 1] : null;
 }
 
-/** The audit `stress.py` attaches to the replay: the holding it left out, omitted and unweighted, and a total pinned at 0.0 on an unweighted scope. */
+/** The audit `stress/plugin.py` attaches to the replay: the holding it left out, omitted and unweighted, and a total pinned at 0.0 on an unweighted scope. */
 function replayAudit(request: RiskRequest) {
     const leftOut = replayLeftOutAssetId(request);
     const excluded = leftOut === null ? [] : [{asset_id: leftOut, reason: 'no_prices_in_window', weight: null, treatment: 'omitted_from_replay'}];

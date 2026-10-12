@@ -367,7 +367,7 @@ current-composition `historical_kpi` and `asset_risk_return` and the on-demand `
 - **Replay.** Controls and lifetime are the lab's ([Replay (L4°)](#replay)); coverage, exclusions and the
   suggested period are in [Replay Coverage](../../../backend/risk/architecture.md#replay-coverage). On a
   weighted scope the excluded weight becomes a zero-return residual
-  (`backend/app/services/risk_plugins/stress.py:562`), worded by `excludedHeader()`
+  (`backend/app/services/risk_plugins/stress/plugin.py:562`), worded by `excludedHeader()`
   (`levels/l4/L4Replay.svelte:203`). `showMoney` follows `metadata.scope === 'portfolio'` (l.99), so the
   total sentence (l.269) and the amounts show here.
 - **Shock.** A preset click adopts the scenario's dimension and bucket shocks and runs it

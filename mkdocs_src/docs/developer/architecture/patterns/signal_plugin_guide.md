@@ -3,9 +3,10 @@
 How to add a backend technical indicator to LibreFolio's schema-driven signal system.
 
 **Base class**: `SignalPlugin`  
-**Plugin folder**: `backend/app/services/signal_plugins/`  
 **Registry**: `SignalPluginRegistry`  
 **Orchestrator**: `SignalService`
+
+**Plugin folder**: `backend/app/services/signal_plugins/<name>/` — `plugin.py`, a docstring-only `__init__.py`, and its `i18n/` fragment.
 
 ---
 
@@ -67,7 +68,7 @@ flowchart TB
 |---|---|
 | `signal_runtime.py` | Verify the locked `pandas-ta-classic` + TA-Lib stack at startup and reject silent fallback. |
 | `signal_plugins/base.py` | Define the plugin contract and build static catalog metadata. |
-| `provider_registry.py` | Discover plugin files, validate definitions, and reject duplicate codes. |
+| `provider_registry.py` | Discover plugin folders, validate definitions, and reject duplicate codes. |
 | `signal_service.py` | Plan batches, calculate required history, check coverage, execute plugins, isolate failures, and slice output. |
 | `signal_annotations.py` | Derive line crossovers and threshold crossings from extended canonical data. |
 | Chart Asset/FX adapters | Load chart-domain data, perform currency conversion, and map it into neutral points. |
@@ -254,7 +255,7 @@ Every concrete plugin must declare:
 | `signal_code` | Stable uppercase identifier used by APIs and saved settings. |
 | `implementation_version` | Version of the plugin's numerical behavior. |
 | `category` | Trend, momentum, volatility, volume, or risk. |
-| `display_name_key` | Frontend i18n key for the human-readable name. |
+| `display_name_key` | Frontend i18n key for the human-readable name. Its parent (`signals.rsi` for `signals.rsi.name`) is the plugin's translation space, held by its `i18n/` fragment (see [Folder and Translations](#folder-and-translations)). |
 | `description_key` | Frontend i18n key for the short selector description. |
 | `semantic_id` / `semantic_description` | Canonical identity and neutral, non-prescriptive meaning exposed to AI consumers (`describe_for_ai()`). |
 | `icon` | Emoji displayed by the signal selector. |
@@ -464,7 +465,7 @@ TP_t = \frac{H_t + L_t + C_t}{3}
 $$
 
 ```python
-# backend/app/services/signal_plugins/typical_price.py
+# backend/app/services/signal_plugins/typical_price/plugin.py
 from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict
@@ -593,15 +594,60 @@ class TypicalPriceSignalPlugin(SignalPlugin):
         )
 ```
 
-No central registration list is required. Importing the module triggers
-`@register_plugin(SignalPluginRegistry)`.
+### 🗂️ Folder and Translations {: #folder-and-translations }
+
+No central registration list is required. The plugin is a folder of `signal_plugins/`, and
+discovery loads its `plugin.py` as `backend.app.services.signal_plugins.typical_price.plugin`,
+which triggers `@register_plugin(SignalPluginRegistry)`:
+
+```text
+backend/app/services/signal_plugins/
+├── base.py            ← the SignalPlugin contract, shared by every plugin (the registry ignores `base`)
+└── typical_price/
+    ├── __init__.py    ← its docstring and nothing else
+    ├── plugin.py      ← the code above
+    └── i18n/          ← en.json, it.json, fr.json, es.json
+```
+
+Import and patch the plugin's names from `backend.app.services.signal_plugins.typical_price.plugin`:
+the package re-exports nothing. A helper only this plugin uses sits beside `plugin.py` as `_*.py`.
+[Plugin Folder Layout](registry_pattern.md#plugin-layout) has the discovery rules and the gate that
+keeps them, `./dev.py test utils gate-plugin-layout`.
+
+The plugin's translation space is the parent of its `display_name_key`, here
+`signals.typicalPrice`, and its fragment holds every key under it — the name, the description,
+the output labels, and any reference level or region:
+
+```json
+{"signals": {"typicalPrice": {"name": "Typical Price", "description": "Average of high, low and close", "output": "Typical price"}}}
+```
+
+The space need not match the folder's name: the `drawdown` plugin's is `signals.riskDrawdown`.
+Add the keys in the four languages and name the folder with `--into`: without it, the first key of
+a new plugin lands in the `charts` subsystem, which owns the `signals` prefix.
+
+```bash
+./dev.py i18n add "signals.typicalPrice.name" --en "Typical Price" --it "…" --fr "…" --es "…" --into signal_plugins/typical_price
+./dev.py i18n add "signals.typicalPrice.description" --en "Average of high, low and close" --it "…" --fr "…" --es "…" --into signal_plugins/typical_price
+./dev.py i18n add "signals.typicalPrice.output" --en "Typical price" --it "…" --fr "…" --es "…" --into signal_plugins/typical_price
+./dev.py i18n where "signals.typicalPrice.output"   # backend/app/services/signal_plugins/typical_price/i18n/en.json (exists)
+```
+
+Keys outside the plugin's space stay in the `charts` subsystem, where `add` puts them by itself:
+the parameter captions and tooltips named by `x-i18n-key` and `x-tooltip-key`
+(`chartSettings.params.*`, `chartSettings.tooltips.*`), the units (`signals.units.*`), and the
+keys several plugins share — `signals.reference.zero`, and `signals.riskRollingReturn.*`, the space
+of the two rolling-return plugins. `./dev.py test utils gate-plugin-i18n-ownership` keeps every key
+the plugin declares in its space — `display_name_key`, `description_key`, and the `label_key` and
+`description_key` of its outputs, reference levels and regions — in its fragment
+([A Plugin's Translations](registry_pattern.md#plugin-translations)).
 
 ---
 
 ## 🎛️ Parameter Metadata
 
 Parameters are ordinary Pydantic fields. JSON Schema extensions control the generic
-frontend form. The SMA period (`signal_plugins/sma.py`):
+frontend form. The SMA period (`signal_plugins/sma/plugin.py`):
 
 ```python
 period: int = Field(
@@ -626,7 +672,8 @@ declares `"x-suffix": "days"` (`calendar_rolling_return` and the rolling risk wi
 `SignalParamControl.svelte` renders the suffix through the i18n key
 `signals.units.<suffix>` and falls back to the raw value when the key is missing: a
 symbol such as `%` or `σ` needs no key, while a word unit needs `signals.units.<suffix>`
-in all four catalogs.
+in the four languages. The units are shared by every plugin, so they live in the `charts`
+subsystem, where `./dev.py i18n add` writes them without `--into`.
 
 Prefer schema metadata over frontend conditionals. New parameter shapes should be added
 to the shared JSON Schema mapper only when they are reusable across plugins.
@@ -689,7 +736,9 @@ event selection, and tests.
 
 ## ✅ Adding a Plugin
 
-1. Create one Python file under `signal_plugins/`.
+1. Create a folder `signal_plugins/<name>/` holding the code in `plugin.py` and an
+   `__init__.py` with the plugin's docstring and nothing else
+   ([Folder and Translations](#folder-and-translations)).
 2. Define a strict Pydantic parameter model.
 3. Declare required price fields/events and compatible domains.
 4. Decide what the periods count: sessions (keep the inherited
@@ -702,7 +751,9 @@ event selection, and tests.
    (sessions for a quote-day plugin); the plan converts them to calendar days.
 8. Implement and normalize `compute()`.
 9. Validate semantic input/output and provide AI descriptions and annotations.
-10. Add all EN/IT/FR/ES UI keys.
+10. Add the plugin's UI keys in the four languages to its fragment,
+    `signal_plugins/<name>/i18n/`, with
+    `./dev.py i18n add <key> --en … --it … --fr … --es … --into signal_plugins/<name>`.
 11. Add the English financial-theory page referenced by `docs_path`.
 12. Add focused numerical/parity tests, temporal-rule resolution tests, and shared-grid
     tests for multi-output indicators.
@@ -718,6 +769,9 @@ Useful commands:
 ./dev.py test services signal-plugin-matrix
 ./dev.py test services signal-service
 ./dev.py test api signal-catalogs
+./dev.py test utils gate-plugin-layout
+./dev.py test utils gate-plugin-i18n-ownership
+./dev.py i18n check
 ./dev.py api sync
 ./dev.py front check
 ./dev.py mkdocs build

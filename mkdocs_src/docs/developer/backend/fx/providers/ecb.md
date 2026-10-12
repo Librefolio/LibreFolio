@@ -14,7 +14,7 @@
 
 ### ⚙️ How It Works
 
-The European Central Bank publishes daily reference exchange rates for the Euro against about 30 currencies. The provider queries the ECB Statistical Data Warehouse using the SDMX REST API; `get_supported_currencies()` (`backend/app/services/fx_providers/ecb.py`) reads the currency list from the same API, so it also returns the discontinued currencies that are still in the history.
+The European Central Bank publishes daily reference exchange rates for the Euro against about 30 currencies. The provider queries the ECB Statistical Data Warehouse using the SDMX REST API; `get_supported_currencies()` (`backend/app/services/fx_providers/ecb/plugin.py`) reads the currency list from the same API, so it also returns the discontinued currencies that are still in the history.
 
 - **Dataset**: `EXR` (Exchange Rates)
 - **Frequency**: `D` (Daily)
