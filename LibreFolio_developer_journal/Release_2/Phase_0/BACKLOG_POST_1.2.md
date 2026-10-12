@@ -635,6 +635,18 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
     controlla che ne venga il locale atteso per ogni lingua.
 
   Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezioni «21.2» e «23».
+- **M-25 · Un `dev.py docker build` locale può riusare un frontend con un'altra versione** — basso; M (lotto 34), 13/10.
+  - **Perché:** `_docker_ensure_assets_built()` ricostruisce il frontend solo se `check_frontend_needs_build()` lo
+    trova vecchio, e quel controllo guarda le date dei sorgenti, non la versione.
+  - **L'effetto:** dopo un commit che non tocca il frontend, l'immagine locale riusa un bundle con la versione di un
+    build precedente, anche `-dirty`, mentre `VERSION`, scritto alla fine, è nuovo.
+  - **Fuori portata:** le immagini pubblicate non ne soffrono, perché la CI ricostruisce sempre il frontend con
+    `LF_APP_VERSION`.
+  - **La cura:** congelare la versione una volta all'inizio di `_docker_ensure_assets_built()`, passarla come
+    `LF_APP_VERSION` al build del frontend, segnarla in `frontend/build/` accanto a `.build-debug`, e ricostruire
+    quando è diversa.
+
+  Dettagli: [piano ReleaseGallery](27_releaseImages/plan-phase00ReleaseGallery.prompt.md), passo «30».
 
 ## Q · Documentazione e onboarding (21, 32)
 
