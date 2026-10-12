@@ -265,7 +265,10 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   che il modale della custodia ricalcola come quantità × prezzo d'apertura (`LotCustodyModal.svelte`) invece di
   leggere `original_cost`, trovato in B3b, e la dichiarazione nel codice delle misure interattive che la regola
   ammette (`MeasureSignal.ts`, `CompoundSignal.ts`, `LinearSignal.ts`, `SineSignal.ts`; docs-writer di T-1). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «7.1».
-- **T-U9 · L'AI Export dalle case comuni** — medio; T, 11/10. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «7.1».
+- **T-U9 · L'AI Export dalle case comuni** — medio; T, 11/10. Comprende il `reason_code` di `broker.concentration_comparison`,
+  trovato con C-55 (12/10): `broker_summary_unavailable` (`broker_concentration_context.py:390`) esce anche quando il
+  riepilogo del broker c'è ma non ha posizioni, mai avute o tutte chiuse. Il messaggio è esatto, il codice no; cambiarlo
+  cambia il contratto, quindi la v2. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «7.1» e «C-55 — analisi».
 - **T-U10 · Interessi e convenzioni di calendario (`interest.py`)** — basso-medio; T, 11/10, decisione D-8. Dettagli:
   [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.10» e «7.1».
 - **T-D9 · MeasureSignal: la soglia dei 30 giorni sull'annualizzato** — minimo; T, 11/10, decisione D-9. Dettagli:
@@ -287,13 +290,10 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
 - **T-P2.2 · I file grandi del backend, divisi per cuciture** — medio; T, 11/10. L'evaluator del PAC,
   `portfolio_service`, le transazioni, `broker_service`, `price_store`, i router, gli schemi. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «P2.2».
-- **T-BU1+BU2 · `utils/` del backend: sottocartelle per tipo di utility** — basso; **nella 1.2, dopo C-53** (developer,
-  12/10); T, 11/10; riscritta con D-P7 del developer (12/10). `utils/` resta la casa delle funzioni foglia, che non importano mai servizi (oggi è già così:
-  importano solo altri `utils` e, in `decimal_utils`, `db.models`). Niente `backend/app/domain/` e niente spostamenti
-  sotto `services/`: al più si raggruppano i moduli in sottocartelle per tipo, per esempio gli aiuti degli asset
-  (`sector_fin_utils`, `geo_utils`, `identifier_utils`, `translation_utils`). Quello che chiede cambi, asset o altri
-  servizi sta negli strati di servizio, come `financial_math`. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
-  sezioni «P2.3» e «D-P7».
+- ✅ **T-BU1+BU2 · `utils/` del backend: sottocartelle per tipo di utility** — chiusa nella 1.2 da T: BU1 nel treno 50
+  (`346b7e292`), BU2 nel treno 53 (`8dae5cc6e`). `utils/` resta la casa delle funzioni foglia (D-P7), con le
+  sottocartelle `asset/`, `fx/` e `runtime/`; la precisione del DB è in `db/precision.py`. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezioni «P2.3», «D-P7» e «BU1/BU2».
 - **T-FE2…FE11 · Il frontend a cartelle per funzionalità** — da basso ad alto; T, 11/10. FE8 dopo P; FE6 e FE7 dopo F.
   Comprende due cose trovate con FE1 e con le durate: la copia di `DELTA_PERIODS` nella pagina FX
   (`routes/(app)/fx/+page.svelte:159`) e l'albero di `developer/frontend/index.md`, che non ha `lib/features/`.

@@ -822,6 +822,7 @@ def audit_snapshot_semantics(  # noqa: C901 — flat battery of independent audi
 
     hhi_checks = 0
     hhi_values: list[str] = []
+    hhi_unavailable = 0
     unit_price_checks = 0
     unit_price_violations = 0
     fifo_lot_rows = 0
@@ -846,8 +847,12 @@ def audit_snapshot_semantics(  # noqa: C901 — flat battery of independent audi
                 violations.append(f"{component_id}: deprecated herfindahl_index_percent")
             if "herfindahl_index_points" in record:
                 hhi_checks += 1
-                value = _as_decimal(record.get("herfindahl_index_points"))
-                if value is None or value < 0 or value > 10_000:
+                raw_hhi = record.get("herfindahl_index_points")
+                value = _as_decimal(raw_hhi)
+                # No weighted position: the builders null the HHI and the largest weight together, since an HHI of 0 would claim perfect diversification.
+                if raw_hhi is None and "largest_position_weight_percent" in record and record.get("largest_position_weight_percent") is None:
+                    hhi_unavailable += 1
+                elif value is None or value < 0 or value > 10_000:
                     violations.append(f"{component_id}: invalid HHI points")
                 else:
                     hhi_values.append(str(value))
@@ -1020,6 +1025,7 @@ def audit_snapshot_semantics(  # noqa: C901 — flat battery of independent audi
         "hhi": {
             "checks": hhi_checks,
             "values": hhi_values,
+            "unavailable": hhi_unavailable,
             "violations": sum(1 for violation in violations if "HHI" in violation or "herfindahl" in violation),
         },
         "weights": {
@@ -3205,6 +3211,7 @@ def build_quality_summary(entries: Sequence[Mapping[str, object]]) -> dict[str, 
     prompt_pattern_totals: dict[str, int] = defaultdict(int)
     totals = {
         "hhi_checks": 0,
+        "hhi_unavailable": 0,
         "hhi_violations": 0,
         "weight_checks": 0,
         "weight_violations": 0,
@@ -3246,6 +3253,7 @@ def build_quality_summary(entries: Sequence[Mapping[str, object]]) -> dict[str, 
         fifo = checks.get("fifo") if isinstance(checks.get("fifo"), Mapping) else {}
         tables = checks.get("table_audit") if isinstance(checks.get("table_audit"), Mapping) else {}
         totals["hhi_checks"] += int(hhi.get("checks") or 0)
+        totals["hhi_unavailable"] += int(hhi.get("unavailable") or 0)
         totals["hhi_violations"] += int(hhi.get("violations") or 0)
         totals["weight_checks"] += int(weights.get("checks") or 0)
         totals["weight_violations"] += int(weights.get("violations") or 0)
