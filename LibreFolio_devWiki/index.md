@@ -81,6 +81,7 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/transfer-auto-cost-from-sending-broker]] | **P, plan 40.** A TRANSFER's receiving side in Auto averages its partner's broker up to the partner's date, without the outgoing leg (`_auto_cost_source`, `d7c148564`, train 28): a whole position no longer gets 0, an updated or promoted transfer no longer averages the receiver; the date confirmed by the developer | 2026-10-09 | backend, wac, cost-basis, transfer, promote |
 | [[decisions/scalable-two-accounts-two-plugins]] | **S, plan 37.** A Scalable customer is two brokers with two plugins (`broker_scalable`, `broker_scalable_deposit`, shared `_scalable.py`) that refuse each other's file with a code, so the default plugin names the account; the transaction id in the description; PRIME trades on the gross, income net + tax; exporter 1.0.1; twelve coded notices; out of alpha on 2026-10-12 (M, batch 21) | 2026-10-10 | brim, import, scalable, plugins, exporter |
 | [[decisions/import-wizard-default-plugin-check]] | **S, plan 37.** `cannot_parse_detail` (`BRIMRefusal`) and `GET …/plugin-check`: after the upload, a file its broker's default plugin cannot read opens a modal — Move, Keep here, Remove — for every broker; report-set files exempt, fallback plugins only as a last destination | 2026-10-09 | brim, import-wizard, plugins, api |
 | [[decisions/broker-icon-order-dedicated-plugin-first]] | **S, step 12d.** Custom icon → dedicated plugin → portal favicon → fallback plugin → briefcase (developer, 2026-10-10); one threshold, `FALLBACK_PLUGIN_PRIORITY_LIMIT = 50`, pinned by a backend test; a selector after 1.2 (C-40) | 2026-10-10 | frontend, brokers, icons, plugins |
@@ -249,6 +250,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/promote-skipped-cost-basis-check]] | **P, plan 40.** `validate_cost_basis` skipped promoted rows, so a receiving side without a cost was saved and counted at zero; now `costBasisRequired` on the `create` or the `promote` operation (`d7c148564`) | resolved | backend, cost-basis, promote, validation |
 | [[problems/import-wizard-next-before-brokers-loaded]] | **M-16, plan 44 (I).** Step 1's «Next» worked before the broker list arrived, so step 2 hid the uploaded files; now every broker load in flight (`trackBrokerLoad`, a plain counter, not `$state`) keeps «Next» disabled, `loadBrokers` uses `allSettled` (`3cd25af4f`, train 48) | resolved | frontend, import-wizard, svelte5, race-condition |
 | [[problems/merged-transfer-not-seen-as-duplicate]] | **S, plan 37 §9.** A DEPOSIT or WITHDRAWAL already merged into a `CASH_TRANSFER` came back as new on re-import; it now also matches the merged legs (`_MERGED_LEG_TYPES`), «probable» when the merged text contains it | resolved | brim, duplicates, cash-transfer |
 | [[problems/ai-export-probe-rejected-unavailable-hhi]] | **C-55.** The real-prompt probe flagged an empty broker's `null` HHI as invalid; the contract is HHI and largest weight `null` together, never 0. The probe now accepts and counts it; prompts byte-identical, no bump | resolved | ai-export, probe, hhi, contracts |
@@ -392,6 +394,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/phase00-transfer-cost-basis-2026-10]] | `Release_2/phases/40_transferCostBasis/` — workstream P: the cost of transfers in Auto and of promotes; archived after the 09/10 ingest | 2026-10-12 | phase0, wac, cost-basis, transfer, promote |
 | [[sources/phase00-import-wizard-broker-gate-2026-10]] | `Release_2/Phase_0/44_importWizardBrokerGate/` — workstream I: the wizard waits for the broker list (M-16); F-AI (b) into the backlog | 2026-10-12 | phase0, import-wizard, svelte5, testing |
 | [[sources/phase00-brim-scalable-2026-10]] | `Release_2/Phase_0/37_brimScalable/` — workstream S: the Scalable importers and the exporter's recap; M's batch 21, the page out of alpha | 2026-10-12 | phase0, brim, scalable, import-wizard, bulk-editor |
 | [[sources/phase00-data-quality-e2e-2026-10]] | `Release_2/Phase_0/46_dataQualityE2E/` — workstream V: data-quality warnings on real data, MOCKFX, legacy rows, the refresh after the sync; V-1…V-7 open | 2026-10-12 | phase0, testing, e2e, data-quality |
@@ -516,6 +519,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Step B3 — plan 40 (P).** A transfer's receiving side in Auto takes the sending broker's average when the units left; a promote asks for a missing cost | [[sources/phase00-transfer-cost-basis-2026-10]] *(3 pages — 1 decision, 1 problem, 1 source; see log)* |
 | 2026-10-12 | **Step B2 — plan 44 (I, M-16).** The import wizard waits for the broker list; a counter that must not be reactive; F-AI (b) now a backlog row; plan 41's registry row refreshed | [[sources/phase00-import-wizard-broker-gate-2026-10]] *(2 pages — 1 problem, 1 source; see log)* |
 | 2026-10-12 | **Step B1 — the Scalable importers** (plan 37 of S, the exporter's recap, M's batch 21). Two plugins for two accounts, the wrong-broker check in the import wizard, new + saved pairs in the bulk editor, merged transfers as duplicates, the broker icon order, plugin texts translated by code | [[sources/phase00-brim-scalable-2026-10]] *(7 pages — 4 decisions, 1 problem, 1 concept, 1 source; see log)* |
 | 2026-10-12 | **Lint, step A (`37304d716`, train 57).** Stale statuses corrected against the code: two problems fixed in June and September but still `open`, the TanStack workaround gone, the broker-icon race fixed where it was seen in June but still open elsewhere (assigned to I), [[F-050]]/[[F-089]]/[[F-092]] documented and [[F-075]] superseded; I-08 and K-24 closures in the prose; one inbound link for each of the 24 pages that only the index linked; registry statistics recomputed | *(no new pages; see log)* |

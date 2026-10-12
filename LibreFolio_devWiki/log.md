@@ -2739,3 +2739,25 @@ Updated:
 - [[features/F-049]], [[entities/import-wizard-modal]].
 
 Plan 41's registry row refreshed to `8339b0a06`: bookkeeping only since `f10fcd04a`. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B3 — plan 40 (P): the cost of transfers in Auto and of promotes
+Source: `Release_2/phases/40_transferCostBasis/plan-phase00TransferCostBasis.prompt.md` @ git:`fa109eaa7`; base
+`5350c8e24`. The folder was archived on 2026-10-10, after the archive ingest of 09/10, so the audit found it never
+ingested. Checked on the code at HEAD:
+- `_auto_cost_source()`: the partner's broker, its date, the two exclusions;
+- `_resolve_source_broker_from_link`: gone;
+- `_check_result_create_cost_basis` and `_check_promoted_saved_cost_basis`;
+- tests P30–P35 and G1/G2 by name;
+- the three developer pages, and the theory sentence in all four languages, so the plan's translation residue is
+  closed.
+
+`d7c148564`, the train-28 merge `2a5c15c3c` and `fa109eaa7` are all in HEAD.
+Created: [[decisions/transfer-auto-cost-from-sending-broker]], [[problems/promote-skipped-cost-basis-check]],
+[[sources/phase00-transfer-cost-basis-2026-10]].
+Updated:
+- [[entities/transaction-batch-pipeline]];
+- [[features/F-048]] (a dated note under the Plan D auto-calc: `compute_weighted_avg_cost` no longer exists);
+- [[features/F-097]];
+- [[decisions/financial-math-single-average-cost]], [[decisions/bulk-pairs-new-with-saved]].
+
+Graph: not updated (P-6).

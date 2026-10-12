@@ -52,6 +52,8 @@ Plan 37, §8, and its steps 11, 12b and 12f:
   (`pairAssetMismatch`, `pairQuantityMismatch`), and no merge of a row linked to an asset event
   (`eventTypeIncompatible`).
 - A spec that saves the bulk editor on the shared E2E user with an unseen suggestion now stops on the reminder.
+- The cost check on promotes is lot 40's ([[problems/promote-skipped-cost-basis-check]]); S's spec
+  `tx-bulk-promote-cost-basis.spec.ts` verifies that its refusal lands on the right row of the editor.
 
 ## Links
 

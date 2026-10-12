@@ -38,6 +38,9 @@ basis → balance replay → response*.
   flags. Characterisation tests were written before the extraction; no API, schema, policy or frontend change.
 - Since 2026-10-07 the WAC stage reads the single average-cost function
   ([[decisions/financial-math-single-average-cost]]); the cost-basis stage skips Auto rows (backlog P-1).
+- Since plan 40 (2026-10-09, train 28) the WAC stage averages a TRANSFER's receiving side on its partner's broker as
+  the units left ([[decisions/transfer-auto-cost-from-sending-broker]]), and the cost-basis stage checks the receiving
+  side of a promote too ([[problems/promote-skipped-cost-basis-check]]).
 
 ## History
 - 2026-04-29: unified validate/commit pipeline ([[decisions/unified-batch-pipeline]]).
