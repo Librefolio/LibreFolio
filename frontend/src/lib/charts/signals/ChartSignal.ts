@@ -8,7 +8,13 @@
  * @module charts/signals/ChartSignal
  */
 
+import {fromStore} from 'svelte/store';
+import {_} from '$lib/i18n';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+
+const trackCatalogue = () => fromStore(_);
+/** The catalogue's formatter, tracked like `uiLocale()`; created on the first label, so a module that never labels a signal never reads svelte-i18n. */
+let catalogue: ReturnType<typeof trackCatalogue> | undefined;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PARAM DESCRIPTORS — Read by ChartSettingsModal to render controls
@@ -44,7 +50,11 @@ export interface SignalParamDescriptor {
     min?: number;
     max?: number;
     step?: number;
-    /** Suffix shown inline after the input (e.g. "%/yr") */
+    /**
+     * Unit shown inline after the input: a token written through `signals.units.<token>` in the
+     * interface language (`percentPerYear`, `days`), as the backend's `x-suffix` is; a token with
+     * no key is shown as written (`%`).
+     */
     suffix?: string;
     // ── For type === 'select' ──
     /** Static options list */
@@ -334,6 +344,19 @@ export abstract class ChartSignal {
         const b = new Date(dateB + 'T00:00:00Z');
         // 1 day = 24 * 60 * 60 * 1000 ms. Math.round handles any floating-point drift.
         return Math.round((b.getTime() - a.getTime()) / 86_400_000);
+    }
+
+    /**
+     * A catalogue text for a label, in the interface language.
+     *
+     * Read through `fromStore`, the catalogue is tracked the way `uiLocale()` is: a label built
+     * inside the `$derived` that renders the overlays is rebuilt when the language changes, its
+     * words and its figures together. The figures arrive already written (`formatPercent`,
+     * `formatFixed`), so the message only places them.
+     */
+    protected static text(key: string, values: Record<string, string>): string {
+        catalogue ??= trackCatalogue();
+        return catalogue.current(key, {values});
     }
 
     /**
