@@ -1673,3 +1673,27 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 > - **Cura**: `_project_root()` restituisce `Path(__file__).resolve().parents[__name__.count(".")]`. Dipende dal nome puntato del modulo, non dalla profondità a mano, quindi resta giusta anche se il file si sposta ancora.
 > - **Verde**: `utils version` 13 (11 + 2), `api system` 86, `brim-parse-race` 42. Nessun `VERSION` lasciato nel repo.
 > - **Lezione**: in una rinomina si cercano anche i percorsi calcolati dal file stesso (`__file__`, `parents`), oltre agli import.
+
+### Treno 50 (coordinatore, 2026-10-12)
+- BU1 è nel target: commit `346b7e292` e `390ba7d9a`, merge `bdc078efc`. W aggiorna le righe «Source files» dei moduli spostati.
+
+#### BU2 — le due eccezioni alla regola della foglia ✅ (2026-10-12)
+> **Note implementazione**:
+> - **Precisione del DB**: `backend/app/db/precision.py` (nuovo) prende, invariati, `get_model_column_precision`, `truncate_to_db_precision`, `truncate_priceHistory` e `truncate_fx_rate`, con la docstring d'uso.
+>   - `utils/decimal_utils.py` tiene solo `parse_decimal_value` e non importa più `db.models`, SQLModel né SQLAlchemy. Così `asset/geo` e `fx/currency` non caricano più i modelli al momento dell'import.
+>   - Import riscritti in 7 file: `asset_sources/{price_store,refresh}`, `fx` e i 4 test. `test_decimal_utils` ora importa da due moduli.
+> - **Import pigri**:
+>   - `fx.py`: via i 3 import pigri di `clear_cache`; si aggiunge a quello in cima (`clear_cache, get_ttl_cache`). Nessun test patcha `clear_cache`, quindi nessuna patch diventa muta.
+>   - `config.py`: l'import di `get_git_version` va in cima. `version` non importa niente dall'app, e la patch di `test_version.py` è letta da `get_version_info()` dentro il modulo stesso.
+>   - Con l'import di `backend.app.config` e di `backend.app.main` si vede che non c'è nessun ciclo.
+> - **Testo**: la riga `print_info` di `decimal-precision` nel runner, la docstring di `utils/`, e una frase su `db/precision.py` nel paragrafo di `utils/` in `backend.instructions.md`.
+> - **Regola delle versioni dell'AI Export** (in coda da W):
+>   - una sezione «Versions» in `ai-development.instructions.md`;
+>   - un paragrafo in «ComponentSpec» di `ai_export_composition.md` (docs-writer, `:23-28`), con la devWiki citata come testo (`decisions/ai-export-version-bump-once-per-release`).
+>   - docs-writer ha verificato le affermazioni sul codice: la corrispondenza col segnaposto la controlla `catalog.py` all'import, non il registro.
+> - **Mirati**: decimal-precision 21, numeric-truncation 3, asset-source 61, fx-core 23, fx-conversion 18, version 13, cache-utils 20, financial-math 212.
+> - **Statici** come la base: client generato, dead code, ruff, black. Build stretto e check-links verdi.
+> - `all-backend` sulla 6164: 7/7, **12 411 passed, 28 skipped, 0 failed** (25 min 05 s). Rispetto a BU1 cambia solo un'invocazione, +2: i test della radice di `version.py`. Porta libera; nessun `VERSION` nel repo.
+> - `check_source_paths.py`: 11 percorsi inesistenti (20 occorrenze, 16 pagine). Sono le righe dei moduli di BU1, che aggiorna W.
+
+### Checkpoint BU2 🧊 (2026-10-12) — FROZEN, in attesa del coordinatore
