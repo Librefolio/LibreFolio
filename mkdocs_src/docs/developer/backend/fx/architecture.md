@@ -129,6 +129,6 @@ Every write that changes stored rates drops the two portfolio cache layers, `por
 | Rate deletion (`DELETE /api/v1/fx/currencies/rate`) | `delete_rates_bulk()` | At least one row was deleted |
 
 Both layers also key their entries on an FX fingerprint of the scope
-(`compute_portfolio_fx_cache_identity()` in `portfolio_engine.py`); the explicit clear drops entries
+(`compute_portfolio_fx_cache_identity()` in `financial_math/portfolio/engine.py`); the explicit clear drops entries
 right away instead of leaving them to their TTL. See [Cache Registry & Admin Endpoints](../../architecture/settings_cache.md)
 for the caches themselves.

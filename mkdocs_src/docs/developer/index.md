@@ -48,6 +48,7 @@ Set up your local development environment and learn the daily workflow:
 
 - 📥 **[BRIM (Broker Report Import Manager)](backend/brim/architecture.md)** — CSV/Excel import pipeline, plugin architecture
 - 📈 **[Asset Pricing & Metadata](backend/assets/architecture.md)** — How asset prices and metadata are fetched and managed
+- 🧮 **[Financial Math Layer](backend/financial_math.md)** — The one home of financial calculations: package map, layer rules, guards
 - 📏 **[Price Resolver](backend/transactions/price_resolver.md)** — The single daily valuation-mark source behind NAV/MWRR/TWRR/ROI
 - 💱 **[Foreign Exchange (FX)](backend/fx/architecture.md)** — Multi-provider currency conversion system
     - 🔀 [FX Configuration & Routing](backend/fx/configuration.md) — Chain routing algorithm
