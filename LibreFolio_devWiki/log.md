@@ -2824,3 +2824,81 @@ the registry), [[features/F-004]], [[features/F-005]], [[features/F-008]], [[fea
 [[concepts/svelte5-runes]], [[problems/legacy-component-language-untracked]] (two earlier instances),
 [[problems/i18n-loading-gate-remounts-app]].
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B6a — the Tool platform (C, folder 16): F-106, three decisions
+Source: `Release_2/Phase_0/16_toolPlatform/` (plan, integration manifest, review dossier, hand-off to D) and the
+capacity round `13_pacAllocator/implementation/plan-phase00Step1Round1-ToolPlatformCapacity.prompt.md`, at the
+commits of the registry section; base `8abce8e87`. Step B6 is split in two: the PAC (folder 13) follows as B6b.
+Checked on the code at HEAD:
+- `ToolPlatformPolicy` defaults (1–4 items, 2 lanes, 8 pending, 4 per user, engine 30 s, 1 GiB) and the operation
+  defaults (engine 4 s); `catalog_version` "2"; `_MAX_SERVICES_PER_PLUGIN = 16`; `duplicate_code` and
+  `import_failed` quarantine;
+- `get_current_user` on the three routes; the `spawn` context, `setsid`, the `ready` frame and the `\x00` ACK,
+  `OwnedProcessTree`, `cgroup_v2_hard` and `process_tree_observed`, `claim_engine_window()`;
+- `@register_plugin(ToolPluginRegistry)` on `PacAllocatorTool`, contract and implementation `1.0.0`;
+  `defineToolRenderer('pac_allocator', '1.0.0', …)` in `registry.ts`;
+- the commits `1656aff69`, `bb0cdc334`, `8e7259ecc`, `570beb386`, `4a38b9061`, `3913fe217`, `b82e59ffa`,
+  `0210f9848`.
+
+The dossier's risks of 2026-09-11, re-checked: the old budgets are gone from the user page (fixed); no screen shows
+the memory mode, and `contracts.ts` still waits the platform's client timeout (both still true, recorded in
+[[features/F-106]]). The generated codec files are git-ignored, so no page cites them.
+Created:
+- [[features/F-106]] (registry: 106 features, INFRASTRUCTURE 17);
+- [[decisions/tool-calculation-without-authority]], [[decisions/tool-item-runs-in-owned-process]],
+  [[decisions/tool-contract-from-pydantic-compiled-renderer]];
+- [[sources/phase00-tool-platform-2026-09]].
+
+Updated: [[features/registry]], [[domains/infrastructure]], [[features/F-059]], [[features/F-105]] (the unused
+`tools.hub` anchor), [[decisions/provider-registry-decision]], [[decisions/plugin-folders-and-split-i18n]],
+[[concepts/backend-only-calculations]].
+
+Also: [[decisions/onboarding-existing-users-seeded-skipped]] records the developer's decision of 2026-10-12, relayed by
+the coordinator — the `import.gapFix` coachmark that older accounts meet once is accepted, not a defect («Va bene così:
+lo step è una novità della 1.2 e il coachmark la presenta una volta sola»); migration 004 does not change.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B6b — the PAC allocator (D, folder 13): F-107, F-108 planned, six decisions, seven problems
+Source: `Release_2/Phase_0/13_pacAllocator/` — the five designs, `review/`, the fifteen `drafts/` (characterised, not
+re-told) and eighteen plans of `implementation/` (Step 1, Round 1 went with B6a), at the commits of the registry
+section; base `96fd88fec`. Read through eight digests of the plans, then checked on the code at HEAD:
+- `pyscipopt = "==6.2.1"` in the `Pipfile`; the seven `result_state` values; `policy: Literal["proportional"]` for
+  the PAC; the Rebalancer requests in the schema with no service, `normalize_rebalancer_plan` reached only by tests;
+- the plugin's `claim_engine_window(post_engine_reserve_ms=_POST_ENGINE_RESERVE_MS)` (2,000 ms) and
+  `solver_time_budget_seconds=window.timeout_ms / 1000`; the 3.5 s fallback marked «Not the product budget»;
+- `STAGE_PIN_RELATIVE_SLACK = 1e-12`, `_flag_contradicted_bounds`, `SolverInfeasibilityContradictedError`,
+  `_published_gap`; `_fee_clamp_upper`, `_fee_cap_excess`; `_require_credit_tie_free` gone;
+- `validate_fx_coherence`, `allocation.fx_rate_inconsistent`, `allocation.exposure_total_exceeds_one`; `rounding_delta`
+  as `ExactNumber` (`ratio_to_exact_number`); `conversion_mode` («It changes no figure of the plan»),
+  `PlannerConversion`, `NoOrderCap`; `currency_specs` gone; `json_schema_serialization_defaults_required=True`, no
+  `default_factory`, the `~zero~` fee instances;
+- the copies endpoint (owner-only, 403, `no-store`), `POST /portfolio/wac` behind `get_current_user`,
+  `refreshCopiedFacts()`; `{' '}` at the routing intro; the `DataTable` sticky-header and actions selectors;
+- the regression tests named on the pages, among them `test_exhaustive_oracle_is_test_only`; the 47 commit hashes on the
+  pages touched by this step, all ancestors of HEAD.
+
+Corrections against the sources: the README calls the Remediation's §5 «sette decisioni del developer» — they are
+seven questions for the developer, one answered later (Q-C0-4); the compaction's «Il fingerprint cambia una volta,
+qui» held for that slice only — the FX fix and the rounding fix moved the `1.0.0` fingerprint again; the README's note
+«Il P1 rimosso il 24/09» dates a removal committed on 2026-09-21 (`b82e59ffa`).
+Created:
+- [[features/F-107]] (CALCULATIONS) and [[features/F-108]] (`planned`); registry at 108 features;
+- [[decisions/pac-scip-searches-exact-replay-certifies]], [[decisions/pac-lexicographic-fixed-l2-objective]],
+  [[decisions/pac-fx-one-rate-map-direct-conversions]], [[decisions/pac-draft-copies-from-owned-data]],
+  [[decisions/pac-contract-compacted-before-release]], [[decisions/pac-p1-prototype-removed]];
+- [[problems/pac-solver-ran-on-default-budget]], [[problems/pac-scip-tolerance-misreported-proof]],
+  [[problems/pac-fee-floor-and-cap-misread]], [[problems/pac-foreign-funding-calculation-failed]],
+  [[problems/pac-tool-error-instead-of-plan]], [[problems/svelte5-trims-leading-space-in-tag]],
+  [[problems/datatable-actions-column-on-mobile]] (open, a hypothesis);
+- [[sources/phase00-pac-rebalancer-design-2026-09]], [[sources/phase00-pac-implementation-2026-10]].
+
+Updated: [[features/registry]], [[domains/calculations]], [[features/F-106]], [[features/F-097]],
+[[decisions/pac-rounding-against-the-plan]], [[decisions/tool-calculation-without-authority]],
+[[decisions/wac-target-currency-last-acquisition]], [[decisions/financial-math-one-home]],
+[[decisions/html-escape-at-the-source]], [[concepts/backend-only-calculations]], [[concepts/svelte5-runes]],
+[[problems/svelte-i18n-formatter-cache-ignores-locale]], [[problems/bulk-modal-sticky-z-index]],
+[[problems/datatable-column-resize-noop]], [[sources/phase00-tool-platform-2026-09]].
+
+Note for step D: the B6a and B6b pages cite `backend/app/services/tool_plugins/pac_allocator.py`, which U-1 moved to
+`tool_plugins/pac_allocator/plugin.py` in the target (train 61); they follow the map with the other plugin paths.
+Graph: not updated (P-6).
