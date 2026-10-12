@@ -28,15 +28,52 @@ $$
 | Realized | Sum of (sell proceeds − historical cost of the units sold) for SELLs in period; proceeds are converted at the sale date |
 | Income | DIVIDEND + INTEREST in period |
 | FeesTaxes | FEE + TAX in period |
-| Other | Residual that closes the identity |
+| Other | What closes the identity: the exchange result on cash held in another currency (FX on cash) plus a residual |
 
-The residual is computed as:
+Other is computed as:
 
 $$
 \mathrm{Other} = \mathrm{PnL}_{\text{period}} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Because the cost basis keeps its historical exchange rates (see [Book Value](book-value.md)), the effect of exchange rates on foreign assets is part of $\Delta\mathrm{UGL}$, not of Other. What Other still holds is what the four components cannot see, for example the value of assets travelling between two brokers on a boundary day, or a sale left out of Realized because its proceeds could not be converted or its position's cost is incomplete.
+Because the cost basis keeps its historical exchange rates (see [Book Value](book-value.md)), the effect of exchange rates on foreign assets is part of $\Delta\mathrm{UGL}$, not of Other. Cash held in another currency is different: NAV and Book both value it at each day's rate, so its exchange-rate effect cancels in the unrealized gain/loss and is not in $\Delta\mathrm{UGL}$. It is the first part of Other, the [FX on cash](#fx-on-cash) of each broker $b$, which the Performance view shows per broker:
+
+$$
+\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
+$$
+
+The residual holds what neither the four components nor the exchange result on cash can see:
+
+- the exchange-rate move of cash while it travels between two brokers: in transit, it belongs to no broker's balance;
+- the cost of a currency exchange, at one broker or across two: −1,000 USD worth €920 at the day's rate, exchanged into +€900, gives −€20, which is neither a fee nor a sale;
+- the value of assets travelling between two brokers on a boundary day;
+- a sale left out of Realized because its proceeds could not be converted or its position's cost is incomplete.
+
+### 💵 FX on Cash {: #fx-on-cash }
+
+For each broker $b$ holding cash in a currency other than $C^*$, over the period $(t_0, t_1]$, $t_0$ being the opening state:
+
+$$
+\mathrm{FXonCash}_b = \sum_{c \neq C^*} \Bigl[N_{b,c}(t_1)\,\mathrm{fx}(c, C^*, t_1) - N_{b,c}(t_0)\,\mathrm{fx}(c, C^*, t_0)\Bigr] - \sum_{\substack{m \in (t_0, t_1] \\ \mathrm{ccy}(m) \neq C^*}} s_m \cdot \mathrm{amount}_m \cdot \mathrm{fx}(\mathrm{ccy}(m), C^*, d_m)
+$$
+
+$N_{b,c}(t)$ is the balance $b$ holds in currency $c$ on $t$, scaled by the broker's share, and $\mathrm{fx}$ the latest rate on or before the day. The second sum runs over $b$'s movements in a foreign currency dated in the period: each amount, scaled by the share $s_m$, at the rate of its own date $d_m$. The first term is the change in value of the foreign cash, the second what the movements brought in or took out: the difference is what the exchange rates did to the cash the broker held. It equals the exchange results the engine books on the period's rate-change days ([Portfolio Engine — §6](index.md#exchange-result-on-foreign-cash)). Cash in $C^*$ has none.
+
+??? example "Example: dollars at a broker on a euro dashboard"
+
+    A broker holds 1,000 USD for the whole period while the rate goes from 0.90 to 0.92 EUR per USD:
+
+    $$
+    \mathrm{FXonCash} = 1{,}000 \times 0.92 - 1{,}000 \times 0.90 = +20 \text{ EUR}
+    $$
+
+    With a deposit of 500 USD in the middle of the period at 0.91, and 0.92 at the end:
+
+    $$
+    \mathrm{FXonCash} = 1{,}500 \times 0.92 - 1{,}000 \times 0.90 - 500 \times 0.91 = 1{,}380 - 900 - 455 = +25 \text{ EUR}
+    $$
+
+    The deposit entered the capital at €455; the +€25 is what the dollars gained against the euro while the broker held them.
 
 ---
 

@@ -138,7 +138,7 @@ Two producers build this issue, both through `build_data_quality_report(missing_
 
 | Source | Conversions | Dates kept |
 |--------|-------------|------------|
-| The summary's own conversions | Transaction cash amounts and priced in-kind adjustments at their dates; holding prices and cash balances at the end date; the previous day's price for Δ1; Yield on Cost income | As requested |
+| The summary's own conversions | Transaction cash amounts at their dates, from the engine's native cash (`NativeCash.missing_conversions()`); holding prices at the end date; the previous day's price for Δ1; Yield on Cost income | As requested |
 | The engine, through `_engine_missing_fx_pairs()` | **Movements** — `PortfolioCalculationResult.missing_fx`: the average cost of each acquisition (report and asset leg), cash amounts, external cash flows, the cost of assets in transit (at the arrival date) | Every date, whenever the movement happened |
 | | **Valuations** — `DailyPortfolioState.missing_fx_pairs`: market prices and in-transit cash, day by day | Only the days of the period shown, `[date_from, end date]`; the first one is the period's opening state |
 

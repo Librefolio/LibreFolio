@@ -30,12 +30,12 @@ The chart remembers your last view, P&L sub-view included, in this browser and f
 | Element | Color | Meaning |
 |---------|-------|---------|
 | Area — **Purchase Cost** | Blue | What the positions you hold cost you (average cost × quantity) |
-| Area — **Returns** | Emerald | Returns held as cash (dividends, interest, realized gains not yet reinvested) |
+| Area — **Returns** | Emerald | Returns held as cash (dividends, interest, realized gains not yet reinvested, exchange-rate gains on cash you hold in another currency) |
 | Area — **Capital** | Grey-green | Deposits not yet invested, held as cash |
 | Line — **[Net Asset Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Dark green solid | Total portfolio value at current market prices |
 | Line — **[Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Grey dashed | Net external capital contributed over time |
 
-**The gap between the two lines is your Total P&L**: every gain ever made (unrealized, realized, interest, and dividends) minus fees and taxes. The tooltip shows both lines, the Total P&L in green or red, and the breakdown: **Assets at Cost** (the blue area, assets moving between your brokers included), **Returns**, and **Capital**.
+**The gap between the two lines is your Total P&L**: every gain ever made (unrealized, realized, interest, dividends, and exchange-rate gains or losses on cash held in another currency) minus fees and taxes. The tooltip shows both lines, the Total P&L in green or red, and the breakdown: **Assets at Cost** (the blue area, assets moving between your brokers included), **Returns**, and **Capital**.
 
 **Assets valued at their purchase price**, such as P2P loans with no live market price, keep NAV close to Purchase Cost, so the gap can be thin: read **Total P&L** in the tooltip.
 

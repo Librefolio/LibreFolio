@@ -22,6 +22,14 @@ $$
 \cdot \mathrm{fx}(\mathrm{ccy}_{mark}, C^*, t)
 $$
 
+and the cash of each broker, kept in the currencies it was recorded in and valued at the rate of $t$:
+
+$$
+\mathrm{Cash}(t) = \sum_{b \in S} \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t)
+$$
+
+with $N_{b,c}(t)$ the balance broker $b$ holds in currency $c$ on $t$, scaled by the broker's [ownership share](../../../../user/brokers/sharing.md), and $\mathrm{fx}(c, C^*, t)$ the latest rate on or before $t$ ($1$ for $c = C^*$). Cash held in another currency therefore moves NAV when its exchange rate moves.
+
 🔗 See **[Portfolio Engine — §5 Aggregation](index.md#5-portfolio-aggregation)** for full derivation.
 
 ---
@@ -35,7 +43,7 @@ The mark $\operatorname{mark}(a,t)$ comes from the unified resolver:
 3. **CARRIED** — last observation before $t$, carried forward (LOCF).
 4. **MISSING** — no observation on or before $t$.
 
-Marks remain in native currency until valuation; FX conversion happens at $t$. WAC is **never** used for valuation. See [Price Resolution](price-resolution.md).
+Marks remain in native currency until valuation, and so do cash balances, each in the currency it was recorded in; FX conversion happens at $t$. WAC is **never** used for valuation. See [Price Resolution](price-resolution.md).
 
 ---
 
