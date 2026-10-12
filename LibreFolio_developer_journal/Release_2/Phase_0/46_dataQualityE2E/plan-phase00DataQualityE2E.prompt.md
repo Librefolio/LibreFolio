@@ -1456,3 +1456,335 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
     a 1 worker è verde;
   - il gate di utility è girato con le cure di V-20 già nella worktree: `auth`, `app-start-auth` e `files` sono verdi
     anche nel giro consolidato.
+
+> Checkpoint 2b committato dal coordinatore: 7 commit da `1b1e58fd0` a `3d7635efb`. Poi il ramo è stato portato sul
+> target `b1c8f22df`: ora sono a **`bb2519108`**, pulito (12/10). La base nuova contiene il CP1 di M-18 (numeri nella
+> lingua della UI) e i treni 65-70. Decisioni del coordinatore:
+> - V-22 va nelle domande per lo sviluppatore, e non lo tocco;
+> - V-21 e V-23 restano dopo la 1.2; il T1 di V-21 lo decide lo sviluppatore.
+
+### 12.9 Convalida della revisione combinata e lacune 1.2
+
+- **Convalida** (in corso, 12/10): i 15 spec toccati dalla 2b, `--fresh-run --workers 4`, una chiave alla volta. Dopo
+  ogni giro il DB si confronta col seed della base nuova, fotografato da un giro innocuo
+  (`/tmp/libreFolio_v_combo_dbcheck.py`; riepilogo in `/tmp/libreFolio_v_combo_summary.log`). Un rosso si triagia
+  prima di toccare qualunque cosa.
+- **Lacune**, nell'ordine 2, 1, 6, 4, 7, 5, 3, con un checkpoint ogni due o tre. I test-author scrivono in parallelo,
+  la corsia si dà a turno:
+  - lacuna 2: `g2-fx-on-cash`. Un Vitest della riga «FX on cash» (`OtherPeriodEffectsTable.test.ts`); un E2E su dati
+    veri con cassa in una valuta riservata e tassi MANUAL, con oracolo; la cassa d'intestazione uguale alla somma
+    delle card;
+  - lacuna 1: `g1-risk-real`. Un E2E con il `/risk/query` vero fino allo schermo, L1 (VaR, CVaR) e una cifra L4, con
+    la risposta validata dallo schema Zod generato.
+- ✅ **Convalida della revisione combinata** (12/10, 21:18-21:50, `bb2519108`). 15 spec su 14 chiavi, `--fresh-run
+  --workers 4`, una alla volta. Load average da 23 a 178 su 10 core, per la coverage sulla 6176.
+  - **Esito**: tutto verde.
+    - Transazioni: `tx-commit-all-types` 19, `transactions-modals` 19, `tx-wac-formmodal` 10, `tx-wac-unit-toggle` 4,
+      `tx-split-promote` 6, `tx-paired-edit` 4, `tx-event-picker` 5, `tx-import-resolution` 15, `tx-clone` 8,
+      `tx-wac-bulk` 11.
+    - Broker e utenti: `list` 9, `multi-user` 2.
+    - Utility: `auth` 29, `app-start-auth` 3, `files` 28.
+  - **DB**: dopo 13 chiavi su 14 è identico al seed della base nuova (11 utenti, 8 broker, 30 accessi, 76 transazioni,
+    17 asset, 11 eventi, 24 rotte, 4125 tassi, scheduler e `e2e_test_user` invariati).
+  > **⚠️ Fuori pista: `files` lascia avanzi** (triage letto dal DB, in sola lettura). Restano un broker, «Preview Broker
+  > <ts>» con OWNER `e2e_test_user`, e 6 upload statici (12 file con i metadati). Non vengono dalla 2b:
+  > - `files.spec.ts:886`, «opens table preview for BRIM files», crea il broker e un file BRIM e non li cancella mai.
+  >   È la classe A7, che nell'audit avevo messo per errore in B;
+  > - gli upload sono dei test di File Preview che non cancellano mai, già notati in V-21.
+  >
+  > Ho proposto al coordinatore di curarli nel checkpoint delle lacune 2 e 1, con un commit a parte.
+- **Lacuna 2**: `g2-fx-on-cash` ha scritto `OtherPeriodEffectsTable.test.ts` (Vitest 4/4) e
+  `frontend/e2e/portfolio/foreign-cash-real.spec.ts`.
+  - Valute riservate: NAD su desktop, MZN su mobile.
+  - Oracolo esatto: FX on cash = 1000 × (1/1,6 − 1/1,25) = **−175 EUR**; cassa 1310 → 1135 fra due giorni consecutivi,
+    uguale alla somma delle card.
+  - Registrazioni: `add_test("foreign-cash-real")` in `_frontend_portfolio.py`, e una riga del Vitest nell'elenco
+    `front_component_unit` di `_frontend_utility.py`, che ora è di T. Ho chiesto al coordinatore.
+  - In corsia dalle 21:5x.
+- **Lacuna 1**: `g1-risk-real` ha scritto `frontend/e2e/portfolio/risk-real.spec.ts`, con due test su account
+  usa-e-getta che hanno Apple e Microsoft del seed:
+  - R1, L1: VaR giornaliero, CVaR giornaliero e mensile, bin e osservazioni;
+  - R2, L4: il replay reale, il totale e le righe per asset;
+  - ogni risposta `/risk/*` è validata dallo schema Zod.
+
+  È registrato in `_frontend_portfolio.py`, e aspetta la corsia.
+- **Decisioni del coordinatore sulla convalida** (12/10). La 2b entra nel treno 72 (`bb2519108`) insieme al lotto 48
+  di I.
+  - Gli avanzi di `files` si curano nel checkpoint delle lacune 2 e 1, con un commit a parte. L'agente è
+    `b-files-leak`. Il broker e il file BRIM di `:886` vanno in `try/finally` con `deleteOwnedBrokerAndFiles`; gli
+    upload della File Preview, in `ownedStaticFiles`.
+  - **Classe di `:886`, corretta**: è A, non B. Crea un broker permanente di `TEST_USER` e non ha nessuna pulizia.
+  - `_frontend_utility.py` è di **I** dal treno 70, non di T. La riga del Vitest in `front_component_unit` resta nel
+    mio commit, perché è un'aggiunta. Se al merge si scontra con le righe di I, si tengono tutte e due.
+- In scrittura: le lacune 6 (`g6-account-delete`) e 4 (`g4-yoc`). Ordine della corsia: g2, g1, `files`, g6, g4.
+- ✅ **Lacuna 2, verificata** (12/10). `g2-fx-on-cash`.
+  - **Vitest** `OtherPeriodEffectsTable.test.ts`, 4/4. Controlla l'etichetta dalla chiave `dashboard.fxOnCash`, letta in
+    una lingua finta `⟦key⟧`; il segno (+, −, niente sullo zero, «—» quando manca); la valuta passata; l'ordine e le
+    chiavi; la cella del P&L.
+  - **E2E** `portfolio/foreign-cash-real.spec.ts`, su un account usa-e-getta e con tassi MANUAL, valute riservate NAD
+    e MZN:
+    - `other_effects` è uguale alle righe attese: FX on cash **−175 EUR**, cioè 1000 × (0,625 − 0,8); prima viene il
+      reddito, e non c'è residuo;
+    - in una finestra in cui il tasso non si muove, la riga FX non c'è;
+    - due report a un giorno di distanza danno 1310 → 1135 di cassa e +10 → −165 di guadagno, ogni volta uguali alla
+      somma delle card (`summary.by_broker`), con i saldi nativi invariati;
+    - sullo schermo, net worth `113500` e la riga FX `17500` col meno.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | E2E `--fresh-run --workers 1` | 1/1 | 47 → 38 |
+    | E2E `--fresh-run --workers 4` | 1/1 | 33 → 22 |
+    | `check-orphans` | pulito (112 spec, 353 unit) | — |
+
+  - Nessun avanzo. svelte-check 0 errori; prettier e tsc puliti.
+  - Registrazioni: `foreign-cash-real` in `_frontend_portfolio.py`; il Vitest in `front_component_unit` di
+    `_frontend_utility.py`, file di I, riga aggiunta e tenuta d'accordo col coordinatore.
+  > **Note implementazione**: le card dei broker e la barra della cassa nel KPI non hanno testid. Le card si leggono da
+  > `summary.by_broker`; su un account di sola cassa il net worth è uguale alla cassa. L'attributo possibile è
+  > `broker-card-nav-{id}` in `BrokerCard.svelte`: per ora è solo una nota.
+- ✅ **Lacuna 1, verificata** (12/10). `g1-risk-real`, `frontend/e2e/portfolio/risk-real.spec.ts`. Due test paralleli,
+  ognuno su un account suo con un broker, un deposito USD e 10 Apple e 10 Microsoft del seed, comprati 200 giorni fa al
+  prezzo del seed. Prima il test verifica che i prezzi bastino: almeno 60 giorni e un prezzo recente. **Nessun
+  `page.route`.**
+  - **R1, L1**: CVaR giornaliero e mensile, VaR giornaliero, bin e osservazioni a schermo, uguali al `/risk/query`
+    vero. Nessuno stato d'errore o vuoto, e le quattro analitiche L1 sono `ok`. Valori visti: VaR 2,01%, CVaR 2,40% e
+    11,57%.
+  - **R2, L4**: il replay storico vero. Il totale (−5,00%) e il rendimento e il contributo per asset coincidono con il
+    backend.
+  - Ogni risposta `/risk/*` passa lo schema Zod generato.
+  - Si confronta l'ultima risposta di ogni tipo, a pannello assestato; le cifre per segno e numero, entro mezza unità
+    dell'ultima cifra mostrata.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 2/2 | 16,9 → 24,5 |
+    | `--fresh-run --workers 4` | 2/2 | 25,3 → 32,4 |
+    | `check-orphans` | pulito | — |
+
+  - Nessun avanzo; prettier e tsc puliti. Registrato in `_frontend_portfolio.py` (`risk-real`).
+  > **⚠️ Fuori pista**, osservazioni sul prodotto, non bloccanti:
+  > - L1 non mostra mai il VaR come cifra a sé. Le card mostrano il CVaR, e il VaR giornaliero compare solo nella frase
+  >   dell'istogramma; quello mensile mai. Il `secondaryLoss` calcolato da `buildHurtRows` non viene reso. Sembra
+  >   voluto;
+  > - `risk-replay-total` è una frase tradotta che contiene percentuale e importo. Il test prende la percentuale dal
+  >   `%`, ma per una lettura rigorosa servirebbe un elemento a parte.
+- ✅ **Gate `front-portfolio all` con i due spec nuovi** (12/10, `--fresh-run --workers 4`, load 22,1 → 45,3): E2E 18 +
+  **162/162**, Vitest 1221/1221 (`/tmp/libreFolio_v_cpA_gate_front-portfolio_all.log`). In corso
+  `front-utility component-unit`, dove è registrato il Vitest nuovo.
+- ✅ **Attributi per la lacuna 6** (12/10, aggiunti da me, solo attributi). In
+  `frontend/src/lib/components/settings/tabs/ProfileTab.svelte`, nel dialogo di cancellazione dell'account:
+  `data-testid="profile-delete-confirm-input"` sul campo dello username, `profile-delete-confirm` sul pulsante di
+  conferma e `profile-delete-cancel` su Annulla. Il dialogo chiede lo username, non la password. Prettier pulito,
+  Vitest `ProfileTab.test.ts` 51/51.
+- **Pronti per la corsia**:
+  - `b-files-leak`. `ownedStaticFiles` sale a «Files Page», e ci si iscrive anche «can upload a file to static
+    storage», sesto upload perso. Il broker BRIM di `:886` si cancella in un `afterEach`, che ha un suo slot di tempo:
+    un `finally` sarebbe tagliato dal timeout. `createBroker` usa `uniqueSuffix()`;
+  - `g4-yoc` (`yield-on-cost-real.spec.ts`):
+    - Y1: un asset su due broker, con YOC 3,00% e 1,20% per (asset, broker), contro 2,10% se fosse per asset;
+    - Y2: il percorso P-10 dà «—» con l'icona, poi, dopo un costo esplicito di 0, 4,00%;
+  - `g6-account-delete` (`brokers/account-deletion.spec.ts`), registrato in `_frontend_user.py`.
+- ✅ **Gate `front-utility component-unit`** (12/10, load 45,3 → 99,8): 115 file, **3010/3010**, con il Vitest nuovo della
+  lacuna 2 (`/tmp/libreFolio_v_cpA_gate_front-utility_component-unit.log`).
+- ✅ **Avanzi di `files.spec.ts`, cura** (12/10). `b-files-leak`; ha toccato solo lo spec.
+  - `ownedStaticFiles` e il suo `afterEach` salgono a «Files Page».
+  - Il sesto upload perso era di «can upload a file to static storage»: ora legge la risposta del suo `POST /uploads`
+    e iscrive il file.
+  - I test di anteprima di markdown, immagine, dettaglio, zoom, commento, host, fallback, modifica, menu e comandi
+    iscrivono il loro file. Il `finally` usato solo per cancellare è tolto.
+  - Il broker e il file BRIM di `:886` si cancellano in un `afterEach` di «File Preview» con
+    `deleteOwnedBrokerAndFiles`: un `finally` sarebbe tagliato dal timeout, e la sua `expect` coprirebbe il rosso del
+    test.
+  - `createBroker` usa `uniqueSuffix()`.
+  - **Prove**:
+
+    | Giro | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 28/28 | 72,3 → 34,0 |
+    | `--fresh-run --workers 4` | **24/28** | 32,6 → 52,1 |
+    | i 4 rossi da soli, a 1 worker | 4/4 | 42,4 → 54,8 |
+
+  - Dopo i tre giri il DB è al seed (11/8/30/76/17), `custom-uploads` resta a 137 e nessun upload della run è rimasto;
+    `broker_reports` resta a 16 file di dati.
+  - Prettier e tsc puliti.
+  > **⚠️ Fuori pista: i 4 rossi a 4 worker sono carico.** Sono le prime quattro anteprime aperte dalla griglia
+  > (immagine, immagine con zoom, commento PDF, host PDF), ferme con `file-preview-shell` `data-busy="true"` fino ai 30
+  > s. Cadono prima di qualunque riga cambiata. Erano già le più lente nel giro verde sulla base (11-17 s), e tutto
+  > girava circa due volte più piano. Il meccanismo probabile, non dimostrato, è la coda delle miniature nel thread
+  > pool del backend. Rilancio `files` a 4 worker con meno carico prima del checkpoint. `custom-uploads` parte da 137
+  > e non da 125 perché i 6 upload persi dal giro di convalida delle 21:49 restano: il populate non pulisce quella
+  > cartella.
+- ✅ **Lacuna 4, verificata** (12/10). `g4-yoc`, `frontend/e2e/portfolio/yield-on-cost-real.spec.ts`, registrato come
+  `yield-on-cost-real`. Due test su account usa-e-getta, niente route né mock.
+  - **Y1**: un asset manuale su due broker, con dividendi di 100 giorni fa, fuori dal periodo ma dentro la finestra YOC.
+    - API: un valore per (asset, broker), esatto: 30/10 ÷ 100 = **3,00%** e 12/8 ÷ 125 = **1,20%**, contro 2,10% se
+      fosse per asset;
+    - finestra, `first_pair_transaction_date`, redditi e base di costo coerenti;
+    - lo schermo mostra le cifre `300` e `120`, sulla Dashboard e sulla pagina del broker B.
+  - **Y2**: il percorso P-10, con un costo ignoto e un dividendo di 40.
+    - API: `unavailable`/`missing_wac` con il reddito contato;
+    - la cella mostra il trattino `-` con l'icona, senza cifre;
+    - dopo un costo esplicito di 0, WAC 50 e **4,00%**.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 2/2 | 25,1 → 25,4 |
+    | `--fresh-run --workers 4` | 2/2 | 25,4 → 36,3 |
+    | `check-orphans` | il suo spec registrato; l'unico orfano era lo spec di g7, non ancora registrato | — |
+
+  - Nessun avanzo; prettier e tsc puliti.
+  > **Note implementazione**: il YOC usa il trattino `-`, mentre le altre celle vuote usano `—`. Doc e Vitest dicono
+  > così, quindi è voluto, e lo spec asserisce il trattino. Y2 verifica in apertura che il percorso del costo ignoto
+  > sia ancora aperto, come V-4 per E2.
+- **Lacuna 7**: `g7-pdf-offline` ha scritto `frontend/e2e/files-pdf-offline.spec.ts`.
+  - Ogni richiesta fuori origine è abortita e registrata.
+  - Il PDF latino è costruito nel test.
+  - Asserisce `file-preview-pdf` `data-state="ready"` e zero richieste esterne; un GET del motore pdfium e il rifiuto
+    di jsDelivr confermano che il log vede le richieste.
+  - È registrato in `_frontend_utility.py`, file di I, con righe aggiunte. Aspetta la corsia dopo g6.
+- ✅ **Lacuna 6, verificata** (12/10). `g6-account-delete`, `frontend/e2e/brokers/account-deletion.spec.ts` (categoria
+  `front-user`, registrato in `_frontend_user.py`).
+  - **Setup via API**: utenti A e B usa-e-getta, non admin. Il broker X ha A come unico owner e B come viewer, con un
+    deposito e un report. Il broker Y ha A e B come owner, con un deposito.
+  - **Prima della cancellazione**: accessi e letture verificati come B.
+  - **La cancellazione**: A entra dalla UI e cancella l'account dal dialogo vero, con gli attributi aggiunti. Il
+    pulsante resta disabilitato finché lo username non è esatto, e `DELETE /auth/users/me` risponde 200.
+  - **Dopo**:
+    - A è uscito: `/` e `login-page`; `/auth/me` risponde 401, anche alla vecchia sessione API, e un nuovo login fallisce;
+    - come B: X, i suoi accessi e il suo report rispondono 404, e X sparisce dall'elenco;
+    - Y resta, con B unico owner e nessuna riga di A, e resta leggibile solo il deposito di Y.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 1/1 | 32,5 |
+    | `--fresh-run --workers 4` | 1/1 | 34,1 |
+    | `check-orphans` | pulito: 115 spec, 353 unit, 260 backend | — |
+
+  - Nessun avanzo. Gli id non si riusano, quindi il 404 di X non può essere un broker più nuovo di qualcun altro.
+  - Prettier e tsc puliti.
+- ✅ **Lacuna 7, verificata** (12/10). `g7-pdf-offline`, `frontend/e2e/files-pdf-offline.spec.ts`, registrato come
+  `front-utility files-pdf-offline` in `_frontend_utility.py` (di I, 20 righe aggiunte).
+  - Prima della prima navigazione ogni richiesta del contesto viene registrata, e ogni richiesta fuori origine è
+    rifiutata (`internetdisconnected`), non finta.
+  - Un PDF latino di una pagina, costruito nel test, raggiunge `file-preview-pdf[data-state=ready]`.
+  - **Zero richieste ad altre origini**: 144 richieste, tutte a `localhost:6175`.
+  - Il GET di `pdfium.<hash>.wasm` con 200 dal worker del motore dimostra che il log vede anche il worker; il rifiuto
+    di una sonda jsDelivr è registrato.
+  - Login via API, dopo aver verificato che `TEST_USER` non sia admin: un admin controllerebbe gli aggiornamenti su
+    GitHub.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 1/1 | 26,0 → 22,8 |
+    | `--fresh-run --workers 4` | 1/1 | 15,8 → 13,7 |
+    | `check-orphans` | pulito, 115 spec | — |
+
+  - Nessun avanzo; prettier, tsc, black e ruff puliti.
+  > **Note implementazione**:
+  > - un PDF latino non chiede font di ripiego (PDFium usa i suoi), quindi «font serviti in locale» resta coperto solo
+  >   da `pdfViewerAssets.test.ts`;
+  > - il controllo «requests nothing from third-party hosts» di `files.spec.ts` accetta qualsiasi richiesta `.wasm`,
+  >   anche solo la HEAD del thread principale. È solo una nota.
+- In scrittura: le lacune 5 (`g5-auto-transfer`) e 3 (`g3-pac`). Per il checkpoint rifaccio `files` a 4 worker e i gate
+  di `front-portfolio`, `front-user` e `front-utility`, con il carico ora basso (load 13-14).
+- ✅ **Gate del checkpoint delle lacune** (12/10, `--fresh-run --workers 4`, una chiave alla volta):
+
+  | Gate | Esito | Load |
+  |---|---|---|
+  | `front-utility files` (rifatto con poco carico) | **28/28** | 12,8 → 23,0 |
+  | `front-portfolio all` | 18 + **164/164**, Vitest 1221 | 23,0 → 33,1 |
+  | `front-user all` | **20/20**, Vitest 57 | 31,8 → 50,3 |
+  | `front-utility all` | 90/90 + **227/229**, Vitest 7231 | 50,3 → 102,3 |
+
+  - I due rossi di `front-utility all` sono gli `es` di `toolbar-width-sweep`: V-19, deterministici, di I.
+  - `files-pdf-offline` è verde nel giro consolidato.
+  - Dopo ogni gate il DB è al seed. Il confronto segna solo `uploads` 125 → 137: sono i 12 file persi nel giro di
+    convalida delle 21:49, che il populate non toglie, e nessun giro nuovo ha lasciato upload.
+  - Log: `/tmp/libreFolio_v_cpA2_*.log`.
+  > **Note implementazione**: niente checkpoint parziale. `_frontend_utility.py` contiene le righe delle lacune 2, 7 e
+  > 3, e `_frontend_portfolio.py` quelle di 2, 1 e 4: un checkpoint senza la 3 porterebbe una registrazione verso uno
+  > spec non verificato. Faccio un checkpoint unico con le 7 lacune appena 5 e 3 sono verificate, e l'ho detto al
+  > coordinatore.
+- **Lacune 5 e 3**, scritte:
+  - `g5-auto-transfer`, `tx-transfer-auto-cost.spec.ts`. T1 trasferisce l'intera posizione in Auto, e B deve avere WAC
+    150 e guadagno 600, non 3600. T2 è parziale, 8 unità: B ha 8 @ 150 e A ne tiene 12 @ 150;
+  - `g3-pac`, `pac-allocator-real.spec.ts`, spec di radice in `front-utility`. Asserisce lo stato `ready_incumbent`.
+
+  Verifiche in corsia, una alla volta.
+- ✅ **Lacuna 5, verificata** (12/10). `g5-auto-transfer`, `frontend/e2e/transactions/tx-transfer-auto-cost.spec.ts`,
+  registrato come `tx-transfer-auto-cost` in `_frontend_transaction.py`. Due test, ognuno su un account usa-e-getta,
+  con i broker A e B, un asset EUR manuale e gli acquisti di A fatti via API.
+  - Il trasferimento passa dalla UI: «+», poi il form TRANSFER, con il costo lasciato in Auto, poi Save
+    nell'editor.
+  - Si controllano:
+    - il form propone 150;
+    - la cella dell'editor è `ready` a 150;
+    - il salvataggio manda il ricevente come `auto`, e il server risponde che ha usato la media di A, 150 EUR;
+    - le righe salvate sono collegate, e il ricevente ha 150 per unità;
+    - il report e la tabella, con `pmc` acceso dal menu delle colonne.
+  - **Oracolo**: A compra 10 @ 100 e 10 @ 200, quindi WAC 150, con ultimo prezzo 180.
+    - **T1**, trasferimento di tutta la posizione: B ha 20 / 150 / 3600 / guadagno **600**; nella 1.1 il costo era 0 e
+      il guadagno 3600. A non ha più la posizione.
+    - **T2**, trasferimento parziale di 8: B ha 8 / 150 / 1440 / 240; A tiene 12 / 150 / 2160 / 360.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 2/2 | 71,8 |
+    | `--fresh-run --workers 4` | 2/2 | 32,0 |
+    | `check-orphans` | pulito, 117 spec | 24,8 |
+
+  - Nessun avanzo: controllati il DB vivo e lo snapshot di fine giro 1. Prettier e tsc puliti.
+  > **⚠️ Fuori pista**, osservazione sul prodotto letta nel codice, non vista a schermo, nel backlog come V-24. Appena il
+  > form è applicato, la cella del costo nell'editor può mostrare per un attimo «💡 0.00» come `ready`. Il form passa 0
+  > come segnaposto in Auto, e la cella tratta qualsiasi importo come una proposta pronta. Si corregge quando arriva la
+  > validazione, che dà 150. Per un istante l'utente vede il sintomo della 1.1, e `ready` non vuol dire «calcolato».
+- ✅ **Lacuna 3, verificata** (12/10). `g3-pac`, `frontend/e2e/pac-allocator-real.spec.ts`, registrato come
+  `front-utility pac-allocator-real` in `_frontend_utility.py` (di I, 21 righe aggiunte).
+  - **Setup**: un account usa-e-getta con 5000 EUR e due posizioni manuali, 20 @ 90 e 30 @ 40. Il codice del tool viene
+    da `GET /tools/catalog`; il planner si apre dalla sua card.
+  - **«Copia da LibreFolio»**: la liquidità del broker, i due asset con i prezzi salvati, la distribuzione attuale 60/40.
+  - **Il calcolo**: budget 1000, poi «Calculate plan». Il motore vero gira, e il test cattura il suo `POST
+    /tools/compute`.
+  - **Le verifiche**: la richiesta porta id, prezzi, cassa, pesi e il codice del tool. La risposta è `ready_incumbent`,
+    con prova `optimal_proven`. A schermo coincidono stato, prova, valori per asset, piè di tabella e ordini (debito e
+    commissione), e il totale investito non supera il budget.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 1/1 | 22,8 |
+    | `--fresh-run --workers 4` | 1/1 | 14,3 |
+    | `check-orphans` | pulito, 117 spec e 353 unit | — |
+
+  - Nessun avanzo; prettier, tsc, ruff e black puliti.
+  > **Note implementazione** (UI beta):
+  > - lo stato di successo pubblicato è `ready_incumbent`, non `ok`;
+  > - valore finale, valore ideale, importo e commissione non hanno un testid proprio, e si leggono dagli attributi
+  >   del data table;
+  > - il selettore di valuta non pubblica il valore scelto;
+  > - la data del planner è la minore fra quella locale e quella UTC, quindi lo spec salva i prezzi solo fino a ieri.
+- **Gate finale `front-transaction all`**: in corso.
+- ✅ **Gate finale `front-transaction all`** (12/10, `--fresh-run --workers 4`, load 21,4 → 38,2): 34 (32 skippati) +
+  **329/329**, Vitest 881 (`/tmp/libreFolio_v_cpA2_transaction-all.log`). Contiene la lacuna 5.
+  > **⚠️ Fuori pista: il DB, dopo il giro consolidato delle transazioni, non torna al seed.** Ci sono un broker, un
+  > accesso e un asset in più, e 3 transazioni in meno. Triage letto dal DB e da uno snapshot archiviato del seed:
+  > - la 28 è la FEE `[delete-safe] Platform fee for delete test`: la cancella `tx-delete` «A1-confirm» (`:181-183`),
+  >   per costruzione;
+  > - 45 e 46 sono la coppia `delete-consume`: la consuma «A2-confirm», per costruzione e già nelle note C;
+  > - il broker `T4-delref-<suffix>` (OWNER `e2e_test_user`) e l'asset `T4-delref-asset-<suffix>` sono lasciati di
+  >   proposito da «A1-error» (`:390-393`, «inert reference data»).
+  >
+  > È tutto vecchio e documentato, non viene dalle lacune. È nel backlog come V-25: un broker permanente di `TEST_USER`
+  > è della classe A7.
+- ✅ **Controlli statici del checkpoint** (12/10):
+  - prettier pulito su tutti i file frontend nuovi e cambiati;
+  - svelte-check 0 errori e 0 warning;
+  - ruff: 41 segnalazioni sui quattro file del runner sia a HEAD sia ora, quindi nessuna nuova;
+  - `git diff --check` pulito;
+  - `check-orphans` pulito, con 117 spec, nell'ultimo giro di g3.
