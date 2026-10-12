@@ -46,9 +46,24 @@
  *
  * Both the model and the component are loaded once, in a `beforeAll` with its own timeout: the
  * component's first transform is cold and takes seconds, which no test's budget should pay.
+ *
+ * The interface language (M-18 CP3a, last block). Every quantity of the step goes through its
+ * `quantity()` — a position's three figures, the bank's «at least» inside its sentence, and a
+ * correction's in the table (through `signedQuantity()`, which adds a `+`) — and that was
+ * `formatDecimalForDisplay`: exact digits, cut at the eighth, but a dot and no grouping in every
+ * language. The cure writes the same digits in the interface locale (`formatExactDecimal`). A
+ * dedicated broker (10) carries quantities with a fraction, thousands and a ninth fraction digit:
+ * the main fixture's quantities are integers below 1000, which read the same in every language.
+ * The expected text is Intl's output for the interface locale, handed the step's digits as a
+ * string; no localized literal is typed. jsdom's browser is en-US: an English UI is written en-US
+ * (grouped from a thousand on: the new contract of English), an Italian one bare `it`. When the
+ * language is switched in place, the figures that already follow it (CP2) are the in-component
+ * controls: the correction's date cell for the table, the checkpoint's cash row (CurrencyAmount)
+ * for the details.
  */
 import {afterEach, beforeAll, describe, expect, it, vi, type Mock} from 'vitest';
 import {flushSync, tick, type Component} from 'svelte';
+import {waitLocale} from 'svelte-i18n';
 
 // The step formats cash through CurrencyAmount, which reads the currency catalogue. Every other API
 // method is inert: the step receives its data as props.
@@ -77,8 +92,11 @@ vi.mock('$lib/api', async () => {
 });
 
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {currentLanguage} from '$lib/stores/app/language';
 import {isPrivacyEnabled, setPrivacyEnabled, togglePrivacy} from '$lib/stores/app/privacyStore.svelte';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
+import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 
 // ---------------------------------------------------------------------------
@@ -226,12 +244,58 @@ function money(amount: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Fixture of the interface-language block (M-18 CP3a): broker 10, quantities with a fraction
+// ---------------------------------------------------------------------------
+
+const DECIMAL_BROKER = 10;
+const G10 = `${DECIMAL_BROKER}:${DANSKE}`;
+const CP_DECIMAL = `${G10}:cp:0`;
+const KEY_DECIMAL_ADJUSTMENT = `${CP_DECIMAL}:p:0`;
+const DECIMAL_DATE = '2021-05-05';
+/** Thousands and a ninth fraction digit, which the step cuts. */
+const BANK_QTY = '12345.678901234';
+const LIBREFOLIO_QTY = '0.5';
+const DIFFERENCE_QTY = '12345.178901234';
+/** The cash LibreFolio lacks at that checkpoint: the in-component control of the details. */
+const DECIMAL_CASH = '12345.67';
+
+/**
+ * One opening checkpoint: an exact position with thousands and nine fraction digits, an «at least» one, one
+ * LibreFolio holds more of (a negative difference), a cash row, and one correction carrying the position's
+ * difference as its quantity.
+ */
+const DECIMAL_OUTCOMES = [
+    {
+        brokerId: DECIMAL_BROKER,
+        pluginCode: DANSKE,
+        response: {
+            checkpoints: [
+                {
+                    as_of: DECIMAL_DATE,
+                    kind: 'opening',
+                    cash: [{currency: 'EUR', bank: DECIMAL_CASH, librefolio: '0.00', difference: DECIMAL_CASH}],
+                    positions: [
+                        {asset_id: 43, exactness: 'exact', bank: BANK_QTY, librefolio: LIBREFOLIO_QTY, difference: DIFFERENCE_QTY},
+                        {asset_id: 44, exactness: 'at_least', bank: '1500.25', librefolio: '1234.5', difference: '265.75'},
+                        {asset_id: 45, exactness: 'exact', bank: '2', librefolio: '2.25', difference: '-0.25'},
+                    ],
+                    proposals: [{broker_id: DECIMAL_BROKER, type: 'ADJUSTMENT', date: DECIMAL_DATE, asset_id: 43, quantity: DIFFERENCE_QTY, tags: TAGS, description: `Gap-fix ${DECIMAL_DATE}`}],
+                    todos: [],
+                    explanation: {absorbed_count: 0, absorbed_missing_count: 0, absorbed_missing_cash: [], opening_cash: [], unexplained_cash: [], notes: []},
+                },
+            ],
+            verifications: [],
+        },
+    },
+];
+
+// ---------------------------------------------------------------------------
 // Mounting and reading
 // ---------------------------------------------------------------------------
 
-async function mountStep(choose?: (all: string[]) => string[]) {
+async function mountStep(choose?: (all: string[]) => string[], outcomes: unknown[] = OUTCOMES) {
     const {model, GapFixStep} = pieces();
-    const view = model.buildGapFixView(OUTCOMES, (_reasonCode, message) => message);
+    const view = model.buildGapFixView(outcomes, (_reasonCode, message) => message);
     const keys = [...model.defaultGapFixSelection(view)];
     const onToggle = vi.fn();
     const onSetSelected = vi.fn();
@@ -695,5 +759,146 @@ describe('GapFixStep — privacy (D5′): money and positions are masked, a corr
 
         await togglePrivacyInPlace();
         await expectState('on → off', false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// M-18 CP3a — the quantities in the interface language
+// ---------------------------------------------------------------------------
+
+/**
+ * What Intl writes for the plain decimal `text` in `locale`, with exactly its own fraction digits. Intl is handed
+ * the string, which Intl.NumberFormat v3 reads as an exact decimal: no double in between.
+ */
+function intlExact(locale: string, text: string): string {
+    const fractionDigits = text.split('.')[1]?.length ?? 0;
+    return new Intl.NumberFormat(locale, {minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits}).format(text as Intl.StringNumericLiteral);
+}
+
+describe('GapFixStep — the quantities in the interface language (M-18 CP3a)', () => {
+    type UiLanguage = 'en' | 'it';
+    /** The interface locale of each language: jsdom's browser is en-US. */
+    const LOCALE_OF: Readonly<Record<UiLanguage, string>> = {en: 'en-US', it: 'it'};
+
+    /** A string as `text()` reads an element: whitespace runs collapsed. */
+    const squash = (value: string): string => value.replace(/\s+/g, ' ').trim();
+
+    /** A quantity as the step writes it in `locale`: the digits of its `quantity()` (cut at the eighth), handed to Intl as a string. */
+    function quantityIn(locale: string, value: string): string {
+        return squash(intlExact(locale, formatDecimalForDisplay(value, {minFrac: 0, maxFrac: 8})));
+    }
+
+    /** `signedQuantity()`'s form: a `+` before a positive quantity. */
+    function signedQuantityIn(locale: string, value: string): string {
+        return (Number(value) > 0 ? '+' : '') + quantityIn(locale, value);
+    }
+
+    /** Every quantity under test as `locale` writes it; the bank's «at least» one sits inside a sentence and is read apart. */
+    function quantitiesIn(locale: string) {
+        return {
+            exact: {librefolio: quantityIn(locale, LIBREFOLIO_QTY), bank: quantityIn(locale, BANK_QTY), difference: signedQuantityIn(locale, DIFFERENCE_QTY)},
+            atLeast: {librefolio: quantityIn(locale, '1234.5'), difference: signedQuantityIn(locale, '265.75')},
+            moreInLibreFolio: {librefolio: quantityIn(locale, '2.25'), bank: quantityIn(locale, '2'), difference: signedQuantityIn(locale, '-0.25')},
+            correction: signedQuantityIn(locale, DIFFERENCE_QTY),
+        };
+    }
+
+    /** The cells of a position row of the open checkpoint, in the template's order: name, LibreFolio, bank, difference. */
+    function positionCells(assetId: number): string[] {
+        const tr = the('gapfix-position-row', {'asset-id': String(assetId)});
+        if (!(tr instanceof HTMLTableRowElement) || tr.cells.length !== 4) throw new Error(`the position row of asset ${assetId} is not a row of four cells (name, LibreFolio, bank, difference): re-read the template`);
+        return [...tr.cells].map((cell) => text(cell));
+    }
+
+    /** A cell of the correction's table row, by the column DataTable marks it with. */
+    function correctionCell(columnId: string): string {
+        const cell = row(KEY_DECIMAL_ADJUSTMENT, group(DECIMAL_BROKER)).querySelector(`td[data-column-id="${columnId}"]`);
+        if (!cell) throw new Error(`the table row of ${KEY_DECIMAL_ADJUSTMENT} has no ${columnId} cell`);
+        return text(cell);
+    }
+
+    function observedQuantities(): ReturnType<typeof quantitiesIn> {
+        const [, exactLibrefolio, exactBank, exactDifference] = positionCells(43);
+        const [, atLeastLibrefolio, , atLeastDifference] = positionCells(44);
+        const [, moreLibrefolio, moreBank, moreDifference] = positionCells(45);
+        return {
+            exact: {librefolio: exactLibrefolio, bank: exactBank, difference: exactDifference},
+            atLeast: {librefolio: atLeastLibrefolio, difference: atLeastDifference},
+            moreInLibreFolio: {librefolio: moreLibrefolio, bank: moreBank, difference: moreDifference},
+            correction: correctionCell('quantity'),
+        };
+    }
+
+    /** The correction's date as DataTable's date cell writes it in `locale`: the in-table control. */
+    function correctionDateIn(locale: string): string {
+        return squash(new Date(DECIMAL_DATE).toLocaleDateString(locale, {year: 'numeric', month: 'short', day: 'numeric'}));
+    }
+
+    /** The digits of the checkpoint's cash as CurrencyAmount writes them in `locale`: the in-details control. */
+    function cashIn(locale: string): string {
+        return squash(Number(DECIMAL_CASH).toLocaleString(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+    }
+
+    /** The figures that already follow the interface language (CP2) read `locale`'s: the switch reached the table and the details. */
+    function expectControlsIn(step: string, locale: string): void {
+        expect(correctionCell('date'), `${step} — control: the correction's date cell`).toBe(correctionDateIn(locale));
+        expect(text(the('gapfix-cash-row', {currency: 'EUR'})), `${step} — control: the checkpoint's cash`).toContain(cashIn(locale));
+    }
+
+    /** Change the UI language as LanguageSelector does, flush, and check the interface locale it gives. */
+    async function uiLanguage(lang: UiLanguage): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(uiLocale(), `control: a ${lang} UI on jsdom's en-US browser is written ${LOCALE_OF[lang]}`).toBe(LOCALE_OF[lang]);
+    }
+
+    /** Broker 10 with its checkpoint open, so the position rows are on screen; resolves once the table shows the correction. */
+    async function mountDecimals(): Promise<void> {
+        await mountStep(undefined, DECIMAL_OUTCOMES);
+        await fireEvent.click(card(CP_DECIMAL));
+        the('gapfix-point-details', {key: CP_DECIMAL});
+        await waitFor(() => expect(rowKeys(group(DECIMAL_BROKER))).toEqual([KEY_DECIMAL_ADJUSTMENT]));
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('Italian UI: a position’s quantities and a correction’s quantity in Italian notation — quantity()’s digits, cut at the eighth', async () => {
+        await uiLanguage('it');
+        expect(formatDecimalForDisplay(BANK_QTY, {minFrac: 0, maxFrac: 8}), 'control: the step cuts at the eighth digit, it does not round').toBe('12345.67890123');
+        const italian = quantitiesIn('it');
+        expect(italian.exact.bank, 'control: Italian writes the quantity otherwise than English').not.toBe(quantitiesIn('en-US').exact.bank);
+        expect(italian.exact.bank.replace(/\D/g, ''), 'control: and keeps its digits').toBe('1234567890123');
+
+        await mountDecimals();
+
+        expect(observedQuantities()).toEqual(italian);
+        expect(positionCells(44)[2], 'the bank’s «at least» quantity, inside its sentence').toContain(quantityIn('it', '1500.25'));
+    });
+
+    it('follows a language switch in place: English (en-US, grouped from 1,000 on — the new contract) → Italian → English', async () => {
+        await uiLanguage('en');
+        await mountDecimals();
+        expect(correctionDateIn('it'), 'control: Italian writes the date otherwise').not.toBe(correctionDateIn('en-US'));
+        expect(cashIn('it'), 'control: Italian writes the cash otherwise').not.toBe(cashIn('en-US'));
+        expectControlsIn('English UI', 'en-US');
+
+        expect(observedQuantities(), 'English UI: en-US notation').toEqual(quantitiesIn('en-US'));
+        expect(positionCells(44)[2], 'English UI: the «at least» quantity').toContain(quantityIn('en-US', '1500.25'));
+
+        await uiLanguage('it');
+        expectControlsIn('switched to Italian', 'it');
+
+        expect(observedQuantities(), 'switched to Italian in place').toEqual(quantitiesIn('it'));
+        expect(positionCells(44)[2], 'switched to Italian: the «at least» quantity').toContain(quantityIn('it', '1500.25'));
+
+        await uiLanguage('en');
+        expectControlsIn('back to English', 'en-US');
+
+        expect(observedQuantities(), 'back to English in place').toEqual(quantitiesIn('en-US'));
     });
 });

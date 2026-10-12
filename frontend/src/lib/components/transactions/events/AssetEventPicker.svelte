@@ -14,9 +14,8 @@
     import {onDestroy} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {Plus} from 'lucide-svelte';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatExactDecimal, formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Props {
@@ -450,7 +449,7 @@
                         {@const ev = item.event}
                         {@const cfg = getTypeConfig(ev.type)}
                         {@const delta = computeDelta(ev.amount, ev.code)}
-                        {@const fmtAmt = ev.amount && ev.amount !== '0' ? formatDecimalForDisplay(ev.amount) : null}
+                        {@const fmtAmt = ev.amount && ev.amount !== '0' ? formatExactDecimal(ev.amount) : null}
                         {@const isSelected = value === ev.id}
                         <button
                             type="button"

@@ -17,6 +17,7 @@
 import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import {formatDateTime} from '$lib/utils/core/formatDateTime';
 import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+import {formatExactDecimal} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {maskable, shouldMaskAmount, type AmountSensitivity} from '$lib/utils/privacy/maskable';
 import {canonicalDecimal, decimalEqualsRatio, decimalScale, roundDecimal, roundRatio} from './decimal';
@@ -158,7 +159,7 @@ export function formatPlannerQuantity(quantity: string | null | undefined, optio
     if (quantity === null || quantity === undefined) return EMPTY;
     const canonical = canonicalDecimal(quantity);
     if (canonical === null) return EMPTY;
-    const text = maskable(formatDecimalForDisplay(canonical, {maxFrac: MAX_DISPLAY_FRACTION}), 'personal');
+    const text = maskable(formatExactDecimal(canonical, {maxFrac: MAX_DISPLAY_FRACTION}), 'personal');
     return options.approx ? '≈' + text : text;
 }
 
@@ -171,7 +172,7 @@ export function formatExactQuantity(value: PacExactNumber): string {
 export function formatPlannerPlainDecimal(value: string | null | undefined): string {
     if (value === null || value === undefined) return EMPTY;
     const canonical = canonicalDecimal(value);
-    return canonical === null ? EMPTY : maskable(formatDecimalForDisplay(canonical, {maxFrac: MAX_DISPLAY_FRACTION}), 'public');
+    return canonical === null ? EMPTY : maskable(formatExactDecimal(canonical, {maxFrac: MAX_DISPLAY_FRACTION}), 'public');
 }
 
 /**
@@ -209,7 +210,7 @@ export function formatPlannerFxRate(rate: string | null | undefined, options: {a
     if (rate === null || rate === undefined) return EMPTY;
     const canonical = canonicalDecimal(rate);
     if (canonical === null) return EMPTY;
-    const text = maskable(formatDecimalForDisplay(canonical, {maxFrac: MAX_DISPLAY_FRACTION}), 'public');
+    const text = maskable(formatExactDecimal(canonical, {maxFrac: MAX_DISPLAY_FRACTION}), 'public');
     return options.approx ? '≈' + text : text;
 }
 
