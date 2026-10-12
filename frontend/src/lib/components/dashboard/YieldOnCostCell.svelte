@@ -7,6 +7,7 @@
     import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type YieldOnCostStatus = 'available' | 'no_income' | 'unavailable';
     type YieldOnCostReason = 'insufficient_history' | 'income_without_eligible_quantity' | 'replay_inconsistent' | 'invalid_split' | 'missing_fx' | 'missing_wac' | 'non_positive_wac';
@@ -73,7 +74,7 @@
     }
 
     function formatDate(value: string): string {
-        return formatAxisDate($currentLanguage, value, true);
+        return formatAxisDate(uiLocale(), value, true);
     }
 
     function formatCurrencyCode(code: string): string {

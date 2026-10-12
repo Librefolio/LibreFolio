@@ -31,7 +31,9 @@
  *
  * WHAT IS MOCKED, AND WHAT IS NOT. Only the ECharts module, replaced by a recorder that
  * captures the options handed to it (jsdom has no canvas, and rendering pixels is not the
- * subject). The component under test is the real `GrowthChart`: real props, real runes,
+ * subject), and the source of the interface locale, `uiLocale()`, which stays the real one unless
+ * a D23 case forces sv-SE through it (`forceInterfaceLocale`, M-18). The component under test is
+ * the real `GrowthChart`: real props, real runes,
  * real `$derived` bundle, real memo, real render effect, real aggregation helpers. The
  * assertion reads GrowthChart's own output — the series data it hands to the chart — which
  * is precisely what the stale entry corrupted.
@@ -54,6 +56,9 @@
  * chart fixes left unlabelled and blank, so the grid does not measure it (S7b: D18, D23, D25, k4 G1),
  * and the purchase value of the Income submode: one name for its two halves, their total in
  * the tooltip, each half in its Abs colour (S8: R11, D26).
+ * Every figure is written in the interface locale (M-18): `uiLocale()`, en-US under the English UI
+ * on jsdom's en-US browser whatever the host, so the expectations are built in it; the last
+ * describe mounts the chart under an Italian UI.
  * Each describe states its own reasons.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -225,7 +230,20 @@ const {chartInstances, echartsModule, fakeGeometry, measuredFonts, DEFAULT_PLOT_
 
 vi.mock('echarts', () => echartsModule);
 
-import {tick} from 'svelte';
+/**
+ * The interface locale as the chart reads it: the real `uiLocale()`, unless a case forces another one
+ * (M-18). A case forces it BEFORE it mounts (`forceInterfaceLocale`), so the chart is drawn in it
+ * however it reads the source; the file-level `afterEach` lifts it. A plain object, not a store:
+ * forcing it redraws nothing, which is the reason the cases force it before they mount.
+ */
+const {interfaceLocale} = vi.hoisted(() => ({interfaceLocale: {forced: undefined as string | undefined}}));
+
+vi.mock('$lib/stores/app/uiLocale', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('$lib/stores/app/uiLocale')>();
+    return {...actual, uiLocale: () => interfaceLocale.forced ?? actual.uiLocale()};
+});
+
+import {flushSync, tick} from 'svelte';
 import {get} from 'svelte/store';
 import {addMessages, dictionary, getMessageFormatter, waitLocale} from 'svelte-i18n';
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
@@ -235,8 +253,11 @@ import en from '$lib/i18n/en.json';
 import es from '$lib/i18n/es.json';
 import fr from '$lib/i18n/fr.json';
 import itCatalogue from '$lib/i18n/it.json';
+import {currentLanguage} from '$lib/stores/app/language';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import type {PortfolioAcquisitionFundingSeries, PortfolioBrokerPnlHistory, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioHistoryPoint, PortfolioIncomeHistorySeries, PortfolioPnlCandlePoint, PortfolioPnlCandleSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import GrowthChart from './GrowthChart.svelte';
 
@@ -706,7 +727,7 @@ async function waitForPnlLineWithBrokers(names: readonly string[]): Promise<Full
 interface AmountFormat {
     /** As `fmtCurrency(v, true)`: `+` on a gain, and no sign on anything that rounds to zero. */
     signed?: boolean;
-    /** A forced locale. `undefined` is this machine's, as it is for the component. */
+    /** An explicit locale. `undefined` is the interface locale (M-18), as it is for the component. */
     locale?: string;
 }
 
@@ -714,9 +735,9 @@ interface AmountFormat {
  * The tooltip's number format, produced by the same call `fmtCurrency` makes. The expected string
  * therefore follows the locale instead of hard-coding one, sign included: the sign is whatever
  * that locale writes. A negative zero prints as zero, which is the contract, not a detail of the
- * call.
+ * call. Without a locale, the interface locale, read when the expectation is built.
  */
-const formatAmount = (value: number, {signed = false, locale}: AmountFormat = {}) => (value === 0 ? 0 : value).toLocaleString(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: signed ? 'exceptZero' : 'auto'});
+const formatAmount = (value: number, {signed = false, locale}: AmountFormat = {}) => (value === 0 ? 0 : value).toLocaleString(locale ?? uiLocale(), {minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: signed ? 'exceptZero' : 'auto'});
 
 /** A sign at the start of a formatted number, bidi marks included: the part `maskFormattedNumber` keeps outside the mask. */
 const LEADING_SIGN = /^[\p{Cf}+\-\u2212]*/u;
@@ -729,37 +750,29 @@ function expectedAmount(value: number, {masked = false, ...format}: AmountFormat
     return `${BASE_CURRENCY} ${masked ? `${leadingSign(formatted)}${PRIVACY_PLACEHOLDER}` : formatted}`;
 }
 
-/** A locale whose minus is U+2212 MINUS SIGN, where Node's default locale writes a hyphen. */
+/** A locale whose minus is U+2212 MINUS SIGN, where the four interface languages write a hyphen. */
 const SWEDISH = 'sv-SE';
 
 /**
- * Runs `read` with every `Number.prototype.toLocaleString` call forced to `locale`, the
- * component's own included. `undefined` leaves this machine's locale in place.
+ * Draws the next mount in `locale`, forced as the interface locale (M-18): call it BEFORE the mount,
+ * so the chart is drawn in it whether it reads the source when it builds the option or when ECharts
+ * calls a formatter. `undefined` gives the real source back; the file-level `afterEach` does so too.
  *
- * Synchronous on purpose: the spy comes off before anything else runs, so nothing outside `read`
- * ever formats a number in the forced locale.
+ * WHY it replaced the old `inLocale`, a spy on `Number.prototype.toLocaleString`: that forced the
+ * browser's default locale, which no figure reads any more. The one source every figure reads is
+ * the interface locale, so that is where a locale the four UI languages do not write is forced.
  */
-function inLocale<T>(locale: string | undefined, read: () => T): T {
-    if (locale === undefined) return read();
-    const original = Number.prototype.toLocaleString;
-    const spy = vi.spyOn(Number.prototype, 'toLocaleString').mockImplementation(function (this: number, _locales?: unknown, options?: Intl.NumberFormatOptions) {
-        return original.call(this, locale, options);
-    });
-    try {
-        return read();
-    } finally {
-        spy.mockRestore();
-    }
+function forceInterfaceLocale(locale: string | undefined): void {
+    interfaceLocale.forced = locale;
 }
 
 /**
  * The number a money axis label prints before its k/M suffix, from the same call the axis
  * formatter makes on the SCALED value: -5000 prints as `-5`, then `k` (S7b). A negative zero
  * prints as zero, which is the contract, not a detail of the call. The expected sign of an axis
- * label comes from here, never from a literal (D23). `locale` forces one; `undefined` is this
- * machine's.
+ * label comes from here, never from a literal (D23). `locale` defaults to the interface locale.
  */
-const axisNumber = (scaled: number, locale?: string) => (scaled === 0 ? 0 : scaled).toLocaleString(locale, {maximumSignificantDigits: 15});
+const axisNumber = (scaled: number, locale = uiLocale()) => (scaled === 0 ? 0 : scaled).toLocaleString(locale, {maximumSignificantDigits: 15});
 
 interface TooltipRow {
     label: string;
@@ -943,6 +956,8 @@ afterEach(() => {
     fakeGeometry.measured = false;
     fakeGeometry.plotWidthPx = DEFAULT_PLOT_WIDTH_PX;
     vi.useRealTimers();
+    // A forced interface locale is module state too (M-18): whatever case forced it, it ends with that case.
+    forceInterfaceLocale(undefined);
 });
 
 describe('GrowthChart aggregation memo', () => {
@@ -1012,46 +1027,53 @@ describe('GrowthChart privacy masking (S2a)', () => {
 
     /**
      * What every money axis label must print with privacy on: the mask, and on a loss the
-     * locale's minus kept outside it (D8, D23). This machine's minus comes from the same call the
-     * axis formatter makes. The Swedish one is the glyph D23 is about, so it is a literal, under
-     * a forced locale.
+     * interface locale's minus kept outside it (D8, D23). The minus comes from the same call the
+     * axis formatter makes. Under sv-SE it is the glyph D23 is about, so the case pins it as a
+     * literal.
      */
-    function expectMaskedMoneyAxis(format: AxisFormatter) {
+    function expectMaskedMoneyAxis(format: AxisFormatter, minus: string) {
         const values = [20_000, -5_000, 0];
-        // Preconditions: this machine's locale writes a minus on a loss, so the masked loss is
-        // about one; and this Node has Swedish locale data and writes U+2212 there, so the forced
-        // locale cannot fall back to a hyphen in silence.
-        const hostMinus = leadingSign(axisNumber(-5));
-        expect(hostMinus).toMatch(/[-\u2212]/);
-        expect(leadingSign(axisNumber(-5, SWEDISH))).toBe('\u2212');
-        const labels = {host: values.map((value) => format(value)), swedish: inLocale(SWEDISH, () => values.map((value) => format(value)))};
-        expect(labels).toEqual({
-            host: [PRIVACY_PLACEHOLDER, `${hostMinus}${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER],
-            swedish: [PRIVACY_PLACEHOLDER, `\u2212${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER],
-        });
+        const labels = values.map((value) => format(value));
+        expect(labels).toEqual([PRIVACY_PLACEHOLDER, `${minus}${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER]);
         // The property itself, whatever the placeholder looks like: no digit and no k/M
         // suffix, because `•••k` would still reveal the order of magnitude (D8).
-        for (const label of [...labels.host, ...labels.swedish]) expect(label).not.toMatch(/[0-9kM]/);
+        for (const label of labels) expect(label).not.toMatch(/[0-9kM]/);
     }
 
-    it("masks the money axis labels in Abs and P&L line: no digit, no k/M suffix, the locale's minus kept outside", async () => {
+    /** The interface locales a masked axis is read in: the real one, and sv-SE forced, whose minus is U+2212. Titles stay under Vitest's 40-character cut. */
+    const AXIS_LOCALES = [
+        {title: 'interface locale, en-US here', forced: undefined, minus: undefined},
+        {title: 'sv-SE forced, U+2212', forced: SWEDISH, minus: '\u2212'},
+    ];
+
+    it.each(AXIS_LOCALES)("masks the money axis labels in Abs and P&L line: no digit, no k/M suffix, the locale's minus kept outside — $title", async ({forced, minus}) => {
         // WHY: with privacy on, the axis ticks are the one place a masked chart would still
         // print the scale of the portfolio (20k, 1.3M). Catches the mask dropped from the
         // compact label, or the suffix moving outside it (`mask(n) + 'k'`). Catches too a minus
-        // written by hand in front of the mask instead of the locale's own (D23): in Node's
-        // default locale both are a hyphen, so only the forced sv-SE labels tell them apart.
+        // written by hand in front of the mask instead of the locale's own (D23): the four
+        // interface languages write a hyphen, so only sv-SE as the interface locale tells them apart.
+        // Why (re-pin, M-18 CP2): sv-SE used to be forced by patching the browser's default locale
+        // around the read; the chart now writes in the interface locale, so sv-SE is forced through
+        // that source, before the mount.
+        forceInterfaceLocale(forced);
+        // Preconditions: the interface locale writes a minus on a loss, so the masked loss is about
+        // one; forced, this Node has Swedish locale data and writes U+2212 there, so the locale
+        // cannot fall back to a hyphen in silence.
+        const localeMinus = leadingSign(axisNumber(-5));
+        expect(localeMinus).toMatch(/[-\u2212]/);
+        if (minus !== undefined) expect(localeMinus).toBe(minus);
         setPrivacyEnabled(true);
         const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
 
         const absOption = await waitForFrame(FRAME.abs);
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
-        expectMaskedMoneyAxis(absOption.yAxis.axisLabel.formatter);
+        expectMaskedMoneyAxis(absOption.yAxis.axisLabel.formatter, localeMinus);
 
         await fireEvent.click(getByTestId('growth-toggle-pnl'));
         const pnlOption = await waitForFrame(FRAME.pnlLine);
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pnl']);
         expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
-        expectMaskedMoneyAxis(pnlOption.yAxis.axisLabel.formatter);
+        expectMaskedMoneyAxis(pnlOption.yAxis.axisLabel.formatter, localeMinus);
     });
 
     it('leaves the % axis labels readable: a return is not an amount', async () => {
@@ -1072,8 +1094,8 @@ describe('GrowthChart privacy masking (S2a)', () => {
         const pctOption = await fullOptionAfter(before);
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
 
-        // `toFixed`, not `toLocaleString`: the % label does not depend on the locale, so a
-        // literal is the honest expectation.
+        // Why (re-pin, M-18 CP2): the % label is no longer `toFixed`'s; it follows the interface
+        // locale like every figure. In en-US, the interface locale here, it reads as it always did.
         expect(pctOption.yAxis.axisLabel.formatter(12.3)).toBe('12.3%');
     });
 
@@ -1133,10 +1155,13 @@ describe('GrowthChart privacy masking (S2a)', () => {
         const absOption = await waitForFrame(FRAME.abs);
 
         // The axis labels format their number through the locale (S7b), so their literals are
-        // pinned under a forced en-US, never against this machine's locale. These four print as
-        // they always did; the labels S7b changed (`1.5k`, `1M`) are pinned in its own describe.
+        // pinned in en-US, the interface locale here (M-18), which the precondition checks — never
+        // against this machine's locale. These four print as they always did; the labels S7b
+        // changed (`1.5k`, `1M`) are pinned in its own describe. Why (re-pin, M-18 CP2): the read
+        // used to run under a patched browser locale, which no figure reads any more.
+        expect(uiLocale(), 'the interface locale the literals are written in').toBe('en-US');
         const axis = absOption.yAxis.axisLabel.formatter;
-        expect(inLocale('en-US', () => [-5_000, 1_300_000, 0, -0].map((value) => axis(value)))).toEqual(['-5k', '1.3M', '0', '0']);
+        expect([-5_000, 1_300_000, 0, -0].map((value) => axis(value))).toEqual(['-5k', '1.3M', '0', '0']);
 
         const absRows = tooltipRows(absOption.tooltip.formatter([{dataIndex: 0}]));
         expect(rowValue(absRows, 'dashboard.navValue')).toBe(`${BASE_CURRENCY} ${formatAmount(1_234.56)}`);
@@ -1200,11 +1225,13 @@ describe('GrowthChart privacy masking (S2a)', () => {
  * case walks all of them on one mount, so a family that builds its sign by another route cannot
  * hide behind one that does not.
  *
- * The minus is the locale's (D23). In Node's default locale it is a hyphen, the very character a
- * hand-written sign would use, so on this machine alone a hard-coded `-` would pass unseen. The
- * Swedish cases force the one call `fmtCurrency` makes, `Number.prototype.toLocaleString`, to a
- * locale whose minus is U+2212, and pin that glyph as a literal: the glyph is the subject of
- * D23, not a translated text.
+ * The minus is the locale's (D23), and the locale is the interface's (M-18). The four interface
+ * languages write a hyphen, the very character a hand-written sign would use, so in them alone a
+ * hard-coded `-` would pass unseen. The Swedish cases force sv-SE, whose minus is U+2212, as the
+ * interface locale — through its one source, `uiLocale()`, before the mount — and pin that glyph
+ * as a literal: the glyph is the subject of D23, not a translated text. Why (re-pin, M-18 CP2):
+ * they used to force it by patching `Number.prototype.toLocaleString`, the browser's default
+ * locale, which no figure reads any more.
  */
 describe('GrowthChart signed tooltip amounts (D23, D23b)', () => {
     // The flag is module state shared by every case in the file. Whoever switches it on
@@ -1222,7 +1249,7 @@ describe('GrowthChart signed tooltip amounts (D23, D23b)', () => {
 
     interface View {
         title: string;
-        /** The forced locale. None keeps this machine's. */
+        /** The locale forced as the interface locale. None keeps the real one, en-US here. */
         locale?: string;
         /** The minus that locale writes, as a literal, when the case pins the glyph. */
         minus?: string;
@@ -1230,10 +1257,10 @@ describe('GrowthChart signed tooltip amounts (D23, D23b)', () => {
     }
 
     const VIEWS: View[] = [
-        {title: 'host locale, in the clear', masked: false},
-        {title: 'host locale, masked', masked: true},
-        {title: 'sv-SE (U+2212), in the clear', locale: SWEDISH, minus: '\u2212', masked: false},
-        {title: 'sv-SE (U+2212), masked', locale: SWEDISH, minus: '\u2212', masked: true},
+        {title: 'interface locale, in the clear', masked: false},
+        {title: 'interface locale, masked', masked: true},
+        {title: 'sv-SE forced (U+2212), in the clear', locale: SWEDISH, minus: '\u2212', masked: false},
+        {title: 'sv-SE forced (U+2212), masked', locale: SWEDISH, minus: '\u2212', masked: true},
     ];
 
     const labelOf = (key: string) => htmlText(get(_)(key));
@@ -1353,30 +1380,27 @@ describe('GrowthChart signed tooltip amounts (D23, D23b)', () => {
     it.each(VIEWS)('prints every signed row as currency, sign, digits, and every OHLC row unsigned: $title', async (view) => {
         // WHY: D23b gives the four signed families one form, and D23 gives the sign to the
         // locale. Catches, family by family: the sign moved back in front of the currency; a
-        // hand-written ASCII `-` (the Swedish cases) or a hard-coded U+2212 (this machine's) in
-        // place of the locale's minus; a `+` or `-` on a zero, whether a negative zero or a
-        // float residue whose sign was decided before rounding; `-0.00` on an unsigned row; a
-        // signed row printed unsigned, or an OHLC row printed signed; and, masked, a mask that
-        // swallows the sign or the currency.
+        // hand-written ASCII `-` (the Swedish cases) or a hard-coded U+2212 (the interface
+        // locale's cases) in place of the locale's minus; a `+` or `-` on a zero, whether a
+        // negative zero or a float residue whose sign was decided before rounding; `-0.00` on an
+        // unsigned row; a signed row printed unsigned, or an OHLC row printed signed; and, masked,
+        // a mask that swallows the sign or the currency.
         if (view.minus !== undefined) {
             // Precondition: this Node has the forced locale's data and writes its minus. Without
             // it the locale would fall back in silence and the glyph checks would prove nothing.
             expect(leadingSign(formatAmount(-1, {locale: view.locale})), `${view.locale} writes its own minus`).toBe(view.minus);
         }
+        // The case's locale is the interface locale of this mount: forced before it, or the real one.
+        forceInterfaceLocale(view.locale);
         setPrivacyEnabled(view.masked);
         const {getByTestId} = render(GrowthChart, {
             props: {history: MONEY_HISTORY, brokerPnlHistory: MONEY_BROKER_PNL, pnlCandles: MONEY_CANDLES, incomeHistory: MONEY_INCOME, costHistory: MONEY_COSTS, depositHistory: MONEY_DEPOSITS, acquisitionFunding: MONEY_ACQUISITION, baseCurrency: BASE_CURRENCY},
         });
 
         const walked: AmountRow[] = [];
-        /** Reads the tooltip of one bucket in the case's locale, and checks it against `rows`. */
+        /** Reads the tooltip of one bucket, drawn in the case's locale, and checks it against `rows`. */
         const expectBucket = (option: FullOption, dataIndex: number, rows: AmountRow[], where: string) => {
-            expectTooltip(
-                inLocale(view.locale, () => option.tooltip.formatter([{dataIndex}])),
-                rows,
-                view,
-                where,
-            );
+            expectTooltip(option.tooltip.formatter([{dataIndex}]), rows, view, where);
             walked.push(...rows);
         };
 
@@ -3015,11 +3039,12 @@ describe('GrowthChart ladder axis catalogue keys (S7a: the ICU apostrophe trap)'
  * each label, so the scale seemed to jump. A label prints the scaled value exactly (`5.5k`,
  * `1.25M`), and a whole value with no decimals (`2k`, `1M`).
  *
- * D23, the locale's glyphs. The number and its minus come from `toLocaleString`, so a Swedish
- * axis writes `−1,5k`, with U+2212 and a decimal comma. A minus written by hand is a hyphen in
- * every locale, and in Node's default locale the locale's own minus is a hyphen too. So the
- * Swedish cases force the call to a locale whose minus differs, and pin that glyph as a literal:
- * the glyph is the subject. Every other literal here is pinned under a forced en-US.
+ * D23, the locale's glyphs. The number and its minus come from one Intl call in the interface
+ * locale (M-18), so a Swedish axis writes `−1,5k`, with U+2212 and a decimal comma. A minus
+ * written by hand is a hyphen in every locale, and the four interface languages write a hyphen
+ * too. So the Swedish case forces sv-SE as the interface locale, before the mount, and pins that
+ * glyph as a literal: the glyph is the subject. Every other literal here is pinned in en-US, the
+ * interface locale of this file, which the cases check.
  *
  * D25, the edge the chart fixes. The axis `min` is a callback that leaves 8% of the range below
  * the data, and ECharts labels that edge with its raw value: exact formatting would print it as
@@ -3045,7 +3070,7 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
     // switches it off, whatever the outcome of the case (as S2a does).
     afterEach(() => setPrivacyEnabled(false));
 
-    /** Tick sequences ECharts lays out on a money axis, with what each must print in en-US. WHY literals: the exact labels are the subject, under a forced locale. */
+    /** Tick sequences ECharts lays out on a money axis, with what each must print in en-US. WHY literals: the exact labels are the subject, in the interface locale the reads check. */
     const TICKS_EN = [
         {values: [5_000, 5_500, 6_000, 6_500, 7_000, 7_500, 8_000], labels: ['5k', '5.5k', '6k', '6.5k', '7k', '7.5k', '8k']},
         {values: [1_000, 1_500, 2_000, 2_500], labels: ['1k', '1.5k', '2k', '2.5k']},
@@ -3054,9 +3079,21 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         {values: [-3_000, -1_500, 0, 1_500, 3_000], labels: ['-3k', '-1.5k', '0', '1.5k', '3k']},
     ];
 
+    /**
+     * Reads labels written in en-US, the interface locale of this file (M-18): the English UI on
+     * jsdom's en-US browser, whatever the host. WHY a precondition rather than a forced locale: it
+     * names the locale every en-US literal below is about, and a red here is about the harness, not
+     * the chart. Why (re-pin, M-18 CP2): the reads used to run under a patched browser locale
+     * (`inLocale('en-US', …)`), which no figure reads any more.
+     */
+    function readInEnUs<T>(read: () => T): T {
+        expect(uiLocale(), 'the interface locale the en-US literals are written in').toBe('en-US');
+        return read();
+    }
+
     /** What `format` prints for each sequence in en-US, and whether those labels are distinct. WHY both: the literals pin this formatting, the property holds for any that replaces it. */
     function readTicks(format: AxisFormatter, sequences: Array<{values: number[]}>) {
-        return inLocale('en-US', () =>
+        return readInEnUs(() =>
             sequences.map(({values}) => {
                 const labels = values.map((value) => format(value));
                 return {labels, distinct: new Set(labels).size === labels.length};
@@ -3121,29 +3158,32 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         render(GrowthChart, {props: {history: HISTORY}});
         const axis = (await waitForFrame(FRAME.abs)).yAxis.axisLabel.formatter;
 
-        const singles = inLocale('en-US', () => [2_000, 20_000, 1_000_000, 1_300_000, 900, -5_000, 0, -0].map((value) => `${show(value)} → ${axis(value)}`));
+        const singles = readInEnUs(() => [2_000, 20_000, 1_000_000, 1_300_000, 900, -5_000, 0, -0].map((value) => `${show(value)} → ${axis(value)}`));
         expect(singles).toEqual(['2000 → 2k', '20000 → 20k', '1000000 → 1M', '1300000 → 1.3M', '900 → 900', '-5000 → -5k', '0 → 0', '-0 → 0']);
     });
 
-    it("D23: writes the locale's minus and decimal comma on the money axis, in the clear and masked: U+2212 in sv-SE", async () => {
-        // WHY: D23 on the axis. A minus written by hand is a hyphen in every locale, and in Node's
-        // default locale the locale's own minus is a hyphen too, so no host-locale case can tell
-        // the two apart. Forcing the call the formatter makes, `Number.prototype.toLocaleString`,
-        // to a locale whose minus is U+2212 can. Catches a hand-written `-` in the clear label
-        // and in front of the mask, and a decimal point written by hand where the locale writes
-        // a comma. The glyphs are literals on purpose: they are the subject.
+    it("D23: writes the interface locale's minus and decimal comma on the money axis, in the clear and masked: U+2212 in sv-SE", async () => {
+        // WHY: D23 on the axis. A minus written by hand is a hyphen in every locale, and the four
+        // interface languages write a hyphen too, so no case in them can tell the two apart. With
+        // sv-SE as the interface locale the digits turn Swedish either way, the sign only if it
+        // comes out of the same call. Catches a hand-written `-` in the clear label and in front of
+        // the mask, and a decimal point written by hand where the locale writes a comma. The glyphs
+        // are literals on purpose: they are the subject.
+        // Why (re-pin, M-18 CP2): sv-SE used to be forced by patching `Number.prototype.toLocaleString`
+        // around the read; it is now forced as the interface locale, before the mount.
+        forceInterfaceLocale(SWEDISH);
         // Precondition: this Node has Swedish locale data and writes U+2212 there. Without it the
-        // forced locale would fall back in silence and the check would prove nothing.
+        // locale would fall back in silence and the check would prove nothing.
         expect(leadingSign(axisNumber(-5, SWEDISH))).toBe('\u2212');
         expect(isPrivacyEnabled()).toBe(false);
         render(GrowthChart, {props: {history: HISTORY}});
         const clearAxis = (await waitForFrame(FRAME.abs)).yAxis.axisLabel.formatter;
-        const clear = inLocale(SWEDISH, () => [-5_000, -1_500, 1_500, -0].map((value) => clearAxis(value)));
+        const clear = [-5_000, -1_500, 1_500, -0].map((value) => clearAxis(value));
 
         const beforeOn = setOptionCount();
         setPrivacyEnabled(true);
         const maskedAxis = (await fullOptionAfter(beforeOn)).yAxis.axisLabel.formatter;
-        const masked = inLocale(SWEDISH, () => [-5_000, 1_500, 0].map((value) => maskedAxis(value)));
+        const masked = [-5_000, 1_500, 0].map((value) => maskedAxis(value));
 
         expect({clear, masked}).toEqual({
             clear: ['\u22125k', '\u22121,5k', '1,5k', '0'],
@@ -3265,7 +3305,7 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         // in the clear or masked — the mask (`-•••`) is as wide as a label that is not empty.
         setPrivacyEnabled(masked);
         const views = await edgeFormatters();
-        const read = Object.fromEntries(views.map(({view, format}) => [view, inLocale('en-US', () => EDGES.map((edge) => format(edge, 0)))]));
+        const read = Object.fromEntries(views.map(({view, format}) => [view, readInEnUs(() => EDGES.map((edge) => format(edge, 0)))]));
         expect(read).toEqual(Object.fromEntries(views.map(({view}) => [view, EDGES.map(() => '')])));
     });
 
@@ -3277,20 +3317,22 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         const views = await edgeFormatters();
         const PCT_TICKS = [-0.6, 0, 1.2, 12.3];
         const sequencesOf = (view: string) => (view === '%' ? [PCT_TICKS] : TICKS_EN.map(({values}) => values));
-        const read = Object.fromEntries(views.map(({view, format}) => [view, inLocale('en-US', () => sequencesOf(view).map((values) => values.map((value, offset) => format(value, offset + 1))))]));
+        const read = Object.fromEntries(views.map(({view, format}) => [view, readInEnUs(() => sequencesOf(view).map((values) => values.map((value, offset) => format(value, offset + 1))))]));
         const money = masked ? TICKS_EN.map(({values}) => values.map(maskedMoney)) : TICKS_EN.map(({labels}) => labels);
         expect(read).toEqual({Abs: money, 'P&L line': money, Candles: money, '%': [['-0.6%', '0.0%', '1.2%', '12.3%']]});
     });
 
-    it.each(PRIVACY)('k4 G1: a call with the value alone prints the edge as before — $title (green today and after the fix)', async ({masked}) => {
+    it.each(PRIVACY)('k4 G1: a call with the value alone prints the edge as before, the % edge grouped in en-US (M-18) — $title', async ({masked}) => {
         // WHY: the index is ECharts' second argument, and the older callers — the S2a and S7b cases among them
         // — pass the value alone. Catches an index that defaults to 0 and blanks every such call.
+        // Why (re-pin, M-18 CP2): the % edge is written by `formatPercent` in the interface locale, en-US
+        // here, which groups from 1,000: `-4152.0%` and `55588000.0%` become `-4,152.0%` and `55,588,000.0%`.
         setPrivacyEnabled(masked);
         const views = await edgeFormatters();
         const VALUES = [-4_152, 55_588_000, 0];
-        const read = Object.fromEntries(views.map(({view, format}) => [view, inLocale('en-US', () => VALUES.map((value) => format(value)))]));
+        const read = Object.fromEntries(views.map(({view, format}) => [view, readInEnUs(() => VALUES.map((value) => format(value)))]));
         const money = masked ? VALUES.map(maskedMoney) : ['-4.152k', '55.588M', '0'];
-        expect(read).toEqual({Abs: money, 'P&L line': money, Candles: money, '%': ['-4152.0%', '55588000.0%', '0.0%']});
+        expect(read).toEqual({Abs: money, 'P&L line': money, Candles: money, '%': ['-4,152.0%', '55,588,000.0%', '0.0%']});
     });
 
     it.each(PRIVACY)('k4 G1: Income keeps the label of its tick index 0, a real tick on an axis that stands on zero — $title (green today and after the fix)', async ({masked}) => {
@@ -3307,7 +3349,7 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         // Barrier: Income's axis has no computed edge, so its index 0 is not the edge G1 blanks.
         expect(income.yAxis).toHaveProperty('min', undefined);
         const VALUES = [0, -30, -5_000, 1_500];
-        const labels = inLocale('en-US', () => VALUES.map((value) => income.yAxis.axisLabel.formatter(value, 0)));
+        const labels = readInEnUs(() => VALUES.map((value) => income.yAxis.axisLabel.formatter(value, 0)));
         expect(labels).toEqual(masked ? VALUES.map(maskedMoney) : ['0', '-30', '-5k', '1.5k']);
     });
 });
@@ -3771,5 +3813,146 @@ describe('GrowthChart broker set changes under the P&L line (plan 47, C2)', {tim
         const call = latestSeriesCallSince(before);
         if (call == null) throw new Error('the barrier passed without a series update');
         expect(mechanismOf(call)).toMatchObject({fullRebuild: false, brokerSeries: [BROKER_A, BROKER_B]});
+    });
+});
+
+// =============================================================================
+// M-18 — the figures in the interface language
+// =============================================================================
+
+/**
+ * M-18 CP2: every figure the chart writes follows the interface language.
+ *
+ * The money ticks (`scaled.toLocaleString(undefined, …)`) and the tooltip amounts (`fmtCurrency`,
+ * `toLocaleString(undefined, …)`) are written in the browser's locale; the % ticks (`${v.toFixed(1)}%`)
+ * and the % tooltip rows (`${Number(rawVal).toFixed(2)}%`) in no locale at all. An Italian on an en-US
+ * browser reads `-1.5k`, `EUR -1,357.24` and `12.3%`. Every figure is written in the interface language
+ * (the developer's decision M-18, 2026-10-12), through `uiLocale()`:
+ *
+ *   - money tick: the scaled value in the interface locale, then `k` or `M`;
+ *   - % tick: `formatPercent(v, {digits: 1, signed: false})`;
+ *   - tooltip amount: `fmtCurrency` in the interface locale, its sign out of the same call (D23);
+ *   - % tooltip row: `formatPercent(value, {signed: false})`.
+ *
+ * Fixtures. The Abs view on `MONEY_HISTORY`, whose tooltip rows are known day by day (day 0's NAV, day
+ * 1's loss); the % view on `HISTORY`, which carries returns. A % row is read with a series name and a
+ * value this file hands the formatter, as ECharts hands them.
+ *
+ * Expectations are built in an explicit locale. Each case runs twice: the English UI is the control,
+ * today's en-US text; the Italian UI is the subject. The `beforeAll` checks that Italian differs from
+ * English on every figure read.
+ *
+ * Language. Switched as LanguageSelector does — `currentLanguage.set`, which also drives svelte-i18n —
+ * before the mount; the `afterEach` puts English back.
+ */
+describe('GrowthChart figures in the interface language (M-18)', {timeout: 30_000}, () => {
+    /** The UI languages read, with the interface locale each gives on jsdom's en-US browser. */
+    const LANGUAGES = [
+        {lang: 'en', locale: 'en-US'},
+        {lang: 'it', locale: 'it'},
+    ] as const;
+
+    /** Money ticks of both scales, and zero. */
+    const MONEY_TICKS = [-1_500, 12_500, 1_300_000, 0];
+    /** % ticks: a return, a loss, zero. */
+    const PCT_TICKS = [12.34, -0.6, 0];
+    /** The % rows handed to the tooltip: series names this file supplies, values already in percent. */
+    const PCT_ROWS = [
+        {seriesName: 'Probe return A', value: 12.3456, color: '#111111'},
+        {seriesName: 'Probe return B', value: -3.21, color: '#222222'},
+    ];
+
+    /** Day 0's NAV and day 1's total P&L, a loss: the Abs tooltip amounts read. */
+    const NAV_DAY_0 = Number(MONEY_HISTORY[0].nav_value.amount);
+    const PNL_DAY_1 = Number(MONEY_HISTORY[1].total_pnl.amount);
+
+    /** What the Abs view must write in `locale`. */
+    function expectedAbs(locale: string) {
+        return {
+            moneyTicks: [`${axisNumber(-1.5, locale)}k`, `${axisNumber(12.5, locale)}k`, `${axisNumber(1.3, locale)}M`, axisNumber(0, locale)],
+            nav: expectedAmount(NAV_DAY_0, {locale}),
+            totalPnl: expectedAmount(PNL_DAY_1, {signed: true, locale}),
+        };
+    }
+
+    /** What the % view must write in `locale`. */
+    function expectedPct(locale: string) {
+        return {
+            pctTicks: PCT_TICKS.map((value) => formatPercent(value, {digits: 1, signed: false, locale})),
+            pctRows: PCT_ROWS.map(({value}) => formatPercent(value, {signed: false, locale})),
+        };
+    }
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; Italian joins it, so a switch never waits on a loader.
+        await waitLocale('it');
+        // Controls: this runtime has Italian data, so every figure read changes notation.
+        const [abs, pct] = [
+            [expectedAbs('en-US'), expectedAbs('it')],
+            [expectedPct('en-US'), expectedPct('it')],
+        ] as const;
+        expect(abs[1].moneyTicks[0], 'an Italian money tick differs from English').not.toBe(abs[0].moneyTicks[0]);
+        expect(abs[1].nav, 'an Italian amount differs from English').not.toBe(abs[0].nav);
+        expect(abs[1].totalPnl, 'an Italian signed amount differs from English').not.toBe(abs[0].totalPnl);
+        expect(pct[1].pctTicks[0], 'an Italian % tick differs from English').not.toBe(pct[0].pctTicks[0]);
+        expect(pct[1].pctRows[0], 'an Italian % row differs from English').not.toBe(pct[0].pctRows[0]);
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it.each(LANGUAGES)('$lang UI on an en-US browser: the money ticks and the tooltip amounts of the Abs view, in $locale', async ({lang, locale: interfaceTag}) => {
+        await switchLanguage(lang);
+        expect(uiLocale(), 'control: the interface locale').toBe(interfaceTag);
+        render(GrowthChart, {props: {history: MONEY_HISTORY, baseCurrency: BASE_CURRENCY}});
+        const option = await waitForFrame(FRAME.abs);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
+
+        const expected = expectedAbs(interfaceTag);
+        const read = {
+            moneyTicks: MONEY_TICKS.map((value) => option.yAxis.axisLabel.formatter(value)),
+            nav: rowValue(tooltipRows(option.tooltip.formatter([{dataIndex: 0}])), 'dashboard.navValue'),
+            totalPnl: rowValue(tooltipRows(option.tooltip.formatter([{dataIndex: 1}])), 'dashboard.totalPnl'),
+        };
+        expect(read, spelled(expected)).toEqual(expected);
+    });
+
+    it.each(LANGUAGES)('$lang UI on an en-US browser: the % ticks and the % tooltip rows, in $locale', async ({lang, locale: interfaceTag}) => {
+        await switchLanguage(lang);
+        expect(uiLocale(), 'control: the interface locale').toBe(interfaceTag);
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+        await waitForFrame(FRAME.abs);
+
+        // Precondition: HISTORY carries return series, so the % view can be reached.
+        expect(getByTestId('growth-toggle-pct')).toBeEnabled();
+        const before = setOptionCount();
+        await fireEvent.click(getByTestId('growth-toggle-pct'));
+        const pctOption = await fullOptionAfter(before);
+        expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
+
+        const rows = tooltipRows(pctOption.tooltip.formatter(PCT_ROWS.map((row) => ({dataIndex: 0, ...row}))));
+        const expected = expectedPct(interfaceTag);
+        const read = {
+            pctTicks: PCT_TICKS.map((value) => pctOption.yAxis.axisLabel.formatter(value)),
+            pctRows: PCT_ROWS.map(({seriesName}) => rows.find((row) => row.label === seriesName)?.value ?? `(no row labelled ${seriesName})`),
+        };
+        expect(read, spelled(expected)).toEqual(expected);
     });
 });

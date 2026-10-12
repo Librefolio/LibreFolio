@@ -30,6 +30,7 @@
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {splitRowCharges, type ChargeDraft, type ChargeKind} from '$lib/utils/transactions/splitRowCharges';
     import type {BrimEvidence} from '$lib/types';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface FlaggedTodo {
         field: string;
@@ -423,7 +424,7 @@
         const n = Number(amount);
         if (!Number.isFinite(n)) return '—';
         const decimals = Math.min(8, Math.max(2, amount.split('.')[1]?.length ?? 0));
-        const text = Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: decimals});
+        const text = Math.abs(n).toLocaleString(uiLocale(), {minimumFractionDigits: 2, maximumFractionDigits: decimals});
         const symbol = getCurrencyInfo(code)?.symbol || code;
         return `${negative ? '−' : ''}${text} ${symbol}`;
     }

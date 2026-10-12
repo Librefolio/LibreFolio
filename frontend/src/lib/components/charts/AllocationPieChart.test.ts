@@ -54,7 +54,7 @@
  */
 import {existsSync} from 'node:fs';
 import {join} from 'node:path';
-import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
 /**
  * The ECharts stand-in: a recorder, not a renderer — jsdom has no canvas, and pixels are not the
@@ -109,10 +109,13 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
 
 vi.mock('echarts', () => echartsModule);
 
+import {flushSync, tick} from 'svelte';
 import {get} from 'svelte/store';
+import {locale, waitLocale} from 'svelte-i18n';
 
 import {render, setupI18n, waitFor} from '$test/component';
 import {_} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 
 // =============================================================================
 // Fixtures
@@ -392,5 +395,216 @@ describe("AllocationPieChart — the tooltip titles each arc with the type's own
             return shared.length === 0 ? [] : [`${type}: its tooltip shows ${JSON.stringify(shared)}, the icon of its family ${K.assetTypeFamily(type)}`];
         });
         expect(problems, "subtypes whose tooltip picture is their family's or the fallback: the composite that carries what they hold is missing").toEqual([]);
+    });
+});
+
+// =============================================================================
+// M-18 — redrawn in the interface language
+// =============================================================================
+
+/**
+ * M-18 CP2: a switch of the UI language redraws the pie, and the figures it writes follow it.
+ *
+ * ECharts runs a formatter only while painting, and paints only when it is handed an option: a pie
+ * that is not redrawn keeps everything it was drawn with. The render effect tracks the data alone,
+ * so a language switch hands ECharts nothing. Every figure is written in the interface language (the
+ * developer's decision M-18, 2026-10-12), and every effect that calls `setOption` reads `uiLocale()`,
+ * so a switch redraws the pie on the same instance.
+ *
+ * The amount under each arc's name in the tooltip (`formatCurrencyAmountPlain`) follows the interface
+ * language too: after a switch to Italian, `12.345,67` where English writes `12,345.67`.
+ *
+ * The percentages the pie prints by interpolating the number — an arc's in its tooltip, sector or type,
+ * the family line `↳ …` under a member, the outer ring's captions — become `formatPercent(value,
+ * {digits: 2, signed: false, trim: true})`: the decimals the figure has, up to two, in the interface
+ * locale. `44.5%` and `24%` in English, as today; `44,5%` and `24%` in Italian.
+ *
+ * And the switch rebuilds the pie in full. A data-only update (the fast path, for an unchanged theme
+ * and type set) hands ECharts the Italian names but keeps the legend formatter of the English build,
+ * whose name lookup misses them and falls back to a key of its own: `assets.types.OBBLIGAZIONI`.
+ *
+ * Read: the `setOption` calls on the one instance; the tooltip of the latest full build, called as
+ * ECharts calls it on hover; the outer captions and the legend through the formatters ECharts paints
+ * with. A legend is painted when ECharts is handed an option — svelte-i18n's `$_` answers in the
+ * language current when it is called, so a formatter called later would say what ECharts never
+ * painted. Expectations come from `Intl` in an explicit locale, and labels from the catalogue.
+ *
+ * Language. Switched as LanguageSelector does — `currentLanguage.set`, which also drives svelte-i18n —
+ * with both dictionaries loaded; the `afterEach` puts English back.
+ */
+describe('AllocationPieChart — redrawn in the interface language (M-18)', {timeout: 15_000}, () => {
+    /** Two types with no subtype — one ring — whose amounts are above ten thousand, so both separators are read in both languages. */
+    const SLICES: Slice[] = [
+        {name: 'BOND', value: 44.5, amount: 12_345.67},
+        {name: 'STOCK', value: 55.5, amount: 15_396.21},
+    ];
+    const BOND_AMOUNT = 12_345.67;
+
+    /** Two sectors, one ring: the sector tooltip's own template. */
+    const SECTORS: Slice[] = [
+        {name: 'Technology', value: 44.5, amount: 12_345.67},
+        {name: 'Health Care', value: 55.5, amount: 15_396.21},
+    ];
+
+    /** The UI languages read, with the interface locale each gives on jsdom's en-US browser. Titles stay short: Vitest cuts `$title` at 40 characters. */
+    const LANGUAGES = [
+        {lang: 'en', locale: 'en-US'},
+        {lang: 'it', locale: 'it'},
+    ] as const;
+
+    /** The amount's digits as the currency format writes them in `localeTag`: two decimals. */
+    const digitsIn = (amount: number, localeTag: string) => amount.toLocaleString(localeTag, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    /** A percentage as the pie must write it in `localeTag`: the decimals it has, up to two, after `toFixed(2)` — `formatPercent` with `trim`. */
+    const percentIn = (value: number, localeTag: string) => new Intl.NumberFormat(localeTag, {style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 2}).format(Number(value.toFixed(2)) / 100);
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    /** Mount the sector pie as the Asset Detail page does, and read its first full build. */
+    async function drawSectorPie(data: Slice[]): Promise<Drawing> {
+        render(AllocationPieChart, {props: {data, mode: 'sector', legendPosition: 'bottom', currency: 'EUR'}});
+        await waitFor(() => expect(chartInstances[0]?.setOptionCalls.length ?? 0).toBeGreaterThan(0), {timeout: 5_000});
+        return drawing();
+    }
+
+    /** The latest `setOption` call carrying `key`, newest first. */
+    function latestCallWith(key: 'legend' | 'series' | 'tooltip') {
+        expect(chartInstances, 'the pie did not create exactly one chart').toHaveLength(1);
+        return [...chartInstances[0].setOptionCalls].reverse().find(({option}) => (key === 'series' ? Array.isArray(option.series) : option[key] !== undefined));
+    }
+
+    /** The caption the outer ring draws beside `arc`, through the label formatter of the latest full build. */
+    function outerCaptionOf(arc: DrawnArc): string {
+        const series = latestCallWith('tooltip')?.option.series as Array<{id?: string; label?: {formatter?: unknown}}> | undefined;
+        const formatter = series?.find((entry) => entry.id === 'alloc-outer')?.label?.formatter;
+        if (typeof formatter !== 'function') throw new Error('the outer ring carries no caption formatter');
+        return (formatter as (params: unknown) => string)({componentType: 'series', seriesType: 'pie', name: arc.name, value: arc.value, data: arc});
+    }
+
+    /** The percentage an arc's tooltip prints after the arc's name: what follows `: ` up to the `%`. */
+    function arcPercentIn(html: string): string {
+        return /: ([^<]*%)/.exec(html)?.[1] ?? `(no percentage after the arc's name in ${html})`;
+    }
+
+    /**
+     * What the legend shows now: each name the latest series data carries, through the legend formatter of
+     * the latest build that carried one — what ECharts paints after merging the last option it was handed.
+     * The rich-text token in front (`{img_BOND|}`) draws the icon; the text after it is what a reader reads.
+     */
+    function legendNow(): {raw: string[]; visible: string[]} {
+        const formatter = (latestCallWith('legend')?.option.legend as {formatter?: unknown} | undefined)?.formatter;
+        if (typeof formatter !== 'function') throw new Error('the type legend carries no formatter');
+        const data = (latestCallWith('series')?.option.series as Array<{data?: Array<{name: string}>}> | undefined)?.[0]?.data ?? [];
+        const raw = data.map(({name}) => (formatter as (name: string) => string)(name));
+        return {raw, visible: raw.map((text) => text.replace(/\{[^{}|]*\|[^{}]*\}/g, '').trim()).sort()};
+    }
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; Italian joins it, so a switch never waits on a loader.
+        await waitLocale('it');
+        // Controls: this runtime has Italian data, so the Italian amount and percentage are not the English ones.
+        expect(digitsIn(BOND_AMOUNT, 'it'), 'Italian differs from English').not.toBe(digitsIn(BOND_AMOUNT, 'en-US'));
+        expect(percentIn(44.5, 'it'), 'an Italian percentage differs from English').not.toBe(percentIn(44.5, 'en-US'));
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('a switch of the UI language redraws the pie: setOption is called again after the switch, on the same instance', async () => {
+        await drawPie(SLICES);
+        const [chart] = chartInstances;
+        const before = chart.setOptionCalls.length;
+
+        await switchLanguage('it');
+        // A redraw is one `tick()` away: two seconds are generous, and shorter than the case's budget,
+        // so a missing redraw fails on this assertion rather than on the test timeout.
+        await waitFor(() => expect(chart.setOptionCalls.length, 'no setOption followed the switch to Italian').toBeGreaterThan(before), {timeout: 2_000});
+        expect(chartInstances, 'the switch redrew the same chart').toHaveLength(1);
+    });
+
+    it('after a switch to Italian, the amount its tooltip writes is Italian', async () => {
+        const drawn = await drawPie(SLICES);
+        // Control: drawn under the English UI, the amount reads as en-US writes it.
+        expect(drawn.tooltipOf(sliceOf(drawn, 'BOND'))).toContain(digitsIn(BOND_AMOUNT, 'en-US'));
+
+        await switchLanguage('it');
+        const after = drawing();
+        const html = after.tooltipOf(sliceOf(after, 'BOND'));
+        expect(html, 'the amount in Italian notation').toContain(digitsIn(BOND_AMOUNT, 'it'));
+        expect(html, 'no English amount left').not.toContain(digitsIn(BOND_AMOUNT, 'en-US'));
+    });
+
+    it.each(LANGUAGES)('$lang UI: the type pie’s percentages — an arc’s, its family’s, an outer caption’s — in $locale, with the decimals they have', async ({lang, locale: localeTag}) => {
+        // WHY: the pie interpolates its percentages (`${params.value}%`), so they carry a point in every
+        // language. Catches each of the three sites left raw: an arc's tooltip, the `↳` family line under a
+        // member of a split family, and the outer ring's caption. The English UI is the control: today's
+        // text, which is also the trimmed text of the rule.
+        await switchLanguage(lang);
+        const drawn = await drawPie(CROWDFUND_CASE);
+        // Precondition: the family holding a subtype is split on a second ring, so all three sites are drawn.
+        expect(drawn.rings, 'a family holding a subtype is split on a second ring').toBe(true);
+        const generic = sliceOf(drawn, 'CROWDFUND');
+        const subtypeTooltip = drawn.tooltipOf(sliceOf(drawn, 'CROWDFUND_REAL_ESTATE'));
+
+        const read = {
+            arc: arcPercentIn(drawn.tooltipOf(sliceOf(drawn, 'BOND'))),
+            family: /↳ ([^<]*)</.exec(subtypeTooltip)?.[1] ?? `(no family line in ${subtypeTooltip})`,
+            caption: outerCaptionOf(generic),
+        };
+        // BOND weighs 44.5, the Crowdfund family 31.5 + 24 = 55.5, its generic member 31.5.
+        expect(read).toEqual({
+            arc: percentIn(44.5, localeTag),
+            family: `${typeLabel('CROWDFUND')} ${percentIn(55.5, localeTag)}`,
+            caption: `${generic.caption}\n${percentIn(31.5, localeTag)}`,
+        });
+    });
+
+    it.each(LANGUAGES)('$lang UI: the sector pie’s tooltip percentage in $locale, with the decimals it has', async ({lang, locale: localeTag}) => {
+        // WHY: the sector tooltip is a template of its own (`${name}: ${params.value}%`), so a cure of the
+        // type tooltip alone leaves it with a point.
+        await switchLanguage(lang);
+        const drawn = await drawSectorPie(SECTORS);
+        const technology = drawn.inner.filter((arc) => arc.rawName === 'Technology');
+        expect(technology, 'one arc for Technology').toHaveLength(1);
+
+        expect(arcPercentIn(drawn.tooltipOf(technology[0]))).toBe(percentIn(44.5, localeTag));
+    });
+
+    it('after a switch to Italian, the pie is rebuilt in full: its legend reads the Italian names, never a raw key', async () => {
+        // WHY: a pie not redrawn keeps the English legend ECharts painted; a data-only update hands ECharts
+        // the Italian names and keeps the English build's legend formatter, which misses them and paints a
+        // key it derives, `assets.types.OBBLIGAZIONI`. Only a full rebuild gives the legend a formatter that
+        // knows the names it is handed. Catches both: the switch must end with the legend in Italian.
+        await drawPie(SLICES);
+        const [chart] = chartInstances;
+        const english = ['BOND', 'STOCK'].map(typeLabel).sort();
+        const painted = legendNow();
+        expect(painted.visible, 'control: drawn in English, the English names').toEqual(english);
+
+        const before = chart.setOptionCalls.length;
+        await switchLanguage('it');
+        const italian = ['BOND', 'STOCK'].map(typeLabel).sort();
+        expect(italian, 'control: the Italian names differ from the English ones').not.toEqual(english);
+
+        await waitFor(
+            () => {
+                // ECharts paints a legend when it is handed an option: with none since the switch, the
+                // legend still shows what it was painted with.
+                const shown = chart.setOptionCalls.length > before ? legendNow() : painted;
+                expect(shown.raw.join(' | '), 'a raw catalogue key in the legend').not.toContain('assets.types.');
+                expect(shown.visible, 'the legend after the switch to Italian').toEqual(italian);
+            },
+            {timeout: 2_000},
+        );
     });
 });

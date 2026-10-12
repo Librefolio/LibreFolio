@@ -28,6 +28,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {safeDecimal, safeNumber, safeScalar, safeString} from '$lib/types';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Holding {
         asset_id: number;
@@ -150,7 +151,7 @@
 
     /** A position quantity; masked under privacy (D5′), an em dash when absent. */
     function formatQuantity(value: number | null): string {
-        return value == null ? '—' : maskableQuantity(value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6}));
+        return value == null ? '—' : maskableQuantity(value.toLocaleString(uiLocale(), {minimumFractionDigits: 0, maximumFractionDigits: 6}));
     }
 
     function label(key: string, fallback: string): string {

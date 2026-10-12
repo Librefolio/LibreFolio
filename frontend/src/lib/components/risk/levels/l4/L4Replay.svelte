@@ -17,6 +17,7 @@
     import TornadoChart from './TornadoChart.svelte';
     import {formatReplayDate, formatReplayShare, replayCoverageWarning, replayExclusions, replayNothingLeft, replayOptions, replaySuggestion, tornadoRows, type ReplayExclusionGroup, type ReplayExclusions, type TornadoRow} from './scenarioHelpers';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     /**
      * L4 rung 1 — historical replay: real returns, from a real period.
@@ -203,7 +204,7 @@
      */
     function excludedHeader(value: ReplayExclusions): string {
         if (value.treatment === 'zero_return_residual' && value.weightTotal !== null) {
-            return $t('risk.levels.l4.replayExcludedResidual', {values: {count: value.count, weight: formatReplayShare(value.weightTotal, $currentLanguage)}});
+            return $t('risk.levels.l4.replayExcludedResidual', {values: {count: value.count, weight: formatReplayShare(value.weightTotal, uiLocale())}});
         }
         return $t('risk.levels.l4.replayExcludedOmitted', {values: {count: value.count}});
     }
@@ -299,7 +300,7 @@
                     {#each group.assets as asset (asset.assetId)}
                         <AssetChip asset={chipAsset(asset.assetId)} variant="excluded" testId="risk-replay-excluded-asset" data-asset-id={asset.assetId} data-weight={asset.weight ?? undefined}>
                             {#snippet trailing()}
-                                {#if asset.weight !== null}<span class="tabular-nums">{formatReplayShare(asset.weight, $currentLanguage)}</span>{/if}
+                                {#if asset.weight !== null}<span class="tabular-nums">{formatReplayShare(asset.weight, uiLocale())}</span>{/if}
                             {/snippet}
                         </AssetChip>
                     {/each}
@@ -323,7 +324,7 @@
                 data-recovers={suggestion.recovers.length}
             >
                 <RotateCcw size={13} />
-                {$t('risk.levels.l4.replaySuggested', {values: {start: formatReplayDate(suggestion.start, $currentLanguage), end: formatReplayDate(suggestion.end, $currentLanguage), count: suggestion.recovers.length}})}
+                {$t('risk.levels.l4.replaySuggested', {values: {start: formatReplayDate(suggestion.start, uiLocale()), end: formatReplayDate(suggestion.end, uiLocale()), count: suggestion.recovers.length}})}
             </button>
             {#if partOfCrisis}
                 <span class="text-gray-500 dark:text-gray-400" data-testid="risk-replay-suggested-partial">{$t('risk.levels.l4.replaySuggestedPartial')}</span>

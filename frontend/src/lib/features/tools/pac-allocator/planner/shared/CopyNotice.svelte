@@ -1,6 +1,6 @@
 <script lang="ts">
     import {Clock} from 'lucide-svelte';
-    import {t, locale} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import type {CopyKind} from '../draft.svelte';
     import type {PlannerDraft} from '../draft.svelte';
     import type {CopyOutcome} from '../copies';
@@ -57,7 +57,7 @@
     const shown = $derived(!quiet || warn || issues.length > 0);
     /** Prices, FX rates and cash balances left unchanged are read again before «Calcola»: their copy time says nothing. */
     const showStamp = $derived(outcome.kind !== 'prices' && outcome.kind !== 'fx' && outcome.kind !== 'liquidity');
-    const stamp = $derived(formatCopyStamp(outcome.copy.asOf, outcome.copy.capturedAt, $locale));
+    const stamp = $derived(formatCopyStamp(outcome.copy.asOf, outcome.copy.capturedAt));
     const stampHint = $derived(
         $t('tools.pacAllocator.planner.copyNotice.stamp', {
             default: '{kind, select, refreshed {Copied: {when}. Values you have not changed are read again just before the calculation.} other {Copied: {when}.}}',

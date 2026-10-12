@@ -6,6 +6,7 @@
  */
 
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /**
  * Format a quantity string for display:
@@ -17,7 +18,7 @@ export function formatTxQuantity(qty: string | null | undefined): string {
     if (qty == null || qty === '') return '—';
     const n = parseFloat(qty);
     if (isNaN(n) || n === 0) return '—';
-    const formatted = n.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
+    const formatted = n.toLocaleString(uiLocale(), {minimumFractionDigits: 0, maximumFractionDigits: 6});
     const emoji = n > 0 ? ' 📈' : ' 📉';
     return `${n > 0 ? '+' : ''}${formatted}${emoji}`;
 }

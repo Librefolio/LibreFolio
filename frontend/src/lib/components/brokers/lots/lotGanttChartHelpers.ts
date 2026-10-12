@@ -23,6 +23,7 @@
 import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {clamp} from './lotChartShared';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /** The marker kinds the Gantt can draw for a lot event. */
 export type EventMarkerKind = 'BUY' | 'SELL' | 'TRANSFER' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT';
@@ -99,9 +100,9 @@ export function firstPresentUnknown(...values: unknown[]): unknown {
 
 /**
  * Format a quantity with up to 6 fraction digits. `locale` is exposed for
- * deterministic tests; it defaults to the machine locale, matching the component.
+ * deterministic tests; it defaults to the interface locale (`uiLocale()`, M-18).
  */
-export function formatQuantity(value: number, locale?: string): string {
+export function formatQuantity(value: number, locale: string = uiLocale()): string {
     return value.toLocaleString(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6});
 }
 

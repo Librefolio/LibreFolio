@@ -109,10 +109,14 @@ const {charts, echartsModule} = vi.hoisted(() => {
 
 vi.mock('echarts', () => echartsModule);
 
-import {flushSync, type ComponentProps} from 'svelte';
+import {flushSync, tick, type ComponentProps} from 'svelte';
+import {get} from 'svelte/store';
+import {locale, waitLocale} from 'svelte-i18n';
 
 import {cleanup, render, screen, waitFor} from '$test/component';
 import {reactiveBox} from '$test/runes.svelte';
+import {currentLanguage} from '$lib/stores/app/language';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
 import {buildScatterOption, type RiskReturnPoint} from './scatterChartHelpers';
 import ScatterChart from './ScatterChart.svelte';
@@ -448,6 +452,77 @@ describe('ScatterChart', () => {
             // Presence first: the name and both coordinates are there, so the count is about the extra line.
             expect(lines[0]).toBe('Asset Two');
             expect(lines, 'the name and where the dot sits, and nothing else').toHaveLength(3);
+        });
+    });
+
+    /**
+     * M-18 CP2: a switch of the UI language redraws the chart.
+     *
+     * Both axes write their ticks through `axisPercent`, a `formatPercent` whose locale defaults to the
+     * interface locale, read when ECharts calls it. But ECharts calls a formatter only while painting,
+     * and paints only when it is handed an option: the render effect tracks the built option alone —
+     * points, labels, theme, selection — so a language switch hands ECharts nothing, and the axes keep
+     * the language they were drawn in. Every figure is written in the interface language (the
+     * developer's decision M-18, 2026-10-12), and every effect that calls `setOption` reads `uiLocale()`,
+     * so a switch redraws, on the same instance, an option whose axes write French.
+     *
+     * Read: a new `setOption` after the switch, and the two axis formatters of that option, called as
+     * ECharts calls them. Expectations from `formatPercent` with an explicit locale; English is the control.
+     *
+     * Language. Switched as LanguageSelector does — `currentLanguage.set`, which also drives svelte-i18n —
+     * after the mount; the `afterEach` puts English back. The chart takes its labels as props, so no
+     * translated text is read.
+     */
+    describe('redrawn in the interface language (M-18)', () => {
+        type AxisFormatter = (value: number) => string;
+
+        /** The tick formatter of one axis of a drawn option. */
+        function axisFormatter(option: Record<string, unknown>, axis: 'xAxis' | 'yAxis'): AxisFormatter {
+            const formatter = (option[axis] as {axisLabel?: {formatter?: unknown}} | undefined)?.axisLabel?.formatter;
+            if (typeof formatter !== 'function') throw new Error(`the option carries no ${axis} label formatter`);
+            return formatter as AxisFormatter;
+        }
+
+        /** A volatility tick on x and a return tick on y, as each axis writes them. */
+        function ticksOf(option: Record<string, unknown>): {volatility: string; annualReturn: string} {
+            return {volatility: axisFormatter(option, 'xAxis')(0.1234), annualReturn: axisFormatter(option, 'yAxis')(-0.05)};
+        }
+
+        /** Both ticks as an axis must write them in `localeTag`: fractions, as percentages with one decimal and no `+`. */
+        function expectedTicks(localeTag: string): {volatility: string; annualReturn: string} {
+            const percent = (fraction: number) => formatPercent(fraction, {scale: 100, signed: false, digits: 1, locale: localeTag});
+            return {volatility: percent(0.1234), annualReturn: percent(-0.05)};
+        }
+
+        /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+        async function switchLanguage(lang: 'en' | 'fr'): Promise<void> {
+            currentLanguage.set(lang);
+            await waitLocale(lang);
+            flushSync();
+            await tick();
+            expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+            expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+        }
+
+        afterEach(async () => {
+            // The language is module-level state shared by every test of the file.
+            await switchLanguage('en');
+        });
+
+        it('a switch to French redraws the chart on the same instance, and the option it hands ECharts writes French percentages on both axes', async () => {
+            mount();
+            const chart = await firstDraw();
+            // Control: drawn under the English UI, today's text; and French writes it otherwise.
+            expect(ticksOf(chart.setOptionCalls.at(-1)!.option)).toEqual({volatility: '12.3%', annualReturn: '-5.0%'});
+            const french = expectedTicks('fr');
+            expect(french.volatility, 'French differs from English').not.toBe('12.3%');
+
+            const draws = chart.setOptionCalls.length;
+            await switchLanguage('fr');
+            await waitFor(() => expect(chart.setOptionCalls.length, 'no setOption followed the switch to French').toBeGreaterThan(draws), WAIT);
+
+            expect(ticksOf(chart.setOptionCalls.at(-1)!.option)).toEqual(french);
+            expect(theChart(), 'the switch redrew the same chart').toBe(chart);
         });
     });
 });
