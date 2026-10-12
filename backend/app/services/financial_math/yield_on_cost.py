@@ -25,13 +25,9 @@ from backend.app.schemas.portfolio import (
     YieldOnCostUnavailableReason,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.financial_math.fifo.engine import (
-    FifoEngineResult,
-    FifoEvent,
-    FragmentInterval,
-    eligible_income_quantity,
-    run_fifo_lot_engine,
-)
+from backend.app.services.financial_math.fifo.eligibility import eligible_income_quantity
+from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
+from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FragmentInterval
 from backend.app.services.fx import convert_bulk
 
 logger = structlog.get_logger(__name__)

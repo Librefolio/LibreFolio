@@ -9,7 +9,8 @@ A calculation here owns its whole problem. It takes the plain data of the proble
 FX service for conversions, the base currency from the settings service, the shared
 data-quality thresholds, the cache — instead of receiving values prepared by its caller.
 Where a calculation needs its own data from the database, it reads it at named points:
-the portfolio engine and the Yield on Cost loaders.
+the portfolio engine, with the configured FX pairs its data-quality report names, and the
+Yield on Cost loaders.
 
 Engines, services and API handlers call this layer; it does not depend on them. It never
 imports orchestration services (``portfolio_service``, ``broker_service``,
@@ -31,7 +32,11 @@ Modules:
   same-day trade average, or the last observation carried forward.
 * ``yield_on_cost`` — Yield on Cost of holdings, replayed from the transaction ledger.
 * ``fifo`` — FIFO lots: custody fragments, closures, transfers, and the allocation of
-  income and costs to lots.
+  income and costs to lots (``models``, ``eligibility``, ``engine``).
 * ``portfolio`` — the daily portfolio state (NAV, capital, P&L, per-broker contributions)
-  and the views derived from it.
+  and the views derived from it (``models``, ``classifier``, ``daily_state``,
+  ``derived_views``, ``data_quality``, ``engine``).
+* ``lots`` — the math of the lots analysis: price lookups, conversions, economic events,
+  lot histories and average cost lines (``prices``, ``conversions``, ``economic_events``,
+  ``histories``, ``average_cost_lines``).
 """

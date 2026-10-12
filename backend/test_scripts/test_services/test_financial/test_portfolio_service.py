@@ -41,6 +41,7 @@ from backend.app.schemas.portfolio import (
     StalePriceAsset,
 )
 from backend.app.services.broker_service import BrokerService
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.portfolio_service import (
     PortfolioService,
@@ -1299,13 +1300,13 @@ class TestPortfolioBlobCacheFxSensitivity:
         portfolio_engine_module._portfolio_blob_cache.clear()
 
         build_calls = {"n": 0}
-        original_build = portfolio_engine_module.DailyStateBuilder.build
+        original_build = DailyStateBuilder.build
 
         def counting_build(builder_self):
             build_calls["n"] += 1
             return original_build(builder_self)
 
-        monkeypatch.setattr(portfolio_engine_module.DailyStateBuilder, "build", counting_build)
+        monkeypatch.setattr(DailyStateBuilder, "build", counting_build)
 
         engine = portfolio_engine_module.PortfolioCalculationEngine(session)
         date_to = date(2033, 1, 10)
@@ -1337,13 +1338,13 @@ class TestPortfolioBlobCacheFxSensitivity:
         request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
 
         build_calls = {"n": 0}
-        original_build = portfolio_engine_module.DailyStateBuilder.build
+        original_build = DailyStateBuilder.build
 
         def counting_build(builder_self):
             build_calls["n"] += 1
             return original_build(builder_self)
 
-        monkeypatch.setattr(portfolio_engine_module.DailyStateBuilder, "build", counting_build)
+        monkeypatch.setattr(DailyStateBuilder, "build", counting_build)
 
         engine = portfolio_engine_module.PortfolioCalculationEngine(session)
 

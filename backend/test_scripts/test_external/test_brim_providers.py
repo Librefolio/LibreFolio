@@ -70,7 +70,8 @@ from backend.app.services.brim_providers.broker_intesa import IntesaSanpaoloBrok
 from backend.app.services.brim_providers.broker_revolut import RevolutBrokerProvider, _parse_revolut_amount, _parse_revolut_datetime, _parse_revolut_quantity
 from backend.app.services.brim_providers.broker_schwab import SchwabBrokerProvider, _parse_schwab_amount, _parse_schwab_date
 from backend.app.services.brim_providers.broker_trading212 import Trading212BrokerProvider, _parse_trading212_datetime, _parse_trading212_number
-from backend.app.services.financial_math.portfolio.engine import ClassifiedTransaction, DailyStateBuilder
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.app.services.provider_registry import BRIMProviderRegistry
 
