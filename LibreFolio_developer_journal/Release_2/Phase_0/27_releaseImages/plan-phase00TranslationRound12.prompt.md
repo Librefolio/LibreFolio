@@ -788,5 +788,29 @@
 1. devWiki: the coordinator hands the notes to the historian (his step 3): `release-pipeline/b12_devwiki_stamps_hide_stale_translations.md`, `b13_devwiki_anchors_from_render.md`, `b14_devwiki_raw_html_paths_in_translations.md`, `b15_devwiki_fr_typography_hook.md`.
 2. Full pipeline run (translations + gallery): never forced (it would undo the hand reviews of batches 11–18); nothing is pending today.
 3. The gallery's «FX on cash» shot: only after a new dashboard capture by the developer.
-4. M-19: done in batch 24 (step 15); the 🐛 CHANGELOG line is the coordinator's, M's proposal in the checkpoint.
-5. The CHANGELOG's translation: approved by the developer on 12/10 (verbatim: «si ma fai anche la traduzione delle cose non ancora rilasciate, tanto stiamo rifinendo, ci fossero piccole aggiunte, andremo in append»), after batch 23; its own plan. Coordinator 12/10, during batch 23: T (not I) writes the frontend; the modal falls back to English chapter by chapter, with a «not yet translated» pill; T adds one or two English sentences to `user/settings/about.en.md` (§Changelog Modal), whose it/fr/es are M's. And a gallery conflict to cure in that batch: `frontend/e2e/gallery.spec.ts:1984` searches `'Added'` in the changelog modal for the `changelog-modal-search` shot, which finds nothing once the chapters are translated: a word that stays the same in the four languages (a technical term or a proper name present in the chapters); the wait for the chapters (`:1978`, 8 s) holds T's lazy loading.
+4. M-19: done in batch 24 (step 15); the 🐛 CHANGELOG line is the coordinator's. In batch 25, the spec's author found
+   two more things, both proven in a browser:
+   - the local copy has no MathJax fonts, so the formulas drew in the page's font;
+   - `mathjax.js` threw a `TypeError` on every page.
+
+   Both are fixed in batch 25: the fonts are vendored by `scripts/update_js_cache.py`, and the `typesetPromise` call is
+   guarded. The coordinator widened the 🐛 line in English (`e9bc300f0`: every nested page called jsDelivr, with or
+   without formulas); M ports it into it/fr/es after the fast-forward. M-22 is filed: Mermaid only with internet.
+   Details: [plan-phase00ChangelogTranslation.prompt.md](plan-phase00ChangelogTranslation.prompt.md), steps 7–8.
+5. The CHANGELOG's translation: approved by the developer on 12/10 (verbatim: «si ma fai anche la traduzione delle cose non ancora rilasciate, tanto stiamo rifinendo, ci fossero piccole aggiunte, andremo in append»); batch 25, started 12/10 after batch 24, in its own plan: [plan-phase00ChangelogTranslation.prompt.md](plan-phase00ChangelogTranslation.prompt.md).
+6. Coming with I's batch (coordinator 12/10, 16:3x): the button texts of the wrong-broker modal in `user/transactions/import/how-to` (four languages) and in `developer/frontend/components/features/import-wizard.md:162`; the security panel that closes after 30 s, paused while the pointer or the focus is inside it — in the gallery (`frontend/e2e/gallery.spec.ts:1666-1720`) the pointer stays on the button, so it should not close: check the shots once I's batch is in.
+7. M-19's e2e spec `frontend/e2e/layout/docs-offline-math.spec.ts`: written by test-author in batch 25, which added
+   checks on the fonts and on `typesetPromise`. It ran once in M's lane, unregistered: 2 passed, and a negative control
+   without the fonts went red on the font assertion. It is parked outside the repo (`release-pipeline/pending/`) because
+   an unregistered spec turns `check-orphans` red. It will be registered in `scripts/test_runner/_frontend_utility.py`
+   after T's checkpoint (the file is T's for M-18's CP1), when the coordinator says so.
+   Coordinator 12/10, during batch 23:
+   - T (not I) writes the frontend; the modal falls back to English chapter by chapter, with a «not yet translated»
+     pill.
+   - T adds one or two English sentences to `user/settings/about.en.md` (§Changelog Modal), whose it/fr/es are M's.
+   - A gallery conflict to cure in that batch: `frontend/e2e/gallery.spec.ts:1984` searches `'Added'` in the changelog
+     modal for the `changelog-modal-search` shot. Once the chapters are translated, that finds nothing. It needs a word
+     that stays the same in the four languages (a technical term or a proper name present in the chapters).
+   - The wait for the chapters (`:1978`, 8 s) holds T's lazy loading.
+
+   Batch 25 cured the conflict with `CHANGELOG_SEARCH_TERM = 'Docker'`.

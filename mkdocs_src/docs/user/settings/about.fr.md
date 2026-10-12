@@ -101,10 +101,12 @@ rechargez-le pour le relire.
 
 ## 📜 Modale du journal des modifications {: #changelog-modal }
 
-La **modale du journal des modifications** intégrée à l'application affiche le fichier `CHANGELOG.md` fourni. Vous pouvez y accéder depuis deux endroits :
+La **modale du journal des modifications** intégrée à l'application affiche le journal des modifications fourni avec LibreFolio, dans la langue de votre interface. Vous pouvez y accéder depuis deux endroits :
 
 - le **numéro de version en bas de la barre latérale** (sur n'importe quelle page), et
 - le **libellé de version juste sous le titre de cette page À propos** (Paramètres → À propos).
+
+Chaque version s'affiche dans votre langue lorsque sa traduction est disponible ; une version pas encore traduite apparaît en anglais, signalée par une petite étiquette **Pas encore traduit**.
 
 - Un **panneau repliable par version** — seule la version la plus récente est ouverte au départ ; les sections et sous-sections se replient aussi.
 - Un **index des versions** sous forme de pastilles en haut : cliquer sur une version la déplie et fait défiler directement jusqu'à elle.

@@ -24,11 +24,13 @@ import hashlib
 import json
 import re
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Sibling module: dev.py and a standalone run both put this directory on sys.path.
+# Sibling modules: dev.py and a standalone run both put this directory on sys.path.
+import changelog as cl
 from code_blocks import code_line_mask, restore_code_indent
 
 # ---------------------------------------------------------------------------
@@ -1993,8 +1995,8 @@ def _pipeline_worker(
 # Main orchestration
 # ---------------------------------------------------------------------------
 
-def run_translate(args) -> int:
-    """Main translation logic."""
+def _run_translate_pages(args) -> int:
+    """Translate the nav pages (or the ``--file`` ones): the page half of ``run_translate``."""
     global DEFAULT_RATE_LIMIT_RETRIES  # noqa: PLW0603
     target_langs = args.lang or _detect_target_languages()
     force = getattr(args, "force", False)
@@ -2596,6 +2598,304 @@ def run_translate(args) -> int:
 
 
 # ---------------------------------------------------------------------------
+# CHANGELOG — translated by pieces (changelog.py)
+# ---------------------------------------------------------------------------
+# CHANGELOG.md sits at the project root, two levels above DOCS_DIR (mkdocs_src/docs/), and its translations beside it
+# as CHANGELOG.<lang>.md. Taking the path from DOCS_DIR at call time keeps every run that points DOCS_DIR elsewhere —
+# the tests' sandboxes — away from the repository's CHANGELOG.
+
+def _changelog_source() -> Path:
+    return DOCS_DIR.parent.parent / cl.SOURCE.name
+
+
+def _changelog_requested(file_filter: list[str] | None) -> tuple[bool, list[str] | None]:
+    """``(the CHANGELOG is in scope, the page filter without it)``: with no ``--file`` the CHANGELOG comes with every
+    nav page; with ``--file``, only when one of them is ``CHANGELOG.md`` (an empty page filter then means no page)."""
+    if not file_filter:
+        return _changelog_source().exists(), file_filter
+    pages = [f for f in file_filter if Path(f).name != cl.SOURCE.name]
+    asked = len(pages) != len(file_filter)
+    if asked and not _changelog_source().exists():
+        print(f"  ⚠️  File not found: {_changelog_source()}", file=sys.stderr)
+    return asked and _changelog_source().exists(), pages
+
+
+def _with_files(args, files: list[str] | None):
+    return argparse.Namespace(**{**vars(args), "file": files})
+
+
+def run_translate(args) -> int:
+    """Main translation logic: the nav pages, then the CHANGELOG by pieces."""
+    file_filter = getattr(args, "file", None)
+    with_changelog, page_filter = _changelog_requested(file_filter)
+    rc = 0
+    if page_filter is None or page_filter:
+        rc = _run_translate_pages(args if page_filter == file_filter else _with_files(args, page_filter))
+    if with_changelog:
+        rc = max(rc, _run_translate_changelog(args))
+    return rc
+
+
+def _changelog_plan(units, translations: dict, hashes: dict, langs: list[str], force: bool):
+    """``(plan, located, notes)``: the ``(unit, piece, lang)`` to translate, the translated text already found for each
+    ``(lang, unit name)``, and why a translated chapter could not be read piece by piece."""
+    plan, located, notes = [], {}, []
+    for unit in units:
+        if not unit.pieces:
+            continue
+        for lang in langs:
+            found, why = cl.locate(unit, translations[lang], hashes, lang)
+            located[(lang, unit.name)] = found
+            if why and why != "absent":
+                notes.append(f"{cl.KEY}#{unit.name} → {lang}: {why}; every piece is translated again")
+            for piece in unit.pieces:
+                if force or piece.key not in found or _needs_translation(hashes.get(piece.key), piece.md5, lang):
+                    plan.append((unit, piece, lang))
+    return plan, located, notes
+
+
+def _changelog_bodies(units, located: dict, new: dict, translations: dict, lang: str):
+    """``(bodies by unit name, units rebuilt)``: a chapter is rebuilt from its pieces when every piece has a translation,
+    new or found; otherwise its old text stays as it was (absent if it was absent)."""
+    bodies, rebuilt = {}, []
+    for unit in units:
+        if not unit.pieces:
+            continue
+        texts = {**located.get((lang, unit.name), {}), **new.get(lang, {})}
+        if all(piece.key in texts for piece in unit.pieces):
+            bodies[unit.name] = "\n\n".join(texts[piece.key].strip("\n") for piece in unit.pieces)
+            rebuilt.append(unit)
+        else:
+            old = cl.translated_body(unit, translations[lang])
+            if old is not None:
+                bodies[unit.name] = old
+    return bodies, rebuilt
+
+
+def _changelog_misfits(units, located: dict, new: dict, translations: dict, lang: str) -> list[tuple]:
+    """``(unit, parts)`` for each cut chapter that ``lang``'s new translations would rebuild into another number of parts
+    than it has pieces. Each piece fits on its own, so the cause is at a seam (a code fence left open, say)."""
+    bodies, rebuilt = _changelog_bodies(units, located, new, translations, lang)
+    fresh = new.get(lang, {})
+    return [(unit, parts) for unit in rebuilt
+            if unit.split and any(piece.key in fresh for piece in unit.pieces)
+            for parts in [len(cl.cut_parts(bodies[unit.name]))] if parts != len(unit.pieces)]
+
+
+def _changelog_rebuild(units, located: dict, translations: dict, lang: str) -> str | None:
+    """The text ``CHANGELOG.<lang>.md`` would have, rebuilt from the parts found, without any new translation."""
+    bodies, _ = _changelog_bodies(units, located, {}, translations, lang)
+    return cl.assemble(units, bodies) if bodies else None
+
+
+def _changelog_file_text(lang: str, source: Path) -> str | None:
+    path = cl.translated_path(lang, source)
+    return cl.read_text(path) if path.exists() else None
+
+
+def _changelog_write(units, located: dict, new: dict, infos: dict, translations: dict, hashes: dict,
+                     lang: str, source: Path, now: str) -> list[str]:
+    """Write ``CHANGELOG.<lang>.md`` (only when its text changes) and record each rebuilt piece's position. A chapter is
+    rebuilt only when every piece of it has a translation, new or found; otherwise its old text stays as it was.
+    Returns the units rebuilt."""
+    bodies, rewritten = _changelog_bodies(units, located, new, translations, lang)
+    if not bodies:
+        return []
+    text = cl.assemble(units, bodies)
+    if text != _changelog_file_text(lang, source):
+        cl.translated_path(lang, source).write_text(text, encoding="utf-8")
+    for unit in rewritten:
+        current = {piece.key for piece in unit.pieces}
+        for index, piece in enumerate(unit.pieces):
+            if piece.key in new.get(lang, {}):
+                _cache_mark_translated(hashes, piece.key, lang, infos[(piece.key, lang)], now)
+            entry = hashes.setdefault(piece.key, {"md5": "", "langs_done": [], "last_translated": "", "langs": {}})
+            entry.setdefault("langs", {}).setdefault(lang, {})["index"] = index
+        for key in cl.unit_keys(unit.name, list(hashes)):
+            if key not in current:
+                hashes[key].get("langs", {}).get(lang, {}).pop("index", None)
+    return [unit.name for unit in rewritten]
+
+
+def _changelog_prune(units, hashes: dict) -> None:
+    """Drop the entries of pieces that are gone from the English and that no translation places any more."""
+    current = {piece.key for unit in units for piece in unit.pieces}
+    for key in [k for k in hashes if k.startswith(f"{cl.KEY}#") and k not in current]:
+        if not any(isinstance(v, dict) and "index" in v for v in hashes[key].get("langs", {}).values()):
+            del hashes[key]
+
+
+def _run_translate_changelog(args) -> int:
+    """Translate the CHANGELOG's pieces that are new, changed or missing, then rewrite each language's file."""
+    global DEFAULT_RATE_LIMIT_RETRIES  # noqa: PLW0603
+    source = _changelog_source()
+    target_langs = args.lang or _detect_target_languages()
+    force = getattr(args, "force", False)
+    dry_run = getattr(args, "dry_run", False)
+    workers = max(1, getattr(args, "workers", 1))
+    cli_retries = getattr(args, "rate_limit_retries", None)
+    if cli_retries is not None:
+        DEFAULT_RATE_LIMIT_RETRIES = cli_retries
+
+    units = cl.read_english(source) or []
+    hashes = _load_hashes()
+    translations = {lang: cl.read_translation(lang, source) for lang in target_langs}
+    plan, located, notes = _changelog_plan(units, translations, hashes, target_langs, force)
+    if not plan:
+        # Nothing for the model, but a section removed or moved in the English still leaves the files behind: the
+        # chapters are rebuilt from the parts found, with no model call.
+        outdated = [lang for lang in target_langs
+                    if _changelog_rebuild(units, located, translations, lang) not in (None, _changelog_file_text(lang, source))]
+        if not outdated:
+            print(f"✅ {cl.KEY}: every piece is up to date, nothing to translate.")
+            return 0
+        print(f"📋 {cl.KEY}: nothing to translate; {', '.join(f'CHANGELOG.{lang}.md' for lang in outdated)} to rebuild"
+              " (sections removed or moved in the English)")
+        if dry_run:
+            return 0
+        now = datetime.now(timezone.utc).isoformat()
+        for lang in outdated:
+            _changelog_write(units, located, {}, {}, translations, hashes, lang, source, now)
+        _changelog_prune(units, hashes)
+        _save_hashes(hashes)
+        return 0
+
+    from collections import OrderedDict
+    pieces: OrderedDict[str, tuple] = OrderedDict()
+    for unit, piece, lang in plan:
+        pieces.setdefault(piece.key, (unit, piece, []))[2].append(lang)
+    print(f"\n📋 {cl.KEY}: {len(pieces)} piece(s), {len(plan)} translation(s) ({cl.PIECE_THRESHOLD:,} characters"
+          f" or less is one piece; a longer chapter is cut at its ### and #### lines)")
+    for note in notes:
+        print(f"   ⚠️  {note}")
+    total = {"input": 0, "output": 0, "total": 0}
+    for _unit, piece, lang in plan:
+        est = _estimate_tokens(len(piece.text.encode("utf-8")))
+        for k in total:
+            total[k] += est[k]
+        print(f"  • {piece.key} → {lang}  ({_format_tokens(est['total'])})")
+    print(f"\n📊 Estimated tokens: {_format_tokens(total['total'])} "
+          f"(in: {_format_tokens(total['input'])}, out: {_format_tokens(total['output'])})")
+    if dry_run:
+        print("🔍 Dry run — the CHANGELOG was not translated.")
+        return 0
+
+    api_key = _load_api_key()
+    models = _load_models()
+    print(f"\n🚀 [{_now()}] Translating {cl.KEY}: {len(pieces)} piece(s), {workers} worker(s)...")
+    new: dict[str, dict[str, str]] = {lang: {} for lang in target_langs}
+    infos: dict[tuple[str, str], dict] = {}
+    failed: list[tuple[str, str, str]] = []
+    t_total = time.time()
+    try:
+        model_client = _create_model_client(api_key, models)
+        with tempfile.TemporaryDirectory(prefix="lf-changelog-") as tmp:
+            def work(index: int, piece, langs: list[str]):
+                path = Path(tmp) / f"piece-{index:03d}.en.md"
+                path.write_text(piece.text, encoding="utf-8")
+                workflow, workflow_config, analysis = _analyze_source(piece.text, model_client, models)
+                results = []
+                for lang in langs:
+                    t0 = time.time()
+                    try:
+                        result = _translate_one_lang(piece.text, path, lang, workflow, dict(workflow_config),
+                                                     model_client, models, analysis, log_buf=[])
+                    except AuthError:
+                        raise
+                    except Exception as e:  # one language failing does not lose the others
+                        result = {"output_path": None, "failure_reason": f"Unexpected error: {e}", "models": {}}
+                    result["elapsed_s"] = round(time.time() - t0, 1)
+                    if result.get("output_path"):
+                        result["text"] = Path(result["output_path"]).read_text(encoding="utf-8")
+                    results.append((lang, result))
+                return analysis, results
+
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = {executor.submit(work, n, piece, langs): (unit, piece, langs)
+                           for n, (unit, piece, langs) in enumerate(pieces.values())}
+                for future in as_completed(futures):
+                    unit, piece, langs = futures[future]
+                    now = datetime.now(timezone.utc).isoformat()
+                    try:
+                        analysis, results = future.result()
+                    except AuthError as e:
+                        print(f"  🛑 AUTH ERROR (global stop): {e}", flush=True)
+                        for f in futures:
+                            f.cancel()
+                        failed.extend((piece.key, lang, f"Auth error: {e}") for lang in langs)
+                        break
+                    except Exception as e:
+                        reason = str(e).split("\n")[0]
+                        print(f"  ✗ {piece.key}: analysis failed: {reason}", flush=True)
+                        failed.extend((piece.key, lang, f"Analyze failed: {reason}") for lang in langs)
+                        continue
+                    serialized = analysis if isinstance(analysis, str) else json.dumps(analysis, ensure_ascii=False, default=str)
+                    _cache_mark_analyzed(hashes, piece.key, piece.md5, serialized, models["analyzer"])
+                    for lang, result in results:
+                        why = cl.structure_change(piece.text, result["text"]) if result.get("text") and unit.split else None
+                        if why:
+                            # The model added or dropped a ### / #### heading: the chapter would no longer cut into
+                            # its pieces, and every later run would translate it again. Refused.
+                            result = {**result, "text": "", "failure_reason": f"structure changed: {why}"}
+                        if result.get("text"):
+                            new[lang][piece.key] = result["text"].strip("\n")
+                            infos[(piece.key, lang)] = {
+                                "models": result.get("models", {}),
+                                "critique": result.get("critique", ""),
+                                "structural_diff": result.get("structural_diff", ""),
+                                "structural_issues": result.get("structural_issues", 0),
+                                "elapsed_s": result.get("elapsed_s", 0),
+                            }
+                            print(f"  ✓ {piece.key} → {lang} ({_format_elapsed(result.get('elapsed_s', 0))})", flush=True)
+                        else:
+                            reason = result.get("failure_reason") or "Unknown"
+                            failed.append((piece.key, lang, reason))
+                            _cache_mark_failed(hashes, piece.key, lang, reason, result.get("models", {}), now)
+                            print(f"  ✗ {piece.key} → {lang}: {reason}", flush=True)
+                    _save_hashes(hashes)
+    finally:
+        _cleanup_config_toml()
+
+    now = datetime.now(timezone.utc).isoformat()
+    for lang in target_langs:
+        for unit, parts in _changelog_misfits(units, located, new, translations, lang):
+            # Written as it is, the chapter would be translated again on every run: its new pieces are refused, so
+            # it keeps the text it had, and they stay pending in this language.
+            reason = f"structure changed: the chapter would cut into {parts} parts instead of {len(unit.pieces)}"
+            for piece in unit.pieces:
+                if new[lang].pop(piece.key, None) is not None:
+                    info = infos.pop((piece.key, lang), {})
+                    failed.append((piece.key, lang, reason))
+                    _cache_mark_failed(hashes, piece.key, lang, reason, info.get("models", {}), now)
+                    print(f"  ✗ {piece.key} → {lang}: {reason}", flush=True)
+        rewritten = _changelog_write(units, located, new, infos, translations, hashes, lang, source, now)
+        if rewritten:
+            print(f"  📝 {cl.translated_path(lang, source).name}: {len(rewritten)} chapter(s) written ({', '.join(rewritten)})")
+    _changelog_prune(units, hashes)
+    _save_hashes(hashes)
+
+    # Post-step: the structural diff of every chapter the files now hold, as for the pages.
+    for lang in target_langs:
+        translation = cl.read_translation(lang, source)
+        for unit in units:
+            body = cl.translated_body(unit, translation) if unit.pieces else None
+            if body is None:
+                continue
+            report = _structural_diff(unit.text(), unit.text(body))
+            if report:
+                count = sum(1 for line in report.splitlines() if re.match(r'^\d+\.', line.strip()))
+                print(f"  ⚠️  {cl.KEY}#{unit.name} → {lang}: {count} structural issue(s)")
+    done = sum(len(v) for v in new.values())
+    print(f"\n{'=' * 50}")
+    print(f"✅ {cl.KEY}: translated {done}  |  ❌ Failed: {len(failed)}  |  Total: {len(plan)}")
+    print(f"⏱️  Total time: {_format_elapsed(time.time() - t_total)}")
+    for key, lang, reason in failed:
+        print(f"  ❌ {key} → {lang}: {reason.splitlines()[0] if reason else 'Unknown'}")
+    return 1 if failed else 0
+
+
+# ---------------------------------------------------------------------------
 # Check / diagnostics
 # ---------------------------------------------------------------------------
 
@@ -2798,12 +3098,14 @@ def run_diff(args) -> int:
     and reports anomalies. No LLM required — pure text analysis.
     """
     target_langs = args.lang or _detect_target_languages()
-    file_filter = getattr(args, "file", None)
+    with_changelog, file_filter = _changelog_requested(getattr(args, "file", None))
     verbose = getattr(args, "verbose", False)
     issues_only = getattr(args, "issues_only", False)
 
     # Build list of source files (reuse same logic as run_translate)
-    if file_filter:
+    if file_filter == []:
+        sources = []  # only CHANGELOG.md was asked for
+    elif file_filter:
         sources = []
         resolved_paths: list[Path] = []
         for f in file_filter:
@@ -2840,7 +3142,7 @@ def run_diff(args) -> int:
         nav_files = get_translatable_files()
         sources = [(rel, DOCS_DIR / rel) for rel in nav_files]
 
-    if not sources:
+    if not sources and not with_changelog:
         print("No source files found.")
         return 0
 
@@ -2882,6 +3184,13 @@ def run_diff(args) -> int:
                 if not issues_only:
                     print(f"  ✅ {cache_key} → {lang}")
 
+    if with_changelog:
+        checked, with_issues, issues, missing = _diff_changelog(target_langs, verbose, issues_only)
+        files_checked += checked
+        files_with_issues += with_issues
+        total_issues += issues
+        files_missing += missing
+
     # Summary
     print(f"\n{'=' * 50}")
     print(f"📊 Files checked: {files_checked}")
@@ -2895,6 +3204,48 @@ def run_diff(args) -> int:
     print()
 
     return 1 if (files_with_issues or files_missing) else 0
+
+
+def _diff_changelog(target_langs: list[str], verbose: bool, issues_only: bool) -> tuple[int, int, int, int]:
+    """The structural diff of each chapter of each ``CHANGELOG.<lang>.md``, as for a page. A released chapter's
+    anomalies and absence count; the open chapter's are printed as information only (``changelog.released``).
+    Returns ``(chapters checked, with counted issues, counted issues, counted missing)``."""
+    source = _changelog_source()
+    every_unit = cl.read_english(source) or []
+    released = cl.released(every_unit, source)  # the empty units count: they decide which chapter is the newest
+    units = [u for u in every_unit if u.pieces]
+    checked = with_issues = issue_total = missing = 0
+    for lang in target_langs:
+        translation = cl.read_translation(lang, source)
+        for unit in units:
+            label = f"{cl.KEY}#{unit.name} → {lang}"
+            counted = unit.name in released
+            body = cl.translated_body(unit, translation)
+            if body is None:
+                if counted:
+                    missing += 1
+                    print(f"  ❌ {label}  (missing translation)")
+                else:
+                    print(f"  ℹ️  {label}  (not translated yet: open chapter, information only)")
+                continue
+            checked += 1
+            report = _structural_diff(unit.text(), unit.text(body))
+            if not report:
+                if not issues_only:
+                    print(f"  ✅ {label}")
+                continue
+            count = sum(1 for line in report.splitlines() if re.match(r'^\d+\.', line.strip()))
+            if counted:
+                with_issues += 1
+                issue_total += count
+                print(f"  ⚠️  {label}  ({count} issue{'s' if count != 1 else ''})")
+            else:
+                print(f"  ℹ️  {label}  ({count} issue{'s' if count != 1 else ''}: open chapter, information only)")
+            if verbose:
+                for line in report.splitlines():
+                    print(f"       {line}")
+                print()
+    return checked, with_issues, issue_total, missing
 
 
 # ---------------------------------------------------------------------------
@@ -3019,7 +3370,7 @@ def _add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--force", action="store_true", help="Re-translate all files (ignore MD5 cache)", )
     parser.add_argument("--dry-run", action="store_true", help="Show plan without translating", )
     parser.add_argument("--rate-limit-retries", type=int, default=DEFAULT_RATE_LIMIT_RETRIES, metavar="N", help=f"Max retries on rate limit (429), with {DEFAULT_RATE_LIMIT_PAUSE}s pause between (default: {DEFAULT_RATE_LIMIT_RETRIES})", )
-    parser.add_argument("--workers", type=int, default=1, metavar="N", help="Number of parallel translation workers per file (default: 1 = sequential). Each worker translates one language concurrently. Use with caution on free-tier models that may have rate limits.", )
+    parser.add_argument("--workers", type=int, default=1, metavar="N", help="Number of parallel workers (default: 1 = sequential). For the pages, each worker runs one analysis or one language's translation; for the CHANGELOG, one piece (its analysis, then its languages). Use with caution on free-tier models that may have rate limits.", )
 
 
 def _add_diff_arguments(parser: argparse.ArgumentParser) -> None:
@@ -3064,6 +3415,81 @@ def _add_stamp_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run_stamp(args) -> int:
+    """``translate-stamp``: the pages (every nav page with no ``--file``), and the CHANGELOG only when ``--file`` names
+    ``CHANGELOG.md``."""
+    file_filter = getattr(args, "file", None)
+    pages = [f for f in file_filter if Path(f).name != cl.SOURCE.name] if file_filter else None
+    with_changelog = bool(file_filter) and pages is not None and len(pages) != len(file_filter)
+    rc = 0
+    if pages is None or pages:
+        rc = _run_stamp_pages(args if pages == file_filter else _with_files(args, pages))
+    if with_changelog:
+        rc = max(rc, _stamp_changelog(args))
+    return rc
+
+
+def _stamp_changelog(args) -> int:
+    """Stamp the CHANGELOG's translated chapters as done for the current English, piece by piece.
+
+    Each chapter present in ``CHANGELOG.<lang>.md`` is cut by the same rule as the English one; when the counts agree,
+    every piece is stamped at its current md5 and its position is recorded. A chapter whose structure differs is named
+    and left as it is: stamping it would pair translated parts with the wrong pieces."""
+    target_langs: list[str] = args.lang or _detect_target_languages()
+    dry_run: bool = getattr(args, "dry_run", False)
+    now_ts = datetime.now(timezone.utc).isoformat()
+    source = _changelog_source()
+    if not source.exists():
+        print(f"  ⚠️  File not found: {source}", file=sys.stderr)
+        return 1
+    units = [u for u in (cl.read_english(source) or []) if u.pieces]
+    hashes = _load_hashes()
+    # The md5 each piece had before this run: stamping the first language moves it for the others.
+    before = {key: entry.get("md5") for key, entry in hashes.items() if key.startswith(f"{cl.KEY}#")}
+    stamped = skipped = 0
+    for lang in target_langs:
+        translation = cl.read_translation(lang, source)
+        if translation is None:
+            print(f"  ⚠️  {cl.translated_path(lang, source).name} not found, skipping {lang}")
+            continue
+        for unit in units:
+            body = cl.translated_body(unit, translation)
+            if body is None:
+                continue  # not translated yet: nothing to stamp
+            parts = cl.cut_parts(body) if unit.split else [body]
+            if len(parts) != len(unit.pieces):
+                skipped += 1
+                print(f"  ⚠️  {cl.KEY}#{unit.name} → {lang}: {len(parts)} translated parts for {len(unit.pieces)} pieces,"
+                      " not stamped")
+                continue
+            for index, piece in enumerate(unit.pieces):
+                entry = hashes.get(piece.key, {})
+                lang_entry = entry.get("langs", {}).get(lang, {})
+                if (entry.get("md5") == piece.md5 and lang in entry.get("langs_done", [])
+                        and lang_entry.get("index") == index):
+                    continue
+                print(f"  {'🔍' if dry_run else '📌'} {piece.key} → {lang}  (MD5 {(before.get(piece.key) or '<none>')[:8]}→{piece.md5[:8]})")
+                if not dry_run:
+                    stamped_entry = _cache_stamp(entry, piece.md5, [lang], now_ts)
+                    stamped_entry["langs"][lang]["index"] = index
+                    hashes[piece.key] = stamped_entry
+                stamped += 1
+            if not dry_run:
+                current = {piece.key for piece in unit.pieces}
+                for key in cl.unit_keys(unit.name, list(hashes)):
+                    if key not in current:
+                        hashes[key].get("langs", {}).get(lang, {}).pop("index", None)
+    if dry_run:
+        print(f"\n🔍 Dry run — {stamped} {cl.KEY} piece(s) would be stamped"
+              + (f", {skipped} chapter(s) skipped" if skipped else ""))
+        return 0
+    if stamped:
+        _save_hashes(hashes)
+    print(f"\n✅ {cl.KEY}: stamped {stamped} piece(s)" + (f", {skipped} chapter(s) skipped" if skipped else "")
+          + f" for lang(s): {', '.join(target_langs)}")
+    return 1 if skipped else 0
+
+
+def _run_stamp_pages(args) -> int:
     """Mark source file(s) as already translated in the cache (without running LLM translation).
 
     Use this when you have manually edited or reviewed a translation and want to
