@@ -52,6 +52,11 @@ Plan 37, §8, and its steps 11, 12b and 12f:
   (`pairAssetMismatch`, `pairQuantityMismatch`), and no merge of a row linked to an asset event
   (`eventTypeIncompatible`).
 - A spec that saves the bulk editor on the shared E2E user with an unseen suggestion now stops on the reminder.
+- The pairs it offers follow lot 42's rules: one asset in exactly opposite quantities ([[decisions/transfer-pair-same-asset-opposite-quantity]]),
+  and no row linked to an asset event its new type does not admit ([[decisions/promote-respects-asset-event-link]]).
+- C-47 (2026-10-11, `bdec709d2`): the *Max Δ days* slider reached 0 while `/promote-suggest` wanted at least 1, and
+  moving it did not search again. The endpoint accepts 0 (the same day only), and the window is part of the 💡's search
+  key.
 - The cost check on promotes is lot 40's ([[problems/promote-skipped-cost-basis-check]]); S's spec
   `tx-bulk-promote-cost-basis.spec.ts` verifies that its refusal lands on the right row of the editor.
 
