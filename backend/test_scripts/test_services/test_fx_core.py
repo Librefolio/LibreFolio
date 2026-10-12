@@ -27,6 +27,7 @@ from sqlmodel import delete
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import FxRate
+from backend.app.db.precision import truncate_fx_rate
 from backend.app.db.session import get_async_engine
 from backend.app.services.fx import (
     _count_actual_changes,
@@ -35,7 +36,6 @@ from backend.app.services.fx import (
     upsert_rates_bulk,
 )
 from backend.app.services.portfolio_service import _portfolio_l2_cache
-from backend.app.utils.decimal_utils import truncate_fx_rate
 from backend.test_scripts.test_utils import print_section, print_success
 
 # ============================================================================
