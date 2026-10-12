@@ -104,6 +104,13 @@ closed two items that had waited for the shared runner file and for T's CP1 of M
 - **I5 prepared** (§21): the gallery's shot of the security panel, which `parkPointer` exposes to the 30 s —
   [[decisions/security-details-close-after-30-seconds]]; applied once T's CP3 is in the target.
 
+## Batch 33 (2026-10-13, added at the train-78 ingest)
+
+- **I5, part one**: the gallery keeps the security details open for their shot (`2d0ca1660`); the header of
+  `galleryLocale.ts` says what the locale pin reaches (`1e4a3ecd5`); M-24 (low) — the pin does not reach
+  `navigator.language`, which `uiLocale()` reads — [[problems/playwright-probes-ignore-timeout]].
+- The release shots of 1.1 read `v1.1.0-dirty` — [[problems/release-shots-show-dirty-version]] (open, M's lot 34).
+
 ## Not ingested
 
 - The rest of round 12 (batches 11–18: the pipeline runs, the label and register reviews, the glossary) — operational,
