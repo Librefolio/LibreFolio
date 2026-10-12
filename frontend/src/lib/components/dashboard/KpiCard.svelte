@@ -22,6 +22,7 @@
 <script lang="ts">
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     interface Props {
         label: string;
@@ -67,7 +68,7 @@
         <!-- Change badge (gain / loss) -->
         {#if changeValue !== undefined || changePercent !== undefined}
             <p class="text-sm font-medium transition-opacity duration-300 {isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}" class:opacity-50={refreshing} data-testid="kpi-change">
-                {changeValue ?? ''}{changeValue !== undefined && changePercent !== undefined ? ' ' : ''}{changePercent !== undefined ? `(${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)` : ''}
+                {changeValue ?? ''}{changeValue !== undefined && changePercent !== undefined ? ' ' : ''}{changePercent !== undefined ? `(${formatPercent(changePercent)})` : ''}
             </p>
         {/if}
 
