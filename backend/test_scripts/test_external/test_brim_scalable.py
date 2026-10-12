@@ -36,7 +36,6 @@ from __future__ import annotations
 import csv
 import importlib
 import io
-import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
 from decimal import Decimal
@@ -50,6 +49,7 @@ from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMEvidence, BRIMNotic
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.provider_registry import BRIMProviderRegistry
+from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
 # CONSTANTS
@@ -1321,14 +1321,14 @@ class TestDescriptionsAndAssets:
 # =============================================================================
 
 UI_LANGUAGES = ("en", "it", "fr", "es")
-# The catalogues of the checkout this file belongs to, found from the file itself.
-I18N_DIR = Path(__file__).resolve().parents[3] / "frontend" / "src" / "lib" / "i18n"
 EVIDENCE_CAPTION_KEY = "importWizard.evidenceRowsTitle"
 
 
 def _catalogue(language: str) -> Dict[str, Any]:
-    """One UI catalogue, as the frontend bundles it."""
-    return json.loads((I18N_DIR / f"{language}.json").read_text(encoding="utf-8"))
+    """One UI catalogue, as the frontend bundles it but without the English fallback: merged from the sources of the
+    checkout this file belongs to (``scripts/i18n_catalog.py``), never read from a build, a wording the language lacks
+    missing rather than English under its name."""
+    return load_catalog(language, fallback=False)
 
 
 def _entry(catalogue: Dict[str, Any], key: str) -> Any:

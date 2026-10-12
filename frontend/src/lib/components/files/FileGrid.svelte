@@ -20,6 +20,7 @@
     import {Check, Download, Eye, File as FileIcon, FileSpreadsheet, FileText, Image as ImageIcon, Link2, Search, Trash2, X} from 'lucide-svelte';
     import type {UploadedFile} from '$lib/types';
     import {getPreviewTypeForUploadedFile} from '$lib/utils/files/filePreview';
+    import {writeTextToClipboard} from '$lib/utils/clipboard';
 
     interface Props {
         /** Files to display */
@@ -97,26 +98,14 @@
         oncopyLink?.({file});
         const fullUrl = `${window.location.origin}${file.url}`;
         try {
-            if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(fullUrl);
-            } else {
-                const ta = document.createElement('textarea');
-                ta.value = fullUrl;
-                ta.style.position = 'fixed';
-                ta.style.left = '-9999px';
-                document.body.appendChild(ta);
-                ta.focus();
-                ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
-            }
-            copiedFileId = file.id;
-            setTimeout(() => {
-                copiedFileId = null;
-            }, 2000);
+            await writeTextToClipboard(fullUrl);
         } catch {
-            /* ignore */
+            return;
         }
+        copiedFileId = file.id;
+        setTimeout(() => {
+            copiedFileId = null;
+        }, 2000);
     }
 
     function handleDelete(file: UploadedFile) {

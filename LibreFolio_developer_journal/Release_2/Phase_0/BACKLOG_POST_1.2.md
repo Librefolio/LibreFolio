@@ -94,6 +94,51 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   (`frontend/e2e/brokers/brokers-detail.spec.ts:410`) è scaduto durante la navigazione, prima del pannello (40,1 s);
   rilanciato con carico 30, è passato in 2,9 s. Nei 30 s stanno login, `ensureBrokerExists`, due navigazioni e il
   pannello. Da valutare con `test-triage`: un budget esplicito o una navigazione in meno.
+- **C-59 · L'immagine Docker installa `uvicorn[standard]` fuori dal lock** — medio-basso; coordinatore, 12/10, dalla
+  ricerca su Python. `Dockerfile:70` esegue `pip install uvicorn[standard]` senza versione dopo `requirements.txt`:
+  `uvloop`, `httptools` e gli altri extra arrivano in produzione all'ultima versione del giorno della build, mentre il
+  lock non li contiene, e sviluppo e test girano senza `uvloop`. È uno scarto fra sviluppo e produzione, e una build
+  non riproducibile. Cura: gli extra nel `Pipfile` (`uvicorn = {extras = ["standard"], …}`), il lock e
+  `requirements.txt` rigenerati dal developer, poi via la riga 70. Dettagli: [rapporto di ricerca del 12/10](38_postReleaseBacklog/research-python-3.15-20261012.md),
+  §5.
+- **C-60 · Python dopo la 3.13** — medio; developer, 12/10 (richiesta di ricerca). Python 3.15.0 è uscito il 09/10.
+  - Gli import lazy (PEP 810) sono una parola chiave esplicita, `lazy import`: utili per avviare più in fretta i worker
+    con QuantLib, cvxpy, matplotlib e TA-Lib.
+  - Il free-threading (senza GIL) resta una build separata, `python3.15t`, non il default. Non alza il throughput di
+    questo server: l'event loop resta uno e SQLite ha un solo scrittore. Aiuterebbe solo il lavoro CPU nei thread.
+  - Al 12/10 cvxpy, riskfolio-lib, osqp, arch, ta-lib e PyYAML non hanno wheel per la 3.15.
+  - Consiglio: la 1.2 resta su 3.13 (sicurezza fino a ottobre 2029); dopo la 1.2 la **3.14 con la build normale**;
+    la 3.15 verso il primo trimestre 2027, dopo una nuova verifica delle wheel; il free-threading più avanti.
+  - Dettagli, con la tabella di compatibilità pacchetto per pacchetto: [rapporto di ricerca del 12/10](38_postReleaseBacklog/research-python-3.15-20261012.md).
+- **C-61 · BulkModal: la barra di selezione dopo un import, mai provata** — basso, da verificare; W (lint della
+  devWiki), 12/10. La pagina della wiki è aperta dal 25/06: dopo un import BRIM la barra di selezione del BulkModal
+  mancava o era tagliata (il contenitore `overflow-y: auto`, oppure `onSelectionChange` non propagato). Nessuna delle
+  due cure proposte è nel codice, e nessun E2E seleziona una riga nel BulkModal dopo il passaggio dall'import
+  (`tx-bulk-import-handoff.spec.ts` non guarda la barra). Prima un test rosso; se non si riproduce, la pagina si
+  chiude. Dettagli: [`bulk-modal-sticky-z-index`](../../../LibreFolio_devWiki/wiki/problems/bulk-modal-sticky-z-index.md).
+- **C-62 · DataTable: il ridimensionamento delle colonne è provato su una tabella sola** — basso, da verificare; W (lint
+  della devWiki), 12/10. La pagina della wiki, aperta dal 07/07, dice che in alcune tabelle la maniglia non allarga la
+  colonna, senza una causa trovata (`onColumnResize` non letto dal genitore, o una `width` fissa che la rimette com'era).
+  Un E2E lo prova solo sulla tabella L1° del Laboratorio di rischio (`risk-lab.spec.ts`, «value columns carry their
+  help»): le altre DataTable vanno ritestate. Dettagli: [`datatable-column-resize-noop`](../../../LibreFolio_devWiki/wiki/problems/datatable-column-resize-noop.md).
+- **C-63 · File: due pulsanti «copia» con un ripiego scritto a mano** — minimo; coordinatore, 12/10, dal lint della
+  devWiki. `components/files/FileGrid.svelte:110` e `components/files/FilesTable.svelte:544` hanno un loro ripiego
+  `execCommand` per l'HTTP, che funziona, invece dell'helper comune `utils/clipboard.ts` (`writeTextToClipboard`);
+  FileGrid ignora l'esito di `execCommand` e segna «copiato» anche quando non ha copiato. Cura: passare entrambi
+  dall'helper, dopo M-20 (lotto 48 di I). Dettagli: la voce M-20 nella sezione M.
+- **C-64 · Devwiki: il secondo giro di lint** — basso; W, 12/10. Il lint del 12/10 (a base `4d0cedec7`) non ha
+  controllato: date e hash in conflitto fra pagine; le feature `planned` o `in-progress` (F-048, F-077–F-108) contro il
+  codice; il contenuto degli 11 piani di `phases/06_betaTestingReportAndFixing`. Da fare insieme alla voce qui sotto.
+- **C-65 · Evento → transazione: il resto del collegamento (F-090)** — medio-basso; W (C-64), 12/10. Sono già nel
+  codice, sotto F-051: la FK `RESTRICT` (`backend/app/db/models.py:830`), la cancellazione degli eventi che risponde
+  con un esito per id e rispetta il `RESTRICT` (`api/v1/assets.py`, `delete_events_bulk`), il selettore degli eventi
+  nel form. Mancano il modale al cambio di provider (vecchio evento → nuovo, con la proposta di ricollegare) e la
+  ricerca inversa `GET /transactions?asset_event_id=`. Vicina ma diversa: «🔗 Suggerimento eventi collegabili nella
+  bulk modal» in [`TODO_FUTURI.md`](../../../TODO_FUTURI.md). Dettagli: [F-090](../../../LibreFolio_devWiki/wiki/features/F-090.md).
+- **C-66 · Sync: l'avviso prima di sovrascrivere i dati (F-094)** — basso; W (C-64), 12/10. Il dialogo c'è già ed è
+  comune a cambi e asset: `SyncModalBase`, con `FxSyncModal`, `AssetSyncModal` (lista degli asset) e `PageSyncModal`
+  (pagine di dettaglio), che sincronizzano l'intervallo della pagina. Manca solo l'avviso quando l'intervallo scelto
+  copre dati che esistono già, per i cambi come per gli asset. Dettagli: [F-094](../../../LibreFolio_devWiki/wiki/features/F-094.md).
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6).
 
 ## Risk · Rischio (02)
@@ -210,6 +255,11 @@ debito di traduzione di F-5 (di M).
   zoom, 7 con metà periodo, 4 con un quinto, solo i due bordi su una finestra di 33 punti. Gli assi time non ne
   soffrono. Dettagli: [piano della 47](47_chartAxisDayLabels/plan-phase00ChartAxisDayLabels.prompt.md), §4 «Fuori» e
   §9, passo 7.
+- **48-1 · Il pulsante dell'AI Export più largo dei vicini nella barra** — minimo, cosmetico; I, 12/10 (piano 48,
+  V-19). Il trigger di `AiExportMenu.svelte:298` ha `px-3 gap-2`, i pulsanti vicini `px-2.5 gap-1.5`
+  (`assets/[id]/+page.svelte:2826-2861`). Allinearlo stringe la colonna di «Exportación IA» di circa 12 px. Da solo
+  non avrebbe curato V-19, che sforava fino a 18,8 px: lo ha curato C5 con le soglie `denseRow`. Resta un ritocco di
+  coerenza. Dettagli: [piano della 48](48_uiPolish/plan-phase00UiPolish.prompt.md), §1.5 e passo 5.
 
 ## P · Transazioni e Bulk (42)
 
@@ -495,7 +545,7 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   formule non si vedevano. Ora la base è l'indirizzo dello script stesso (`document.currentScript`), che MkDocs collega
   sempre alla radice del sito. Provato senza internet: 34 pagine su 34 (16 pagine con formule, 4 lingue, profondità da 2
   a 6, servite sotto `/mkdocs/` e sotto `/LibreFolio/`) caricano la copia locale e disegnano ogni formula. Il test e2e
-  aspetta che il coordinatore assegni il file del runner. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
+  `front-utility docs-offline-math` è registrato nel lotto 28. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
   sezione «15». **Seguito nel lotto 25** (12/10, decisione del coordinatore): la copia locale non aveva i font di MathJax,
   che il bundle cerca accanto a sé (`output/chtml/fonts/woff-v2/`). Con la correzione ogni pagina annidata prendeva lo
   script locale e disegnava le formule col font della pagina: lettere diritte, frazioni tagliate. Prima, online, quelle
@@ -528,13 +578,16 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   MathJax: una copia in `vendor/` scaricata da `scripts/update_js_cache.py` e un caricatore con ripiego; resta da
   scegliere il formato da copiare, perché il modulo ESM di Mermaid ne carica altri. Dettagli:
   [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md), passo «8».
-- **M-23 · Il changelog dell'app in francese senza spazi non separabili** — basso; M, 12/10, fuori dal perimetro di M
-  (il renderer del modale). Le traduzioni tengono spazi normali, e per le pagine della documentazione li cambia in
-  spazi non separabili `mkdocs_src/hooks/fr_typography.py`, al momento della build. Il modale del changelog legge
-  `CHANGELOG.fr.md` senza MkDocs (`frontend/src/lib/features/changelog/changelog.ts`), quindi lì una riga può andare
-  a capo prima di `;` `:` `?` `!` `%` o dentro « ». Le stesse regole dell'hook vanno applicate al testo del modale in
-  francese; i sorgenti restano come sono. Dettagli: [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md),
-  passo «10».
+- ✅ **M-23 · Il changelog dell'app in francese senza spazi non separabili** — nella 1.2, M (lotto 27; assegnata a M
+  dal coordinatore il 12/10, con `changelog.ts` e i suoi test). Le traduzioni tengono spazi normali, e per le pagine
+  della documentazione li cambia in spazi non separabili `mkdocs_src/hooks/fr_typography.py`, al momento della build.
+  Il modale del changelog legge `CHANGELOG.fr.md` senza MkDocs, quindi lì una riga poteva andare a capo prima di `;`
+  `:` `?` `!` `%` o dentro « ». Ora `frontend/src/lib/features/changelog/changelog.ts` applica le stesse regole ai
+  capitoli francesi (`typesetFrench`, `typesetFrenchMarkdown`), sul testo Markdown prima di tagliarlo in capitoli, fuori
+  dal codice (inline e blocchi), dalle destinazioni dei link, dalle immagini, dall'HTML e dagli URL; i sorgenti restano
+  come sono. L'HTML del modale coincide byte per byte con quello dell'hook sui 4 capitoli francesi; 136 test Vitest nuovi
+  (`front-utility core-unit`). Dettagli: [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md),
+  passo «11».
 
 ## Q · Documentazione e onboarding (21, 32)
 
@@ -710,6 +763,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
   Cura, a poco a poco: un account usa-e-getta (`registerDisposableUser`, `createOwnedBroker` di
   `fixtures/onboarding-accounts.ts`), come in `dashboard-broker-filter-label`. Dettagli: piano della 46, §12.3.
+  Nella 2b (12/10) è stato sistemato anche `tx-wac-bulk`: WB5 dipendeva dagli avanzi degli altri spec, e ora costruisce
+  la sua coppia; WB4 cancella ciò che committa. Dettagli: piano della 46, §12.8.
 - ✅ **V-16 · Login, registrazione e cambio password fanno bcrypt dentro l'event loop** — medio, serve una decisione;
   test-author di V, 12/10, verificato da me. Le chiamate sincrone stanno direttamente nei gestori `async def`:
   - `login` (`api/v1/auth.py:105`) chiama `verify_password_or_dummy`, cioè `bcrypt.checkpw`
@@ -741,6 +796,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     giro, con il backend condiviso già avviato;
   - il catalogo delle eccezioni seriali in `playwright.config.ts` non elenca il blocco seriale nuovo di
     `settings/scheduler.spec.ts` («Saving»), e mancava già di `fx-destructive` e `files-destructive`.
+    **Questo punto è chiuso il 12/10**, nella 2b di V: il catalogo elenca i cinque blocchi seriali veri, e
+    `asset-event-delete` è uscito dall'elenco.
   Dettagli: piano della 46, §12.5.
 - **V-18 · Selettori CSS e in inglese rimasti nei test delle impostazioni** — basso; test-author di V, 12/10:
   - in `SchedulerConfigModal.svelte` i chip degli orari non hanno testid: FSCH-008/009 usano `span.rounded-full`. Il
@@ -759,8 +816,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
   È deterministico: rosso anche a 1 worker. Lo spec suggerisce di alzare la soglia sopra la barra più larga, oppure di
   accorciare le etichette. La 2a di V non tocca né le barre né i cataloghi. Dettagli: piano della 46, §12.5.
-- **V-20 · Attese di 3 s sulla prima navigazione, rosse sotto carico** — basso; gate di V, 12/10. Sono verdi da sole
-  o a 1 worker, rosse con la concorrenza:
+- ✅ **V-20 · Attese di 3 s sulla prima navigazione, rosse sotto carico** — basso; gate di V, 12/10. Sono verdi da
+  sole o a 1 worker, rosse con la concorrenza:
   - `auth.spec.ts:379` e `:615` (Integrated onboarding 1 e 4): dopo `login()`, `toHaveURL(/dashboard/)` usa i 3 s di
     default; il test accanto (`:370`) ne usa 15;
   - `layout/app-start-auth.spec.ts:184`: poll di 3 s su `/auth/me` dopo `goto('/assets')`. Con tre test concorrenti i
@@ -769,6 +826,67 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
   Cura: aspettare la condizione con un limite di stato adeguato, non i 3 s di default. Il rallentamento stesso merita
   una voce sua; V-16 è una concausa possibile. Dettagli: piano della 46, §12.5.
+
+  **Chiusa il 12/10**, nella 2b di V, con attese su stati pubblicati e limiti espliciti:
+  - `openLoginPage`, `expectLandedOnDashboard` (path, poi `dashboard-page`) ed `expectLandedOnWelcome` in
+    `auth.spec.ts`, che copre anche il resto del flusso;
+  - lo stato del layout prima del gate in `app-start-auth:190`;
+  - `files-page` `data-busy` e la pulizia in `afterEach` in `files:854`.
+
+  Verdi `auth` 29/29, `app-start-auth` 3/3 e `files` 28/28, a 1 e a 4 worker, sotto carico alto. Commit: checkpoint 2b
+  di V, indicato dal coordinatore. Dettagli: piano della 46, §12.8.
+- **V-21 · Sonde e selettori vietati rimasti negli spec curati dalla 2b** — basso; test-author di V, 12/10. La 2b ha
+  curato i test che scrivevano sullo stato condiviso, non tutto il resto degli stessi file:
+  - `transactions-modals`:
+    - **T10 non prova niente**: il delete della toolbar ora apre il workspace bulk, quindi la sua sonda su
+      `confirm-modal-confirm` risponde sempre falso. In più legge un contatore globale;
+    - **T1 non mostra mai un commit riuscito**: sceglie Charles Schwab, senza cassa, e va in rollback. È una
+      decisione, perché cambiare broker cambia ciò che il test asserisce;
+    - `.first()` senza filtro in T3/T9/T11, e sonde `isVisible().catch`;
+  - `tx-wac-unit-toggle`: classi CSS (`bg-gray-200`, `bg-libre-green`) e sonde;
+  - `tx-wac-formmodal`: FM10 usa `.nth(count-1)` e la classe `font-medium`; FM7 ha una sonda;
+  - `tx-commit-all-types`:
+    - `.checkbox-btn` e `tr.row-deleted`;
+    - il test FX_CONVERSION accetta ancora «nessun commit»;
+    - `expectTransactionGone` dice che gli id vengono riusati, ma `AUTOINCREMENT` c'è dal piano 34;
+  - `tx-split-promote` e `tx-paired-edit`:
+    - sonde e classi CSS in Bug 6, Bug 14, NR-1 e Guard;
+    - gli helper della coppia sono copiati nei due spec;
+    - il commento di `selectRow` («a paired row selects both halves») è sbagliato;
+  - `tx-event-picker`: `pickAssetByName`, se la sonda manca, clicca il primo asset della lista;
+  - `tx-import-resolution`:
+    - `openImportWizard` usa un `.first()` senza filtro;
+    - IWR-007 e IWR-010 hanno `return` condizionali;
+    - IWR-006b ripiega su un controllo più debole;
+  - `tx-clone`: righe scelte per posizione, classi CSS, `text=new`; il test «view-only» esce presto;
+  - `files.spec.ts`:
+    - gli altri test di File Preview: i PDF puliscono in `finally` con 30 s, mentre markdown, immagine, dettaglio, zoom
+      e commenti non cancellano mai il loro upload (la lista `ownedStaticFiles` ora c'è);
+    - il modo griglia/lista si legge dalla classe `active`: servirebbe `aria-pressed` su `view-mode-grid` e
+      `view-mode-list` in `files/+page.svelte` (~`:704/707`);
+  - la fixture `logout()` (`auth-helpers.ts`) usa ancora i 3 s di default.
+
+  Dettagli: piano della 46, §12.8.
+- **V-22 · «+ New event» può modificare un evento esistente dicendo di averlo creato** — da decidere; letto da
+  test-author di V e verificato nel codice da me, 12/10. Nessun test lo dimostra ancora:
+  - `EventCreateMiniModal.svelte:133-145` manda un upsert senza id (`upsert_events_bulk`);
+  - il backend applica un upsert senza id all'evento con la stessa data e lo stesso tipo, e lo aggiorna sul posto, anche
+    se è collegato (`test_upsert_without_id_keeps_the_event_id`,
+    `test_upsert_without_id_updates_a_linked_event_in_place`);
+  - il modale rilegge quell'evento, mostra un toast di successo e lo passa al form come appena creato.
+
+  Un dividendo «nuovo» nello stesso giorno di uno esistente, magari del provider, ne sovrascrive importo e note. Da
+  decidere se è voluto. Se non lo è, il rosso va scritto prima della cura. Dettagli: piano della 46, §12.8.
+- **V-23 · Il bulk editor nasconde il broker di sola lettura e attacca l'errore d'accesso alla riga sbagliata** — basso,
+  UX; test-author di V (triage di WB5), 12/10:
+  - un TRANSFER verso un broker di sola lettura mostra il ricevente come «To: —». `renderBrokerHtml`
+    (`TransactionBulkModal.svelte` ~`:1608`) cerca il broker solo nella lista dei broker modificabili
+    (`getEditableBrokers()`, ~`:593`). L'utente non vede quale broker causa l'errore, e il banner lo chiama solo
+    «Broker #2»;
+  - `_append_access_issues` (`transaction_batch_stages.py` ~`:158-178`) riporta ogni errore d'accesso come
+    `operation="create", index=0`. La griglia lo mette sulla riga 1a (IB, modificabile) e non sulla 1b (DEGIRO).
+
+  Dettagli: piano della 46, §12.8.
 
 ## 09 · Feedback e backlog strutturale
 
@@ -810,3 +928,10 @@ plugin.
 - **U-B5 · I vecchi percorsi `<famiglia>/<nome>.py` fuori da U** — basso; U, 12/10. Sono 84 citazioni in 47 pagine del
   devWiki, per l'historian, come T-W1, e `financial-theory/fundamentals/day-count.{en,it,fr,es}.md:10`, per M. Dettagli:
   piano della 45, sezione «3».
+- **U-B6 · Il server di sviluppo non segue le sorgenti del catalogo** — basso; U, 12/10.
+  - Oggi: `npm run dev` genera il catalogo all'avvio (`predev`), e i comandi `dev.py i18n` lo rigenerano da soli.
+  - Il limite: una modifica a mano di una sorgente (`base/`, un sottosistema, un frammento di plugin) arriva al server di
+    sviluppo solo dopo `dev.py i18n build` o `npm run i18n:build`.
+  - La soluzione: un plugin Vite che osserva le sorgenti e rilancia la build.
+
+  Dettagli: piano della 45, sezione «10», U-2.

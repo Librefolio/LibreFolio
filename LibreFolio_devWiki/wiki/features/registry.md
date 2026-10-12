@@ -2,7 +2,7 @@
 
 > Authoritative list of all LibreFolio features with permanent codes.
 > Codes are assigned at first mention and **never change** even if the feature is renamed/split/superseded.
-> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git); 2026-10-12 (step B5: F-105 guided onboarding; step B6a: F-106 Tool platform; step B6b: F-107 PAC allocator, F-108 Rebalancer planned; step C: F-078 implemented); 2026-10-12 (step B8: F-109 in-app changelog, localized by chapter)
+> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git); 2026-10-12 (step B5: F-105 guided onboarding; step B6a: F-106 Tool platform; step B6b: F-107 PAC allocator, F-108 Rebalancer planned; step C: F-078 implemented); 2026-10-12 (step B8: F-109 in-app changelog, localized by chapter); 2026-10-12 (folder 02, step R0: F-110–F-113 Risk); 2026-10-12 (C-64, status check: F-048 documented; the planned and idea rows checked against the code, unchanged)
 >
 > **Macro-level navigation**: for product-level domain narratives (what each domain does, how features cluster, data-flow diagrams), see [`wiki/domains/`](../domains/) — 11 domain pages covering all features.
 
@@ -118,7 +118,7 @@
 |------|-------|-------|--------|--------|
 | [[F-046]] | Transaction Model & Unified Batch API (validate + commit) | fullstack | `implemented` | [`dev/arch/database/brokers_transactions.md`](developer/architecture/database/brokers_transactions.md) |
 | [[F-047]] | Transaction List Page (DataTable + filters + dual-form modals) | frontend | `implemented` | — |
-| [[F-048]] | Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done) | fullstack | `in-progress` | — |
+| [[F-048]] | Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done) | fullstack | `documented` | `user/transactions/index.en.md` |
 | [[F-049]] | BRIM Import UI (asset matching and review wizard) | fullstack | `documented` | [`dev/fe/import-wizard.md`](developer/frontend/components/features/import-wizard.md) |
 | [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | `documented` | `user/files/index.en.md` |
 | [[F-051]] | Transaction ↔ AssetEvent Link | backend | `implemented` | — |
@@ -141,6 +141,9 @@
 | [[F-054]] | Dashboard KPI & Overview | fullstack | `implemented` | — |
 | [[F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart with P&L modes, Allocation) | frontend | `documented` | `user/dashboard/charts.en.md` |
 | [[F-100]] | Yield on Cost (YOC) per position | fullstack | `documented` | `user/dashboard/positions.en.md` |
+| [[F-111]] | Risk tab of the Dashboard and broker pages (four levels L1–L4) | frontend | `documented` | `user/dashboard/risk.en.md` |
+| [[F-112]] | Risk Lab of Asset Global (correlation, losses, risk–return, replay) | frontend | `documented` | `user/assets/correlation.en.md` |
+| [[F-113]] | Risk tab of Asset Detail (legacy panel, beta) | frontend | `implemented` | — |
 
 ---
 
@@ -152,6 +155,7 @@
 | [[F-057]] | Currency Conversion (triangulation via FX graph) | backend | `implemented` | — |
 | [[F-058]] | ROI Calculations (TWRR + MWRR) | backend | `implemented` | — |
 | [[F-107]] | PAC allocator (purchase planner: SCIP search, exact replay, broker increments) | fullstack | `documented` | `user/tools/pac-allocator/index.en.md` |
+| [[F-110]] | Risk engine (analytic plugins, quant libraries in spawned processes) | backend | `documented` | [`dev/be/risk/architecture.md`](developer/backend/risk/architecture.md) |
 
 ---
 
@@ -216,8 +220,12 @@
 
 > Recomputed from the rows above on 2026-10-09 (the previous table still counted 96 features and listed F-052/F-053
 > as planned), and again on 2026-10-12 after the lint (F-050, F-089, F-092 shipped; F-075 superseded) and after
-> steps B5, B6a and B6b (F-105 to F-108 added), and step B8 (F-109). "PLANNED / IDEA" is the section where a feature was first
+> steps B5, B6a and B6b (F-105 to F-108 added), step B8 (F-109), and step R0 of folder 02 (F-110–F-113, Risk). "PLANNED / IDEA" is the section where a feature was first
 > registered, not its status: twelve of its rows have shipped (F-078 recognised in step C) and one is superseded.
+> **C-64, the status check of 2026-10-12**: F-048 had shipped in 1.0.0 and is `documented`. The ten `planned` rows and
+> the three `idea` rows were checked against the code and stay as they are: none is in 1.2 (F-108 has its contract
+> only; F-090 has parts built under F-051, its provider-change modal and reverse lookup are not — C-65; F-094's sync
+> dialogs exist, the warning on existing data is C-66).
 
 | Domain | Total | implemented/documented | in-progress | planned | idea | superseded |
 |--------|-------|----------------------|-------------|---------|------|------------|
@@ -227,13 +235,13 @@
 | FX | 9 | 9 | 0 | 0 | 0 | 0 |
 | ASSETS | 13 | 13 | 0 | 0 | 0 | 0 |
 | SIGNALS | 9 | 9 | 0 | 0 | 0 | 0 |
-| TRANSACTIONS | 6 | 5 | 1 | 0 | 0 | 0 |
+| TRANSACTIONS | 6 | 6 | 0 | 0 | 0 | 0 |
 | SCHEDULER | 2 | 2 | 0 | 0 | 0 | 0 |
-| DASHBOARD | 3 | 3 | 0 | 0 | 0 | 0 |
-| CALCULATIONS | 4 | 4 | 0 | 0 | 0 | 0 |
+| DASHBOARD | 6 | 6 | 0 | 0 | 0 | 0 |
+| CALCULATIONS | 5 | 5 | 0 | 0 | 0 | 0 |
 | INFRASTRUCTURE | 17 | 17 | 0 | 0 | 0 | 0 |
 | PLANNED/IDEA (first registered) | 26 | 12 | 0 | 10 | 3 | 1 |
-| **TOTAL** | **109** | **94** | **1** | **10** | **3** | **1** |
+| **TOTAL** | **113** | **99** | **0** | **10** | **3** | **1** |
 
 ## Key source files
 
