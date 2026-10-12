@@ -3285,3 +3285,13 @@ R1–R4; U-4 and U-5 to come), [[features/F-008]], [[sources/phase00-translation
 (the CHANGELOG announces the whole rule ahead of CP2 and CP3), [[decisions/clipboard-through-one-helper-with-a-gate]]
 and [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]] (C-63, M-20, V-19 closed, `2166eeb90`). No path
 broke: `base/` stays. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Trains 75 and 76 — M-18 closed (T's CP2, CP3), the seven E2E gaps of 1.2 (V)
+Base `986e99bd3` (fast-forward). Sources: plan 43 (M-18 CP2, CP3a, CP3b) and plan 46 §12.9, digested by two explore
+agents, with the paths, the hashes and the figures (−175 EUR, WAC 150, en-GB, `formatExactDecimal`) re-checked on the
+code. **Updated** [[decisions/figures-in-the-interface-language]] (delivered: amounts, dates, axes, exact decimals;
+M-17 resolved; what is left for after 1.2), [[features/F-008]] (its rows of 2026-10-12 put in order),
+[[problems/playwright-probes-ignore-timeout]] (M-17, M-18), [[decisions/e2e-gaps-of-1-2-before-release]] (delivered,
+the seven specs and their figures), [[problems/e2e-writes-leaked-into-shared-state]] (the files spec cleans up; V-25
+open), [[sources/phase00-data-quality-e2e-2026-10]]. The M-18 lines of the CHANGELOG (`e7bfa342f`), noted in train 74
+as ahead of the code, now describe it. Graph: not updated (P-6).
