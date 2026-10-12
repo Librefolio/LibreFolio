@@ -3043,3 +3043,39 @@ the backlog's M-23. The ✨ line of `b91d6d902` was ported by hand into `CHANGEL
 (what the build-time hook cannot reach: M-23, open, planned in 1.2 by the coordinator), [[features/F-109]] (still open:
 M-23). Checked on the code: `changelog.ts` and `ChangelogModal.svelte` apply no French spacing rule.
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R0 — the features and the map
+Base `551d8cbb4`. Plan approved by the coordinator: R0 → R6, trains first; three UI features in DASHBOARD, the engine
+in CALCULATIONS, no new domain; open items as «paused, after 1.2» (D382). Source of this step: the folder's README
+(`107098edf`), whose code map was checked path by path on this tree.
+
+**Created (5)**: [[features/F-110]] (engine: `services/risk/`, fifteen plugins, four endpoints, documented),
+[[features/F-111]] (four levels on the Dashboard and broker pages; only the simulation rung stays beta),
+[[features/F-112]] (the Lab of Asset Global), [[features/F-113]] (the legacy Asset Detail tab, beta, implemented),
+[[sources/phase00-risk-integration-2026-09]] (the folder, its parts, D382).
+
+**Updated**: the registry (113 features, 98 implemented or documented), [[domains/calculations]], [[domains/dashboard]]
+(F-100 added too: it was in the registry's DASHBOARD rows but missing from the domain page).
+Next: R1, the open items. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 68 — M-18 CP1 (T)
+Base `8730f949c` (the target merged into this branch by the coordinator). Source: plan 43, «M-18» sections (`d00c06685`),
+and the code of `5b2aad5c4`. **Created**: [[decisions/figures-in-the-interface-language]] (the developer's rule, CP1
+delivered, CP2 pending). **Updated**: [[problems/playwright-probes-ignore-timeout]] (M-18 moved to T, CP1),
+[[features/F-008]] (status row). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R1 — the open items
+Base `86de5e903`. Source: the README's lists «Lavoro pianificato e non fatto», «Buchi veri», «Difetti noti», «Buchi nei
+test», «Domande mai decise», the backlog-38 family and the `TODO_FUTURI.md` deferrals (`107098edf`, verified by their
+authors on 2026-10-10). Re-checked on the code: A6, C-22 (D381 clamp; Sturges only for a zero IQR), C4, B7, B8 and
+`HurtRow.secondaryLoss`. **Updated**: [[features/F-110]], [[features/F-111]], [[features/F-112]] («Still open (paused,
+after 1.2 — D382)»); F-113 already carried A2 and T-DI. No problem page: every item is paused by the developer's D382,
+and the README stays its single home. The post-integration review `08` is the first round's history: steps R3/R4.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R2 — the decisions that bind
+Base `e3a55b85f`. Sources: the README's «Decisioni che vincolano il lavoro» (`107098edf`) and the thesis
+`01-tesi-e-quattro-domande.md` (`245aabf97`). **Created**: [[decisions/risk-answers-four-questions]],
+[[concepts/risk-binding-decisions]] (D374 and D380–D381 checked on the code). **Updated**: F-110…F-112 (a link). The
+full records of `04` (1,076 lines) stay in the journal; individual pages come only where a later step needs one.
+Graph: not updated (P-6).

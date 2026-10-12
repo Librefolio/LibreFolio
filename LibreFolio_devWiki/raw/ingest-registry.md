@@ -531,3 +531,28 @@ are each file's last commit at the base. Paths are relative to the repository ro
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00ChangelogTranslation.prompt.md` | `872d42107` | 2026-10-12 | [[decisions/changelog-translated-by-heading-pieces]] (step 10), [[decisions/fr-typography-at-build-time]] (M-23) |
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `872d42107` | 2026-10-12 | section M (M-23), read for status |
+
+## 2026-10-12 — folder 02 (Risk), step R0 (base `551d8cbb4`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/README.md` | `107098edf` | 2026-10-12 | [[sources/phase00-risk-integration-2026-09]], [[features/F-110]], [[features/F-111]], [[features/F-112]], [[features/F-113]] — partial: status, parts, code map; the open items come in R1 |
+
+## 2026-10-12 — train 68: M-18 CP1 (base `8730f949c`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` | `d00c06685` | 2026-10-12 | [[decisions/figures-in-the-interface-language]] — partial: M-18 rule and CP1 |
+
+## 2026-10-12 — folder 02 (Risk), step R1 (base `86de5e903`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/README.md` | `107098edf` | 2026-10-12 | [[features/F-110]], [[features/F-111]], [[features/F-112]] — the open items (the R0 row was partial; now complete) |
+
+## 2026-10-12 — folder 02 (Risk), step R2 (base `e3a55b85f`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/01-tesi-e-quattro-domande.md` | `245aabf97` | 2026-10-12 | [[decisions/risk-answers-four-questions]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md` | `107098edf` | 2026-10-12 | [[concepts/risk-binding-decisions]] — partial: the binding list via the README |
