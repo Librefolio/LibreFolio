@@ -296,6 +296,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/gallery-price-guard-expected-tofixed-text]] | **M, batch 28 (train 70).** The gallery's price guard expected `toFixed` text; since M-18's CP1 the cards write prices in the UI locale: red in English on prices over 1,000, unseen by any test run (the runner excludes the gallery). Expected figure in the shot's locale, behind a control that can fail (`e8d5a5668`) | resolved | e2e, gallery, locale |
 | [[problems/base-currency-setting-silently-defaulted-eur]] | **Folder 08 (second clean audit), P0-1.** Swapped arguments and a non-existent key made every base-currency lookup fall back to EUR; `get_effective_base_currency()` (`08b99c3ac`) | resolved | backend, settings, currency |
 | [[problems/asset-events-lost-on-price-cache-hit]] | **Folder 05 (clean audit).** A price-cache hit returned early and skipped the request that also carried the events: «No data» on an asset with events; events-only fall-through (`b45f5afbb`) | resolved | frontend, assets, cache |
 | [[problems/spa-logout-cross-user-cache-leak]] | **Folder 01.** After an SPA logout stores kept the previous account's data; `ClientSessionState` resets them, scopes keys per user, drops stale responses (`5b9dddb45`) | resolved | frontend, auth, session |
@@ -613,6 +614,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Train 70 — M's batch 28.** The M-19 spec registered (`front-utility docs-offline-math`); the gallery's price guard follows M-18 | [[problems/gallery-price-guard-expected-tofixed-text]] *(1 page — 1 problem)* |
 | 2026-10-12 | **Lint follow-up (read-only check).** Two old open problems re-checked against today's E2E: the BulkModal toolbar not covered (C-61), the DataTable resize proved on one table only (C-62) | *(none)* |
 | 2026-10-12 | **Historical folder H6 — `06_betaTestingReportAndFixing`.** Drift only: the folder moved to `phases/`, four rows re-based; eleven never-ingested plans listed on [[sources/beta-testing-2026-08-05]] | *(none)* |
 | 2026-10-12 | **Historical folder H5 — `Ai_ideas`; the historical folders are covered.** The July brainstorm as a source page only; the MCP assistant pointed to `TODO_FUTURI.md` | [[sources/release2-ai-ideas-2026-07]] *(1 page — 1 source)* |

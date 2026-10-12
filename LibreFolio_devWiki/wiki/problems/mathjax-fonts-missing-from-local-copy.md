@@ -52,8 +52,10 @@ shipped degraded formulas in 1.2, in the image and on the public site. A 200 on 
 - **A vendored library lists its companions from its own text, and they are checked on every run** — a fresh script
   with missing companions is a broken library.
 - Check what a page draws, not that a file answers 200: the M-19 spec now also checks the font answers, the MJX faces
-  and the absence of `typesetPromise` errors. It is **not in the repository yet**: it waits outside it until the shared
-  runner file is free, since an unregistered spec turns `check-orphans` red.
+  and the absence of `typesetPromise` errors. It waited outside the repository until the shared runner file was free,
+  since an unregistered spec turns `check-orphans` red; run once in M's lane, it passed, and a negative control without
+  the fonts went red on the font assertion. *Update (train 70)*: registered in M's batch 28 (`0fe5195e8`) as
+  `front-utility docs-offline-math`.
 - **Still open — M-22** (medium, after 1.2): Mermaid is imported only from jsDelivr (`mermaid.mjs`), with no local copy
   and no fallback, so without internet — as in the full image — 74 pages show their diagrams as code. The cure is
   MathJax's: a copy in `vendor/` and a loader with a fallback.
@@ -68,5 +70,6 @@ shipped degraded formulas in 1.2, in the image and on the public site. A 200 on 
 | Companion tests | `backend/test_scripts/test_utilities/test_update_js_cache.py` |
 | `typesetPromise` guard | `mkdocs_src/docs/javascripts/mathjax.js` |
 | Loader (M-19) | `mkdocs_src/docs/javascripts/lib-loader.js` |
+| Regression spec (the fonts, the faces, `typesetPromise`) | `frontend/e2e/layout/docs-offline-math.spec.ts` |
 | Mermaid from the CDN only (M-22) | `mkdocs_src/docs/javascripts/mermaid.mjs` |
 | Journal (step 8) | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00ChangelogTranslation.prompt.md` |
