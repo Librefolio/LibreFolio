@@ -85,6 +85,9 @@ related:
 > `--into`, `dev.py i18n add` puts a new plugin key in the subsystem that declares its prefix, silently, and only the
 > ownership gate notices; the guides say to pass `--into`. U-B5's devWiki part was done in step D (below). U-5, the
 > final gates and the handoff, remains.
+>
+> *Train 79*: the first keys added after U-3 — eight, with `dev.py i18n add` for T-EN — went by their prefix to the
+> `charts` and `assets` subsystems (`f31bd6cfd`).
 
 > **Planned, not in the code.** Decided on 2026-10-12; at `e7d698c4d` (train 56) nothing of it is implemented and
 > workstream U's plan (45) is not in the target yet. The decisions are quoted from the coordinator's diary, which is
