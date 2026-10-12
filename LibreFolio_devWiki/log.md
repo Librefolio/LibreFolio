@@ -3121,3 +3121,10 @@ ingest: archived on 2026-09-16 (`245aabf97`), aligned once on 2026-10-09 (`33d5a
 [[sources/phase00-risk-analysis-backend]] (what still holds, what is superseded), [[sources/phase00-risk-integration-2026-09]].
 Folder 02 is now covered by steps R0–R6: 4 features, 6 decisions, 2 concepts, 5 problems and 1 source, with the open
 items as «paused, after 1.2 (D382)». Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 09, step F0 — the feedback jobs
+Base `dc00cbe9f`. Plan approved by the coordinator: F0 → F2, then H1 → H5 (`Ai_ideas`: a source page only, linked to
+`TODO_FUTURI.md` themes). Sources: `09_feedbackJobs/README.md` and `06_piano_sprint.md` (`d614daed9`), digested by an
+explore agent; the hashes verified as ancestors, the README's open items rewritten with today's paths (BU1, U-1).
+**Created**: [[sources/phase00-feedback-jobs-2026-09]]. **Updated**: [[sources/phase00-feedback-import-urgent-2026-09]]
+(a link). Graph: not updated (P-6).
