@@ -18,6 +18,7 @@ import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 import {appears} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
+import {randomUUID} from 'crypto';
 
 test.setTimeout(60_000);
 
@@ -183,7 +184,12 @@ async function dblClickBulkRow(page: Page, marker: string) {
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
 }
 
-async function commitBulkModal(page: Page): Promise<number[]> {
+/**
+ * Save the editor and return the ids the backend assigned. With `owned`, the ids are also
+ * recorded there the moment the response reports them, before anything else is checked:
+ * a red after the commit still deletes what it saved.
+ */
+async function commitBulkModal(page: Page, owned?: number[]): Promise<number[]> {
     const commitBtn = page.getByTestId('tx-bulk-commit');
     await expect(commitBtn).toBeEnabled({timeout: 8_000});
 
@@ -195,14 +201,16 @@ async function commitBulkModal(page: Page): Promise<number[]> {
         issues?: Array<{error: string}>;
         results?: Array<{operation: string; ids?: number[]; status?: string}>;
     };
+    // The ids the backend assigned — the only way for the test to know which
+    // rows it owns rather than scanning the table and hoping. A rolled-back
+    // commit created nothing, so it reports nothing to own.
+    const ids = body.committed === true ? (body.results ?? []).filter((r) => r.operation === 'create' && r.status === 'success').flatMap((r) => r.ids ?? []) : [];
+    owned?.push(...ids);
     expect(body.committed, `commit was rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
 
     // Wait for BulkModal to close
     await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 10_000});
-
-    // The ids the backend assigned — the only way for the test to know which
-    // rows it owns rather than scanning the table and hoping.
-    return (body.results ?? []).filter((r) => r.operation === 'create' && r.status === 'success').flatMap((r) => r.ids ?? []);
+    return ids;
 }
 
 // ---------------------------------------------------------------------------
@@ -355,106 +363,115 @@ test.describe('BulkModal WAC Cell Rendering', () => {
     });
 
     test('WB4 — DB rows with saved cost_basis show manual (Bug 11)', async ({page}) => {
-        // Create BUY + TRANSFER with auto WAC, then commit
-        await openCreateFlow(page);
-        await selectType(page, 'BUY');
-        await pickFirstBroker(page);
-        await pickAssetByName(page, ASSET_NAME);
-        await fillQuantity(page, '10');
-        await fillCash(page, '1000');
-        await applyFormModal(page);
-        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+        // Whoever commits, cleans up. The BUY and the TRANSFER land on shared brokers, where
+        // every later test would read them: their ids are recorded the moment the commit
+        // reports them, and deleted after the test whatever its outcome.
+        await withOwned(page, 'WB4', async (owned) => {
+            // Create BUY + TRANSFER with auto WAC, then commit
+            await openCreateFlow(page);
+            await selectType(page, 'BUY');
+            await pickFirstBroker(page);
+            await pickAssetByName(page, ASSET_NAME);
+            await fillQuantity(page, '10');
+            await fillCash(page, '1000');
+            await applyFormModal(page);
+            await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
-        await page.getByTestId('tx-bulk-add-row').click();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
-        await selectType(page, 'TRANSFER');
-        await pickBrokerInPanel(page, 'tx-form-dual-from', BROKER_FROM);
-        await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
-        await pickAssetByName(page, ASSET_NAME);
-        await fillQuantity(page, '5');
-        await applyFormModal(page);
-        await waitForWacResolved(page);
+            await page.getByTestId('tx-bulk-add-row').click();
+            await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+            await selectType(page, 'TRANSFER');
+            await pickBrokerInPanel(page, 'tx-form-dual-from', BROKER_FROM);
+            await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_TO);
+            await pickAssetByName(page, ASSET_NAME);
+            await fillQuantity(page, '5');
+            await applyFormModal(page);
+            await waitForWacResolved(page);
 
-        // Commit
-        const createdIds = await commitBulkModal(page);
-        expect(createdIds.length, 'the commit must report the rows it created').toBeGreaterThan(0);
+            // Commit
+            const createdIds = await commitBulkModal(page, owned.transactionIds);
+            expect(createdIds.length, 'the commit must report the rows it created').toBeGreaterThan(0);
 
-        // Open the table narrowed to the rows we just created. Scanning the
-        // whole table for "a paired row with this asset and broker" could land
-        // on a neighbour's row, which has no saved cost_basis and would fail
-        // the assertion below for the wrong reason.
-        await goToTransactionsByIds(page, createdIds);
+            // Open the table narrowed to the rows we just created. Scanning the
+            // whole table for "a paired row with this asset and broker" could land
+            // on a neighbour's row, which has no saved cost_basis and would fail
+            // the assertion below for the wrong reason.
+            await goToTransactionsByIds(page, createdIds);
 
-        // Among our own rows, find the giver of the pair (the row followed by a receiver)
-        const allRows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
-        let giverRowId: string | null = null;
-        const count = await allRows.count();
-        for (let i = 0; i < count - 1; i++) {
-            const nextCls = (await allRows.nth(i + 1).getAttribute('class')) ?? '';
-            if (nextCls.includes('tx-row-receiver')) {
-                giverRowId = await allRows.nth(i).getAttribute('data-row-id');
-                break;
-            }
-        }
-        expect(giverRowId, 'the committed TRANSFER must render as a giver + receiver pair').toBeTruthy();
-
-        // Select and open in BulkModal (Edit)
-        const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${giverRowId}"]`);
-        await row.locator('.checkbox-btn').first().click();
-
-        const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
-        await expect(editBtn).toBeEnabled({timeout: 5_000});
-        await editBtn.click();
-        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
-
-        // Assert: cost_basis cell shows manual value (DB-saved = manual)
-        const manualCell = page.locator('[data-testid="tx-bulk-cost-basis-manual"]').first();
-        await expect(manualCell).toBeVisible({timeout: 10_000});
-    });
-
-    test('WB5 — Clone paired from DB, WAC auto cell appears (inline validate)', async ({page}) => {
-        // Find a paired giver row on editable broker (from mock data)
-        const allRows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
-        // The table is populated asynchronously: without this wait, a slow backend
-        // (e.g. running under coverage) yields a count of 0 and the loop below never runs.
-        await expect(allRows.first()).toBeVisible({timeout: 10_000});
-        const count = await allRows.count();
-        let giverRowId: string | null = null;
-
-        for (let i = 0; i < count - 1; i++) {
-            const nextCls = (await allRows.nth(i + 1).getAttribute('class')) ?? '';
-            if (nextCls.includes('tx-row-receiver')) {
-                const text = (await allRows.nth(i).textContent()) ?? '';
-                if (text.includes(BROKER_FROM) || text.includes(BROKER_TO)) {
+            // Among our own rows, find the giver of the pair (the row followed by a receiver)
+            const allRows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
+            let giverRowId: string | null = null;
+            const count = await allRows.count();
+            for (let i = 0; i < count - 1; i++) {
+                const nextCls = (await allRows.nth(i + 1).getAttribute('class')) ?? '';
+                if (nextCls.includes('tx-row-receiver')) {
                     giverRowId = await allRows.nth(i).getAttribute('data-row-id');
                     break;
                 }
             }
-        }
-        expect(giverRowId, 'Must find a paired giver row on editable broker').toBeTruthy();
+            expect(giverRowId, 'the committed TRANSFER must render as a giver + receiver pair').toBeTruthy();
 
-        // Select and clone
-        const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${giverRowId}"]`);
-        await row.locator('.checkbox-btn').first().click();
+            // Select and open in BulkModal (Edit)
+            const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${giverRowId}"]`);
+            await row.locator('.checkbox-btn').first().click();
 
-        const cloneBtn = page.locator('[data-testid="toolbar-action-clone"]');
-        await expect(cloneBtn).toBeVisible({timeout: 2_000});
+            const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
+            await expect(editBtn).toBeEnabled({timeout: 5_000});
+            await editBtn.click();
+            await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
-        await cloneBtn.click();
-        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+            // Assert: cost_basis cell shows manual value (DB-saved = manual)
+            const manualCell = page.locator('[data-testid="tx-bulk-cost-basis-manual"]').first();
+            await expect(manualCell).toBeVisible({timeout: 10_000});
+        });
+    });
 
-        // Il WAC arriva dalla risposta di validate (niente /wac-preview separato).
-        //
-        // Qui stava il difetto: WB5 era l'unico test del file che, dopo il clone,
-        // scommetteva 8 s sull'**esito** senza prima aspettare la barriera che il
-        // prodotto pubblica — `data-validate-runs` che lascia lo zero, poi
-        // `data-busy` che torna false. Con il debounce di 1 s davanti e un backend
-        // strumentato due volte (coverage Python + JS) sotto la run completa, quel
-        // budget cadeva dentro la coda della distribuzione e il test si arrendeva
-        // mentre la cella era ancora 'pending'. Aumentare il numero avrebbe
-        // spostato la scommessa, non tolta: `waitForWacResolved` aspetta lo stato,
-        // che è ciò che gli altri nove test di questo file fanno da sempre.
-        await waitForWacResolved(page);
+    test('WB5 — Clone paired from DB, WAC auto cell appears (inline validate)', async ({page}) => {
+        // The saved pair is the test's own, and so is its arithmetic (createOwnedTransferPair).
+        // It used to be "the first paired row sent from IB or Directa" — on the seed, the
+        // view-only pair whose receiver the test user cannot write, which by contract gets
+        // no cost proposed; it went green only on a pair another test had left behind.
+        await withOwned(page, 'WB5', async (owned) => {
+            const pair = await createOwnedTransferPair(page, owned);
+            await goToTransactionsByIds(page, [pair.giverId, pair.receiverId]);
+
+            // Premise, by id: the sending half is shown directly above its receiving half.
+            const table = page.getByTestId('tx-table');
+            await expect(table.locator(`tbody tr[data-row-id="tx-${pair.giverId}"] + tr[data-row-id="tx-${pair.receiverId}"]`)).toBeVisible({timeout: 10_000});
+
+            // Select the sending half and clone: the editor brings its partner along.
+            const checkbox = table.getByTestId(`dt-row-checkbox-tx-${pair.giverId}`);
+            await checkbox.click();
+            await expect(checkbox).toHaveAttribute('data-state', 'checked');
+            const cloneBtn = page.getByTestId('toolbar-action-clone');
+            await expect(cloneBtn).toBeVisible({timeout: 5_000});
+            await cloneBtn.click();
+            await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+
+            // Premise: the clone is one paired row on the grid, with no form on top of it.
+            const gridRow = page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]').filter({hasText: pair.description});
+            await expect(gridRow).toHaveCount(1, {timeout: 5_000});
+            await expect(page.getByTestId('tx-form-modal')).toBeHidden();
+
+            // Il WAC arriva dalla risposta di validate (niente /wac-preview separato).
+            //
+            // Qui stava il difetto: WB5 era l'unico test del file che, dopo il clone,
+            // scommetteva 8 s sull'**esito** senza prima aspettare la barriera che il
+            // prodotto pubblica — `data-validate-runs` che lascia lo zero, poi
+            // `data-busy` che torna false. Con il debounce di 1 s davanti e un backend
+            // strumentato due volte (coverage Python + JS) sotto la run completa, quel
+            // budget cadeva dentro la coda della distribuzione e il test si arrendeva
+            // mentre la cella era ancora 'pending'. Aumentare il numero avrebbe
+            // spostato la scommessa, non tolta: `waitForWacResolved` aspetta lo stato,
+            // che è ciò che gli altri nove test di questo file fanno da sempre.
+            await waitForWacResolved(page);
+
+            // The proposal is the sending broker's average, 150.00 EUR per unit — not the 175
+            // saved on the source row. The cell publishes no raw amount, so read its digits,
+            // never its words.
+            const autoCell = gridRow.getByTestId('tx-bulk-cost-basis-auto');
+            await expect(autoCell).toHaveAttribute('data-state', 'ready');
+            await expect.poll(async () => ((await autoCell.textContent()) ?? '').replace(/\D/g, ''), {message: 'the clone proposes the average of the owned lots, 150.00 EUR per unit', timeout: 5_000}).toBe('15000');
+        });
     });
 
     test('WB6 — WAC value stable after debounce (no feedback loop)', async ({page}) => {
@@ -854,3 +871,84 @@ test.describe('BulkModal saved manual cost basis', () => {
         });
     });
 });
+
+// ---------------------------------------------------------------------------
+// Owned data for WB4 and WB5
+// ---------------------------------------------------------------------------
+//
+// Same toolkit as WB11 (`Owned`, `cleanupOwned`): every id recorded the moment it
+// exists, everything deleted by id at the end whatever the outcome — never "what
+// appeared since", which under four workers is also a neighbour's rows.
+
+/** Run `body` with a record of what it creates, then delete exactly that, whatever the outcome. */
+async function withOwned(page: Page, label: string, body: (owned: Owned) => Promise<void>): Promise<void> {
+    const owned: Owned = {brokerIds: [], assetIds: [], transactionIds: []};
+    let passed = false;
+    try {
+        await body(owned);
+        passed = true;
+    } finally {
+        const failures = await cleanupOwned(page, owned);
+        // A red keeps its own error; on a green, a cleanup that failed is a red of its own.
+        if (passed) expect(failures, 'every cleanup operation is scoped to ids this test created').toEqual([]);
+        else if (failures.length > 0) console.warn(`[${label}] cleanup after a failure left behind: ${failures.join('; ')}`);
+    }
+}
+
+/** A saved TRANSFER between two owned brokers: ids to find it in the table, the description that marks it on the grid. */
+type OwnedTransferPair = {giverId: number; receiverId: number; description: string};
+
+/**
+ * Two owned brokers and an owned EUR asset. The sending broker holds two ADJUSTMENT lots,
+ * +10 at 100 and +10 at 200 EUR per unit — an average of exactly 150 — and sends 4 units
+ * to the receiving broker in a saved TRANSFER. The receiving half is saved with a MANUAL
+ * cost of 175, so a clone that proposes 150 has computed it rather than copied the source.
+ * Old fixed dates keep the rows at the bottom of every other test's table. The ledger is
+ * read back, so the premise is checked rather than assumed.
+ */
+async function createOwnedTransferPair(page: Page, owned: Owned): Promise<OwnedTransferPair> {
+    const suffix = uniqueSuffix();
+    const brokerNames = [`WB5 from ${suffix}`, `WB5 to ${suffix}`];
+    const brokers = await jsonFrom<{results: Array<{broker_id: number | null; name: string; success: boolean}>}>(await page.request.post(`${API}/brokers`, {data: brokerNames.map((name) => ({name, opened_at: '2020-01-01'}))}), 'create owned brokers');
+    // Both ids are recorded before either is checked: a half-created setup still cleans up.
+    for (const item of brokers.results) if (item.success && typeof item.broker_id === 'number') owned.brokerIds.push(item.broker_id);
+    const [fromId, toId] = brokerNames.map((name) => brokers.results.find((item) => item.name === name && item.success)?.broker_id);
+    if (typeof fromId !== 'number' || typeof toId !== 'number') throw new Error(`Broker creation failed: ${JSON.stringify(brokers)}`);
+
+    const assetName = `WB5 asset ${suffix}`;
+    const assets = await jsonFrom<{results: Array<{asset_id: number | null; display_name: string; success: boolean}>}>(await page.request.post(`${API}/assets`, {data: [{display_name: assetName, currency: 'EUR', asset_type: 'STOCK'}]}), 'create owned asset');
+    const asset = assets.results.find((item) => item.display_name === assetName);
+    if (!asset?.success || typeof asset.asset_id !== 'number') throw new Error(`Asset creation failed: ${JSON.stringify(assets)}`);
+    const assetId = asset.asset_id;
+    owned.assetIds.push(assetId);
+
+    const description = `WB5 transfer ${suffix}`;
+    const linkUuid = randomUUID();
+    const lot = (date: string, amount: string) => ({broker_id: fromId, asset_id: assetId, type: 'ADJUSTMENT', date, quantity: '10', cost_basis_override: {code: 'EUR', amount}, description: `WB5 lot ${amount} ${suffix}`});
+    const creates = [
+        lot('2024-01-02', '100'),
+        lot('2024-01-03', '200'),
+        {broker_id: fromId, asset_id: assetId, type: 'TRANSFER', date: '2024-01-04', quantity: '-4', link_uuid: linkUuid, description},
+        {broker_id: toId, asset_id: assetId, type: 'TRANSFER', date: '2024-01-04', quantity: '4', link_uuid: linkUuid, description, cost_basis_override: {code: 'EUR', amount: '175'}},
+    ];
+    const committed = await jsonFrom<{committed: boolean; issues?: unknown; results: Array<{operation: string; ids?: number[]}>}>(await page.request.post(`${API}/transactions/commit`, {data: {creates}}), 'commit the owned lots and TRANSFER');
+    const ids = committed.committed === true ? committed.results.filter((result) => result.operation === 'create').flatMap((result) => result.ids ?? []) : [];
+    owned.transactionIds.push(...ids);
+    expect(committed.committed, `owned rows rolled back: ${JSON.stringify(committed.issues ?? [])}`).toBe(true);
+    expect(ids, 'the commit created the two lots and both halves of the TRANSFER').toHaveLength(creates.length);
+
+    const saved = await jsonFrom<Array<{id: number; type: string; broker_id: number; quantity: string; related_transaction_id?: number | null; cost_basis_override?: CostBasis | null}>>(await page.request.get(`${API}/transactions?${ids.map((id) => `ids=${id}`).join('&')}`), 'read the owned rows');
+    const lots = saved
+        .filter((tx) => tx.type === 'ADJUSTMENT')
+        .map((tx) => Number(tx.cost_basis_override?.amount))
+        .sort((a, b) => a - b);
+    expect(lots, 'premise: the sending broker holds the two lots the average is made of').toEqual([100, 200]);
+    const giver = saved.find((tx) => tx.type === 'TRANSFER' && tx.broker_id === fromId);
+    const receiver = saved.find((tx) => tx.type === 'TRANSFER' && tx.broker_id === toId);
+    if (!giver || !receiver) throw new Error(`The owned TRANSFER is missing a half: ${JSON.stringify(saved)}`);
+    expect([giver.related_transaction_id, receiver.related_transaction_id], 'premise: the two halves are linked to each other').toEqual([receiver.id, giver.id]);
+    expect(Number(giver.quantity), 'premise: the sending half takes 4 units out').toBe(-4);
+    expect(receiver.cost_basis_override?.code, 'premise: the receiving half is saved with its manual cost').toBe('EUR');
+    expect(Number(receiver.cost_basis_override?.amount), 'premise: the receiving half is saved with its manual cost').toBe(175);
+    return {giverId: giver.id, receiverId: receiver.id, description};
+}
