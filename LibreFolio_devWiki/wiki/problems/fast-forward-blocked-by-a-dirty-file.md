@@ -44,6 +44,11 @@ Keep shared files — the backlog above all — out of a workstream's uncommitte
 the change to the coordinator first. When it happens anyway, the five steps above keep both sides without touching
 history.
 
+## See also
+
+- The other train-time obstacle on a shared checkout: a merge that dies with «stash failed» because an IDE or a
+  watcher holds `index.lock` — [[problems/git-merge-stash-failed-on-locked-index]].
+
 ## Source files
 
 | Role | Path |

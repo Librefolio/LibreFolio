@@ -21,6 +21,7 @@
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import ScheduledInvestmentEditor from './ScheduledInvestmentEditor.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {writeTextToClipboard} from '$lib/utils/clipboard';
     import {getCurrencyInfo, currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {isSoftProbeFailure, summarizeProbeError, formatCurrencyForTooltip, buildProbeTooltipHtml} from './providerProbe';
@@ -588,12 +589,13 @@
                                     <button
                                         type="button"
                                         class="ml-auto shrink-0 p-0.5 text-gray-400 hover:text-blue-500 transition-colors"
-                                        title="Copy error detail"
+                                        data-testid="provider-test-result-copy"
+                                        title={$t('assets.probe.copyErrorDetail')}
                                         onclick={async (e) => {
                                             e.stopPropagation();
                                             try {
-                                                await navigator.clipboard.writeText(result.detail ?? '');
-                                                toasts.info('Copied to clipboard');
+                                                await writeTextToClipboard(result.detail ?? '');
+                                                toasts.info($t('common.copiedToClipboard'));
                                             } catch {
                                                 /* clipboard not available */
                                             }

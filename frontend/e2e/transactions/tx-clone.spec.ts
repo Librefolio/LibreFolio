@@ -549,21 +549,13 @@ test.describe('Transaction Clone', () => {
     test('clone inside the workspace (cloneRow) preserves the source date (T3)', async ({page}) => {
         // Own the source row: a mock-table scan could land on a today-dated
         // neighbour, where preserved and reset-to-today are indistinguishable.
-        // A row this test created, dated 2021, makes the assertion exact.
-        const suffix = uniqueSuffix();
-        const brokerResp = await page.request.post('/api/v1/brokers', {data: [{name: `T3-ws-${suffix}`}]});
-        expect(brokerResp.ok(), `broker setup failed (HTTP ${brokerResp.status()})`).toBeTruthy();
-        const brokerId = (await brokerResp.json()).results[0].broker_id as number;
+        // A row this test created, dated 2021, makes the assertion exact. The
+        // broker it sits on is the test's too: withOwnedBroker deletes, by id,
+        // the row and then the broker, after a red as well.
+        await withOwnedBroker(page, txWrites, 'T3-ws', async (owned) => {
+            const sourceDate = '2021-07-19';
+            const [sourceId] = await commitSources(page, owned, [{type: 'DEPOSIT', date: sourceDate, cash: {code: 'EUR', amount: '10'}, description: `T3-ws-${owned.suffix}`}]);
 
-        const sourceDate = '2021-07-19';
-        const createResp = await page.request.post('/api/v1/transactions/commit', {
-            data: {creates: [{broker_id: brokerId, type: 'DEPOSIT', date: sourceDate, cash: {code: 'EUR', amount: '10'}, description: `T3-ws-${suffix}`}]},
-        });
-        const createBody = await createResp.json();
-        expect(createBody.committed, `setup rolled back: ${JSON.stringify(createBody.issues ?? [])}`).toBe(true);
-        const sourceId = createBody.results[0].ids[0] as number;
-
-        try {
             // Id-filtered navigation: re-navigating to the URL the page is
             // already on is a client-side no-op that would leave the freshly
             // seeded row out of the table.
@@ -575,12 +567,14 @@ test.describe('Transaction Clone', () => {
             const bulkModal = page.getByTestId('tx-bulk-modal');
             await expect(bulkModal).toBeVisible({timeout: 5_000});
 
-            // Single-row edit auto-opens the FormModal; close it to reach the grid.
+            // A single-row edit always auto-opens the FormModal (TransactionBulkModal,
+            // autoForm 'edit'); close it to reach the grid. Asserted, not probed: a
+            // probe that answers before the form has opened lets the click below
+            // land behind it.
             const formModal = page.getByTestId('tx-form-modal');
-            if (await formModal.isVisible({timeout: 2_000}).catch(() => false)) {
-                await formModal.getByTestId('tx-form-cancel').click();
-                await expect(formModal).not.toBeVisible({timeout: 3_000});
-            }
+            await expect(formModal).toBeVisible({timeout: 5_000});
+            await formModal.getByTestId('tx-form-cancel').click();
+            await expect(formModal).not.toBeVisible({timeout: 3_000});
 
             // Clone the row INSIDE the workspace (cloneRow — the third T3 site).
             const gridRow = bulkModal.locator('tbody tr[data-row-id]').first();
@@ -591,12 +585,7 @@ test.describe('Transaction Clone', () => {
             const appendedText = (await appended.textContent()) ?? '';
             expect(appendedText, 'the in-workspace clone must carry the source date').toContain(sourceDate);
             expect(appendedText).not.toContain(todayIso());
-        } finally {
-            // Nothing was committed through the page — the API-seeded source is
-            // this test's only write; remove it. The broker stays (inert,
-            // uniquely named).
-            await page.request.post('/api/v1/transactions/commit', {data: {deletes: [sourceId]}});
-        }
+        });
     });
 
     test('clone from view-only broker → no edit/delete actions on row', async ({page}) => {

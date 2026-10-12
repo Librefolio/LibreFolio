@@ -19,8 +19,8 @@
  *     portal_url: portalUrl,
  *     default_import_plugin: pluginCode,
  * }));
- * // then use chain.currentDisplayUrl, chain.imageLoaded,
- * //           chain.handleLoad(), chain.handleError()
+ * // then use chain.currentDisplayUrl, chain.imageLoaded, and give
+ * // chain.handleLoad / chain.handleError to the <img> as its onload / onerror
  * ```
  *
  * @module utils/broker/brokerIconChain
@@ -33,8 +33,10 @@ export type {BrokerIconSource};
 export interface BrokerIconChain {
     readonly currentDisplayUrl: string | null;
     readonly imageLoaded: boolean;
-    handleLoad: () => void;
-    handleError: () => void;
+    /** The <img>'s `load` listener: only a load of the current URL hides the caller's fallback. */
+    handleLoad: (event?: Event) => void;
+    /** The <img>'s `error` listener: fails the URL of the <img> that raised it, the current one without an event. */
+    handleError: (event?: Event) => void;
 }
 
 /**
@@ -49,9 +51,13 @@ export function createBrokerIconChain(getSource: () => BrokerIconSource): Broker
     // Plugin icon — loaded async via shared module-level cache
     // =========================================================================
 
-    let pluginIconUrl = $state<string | null>(null);
+    // Seeded from the cache when the plugin list is already loaded: the first render then orders the
+    // candidates as they stay, and with a plugin made for the broker no request goes to the favicon first.
+    const initialPluginCode = getSource().default_import_plugin;
+    const initialPluginIconUrl = getPluginIconUrl(initialPluginCode);
+    let pluginIconUrl = $state<string | null>(initialPluginIconUrl);
     /** A generic fallback plugin's icon comes after the portal's favicon. */
-    let pluginIsGeneric = $state(false);
+    let pluginIsGeneric = $state(initialPluginIconUrl !== null && isFallbackPluginCode(initialPluginCode));
 
     $effect(() => {
         const code = normalizeBrokerIconField(getSource().default_import_plugin);
@@ -144,15 +150,26 @@ export function createBrokerIconChain(getSource: () => BrokerIconSource): Broker
     // Handlers
     // =========================================================================
 
-    function handleLoad() {
-        imageLoaded = true;
+    /**
+     * The URL an <img> event is about: the `src` of the <img> that raised it. Svelte never removes
+     * `onload` / `onerror` from an <img> swapped out by `{#key}`, so a request still in flight reports
+     * after the swap, about a URL that is no longer the current one. `getAttribute`, not `.src`, which
+     * resolves the URL against the page. Without an event, the current URL.
+     */
+    function eventUrl(event?: Event): string | null {
+        const target = event?.currentTarget as Element | null | undefined;
+        if (target && typeof target.getAttribute === 'function') return target.getAttribute('src');
+        return currentDisplayUrl;
     }
 
-    function handleError() {
-        if (currentDisplayUrl) {
-            failedUrls = new Set([...failedUrls, currentDisplayUrl]);
-        }
-        imageLoaded = false;
+    function handleLoad(event?: Event) {
+        if (eventUrl(event) === currentDisplayUrl) imageLoaded = true;
+    }
+
+    function handleError(event?: Event) {
+        const url = eventUrl(event);
+        if (url) failedUrls = new Set([...failedUrls, url]);
+        if (url === currentDisplayUrl) imageLoaded = false;
     }
 
     return {
