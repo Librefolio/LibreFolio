@@ -23,6 +23,7 @@
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
 
     interface CacheStatusEntry {
         name: string;
@@ -89,7 +90,7 @@
     function formatTtl(seconds: number): string {
         if (seconds >= 3600) {
             const hours = seconds / 3600;
-            return `${Number.isInteger(hours) ? hours : hours.toFixed(1)}h`;
+            return `${formatFixed(hours, Number.isInteger(hours) ? 0 : 1)}h`;
         }
         if (seconds >= 60) return `${Math.round(seconds / 60)}min`;
         return `${seconds}s`;

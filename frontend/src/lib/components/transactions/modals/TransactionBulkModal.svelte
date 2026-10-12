@@ -92,6 +92,7 @@
     import {resolveFormItemsFromOps, type FormModalItems} from '../shared/resolveFormItems';
     import type {TXReadItem, ValidationIssue} from '../types';
     import type {TransactionCreateItem} from '$lib/types';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
 
     // =========================================================================
     // Types
@@ -1905,12 +1906,12 @@
                         const ci = getCurrencyInfo(ev.code);
                         const sym = ci.symbol && ci.symbol !== ev.code ? `${ci.symbol} ` : '';
                         const flag = ci.flag_emoji && ci.flag_emoji !== '🏳️' ? `<span class="emoji-flag">${ci.flag_emoji}</span> ` : '';
-                        fmtAmt = `${Number.isInteger(amt) ? amt.toString() : amt.toFixed(2)} ${sym}${flag}${ev.code}`;
+                        fmtAmt = `${formatFixed(amt, Number.isInteger(amt) ? 0 : 2)} ${sym}${flag}${ev.code}`;
                     }
                     // Build rich HTML tooltip
                     const typeLabel = $t(`assetDetail.eventType.${ev.type}`) || ev.type.replace(/_/g, ' ');
                     let tooltipHtml = `<strong>${emoji} ${typeLabel}</strong><br>${fullDate}`;
-                    if (amt !== 0) tooltipHtml += `<br>${$t('transactions.bulk.eventTooltipAmount')}: <span style="font-family:monospace">${amt.toFixed(4)} ${ev.code}</span>`;
+                    if (amt !== 0) tooltipHtml += `<br>${$t('transactions.bulk.eventTooltipAmount')}: <span style="font-family:monospace">${formatFixed(amt, 4)} ${ev.code}</span>`;
                     if (ev.notes) tooltipHtml += `<br>📝 ${$t('common.notes')}: ${escapeHtml(ev.notes)}`;
                     return {
                         type: 'html',
@@ -3429,7 +3430,7 @@
                                                     {@html formatCurrencyCodeHtml(fxInfo.base)}
                                                     <span>→</span>
                                                     {@html formatCurrencyCodeHtml(fxInfo.quote)}
-                                                    <span class="font-mono">@ {fxInfo.impliedRate.toFixed(4)}</span>
+                                                    <span class="font-mono">@ {formatFixed(fxInfo.impliedRate, 4)}</span>
                                                     {#if tooltipData.staleDays != null && tooltipData.staleDays > 0}
                                                         <span class="text-amber-500">⚠️</span>
                                                     {/if}

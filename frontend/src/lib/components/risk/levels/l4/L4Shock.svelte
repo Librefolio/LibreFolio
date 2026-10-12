@@ -11,6 +11,7 @@
     import {formatCurrencyAmount} from '../../riskAnalysisHelpers';
     import TornadoChart from './TornadoChart.svelte';
     import {shockOptions, shockScenario, tornadoRows, type TornadoRow} from './scenarioHelpers';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     /**
      * L4 rung 2 — hypothetical shock: deterministic, on an assumption stated.
@@ -161,7 +162,7 @@
         <p class="text-sm text-gray-700 dark:text-gray-200" data-testid="risk-shock-total">
             {$t('risk.levels.l4.shockTotal', {
                 values: {
-                    percent: output.portfolio_return == null ? '—' : `${output.portfolio_return < 0 ? '−' : '+'}${(Math.abs(output.portfolio_return) * 100).toFixed(2)}%`,
+                    percent: output.portfolio_return == null ? '—' : `${output.portfolio_return < 0 ? '−' : '+'}${formatPercent(Math.abs(output.portfolio_return), {scale: 100, signed: false})}`,
                     amount: !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
                 },
             })}
@@ -172,7 +173,7 @@
                  Unstated, the total would silently speak for less than the whole
                  portfolio while looking as if it spoke for all of it. -->
             <p class="text-xs text-amber-700 dark:text-amber-300" data-testid="risk-shock-coverage">
-                {$t('risk.levels.l4.shockCoverage', {values: {percent: `${(output.classification_coverage * 100).toFixed(0)}%`}})}
+                {$t('risk.levels.l4.shockCoverage', {values: {percent: formatPercent(output.classification_coverage, {scale: 100, signed: false, digits: 0})}})}
             </p>
         {/if}
     {/if}
