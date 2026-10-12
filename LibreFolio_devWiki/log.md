@@ -2994,3 +2994,24 @@ features, 94 implemented or documented).
 (the loose modules of `services/` grouped by domain, after 1.2). V-19 is in the target's backlog since train 64, not yet on
 this branch: cited by id only.
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Trains 58 and 64 — V's batch 2 and work 3 (plan 46 §11–§12)
+Base `d04b87c0f` (train 65). The coordinator asked for train 64 (V's step 2a: §12.3–§12.5, V-15…V-20, cures A1–A3).
+The same plan also carried V's part of train 58 (`0596e8d08`: §11, batch 2, and §12.1–§12.2), never ingested, and the
+wiki still called V-1 open: both are included, so the registry row at `262515898` is true for the whole plan.
+
+**Created (3)**: [[problems/e2e-writes-leaked-into-shared-state]] (how a write spreads — parallel inside a category,
+one populate per invocation, clean-ups at one worker only; A1–A7; damage proved on the lane's database before each cure;
+2a delivered in `495fb9e86`, `6d62171e3`, `e6333930c`; 2b open), [[problems/bcrypt-blocks-the-event-loop]] (V-16,
+checked in `auth.py`, `auth_service.py`, `user_service.py`), [[decisions/e2e-gaps-of-1-2-before-release]] (planned:
+nothing of it is in the code).
+
+**Updated**: [[problems/open-panels-stale-after-fx-sync]] (V-1 closed, `a0722f755`), [[decisions/data-quality-proved-on-real-data]]
+(the left-after list: V-1, V-5…V-7, V-9, V-10 closed), [[sources/phase00-data-quality-e2e-2026-10]] (batch 2 and work 3;
+open after train 64: V-2…V-4, V-8, V-11…V-20), [[features/F-054]] (status row), [[concepts/test-isolation-classes]]
+(the E2E rule), [[concepts/async-io-rule]] (the known violation). V-19 was already filed in step B8.
+
+**Checked against the code**: `fullyParallel: true` in `playwright.config.ts` (a comment above it still says «off»;
+not ours to change); the reserved quotes TTD/JMD and GTQ/HNL; `describe('Saving')` serial; the About tab's
+`data-busy`; the disposable-account helpers in `fixtures/onboarding-accounts.ts`.
+Graph: not updated (P-6).

@@ -508,3 +508,10 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` | `fba291f53` | 2026-10-12 | [[sources/phase00-financial-math-home-2026-10]] (CL), [[decisions/changelog-translated-by-chapter]], [[features/F-109]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/47_chartAxisDayLabels/plan-phase00ChartAxisDayLabels.prompt.md` | `ace3455e2` | 2026-10-12 | [[sources/phase00-chart-axis-day-labels-2026-10]], [[problems/line-chart-axes-lost-the-day]], [[problems/pnl-lines-kept-removed-brokers]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `bf831ef10` | 2026-10-12 | sections C (C-56, C-57), D (D-T1…D-T3), T (T-DI), M (M-19…M-21), I (47-1) — read for ids and status, not summarized |
+
+## 2026-10-12 — trains 58 and 64: V's batch 2 and work 3 (base `d04b87c0f`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` | `262515898` | 2026-10-12 | [[sources/phase00-data-quality-e2e-2026-10]] (§11–§12), [[problems/e2e-writes-leaked-into-shared-state]], [[decisions/e2e-gaps-of-1-2-before-release]], [[problems/bcrypt-blocks-the-event-loop]], [[problems/open-panels-stale-after-fx-sync]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `0afac8e14` | 2026-10-12 | section V (V-1…V-20), read for status |
