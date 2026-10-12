@@ -1038,7 +1038,7 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   - `/tmp/libreFolio_commit_u3_docs.txt`, per questo piano.
 - ✅ **U-3 chiuso il 12/10.** Checkpoint mandato al coordinatore, stato FROZEN. Il prossimo passo è U-4, la documentazione.
 
-### U-4 — La documentazione (prima parte chiusa il 13/10, checkpoint inviato; `i18n.md` dopo)
+### U-4 — La documentazione (chiusa il 13/10: parte 1 committata, parte 2 col checkpoint inviato)
 
 - ✅ **Via** (12/10, 23:48), dopo che U-3 è entrato nel treno 74 (`bcd502912`, commit `f2a394a0f` e `bcd4f6fe4`). Vincolo
   del coordinatore: **`developer/frontend/i18n.md` per ultima**. Il CP3a di T (`133259913`) aggiunge ~130 righe sulla
@@ -1111,3 +1111,37 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   - i commenti di `galleryPac.ts` e `risk-analysis.spec.ts`. Quest'ultimo citava `asset_risk_return.py:61`, già sbagliata
     prima dello spostamento: ora nomina `supported_scopes`/`supported_modes` in `…/asset_risk_return/plugin.py`;
   - nel backlog, U-B5 è chiusa per `day-count`; restano le pagine del devWiki.
+- ✅ **U-4, parte 1 committata** (13/10, 00:30): `c120086d2` (44 file) e `f542743d2` (journal). Poi il merge del target
+  del treno 77: ora sono a **`1e1708528`**, che contiene la sezione di T in `developer/frontend/i18n.md` («🔢 Numbers,
+  amounts and dates», `#ui-locale`, `133259913`).
+- ✅ **U-4, parte 2** (via del coordinatore, 00:30), affidata a docs-writer:
+  - `i18n.md`: «Architecture» e «Managing Translations» riscritte per le sorgenti, sopra le righe di T, che restano
+    intatte;
+  - **`--list` del runner**, verificato nella corsia. `dev.py test <categoria> --list` fallisce, perché vuole l'azione.
+    Le forme giuste sono:
+    - `--help`, per le unità con la loro descrizione;
+    - `<azione> --list`, per i test di un'unità;
+    - `all --list`, per tutti.
+
+    La forma sbagliata stava in `test-walkthrough/utils.md:28` e `dev_workflow.en.md` (segnalati da docs-writer), e
+    anche in `front-fx.md:26`, `front-user.md:22` e `front-utility.md:24` (trovati ora); `index.md:28` era già giusta.
+  - **`risk-lab.md`, paragrafo «Replay.»**: i riferimenti erano scivolati di più di quanto risultasse.
+    `excludedHeader()` è a `L4Replay.svelte:205` (non 203 né 204). `showMoney` è a l.101 ed è
+    `showMoneyOverride ?? scopeKind === 'portfolio'` (l.100–101). Il totale è a l.272–273. `stress/plugin.py:562` è
+    ancora giusta.
+  - `runner_architecture.md:359` resta com'è, per decisione del coordinatore.
+- ✅ **Esito della parte 2** (13/10, ~01:00):
+  - **`i18n.md`**: «🏗️ Architecture» riscritta, con sottosezioni nuove: «The Generated Catalogue»
+    (`#generated-catalogue`), «The Sources» (`#sources`, la tabella dei 17 sottosistemi letta dai `prefixes.txt` veri),
+    «Who Owns a Key» (`#key-ownership`, i 10 errori delle sorgenti e l'ordine) e «Languages and Fallback» (`#languages`).
+    «🛠️ Managing Translations» riscritta, con «Where a Key Goes», «Build and Check», «Move, Split, Absorb», «Gates» e
+    «Known Limits» (U-B1, U-B6, U-B7). Restano le sottosezioni sull'uso, sui valori dinamici e sull'ICU, e le opzioni e i
+    verdetti dell'audit, che ora legge le sorgenti senza ripiego ed esce con 1 anche sui problemi delle sorgenti.
+    **La sezione di T, «Numbers, amounts and dates», è identica byte per byte a HEAD**: 132 righe, verificato con `cmp`;
+    le ancore `#ui-locale` e `#ui-locale-reactivity` restano.
+  - **`--list`** corretto in `utils.md`, `dev_workflow.en.md`, `front-fx.md`, `front-user.md` e `front-utility.md`.
+    Le pagine frontend notano che `--list` legge solo le spec Playwright, non i file Vitest.
+  - **`risk-lab.md`**: `L4Replay.svelte:205`, `showMoney` (l.100–101), il totale a l.272–273.
+  - `mkdocs build` strict senza avvisi; `check-links` 95 validi e 0 rotti; `git diff --check` pulito.
+- ✅ **Checkpoint U-4, parte 2** (13/10): 8 file (7 pagine e questo piano). Stato FROZEN. Il prossimo passo è U-5, al via
+  del coordinatore.
