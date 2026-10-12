@@ -640,3 +640,10 @@ are each file's last commit at the base. Paths are relative to the repository ro
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/phases/08_newCleanAndDocumentation_audit/00_INDEX.md` | `a9138140a` | 2026-10-12 | [[sources/phase00-clean-audit-2026-08]] |
 | `LibreFolio_developer_journal/Release_2/phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md` | `a9138140a` | 2026-10-12 | [[problems/base-currency-setting-silently-defaulted-eur]] |
+
+## 2026-10-12 — historical folders H4, 03 and 04 (base `63121ee78`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/phases/03_brokerImportRecovery/README.md` | `8da24ef22` | 2026-10-12 | covered by [[decisions/credit-agricole-securities-only-cash-neutral-brim]] — read for drift, no new page |
+| `LibreFolio_developer_journal/Release_2/phases/04_webSearchEngine/README.md` | `8dd918a15` | 2026-10-12 | [[decisions/web-link-finder-ddgs]] |

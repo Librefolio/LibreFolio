@@ -90,6 +90,7 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/web-link-finder-ddgs]] | **Folder 04.** The web link finder uses `ddgs` instead of a DuckDuckGo HTML scraper whose 202 «anomaly» pages were cached as empty results; SearXNG dropped (`ae417b9ab`) | 2026-07-28 | backend, search, ddgs |
 | [[decisions/signal-indicator-warmup-sizing]] | **Folder 01 (signals migration).** Each plugin's warm-up measured across periods 2–200 against the reference (1e-6): KAMA `max(30, period + 1)`, ADX 18 × period (`5b9dddb45`) | 2026-07-23 | signals, indicators, warm-up |
 | [[decisions/risk-library-versus-own-maths]] | **Folder 02, analysis 06.** A library only where our maths duplicates it badly (rolling, CVaR, matrices), our own where it composes; correctness decides; riskfolio-lib first as the oracle | 2026-09-16 | risk, metrics, riskfolio |
 | [[decisions/risk-tool-verdicts]] | **Folder 02, analysis 02.** Every tool judged by the four questions — core, fixed, cut (TE, IR), deferred (optimization); today's code partly reverses it | 2026-09-16 | risk, tools, verdicts |
@@ -611,6 +612,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Historical folders H4 — `03_brokerImportRecovery`, `04_webSearchEngine`.** 03 already covered by the BRIM pages; 04's switch to `ddgs` filed as a decision | *(1 page — 1 decision; see log)* |
 | 2026-10-12 | **Historical folder H3 — `08_newCleanAndDocumentation_audit`.** The second clean audit, added to the first one's source; its P0-1 kept as a problem | *(1 page — 1 problem; see log)* |
 | 2026-10-12 | **Historical folder H2 — `05_cleanAudit`.** The August audit summarised; one solved problem kept (events lost on a price-cache hit) | [[sources/phase00-clean-audit-2026-08]] *(2 pages — 1 source, 1 problem; see log)* |
 | 2026-10-12 | **Historical folder H1 — `01_signalMigration`.** Drift: four July rows re-baselined (path moved to `phases/`); gaps: indicator warm-up sizing, the SPA logout leak | *(2 pages — 1 decision, 1 problem; see log)* |
