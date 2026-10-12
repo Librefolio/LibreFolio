@@ -4,6 +4,10 @@
      * The level and reason come from `connectionSecurityStore` (plan 36); the details carry the
      * reason, a line for administrators when the session cookie is not Secure on HTTPS, and the
      * user page. Collapsed, the line is its icon: a click asks the sidebar to expand (D3).
+     *
+     * The details close on a click on the reason, and by themselves 30 s after they open (plan 48, C3). The pointer
+     * anywhere on the indicator holds the countdown, and so does the focus inside the details, not on the toggle,
+     * where a mouse click leaves it in Chrome (choice (b)). Once nothing holds it, the countdown starts again from 30 s.
      */
     import {onMount} from 'svelte';
     import {BookOpen, ShieldAlert, ShieldCheck, ShieldHalf} from 'lucide-svelte';
@@ -44,7 +48,19 @@
         insecure: 'text-red-300',
     };
 
+    const AUTO_CLOSE_MS = 30_000;
+
     let detailsOpen = $state(false);
+    let pointerInside = $state(false);
+    let focusInDetails = $state(false);
+    let toggleEl: HTMLButtonElement | undefined = $state();
+
+    // The handle lives in the closure: a teardown clears the timer its own run armed, never one a later run replaced.
+    $effect(() => {
+        if (!detailsOpen || pointerInside || focusInDetails) return;
+        const timer = setTimeout(closeDetails, AUTO_CLOSE_MS);
+        return () => clearTimeout(timer);
+    });
 
     const level = $derived($connectionSecurity.level);
     const label = $derived($_(LEVEL_KEYS[level]));
@@ -55,18 +71,39 @@
         void refreshConnectionSecurity();
     });
 
+    function closeDetails(): void {
+        detailsOpen = false;
+        // The details leave the page with the focus they held, and not every browser fires a focusout for that.
+        focusInDetails = false;
+    }
+
     function toggle(): void {
         if (collapsed) {
             onExpand();
             detailsOpen = true;
             return;
         }
-        detailsOpen = !detailsOpen;
+        if (detailsOpen) closeDetails();
+        else detailsOpen = true;
+    }
+
+    /** A keyboard user keeps their place: a reason that held the focus hands it back to the toggle. */
+    function closeFromReason(event: MouseEvent & {currentTarget: EventTarget & HTMLButtonElement}): void {
+        const heldFocus = document.activeElement === event.currentTarget;
+        closeDetails();
+        if (heldFocus) toggleEl?.focus();
+    }
+
+    function releaseFocus(event: FocusEvent & {currentTarget: EventTarget & HTMLDivElement}): void {
+        // From the reason to the link, the focus stays inside the details.
+        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+        focusInDetails = false;
     }
 </script>
 
-<div data-testid="connection-security" data-level={level} data-reason={$connectionSecurity.reason} data-server-checked={$connectionSecurity.serverChecked ? 'true' : 'false'}>
+<div data-testid="connection-security" data-level={level} data-reason={$connectionSecurity.reason} data-server-checked={$connectionSecurity.serverChecked ? 'true' : 'false'} onpointerenter={() => (pointerInside = true)} onpointerleave={() => (pointerInside = false)}>
     <button
+        bind:this={toggleEl}
         type="button"
         class="w-full flex items-center rounded-lg px-2 py-1.5 text-xs transition-colors hover:bg-white/10 {collapsed ? 'justify-center' : 'gap-2'} {level === 'insecure' ? 'bg-red-500/20' : ''}"
         data-testid="connection-security-toggle"
@@ -83,8 +120,8 @@
     </button>
 
     {#if detailsOpen && !collapsed}
-        <div id="connection-security-details" class="mt-1 space-y-2 rounded-lg bg-white/10 px-3 py-2 text-xs leading-relaxed text-white/80" data-testid="connection-security-details">
-            <p data-testid="connection-security-reason">{$_(REASON_KEYS[$connectionSecurity.reason])}</p>
+        <div id="connection-security-details" class="mt-1 space-y-2 rounded-lg bg-white/10 px-3 py-2 text-xs leading-relaxed text-white/80" data-testid="connection-security-details" onfocusin={() => (focusInDetails = true)} onfocusout={releaseFocus}>
+            <button type="button" class="block w-full cursor-pointer text-left" data-testid="connection-security-reason" title={$_('common.close')} onclick={closeFromReason}>{$_(REASON_KEYS[$connectionSecurity.reason])}</button>
             {#if showAdminWarning}
                 <p class="rounded bg-amber-500/20 px-2 py-1 text-amber-100" data-testid="connection-security-admin-warning">{$_('connectionSecurity.cookieWarning')}</p>
             {/if}

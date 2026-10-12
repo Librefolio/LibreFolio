@@ -65,7 +65,7 @@ LibreFolio recuerda tus elecciones.
 - **Un valor por activo y bróker**, durante el año que termina en la fecha de fin: mover la fecha de inicio no lo cambia.
 - **Bruto, no después de impuestos**: las transacciones separadas de impuestos y comisiones no se restan.
 - **Pasa el cursor sobre un valor** para ver los ingresos por unidad, el período y los tipos de cambio utilizados — cada pago al tipo de su propia fecha.
-- **`0.00%`** significa ingresos registrados a cero; un **`-`** simple significa que no hay ingresos en el último año.
+- **`0,00 %`** significa ingresos registrados a cero; un **`-`** simple significa que no hay ingresos en el último año.
 
 🔗 **Teoría**: [Rendimiento sobre coste](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) — las reglas exactas y en qué se diferencia YOC del rendimiento por dividendo o del CAGR
 

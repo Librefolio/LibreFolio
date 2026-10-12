@@ -121,7 +121,8 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   colonna, senza una causa trovata (`onColumnResize` non letto dal genitore, o una `width` fissa che la rimette com'era).
   Un E2E lo prova solo sulla tabella L1° del Laboratorio di rischio (`risk-lab.spec.ts`, «value columns carry their
   help»): le altre DataTable vanno ritestate. Dettagli: [`datatable-column-resize-noop`](../../../LibreFolio_devWiki/wiki/problems/datatable-column-resize-noop.md).
-- **C-63 · File: due pulsanti «copia» con un ripiego scritto a mano** — minimo; coordinatore, 12/10, dal lint della
+- ✅ **C-63 · File: due pulsanti «copia» con un ripiego scritto a mano** — chiusa nella 1.2 da I, treno 72
+  (`65d20910e`): FileGrid e FilesTable copiano dall'helper. Era: minimo; coordinatore, 12/10, dal lint della
   devWiki. `components/files/FileGrid.svelte:110` e `components/files/FilesTable.svelte:544` hanno un loro ripiego
   `execCommand` per l'HTTP, che funziona, invece dell'helper comune `utils/clipboard.ts` (`writeTextToClipboard`);
   FileGrid ignora l'esito di `execCommand` e segna «copiato» anche quando non ha copiato. Cura: passare entrambi
@@ -255,6 +256,11 @@ debito di traduzione di F-5 (di M).
   zoom, 7 con metà periodo, 4 con un quinto, solo i due bordi su una finestra di 33 punti. Gli assi time non ne
   soffrono. Dettagli: [piano della 47](47_chartAxisDayLabels/plan-phase00ChartAxisDayLabels.prompt.md), §4 «Fuori» e
   §9, passo 7.
+- **48-1 · Il pulsante dell'AI Export più largo dei vicini nella barra** — minimo, cosmetico; I, 12/10 (piano 48,
+  V-19). Il trigger di `AiExportMenu.svelte:298` ha `px-3 gap-2`, i pulsanti vicini `px-2.5 gap-1.5`
+  (`assets/[id]/+page.svelte:2826-2861`). Allinearlo stringe la colonna di «Exportación IA» di circa 12 px. Da solo
+  non avrebbe curato V-19, che sforava fino a 18,8 px: lo ha curato C5 con le soglie `denseRow`. Resta un ritocco di
+  coerenza. Dettagli: [piano della 48](48_uiPolish/plan-phase00UiPolish.prompt.md), §1.5 e passo 5.
 
 ## P · Transazioni e Bulk (42)
 
@@ -509,7 +515,8 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   `scripts/update_js_cache.py` ora scarica anche i 22 font che il bundle nomina (321 KB), con la stessa severità dello
   script; `mathjax.js` non chiama più `MathJax.typesetPromise()` prima che MathJax esista (un `TypeError` su ogni
   pagina). Dettagli: [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md), passo «8».
-- **M-20 · Cinque pulsanti «copia» senza il ripiego per l'HTTP** — basso; M (trovato da docs-writer), 12/10, fuori dal
+- ✅ **M-20 · Cinque pulsanti «copia» senza il ripiego per l'HTTP** — chiusa nella 1.2 da I, treno 72 (`65d20910e`).
+  Era: basso; M (trovato da docs-writer), 12/10, fuori dal
   perimetro di M: assegnata a I nel lotto di rifinitura UI (decisione del coordinatore). Il browser non dà l'API degli appunti a una pagina in `http://` fuori da `localhost` (per esempio
   Tailscale in HTTP, o l'indirizzo di rete locale). `frontend/src/lib/utils/clipboard.ts:14` (`writeTextToClipboard`)
   ha il ripiego, ma cinque pulsanti chiamano `navigator.clipboard.writeText` direttamente e lì non copiano niente:
@@ -766,7 +773,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     testo ON/OFF. I testid per migrarlo esistono già: `settings-lock-toggle`, `setting-save`, `setting-undo`;
   - «preferences persist after navigating away and back» controlla solo la visibilità.
   Dettagli: piano della 46, §12.5.
-- **V-19 · In spagnolo la barra della Dashboard e dell'asset sfora in modo denseRow** — basso, difetto di layout;
+- ✅ **V-19 · In spagnolo la barra della Dashboard e dell'asset sfora in modo denseRow** — chiusa nella 1.2 da I,
+  treno 72 (`7f8febd9d`): soglie denseRow 990 e 890. Era: basso, difetto di layout;
   gate di V, 12/10. `layout/toolbar-width-sweep.spec.ts:873`, casi `es` di dashboard e assetDetail. Il gruppo
   «Exportación IA …» esce dalla barra (`dashboard-filter-bar`, `asset-detail-filter-bar`):
   - asset: +1,8 px a vw 1220, +11,8 px a vw 1210, +9,8 px a vw 940 (soglia denseRow 850);
@@ -904,3 +912,10 @@ plugin.
 - **U-B5 · I vecchi percorsi `<famiglia>/<nome>.py` fuori da U** — basso; U, 12/10. Sono 84 citazioni in 47 pagine del
   devWiki, per l'historian, come T-W1, e `financial-theory/fundamentals/day-count.{en,it,fr,es}.md:10`, per M. Dettagli:
   piano della 45, sezione «3».
+- **U-B6 · Il server di sviluppo non segue le sorgenti del catalogo** — basso; U, 12/10.
+  - Oggi: `npm run dev` genera il catalogo all'avvio (`predev`), e i comandi `dev.py i18n` lo rigenerano da soli.
+  - Il limite: una modifica a mano di una sorgente (`base/`, un sottosistema, un frammento di plugin) arriva al server di
+    sviluppo solo dopo `dev.py i18n build` o `npm run i18n:build`.
+  - La soluzione: un plugin Vite che osserva le sorgenti e rilancia la build.
+
+  Dettagli: piano della 45, sezione «10», U-2.

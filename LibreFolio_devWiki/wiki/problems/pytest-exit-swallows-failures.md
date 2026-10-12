@@ -63,7 +63,7 @@ server thread to worry about yet, so let the interpreter shut down normally.
 
 ## Why the force-exit exists at all
 
-Documented at introduction (commit `b4b77e70`, later trimmed): the uvicorn test server used by
+Documented at introduction (commit `7dc63fbbc`, later trimmed): the uvicorn test server used by
 API tests runs in a background thread; Python's normal interpreter shutdown
 (`threading._shutdown()`) waits on internal `ThreadPoolExecutor` workers that never terminate,
 hanging the whole process after tests are otherwise done. `os._exit()` bypasses that — this

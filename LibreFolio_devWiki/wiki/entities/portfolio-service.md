@@ -102,7 +102,7 @@ cache_key = (
 
 Cache invalidated on: any transaction add/edit/delete, any price update.
 
-## Known Issues / Technical Debt — RESOLVED (2026-07-06, commit `78aaa0a3`)
+## Known Issues / Technical Debt — RESOLVED (2026-07-06, commit `13052a006`)
 
 The four items below were the open technical debt tracked in `ARCHITECTURE_CURRENT_STATE.md` §5 bugs 2, 5, 6
 and `implementation_status_report.md` §3. All four were closed out by the Holdings/Performance panel refactor

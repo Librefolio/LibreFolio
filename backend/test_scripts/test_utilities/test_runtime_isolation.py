@@ -1846,6 +1846,40 @@ def frontend_project(monkeypatch, tmp_path) -> dict[str, Path]:
     return files
 
 
+# The translation catalogue is an input of the build too (workstream U, step U-2): `src/lib/i18n/<lang>.json` is
+# generated from its sources — `src/lib/i18n/base/`, the subsystem folders, the plugins' `i18n/` — by
+# `scripts/i18n_catalog.py`, and is not tracked. So a checkout without the generated files needs the build that writes
+# them even when the bundle is fresh, and a source or the generator newer than the build makes it stale.
+CATALOGUE_LANGUAGES = ("en", "it", "fr", "es")
+
+
+@pytest.fixture
+def frontend_catalogue(frontend_project, tmp_path) -> dict[str, Path]:
+    """``frontend_project`` with a translation catalogue, every file of it an hour older than the build.
+
+    Its sources (``frontend/src/lib/i18n/base/<lang>.json`` and one plugin fragment,
+    ``backend/app/services/brim_providers/broker_x/i18n/en.json`` beside its ``plugin.py``), the
+    generator ``scripts/i18n_catalog.py`` and the four catalogues it generates,
+    ``frontend/src/lib/i18n/<lang>.json``. That the probe sees the four is verified, not assumed.
+    """
+    i18n = tmp_path / "frontend" / "src" / "lib" / "i18n"
+    plugin = tmp_path / "backend" / "app" / "services" / "brim_providers" / "broker_x"
+    files = {
+        **{f"base/{language}.json": i18n / "base" / f"{language}.json" for language in CATALOGUE_LANGUAGES},
+        **{f"generated/{language}.json": i18n / f"{language}.json" for language in CATALOGUE_LANGUAGES},
+        "plugin.py": plugin / "plugin.py",
+        "fragment": plugin / "i18n" / "en.json",
+        "generator": tmp_path / "scripts" / "i18n_catalog.py",
+    }
+    for path in files.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}\n" if path.suffix == ".json" else "# synthetic build input\n", encoding="utf-8")
+        os.utime(path, (OLDER_MTIME, OLDER_MTIME))
+    assert cli_base.generated_catalogs(tmp_path) == [i18n / f"{language}.json" for language in CATALOGUE_LANGUAGES], "premise: the probe sees the four generated catalogues"
+    assert [path for path in cli_base._tool_contract_sources(tmp_path) if path.exists()] == [], "a Tool codegen input exists under the fake root"
+    return {**frontend_project, **files}
+
+
 class TestFrontendBuildStaleness:
     """``cli_base.check_frontend_needs_build()``: the build is stale once any input it bundles is newer than it."""
 
@@ -1869,3 +1903,28 @@ class TestFrontendBuildStaleness:
         os.utime(frontend_project["README.md"], (NEWER_MTIME, NEWER_MTIME))
 
         assert cli_base.check_frontend_needs_build() is False
+
+    def test_without_catalogue_sources_the_other_inputs_still_decide(self, frontend_project, tmp_path):
+        # No frontend/src/lib/i18n/base/en.json: no catalogue to generate, so none can be missing, and the probe answers
+        # on its other inputs. It once raised there, and its blanket except turned every answer into False.
+        assert cli_base.generated_catalogs(tmp_path) == []
+        assert cli_base.check_frontend_needs_build() is False
+
+        os.utime(frontend_project["source"], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True
+
+    def test_a_catalogue_older_than_the_build_leaves_it_up_to_date(self, frontend_catalogue):
+        assert cli_base.check_frontend_needs_build() is False
+
+    @pytest.mark.parametrize("language", CATALOGUE_LANGUAGES)
+    def test_a_missing_generated_catalogue_needs_a_rebuild_though_the_bundle_is_fresh(self, frontend_catalogue, language):
+        frontend_catalogue[f"generated/{language}.json"].unlink()
+
+        assert cli_base.check_frontend_needs_build() is True, f"src/lib/i18n/{language}.json is generated, not tracked: a checkout without it needs the build that writes it"
+
+    @pytest.mark.parametrize("newer", ["base/it.json", "fragment", "generator"], ids=["a-base-source", "a-plugin-fragment", "the-generator"])
+    def test_a_catalogue_input_newer_than_the_build_needs_a_rebuild(self, frontend_catalogue, newer):
+        os.utime(frontend_catalogue[newer], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True
