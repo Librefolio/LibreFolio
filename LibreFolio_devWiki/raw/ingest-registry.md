@@ -647,3 +647,12 @@ are each file's last commit at the base. Paths are relative to the repository ro
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/phases/03_brokerImportRecovery/README.md` | `8da24ef22` | 2026-10-12 | covered by [[decisions/credit-agricole-securities-only-cash-neutral-brim]] — read for drift, no new page |
 | `LibreFolio_developer_journal/Release_2/phases/04_webSearchEngine/README.md` | `8dd918a15` | 2026-10-12 | [[decisions/web-link-finder-ddgs]] |
+
+## 2026-10-12 — historical folder H5, Ai_ideas (base `b899903db`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Ai_ideas/brainstorming_ai_features.md` | `28b8443dd` | 2026-10-12 | [[sources/release2-ai-ideas-2026-07]] |
+| `LibreFolio_developer_journal/Release_2/Ai_ideas/roadmap_and_signals_brainstorm.md` | `e7c33c85a` | 2026-10-12 | [[sources/release2-ai-ideas-2026-07]] |
+| `LibreFolio_developer_journal/Release_2/Ai_ideas/mcp_server_architecture_draft.md` | `07be11cbc` | 2026-10-12 | [[sources/release2-ai-ideas-2026-07]] |
+| `LibreFolio_developer_journal/Release_2/Ai_ideas/phase_0_detailed_roadmap.md` | `7992471b6` | 2026-10-12 | [[sources/release2-ai-ideas-2026-07]] |

@@ -3167,3 +3167,10 @@ Agricole recovery, `0e07359b4`) is already covered by [[decisions/credit-agricol
 and the BRIM pages; its ISIN auto-binding note was too thin for a page of its own. **Created**
 [[decisions/web-link-finder-ddgs]] (`ae417b9ab`; the engine settings checked in `web_link_finder.py`). **Updated**
 [[features/F-028]]. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H5 — Ai_ideas; the historical folders covered
+Base `b899903db`. Source: `Release_2/Ai_ideas/` (four files, 2026-07-20 → 08-05; never ingested). By the coordinator's
+rule a source page only, no `idea` features: **Created** [[sources/release2-ai-ideas-2026-07]] (what held — signals,
+then risk, the rolling chart — and the MCP assistant deferred to `TODO_FUTURI.md`, «QuarkAI»). **Updated**
+[[decisions/signal-backend-plugin-architecture]] (a link). With H5, the plan of folder 09 and the historical folders
+(F0–F2, H1–H5) is complete. Graph: not updated (P-6).
