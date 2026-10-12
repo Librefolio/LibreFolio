@@ -12,7 +12,7 @@
  * Test IDs: FSCH-001..FSCH-010
  */
 
-import {expect, test} from '../fixtures/playwright';
+import {type APIRequestContext, expect, type Page, test} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_ADMIN} from '../fixtures/test-users';
 import {API_BASE, goToAssetDetailPage, openEditAssetModal} from '../assets/assets-helpers';
@@ -47,7 +47,8 @@ async function goToSchedulerSettings(page: import('@playwright/test').Page) {
 
 // Earned parallel: this file's blocks own the data they touch and wait on published
 // state, so they share the backend with their neighbours instead of queueing behind
-// them. Verified by a green run of the whole category at 4 workers.
+// them. Verified by a green run of the whole category at 4 workers. The one exception
+// is the pair of Config Modal tests that save: they run in sequence (see there).
 test.describe.configure({mode: 'parallel'});
 
 test.describe('Scheduler — Visibility', () => {
@@ -223,99 +224,161 @@ test.describe('Scheduler — Log Modal contents', () => {
 // FSCH-005..009: Config modal
 // ---------------------------------------------------------------------------
 
+/**
+ * What the modal's Save writes: all five of these *global* settings, every time, in one
+ * PATCH /settings/global/bulk (SchedulerConfigModal.handleSave). A test that changes only
+ * the frequency still rewrites the other four, for every user of the instance, so a
+ * writer snapshots all five and puts all five back.
+ */
+const SCHEDULER_KEYS = ['scheduler_current_price_frequency_minutes', 'scheduler_history_sync_times', 'scheduler_history_sync_days', 'scheduler_history_sync_horizon_days', 'scheduler_timezone'] as const;
+type SchedulerSettings = Record<(typeof SCHEDULER_KEYS)[number], string>;
+const BULK_PATH = `${API_BASE}/settings/global/bulk`;
+
+/** The scheduler's global settings as stored (a public read: no session needed). */
+async function readSchedulerSettings(request: APIRequestContext): Promise<SchedulerSettings> {
+    const response = await request.get(`${API_BASE}/settings/global`);
+    expect(response.ok(), `GET ${API_BASE}/settings/global returned ${response.status()}`).toBe(true);
+    const {items} = (await response.json()) as {items: Array<{key: string; value: string}>};
+    const stored = {} as SchedulerSettings;
+    for (const key of SCHEDULER_KEYS) {
+        const item = items.find((candidate) => candidate.key === key);
+        if (!item) throw new Error(`Global setting ${key} is missing: check initGlobalSettings in e2e/global-setup.ts`);
+        stored[key] = item.value;
+    }
+    return stored;
+}
+
+/**
+ * Put back exactly what `before` held, through the endpoint the modal writes with, and
+ * read it back. `request` is the test's own API context, signed in here as the admin, so
+ * the restore does not depend on the browser surviving whatever failed. Only the values
+ * come back: the rows keep this write's updated_at / updated_by.
+ */
+async function restoreSchedulerSettings(request: APIRequestContext, before: SchedulerSettings): Promise<void> {
+    const signedIn = await request.post(`${API_BASE}/auth/login`, {data: {username: TEST_ADMIN.username, password: TEST_ADMIN.password}});
+    expect(signedIn.ok(), `The restore could not sign in as ${TEST_ADMIN.username} (HTTP ${signedIn.status()})`).toBe(true);
+    const restored = await request.patch(BULK_PATH, {data: {items: SCHEDULER_KEYS.map((key) => ({key, value: before[key]}))}});
+    expect(restored.ok(), `Restoring the scheduler settings failed (HTTP ${restored.status()}): ${await restored.text()}`).toBe(true);
+    expect(await readSchedulerSettings(request), 'the scheduler settings are back to what the test found').toEqual(before);
+}
+
+/** A frequency other than the stored one, so the save is a real change. */
+function otherFrequency(before: SchedulerSettings, preferred: number): string {
+    return String(before.scheduler_current_price_frequency_minutes === String(preferred) ? preferred + 1 : preferred);
+}
+
+/**
+ * Unlock the Admin tab. It opens locked, and the lock is exactly what disables Configure,
+ * so that button's own state is both the precondition and the proof the unlock took: no
+ * translated title, and no probe deciding whether to click a toggle.
+ */
+async function unlockSchedulerConfig(page: Page) {
+    const configure = page.getByTestId('scheduler-config-btn');
+    await expect(configure, 'precondition: a freshly loaded Admin tab is locked').toBeDisabled();
+    await page.getByTestId('global-settings-tab').getByTestId('settings-lock-toggle').click();
+    await expect(configure).toBeEnabled();
+    return configure;
+}
+
+/** Unlock, open the config modal, and wait for its form. */
+async function openSchedulerConfig(page: Page) {
+    await (await unlockSchedulerConfig(page)).click();
+    await expect(page.getByTestId('scheduler-config-frequency')).toBeVisible({timeout: 5_000});
+}
+
+/** Save, and wait for the server's answer: a later failure then never races the write its restore undoes. */
+async function saveSchedulerConfig(page: Page) {
+    const patched = page.waitForResponse((res) => res.request().method() === 'PATCH' && new URL(res.url()).pathname === BULK_PATH, {timeout: 5_000});
+    await page.getByTestId('scheduler-config-save').click();
+    const response = await patched;
+    expect(response.ok(), `PATCH ${BULK_PATH} returned ${response.status()}`).toBe(true);
+    return response;
+}
+
 test.describe('Scheduler — Config Modal', () => {
     test.beforeEach(async ({page}) => {
         await goToSchedulerSettings(page);
     });
 
     test('FSCH-005: click Configure opens config modal', async ({page}) => {
-        // The Configure button is inside scheduler-config-row
-        const configureBtn = page.getByTestId('scheduler-config-row').getByRole('button', {name: 'Configure'});
-
-        // If locked, unlock first
-        const lockBtn = page.getByTestId('global-settings-tab').locator('button[title="Click to unlock and edit"]');
-        if (await lockBtn.isVisible()) {
-            await lockBtn.click();
-        }
-
-        await configureBtn.click();
+        const configure = await unlockSchedulerConfig(page);
+        await configure.click();
         await expect(page.getByTestId('scheduler-config-frequency')).toBeVisible({timeout: 5_000});
     });
 
-    test('FSCH-006: config modal saves frequency change via PATCH /global/bulk', async ({page}) => {
-        // Unlock
-        const lockBtn = page.getByTestId('global-settings-tab').locator('button[title="Click to unlock and edit"]');
-        if (await lockBtn.isVisible()) {
-            await lockBtn.click();
-        }
+    // The file's only writers. Save rewrites five instance-wide settings, so each of
+    // them snapshots those before acting and restores them in `finally`.
+    test.describe('Saving', () => {
+        // Why serial: a snapshot is the baseline only while no other writer sits between it
+        // and its restore. Side by side, FSCH-006b could snapshot the value FSCH-006 has
+        // just saved and "restore" that, leaving it on the instance for everyone. In
+        // sequence each one starts from the value the other has already put back.
+        test.describe.configure({mode: 'serial'});
 
-        // Open config modal
-        await page.getByTestId('scheduler-config-row').getByRole('button', {name: 'Configure'}).click();
-        await expect(page.getByTestId('scheduler-config-frequency')).toBeVisible({timeout: 5_000});
+        test('FSCH-006: config modal saves frequency change via PATCH /global/bulk', async ({page, request}) => {
+            const before = await readSchedulerSettings(request);
+            const frequency = otherFrequency(before, 15);
+            try {
+                await openSchedulerConfig(page);
+                const freqInput = page.getByTestId('scheduler-config-frequency').locator('input');
+                // Precondition, read back: the modal starts from the stored value.
+                await expect(freqInput).toHaveValue(before.scheduler_current_price_frequency_minutes);
+                await freqInput.fill(frequency);
 
-        // Change frequency value
-        const freqInput = page.getByTestId('scheduler-config-frequency').locator('input');
-        await freqInput.fill('15');
+                const since = await eventSeq(page);
+                const response = await saveSchedulerConfig(page);
 
-        // Intercept the PATCH request
-        const since = await eventSeq(page);
-        const patchPromise = page.waitForRequest((req) => req.method() === 'PATCH' && req.url().includes('/settings/global/bulk'), {timeout: 5_000});
+                // Verify the PATCH payload contains the frequency key with new value
+                const items: Array<{key: string; value: string}> = response.request().postDataJSON()?.items ?? [];
+                const freqItem = items.find((i) => i.key === 'scheduler_current_price_frequency_minutes');
+                expect(freqItem).toBeDefined();
+                expect(freqItem?.value).toBe(frequency);
 
-        // Save
-        await page.getByTestId('scheduler-config-save').click();
+                // The modal closes on success and the schedule is shown nowhere else, so the toast
+                // is the only thing separating "saved" from "dismissed".
+                await expect(page.getByTestId('toast-success')).toBeVisible({timeout: 5_000});
+                const saved = await waitForEvent(page, 'settings.scheduler.saved', {since});
+                expect(saved.detail?.frequencyMinutes).toBe(Number(frequency));
+                // And the server holds it: the write the restore below has to undo.
+                expect((await readSchedulerSettings(request)).scheduler_current_price_frequency_minutes).toBe(frequency);
+            } finally {
+                await restoreSchedulerSettings(request, before);
+            }
+        });
 
-        const patchReq = await patchPromise;
-        const body = JSON.parse(patchReq.postData() || '{}');
+        test('FSCH-006b: a toast can be dismissed by swiping it away', async ({page, request}) => {
+            // Riding on the one operation that already writes: no extra mutation, and the toast
+            // it raises is a real one rather than a fabricated fixture. Its write is undone in
+            // `finally`, like FSCH-006's.
+            const before = await readSchedulerSettings(request);
+            try {
+                await openSchedulerConfig(page);
+                const freqInput = page.getByTestId('scheduler-config-frequency').locator('input');
+                await expect(freqInput).toHaveValue(before.scheduler_current_price_frequency_minutes);
+                await freqInput.fill(otherFrequency(before, 20));
+                await saveSchedulerConfig(page);
 
-        // Verify the PATCH payload contains the frequency key with new value
-        const items: Array<{key: string; value: string}> = body.items || [];
-        const freqItem = items.find((i) => i.key === 'scheduler_current_price_frequency_minutes');
-        expect(freqItem).toBeDefined();
-        expect(freqItem?.value).toBe('15');
+                const toast = page.getByTestId('toast-success');
+                await expect(toast).toBeVisible({timeout: 5_000});
 
-        // The modal closes on success and the schedule is shown nowhere else, so the toast
-        // is the only thing separating "saved" from "dismissed".
-        await expect(page.getByTestId('toast-success')).toBeVisible({timeout: 5_000});
-        const saved = await waitForEvent(page, 'settings.scheduler.saved', {since});
-        expect(saved.detail?.frequencyMinutes).toBe(15);
-    });
+                const box = await toast.boundingBox();
+                expect(box, 'toast must have a box to drag').toBeTruthy();
+                const y = box!.y + box!.height / 2;
+                // Start left of centre so the drag cannot begin on the ✕ in the top-right corner.
+                await page.mouse.move(box!.x + 20, y);
+                await page.mouse.down();
+                await page.mouse.move(box!.x + 20 + 140, y, {steps: 12});
+                await page.mouse.up();
 
-    test('FSCH-006b: a toast can be dismissed by swiping it away', async ({page}) => {
-        // Riding on the one operation that already writes: no extra mutation, and the toast
-        // it raises is a real one rather than a fabricated fixture.
-        const lockBtn = page.getByTestId('global-settings-tab').locator('button[title="Click to unlock and edit"]');
-        if (await lockBtn.isVisible()) await lockBtn.click();
-
-        await page.getByTestId('scheduler-config-row').getByRole('button', {name: 'Configure'}).click();
-        await expect(page.getByTestId('scheduler-config-frequency')).toBeVisible({timeout: 5_000});
-        await page.getByTestId('scheduler-config-frequency').locator('input').fill('20');
-        await page.getByTestId('scheduler-config-save').click();
-
-        const toast = page.getByTestId('toast-success');
-        await expect(toast).toBeVisible({timeout: 5_000});
-
-        const box = await toast.boundingBox();
-        expect(box, 'toast must have a box to drag').toBeTruthy();
-        const y = box!.y + box!.height / 2;
-        // Start left of centre so the drag cannot begin on the ✕ in the top-right corner.
-        await page.mouse.move(box!.x + 20, y);
-        await page.mouse.down();
-        await page.mouse.move(box!.x + 20 + 140, y, {steps: 12});
-        await page.mouse.up();
-
-        await expect(toast).toBeHidden({timeout: 3_000});
+                await expect(toast).toBeHidden({timeout: 3_000});
+            } finally {
+                await restoreSchedulerSettings(request, before);
+            }
+        });
     });
 
     test('FSCH-007: Cancel discards changes without PATCH request', async ({page}) => {
-        // Unlock
-        const lockBtn = page.getByTestId('global-settings-tab').locator('button[title="Click to unlock and edit"]');
-        if (await lockBtn.isVisible()) {
-            await lockBtn.click();
-        }
-
-        // Open config modal
-        await page.getByTestId('scheduler-config-row').getByRole('button', {name: 'Configure'}).click();
-        await expect(page.getByTestId('scheduler-config-frequency')).toBeVisible({timeout: 5_000});
+        await openSchedulerConfig(page);
 
         // Change frequency value
         await page.getByTestId('scheduler-config-frequency').locator('input').fill('99');
@@ -337,14 +400,7 @@ test.describe('Scheduler — Config Modal', () => {
     });
 
     test('FSCH-008: add time slot appears in the list', async ({page}) => {
-        // Unlock
-        const lockBtn = page.getByTestId('global-settings-tab').locator('button[title="Click to unlock and edit"]');
-        if (await lockBtn.isVisible()) {
-            await lockBtn.click();
-        }
-
-        // Open config modal
-        await page.getByTestId('scheduler-config-row').getByRole('button', {name: 'Configure'}).click();
+        await openSchedulerConfig(page);
         await expect(page.getByTestId('scheduler-config-times')).toBeVisible({timeout: 5_000});
 
         // Time slots are rendered as <span class="rounded-full"> badge elements (not <li>)
@@ -360,14 +416,7 @@ test.describe('Scheduler — Config Modal', () => {
     });
 
     test('FSCH-009: delete time slot removes it from list', async ({page}) => {
-        // Unlock
-        const lockBtn = page.getByTestId('global-settings-tab').locator('button[title="Click to unlock and edit"]');
-        if (await lockBtn.isVisible()) {
-            await lockBtn.click();
-        }
-
-        // Open config modal
-        await page.getByTestId('scheduler-config-row').getByRole('button', {name: 'Configure'}).click();
+        await openSchedulerConfig(page);
         await expect(page.getByTestId('scheduler-config-times')).toBeVisible({timeout: 5_000});
 
         const timesSection = page.getByTestId('scheduler-config-times');
