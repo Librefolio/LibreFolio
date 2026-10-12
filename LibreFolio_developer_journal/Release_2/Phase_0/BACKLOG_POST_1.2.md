@@ -455,6 +455,41 @@ Dettagli: [piano della 37](37_brimScalable/plan-phase00BrimScalable.prompt.md), 
 [recap dell'esportatore](37_brimScalable/recap-phase00ScalableExporter.md), «Todo aperti». S è archiviata: le voci
 le prende chi riparte sui BRIM.
 
+## V · E2E qualità dati (46)
+
+Dettagli: [piano della 46](46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md), §9 «Avanzamento». Righe scritte da
+V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
+
+- **V-1 · «Sincronizza prezzi» (STALE_PRICE) non aggiorna i pannelli già aperti** — basso; V, 12/10. È il gemello
+  della D2: `handleBannerAction` (`dashboard/+page.svelte`) ricarica il report, ma non incrementa `refreshVersion`. Il
+  pannello lotti e il rischio già aperti restano quindi vecchi fino a una ricarica. Dettagli: piano della 46, §9
+  «Passo 4».
+- **V-2 · Il pannello lotti non pubblica `data-busy`** — basso; V, 12/10. Parte con `loading` falso
+  (`LotsAnalysisPanel.svelte:91`), quindi un'assenza si legge solo dopo un testimone, cioè le righe dei lotti, o sulla
+  risposta. Gli spec della 46 fanno così. Dettagli: idem, §9 «Passo 3».
+- **V-3 · TRANSFER orfano: i lotti falliscono, la Dashboard lo conta come capitale in natura** — basso, serve una
+  decisione; test-author di V (B1), 12/10. L'analisi dei lotti risponde `FAILED` con `TRANSFER_PAIR_MISSING`. Nessun
+  test lo fissa. Dettagli: idem, §9 «Passo 1».
+- **V-4 · Se si chiude P-10, E2 di `data-quality-real.spec.ts` va ricostruito** — minimo; V, 12/10. E2 ottiene
+  `MISSING_COST_BASIS` dall'app riclassificando uno SPLIT in PRICE_ADJUSTMENT. E4 (righe legacy) e B1 restano validi.
+  Dettagli: idem, §4.
+- **V-5 · Un commento superato in `data-quality-banners.spec.ts:434`** — minimo; V, 12/10. Parla di «the seed's
+  MISSING_COST_BASIS», ma il populate fallisce se manca un costo (`populate_mock_data.py:3944-3959`): il seed non può
+  produrlo. Dettagli: idem, §1.1.
+- **V-6 · La doc dev elenca solo una parte dei test di `data-quality-banners.spec.ts`** — minimo; docs-writer di V,
+  12/10. Mancano i tre test di «Sincronizza tassi» e quello dei link di `MISSING_PRICE`. Dettagli:
+  [data-quality-banner.md](../../../mkdocs_src/docs/developer/frontend/data-quality-banner.md), sezione «Frontend E2E
+  Tests (`e2e/portfolio/data-quality-banners.spec.ts`)».
+- **V-7 · `dashboard-cache.spec.ts:338` rosso accanto a `dashboard-broker-filter-label`** — basso; V, 12/10.
+  Preesistente, fuori scope, i due spec non sono di V. Nel giro consolidato `--workers 4 front-portfolio all`:
+  - `dashboard-broker-filter-label` crea e cancella un broker di `TEST_USER` (11:52:46 → :51/:52 UTC);
+  - nel frattempo `dashboard-cache` aveva letto i broker posseduti dello stesso utente;
+  - la sua `risk/query` riceve 403 «subset not fully accessible» (`risk.py:73,89`) e il pannello mostra «Risk data
+    could not be loaded».
+  Da solo, a 4 worker, `dashboard-cache` passa 6/6. La cura probabile: `broker-filter-label` su un account
+  usa-e-getta. Da decidere se il pannello debba rileggere i broker posseduti dopo un 403. Dettagli: piano della 46,
+  §9 «Passo 7».
+
 ## 09 · Feedback e backlog strutturale
 
 Dettagli: [README della 09](09_feedbackJobs/README.md), «Cosa resta aperto» in cima (verifica Q del 09/10). Prevale
