@@ -64,12 +64,15 @@ usuarios parten de la **Divisa predeterminada** en [Configuración global](setti
 
     Detrás de un proxy inverso HTTPS, `auto` se basa en su cabecera `X-Forwarded-Proto`:
 
-    - **Tailscale Serve and Funnel** (niveles 3 y 4 en [Exponer de forma segura](service_exposure.md)),
+    - **Tailscale Serve y Funnel** (niveles 3 y 4 en [Exponer de forma segura](service_exposure.md)),
       **Caddy** y **Traefik** la envían por su cuenta: nada que configurar.
     - **Nginx** no lo hace: añade `proxy_set_header X-Forwarded-Proto $scheme;` al `location` que
       hace de proxy para LibreFolio.
     - **Cualquier otro proxy**: haz que envíe la cabecera o, si solo se puede acceder a LibreFolio a través de él,
       establece `SESSION_COOKIE_SECURE=always`.
+
+    Para comprobar en tu navegador si la cookie de sesión está marcada como `Secure`, consulta
+    [Comprobar la seguridad de la conexión](connection_checks.md#session-cookie).
 
 ??? info "🧮 Trabajadores del motor de riesgo — ajuste avanzado"
 

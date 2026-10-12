@@ -8,26 +8,37 @@ LibreFolio importa ambas cuentas de **Scalable Capital**: la **cuenta de valores
 
 Cada cuenta se convierte en un bróker propio en LibreFolio, leído por su propio importador. Crea dos [brókeres](../../brokers/index.md), uno por cuenta, y elige el **Plugin de Importación Predeterminado** de cada uno:
 
-| Cuenta de Scalable | Plugin de Importación Predeterminado | Ejemplo de nombre del bróker | Archivos que lee |
-|:--|:--|:--|:--|
-| Cuenta de valores | ![](../../../static/icons/brokers/scalable-broker.png){: style="width:16px;vertical-align:middle;margin-right:6px" } **Scalable Capital cuenta de valores** | *Scalable broker* | el archivo de bróker del exportador de LibreFolio, o el propio CSV de Scalable |
-| Cuenta remunerada | ![](../../../static/icons/brokers/scalable-deposit.png){: style="width:16px;vertical-align:middle;margin-right:6px" } **Scalable Capital cuenta remunerada** | *Scalable overnight account* | el archivo de cuenta remunerada del exportador de LibreFolio |
+<div class="lf-accounts-table" markdown>
 
-Deja vacío **URL del Icono Personalizado**: un bróker sin un icono propio muestra el icono de su plugin de importación predeterminado — el de la tabla — antes del icono del sitio web de su **URL del Portal**.
+| Cuenta de Scalable | Plugin de Importación Predeterminado | Archivos que lee |
+|:--|:--|:--|
+| ![](../../../static/icons/brokers/scalable-broker.png){: style="width:36px;vertical-align:middle;margin-right:6px" } Cuenta de valores | **Scalable Capital cuenta de valores** | el archivo de bróker del exportador de LibreFolio, o el propio CSV de Scalable |
+| ![](../../../static/icons/brokers/scalable-deposit.png){: style="width:36px;vertical-align:middle;margin-right:6px" } Cuenta remunerada | **Scalable Capital cuenta remunerada** | el archivo de cuenta remunerada del exportador de LibreFolio |
 
-¿Por qué dos brókeres? Cada cuenta tiene su propio saldo de efectivo y su propio IBAN, y el dinero que mueves entre ellas es una **transferencia de fondos**, que enlaza dos brókeres. Con dos brókeres, cada saldo se puede comprobar con la app de Scalable, y cada transferencia se convierte en un par enlazado. Cada importador rechaza el archivo de la otra cuenta e indica el importador que lo lee.
+</div>
+
+#### ❓ ¿Por qué dos brókeres? {: #why-two-brokers }
+
+- Cada cuenta tiene su propio saldo de efectivo y su propio IBAN.
+- El dinero que mueves entre ellas es una **Transferencia de fondos**, que enlaza dos brókeres.
+- Con dos brókeres, cada saldo se puede comprobar con la app de Scalable, y cada transferencia se convierte en un par enlazado.
+- Cada importador rechaza el archivo de la otra cuenta e indica el importador que lo lee.
 
 ---
 
 ## 📤 Cómo exportar {: #exporter }
 
-A octubre de 2026, Scalable solo te deja descargar tus transacciones en los planes **PRIME** y **PRIME+**, y nunca las de la cuenta remunerada. Por eso se creó el [exportador de LibreFolio](https://github.com/Librefolio/librefolio-exporter).
+A octubre de 2026, Scalable solo te deja descargar tus transacciones en los planes **PRIME** y **PRIME+**, y nunca las de la cuenta remunerada.
 
-El exportador es una extensión para Chrome, Edge, Brave y los demás navegadores Chromium, versión 120 o posterior. Lee tus transacciones en las páginas de Scalable, en tu navegador, y las guarda como archivos CSV:
+Por eso se creó una extensión de navegador que exporta tus datos como archivos CSV: el [exportador de LibreFolio](https://github.com/Librefolio/librefolio-exporter). Funciona en Chrome, Edge, Brave y los demás navegadores Chromium, versión 120 o posterior, y lee tus transacciones en las páginas de Scalable, en tu navegador.
+
+Recomendamos **nuestra extensión** por los siguientes motivos:
 
 - funciona en **todos los planes**, incluido el FREE;
 - es la **única forma** de exportar la **cuenta remunerada**;
 - añade lo que le falta al propio CSV de Scalable: el **id de transacción** y el **tipo exacto** de cada movimiento.
+
+El plugin de importación de LibreFolio para la cuenta de valores también lee el propio CSV de Scalable (PRIME); el de la cuenta remunerada solo lee el archivo del exportador.
 
 ??? note "🧩 Instala el exportador — una vez, antes de la primera exportación"
 
@@ -67,29 +78,33 @@ El exportador es una extensión para Chrome, Edge, Brave y los demás navegadore
 
 La primera exportación lee todo el historial; las siguientes empiezan desde la última exportación (**Desde la última**), así que solo se leen las transacciones nuevas. Las filas que ya están en LibreFolio vuelven como [probables duplicados](index.md#duplicate-detection) y llegan sin marcar. Puedes renombrar los archivos: LibreFolio reconoce cada uno por sus columnas.
 
-!!! warning "Archivos escritos por el exportador 1.0.0"
-
-    El exportador 1.0.0 escribía la comisión dentro del importe de cada operación. LibreFolio importa esas operaciones tal como están, sin una comisión aparte, y te avisa de ellas. Actualiza el exportador a 1.0.1 o posterior y expórtalas de nuevo. Si ya has importado un archivo así, primero elimina las operaciones que enumeró el aviso: sus importes cambian, por lo que LibreFolio no las reconocería como duplicados.
-
 ---
 
 ## 📥 Importar {: #import }
 
 Importa cada archivo en su propio bróker, en la misma importación o en momentos distintos: en el [Asistente de importación](how-to.md), suelta los archivos CSV y asigna cada uno a su bróker. Nunca importes el mismo archivo en dos brókeres: sus transacciones contarían dos veces.
 
-Si un archivo acaba en el bróker equivocado, el asistente lo dice justo después de la carga. Muestra por qué el plugin predeterminado del bróker no puede leer el archivo y qué bróker sí puede, y ofrece mover el archivo, conservarlo o eliminarlo.
+!!! note "💡 Un archivo en el bróker equivocado"
+
+    Si un bróker tiene un **Plugin de Importación Predeterminado**, el asistente comprueba cada archivo asignado a ese bróker justo después de la carga. Cuando ese plugin no puede leer un archivo, el asistente te dice por qué, muestra qué bróker puede leerlo y ofrece mover el archivo, conservarlo o eliminarlo.
 
 ### 🔁 Transferencias entre tus dos cuentas {: #transfers }
 
-El dinero que mueves entre la cuenta de valores y la cuenta remunerada aparece en ambos archivos: un **Retiro** en un bróker y un **Depósito** en el otro, el mismo día y por el mismo importe. Fusiona cada par en una sola **transferencia de fondos**: el espacio de trabajo masivo de la página [Transacciones](../index.md) sugiere los pares, y pregunta antes de **Guardar todo** si no los has revisado.
+El dinero que mueves entre la cuenta de valores y la cuenta remunerada aparece en ambos archivos:
 
-- **Archivos importados juntos**: las dos mitades se encuentran en el espacio de trabajo, donde un banner verde, *Transacciones complementarias detectadas*, ofrece **Unir** cada par — o todos a la vez, con **Unir todos (N)**.
-- **Archivos importados en momentos distintos**: cuando importas el segundo archivo, el espacio de trabajo encuentra las mitades ya guardadas y muestra el botón 💡: haz clic en él para añadirlas, y luego pulsa **Unir** en cada par del banner. Para transferencias guardadas hace mucho tiempo, también puedes marcar las filas de transferencia de ambos brókeres en la página **Transacciones** y hacer clic en **Editar**: el banner aparece en el espacio de trabajo.
+1. la cuenta de la que sale el dinero registra un **Retiro**;
+2. la cuenta a la que llega registra un **Depósito**, el mismo día y por el mismo importe;
+3. fusionas los dos en una sola **Transferencia de fondos**: tras la importación, mientras las [nuevas filas](../index.md#bulk-workspace) esperan a **Guardar todo**, LibreFolio te sugiere los pares, y pregunta antes de guardar si no los has revisado.
 
-También puedes enlazar un par a mano: marca sus dos filas en la página **Transacciones** y haz clic en **🔗 Promover par**.
+??? info "🔍 Cómo se encuentran los pares, y cómo corregirlos"
 
-Las dos mitades tienen descripciones distintas, ya que cada una lleva su propio id de transacción: conserva la descripción unida que propone la fusión (en **Unir todos**, la opción predeterminada: **Combinar**). Una exportación que se solape con una transferencia ya fusionada entonces trae sus mitades de vuelta como probables duplicados, sin marcar.
+    - **Archivos importados juntos**: las dos mitades llegan con las demás filas nuevas, y un banner verde, *Transacciones complementarias detectadas*, ofrece **Unir** cada par — o todos a la vez, con **Unir todos (N)**.
+    - **Archivos importados en momentos distintos**: cuando importas el segundo archivo, LibreFolio encuentra las mitades ya guardadas y muestra el botón 💡: haz clic en él para añadirlas, y luego pulsa **Unir** en cada par del banner. Para transferencias guardadas hace mucho tiempo, también puedes marcar las filas de transferencia de ambos brókeres en la página **Transacciones** y hacer clic en **Editar**: aparece el mismo banner.
+    - **A mano**: marca las dos filas de un par en la página **Transacciones** y haz clic en **🔗 Promover par**.
+    - **Descripciones**: las dos mitades tienen descripciones distintas, ya que cada una lleva su propio id de transacción. Conserva la descripción unida que propone la fusión (en **Unir todos**, la opción predeterminada: **Combinar**): una exportación que se solape con una transferencia ya fusionada trae entonces sus mitades de vuelta como probables duplicados, sin marcar.
 
 ## 🔗 Referencia para desarrolladores
 
-→ [Importadores de Scalable Capital](../../../developer/backend/brim/scalable.md) · [Lista de proveedores de BRIM](../../../developer/backend/brim/providers_list.md) · [Decir por qué con un código](../../../developer/architecture/patterns/brim_plugin_guide.md#cannot-parse-detail), los rechazos de los dos importadores
+- [Importadores de Scalable Capital](../../../developer/backend/brim/scalable.md)
+- [Lista de proveedores de BRIM](../../../developer/backend/brim/providers_list.md)
+- [Decir por qué con un código](../../../developer/architecture/patterns/brim_plugin_guide.md#cannot-parse-detail): los rechazos de los dos importadores

@@ -8,26 +8,37 @@ LibreFolio importe les deux comptes de **Scalable Capital** : le **compte-titres
 
 Chaque compte devient un courtier à part entière dans LibreFolio, lu par son propre importateur. Créez deux [courtiers](../../brokers/index.md), un par compte, et choisissez le **Plugin d'Import par Défaut** de chacun :
 
-| Compte Scalable | Plugin d'Import par Défaut | Exemple de nom du courtier | Fichiers lus |
-|:--|:--|:--|:--|
-| Compte-titres | ![](../../../static/icons/brokers/scalable-broker.png){: style="width:16px;vertical-align:middle;margin-right:6px" } **Scalable Capital compte-titres** | *Scalable broker* | le fichier courtier de l'exportateur LibreFolio, ou le CSV de Scalable |
-| Compte rémunéré | ![](../../../static/icons/brokers/scalable-deposit.png){: style="width:16px;vertical-align:middle;margin-right:6px" } **Scalable Capital compte rémunéré** | *Scalable overnight account* | le fichier compte rémunéré de l'exportateur LibreFolio |
+<div class="lf-accounts-table" markdown>
 
-Laissez **URL de l'Icône Personnalisée** vide : un courtier sans icône propre affiche l'icône de son plugin d'import par défaut — celle du tableau — avant l'icône du site web de son **URL du Portail**.
+| Compte Scalable | Plugin d'Import par Défaut | Fichiers lus |
+|:--|:--|:--|
+| ![](../../../static/icons/brokers/scalable-broker.png){: style="width:36px;vertical-align:middle;margin-right:6px" } Compte-titres | **Scalable Capital compte-titres** | le fichier courtier de l'exportateur LibreFolio, ou le CSV de Scalable |
+| ![](../../../static/icons/brokers/scalable-deposit.png){: style="width:36px;vertical-align:middle;margin-right:6px" } Compte rémunéré | **Scalable Capital compte rémunéré** | le fichier compte rémunéré de l'exportateur LibreFolio |
 
-Pourquoi deux courtiers ? Chaque compte possède son propre solde de trésorerie et son propre IBAN, et l'argent que vous déplacez entre eux est un **Virement**, qui relie deux courtiers. Avec deux courtiers, chaque solde peut être vérifié par rapport à l'application Scalable, et chaque virement devient une paire liée. Chaque importateur refuse le fichier de l'autre compte et indique l'importateur qui le lit.
+</div>
+
+#### ❓ Pourquoi deux courtiers ? {: #why-two-brokers }
+
+- Chaque compte possède son propre solde de trésorerie et son propre IBAN.
+- L'argent que vous déplacez entre eux est un **Virement**, qui relie deux courtiers.
+- Avec deux courtiers, chaque solde peut être vérifié par rapport à l'application Scalable, et chaque virement devient une paire liée.
+- Chaque importateur refuse le fichier de l'autre compte et indique l'importateur qui le lit.
 
 ---
 
 ## 📤 Comment exporter {: #exporter }
 
-En octobre 2026, Scalable ne permet de télécharger vos transactions que sur les formules **PRIME** et **PRIME+**, et jamais celles du compte rémunéré. C'est pourquoi l'[exportateur LibreFolio](https://github.com/Librefolio/librefolio-exporter) a été créé.
+En octobre 2026, Scalable ne permet de télécharger vos transactions que sur les formules **PRIME** et **PRIME+**, et jamais celles du compte rémunéré.
 
-L'exportateur est une extension pour Chrome, Edge, Brave et les autres navigateurs Chromium, version 120 ou ultérieure. Il lit vos transactions sur les pages de Scalable, dans votre navigateur, et les enregistre sous forme de fichiers CSV :
+C'est pourquoi une extension de navigateur a été créée, qui exporte vos données en fichiers CSV : l'[exportateur LibreFolio](https://github.com/Librefolio/librefolio-exporter). Il fonctionne dans Chrome, Edge, Brave et les autres navigateurs Chromium, version 120 ou ultérieure, et lit vos transactions sur les pages de Scalable, dans votre navigateur.
+
+Nous recommandons **notre exportateur** pour les raisons suivantes :
 
 - il fonctionne sur **toutes les formules**, FREE inclus ;
 - c'est le **seul moyen** d'exporter le **compte rémunéré** ;
 - il ajoute ce qui manque au CSV de Scalable : l'**identifiant de transaction** et le **type exact** de chaque mouvement.
+
+Le plugin d'import de LibreFolio pour le compte-titres lit aussi le CSV de Scalable (PRIME) ; celui du compte rémunéré ne lit que le fichier de l'exportateur.
 
 ??? note "🧩 Installer l'exportateur — une fois, avant le premier export"
 
@@ -67,29 +78,33 @@ L'exportateur est une extension pour Chrome, Edge, Brave et les autres navigateu
 
 Le premier export lit tout l'historique ; les suivants démarrent à partir du dernier export (**Depuis le dernier**), donc seules les nouvelles transactions sont lues. Les lignes déjà présentes dans LibreFolio reviennent comme [doublons probables](index.md#duplicate-detection) et arrivent décochées. Vous pouvez renommer les fichiers : LibreFolio reconnaît chacun d'eux par ses colonnes.
 
-!!! warning "Fichiers écrits par l'exportateur 1.0.0"
-
-    L'exportateur 1.0.0 écrivait les frais à l'intérieur du montant de chaque transaction. LibreFolio importe ces transactions telles quelles, sans frais séparés, et vous en avertit. Mettez à jour l'exportateur vers la version 1.0.1 ou ultérieure et exportez-les à nouveau. Si vous avez déjà importé un tel fichier, supprimez d'abord les transactions listées dans l'avertissement : leurs montants changent, donc LibreFolio ne les reconnaîtrait pas comme doublons.
-
 ---
 
 ## 📥 Import {: #import }
 
 Importez chaque fichier dans son propre courtier, lors du même import ou à des moments différents : dans l'[Assistant d'importation](how-to.md), déposez les fichiers CSV et assignez chacun à son courtier. N'importez jamais le même fichier dans deux courtiers : ses transactions compteraient deux fois.
 
-Si un fichier atterrit dans le mauvais courtier, l'assistant d'importation le signale juste après le téléversement. Il montre pourquoi le plugin par défaut du courtier ne peut pas lire le fichier et quel courtier le peut, et propose de déplacer le fichier, de le conserver ou de le supprimer.
+!!! note "💡 Un fichier dans le mauvais courtier"
+
+    Si un courtier a un **Plugin d'Import par Défaut**, l'assistant d'importation vérifie chaque fichier qui lui est assigné juste après le téléversement. Lorsque ce plugin ne peut pas lire un fichier, l'assistant indique pourquoi, montre quel courtier peut le lire et propose de déplacer le fichier, de le conserver ou de le supprimer.
 
 ### 🔁 Virements entre vos deux comptes {: #transfers }
 
-L'argent que vous déplacez entre le compte-titres et le compte rémunéré apparaît dans les deux fichiers : un **Retrait** dans l'un et un **Dépôt** dans l'autre, le même jour et pour le même montant. Fusionnez chaque paire en un seul **Virement** : l'espace de travail groupé de la page [Transactions](../index.md) suggère les paires, et demande confirmation avant **Enregistrer Tout** si vous ne les avez pas examinées.
+L'argent que vous déplacez entre le compte-titres et le compte rémunéré apparaît dans les deux fichiers :
 
-- **Fichiers importés ensemble** : les deux moitiés se retrouvent dans l'espace de travail, où une bannière verte, *Transactions complémentaires détectées*, propose de **Fusionner** chaque paire — ou toutes en une fois, avec **Tout fusionner (N)**.
-- **Fichiers importés à des moments différents** : lorsque vous importez le second fichier, l'espace de travail trouve les moitiés déjà enregistrées et affiche le bouton 💡 : cliquez dessus pour les ajouter, puis **Fusionner** chaque paire depuis la bannière. Pour les virements enregistrés depuis longtemps, vous pouvez également cocher les lignes de virement des deux courtiers sur la page **Transactions** et cliquer sur **Modifier** : la bannière apparaît dans l'espace de travail.
+1. le compte d'où part l'argent enregistre un **Retrait** ;
+2. le compte où il arrive enregistre un **Dépôt**, le même jour et pour le même montant ;
+3. vous fusionnez les deux en un seul **Virement** : après l'import, tant que les [nouvelles lignes](../index.md#bulk-workspace) attendent **Enregistrer Tout**, LibreFolio suggère les paires, et demande confirmation avant d'enregistrer si vous ne les avez pas examinées.
 
-Vous pouvez aussi lier une paire manuellement : cochez ses deux lignes sur la page **Transactions** et cliquez sur **🔗 Promouvoir la paire**.
+??? info "🔍 Comment les paires sont trouvées, et comment les corriger"
 
-Les deux moitiés ont des descriptions différentes, puisque chacune porte son propre identifiant de transaction : conservez la description jointe que propose la fusion (dans **Fusionner tout**, le choix par défaut : **Combiner**). Un export qui chevauche un virement fusionné ramène alors ses moitiés comme doublons probables, décochées.
+    - **Fichiers importés ensemble** : les deux moitiés arrivent avec les autres nouvelles lignes, et une bannière verte, *Transactions complémentaires détectées*, propose de **Fusionner** chaque paire — ou toutes en une fois, avec **Tout fusionner (N)**.
+    - **Fichiers importés à des moments différents** : lorsque vous importez le second fichier, LibreFolio trouve les moitiés déjà enregistrées et affiche le bouton 💡 : cliquez dessus pour les ajouter, puis **Fusionner** chaque paire depuis la bannière. Pour les virements enregistrés depuis longtemps, vous pouvez également cocher les lignes de virement des deux courtiers sur la page **Transactions** et cliquer sur **Modifier** : la même bannière apparaît.
+    - **À la main** : cochez les deux lignes d'une paire sur la page **Transactions** et cliquez sur **🔗 Promouvoir la paire**.
+    - **Descriptions** : les deux moitiés ont des descriptions différentes, puisque chacune porte son propre identifiant de transaction. Conservez la description jointe que propose la fusion (dans **Tout fusionner**, le choix par défaut : **Combiner**) : un export qui chevauche un virement fusionné ramène alors ses moitiés comme doublons probables, décochées.
 
 ## 🔗 Référence développeur
 
-→ [Importateurs Scalable Capital](../../../developer/backend/brim/scalable.md) · [Liste des fournisseurs BRIM](../../../developer/backend/brim/providers_list.md) · [Indiquer la raison avec un code](../../../developer/architecture/patterns/brim_plugin_guide.md#cannot-parse-detail), les refus des deux importateurs
+- [Importateurs Scalable Capital](../../../developer/backend/brim/scalable.md)
+- [Liste des fournisseurs BRIM](../../../developer/backend/brim/providers_list.md)
+- [Indiquer la raison avec un code](../../../developer/architecture/patterns/brim_plugin_guide.md#cannot-parse-detail) : les refus des deux importateurs

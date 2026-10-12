@@ -48,6 +48,9 @@ I file `.env` più vecchi possono ancora contenere `PORTFOLIO_BASE_CURRENCY`: Li
     - **Nginx** no: aggiungi `proxy_set_header X-Forwarded-Proto $scheme;` alla `location` che fa da proxy a LibreFolio.
     - **Qualsiasi altro proxy**: fagli inviare l'header oppure, se LibreFolio è raggiungibile solo attraverso di esso, imposta `SESSION_COOKIE_SECURE=always`.
 
+    Per controllare nel browser se il cookie di sessione è marcato `Secure`, vedi
+    [Verificare la sicurezza della connessione](connection_checks.md#session-cookie).
+
 ??? info "🧮 Worker del motore di rischio — ottimizzazione avanzata"
 
     Le simulazioni di rischio e le ottimizzazioni di portafoglio vengono eseguite in processi worker separati, avviati al primo utilizzo. I valori predefiniti sono adatti alla maggior parte delle installazioni: aggiungi una variabile a `.env` solo per modificarli.
