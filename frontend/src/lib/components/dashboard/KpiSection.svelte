@@ -302,6 +302,7 @@
                 {/if}
                 <div class="flex flex-col gap-2 mt-1">
                     <KpiMetricBar
+                        testid="kpi-unrealized-delta"
                         label={$_('dashboard.unrealizedDelta')}
                         tooltipHtml={unrealizedDeltaTooltipHtml}
                         tooltip={unrealizedDeltaTooltipHtml ? undefined : $_('dashboard.unrealizedDeltaTooltip')}
