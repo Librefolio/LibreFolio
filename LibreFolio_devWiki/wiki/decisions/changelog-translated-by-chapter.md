@@ -9,6 +9,7 @@ related:
   - features/F-008
   - sources/phase00-financial-math-home-2026-10
   - sources/phase00-translation-round12-2026-10
+  - decisions/changelog-translated-by-heading-pieces
 ---
 
 # Decision: a localized changelog that never hides a release
@@ -53,15 +54,16 @@ English ones; a chapter not yet translated is simply absent from the file.
 
 ## Consequences
 
-- Until M's files land, every chapter shows in English with the label: today the tree has no `CHANGELOG.<xx>.md`.
-  The E2E test reads whatever file is on disk, so it holds before and after.
+- *Corrected in train 66*: this page said, at `35c4242f3`, that no `CHANGELOG.<xx>.md` existed yet. M's files landed
+  in `4325e03d4` (train 66): `CHANGELOG.{it,fr,es}.md`, every chapter, [1.2.0] included, produced by the pipeline of
+  [[decisions/changelog-translated-by-heading-pieces]]. The E2E reads whichever file is on disk, so it held before and
+  holds after. The CHANGELOG announces it under ✨: «The changelog speaks your language» (`b91d6d902`).
 - The developer's «andremo in append»: a chapter added later in English simply shows in English until its
   translation is appended.
 - `dev.py` treats `CHANGELOG*.md` as inputs of the frontend build (`ee8a19384`); deleting a translation needs an
   explicit `front build`, since modification times cannot see a deletion.
-- Before the translations ship, a gallery shot must change: the `changelog-modal-search` shot searches «Added»
-  (`gallery.spec.ts`), which a translated chapter no longer contains; the cure — a word that is the same in the four
-  languages — is M's.
+- The gallery's `changelog-modal-search` shot searched «Added», which a translated chapter no longer contains; M made it
+  search a word the same in the four languages, `CHANGELOG_SEARCH_TERM = 'Docker'` (`416faf60d`).
 - The user guide says the modal follows the interface language and labels untranslated releases (`b02bf6c54`).
 
 ## Source files
