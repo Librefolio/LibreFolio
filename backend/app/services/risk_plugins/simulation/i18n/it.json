@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "simulation": {
+        "name": "Simulazione",
+        "description": "Simula i percentili dei rendimenti GBM condizionati usando stime storiche di drift e covarianza."
+      }
+    }
+  }
+}

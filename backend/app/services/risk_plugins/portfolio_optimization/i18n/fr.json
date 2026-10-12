@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "portfolioOptimization": {
+        "name": "Allocation de portefeuille",
+        "description": "Construit une composition hypothétique des actifs à partir de l'échantillon, de la stratégie, des estimateurs et des contraintes sélectionnés."
+      }
+    }
+  }
+}

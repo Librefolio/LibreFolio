@@ -1,0 +1,105 @@
+{
+  "fx": {
+    "title": "Tipos de Cambio",
+    "subtitle": "Consulta y sincroniza los tipos de cambio",
+    "actions": {
+      "addPair": "Añadir Par"
+    },
+    "empty": {
+      "noPairsTitle": "Sin Pares FX Configurados",
+      "noPairsDesc": "Añade tu primer par de divisas para empezar a seguir los tipos de cambio.",
+      "addFirstPair": "Añadir Primer Par",
+      "noMatchesDesc": "Ningún par coincide con el filtro actual."
+    },
+    "filter": {
+      "filterCurrency": "Filtrar divisa",
+      "secondCurrency": "Segunda divisa",
+      "resetFilters": "Restablecer filtros"
+    },
+    "addPair": {
+      "title": "Añadir Par de Divisas",
+      "baseCurrency": "Divisa Base",
+      "quoteCurrency": "Divisa Cotizada",
+      "providerDisabledHint": "Seleccione primero ambas divisas",
+      "providerInfoBanner": "Los proveedores obtienen automáticamente los tipos de cambio de los bancos centrales. Sin un proveedor, deberá insertar los tipos manualmente.",
+      "noProviderWarning": "Ningún proveedor configurado. Deberá insertar manualmente los tipos de cambio para cada fecha.",
+      "createIntermediatePairs": "Crear también los pares intermedios",
+      "createIntermediatePairsHint": "Cada paso de las cadenas seleccionadas se guardará como par autónomo con su proveedor, para poder sincronizarlos de forma independiente.",
+      "titleEdit": "Editar Proveedores del Par",
+      "createFailed": "Error al crear el par FX",
+      "createConflict": "Otra persona ha modificado esta ruta de conversión al mismo tiempo. No se ha guardado nada: inténtalo de nuevo.",
+      "alreadyExists": "Este par ya existe — sincronízalo o edítalo desde la página FX."
+    },
+    "sync": {
+      "description": "Sincronizar tasas de cambio de los proveedores configurados para el rango de fechas seleccionado.",
+      "synced": "Sincronizados",
+      "start": "Iniciar sincronización",
+      "pairsCount": "pares",
+      "timeout": "Tiempo de espera",
+      "tooltipFetched": "Puntos de datos descargados del proveedor",
+      "tooltipChanged": "Puntos de datos insertados o actualizados en la base de datos",
+      "toastFailed": "{pair} sincronización fallida",
+      "legBreakdown": "Detalle por tramo",
+      "legNoData": "0 fechas — sin datos",
+      "legDates": "fechas",
+      "inProgress": "Sincronizando tasas FX…",
+      "timeoutAfter": "Tiempo agotado tras {seconds} s",
+      "requestTimedOut": "La solicitud agotó el tiempo tras {seconds} s. Aumenta el tiempo de espera y vuelve a intentarlo.",
+      "failed": "Error de sincronización",
+      "retryFailed": "{n, plural, one {Reintentar el fallido} other {Reintentar los # fallidos}}"
+    },
+    "route": {
+      "title": "Rutas de Conversión",
+      "loading": "Cargando rutas...",
+      "directSection": "Conversión directa (1 paso)",
+      "chainSection": "Conversión en cadena",
+      "unusableSection": "No utilizables",
+      "unusableHint": "Estos proveedores no tienen una ruta de conversión automática para este par de divisas.",
+      "steps": "pasos",
+      "noRoutesAvailable": "No se encontraron rutas de conversión automáticas para este par. Puede guardar sin proveedor e insertar las tasas manualmente.",
+      "chainWarning": "Las cadenas requieren que TODOS los pasos intermedios tengan éxito durante la sincronización. Si un proveedor falla, toda la cadena falla para esa fecha.",
+      "searchPlaceholder": "Buscar proveedores, divisas, países…",
+      "noSearchResults": "Ninguna ruta coincide con la búsqueda",
+      "addRoute": "Añadir ruta de conversión",
+      "hideRoutes": "Ocultar rutas disponibles"
+    },
+    "deletePair": "Eliminar par",
+    "deletePairTitle": "Eliminar Par FX",
+    "deletePairQuestion": "¿Eliminar {pair}?",
+    "deletePairWarning": "Esto eliminará la configuración de proveedores y todos los tipos de cambio históricos. ⚠️",
+    "delete": {
+      "toastOk": "{pair} eliminado ({count} tasas eliminadas)",
+      "toastFailed": "Error al eliminar {pair}",
+      "resultDeleted": "eliminado ({n} tasas)"
+    },
+    "rateNotAvailable": "Tipo de cambio no disponible",
+    "rate": "Tipo de cambio",
+    "card": {
+      "manualOnly": "Par solo manual",
+      "syncFromProvider": "Sincronizar las tasas desde el proveedor"
+    },
+    "loadFailed": "No se pudieron cargar los pares FX"
+  },
+  "fxDetail": {
+    "editRates": "Editar tipos de cambio",
+    "loadingRates": "Cargando tasas...",
+    "noData": "No hay datos de tasas disponibles para este rango.",
+    "syncRates": "Sincronizar tasas",
+    "backToList": "Volver a la lista FX",
+    "swapConfirmTitle": "Cambios sin guardar",
+    "swapConfirmMessage": "Tienes cambios sin guardar en el editor de tasas. Invertir la dirección los descartará. ¿Continuar?",
+    "noDataManual": "No hay datos disponibles — inserte las tasas manualmente",
+    "insertManually": "Insertar manualmente",
+    "syncDisabledManual": "Sync deshabilitado — ningún proveedor configurado. Agregue un proveedor o inserte las tasas manualmente.",
+    "aiExport": "Exportación IA",
+    "syncFailed": "Error de sincronización: {error}",
+    "loadFailed": "No se pudieron cargar las tasas",
+    "assetFallback": "Activo n.º {id}",
+    "invalidRates": "{n, plural, one {# fila tiene una tasa no válida} other {# filas tienen una tasa no válida}}: la tasa debe ser estrictamente mayor que cero (0 no está permitido).",
+    "savedSummary": "Tasas FX: {details}",
+    "savedCount": "{n, plural, one {# guardado} other {# guardados}}",
+    "deletedCount": "{n, plural, one {# eliminado} other {# eliminados}}",
+    "skippedCount": "{n, plural, one {# omitido (no válido)} other {# omitidos (no válidos)}}",
+    "saveFailed": "Error al guardar las tasas FX: {error}"
+  }
+}

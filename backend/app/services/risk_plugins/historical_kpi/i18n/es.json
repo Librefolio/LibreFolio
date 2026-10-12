@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "historicalKpi": {
+        "name": "Indicadores de riesgo históricos",
+        "description": "Volatilidad histórica, caída máxima, Sharpe y Sortino a partir de los rendimientos canónicos del ámbito seleccionado."
+      }
+    }
+  }
+}

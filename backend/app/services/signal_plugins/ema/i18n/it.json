@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "ema": {
+      "name": "EMA",
+      "description": "Trend pesato sui prezzi recenti",
+      "output": "EMA"
+    }
+  }
+}

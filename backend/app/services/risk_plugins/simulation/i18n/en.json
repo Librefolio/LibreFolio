@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "simulation": {
+        "name": "Simulation",
+        "description": "Simulate conditional GBM return percentiles from historical drift and covariance estimates."
+      }
+    }
+  }
+}

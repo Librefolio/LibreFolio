@@ -1,0 +1,10 @@
+{
+  "signals": {
+    "riskRollingSharpe": {
+      "name": "Indice di Sharpe mobile",
+      "description": "Rendimento eccedente annualizzato per unità di volatilità campionaria su una finestra mobile.",
+      "output": "Indice di Sharpe",
+      "outputDescription": "Rendimento medio giornaliero eccedente annualizzato diviso per la volatilità campionaria."
+    }
+  }
+}

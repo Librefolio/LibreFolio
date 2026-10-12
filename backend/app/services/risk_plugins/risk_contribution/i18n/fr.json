@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "riskContribution": {
+        "name": "Contribution au risque",
+        "description": "Contributions de chaque actif à la volatilité de la composition actuelle."
+      }
+    }
+  }
+}

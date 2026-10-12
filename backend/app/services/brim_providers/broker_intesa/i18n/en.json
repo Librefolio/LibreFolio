@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_intesa": {
+      "description": "Import from Intesa Sanpaolo exports (CSV or XLSX). Handles the movements list (bond coupons and custody fees; unrecognised everyday-banking rows are skipped) and the portfolio snapshot (patrimonio), which is imported as a cash deposit plus one cost-basis adjustment per holding to seed an account with history.",
+      "name": "Intesa Sanpaolo"
+    }
+  }
+}

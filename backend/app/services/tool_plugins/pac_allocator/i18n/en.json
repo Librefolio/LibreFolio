@@ -1,0 +1,8 @@
+{
+  "tools": {
+    "pacAllocator": {
+      "name": "PAC allocator",
+      "description": "Plan the purchases that bring a new investment as close as possible to its target allocation, in whole units or amounts, without placing orders."
+    }
+  }
+}

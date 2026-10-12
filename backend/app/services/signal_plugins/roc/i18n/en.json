@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "roc": {
+      "name": "ROC",
+      "description": "Speed of price change",
+      "output": "ROC"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "bollinger": {
+      "name": "Bollinger Bands",
+      "description": "Volatility around the moving average",
+      "bands": "Bands"
+    }
+  }
+}

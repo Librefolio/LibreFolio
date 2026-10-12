@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetKpi": {
+        "name": "Indicatori di rischio per asset",
+        "description": "Volatilità, discesa peggiore e rapporti corretti per il rischio, misurati per ogni asset selezionato sulla stessa finestra."
+      }
+    }
+  }
+}

@@ -223,6 +223,15 @@ def utils_gate_plugin_layout(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Plugin layout gate tests", verbose=verbose)
 
 
+def utils_gate_plugin_i18n_ownership(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plugin i18n ownership gate: each plugin's keys live in its own i18n/ fragment."""
+    print_section("Utils: Plugin i18n Ownership Gate")
+    print_info("Testing: the spaces and keys the BRIM, asset, FX, signal, risk and tool registries publish, against the catalogue sources scripts/i18n_catalog.py reads")
+    print_info("Tests: R1 fragment keys in their plugin's space, R2 declared keys of an exclusive space in its fragment, R3 no fragment key in another plugin's space or declared by another plugin, R4 every key under an exclusive space in its fragment (tools aside)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_plugin_i18n_ownership_gate.py", test_names)
+    return run_command(cmd, "Plugin i18n ownership gate tests", verbose=verbose)
+
+
 def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
     """Test bounded Tool JSON encoding and sanitized validation errors."""
     print_section("Utils: Tool Wire")
@@ -465,6 +474,15 @@ Tests for utility modules and helper functions:
         # ast and filesystem reads of the repository's sources, never imported; the control
         # cases build their trees under tmp_path. No DB, no server, no network, no writes
         # outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-plugin-i18n-ownership",
+        utils_gate_plugin_i18n_ownership,
+        name="Plugin i18n Ownership Gate",
+        desc="Each plugin's translations live in its own i18n/ fragment, judged by the metadata its registry publishes: a plugin's space is brimPlugins.<code> (the code being its folder), assets.providerParams.<provider code>, the parent of a signal's display_name_key or of a risk analytic's name_i18n_key, or exactly a tool's name_i18n_key and description_i18n_key (FX plugins have none), and it is exclusive when no other plugin has it; R1 every fragment key lies in its plugin's space; R2 every key a plugin declares in its exclusive space (display_name_key, description_key, name_i18n_key, description_i18n_key, label_key, x-i18n-key, x-tooltip-key, the BRIM name and description) lives in its fragment; R3 no fragment key lies in another plugin's space or is declared by another plugin; R4 every catalogue key under an exclusive space lives in that plugin's fragment, tools aside; every rule proven both ways on synthetic trees, and a sentinel fails on a published key field the gate does not read",
+        # Imports the registries (discovery instantiates the plugins) and reads what they publish; synthetic trees under tmp_path. No DB, no server, no network.
         isolation="pure",
     )
     add_test(
