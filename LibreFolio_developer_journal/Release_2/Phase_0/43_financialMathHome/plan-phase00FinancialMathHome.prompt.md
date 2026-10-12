@@ -1513,3 +1513,80 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 - Quattro commit proposti: refactor (codice, test, guardia, runner), doc, devWiki, journal.
 - Niente CHANGELOG.
 - Due voci per dopo la 1.2 nella sezione T dell'indice: T-W1 e T-R1.
+
+### Treno 45 (coordinatore, 2026-10-12)
+- T-1 è nel target (merge `76a7b099b`, commit `a57a43fbd`, `4e4ae37e5`, `09c089147`, `8e0c4f245`). P-5 del 38 è chiusa da `1cc9cd8f5`.
+
+### C-53 — `reconciled` falso per un residuo di arrotondamento (developer: approvata per la 1.2) — analisi (2026-10-12)
+- **Base**: `378338fed` (treno 46). Corsia 6164.
+- **Il difetto**: `portfolio_financial.py:490` e `broker_financial.py:435` (le stesse righe anche dopo T-1) fanno `reconciled = residual_amount == Decimal("0")`.
+  - Il residuo è `period_pnl − (Δ non realizzato + realizzato + entrate − costi e tasse + altro)`.
+  - Il servizio calcola `period_other_result` come termine di chiusura della stessa scomposizione (`portfolio_service.py`, `:1959`), quindi il residuo è zero per costruzione. Quando non lo è, resta l'arrotondamento dei Decimal a 28 cifre (1e-24).
+  - Succede in 5 snapshot su 33, prima e dopo F: non dipende dalla cassa estera.
+- **Nel prompt**: il renderer stampa un residuo monetario più piccolo dell'unità minima della valuta come `0` (`monetary_residuals_zeroed`). Così il prompt dice `reconciled: false` accanto a `residual: 0`: si contraddice.
+- **La cura** (proposta di I, approvata dal developer):
+  - `reconciled = abs(residual) < CONVERSION_DUST` (`financial_math/native_cash.py`, 1e-9), sempre. La regola del servizio con la cassa estera riguarda un'altra cifra, la riga del residuo dopo «FX on cash».
+  - `residual` resta la differenza esatta.
+- **Versioni** (regola del developer: +1 rispetto alla 1.1): `portfolio.reconciliation` e `broker.reconciliation` sono alla v1 sia in `v1.1.0` sia in HEAD, quindi passano alla v2.
+  - La versione è scritta in due posti: lo spec e il segnaposto del catalogo congelato (`components/catalog.py:111`, `:136`). Il registro controlla che coincidano.
+  - `COMPACT_COMPONENT_VERSIONS` prende {1, 2} per i due componenti nello stesso cambio. Senza, la v2 cadrebbe nello YAML (la lezione di B3b).
+- **Doc**: nessuna pagina descrive `reconciled`. Una riga in «Snapshot Data Tables» di `ai_export_composition.md`, via docs-writer.
+- **Rossi** (test-author):
+  - backend: un residuo di 1e-24 dà `reconciled` vero; uno pari o sopra la tolleranza dà falso, per il portafoglio e per il broker; la v2 nello spec e nel segnaposto;
+  - frontend: la v2 si stampa come la v1, e la v3 cade nello YAML.
+- **Sonda mirata**: sui dati sintetici della 6164, portafoglio e broker; cerco un caso con il residuo di arrotondamento.
+
+### D-P7 — `utils/` e gli aiuti di dominio: decisa dal developer (2026-10-12)
+> «diciamo che utils era nata come logica per essere quello che tu vuoi fare in domain, sarebbero le funzioni "foglie" quelle più basiche, non serve quindi spostare o rinominare, al più creare dentro utils delle cartelle per raggruppare le tipologie di utility, quello sarebbe inteligente. Ti ho fatto creare un service layer per la finanza, perchè se iniziamo a chiedere cambi, asset e altro, non è più una funzione terminale, ma diventa parte dello stack di servizi e ha senso raccogliere queste cose in dei layer ordinati che si usano l'un l'altro»
+- **Niente `backend/app/domain/`**: `utils/` resta la casa delle funzioni foglia, quelle che non chiamano servizi. Oggi è già così: i moduli di `utils/` importano solo altri `utils` e, in `decimal_utils`, `db.models`.
+- **BU1 e BU2 si riscrivono**, dopo la 1.2: niente spostamenti sotto `services/`. Al più si fanno sottocartelle dentro `utils/` per tipo di utility. Le proposte di §P2.3 (`platform/`, `services/fx/`, `api/` per i moduli di `utils/`) decadono.
+- **Quello che chiede** cambi, asset o altri servizi sta negli strati di servizio, come `financial_math`.
+- **Applicato nel checkpoint di C-53** (assegnazioni del coordinatore):
+  - la regola in `backend.instructions.md`, due righe dopo la sezione «One Home»: «`utils/` holds leaf functions only: they never import services; anything that needs FX, assets or other services belongs to a service layer»;
+  - la riga T-BU1+BU2 della sezione T dell'indice, riscritta.
+
+#### C-53 — implementazione ✅ (2026-10-12)
+> **Note implementazione**:
+> - **Rossi** (test-author), che falliscono per le ragioni attese:
+>   - backend, 10 su 22: 6 casi di polvere e 2 di chiusura col formula del servizio (cambio 1,09, residuo 1E-24) danno `False` invece di `True`; 2 test di versione danno (1, 1) invece di (2, 2);
+>   - controlli verdi: zero esatto, 899, `None`, ±`CONVERSION_DUST` (contro un `<=` o un `abs` dimenticato), −99;
+>   - frontend, 4 su 403: la v2 cade nello YAML.
+> - **Cura**:
+>   - `reconciled = abs(residual_amount) < CONVERSION_DUST` nei due builder, con l'import da `financial_math/native_cash.py`;
+>   - `version=2` sui due spec e sui due segnaposti di `components/catalog.py`;
+>   - `COMPACT_COMPONENT_VERSIONS` {1, 2} per i due componenti, col commento;
+>   - `residual` invariato.
+> - **Test** (test-author): i blocchi C-53 del test del renderer stanno in un `describe` proprio; il blocco B3b è identico byte per byte a HEAD.
+> - **Verde**: `services ai-export` 1 021 (1 002 + 19); `front-ai-export unit` 403; svelte-check 0 errori; ruff, black e prettier puliti; `api sync`: client generato identico.
+> - **Sonda mirata** (6164, dati sintetici, `portfolio.overview_and_history` e `broker.overview_and_history` su tutti e 7 i broker):
+>   - EUR: 24 casi (3M, 6M, 1Y);
+>   - GBP: 10 casi, con la valuta base cambiata sulla sola corsia, poi ripopolata;
+>   - tutte le sezioni sono v2, compatte; `reconciled` vale `True` col residuo esattamente zero (`0E-24` e simili), `None` per il broker senza posizioni;
+>   - **i dati sintetici non producono un residuo di polvere**: il caso reale lo riproduce il test di chiusura.
+>   - 3 fallimenti, preesistenti e fuori da C-53: il broker senza posizioni (`broker_anon_07`) fa fallire il controllo pubblico «invalid HHI points» di `broker.allocation_concentration` e `broker.concentration_context` (HTTP 200).
+> - **Equivalenza UI/sonda**: col renderer ufficiale (vite SSR, `/tmp/libreFolio_c53_compare.mjs`), 34 blocchi su 34 sono identici al prompt salvato. Sui dati sintetici il «prima» (v1, regola `== 0`) è identico al «dopo».
+>   - Il backend scrive gli importi in notazione piana. Iniettando la polvere nel JSON canonico prima del parse, come la servirebbe il backend:
+>     - prima: `|reconciled|false|` accanto a `|residual.amount|0|`;
+>     - dopo: `|reconciled|true|` accanto a `|residual.amount|0|`.
+> - **Doc** (docs-writer): un paragrafo in «Snapshot Data Tables» di `ai_export_composition.md` (`:422-426`); build stretto e check-links verdi.
+> - **Cosa c'era già nella v1.1.0**: il difetto (`== 0` in entrambi i componenti alla v1).
+> - **Dopo la 1.2** (T-B9): un residuo reale fra `CONVERSION_DUST` e l'unità minima della valuta si stamperebbe `0` accanto a `reconciled` falso. È improbabile, perché il riepilogo chiude la scomposizione per costruzione.
+
+### BU1 e BU2 nella 1.2 (developer, 2026-10-12, via coordinatore)
+- Riformulati con D-P7, dopo il checkpoint di C-53, col metodo di T-1: prima il raggruppamento esatto e l'elenco dei file (76 importatori fra app, test, script e `dev.py`), FROZEN; poi un commit di sole rinomine e uno per BU2, con la suite backend identica come gate.
+- **BU1**: sottocartelle per tipo dentro `utils/`, senza spostamenti fuori:
+  - `utils/asset/`: sector, geo, identifier, translation;
+  - `utils/fx/`: currency;
+  - `utils/platform/`: version, network, cache;
+  - per datetime, json e decimal decide la proposta di T.
+- **BU2**: le due eccezioni alla regola della foglia.
+  - Il troncamento di `decimal_utils`, che importa `db.models` (`FxRate`, `PriceHistory`), esce da `utils/`; `parse_decimal_value` resta.
+  - I 3 import pigri di `clear_cache` in `fx.py` (`:1218`, `:1533`, `:1674`) si tolgono se il ciclo «utils→services» non esiste più: `fx.py` importa già `cache_utils` in cima, e `cache_utils` non importa servizi.
+
+### Checkpoint C-53 🧊 (2026-10-12) — FROZEN, in attesa del coordinatore
+- **Tre commit proposti**:
+  - `fix(ai-export)`: codice, test e il paragrafo della doc;
+  - `docs(rules)`: la regola su `utils/`;
+  - `docs(journal)`: piano e indice.
+- **Riga di CHANGELOG** proposta al coordinatore, in «🐛 Fixed» › «🤖 AI Export and signal contracts».
+- **Dopo il checkpoint**: BU1 e BU2, cominciando dall'elenco dei file.
