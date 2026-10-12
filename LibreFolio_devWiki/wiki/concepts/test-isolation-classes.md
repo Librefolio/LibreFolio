@@ -4,7 +4,7 @@ category: concept
 date: 2026-08-31
 tags: [testing, test-runner, parallelism, infrastructure, isolation]
 related: [concepts/derived-test-inventory, concepts/playwright-run-consolidation, concepts/backend-test-isolation, decisions/test-runner-package-split]
-related_problems: [conftest-autouse-write-breaks-pure-class, playwright-route-stub-is-per-context, registered-but-unreachable-test-actions]
+related_problems: [e2e-writes-leaked-into-shared-state, conftest-autouse-write-breaks-pure-class, playwright-route-stub-is-per-context, registered-but-unreachable-test-actions]
 ---
 
 # Concept: the four isolation classes
@@ -145,6 +145,15 @@ worker**, and the same 1 red at four workers.
 
 Which means the isolation work had to be done anyway, even if the decision had
 been never to parallelise anything.
+
+## E2E: a write to shared state belongs to its test (2026-10-12)
+
+The classes above are the backend's. On the Playwright side, workstream V's audit (plan 46, work 3) mapped how an E2E
+write spreads: inside a category tests run in parallel, so a temporary write on a shared user breaks its neighbours;
+categories run in sequence on a database populated once per invocation, so a permanent leftover reaches every later
+category; and the automatic clean-ups run only at one worker. The cures of train 64 set the rules — a disposable
+account, a reserved MOCKFX pair, or global keys read and restored in `finally`, with writers of the same keys in
+sequence: [[problems/e2e-writes-leaked-into-shared-state]].
 
 ## Source files
 
