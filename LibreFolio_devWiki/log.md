@@ -2695,3 +2695,25 @@ Checks after the repairs:
   link, 0 plain feature codes;
 - the registry agrees with every page;
 - privacy clean; `git diff --check` clean.
+
+## [2026-10-12] ingest | Step B1 — plan 37 (S): the Scalable importers; the exporter's recap; M's batch 21
+Sources: plan 37 @ git:`4d878e545`, the exporter's recap @ git:`305b80202`, M's journal §12 @ git:`0ebf86178`; base
+`573f7c5c7`. First of the order proposed by the audit of step B. Checked on the code at HEAD:
+- the two plugins and `_scalable.py`: four refusal codes, twelve notices, the id in the description, the tags;
+- `cannot_parse_detail`, `check_file_with_plugin`, the `plugin-check` endpoint;
+- `_MERGED_LEG_TYPES` and the «probable» rule;
+- `defaultPluginCheck.ts`, `ImportBrokerMismatchModal`, `promoteSuggest.ts`, `PromoteAllModal`, `pluginKind.ts` (50);
+- the icons, the docs and the tests.
+
+The commits of the five checkpoints and of batch 21 are all in HEAD. `cashAmountsCancel` has been exact since P's lot 42
+(`7f8233c47`, train 34), so S's reports to P are recorded as closed.
+Created:
+- [[sources/phase00-brim-scalable-2026-10]];
+- [[decisions/scalable-two-accounts-two-plugins]], [[decisions/import-wizard-default-plugin-check]],
+  [[decisions/broker-icon-order-dedicated-plugin-first]], [[decisions/bulk-pairs-new-with-saved]];
+- [[problems/merged-transfer-not-seen-as-duplicate]];
+- [[concepts/brim-texts-translated-by-code]].
+
+Updated: [[features/F-012]], [[features/F-013]], [[features/F-048]], [[features/F-049]] (status history, Source files),
+[[entities/import-wizard-modal]].
+Not yet in the target: M's batch 23, a second rewrite of the Scalable page. Graph: not updated (P-6).

@@ -80,6 +80,9 @@ then receives its own stable `tempId`; display sorting never replaces either ide
   file remain valid.
 - The Generic CSV parser preserves supplied transaction values and row currencies,
   subject to schema/sign validation. It does not generate FX transactions.
+- Since plan 37 (2026-10-09), when step 1 continues, a file whose broker's default plugin cannot read it opens
+  `ImportBrokerMismatchModal`, with the plugin's reason and the brokers that would read it: Move, Keep here or Remove
+  — [[decisions/import-wizard-default-plugin-check]].
 
 ## Asset Identity and Resolution
 

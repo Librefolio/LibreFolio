@@ -387,3 +387,11 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/README.md` | `17c50ab50` | 2026-10-12 | [[problems/ai-export-probe-rejected-unavailable-hhi]] (C-55) |
 | The coordinator's diary, decisions D-1, D-4, D-A, D-B, D-C of 2026-10-12, quoted verbatim by the coordinator; the developer's server checklist, item 28 | `untracked` | 2026-10-12 | [[decisions/plugin-folders-and-split-i18n]] — planned; re-ingest from U's plan 45 when it enters the target |
 | `mkdocs_src/docs/admin/connection_checks.en.md` (commit `3eee17616`) | `3eee17616` | 2026-10-12 | [[features/F-102]], [[decisions/connection-security-server-never-upgrades]] — cross-links only |
+
+## 2026-10-12 — step B1: plan 37 (S), the exporter's recap, M's batch 21 (base `573f7c5c7`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/37_brimScalable/plan-phase00BrimScalable.prompt.md` | `4d878e545` | 2026-10-12 | [[sources/phase00-brim-scalable-2026-10]], [[decisions/scalable-two-accounts-two-plugins]], [[decisions/import-wizard-default-plugin-check]], [[decisions/broker-icon-order-dedicated-plugin-first]], [[decisions/bulk-pairs-new-with-saved]], [[problems/merged-transfer-not-seen-as-duplicate]], [[concepts/brim-texts-translated-by-code]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/37_brimScalable/recap-phase00ScalableExporter.md` | `305b80202` | 2026-10-12 | [[sources/phase00-brim-scalable-2026-10]], [[decisions/scalable-two-accounts-two-plugins]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `0ebf86178` | 2026-10-12 | §12, batch 21 → [[decisions/scalable-two-accounts-two-plugins]]; §13, batch 22, was linked in train 56 |
