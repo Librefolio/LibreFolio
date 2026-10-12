@@ -409,14 +409,14 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   le durate (`components/settings/SchedulerLogModal.svelte:235`, `utils/sync/syncHelpers.ts:110`: «18.7s»). Per le
   percentuali c'è già un formattatore (`utils/core/formatPercent.ts`). Il quando lo decide il coordinatore. Dettagli:
   [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezioni «11.2» e «11.3».
-- **M-19 · MathJax cercato nel posto sbagliato sulle pagine annidate** — basso; M, 12/10: nella 1.2, assegnata a M
-  subito dopo il lotto 23 (decisione del coordinatore); c'era già nella 1.0 e nella 1.1. `mkdocs_src/docs/javascripts/lib-loader.js:48-61` costruisce il percorso
-  della copia locale di MathJax (`javascripts/vendor/mathjax/tex-mml-chtml.js`, alla radice del sito, messa da
-  `scripts/update_js_cache.py`) a partire da `<base>`, che Material non emette, e quindi dalla cartella della pagina: su
-  ogni pagina annidata la copia locale dà 404 e il loader passa alla CDN (jsdelivr). Online le formule si vedono, ma ogni
-  pagina con formule chiama un servizio esterno; senza internet non si vedono. Visto nell'anteprima del lotto 23 (radice
-  200, `/it/user/brokers/javascripts/vendor/…` 404). Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
-  sezione «14.6».
+- ✅ **M-19 · MathJax cercato nel posto sbagliato sulle pagine annidate** — nella 1.2, lotto 24 di M (12/10, decisione del
+  coordinatore); c'era già nella 1.0 e nella 1.1. `mkdocs_src/docs/javascripts/lib-loader.js` cercava la copia locale di
+  MathJax nella cartella della pagina: su ogni pagina annidata dava 404 e passava a jsdelivr, quindi senza internet le
+  formule non si vedevano. Ora la base è l'indirizzo dello script stesso (`document.currentScript`), che MkDocs collega
+  sempre alla radice del sito. Provato senza internet: 34 pagine su 34 (16 pagine con formule, 4 lingue, profondità da 2
+  a 6, servite sotto `/mkdocs/` e sotto `/LibreFolio/`) caricano la copia locale e disegnano ogni formula. Il test e2e
+  aspetta che il coordinatore assegni il file del runner. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
+  sezione «15».
 - **M-20 · Cinque pulsanti «copia» senza il ripiego per l'HTTP** — basso; M (trovato da docs-writer), 12/10, fuori dal
   perimetro di M: assegnata a I nel lotto di rifinitura UI (decisione del coordinatore). Il browser non dà l'API degli appunti a una pagina in `http://` fuori da `localhost` (per esempio
   Tailscale in HTTP, o l'indirizzo di rete locale). `frontend/src/lib/utils/clipboard.ts:14` (`writeTextToClipboard`)
@@ -426,6 +426,13 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   `components/assets/ProviderAssignmentSection.svelte:595`. La guida della sicurezza non dice più che l'app installabile
   è «l'unico motivo» per preferire HTTPS. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
   sezione «14.7».
+- **M-21 · La doc non si ricompila quando cambiano solo i suoi JavaScript o CSS** — basso; M, 12/10, fuori dal perimetro
+  di M (`dev.py` è condiviso). `auto_build_mkdocs()` (`dev.py:2151-2171`, per `dev.py server`) e
+  `_docker_ensure_assets_built()` (per `dev.py docker build`) ricompilano `mkdocs_src/site` solo se un `.md` è più nuovo
+  di `site/index.html`. Una modifica al solo `lib-loader.js` o a `extra.css` lascia com'è un sito già compilato: un server
+  o un'immagine costruiti in locale non la prendono senza `dev.py mkdocs build`. In CI il sito si compila da zero, quindi
+  le immagini pubblicate non ne soffrono. Basterebbe guardare tutti i file sotto `mkdocs_src/docs/`. Dettagli:
+  [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «15.3».
 
 ## Q · Documentazione e onboarding (21, 32)
 
