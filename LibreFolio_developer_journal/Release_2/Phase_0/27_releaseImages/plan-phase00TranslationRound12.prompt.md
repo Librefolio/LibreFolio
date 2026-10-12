@@ -1008,8 +1008,92 @@ Base `32d27501c` (train 72: I's batch 48, V's 2b, the CHANGELOG commit `169bd60f
 >   number already on screen». Since M-18 the figures read `uiLocale()` tracked, so a switch of the interface language
 >   redraws them. The rule the section draws (set the browser locale before the load) and its stamp check still hold.
 >   The sentence was left as it is, outside the assigned lines.
+> - **⚠️ Fuori pista (22:25, I5 preparation, step 21.2):** a probe showed that the gallery's headless Chromium answers
+>   `navigator.language` with en-US whatever the browser locale this file pins. So the pin does not decide the English
+>   shots, and lines 4–9 say otherwise. The corrected text is approved for I5.
 
 **20.4 ✅ Gates** (`release-pipeline/scripts/b31_final_gates.sh`, load 27–50)
 > - dry-run empty after the stamps;
 > - `translate-validate` 630 files 0/0; `translate-diff` 642 of 642 clean;
 > - strict build 0 (all 3,012 asset URLs resolve); `check-links` 95; `git diff --check` clean.
+
+### 21. ✅ I5 prepared, read-only — 2026-10-12 22:25 (approved at 22:26; applied once T's CP3 is in the target)
+
+**21.1 ✅ The security panel's shot (`security/connection-indicator`)**
+> **Note implementazione**: the details' 30 s countdown (I's batch 48, `ConnectionSecurityIndicator.svelte`) is held
+> while the pointer is anywhere on the indicator.
+> - **Before `parkPointer`:** after the click the pointer stays inside the indicator. The sidebar's bottom block is
+>   anchored, so the toggle rises and the pointer lands on the details. The settles before the shot therefore cost
+>   nothing.
+> - **From `parkPointer` (`gallery.spec.ts:1722`):** it moves the pointer to the right edge, out of the indicator, and
+>   the countdown starts.
+>   - Up to the capture: about 1 s typically, about 37 s in the worst case of waits that pass late.
+>   - Up to 20 s of those are inside `screenshot()`, whose waits swallow their timeouts, and they come after the last
+>     check that needs the details. A close there gives a picture of a closed line, with no red.
+> - **Approved fix, for I5:**
+>   - `restPointerOnDetails` rests the pointer on the details' own right padding: on the indicator, and on nothing
+>     with a hover style (checked with `elementFromPoint`);
+>   - `aria-expanded` is asserted after the capture.
+> - **At I5, two controls in the first combination only:** positive (rest + 31 s → green) and negative
+>   (`parkPointer` + 31 s → red).
+> - **Patch:** `release-pipeline/i5/i5_proposed.patch`, with notes in `release-pipeline/i5/I5_PREP.md`. Prettier is
+>   clean, and an in-memory type check gives 0 diagnostics in the two files.
+
+**21.2 ✅ `galleryLocale.ts`, «A language switch redraws no number already on screen»**
+> **Note implementazione**: I probed the gallery's headless Chromium 149 on desktop and mobile, with LANG C, it_IT and
+> en_GB, on macOS in Italian.
+> - **What the override reaches:** `navigator.language` stays en-US whatever the CDP override, the reload or the
+>   machine. The override moves only the locale `Intl` falls back on, at once in the same document, and the
+>   Accept-Language.
+> - **So `uiLocale()` never sees the gallery's browser locale.**
+>   - English shots are en-US.
+>   - The others take the bare language, which writes as it-IT, fr-FR and es-ES do. I checked amounts, percentages,
+>     compact numbers, dates and times.
+> - **The sentence is wrong since M-18:** a switch of the interface language redraws what `uiLocale()` writes. The
+>   approved text replaces it at I5.
+> - **⚠️ Fuori pista:** lines 4–9, written in batch 31 (20.3), say the browser locale this file pins decides the
+>   English shots. `navigator.language` decides them, and the pin does not reach it. The same I5 patch corrects them.
+> - **Backlog, at I5 (coordinator):** an M-* line for a guard on `navigator.language`. It would turn red, instead of
+>   producing British English shots, wherever Chromium answers otherwise.
+
+### 22. ✅ Batch 32: I4's M-18 part — the CHANGELOG's `e7bfa342f`, by hand, then stamped — 2026-10-12 22:55
+
+Base `1bb4abe68`: the target with `e7bfa342f`; T's CP2 and CP3 are not in it yet.
+
+**22.1 ✅ Two lines in `CHANGELOG.{it,fr,es}.md`**
+> **Note implementazione**: the two lines go where the English has them.
+> - **🔄 Changed, first bullet:** «Numbers and dates follow the interface language everywhere.»
+> - **🐛 «Sign-in, language, app icons and small screens»,** after the file-size line: «The last English dates and
+>   dotted decimals are gone.» (M-17 and the exact decimals).
+>
+> **Examples as the UI writes them** (coordinator; Chromium 149's Intl, `release-pipeline/b32/probe_example_bytes.txt`):
+> - the French amount `14 788,01` groups with U+202F, in all three files;
+> - the zero is `0,00%` in Italian and `0,00 %` with U+00A0 in French and Spanish;
+> - dates and the British and US examples are plain.
+>
+> **Names from the catalogues and the files:**
+> - **Admin › Impostazioni globali** / **Admin › Paramètres globaux** / **Administración › Configuración global**;
+> - *Aggiornato* / *Mis à jour* / *Actualizado* (`common.updated`);
+> - rapporti split / ratios de split / ratios de desdoblamiento;
+> - PMC / PRU / PMC;
+> - «correzione / correction / corrección gap-fix»;
+> - the data editor's prices «non aggiornati / obsolètes / obsoletos».
+>
+> **Before the port**, the dry-run planned 2 pieces × 3: `1.2.0/changed` at ~17.2K tokens and
+> `1.2.0/fixed/sign-in-language-app-icons-and-small-screens` at ~16.2K, each.
+> Script: `release-pipeline/scripts/b32_changelog_port.py`.
+>
+> - **⚠️ Fuori pista:** the English example `14 788,01` holds a plain space where the UI writes U+202F. I noted it for
+>   the coordinator, who owns the English file. Changing it would move the piece's md5 and need a new stamp.
+
+**22.2 ✅ Stamp and gates** (`release-pipeline/scripts/b32_final_gates.sh`, load 18–43; logs in `release-pipeline/runs/b32/`)
+> - **Stamp:** `translate-stamp --file CHANGELOG.md` stamped 6 pieces (the two pieces ×3). Only those two cache entries
+>   changed (md5 `ca14a14c`→`d46a1fd9` and `461cc54b`→`53268d15`).
+> - **Dry-run:** empty, for the pages and the CHANGELOG.
+> - **Validation:** `translate-validate --hide-localized` 630 files 0/0. On the CHANGELOG alone (`--file CHANGELOG.md`):
+>   3 files OK, 0 errors, 0 warnings, 0 localized.
+> - **`translate-diff`:** 642 of 642 clean.
+> - **Build:** strict build 0 (all 3,012 relative asset URLs resolve).
+> - **Links:** `check-links` 95 valid.
+> - **`git diff --check`:** clean.
+> - **Ports:** 6158, 6168 and 6042 free.
