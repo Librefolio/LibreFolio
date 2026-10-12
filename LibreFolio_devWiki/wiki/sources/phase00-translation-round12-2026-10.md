@@ -10,6 +10,9 @@ related:
   - decisions/docs-anchors-from-the-render
   - problems/raw-html-paths-in-translations
   - decisions/fr-typography-at-build-time
+  - problems/docs-mathjax-looked-in-the-page-folder
+  - problems/copy-buttons-without-http-fallback
+  - problems/mkdocs-material-tables-resist-styling
   - problems/playwright-probes-ignore-timeout
   - concepts/mkdocs-suffix-i18n
 ---
@@ -47,6 +50,24 @@ every path, symbol and commit against `5d0585595`; two notes lacked a «Source f
   [[problems/raw-html-paths-in-translations]], [[decisions/fr-typography-at-build-time]],
   [[problems/playwright-probes-ignore-timeout]].
 - Updated: [[concepts/mkdocs-suffix-i18n]] (two wrong «Conventions» lines corrected, as note b12 asked).
+
+## Batches 23 and 24 (2026-10-12, added in step B8)
+
+The plan grew after this page was first written (registered at `dfd8284f3`):
+
+- **Batch 23 — two pages reviewed in a live preview.** `dev.py mkdocs serve` stayed up while the developer read the
+  Italian pages and sent corrections, applied live in four languages (`11339afa6`). The Scalable import page lost its
+  example-name column and the custom icon URL, gained larger icons, «❓ Why two brokers?» as a heading, the exporter's
+  link on its name and a bold recommendation of «our extension»: «vista la pagina di scalable, approvata a pieni
+  voti». The connection-security guide became three pros-and-cons tables ([[features/F-102]]). Two CSS traps of
+  Material's tables surfaced: [[problems/mkdocs-material-tables-resist-styling]]. Checking one sentence of the guide
+  found M-20: [[problems/copy-buttons-without-http-fallback]].
+- **Batch 24 — M-19.** Seen in the preview's log: nested pages looked for the local MathJax in their own folder, so
+  they used jsDelivr and showed no formula offline; fixed in `8d47c28c0`, proved on 34 pages —
+  [[problems/docs-mathjax-looked-in-the-page-folder]]. M-21 (a local site not rebuilt after a JS- or CSS-only change)
+  stays in the backlog.
+- **The CHANGELOG's translation**, approved by the developer the same day («si ma fai anche la traduzione delle cose
+  non ancora rilasciate…»), has its own plan; its frontend came from T — [[decisions/changelog-translated-by-chapter]].
 
 ## Not ingested
 
