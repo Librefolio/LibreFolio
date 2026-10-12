@@ -3882,7 +3882,8 @@
     "noStableRelease": "No se ha encontrado ninguna versión estable en GitHub.",
     "imagePending": "Se ha detectado una versión estable más reciente, pero su imagen Docker aún no está disponible.",
     "imageCheckFailed": "Se ha detectado una versión estable más reciente, pero no se ha podido verificar su imagen Docker. Inténtalo de nuevo.",
-    "adminLookupFailed": "Hay una actualización disponible, pero no se ha podido cargar la lista de administradores."
+    "adminLookupFailed": "Hay una actualización disponible, pero no se ha podido cargar la lista de administradores.",
+    "notTranslated": "Aún sin traducir"
   },
   "providerErrors": {
     "NO_DATA": "No hay datos disponibles para este instrumento en el proveedor.",
