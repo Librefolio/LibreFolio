@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_parqet": {
+      "description": "Importa las transacciones de la exportación CSV de Parqet. Parqet es un agregador: los nombres de los brókers subyacentes se conservan en las descripciones de las transacciones.",
+      "name": "Parqet"
+    }
+  }
+}

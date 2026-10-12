@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "donchian": {
+      "name": "Donchian Channels",
+      "description": "Period high-low channel",
+      "channels": "Channels"
+    }
+  }
+}

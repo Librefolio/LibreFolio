@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_coinbase": {
+      "description": "Importa le transazioni dall’export CSV di Coinbase. Supporta acquisti e vendite di cripto e ricompense di staking.",
+      "name": "Coinbase"
+    }
+  }
+}

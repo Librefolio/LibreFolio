@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "ppo": {
+      "name": "PPO",
+      "description": "Percentage momentum between averages",
+      "line": "PPO",
+      "lineDescription": "Percentage difference between fast and slow moving averages.",
+      "signal": "Signal line",
+      "signalDescription": "EMA smoothing of the PPO line.",
+      "histogram": "Histogram",
+      "histogramDescription": "Distance between PPO and its signal line."
+    }
+  }
+}

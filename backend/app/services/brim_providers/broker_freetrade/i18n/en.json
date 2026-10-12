@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_freetrade": {
+      "description": "Import transactions from Freetrade CSV export. Supports UK stocks, ETFs, dividends, and interest.",
+      "name": "Freetrade"
+    }
+  }
+}

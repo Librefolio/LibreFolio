@@ -1,0 +1,58 @@
+{
+  "auth": {
+    "login": "Accedi",
+    "logout": "Esci",
+    "register": "Registrati",
+    "username": "Nome utente",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Conferma Password",
+    "forgotPassword": "Password dimenticata?",
+    "registerTitle": "Crea un account",
+    "noAccount": "Non hai un account?",
+    "hasAccount": "Hai già un account?",
+    "registerHere": "Registrati qui",
+    "loginHere": "Accedi qui",
+    "usernameOrEmail": "Nome utente o Email",
+    "accountCreated": "Account creato con successo! Effettua l'accesso.",
+    "registrationFailed": "Registrazione fallita. Riprova.",
+    "registrationDisabled": "La registrazione di nuovi utenti è al momento disabilitata dall'amministratore.",
+    "passwordRecovery": "Recupero Password",
+    "emailRecoveryNotAvailable": "Il recupero via email non è ancora disponibile. Utilizza il terminale del server per reimpostare la password.",
+    "serverTerminalInstructions": "Esegui questo comando sul server:",
+    "contactAdministrator": "Contatta l'amministratore di sistema se non hai accesso al server.",
+    "backToLogin": "Torna al Login",
+    "validation": {
+      "usernameMinLength": "Il nome utente deve avere almeno 3 caratteri",
+      "passwordsNoMatch": "Le password non corrispondono",
+      "invalidEmail": "Inserisci un indirizzo email valido",
+      "invalidEmailDomain": "Il dominio email non è valido o non può essere usato",
+      "usernameTaken": "Questo nome utente è già in uso",
+      "emailTaken": "Questa email è già registrata",
+      "passwordTooWeak": "La password non soddisfa i requisiti di sicurezza"
+    },
+    "passwordStrength": {
+      "veryWeak": "Molto Debole",
+      "weak": "Debole",
+      "fair": "Discreta",
+      "strong": "Forte",
+      "veryStrong": "Molto Forte",
+      "requirements": "Requisiti password:",
+      "rules": {
+        "minLength": "Almeno 8 caratteri",
+        "hasUppercase": "Una lettera maiuscola",
+        "hasLowercase": "Una lettera minuscola",
+        "hasNumber": "Un numero",
+        "hasSpecial": "Un carattere speciale"
+      }
+    },
+    "serverUnreachable": {
+      "title": "Il server non risponde",
+      "body": "Questa pagina resta aperta e la tua sessione non è stata chiusa. Riprova tra un momento."
+    },
+    "invalidCredentials": "Nome utente o password non validi",
+    "invalidInput": "Dati non validi",
+    "loginFailed": "Accesso non riuscito",
+    "accountDisabled": "Questo account è disattivato: chiedi a un amministratore di riattivarlo."
+  }
+}

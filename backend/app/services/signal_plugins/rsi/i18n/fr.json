@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "rsi": {
+      "name": "RSI",
+      "description": "Pression acheteuse et vendeuse",
+      "output": "RSI",
+      "oversold": "Survendu",
+      "overbought": "Suracheté",
+      "oversoldRegion": "Survendu",
+      "neutralRegion": "Neutre",
+      "overboughtRegion": "Suracheté"
+    }
+  }
+}

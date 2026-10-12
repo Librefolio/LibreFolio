@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetKpi": {
+        "name": "Indicadores de riesgo por activo",
+        "description": "Volatilidad, peor caída y ratios ajustados al riesgo, medidos para cada activo seleccionado sobre una misma ventana."
+      }
+    }
+  }
+}
