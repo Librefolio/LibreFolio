@@ -589,6 +589,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Folder 02, step R1 — what is open in Risk.** The README's open items, re-checked where possible on the code, as «Still open (paused, after 1.2 — D382)» on [[features/F-110]], [[features/F-111]], [[features/F-112]] | *(none)* |
 | 2026-10-12 | **Train 68 in the wiki — M-18 CP1 (T).** Figures in the interface language through `uiLocale()`; the rest of the rule (amounts, dates, axes, M-17) in CP2 | *(1 page — 1 decision; see log)* |
 | 2026-10-12 | **Folder 02, step R0 — the Risk features.** The Risk subsystem had no feature code: engine F-110, the four-level Risk tab F-111, the Lab F-112, the legacy Asset Detail tab F-113; the folder's source page from its README | [[sources/phase00-risk-integration-2026-09]] *(5 pages — 4 features, 1 source; see log)* |
 | 2026-10-12 | **Train 67 in the wiki — M's batch 26.** The first append to the translated CHANGELOG, ported by hand and stamped; M-23 (French spacing in the app's changelog) recorded as open, planned in 1.2 | *(none)* |
