@@ -1246,7 +1246,13 @@
                             <!-- Data cells -->
                             {#each visibleColumns as column}
                                 {@const cellContent = column.cell(row)}
-                                <td class="td-data" class:td-fixed={column.pinned != null} class:td-pinned-right={column.pinned === 'right'} style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}">
+                                <td
+                                    class="td-data"
+                                    class:td-fixed={column.pinned != null}
+                                    class:td-pinned-right={column.pinned === 'right'}
+                                    style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
+                                    data-column-id={column.id}
+                                >
                                     {#if typeof cellContent === 'string' || typeof cellContent === 'number'}
                                         {cellContent}
                                     {:else if cellContent && typeof cellContent === 'object' && 'type' in cellContent}
