@@ -1037,3 +1037,77 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   - `/tmp/libreFolio_commit_u3.txt`, «refactor(i18n): catalogue per subsystem and plugin»;
   - `/tmp/libreFolio_commit_u3_docs.txt`, per questo piano.
 - ✅ **U-3 chiuso il 12/10.** Checkpoint mandato al coordinatore, stato FROZEN. Il prossimo passo è U-4, la documentazione.
+
+### U-4 — La documentazione (prima parte chiusa il 13/10, checkpoint inviato; `i18n.md` dopo)
+
+- ✅ **Via** (12/10, 23:48), dopo che U-3 è entrato nel treno 74 (`bcd502912`, commit `f2a394a0f` e `bcd4f6fe4`). Vincolo
+  del coordinatore: **`developer/frontend/i18n.md` per ultima**. Il CP3a di T (`133259913`) aggiunge ~130 righe sulla
+  regola dei numeri e delle date, ed è entrato col treno 75 (`104ba23d0`). Protocollo:
+  1. checkpoint U-4 senza `i18n.md`;
+  2. il coordinatore lo committa e mi porta il target;
+  3. scrivo `i18n.md` sopra le righe di T.
+- ✅ **Scansione aggiornata** sull'albero di oggi:
+  - percorsi vecchi `<famiglia>/<nome>.py`: 25 file, più i 3 con segnaposto;
+  - istruzioni sul catalogo e comandi `dev.py i18n`: `.github`, `dev_workflow.en.md`, `brim_plugin_guide.md`;
+  - gate da elencare: `test-walkthrough/utils.md`.
+
+  Le 4 pagine `day-count` erano già corrette (`18e872872`, «docs: point day-count at the plugin's module»).
+  `admin/cli_tools.*.md` cita solo `i18n audit`, che resta valido. I test frontend che leggono `en.json` usano il
+  catalogo generato, allo stesso percorso.
+- ✅ **Nessun conflitto col ramo di T**: dei suoi 127 file, le doc sono solo `i18n.md` e `app-state.md`; niente `.github`,
+  niente sorgenti del catalogo.
+- ✅ **docs-writer**: 21 pagine MkDocs EN, nessuna con traduzioni, quindi nessuno stamp e nessun debito.
+  - `registry_pattern.md` ha la scoperta riscritta per le cartelle, e cinque sezioni nuove a cui rimandano le guide:
+    «Plugin Folder Layout», «Importing and Patching a Plugin», «A Plugin's Translations» (lo spazio di ogni famiglia e
+    le chiavi condivise), «Adding a Plugin's Keys» (`add`, `--into`, `where`, `move` e l'instradamento) e «The Ownership
+    Gate» (R1–R4, più il limite U-B1).
+  - Le guide BRIM, asset, FX, segnali e tools, e le architetture di rischio e BRIM: cartella, traduzioni nel frammento,
+    percorsi, passi «Adding a …».
+    - L'esempio BRIM diventa `broker_mybroker`, perché il gate vuole il codice uguale alla cartella.
+    - La guida asset nota che lo spazio usa il codice del provider, non la cartella (`yahoo_finance/` registra
+      `yfinance`).
+    - Gli FX non hanno chiavi.
+  - Le correzioni di una riga: `provider_yahoo_finance`, `credit_agricole`, `danske_bank`, `scalable`, `ecb`,
+    `risk-lab`, `data-quality-banner` (2 righe), `fx-chain-algorithm`, `runner_architecture`, `brokers/forms`,
+    `provider_scheduled_investment` (dopo la scansione dei nomi nudi).
+  - `dev_workflow.en.md`: il catalogo generato e i 13 comandi `dev.py i18n`.
+  - `test-walkthrough/utils.md`: le righe di `gate-plugin-layout`, `gate-i18n-catalog` e `gate-plugin-i18n-ownership`.
+  - `mkdocs build` (strict) senza avvisi; `check-links`: 95 validi, 0 rotti.
+  - La riga «Plugin folder» della guida dei segnali usava i due spazi finali come a capo, e faceva fallire
+    `git diff --check`: ora è un paragrafo a sé.
+- ✅ **Scansione dei nomi nudi dei moduli** (`stress.py`, `ecb.py`, …), che la prima scansione non vedeva perché le
+  mancava la famiglia nel percorso. Corretti:
+  - 5 in `TODO_FUTURI.md`;
+  - 1 nella skill `testing-backend`;
+  - 1 pagina MkDocs, tramite docs-writer;
+  - **14 nei commenti di 7 file E2E**, sempre `X.py` → `X/plugin.py`, con i numeri di riga invariati perché le rinomine
+    di U-1 hanno contenuto identico: `risk-lab.spec.ts` (8), `risk-analysis.spec.ts`, `tx-bulk-import-handoff.spec.ts`,
+    e i fixture della galleria `galleryOfflineData.ts` (2), `galleryProviderCompare.ts`, `galleryRiskLab.ts`.
+
+  Prettier è verde sui 7 file E2E. Dopo, nessun percorso vecchio resta nelle doc, in `.github`, in `TODO_FUTURI.md` e
+  negli E2E.
+- ✅ **Backlog U-B7**: `dev.py i18n add` non conosce gli spazi dei plugin. Senza `--into`, la prima chiave di un segnale
+  o di un tool nuovo va nel sottosistema. La soluzione è un avviso in `route()`.
+- **Divergenze trovate da docs-writer, fuori da U**, passate al coordinatore:
+  - `test-walkthrough/utils.md` e `dev_workflow.en.md` documentano `dev.py test utils --list`, che fallisce: il CLI
+    vuole `<categoria> <azione> --list`, e lista i nomi dei test, non le unità;
+  - `risk-lab.md:371` cita `L4Replay.svelte:203` per `excludedHeader()`, che è alla riga 204;
+  - `runner_architecture.md:359` cita `asset_source.py`, ora uno strato di compatibilità su `asset_sources/core.py`.
+    È una nota storica, lasciata così.
+- ✅ **Checkpoint U-4, prima parte** (13/10): 46 file modificati, `git diff --check` pulito. Stato FROZEN.
+  - Il prossimo passo è `developer/frontend/i18n.md`, sopra le righe di T, dopo che il coordinatore mi porta il target.
+  - Poi U-5.
+- ✅ **Mia parte** (`.github`, `TODO_FUTURI.md`, commenti E2E, backlog):
+  - le istruzioni `backend-providers-{asset,brim,fx}` (tabelle «File», passi «Adding a New …» con cartella, `plugin.py`,
+    import e patch, `i18n/` con `add --into`) e `backend-{risk,signals,tools}` («one folder per …», con le chiavi
+    condivise che restano nel sottosistema);
+  - le skill `asset-plugin`, `brim-plugin`, `risk-plugin`, `signal-plugin` e `tool-plugin`: percorsi, codice di
+    riferimento, il passo delle traduzioni nel frammento;
+  - `frontend.instructions.md`, sezione i18n e tabella «Where to Find Things»: il catalogo generato e le sorgenti;
+  - la skill `devpy-i18n`: comandi, la sezione «The Catalogue: Sources and the Generated File», i gate, il formato,
+    la regola 0 per le chiavi nuove, la `description`;
+  - le 4 citazioni dei provider ECB e FED nell'agente historian;
+  - 7 citazioni in `TODO_FUTURI.md`;
+  - i commenti di `galleryPac.ts` e `risk-analysis.spec.ts`. Quest'ultimo citava `asset_risk_return.py:61`, già sbagliata
+    prima dello spostamento: ora nomina `supported_scopes`/`supported_modes` in `…/asset_risk_return/plugin.py`;
+  - nel backlog, U-B5 è chiusa per `day-count`; restano le pagine del devWiki.

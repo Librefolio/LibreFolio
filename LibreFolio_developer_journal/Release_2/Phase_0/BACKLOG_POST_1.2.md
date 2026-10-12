@@ -889,9 +889,9 @@ plugin.
   45, sezione «9».
 - **U-B4 · `sample_reports/` per plugin** — basso-medio; U, 12/10, decisione D-7. Ci sono 25 percorsi fra E2E e test
   backend. Dettagli: piano della 45, sezione «9».
-- **U-B5 · I vecchi percorsi `<famiglia>/<nome>.py` fuori da U** — basso; U, 12/10. Sono 84 citazioni in 47 pagine del
-  devWiki, per l'historian, come T-W1, e `financial-theory/fundamentals/day-count.{en,it,fr,es}.md:10`, per M. Dettagli:
-  piano della 45, sezione «3».
+- **U-B5 · I vecchi percorsi `<famiglia>/<nome>.py` fuori da U** — basso; U, 12/10. Restano le 84 citazioni in 47
+  pagine del devWiki, per l'historian, come T-W1. ✅ `financial-theory/fundamentals/day-count.{en,it,fr,es}.md:10` è già
+  corretto nelle 4 lingue (`18e872872`). Dettagli: piano della 45, sezione «3».
 - **U-B6 · Il server di sviluppo non segue le sorgenti del catalogo** — basso; U, 12/10.
   - Oggi: `npm run dev` genera il catalogo all'avvio (`predev`), e i comandi `dev.py i18n` lo rigenerano da soli.
   - Il limite: una modifica a mano di una sorgente (`base/`, un sottosistema, un frammento di plugin) arriva al server di
@@ -899,3 +899,12 @@ plugin.
   - La soluzione: un plugin Vite che osserva le sorgenti e rilancia la build.
 
   Dettagli: piano della 45, sezione «10», U-2.
+- **U-B7 · `dev.py i18n add` non conosce gli spazi dei plugin** — basso; U con docs-writer, 12/10.
+  - Oggi: senza `--into`, la prima chiave di un segnale o di un tool nuovo (`signals.<nuovo>.name`, `tools.<nuovo>.name`)
+    va nel sottosistema col prefisso dichiarato (`charts`, `tools`), senza avviso, e la segnala solo
+    `utils gate-plugin-i18n-ownership`. Le guide dicono di passare sempre `--into` per le chiavi di un plugin.
+  - La soluzione: un avviso in `route()` quando la chiave apre un ramo nuovo sotto un prefisso di sottosistema che
+    contiene già frammenti di plugin («se è un plugin nuovo, `--into <famiglia>/<plugin>`»). Non servono i registri,
+    bastano i proprietari.
+
+  Dettagli: piano della 45, sezione «10», U-4.
