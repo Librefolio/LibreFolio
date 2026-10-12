@@ -1696,4 +1696,168 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 > - `all-backend` sulla 6164: 7/7, **12 411 passed, 28 skipped, 0 failed** (25 min 05 s). Rispetto a BU1 cambia solo un'invocazione, +2: i test della radice di `version.py`. Porta libera; nessun `VERSION` nel repo.
 > - `check_source_paths.py`: 11 percorsi inesistenti (20 occorrenze, 16 pagine). Sono le righe dei moduli di BU1, che aggiorna W.
 
-### Checkpoint BU2 🧊 (2026-10-12) — FROZEN, in attesa del coordinatore
+### Checkpoint BU2 ✅ (2026-10-12) — committato e integrato dal coordinatore
+- Commit `8dae5cc6e`, `4388db8df`, `f038ce39a`; manifest e blob verificati dal coordinatore, funzioni spostate identiche all'AST.
+
+### Treno 53 (coordinatore, 2026-10-12)
+- BU2 e la regola delle versioni dell'AI Export sono nel target: `dev_release2` = `f0f3de0d9`, worktree in fast-forward lì.
+
+### C-55 — analisi (2026-10-12) ✅ approvata dal developer
+> **Richiesta** (coordinatore): solo analisi. Dove sta il difetto «invalid HHI points», cosa vede l'utente, la cura con la versione rispetto a `v1.1.0`, i rossi, la stima.
+>
+> **Base**: HEAD `f0f3de0d9`, worktree pulita, corsia 6164 (`/tmp/librefolio-r2-t`). Porta libera prima e dopo ogni sonda.
+
+**Dove sta il difetto: nel controllo della sonda.** Il payload e il backend sono corretti.
+- **La sonda**: `backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py:847-853`, in `audit_snapshot_semantics`.
+  - Segna violazione ogni `herfindahl_index_points` che vale `None`, `< 0` o `> 10 000`. Non prevede l'insieme vuoto.
+  - La violazione solleva `ProbeError` a `:2864-2865`, dopo il rendering e prima della misura: il caso esce dal corpus.
+- **Il payload è il contratto voluto**. Le tre componenti sono `broker.allocation_concentration`, `broker.concentration_context` e `portfolio.allocations_cash`.
+  - L'HHI e il peso massimo vengono dalla stessa lista di pesi, e valgono `None` insieme quando nessuna posizione ha un peso: `broker_financial.py:205-212`, `broker_concentration_context.py:88-103`.
+  - L'HHI di un insieme vuoto, 0, direbbe «diversificazione perfetta», che è falso.
+  - Il rischio documenta la stessa scelta: `risk/acquired.py:169-192`, «a fully liquid scope rather than a zero-concentration one».
+  - Un test esistente fissa `None` sul broker vuoto: `test_ai_export_components_broker_adequacy.py:301` (`test_empty_broker_builds_successfully`).
+- **Il backend non valida i range dell'HHI**. I campi sono `SafeDecimal | None`: la risposta HTTP 200 è giusta.
+- **Il renderer** stampa `null`, e il preambolo del prompt lo definisce: `null=explicitly unavailable` (`snapshotDataRenderer.ts:62`).
+
+**Sulla corsia (dati sintetici)**:
+- **S1, mai detenuto**: Charles Schwab, 0 transazioni.
+- **S2, tutto chiuso**: seme solo sulla corsia, `/tmp/libreFolio_c55_seed_closed.py`. Deposito di 2 000 USD, BUY di 5 AAPL, SELL di 5; cassa residua 2 225,20 EUR.
+  - Le posizioni chiuse escono dai holdings a `portfolio_service.py:775` (`quantity > QUANTITY_DUST_THRESHOLD`), quindi S2 si comporta come S1.
+- In S1 e S2 le due componenti hanno `position_count 0`, `herfindahl_index_points null`, `largest_position_weight_percent null` e `market_value 0`.
+  - `broker.concentration_comparison` è `unavailable`, col messaggio «This broker has no valued positions…».
+  - La sonda fallisce con HTTP 200 e 0 prompt su 1 misurati.
+- **Matrice**: portfolio più i 7 broker, per 3M, 6M e 1Y, cioè 24 casi.
+  - Prima: 21 su 24 misurati, 3 fallimenti, tutti Charles Schwab, uno per periodo.
+  - Con la regola proposta, simulata a runtime (`/tmp/libreFolio_c55_probe_patched.py`, nessun file del repo toccato): **24 su 24, 0 fallimenti**.
+    - Le tolleranze sono esattamente 6: 2 componenti per 3 periodi, tutte sul broker vuoto.
+    - I 24 prompt sono identici al byte fra prima e dopo.
+    - Sui casi del broker vuoto il renderer e la sonda coincidono.
+
+**Cosa vede l'utente**: nessun difetto.
+- L'export funziona.
+- L'IA riceve `|position_count|0|`, `|herfindahl_index_points|null|` e `|largest_position_weight_percent|null|`, con la legenda `null=explicitly unavailable`.
+- Il confronto col portafoglio spiega in chiaro che il broker non ha posizioni valorizzate.
+- Il costo è solo nella sonda:
+  - il caso del broker vuoto esce dalle misure;
+  - una matrice completa sui dati sintetici esce con codice 1, e così nasconde i rossi veri.
+
+**La cura proposta, solo nella sonda**:
+- `None` è valido solo se lo stesso record porta `largest_position_weight_percent` e anche quello vale `null`, cioè nessuna posizione ha un peso.
+- Resta violazione:
+  - `None` accanto a un peso massimo valorizzato: una regressione del builder;
+  - `None` senza il campo fratello: una componente nuova dovrà decidere in modo consapevole;
+  - un valore non numerico, `< 0` o `> 10 000`;
+  - l'HHI reso come percentuale.
+- Un contatore `hhi.unavailable` nel blocco `hhi` (`:1020-1024`) e nei totali (`:3207`, `:3248`), così i casi vuoti si vedono invece di sparire.
+
+**La versione**: nessun bump. Non cambiano né builder, né payload, né renderer.
+- Le 4 componenti di concentrazione restano alla v1, come in `v1.1.0`.
+- I byte del prompt sono invariati, 24 su 24.
+- Niente CHANGELOG: la sonda è uno strumento interno.
+
+**Alternative scartate**:
+- **HHI = 0 per l'insieme vuoto**: falso, e contraddice il rischio e il test esistente.
+- **Un campo di stato o motivo** nelle 3 componenti:
+  - porta la v2 su 3 componenti, più i segnaposti del catalogo e `COMPACT_COMPONENT_VERSIONS`, altrimenti la sezione ricade sul YAML;
+  - cambia i byte di ogni export di broker e portafoglio;
+  - dice cose già presenti (`position_count 0`, la legenda, il messaggio del confronto).
+
+**I rossi**, con test-author in `test_ai_export_real_prompt_probe.py`, azione `utils ai-export-probe-helpers`:
+- Rossi oggi:
+  - l'insieme vuoto sulle 3 componenti: `position_count 0` e i due campi `null` danno 0 violazioni e `unavailable` = 3;
+  - le posizioni senza peso: `position_count 2` e i due `null` danno 0 violazioni.
+- Guardie che devono restare verdi:
+  - `None` con il peso valorizzato;
+  - `None` senza il campo fratello;
+  - `-1`, `10001` e un valore non numerico;
+  - il simbolo `%` nel prompt.
+- Il test esistente `:1283` resta invariato.
+
+**Stima**: circa 1 h – 1 h 30.
+- Rossi: 30 min.
+- Cura: 20 min.
+- Gate:
+  - `utils ai-export-probe-helpers`;
+  - ruff e black sui 2 file;
+  - la matrice reale da 24 casi sulla 6164, con 0 fallimenti e i byte confrontati con la corsa «prima».
+
+**Rischi**: bassi. La sonda è diagnostica e non tocca l'app.
+- La regola lega l'HHI `null` al fratello: una componente futura senza `largest_position_weight_percent` sarà rossa per costruzione, ed è voluto.
+
+**Reperti adiacenti, già tracciati o minori, fuori da C-55**:
+- **W3 → T-U7**: l'HHI è calcolato due volte nell'AI Export (`broker_financial.py:205-212` e `broker_concentration_context.py:88-103`). La casa è `financial_math`, dopo la 1.2.
+- **W1 → T-U7**: `portfolio_service.py:959` usa denominatore 1 se il NAV è ≤ 0.
+  - I pesi diventano valore × 100 e l'HHI supera 10 000.
+  - La sonda lo segnerebbe, a ragione. Non è riprodotto sui dati sintetici.
+- **Minore**: il `reason_code` del confronto è `broker_summary_unavailable` (`broker_concentration_context.py:390`) anche in S2, dove il riepilogo c'è ma è senza holdings.
+  - Il messaggio è esatto, il codice è impreciso.
+  - Candidato per T-U9: cambiarlo è un cambio del contratto, quindi la v2.
+
+### C-55 — via libera (developer, 2026-10-12, via coordinatore)
+- Testuale: «Sì, nella 1.2: la cura della sonda più i test rossi, circa 1 ora e mezza».
+- Portata:
+  - la cura solo in `ai_export_real_prompt_probe.py` (`:847-853`, contatore `hhi.unavailable`);
+  - prima i rossi via test-author in `test_ai_export_real_prompt_probe.py` (`utils ai-export-probe-helpers`), con le guardie che restano verdi;
+  - poi la matrice reale dei 24 casi coi byte confrontati, sulla 6164;
+  - niente bump, niente CHANGELOG; il `reason_code` impreciso va in T-U9, dopo la 1.2.
+- Base `f0f3de0d9`, uguale al target. Entrambi i file sono puliti per ruff e black sulla base.
+- **Correzione all'analisi**: il riepilogo del broker c'è anche in S1 (`market_value` 0, non `null`). Quindi il `reason_code` `broker_summary_unavailable` è impreciso in S1 e in S2, non solo in S2.
+
+Passi:
+1. I rossi, con test-author.
+2. La cura nella sonda.
+3. Verdi e statici.
+4. La matrice reale, coi byte confrontati.
+5. Il backlog: T-U9, e la chiusura di T-BU1+BU2.
+6. Il checkpoint.
+
+#### C-55 passo 1 — i rossi ✅ (2026-10-12)
+> **Note implementazione**: test-author ha scritto 16 test nuovi in `test_ai_export_real_prompt_probe.py`, alle righe 1445–1604, più l'import di `build_quality_summary` alla riga 33. Nessun altro file.
+> - **I rossi**:
+>   - R1, l'insieme vuoto sulle 3 componenti vere;
+>   - R2, le posizioni senza peso, su 3 parametri;
+>   - R3, il totale `hhi_unavailable` del riepilogo di qualità, contato solo sulle voci `ok`; un blocco senza contatore vale 0.
+> - **Le guardie**, verdi oggi e dopo:
+>   - G1: `null` accanto a un peso valorizzato;
+>   - G2: `null` senza il campo fratello;
+>   - G3: il fratello `null` su un altro record;
+>   - G4: `-1`, `10000.01`, `abc` e `NaN` accanto a un peso `null`;
+>   - G5: i bordi `0` e `10000`, compreso `0` accanto a un peso `null`, così un'esenzione basata su «falso» invece che su `None` viene presa;
+>   - G6: il `%` nel prompt.
+> - Le guardie asseriscono la lista esatta delle violazioni. I prompt finti hanno sempre una riga `position_count`, così nessuna colonna è tutta `null`.
+> - **Comando**: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6164 --data-dir /tmp/librefolio-r2-t utils ai-export-probe-helpers`.
+>   - Esito: **5 failed, 68 passed** (57 test esistenti + 16 nuovi).
+>   - I 5 rossi sono R1, R2 ×3 e R3. I motivi: `"<component>: invalid HHI points"` nella lista, e `KeyError: 'hhi_unavailable'`.
+>   - Log: `/tmp/libreFolio_c55_reds_run2.log`.
+> - ruff e black puliti sul file di test. La sonda non è stata toccata.
+
+#### C-55 passi 2–4 — cura, verdi, matrice reale ✅ (2026-10-12)
+> **Note implementazione**:
+> - **La cura** (`ai_export_real_prompt_probe.py`, 5 punti, applicata con `/tmp/libreFolio_c55_apply.py`):
+>   - in `audit_snapshot_semantics`, un `herfindahl_index_points` grezzo `None` non è una violazione se lo stesso record ha la chiave `largest_position_weight_percent`, anch'essa `None`. Conta in `hhi_unavailable`, con un commento sul perché;
+>   - il test usa il valore grezzo, non `_as_decimal`, così `abc` e `NaN` accanto a un peso `null` restano rossi;
+>   - il blocco `hhi` ha la chiave `unavailable`;
+>   - `build_quality_summary` ha il totale `hhi_unavailable`, letto con `.get("unavailable") or 0`.
+> - **Verdi**: `utils ai-export-probe-helpers`, **73 passed** (log `/tmp/libreFolio_c55_green.log`). ruff e black puliti sui 2 file; `git diff --check` pulito.
+>   - Solo il file dei test importa la sonda: le pagine della doc la citano per percorso, senza dire nulla sull'HHI. L'azione quindi copre tutto.
+> - **Matrice reale** sulla 6164: portfolio più i 7 broker, per 3M, 6M e 1Y; wrapper `/tmp/libreFolio_t_probe_synthetic.py`, script `/tmp/libreFolio_c55_matrix.sh`.
+>   - **24 su 24 misurati, 0 fallimenti** (prima 21 su 24).
+>   - `quality_summary`: `hhi_checks` 45, `hhi_unavailable` **6** (solo `broker_anon_07`, 2 componenti × 3 periodi), `hhi_violations` 0, `public_output_violations` 0, `renderer_equivalence_violations` 0. Secret scan superato; sorgente invariata.
+>   - **Byte**: i 24 prompt sono identici, per SHA-256, sia alla corsa «prima» (`/tmp/libreFolio_c55_matrix_before`) sia alla simulazione (`/tmp/libreFolio_c55_matrix_after`). La cura cambia solo l'esito del controllo, mai il prompt.
+>   - Nessuna nuova revisione qualitativa, perché i byte non cambiano. I blocchi di concentrazione del broker vuoto li ho letti nell'analisi.
+> - **S2 con la cura vera** (il seme del broker che chiude tutto, poi `db populate --force --clean`): 1 su 1 misurato, `hhi_unavailable` 2, 0 violazioni. Il prompt è identico a quello della simulazione di S2.
+> - Alla fine la corsia è ripopolata pulita (broker 7 senza transazioni) e la porta è libera.
+
+#### C-55 passo 5 — backlog ✅ (2026-10-12)
+> **Note implementazione**: nella sezione T dell'indice post-1.2:
+> - **T-U9**: il `reason_code` `broker_summary_unavailable` di `broker.concentration_comparison`, che esce anche col riepilogo presente e senza posizioni; cambiarlo porta la v2.
+> - **T-BU1+BU2 chiusa**: BU1 nel treno 50, BU2 nel treno 53.
+> - La riga C-55 della sezione C resta al coordinatore.
+
+### Checkpoint C-55 🧊 (2026-10-12) — FROZEN, in attesa del coordinatore
+- Base `f0f3de0d9`, uguale al target. 4 file modificati, nessun file nuovo.
+- Due commit proposti:
+  1. `fix(ai-export): probe accepts an unavailable HHI`: la sonda e il suo file di test (`/tmp/libreFolio_commit_t_c55_1.txt`);
+  2. `docs(journal): record C-55`: questo piano e `BACKLOG_POST_1.2.md`, solo la sezione T (`/tmp/libreFolio_commit_t_c55_2.txt`).
+- Niente CHANGELOG e niente bump: la sonda è uno strumento interno e i prompt non cambiano.
+- Esclusi: gli artefatti delle sonde, i semi e gli script in `/tmp`, il DB della corsia.
