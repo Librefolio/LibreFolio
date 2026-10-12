@@ -54,22 +54,22 @@ from backend.app.schemas.brim import (
 )
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, write_combined_csv
-from backend.app.services.brim_providers import broker_credit_agricole as ca
 from backend.app.services.brim_providers._brim_io import MATURITY_NOTICE_KIND, model_bond_maturity, read_rows
-from backend.app.services.brim_providers.broker_coinbase import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
-from backend.app.services.brim_providers.broker_credit_agricole import CreditAgricoleBrokerProvider
-from backend.app.services.brim_providers.broker_degiro import DegiroBrokerProvider, _extract_quantity_from_description, _parse_degiro_date
-from backend.app.services.brim_providers.broker_directa import DirectaBrokerProvider, _parse_directa_date, _parse_directa_number
-from backend.app.services.brim_providers.broker_etoro import EtoroBrokerProvider, _parse_etoro_date, _parse_etoro_number
-from backend.app.services.brim_providers.broker_fineco import FinecoBrokerProvider
-from backend.app.services.brim_providers.broker_finpension import FinpensionBrokerProvider, _parse_finpension_date, _parse_finpension_number
-from backend.app.services.brim_providers.broker_freetrade import FreetradeBrokerProvider, _parse_freetrade_datetime, _parse_freetrade_number
-from backend.app.services.brim_providers.broker_generic_csv import GenericCSVBrokerProvider, parse_decimal
-from backend.app.services.brim_providers.broker_ibkr import IBKRBrokerProvider, _parse_ibkr_date, _parse_ibkr_number
-from backend.app.services.brim_providers.broker_intesa import IntesaSanpaoloBrokerProvider
-from backend.app.services.brim_providers.broker_revolut import RevolutBrokerProvider, _parse_revolut_amount, _parse_revolut_datetime, _parse_revolut_quantity
-from backend.app.services.brim_providers.broker_schwab import SchwabBrokerProvider, _parse_schwab_amount, _parse_schwab_date
-from backend.app.services.brim_providers.broker_trading212 import Trading212BrokerProvider, _parse_trading212_datetime, _parse_trading212_number
+from backend.app.services.brim_providers.broker_coinbase.plugin import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
+from backend.app.services.brim_providers.broker_credit_agricole import plugin as ca
+from backend.app.services.brim_providers.broker_credit_agricole.plugin import CreditAgricoleBrokerProvider
+from backend.app.services.brim_providers.broker_degiro.plugin import DegiroBrokerProvider, _extract_quantity_from_description, _parse_degiro_date
+from backend.app.services.brim_providers.broker_directa.plugin import DirectaBrokerProvider, _parse_directa_date, _parse_directa_number
+from backend.app.services.brim_providers.broker_etoro.plugin import EtoroBrokerProvider, _parse_etoro_date, _parse_etoro_number
+from backend.app.services.brim_providers.broker_fineco.plugin import FinecoBrokerProvider
+from backend.app.services.brim_providers.broker_finpension.plugin import FinpensionBrokerProvider, _parse_finpension_date, _parse_finpension_number
+from backend.app.services.brim_providers.broker_freetrade.plugin import FreetradeBrokerProvider, _parse_freetrade_datetime, _parse_freetrade_number
+from backend.app.services.brim_providers.broker_generic_csv.plugin import GenericCSVBrokerProvider, parse_decimal
+from backend.app.services.brim_providers.broker_ibkr.plugin import IBKRBrokerProvider, _parse_ibkr_date, _parse_ibkr_number
+from backend.app.services.brim_providers.broker_intesa.plugin import IntesaSanpaoloBrokerProvider
+from backend.app.services.brim_providers.broker_revolut.plugin import RevolutBrokerProvider, _parse_revolut_amount, _parse_revolut_datetime, _parse_revolut_quantity
+from backend.app.services.brim_providers.broker_schwab.plugin import SchwabBrokerProvider, _parse_schwab_amount, _parse_schwab_date
+from backend.app.services.brim_providers.broker_trading212.plugin import Trading212BrokerProvider, _parse_trading212_datetime, _parse_trading212_number
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
 from backend.app.services.financial_math.price_marks import build_asset_price_series
@@ -5957,9 +5957,13 @@ class TestWindows1252Invariance:
         assert actual == expected, f"{code} on {sample.name}: the Windows-1252 copy gives a different {expected[0]} than the original"
 
     def test_no_plugin_opens_files_with_a_fixed_encoding(self):
-        """No ``broker_*.py`` calls ``open(..., encoding=...)``: one fixed encoding cannot read every export."""
-        modules = sorted(BRIM_PLUGIN_DIR.glob("broker_*.py"))
-        assert modules, f"No broker_*.py found in {BRIM_PLUGIN_DIR}: the scan would pass on nothing"
+        """No module of a ``broker_*/`` plugin calls ``open(..., encoding=...)``: one fixed encoding cannot read every export.
+
+        A plugin is a folder: its code is ``plugin.py``, and a ``_helper.py`` beside it is the same plugin's code, so
+        every module of the folder is read.
+        """
+        modules = sorted(BRIM_PLUGIN_DIR.glob("broker_*/*.py"))
+        assert [module for module in modules if module.name == "plugin.py"], f"No broker_*/plugin.py found in {BRIM_PLUGIN_DIR}: the scan would pass on nothing"
 
         offenders = [f"{module.relative_to(PROJECT_ROOT)}:{line}" for module in modules for line in _fixed_encoding_open_lines(module)]
 

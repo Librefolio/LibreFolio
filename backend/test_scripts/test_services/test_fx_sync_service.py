@@ -31,7 +31,7 @@ from backend.app.db.models import FxConversionRoute, FxRate
 from backend.app.db.session import get_async_engine
 from backend.app.services import fx as fx_service
 from backend.app.services.fx import _is_date_within_sync_range, sync_pairs_bulk
-from backend.app.services.fx_providers.mockfx import MOCKFX_FIXED_RATE, MockFXProvider
+from backend.app.services.fx_providers.mockfx.plugin import MOCKFX_FIXED_RATE, MockFXProvider
 from backend.test_scripts.test_utils import print_section, print_success
 
 # The two pairs this file works on, and the only rows it is entitled to remove.
