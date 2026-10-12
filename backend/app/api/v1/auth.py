@@ -120,7 +120,8 @@ async def login(
     # The password comes first, whatever the account: a wrong one gets the same 401 for an unknown,
     # an active or a disabled account, and an unknown one still costs a bcrypt check (dummy hash),
     # so neither the answer nor its timing tells which accounts exist.
-    if not verify_password_or_dummy(request.password, user.hashed_password if user else None) or user is None:
+    password_ok = await asyncio.to_thread(verify_password_or_dummy, request.password, user.hashed_password if user else None)
+    if not password_ok or user is None:
         if user is None:
             logger.warning("Login failed: user not found", username=request.username)
         else:
@@ -250,7 +251,7 @@ async def change_password(
     Requires the current password for verification.
     """
     # Verify current password
-    if not verify_password(request.current_password, current_user.hashed_password):
+    if not await asyncio.to_thread(verify_password, request.current_password, current_user.hashed_password):
         logger.warning("Password change failed: wrong current password", user_id=current_user.id)
         raise HTTPException(status_code=400, detail="Current password is incorrect")
 
@@ -259,7 +260,7 @@ async def change_password(
         raise HTTPException(status_code=400, detail="New password must be different from current password")
 
     # Update password
-    current_user.hashed_password = hash_password(request.new_password)
+    current_user.hashed_password = await asyncio.to_thread(hash_password, request.new_password)
     session.add(current_user)
     await session.commit()
 
