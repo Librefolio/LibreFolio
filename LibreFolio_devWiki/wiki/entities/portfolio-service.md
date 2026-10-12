@@ -2,18 +2,23 @@
 title: "PortfolioService"
 category: entity
 type: service
-updated: 2026-10-07
-tags: [backend, portfolio, service, kpi, holdings, contribution, wac, l2-cache, fastapi, average-cost, data-quality]
+updated: 2026-10-12
+tags: [backend, portfolio, service, kpi, holdings, contribution, wac, l2-cache, fastapi, average-cost, data-quality, native-cash, broker-cards, fx-on-cash]
 related:
   - entities/portfolio-engine
+  - entities/native-cash
   - concepts/portfolio-report-unified
   - concepts/3-pool-cash-model
   - concepts/holdings-performance-panel
   - decisions/mwrr-boundary-fix
   - decisions/portfolio-summary-direct-wiring
   - decisions/financial-math-single-average-cost
+  - decisions/financial-math-one-home
+  - decisions/native-cash-daily-revaluation
+  - decisions/broker-card-aggregation-no-n-plus-one
   - decisions/wac-target-currency-last-acquisition
   - problems/zero-purchase-cost-foreign-asset-paid-in-report-currency
+  - problems/foreign-cash-never-revalued
   - features/F-054
   - features/F-055
   - features/F-097
@@ -27,7 +32,7 @@ The orchestration layer between the API and the Portfolio Engine. `PortfolioServ
 
 ## Location
 
-`backend/app/services/portfolio_service.py` (~2558 lines after commit `39106380` 3-pool refactor, +612; 2 455 lines on 2026-10-07)
+`backend/app/services/portfolio_service.py` (~2558 lines after commit `39106380` 3-pool refactor, +612; 2 455 lines on 2026-10-07; 2 358 at `5d0585595`)
 
 ## Key Methods
 
@@ -58,6 +63,28 @@ the facade calls the function directly — both come from the single function of
 
 Holdings' `wac_per_unit` is the historical WAC already in the report currency (`None` while incomplete); it is also the
 Yield on Cost denominator.
+
+## Cash from the Native-Cash Ledger (since 2026-10-11)
+
+Lot 41 ([[decisions/native-cash-daily-revaluation]]) removed the service's own loops over the transactions for cash
+(G2–G4) and its own per-broker capital: every cash figure now comes from the run's `NativeCash`
+([[entities/native-cash]]), every capital figure from the engine.
+
+| Where | What it reads (commit) |
+|-------|------------------------|
+| `_engine_native_cash()` | the run's ledger, or an empty one on the engine's early returns (`c04e44ff5`) |
+| `get_summary()` — cards | cash = `value_at(valuation_date)[b]` (a broker whose movements are all zero keeps its report-currency balance), `cash_balances` = `balances(valuation_date)`; capital and value in transit = the engine's `BrokerDailyContribution` at the valuation date (step H, `801b4a168`); NAV = market value + cash + in transit |
+| `get_summary()` — headline and totals | headline `cash_balances` = the cards' lists summed, in access order, so the headline equals Σ cards; period and lifetime totals from `flows()` (deposits, withdrawals, fees and taxes absolute; income signed); missing pairs from `missing_conversions()` |
+| `get_income_history()`, `get_cost_history()`, `get_deposit_history()` | `_signed_transaction_sums_by_date(..., native_cash=None)`: the ledger `get_report()` passes, or one built with `rates_until = date_to or today`, so rows dated after today are ignored (B12) |
+| `get_positions_contribution()` | income and cost flows from `flows(date_from, effective_end)` (G4 and B14 closed); unallocated sums in access order; one «FX on cash» row per broker from `exchange_results()`, ahead of the residual, skipped below `CONVERSION_DUST` (`c04e44ff5`) |
+
+The share of a broker comes from `effective_share()` everywhere (O2); the `UserRole` import is gone.
+
+Since T-1 (2026-10-12) the engine's names are imported from the module that defines them, the engine imports staying
+lazy; the service's own `_normalize_fx_pair_slug` was removed for the public `normalize_fx_pair_slug` of
+`financial_math/portfolio/data_quality.py`. Still open (backlog T-R1): `risk/service.py` calls the private
+`_get_configured_fx_pair_sets()` of this service, and the service imports the private `_compute_tx_fingerprint` from
+the engine.
 
 ## L2 TTL Cache
 
@@ -131,6 +158,8 @@ Phase 09 M1/M2 archive (2026-07-07, [[sources/phase09-m1-m2-archive-2026-07]]):
 | Facade output schemas | `backend/app/schemas/wac.py` |
 | `MISSING_COST_BASIS`, `UnrealizedBreakdownRow` | `backend/app/schemas/portfolio.py` |
 | Service tests | `backend/test_scripts/test_services/test_financial/test_portfolio_service.py` |
+| Native-cash service tests (policy (a), B12, B14, «FX on cash») | `backend/test_scripts/test_services/test_financial/test_portfolio_service_native_cash.py` |
+| Native cash (since 2026-10-11) | `backend/app/services/financial_math/native_cash.py` |
 | #32, diagnostics and breakdown tests | `backend/test_scripts/test_services/test_financial/test_portfolio_cost_currency.py` |
 | Frontend store | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
 

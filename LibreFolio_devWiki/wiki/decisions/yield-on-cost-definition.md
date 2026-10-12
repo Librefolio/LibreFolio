@@ -27,7 +27,7 @@ YOC(asset, broker, T) =  Σ gross income per eligible unit, over [T − 364, T]
   are excluded; `AssetEvent` rows are not an income source. Each payout is converted to the report currency **at its
   own date** and divided by the **eligible LONG quantity at the end of the day before payment (D-1)**, adjusted for
   later splits — the same D-1 rule as the FIFO income allocator, reused (`eligible_income_quantity` from
-  `fifo_lot_engine.py`), not re-implemented a third time.
+  `financial_math/fifo/eligibility.py`), not re-implemented a third time.
 - **Window**: the trailing 365 calendar days, both ends included (`as_of_date − 364 … as_of_date`).
 - **Denominator**: the residual average cost per unit at T, in the report currency. Since 2026-10-07 it is the
   engine's `position.wac`, which comes from the single average-cost function

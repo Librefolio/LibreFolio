@@ -1,14 +1,18 @@
 ---
 title: "3-Pool Cash Model"
 category: concept
-updated: 2026-10-07
-tags: [backend, portfolio, cash, decomposition, dashboard, growthchart, accounting, capital, event-driven, k-r-w-pools]
+updated: 2026-10-12
+tags: [backend, portfolio, cash, decomposition, dashboard, growthchart, accounting, capital, event-driven, k-r-w-pools, native-cash, fx]
 related:
   - entities/portfolio-engine
   - entities/portfolio-service
+  - entities/native-cash
   - concepts/portfolio-report-unified
   - concepts/inline-wac-computation
   - decisions/financial-math-single-average-cost
+  - decisions/native-cash-daily-revaluation
+  - decisions/portfolio-pnl-series-contracts
+  - problems/foreign-cash-never-revalued
   - features/F-054
 ---
 
@@ -27,6 +31,9 @@ W(t) = withdrawn_returns_pool— generated returns that left the system (tracked
 ```
 
 `W` is a hidden bookkeeping pool: not directly visible in the UI, but enables correct deposit accounting when returns were previously withdrawn.
+
+In the code K and R are kept **per broker** (`K[b]`, `R[b]`, since 2026-07-01, `c2dd44763`) and W is global; each rule
+below applies to the broker of the transaction, and the display series sum the brokers.
 
 ## Event-Driven Pool Updates
 
@@ -59,6 +66,7 @@ R_new = R_old + I
 K_new = K_old
 W_new = W_old
 ```
+Signed since 2026-09-18 (`8ed7a0f0d`): a negative correction lowers R by its amount.
 
 ### SELL — Read WAC BEFORE Reducing Pool ⚠️
 This is the critical fix introduced in commit `39106380`. The WAC must be read _before_ the pool is reduced to avoid incorrect K/R split on full exit:
@@ -108,20 +116,62 @@ else:
     R_new = 0; K_new = K_old + R_mid   (negative R_mid reduces K)
 ```
 
-## Reconciliation Invariant
-
-At end of each day:
+### CASH_TRANSFER / FX_CONVERSION, a linked pair inside the scope (X > 0)
+Only the `linked_internal` legs move the pools — also when both legs are on the same broker:
 ```
-cash_like(t) ≈ K(t) + R(t)
+departure broker A:  from_r = min(X, R_A);  R_A -= from_r;  K_A -= X - from_r
+arrival broker B:    K_B += X          ← "Approximate": the split is not carried over
+```
+The code marks the arrival rule as an approximation; backlog B3 (section I) keeps it open. External halves and normal
+legs do not touch K/R. Separately, since lot 41 (2026-10-11) the arrival day of a pair between two brokers also moves
+X from A's capital baseline to B's, a zero-sum flow — [[decisions/portfolio-pnl-series-contracts]], G1a.
 
-where cash_like(t) = cash(t) + in_transit_cash(t)
+### EXCHANGE RESULT ON FOREIGN CASH (since 2026-10-11)
+On every day the rate of a foreign currency held as cash changes, the broker's cash is revalued to its native balances
+at that day's rate ([[decisions/native-cash-daily-revaluation]], lot 41 F, option **k2**):
+```
+ε_b = value_at(day)[b] − cash_b          (NativeCash, financial_math/native_cash.py)
+cash_b += ε_b
+R_b    += ε_b
+if R_b < 0:  K_b += R_b;  R_b = 0         (a loss beyond the returns comes out of capital, as a FEE)
+```
+The capital baseline never moves: an exchange result is a result, not a contribution. Option k1 (only rescaling the
+pools) was rejected because it would put part of an exchange gain into K. In the pre-frame and in the frame alike the
+revaluation comes after the day's cash and before the day's pool rules (in the frame: at the end of step 4a, before
+the per-transaction loop 4b).
+
+### Pre-frame approximation
+A SELL in the pre-frame puts all its proceeds into K (the code: "WAC not tracked yet in pre-frame for sell cost
+basis"); the cost/gain split above is applied only in the frame. In production the pre-frame is empty
+(`date_from=None`), so only tests exercise it.
+
+## Reconciliation
+
+At the end of each frame day the engine clamps every broker's K and R at zero or above (step 4g) and sums them. The
+display values then split `cash_like(t) = cash(t) + in_transit_cash(t)`:
+```
+pool_sum = ΣK + ΣR
+if pool_sum > 0 and |pool_sum − cash_like| > 0.01:
+    cash_from_contributed = max(ΣK × cash_like / pool_sum, 0)     ← the summed pools are rescaled
+else:
+    cash_from_contributed = min(ΣK, cash_like)
+cash_from_generated = max(cash_like − cash_from_contributed, 0)
 ```
 
-`W(t)` does not enter this invariant — it represents returns that have already left the system. Any deviation from this invariant is a `reconciliation_delta` data quality flag. The engine does **not** silently correct the delta.
+`W(t)` does not enter: it represents returns that have already left the system.
+
+> *Corrected 2026-10-12.* Until then this section said that a deviation from `cash_like ≈ K + R` became a
+> `reconciliation_delta` data-quality flag and that the engine never corrected it. The architecture spec has that
+> name; the code never had it (no `reconciliation_delta` in `backend/` or `frontend/src` at `5d0585595`). The
+> rescaling above dates from 2026-06-25 (`7aa1f7772`), and it works on the **summed** pools, not broker by broker —
+> the same correction lot 41's documentation made in the theory pages (step F-5).
 
 ## Where It Applies
 
-- `DailyStateBuilder` in `portfolio_engine.py` — event-driven updates per transaction
+- `DailyStateBuilder` in `financial_math/portfolio/daily_state.py` — event-driven updates per transaction, and the
+  exchange results of `_revalue_foreign_cash()` on rate-change days
+- `NativeCash` in `financial_math/native_cash.py` — the native balances the exchange result is measured against
+  ([[entities/native-cash]])
 - Pre-frame loop: K/R/W state built up from all historical transactions before t0
 - Frame loop [t0, t1]: pool snapshots emitted daily in `DailyPortfolioState`
 - GrowthChart frontend: 3 series
@@ -151,6 +201,10 @@ The new K/R/W model supersedes the earlier informal 2-pool description ("deposit
 | Role | Path |
 |------|------|
 | Engine implementation | `backend/app/services/financial_math/portfolio/daily_state.py` |
+| Native cash, exchange results (since 2026-10-11) | `backend/app/services/financial_math/native_cash.py` |
+| Exchange-result scenarios (k2) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_foreign_cash_revaluation.py` |
+| Theory — exchange result on foreign cash, reconciliation | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.en.md` |
+| Theory — the pools by broker, example D | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.en.md` |
 | Sold cost C (average-cost step, since 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | KPI realized P&L from `realized_sales` (since 2026-10-07) | `backend/app/services/portfolio_service.py` |
 | Math spec §11 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
