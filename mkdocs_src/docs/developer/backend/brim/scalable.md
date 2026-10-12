@@ -3,7 +3,7 @@
 `broker_scalable` and `broker_scalable_deposit` import the two accounts of **Scalable Capital**,
 each into a LibreFolio broker of its own: the **broker account** (*Scalable Capital broker*) and the
 **overnight account** (*Scalable Capital overnight account*). They live in
-`backend/app/services/brim_providers/broker_scalable.py` and `broker_scalable_deposit.py`
+`backend/app/services/brim_providers/broker_scalable/plugin.py` and `broker_scalable_deposit/plugin.py`
 (`plugin_version` 1.0.0, `.csv` only, `detection_priority` 100), which hold only their properties
 and calls to the shared reader, `_scalable.py`: recognition, refusals and parsing are written once,
 for both accounts. The leading underscore keeps `_scalable.py` out of the registry's

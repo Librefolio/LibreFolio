@@ -51,7 +51,7 @@ import {expect, type Locator, type Page} from './playwright';
 import {expectNoToast, waitForStillness} from './galleryReportSets';
 import {imagesSettled, parkPointer} from './galleryRiskLab';
 
-/** The provider the fund is found with: a registered searchable plugin that takes tickers (yahoo_finance.py). */
+/** The provider the fund is found with: a registered searchable plugin that takes tickers (yahoo_finance/plugin.py). */
 const PROVIDER = 'yfinance';
 
 /** The invented fund: everything the search and the provider say about it. */

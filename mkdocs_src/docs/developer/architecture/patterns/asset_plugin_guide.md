@@ -4,7 +4,7 @@ How to create a new **Asset Source Provider** to fetch prices from a new data so
 
 **Base class**: `AssetSourceProvider` (canonical path:
 `backend/app/services/asset_sources/core.py`)
-**Plugin folder**: `backend/app/services/asset_source_providers/`
+**Plugin folder**: `backend/app/services/asset_source_providers/<name>/` — the code in `plugin.py`, beside an `__init__.py` holding only its docstring (see [Plugin Folder and Translations](#plugin-folder))
 **Registry**: `AssetProviderRegistry`
 
 !!! info "Release 2 import compatibility"
@@ -35,7 +35,8 @@ Paste this entire page into an LLM with the data source's API documentation and 
     ```
 
     After scaffolding, implement `get_current_value()` and `get_history_value()`, add test
-    cases, then place the file in `asset_source_providers/` and restart.
+    cases, then save it as `asset_source_providers/<name>/plugin.py`, beside an `__init__.py`
+    holding only a docstring, and restart.
 
 ---
 
@@ -142,7 +143,7 @@ perform blocking I/O directly on the application's main event loop.
 |--------|---------|-------------|
 | `get_icon` | `None` | Provider icon URL for the UI |
 | `supports_history` | `True` | Set `False` for providers that only support current prices (e.g., web scrapers) |
-| `params_schema` | `[]` | List of field definitions for `provider_params`. Used by frontend to generate dynamic forms. Each field has a `key`, a `type` (`string`, `number`, `currency`, `select` with `options` / `option_labels`, or `ui_component` for a custom editor), `required` (shown with a red `*`), and optionally `default`, `placeholder`, a short `label` (the caption) and a `description` (the tooltip). The caption is the translation `assets.providerParams.<code>.label.<key>`, else `label`, else the raw `key` — declare a `label` so users do not see internal names. |
+| `params_schema` | `[]` | List of field definitions for `provider_params`. Used by frontend to generate dynamic forms. Each field has a `key`, a `type` (`string`, `number`, `currency`, `select` with `options` / `option_labels`, or `ui_component` for a custom editor), `required` (shown with a red `*`), and optionally `default`, `placeholder`, a short `label` (the caption) and a `description` (the tooltip). The caption is the translation `assets.providerParams.<code>.label.<key>`, else `label`, else the raw `key` — declare a `label` so users do not see internal names; the tooltip is `assets.providerParams.<code>.description.<key>`, else `description`. Both translations live in the provider's own fragment: see [Plugin Folder and Translations](#plugin-folder). |
 | `get_asset_url(identifier, type, params)` | `None` | Generate URL to the provider's page for this asset (e.g., Yahoo Finance quote page) |
 | `resolvable_url_domains` | `[]` | Domains this provider can turn a page URL back into a search-item for (opt-in). See [Asset Search & Link-Finder](../../backend/assets/search_link_finder.md). |
 | `resolve_url(url)` | `None` | Inverse of `get_asset_url`: open a provider page URL → return one search-item dict, a list of dicts, or `None`. Enables the last-resort external search stack. |
@@ -281,7 +282,7 @@ This runs selectable operations (`current_price`, `history`, `metadata`) without
 ## 💻 Implementation Example
 
 ```python
-# backend/app/services/asset_source_providers/my_provider.py
+# backend/app/services/asset_source_providers/my_provider/plugin.py
 
 from datetime import date
 from decimal import Decimal
@@ -352,6 +353,42 @@ class MyProvider(AssetSourceProvider):
         # No params required — accept anything
         pass
 ```
+
+### 🗂️ Plugin Folder and Translations {: #plugin-folder }
+
+A provider is a folder of `asset_source_providers/`:
+
+```text
+backend/app/services/asset_source_providers/
+├── static/            ← the family's icons, served under /api/v1/uploads/plugin/asset/… (generate_static_url)
+└── my_provider/
+    ├── __init__.py    ← its docstring and nothing else
+    ├── plugin.py      ← the code above
+    └── i18n/          ← optional: en.json, it.json, fr.json, es.json
+```
+
+Restart the app: `AssetProviderRegistry` loads `plugin.py` as
+`backend.app.services.asset_source_providers.my_provider.plugin`. Import and patch the provider's
+names from that module: the package re-exports nothing. A helper only this provider uses sits
+beside `plugin.py` as `_*.py`. Discovery, the layout and the gate that keeps it
+(`./dev.py test utils gate-plugin-layout`) are in [Plugin Folder Layout](registry_pattern.md#plugin-layout).
+
+**Translations.** A provider's space is `assets.providerParams.<provider_code>`: the code
+`provider_code` returns, which need not be the folder's name — the `yahoo_finance/` folder
+registers `yfinance`. Its fragment holds the captions and tooltips of its `params_schema` fields,
+`label.<key>` and `description.<key>`; Borsa Italiana's (`borsa_italiana/i18n/`) is the only one
+today. Add the keys in the four languages, naming the folder with `--into`:
+
+```bash
+./dev.py i18n add "assets.providerParams.my_provider.label.api_key" --en "API key" --it "Chiave API" --fr "Clé API" --es "Clave API" --into asset_source_providers/my_provider
+./dev.py i18n add "assets.providerParams.my_provider.description.api_key" --en "API key for authentication" --it "…" --fr "…" --es "…" --into asset_source_providers/my_provider
+./dev.py i18n where "assets.providerParams.my_provider.label.api_key"   # the file that holds the key
+```
+
+Without `--into`, `add` refuses a new provider's first key, because the keys under
+`assets.providerParams` belong to plugins only. `./dev.py test utils gate-plugin-i18n-ownership`
+then keeps every key under the provider's space in its fragment
+([A Plugin's Translations](registry_pattern.md#plugin-translations)).
 
 ---
 
