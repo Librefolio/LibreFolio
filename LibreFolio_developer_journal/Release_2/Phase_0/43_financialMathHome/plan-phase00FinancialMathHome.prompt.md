@@ -2660,3 +2660,67 @@ Correzioni al conteggio automatico:
   - i decimali esatti (`formatDecimalForDisplay`, 15 punti di sola lettura);
   - le due pagine developer, con docs-writer, partendo da `/tmp/libreFolio_m18cp2_devdocs_proposal.patch`;
   - `ProviderAssignmentSection` (`:333`, `:585`, `:616`), se entra il cambio di I.
+
+### M-18 CP3a — via (coordinatore, 2026-10-12 21:44)
+- **Base**: `64a3ddccc`, cioè il CP2 committato (`ff7c96fd0`, 117 file, e `64a3ddccc`, il journal). Worktree pulita. Il coordinatore non mi porta ancora il target.
+- **Sequenza**:
+  1. **CP3a** sulla mia base: i decimali esatti, le 2 pagine developer dalla patch, e le due righe già sbagliate di `app-state.md`;
+  2. il treno 72 porta il lotto 48 di I (con `ProviderAssignmentSection`) e la 2b di V; poi checkpoint del CP3a, e il coordinatore mi porta il target (U-2, I e V);
+  3. **CP3b**: `ProviderAssignmentSection` e **una sola validazione della revisione combinata** (CP2 + CP3 + U-2 + I + V), compresa `toolbar-width-sweep`, che con la cura di I deve uscire verde anche in es; poi il treno 73.
+- I punti 1–4 dei trovati fuori perimetro diventano voci T-* nel backlog: **T-EN1, T-EN2, T-COL, T-DEAD**, scritte. Nessuna chiave nuova: U sta dividendo i cataloghi.
+
+#### Disegno del CP3a
+- **`formatExactDecimal(value, {minFrac = 0, maxFrac = 8, locale = uiLocale()})`** in `formatFixed.ts`, accanto al `toFixed` localizzato. I test vanno nel file esistente, quindi nessuna registrazione nel runner.
+  - Le cifre sono quelle di `formatDecimalForDisplay`: taglio, zeri finali via, padding.
+  - Intl le scrive ricevendo la **stringa**: decimale esatto (`Intl.StringNumericLiteral`, lib `esnext`). Provato con Node: `12345678901234.123456789012` esce intero.
+- **I 12 punti di sola lettura**:
+  - PAC: `planner/format.ts:161`, `:174`, `:212`;
+  - `LotWacPriceChart:489`, `:1360`;
+  - `LotCustodyModal:77`, `:144`, `:160`, `:191`;
+  - `WacPreviewSection:554`, `AssetEventPicker:453`, `GapFixStep:72`.
+- **Restano a `formatDecimalForDisplay`**, perché sono input o logica: `ExactDecimalInput`, `ExactQuantityInput`, il buffer di `CompactCashCell`, `pluralCount` (`:188`) e il confronto di `WacPreviewSection:296-297`.
+- **Cura pronta**: `/tmp/libreFolio_m18_cp3_apply.py`, dry-run con 18 operazioni su 7 file.
+- **Rossi** (test-author F): `formatFixed.test.ts`, `planner/format.test.ts`, `WacPreviewSection.test.ts`, `GapFixStep.test.ts`.
+- **Doc** (docs-writer, solo EN, dopo la cura):
+  - la patch `/tmp/libreFolio_m18cp2_devdocs_proposal.patch`, estesa ai decimali esatti;
+  - in `app-state.md`, la riga Language («Reacts to changes in the Settings store», falsa) e la frase sull'adattatore del PAC («not in the source tree yet», il file esiste).
+
+#### M-18 CP3a passi 1–2 — rossi e cura ✅ (2026-10-12 sera)
+> **Note implementazione**:
+> - **Rossi** (test-author F): 53. Li ho visti rossi anche io, con vitest diretto: 130 verdi.
+>   - `formatFixed.test.ts`: 38;
+>   - `planner/format.test.ts`: 11, compresa una riga di contratto (il conteggio del solutore, che in inglese ora si raggruppa: `≈1,234.57`);
+>   - `WacPreviewSection.test.ts`: 2;
+>   - `GapFixStep.test.ts`: 2.
+>   - F ha provato con sostituti temporanei, poi rimossi, che dopo la cura vanno verdi. Ha fissato anche il raggruppamento di default di Intl: niente `useGrouping: true`, perché it ed es non raggruppano le 4 cifre.
+> - **Cura**: `/tmp/libreFolio_m18_cp3_apply.py`, 18 operazioni su 7 file. `formatExactDecimal` in `formatFixed.ts`, più i 12 punti di sola lettura. Prettier: nessun cambio.
+> - **Verde**: i 4 file passano, 155 + 28.
+>   - **⚠️ Fuori pista**: alla prima corsa `GapFixStep.test.ts` è andato in timeout nel suo hook di caricamento (60 s, `:138`), col carico della macchina a 47–50, prima di ogni asserzione. Verdetto: **ambiente** (CPU contesa da altre sessioni). Rilanciato da solo: 28/28. F l'aveva visto anche lui, col carico intorno a 98.
+> - **Doc**: ho riapplicato la patch con `patch -p1` (121 righe). docs-writer, riaperto, la estende ai decimali esatti e ai gate, aggiunge T-ICU e corregge le due righe di `app-state.md`.
+> - **Gate in corso**: le 19 azioni e `check-orphans` sulla 6164 (log `/tmp/libreFolio_t1_m18cp3g1_*`).
+
+#### M-18 CP3a passi 3–4 — doc e gate ✅ (2026-10-12 sera)
+> **Note implementazione**:
+> - **Doc** (docs-writer, solo EN):
+>   - `developer/frontend/i18n.md`, +132: la sezione `#ui-locale` con la regola, la mappa, i formattatori (`formatExactDecimal` compreso), cosa non usare, la reattività, le eccezioni (con T-ICU) e i gate;
+>   - `state/app-state.md`, +18/−6: la riga dello store `uiLocale`; la riga Language corretta (nessuno ascolta lo store delle impostazioni; la lingua la mettono l'auth al login, Preferences e Welcome dopo la scrittura, o il selettore); il paragrafo dell'adattatore del PAC al presente, allineato al codice.
+>   - `dev.py mkdocs build` verde (solo l'avviso solito di Material); `check-links` con 95 link validi.
+> - **⚠️ Fuori pista**:
+>   - **L'esempio di T-ICU era sbagliato**: l'unico percento non ha decimali, quindi it e it-CH scrivono entrambi `13%`. Ora c'è es-MX: `1234` contro `1,234`, e `13 %` contro `13%`, provato con Node.
+>   - **Il gate HTML non si fida di `formatExactDecimal`, ed è giusto**: per un valore che non è un decimale restituisce l'ingresso com'è, quindi può portare testo.
+> - **Gate** (6164; log `/tmp/libreFolio_t1_m18cp3g1_*`):
+>   - le 19 azioni Vitest, **11 124 test** (core-unit 3 943, component-unit 3 043, tx 887);
+>   - `check-orphans` pulito;
+>   - `front check` con 0 errori e 0 avvisi;
+>   - Prettier e `diff --check` puliti.
+> - **Sovrapposizione col target** `0071b9703`, che non contiene ancora il CP2. Vera sovrapposizione rispetto alla base `a5653f9ef`:
+>   - `BACKLOG_POST_1.2.md`, in sezioni diverse;
+>   - la pagina dell'asset, toccata da I (`7f8febd9d`, toolbar spagnola) e dal CP2 (una data e un import), in pezzi diversi. Simulazione del coordinatore: pulita.
+
+### Checkpoint M-18 CP3a 🧊 (2026-10-12 sera) — FROZEN, in attesa del coordinatore
+- **Base**: `64a3ddccc` (CP2 sul ramo). **Delta**: 15 file modificati: 7 di prodotto, 4 di test, 2 pagine developer, il piano e il backlog. Nessun file nuovo.
+- **Commit proposti** (ASCII), in `/tmp/libreFolio_commit_t_m18cp3a_{1,2,3}.txt`:
+  1. `fix(i18n): exact decimals in the UI language`: prodotto e test;
+  2. `docs(dev): figures in the interface language`: le 2 pagine;
+  3. `docs(journal): record M-18 CP3a`: il piano e il backlog.
+- **Poi il CP3b**, sul target: `ProviderAssignmentSection` (`:333`, `:585`, `:616`, sulla base che contiene il cambio di I) e la validazione combinata unica, compresa la sweep anche in es.
