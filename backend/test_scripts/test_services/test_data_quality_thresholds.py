@@ -22,16 +22,16 @@ from backend.app.services.data_quality_thresholds import (
     STALE_PRICE_THRESHOLD_DAYS,
     TRANSACTION_IMPLIED_GRACE_DAYS,
 )
-from backend.app.services.risk_plugins.asset_risk_return import AssetRiskReturnAnalytic
-from backend.app.services.risk_plugins.asset_set_comparison import AssetSetComparisonAnalytic
-from backend.app.services.risk_plugins.asset_set_kpi import AssetSetKpiAnalytic
-from backend.app.services.risk_plugins.asset_set_risk_return import AssetSetRiskReturnAnalytic
-from backend.app.services.risk_plugins.asset_set_var import AssetSetVarAnalytic
-from backend.app.services.risk_plugins.comparison import ComparisonAnalytic
-from backend.app.services.risk_plugins.correlation import CorrelationParams
-from backend.app.services.risk_plugins.historical_kpi import HistoricalKpiAnalytic
-from backend.app.services.risk_plugins.historical_var import HistoricalVarAnalytic
-from backend.app.services.risk_plugins.risk_contribution import RiskContributionAnalytic
+from backend.app.services.risk_plugins.asset_risk_return.plugin import AssetRiskReturnAnalytic
+from backend.app.services.risk_plugins.asset_set_comparison.plugin import AssetSetComparisonAnalytic
+from backend.app.services.risk_plugins.asset_set_kpi.plugin import AssetSetKpiAnalytic
+from backend.app.services.risk_plugins.asset_set_risk_return.plugin import AssetSetRiskReturnAnalytic
+from backend.app.services.risk_plugins.asset_set_var.plugin import AssetSetVarAnalytic
+from backend.app.services.risk_plugins.comparison.plugin import ComparisonAnalytic
+from backend.app.services.risk_plugins.correlation.plugin import CorrelationParams
+from backend.app.services.risk_plugins.historical_kpi.plugin import HistoricalKpiAnalytic
+from backend.app.services.risk_plugins.historical_var.plugin import HistoricalVarAnalytic
+from backend.app.services.risk_plugins.risk_contribution.plugin import RiskContributionAnalytic
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 APP_ROOT = REPO_ROOT / "backend" / "app"
@@ -64,8 +64,8 @@ CONSUMERS = {
     "backend/app/services/risk/service.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},
     # The two stale replay exclusions state the threshold in their sentence; the replay warns past
     # the excluded share.
-    "backend/app/services/risk_plugins/stress.py": {"STALE_PRICE_THRESHOLD_DAYS", "REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE"},
-    **{f"backend/app/services/risk_plugins/{name}.py": {"RISK_MIN_OBSERVATIONS"} for name in ("asset_risk_return", "asset_set_comparison", "asset_set_kpi", "asset_set_risk_return", "asset_set_var", "comparison", "correlation", "historical_kpi", "historical_var", "risk_contribution")},
+    "backend/app/services/risk_plugins/stress/plugin.py": {"STALE_PRICE_THRESHOLD_DAYS", "REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE"},
+    **{f"backend/app/services/risk_plugins/{name}/plugin.py": {"RISK_MIN_OBSERVATIONS"} for name in ("asset_risk_return", "asset_set_comparison", "asset_set_kpi", "asset_set_risk_return", "asset_set_var", "comparison", "correlation", "historical_kpi", "historical_var", "risk_contribution")},
 }
 
 

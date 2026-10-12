@@ -36,7 +36,7 @@ def utils_datetime(verbose: bool = False, test_names: list = None) -> bool:
 def utils_day_count(verbose: bool = False, test_names: list = None) -> bool:
     """Test day count conventions."""
     print_section("Utils: Day Count Conventions")
-    print_info("Testing: backend/app/services/asset_source_providers/scheduled_investment.py (day count functions)")
+    print_info("Testing: backend/app/services/asset_source_providers/scheduled_investment/plugin.py (day count functions)")
     print_info("Tests: ACT/365, ACT/360, ACT/ACT, 30/360 conventions")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_day_count_conventions.py", test_names)
     return run_command(cmd, "Day count convention tests", verbose=verbose)
@@ -203,6 +203,15 @@ def utils_gate_i18n_usage(verbose: bool = False, test_names: list = None) -> boo
     print_info("Tests: typed-union expansion, producer vocabulary, ternary arguments, bare-root suppression")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_i18n_usage_gate.py", test_names)
     return run_command(cmd, "i18n three-verdict classifier tests", verbose=verbose)
+
+
+def utils_gate_plugin_layout(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plugin layout gate: every first-party plugin is a folder, reached through its plugin module."""
+    print_section("Utils: Plugin Layout Gate")
+    print_info("Testing: backend/app/services/{brim_providers,asset_source_providers,fx_providers,risk_plugins,signal_plugins,tool_plugins}/, imports and strings of backend/app, backend/test_scripts, scripts, dev.py")
+    print_info("Tests: <name>/__init__.py (docstring only) + <name>/plugin.py, no single-module plugin, no import or string reaching a plugin package instead of its plugin module")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_plugin_layout_gate.py", test_names)
+    return run_command(cmd, "Plugin layout gate tests", verbose=verbose)
 
 
 def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
@@ -425,6 +434,17 @@ Tests for utility modules and helper functions:
         utils_gate_i18n_usage,
         name="i18n Usage Gate",
         desc="Three verdicts where the audit had two: typed unions are expanded from the code that declares them, a bare namespace root no longer absolves everything beneath it, ternary arguments are seen, a key prefix chosen between two literals is expanded over both branches, and 'not verified' stays apart from 'dead' so neither absolution nor condemnation is a default",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-plugin-layout",
+        utils_gate_plugin_layout,
+        name="Plugin Layout Gate",
+        desc="Every first-party plugin is a folder <family>/<name>/ holding __init__.py (its docstring and nothing else) and plugin.py, in the six families the app's registries declare (brim, asset, FX, risk, signal, tool), plugin being the module discovery loads; no family keeps a plugin as a single module (signal_plugins/base.py aside) and none is empty; no import in backend/app, backend/test_scripts, scripts or dev.py reaches a plugin's package instead of its plugin module or a _helper beside it, relative and lazy imports included, and no string names one (patch targets, logger names, __module__)",
+        # ast and filesystem reads of the repository's sources, never imported; the control
+        # cases build their trees under tmp_path. No DB, no server, no network, no writes
+        # outside tmp_path.
         isolation="pure",
     )
     add_test(

@@ -17,33 +17,33 @@ from backend.app.schemas.signals import (
     SignalStatus,
 )
 from backend.app.services.provider_registry import SignalPluginRegistry
-from backend.app.services.signal_plugins import adx as adx_module
-from backend.app.services.signal_plugins import aroon as aroon_module
-from backend.app.services.signal_plugins import atr as atr_module
-from backend.app.services.signal_plugins import cci as cci_module
-from backend.app.services.signal_plugins import donchian as donchian_module
-from backend.app.services.signal_plugins import natr as natr_module
-from backend.app.services.signal_plugins.adx import (
+from backend.app.services.signal_plugins.adx import plugin as adx_module
+from backend.app.services.signal_plugins.adx.plugin import (
     AdxSignalParams,
     AdxSignalPlugin,
 )
-from backend.app.services.signal_plugins.aroon import (
+from backend.app.services.signal_plugins.aroon import plugin as aroon_module
+from backend.app.services.signal_plugins.aroon.plugin import (
     AroonSignalParams,
     AroonSignalPlugin,
 )
-from backend.app.services.signal_plugins.atr import (
+from backend.app.services.signal_plugins.atr import plugin as atr_module
+from backend.app.services.signal_plugins.atr.plugin import (
     AtrSignalParams,
     AtrSignalPlugin,
 )
-from backend.app.services.signal_plugins.cci import (
+from backend.app.services.signal_plugins.cci import plugin as cci_module
+from backend.app.services.signal_plugins.cci.plugin import (
     CciSignalParams,
     CciSignalPlugin,
 )
-from backend.app.services.signal_plugins.donchian import (
+from backend.app.services.signal_plugins.donchian import plugin as donchian_module
+from backend.app.services.signal_plugins.donchian.plugin import (
     DonchianSignalParams,
     DonchianSignalPlugin,
 )
-from backend.app.services.signal_plugins.natr import (
+from backend.app.services.signal_plugins.natr import plugin as natr_module
+from backend.app.services.signal_plugins.natr.plugin import (
     NatrSignalParams,
     NatrSignalPlugin,
 )

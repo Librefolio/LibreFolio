@@ -1,5 +1,5 @@
-"""Asset source providers package. Modules placed here will be auto-discovered by
-`provider_registry.AssetProviderRegistry.auto_discover()`.
+"""Asset source providers package. Plugin folders placed here (``<name>/plugin.py``, beside an ``__init__.py``
+holding only its docstring) are auto-discovered by `provider_registry.AssetProviderRegistry.auto_discover()`.
 """
 
 # Package marker for asset source providers

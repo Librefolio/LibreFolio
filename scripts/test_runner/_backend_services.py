@@ -811,7 +811,7 @@ def services_provider_errors(verbose: bool = False, test_names: list = None) -> 
 def services_borsa_italiana_search(verbose: bool = False, test_names: list = None) -> bool:
     """Test Borsa Italiana provider search (single-fetch, IT+EN variants, ISIN hit)."""
     print_section("Services: Borsa Italiana Search")
-    print_info("Testing: backend/app/services/asset_source_providers/borsa_italiana.py (search)")
+    print_info("Testing: backend/app/services/asset_source_providers/borsa_italiana/plugin.py (search)")
     print_info("External engine mocked — no live Borsa Italiana calls")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_borsa_italiana_search.py", test_names)
