@@ -219,6 +219,7 @@ average cost comes from this one function.
 - [[concepts/inline-wac-computation]] — the engine's previous single-pass pools, now replaced by a precomputed timeline
 - [[entities/portfolio-engine]], [[entities/portfolio-service]], [[entities/lots-analysis-service]] — the migrated consumers
 - [[features/F-097]] — the WAC feature
+- [[decisions/transfer-auto-cost-from-sending-broker]] — which pool an Auto cost averages, and as of when (plan 40)
 - [[decisions/wac-target-currency-last-acquisition]] — still the target-currency rule of the facade's callers
 - [[concepts/absence-sentinel-vs-nullable-type]] — "unknown", "zero" and "rate missing" are three states, not one `None`
 - [[problems/test-transaction-implied-constructor-mismatch]] — the required `average_costs` parameter met the same
