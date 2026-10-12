@@ -93,7 +93,8 @@ Run backend unit/integration tests and frontend Playwright E2E tests:
 |---------|-------------|
 | `./dev.py test all` | Run all test categories in the optimal order |
 | `./dev.py test <category> all` | Run tests in a single category (e.g., `api`, `e2e`, `front-fx`) |
-| `./dev.py test <category> --list` | List available tests in a category without running them |
+| `./dev.py test <category> --help` | List the units (actions) of a category, each with its description |
+| `./dev.py test <category> <action> --list` | List the tests of one unit without running them; `all` lists the whole category |
 
 ### 🧰 Linting, Formatting & Documentation
 
