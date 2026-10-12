@@ -90,6 +90,7 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/histogram-grid-pinned-to-var-cut]] | **Folder 02, round 1 (A).** The histogram grid is shifted so one edge falls on the VaR cut — the red area is the declared percentage; an oracle pins the maths before vectorising (`f5fe80d44`) | 2026-09-18 | risk, var, histogram |
 | [[decisions/asset-set-one-preparation-not-fan-out]] | **Folder 02, round 2.** The Lab asks one `ASSET_SET` request (one preparation, one calendar), not one per asset: «Il fan-out non era caro: era sbagliato» (`d3afb92b6`) | 2026-09-21 | risk, lab, asset-set |
 | [[decisions/l3-reads-current-composition]] | **Folder 02, S3.** L3 measures today's composition replayed over the past, and every card names its mode; arithmetic annualisation (`afd480a89`) | 2026-09-18 | risk, l3, beta |
 | [[decisions/risk-answers-four-questions]] | **Folder 02, the thesis.** Risk answers «is my portfolio what I think it is?»: four questions, one per level (L1 hurt, L2 diversification, L3 paid for risk, L4 what if) | 2026-09-16 | risk, levels, thesis |
@@ -219,6 +220,7 @@
 
 | Page | Summary | Tags |
 |------|---------|------|
+| [[concepts/risk-contracts-k1-k9]] | **Folder 02, round 1.** The contracts K1–K9 between the Risk streams (histogram bins, asset types, benchmark selector, portfolio slice, primitives, simulation axes, doc slugs, acquired KPIs, replay) and where each lives today | — | risk, contracts |
 | [[concepts/risk-binding-decisions]] | **Folder 02.** The decisions that bind Risk work (D8…D384, the thesis, the 1.2 CHANGELOG rules), in English, with where each lives | — | risk, decisions |
 | [[concepts/marker-locale-for-catalogue-labels]] | Prove a label is not hardcoded: mount in the marker locale `qaa`, where every key shows as `⟦key⟧`; a literal shows itself; plus a test that the keys exist in the four catalogues | testing, i18n, frontend |
 | [[concepts/brim-texts-translated-by-code]] | Plugin names and descriptions, notices, evidence captions and refusals are translated through keys built from stable codes (`brimPlugins.*`, `importWizard.brimNotice.*`, `brimEvidence.*`, `parseRefusal.*`), English as the fallback; guarded by backend tests | brim, i18n, plugins |
@@ -290,6 +292,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/annualization-factor-not-coverage]] | **Folder 02, round 1 (A).** A fixed factor of 252 overstated Sharpe; «coverage» would have looked fine; `f` now observed from the data, used for volatility and the risk-free rate | resolved | risk, annualization |
 | [[problems/echarts-stacked-band-null-base]] | **Folder 02, R5.** A stacked band's base null on weekends → ECharts stacks on the origin; bridge base and delta, out of the tooltip (`840bdbc0d`) | resolved | charts, echarts |
 | [[problems/replay-baseline-shortened-by-late-starter]] | **Folder 02, R5.** A late-starting asset moved the replay's joint baseline, halving everyone's crisis; auto-exclusion instead (`a766a9d5d`) | resolved | risk, replay |
 | [[problems/risk-stress-buckets-hand-listed]] | **Folder 02, R5.** The stress editor listed 9 of 17 asset types; a missing bucket got a silent 0 % shock; buckets from the enum (`a5f6776aa`) | resolved | risk, stress |
@@ -597,6 +600,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Folder 02, step R4 — the first round, `implementation/`.** The contracts K1–K9 and their homes, the histogram pinned on the VaR cut, the observed annualisation factor | *(3 pages — 1 concept, 1 decision, 1 problem; see log)* |
 | 2026-10-12 | **Folder 02, step R3b — the post-merge review R5.** Stress buckets from the enum, replay auto-exclusion, the band chart's null base | *(3 pages — 3 problems; see log)* |
 | 2026-10-12 | **Folder 02, step R3a — `implementation_2/`, the contract and the levels.** One asset-set preparation, L3 on today's composition, a merge recipe for the runner's catalogue | *(3 pages — 2 decisions, 1 problem; see log)* |
 | 2026-10-12 | **Train 69 in the wiki — M-23 (M's batch 27).** The in-app changelog typesets French like the docs: M-23 resolved in 1.2 | *(none)* |

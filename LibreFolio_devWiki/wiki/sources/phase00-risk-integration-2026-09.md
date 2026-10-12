@@ -48,6 +48,8 @@ the other parts are ingested in steps R1–R6.
   [[decisions/l3-reads-current-composition]], [[problems/runner-catalog-merge-not-line-union]].
 - From the post-merge review R5 (step R3b): [[problems/risk-stress-buckets-hand-listed]],
   [[problems/replay-baseline-shortened-by-late-starter]], [[problems/echarts-stacked-band-null-base]].
+- From the first round, `implementation/` (step R4): [[concepts/risk-contracts-k1-k9]],
+  [[decisions/histogram-grid-pinned-to-var-cut]], [[problems/annualization-factor-not-coverage]].
 
 ## Source files
 
