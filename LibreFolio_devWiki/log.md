@@ -2717,3 +2717,25 @@ Created:
 Updated: [[features/F-012]], [[features/F-013]], [[features/F-048]], [[features/F-049]] (status history, Source files),
 [[entities/import-wizard-modal]].
 Not yet in the target: M's batch 23, a second rewrite of the Scalable page. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B2 — plan 44 (I): the import wizard waits for the broker list (M-16)
+Source: `Release_2/Phase_0/44_importWizardBrokerGate/plan-phase00ImportWizardBrokerGate.prompt.md` @ git:`8339b0a06`;
+base `d3c6e55c5`. Checked on the code at HEAD:
+- `brokerLoadsInFlight`, a plain variable, and `trackBrokerLoad`;
+- `Promise.allSettled` in `loadBrokers`;
+- the guard in `goNext`;
+- `brokersLoading` in «Next»'s `disabled` and spinner;
+- the `oncreated` refresh through the counter;
+- V1–V4b and E1;
+- the gallery's `waitForSettled(import-wizard-step1)`.
+
+`3cd25af4f`, `8339b0a06`, the train-48 merge `a94de23e2` and `51b581636` are all in HEAD.
+Created: [[problems/import-wizard-next-before-brokers-loaded]], [[sources/phase00-import-wizard-broker-gate-2026-10]].
+Updated:
+- [[problems/playwright-probes-ignore-timeout]] (M-16 links its page);
+- [[problems/svelte5-effect-read-write-loop]] (the rule applied before the code);
+- [[decisions/import-wizard-default-plugin-check]] (the gate also protects the check);
+- [[decisions/native-cash-daily-revaluation]] (F-AI (b) is a backlog row since `8339b0a06`);
+- [[features/F-049]], [[entities/import-wizard-modal]].
+
+Plan 41's registry row refreshed to `8339b0a06`: bookkeeping only since `f10fcd04a`. Graph: not updated (P-6).

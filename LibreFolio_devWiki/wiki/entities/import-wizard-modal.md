@@ -83,6 +83,9 @@ then receives its own stable `tempId`; display sorting never replaces either ide
 - Since plan 37 (2026-10-09), when step 1 continues, a file whose broker's default plugin cannot read it opens
   `ImportBrokerMismatchModal`, with the plugin's reason and the brokers that would read it: Move, Keep here or Remove
   — [[decisions/import-wizard-default-plugin-check]].
+- Since plan 44 (2026-10-12), «Next» on step 1 stays disabled, and step 1 `data-busy`, until every broker load has
+  finished — the one at opening and the refresh after a broker created there (`trackBrokerLoad`) —
+  [[problems/import-wizard-next-before-brokers-loaded]].
 
 ## Asset Identity and Resolution
 

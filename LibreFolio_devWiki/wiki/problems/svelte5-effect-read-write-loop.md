@@ -64,6 +64,11 @@ $effect(() => {
 
 > In Svelte 5 `$effect`, always collect reads first into local variables, then perform all writes at the end. Never interleave reads and writes of the same signal.
 
+**Applied before the code (2026-10-12, plan 44).** The import wizard needed a counter of broker loads in flight,
+incremented by `loadBrokers()`, which runs inside the wizard's opening `$effect`. A `$state` counter would have been
+read and written there, and the effect would have started again at every load. The counter is a plain variable, and
+the template reads only `brokersLoading` — [[problems/import-wizard-next-before-brokers-loaded]].
+
 ## Affected File
 
 - `frontend/src/lib/components/transactions/TransactionStagingModal.svelte` (W1/C1, Round 1)
