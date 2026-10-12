@@ -22,7 +22,7 @@
     import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatExactDecimal, formatFixed} from '$lib/utils/core/formatFixed';
 
     // =========================================================================
     // Types
@@ -551,7 +551,7 @@
                                 </span>
                             </td>
                             <td class="px-2 py-0.5">{qtx.date}</td>
-                            <td class="px-2 py-0.5 text-right font-mono">{formatDecimalForDisplay(qtx.quantity)}</td>
+                            <td class="px-2 py-0.5 text-right font-mono">{formatExactDecimal(qtx.quantity)}</td>
                             <td class="px-2 py-0.5 text-right font-mono">
                                 {#if qtx.original_unit_cost && qtx.original_currency && qtx.currency && qtx.original_currency !== qtx.currency}
                                     <Tooltip html={buildFxTooltipHtml(qtx)} position="bottom">

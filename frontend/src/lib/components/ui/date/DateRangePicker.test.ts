@@ -25,13 +25,14 @@
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
-import {tick} from 'svelte';
+import {flushSync, tick} from 'svelte';
 import {createSubscriber} from 'svelte/reactivity';
 import {get} from 'svelte/store';
-import {addMessages} from 'svelte-i18n';
+import {addMessages, waitLocale} from 'svelte-i18n';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {SelectOption} from '$lib/components/ui/select/types';
 import {_ as t} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
@@ -796,6 +797,87 @@ describe('DateRangePicker — compact fields show the raw ISO', () => {
         const {startInput, endInput} = setup({compact: true, start: '2024-01-15', end: '2024-02-20'});
         expect(startInput).toHaveValue('2024-01-15');
         expect(endInput).toHaveValue('2024-02-20');
+    });
+});
+
+/**
+ * M-17, M-18 CP2 — a blurred field writes its date in the interface language.
+ *
+ * Blurred, each field shows its date formatted for reading (`displayDate`), and that format was pinned to
+ * English — `toLocaleDateString('en', {day: '2-digit', month: 'short', year: 'numeric'})` — so an Italian UI
+ * read `Jan 15, 2024` in every range field (M-17). Every figure follows the UI language (the developer's
+ * rule of 2026-10-12): the cure writes it in `uiLocale()`. Two things do not move, and are guarded here: a
+ * compact picker shows the ISO date, which fits narrow cells, and a focused field shows the ISO date,
+ * because that is what can be edited.
+ *
+ * Expectations are Intl's output for the locale with the component's options, never typed; jsdom's browser
+ * is en-US, so the English UI writes en-US — the text `'en'` wrote. The language is switched as
+ * LanguageSelector does (`currentLanguage.set`, which also moves svelte-i18n) and put back after each test.
+ * DateRangePicker is a runes component: the in-place test proves the fields read the language reactively.
+ */
+describe('DateRangePicker — a blurred field writes its date in the interface language (M-17, M-18 CP2)', () => {
+    const FIELD_DATE: Intl.DateTimeFormatOptions = {day: '2-digit', month: 'short', year: 'numeric'};
+    /** An ISO day as a blurred field writes it in `locale`. */
+    const fieldDateIn = (iso: string, locale: string): string => new Date(iso + 'T00:00:00').toLocaleDateString(locale, FIELD_DATE);
+    /** Both fields of the default range in `locale`. */
+    const fieldsIn = (locale: string) => ({start: fieldDateIn(DEF_START, locale), end: fieldDateIn(DEF_END, locale)});
+
+    /** Change the UI language as LanguageSelector does, then flush. */
+    async function switchLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('English UI on an en-US browser (control): today’s text', () => {
+        const {startInput, endInput} = setup();
+
+        expect({start: startInput.value, end: endInput.value}).toEqual(fieldsIn('en-US'));
+    });
+
+    it('mounted with the UI in Italian: both fields write the Italian date', async () => {
+        await switchLanguage('it');
+        const italian = fieldsIn('it');
+        expect(italian, 'control: the Italian dates differ from the English ones').not.toEqual(fieldsIn('en-US'));
+
+        const {startInput, endInput} = setup();
+
+        expect({start: startInput.value, end: endInput.value}).toEqual(italian);
+    });
+
+    it('follows an in-place switch of the UI language, en → it → en', async () => {
+        const {startInput, endInput} = setup();
+        const read = () => ({start: startInput.value, end: endInput.value});
+        expect(read(), 'en, mount — today’s text').toEqual(fieldsIn('en-US'));
+
+        await switchLanguage('it');
+        expect(read(), 'en → it in place — the Italian dates').toEqual(fieldsIn('it'));
+
+        await switchLanguage('en');
+        expect(read(), 'it → en in place — today’s text again').toEqual(fieldsIn('en-US'));
+    });
+
+    it('a compact picker still shows the ISO dates in an Italian UI (control)', async () => {
+        await switchLanguage('it');
+
+        const {startInput, endInput} = setup({compact: true});
+
+        expect({start: startInput.value, end: endInput.value}).toEqual({start: DEF_START, end: DEF_END});
+    });
+
+    it('a focused field still shows its ISO date in an Italian UI (control)', async () => {
+        await switchLanguage('it');
+        const {startInput} = setup();
+
+        await fireEvent.focus(startInput);
+
+        expect(startInput).toHaveValue(DEF_START);
     });
 });
 

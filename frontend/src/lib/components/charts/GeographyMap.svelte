@@ -31,6 +31,7 @@
     import {_ as t} from '$lib/i18n';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {buildChoroplethData, buildGeoLabel, buildGeoNameMaps, centroidOf, choroplethMax, computeUnknownPct} from '$lib/components/charts/geographyMapHelpers';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     // =========================================================================
     // Props
@@ -289,7 +290,7 @@
             visualMap: {
                 min: 0,
                 max: maxValue,
-                text: [`${maxValue.toFixed(0)}%`, '0%'],
+                text: [formatPercent(maxValue, {digits: 0, signed: false}), formatPercent(0, {digits: 0, signed: false})],
                 realtime: false,
                 calculable: false,
                 inRange: {

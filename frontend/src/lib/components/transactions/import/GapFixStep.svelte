@@ -25,7 +25,7 @@
     import type {ColumnDef} from '$lib/components/table/types';
     import GapFixToggle from '$lib/components/transactions/import/GapFixToggle.svelte';
     import {maskableQuantity} from '$lib/utils/privacy/maskable';
-    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {formatExactDecimal} from '$lib/utils/core/formatFixed';
     import {formatIsoDay} from '$lib/utils/transactions/importReportSets';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {gapFixProposalCount, gapFixSelectedCount, type GapFixAmount, type GapFixCashRow, type GapFixCheckpoint, type GapFixGroup, type GapFixNote, type GapFixProposal, type GapFixVerification, type GapFixView} from '$lib/utils/transactions/gapFixModel';
@@ -69,7 +69,7 @@
     let tables = $state<Record<string, DataTable<ProposalRow> | undefined>>({});
 
     function quantity(value: string): string {
-        return formatDecimalForDisplay(value, {minFrac: 0, maxFrac: 8});
+        return formatExactDecimal(value, {minFrac: 0, maxFrac: 8});
     }
 
     function signedQuantity(value: string): string {

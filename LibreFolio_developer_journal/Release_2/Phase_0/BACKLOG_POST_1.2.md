@@ -176,7 +176,7 @@ Dettagli: [piano della 41](41_brokerPnlFlows/plan-phase00BrokerPnlFlows.prompt.m
 lotto è chiuso: il motore nel treno 32, la card (H) nel treno 35, F nel treno 42. Su F-AI il developer ha deciso il
 12/10: nella 1.2 la (a), cioè niente; la (b), il nome «FX on cash» nell'export del portafoglio, è la voce qui sotto.
 Righe scritte da I il 12/10, coi numeri di riga di `5d62658bb`; la voce F-AI (b) con quelli di `378338fed`; la 47-1,
-dal piano 47, con quelli del suo commit C3.
+dal piano 47, con quelli del suo commit C3; la 49-1, dal piano 49, con quelli di `0071b9703`.
 
 Altrove: B9 (T-U3), C1 (T-U4), L1/L2 (T-U6) e KpiSection (T-U8) sono nella sezione T. P1, R4, W1 e X5 sui prezzi F
 non li ha toccati e restano a T: P1 in U4, R4 in U5 con B8, W1 in U7, X5 dei prezzi in U1 (§17.6). Il gruppo I del
@@ -261,6 +261,12 @@ debito di traduzione di F-5 (di M).
   (`assets/[id]/+page.svelte:2826-2861`). Allinearlo stringe la colonna di «Exportación IA» di circa 12 px. Da solo
   non avrebbe curato V-19, che sforava fino a 18,8 px: lo ha curato C5 con le soglie `denseRow`. Resta un ritocco di
   coerenza. Dettagli: [piano della 48](48_uiPolish/plan-phase00UiPolish.prompt.md), §1.5 e passo 5.
+- **49-1 · Il debito di lint di `_frontend_broker.py`** — minimo, preesistente; I, 12/10 (piano 49, §6). `ruff check`
+  dà E701 a `:44`, `:45`, `:52`, `:53` e PLC0415 a `:96`; `black --check` lo riformatterebbe in due pezzi. Viene da
+  `1a29e0523`, `547c06cf0` e `7d3463e2f`, ed è fuori dal gate: ruff e black del gate passano solo `backend/`
+  (`dev.py:1841`, `:1848`). Nel runner intero sono 149 errori ruff in 17 file, e black riformatterebbe 15 file su 30:
+  se pulirlo in una volta sola lo decide il coordinatore. Dettagli:
+  [piano della 49](49_requestCountRace/plan-phase00RequestCountRace.prompt.md), §6.
 
 ## P · Transazioni e Bulk (42)
 
@@ -413,6 +419,47 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   (`financial_math/portfolio/data_quality.py`); `portfolio_service` importa `_compute_tx_fingerprint` dal motore. Il
   PAC l'ha già fatto in T-1 (`QUANTITY_DUST_THRESHOLD` pubblico). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «B2 — motore del portafoglio in sei moduli».
+- **T-ST · I giorni «stale»: un plurale vero e l'abbreviazione tradotta** — minimo; T, 12/10 (M-18 CP2, scelta (A) del
+  coordinatore). `chart.tooltip.stale` ha lo stesso `{days}` nelle 4 lingue ma nessun plurale ICU: «day(s)»,
+  «giorno/i», «jour(s)», «día(s)». La leggono i tooltip di `CandlestickChart.svelte:520` e `LineChart.svelte:777` e,
+  dal CP2, il titolo del badge di `DataEditor.svelte:180`. Il badge visibile `⚠️ {N}d` ha una «d» inglese (it «g», fr
+  «j»); l'unica chiave con l'abbreviazione è `transactions.fxInfo.stale` («non agg. {days}g»), che aggiunge una parola.
+  Da fare: il plurale ICU nei 4 cataloghi, con testi diversi per lingua (la cache dei formatter di svelte-i18n), e
+  un'abbreviazione tradotta per il badge. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezione «10», M-18 CP2.
+- **T-ICU · I numeri dentro i messaggi del catalogo seguono la lingua senza regione** — minimo, limite noto; T, 12/10
+  (M-18 CP2). Con M-18 ogni cifra passa da `uiLocale()`, ma le cifre che svelte-i18n formatta dentro un messaggio ICU
+  usano il suo `$locale`, cioè la lingua senza regione: l'unico `{covered, number, percent}`
+  (`risk.warnings.historical_replay_mostly_excluded`) e il `#` dei 74 plurali. Si vede solo con un browser che porta
+  una regione diversa da quella di default: per esempio con un browser es-MX il `#` di un plurale scrive `1234` dove il
+  resto della pagina scrive `1,234`, e l'unico percento `13 %` invece di `13%`. Nei cataloghi
+  non ci sono date ICU. Due strade: passare a svelte-i18n la locale completa (`it-CH` ricade sul catalogo `it`) senza
+  cambiare chi legge `$locale` per i link e i testi, oppure formattare le cifre prima di passarle al messaggio, come fa
+  già `problemCount`. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione
+  «10», M-18 CP2.
+- **T-EN1 · Testo inglese scritto a mano nei tooltip del grafico dei prezzi** — minimo; T, 12/10 (trovato con M-18).
+  `PriceChartFull.svelte:785-788` scrive «orig.», «(Nd back)» e «fx @» in ogni lingua; `ProviderAssignmentSection.svelte:354`
+  scrive «points» nel dettaglio della sonda dello storico (la cifra accanto segue la lingua dal CP3b). Servono chiavi
+  nuove: dopo la
+  divisione dei cataloghi di U. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezione «10», M-18 CP3.
+- **T-EN2 · Le etichette dei segnali what-if sono in inglese, con cifre grezze** — minimo; T, 12/10 (trovato con M-18).
+  `LinearSignal.ts:74-75`, `CompoundSignal.ts:96-97` e `SineSignal.ts:87` scrivono «Linear 5%/yr +2%», «Compound …» e
+  «Sine ±…% / …d»: parole inglesi e numeri stampati grezzi (`${rate}%`) in ogni lingua. Servono chiavi, e le cifre da
+  `formatPercent`/`formatFixed`. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezione «10», M-18 CP3.
+- **T-COL · L'ordine dei nomi segue la collazione del browser** — minimo; T, 12/10 (trovato con M-18). Nessun chiamante
+  passa una locale a `nameComparator` (`risk/correlationHelpers.ts:252`): `assetSetTable.ts:49`,
+  `CorrelationHeatmap.svelte:140`, `LabAssetPicker.svelte:46`. Così i nomi si ordinano con le regole del browser, non
+  con quelle della lingua dell'interfaccia. Non è una cifra: è testo, quindi conta la lingua (`$currentLanguage`), non
+  `uiLocale()`. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «10»,
+  M-18 CP3.
+- **T-DEAD · Codice morto trovato con M-18** — minimo; T, 12/10. Il ramo `relative` di `formatCellDate`
+  (`components/table/dataTableLogic.ts:335-342`) scrive «Nd ago» in inglese, ma nessuna colonna usa
+  `format: 'relative'` (il tipo è in `types.ts:46`). `formatDate` in `routes/(app)/files/+page.svelte:685` non viene
+  mai chiamata. Da togliere, oppure, se una colonna adotta `relative`, da scrivere con `Intl.RelativeTimeFormat` nella
+  lingua dell'interfaccia. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezione «10», M-18 CP3.
 
 La voce di `TODO_FUTURI.md` sul riordino del codice si cancella a mano a mano.
 
@@ -551,6 +598,20 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   come sono. L'HTML del modale coincide byte per byte con quello dell'hook sui 4 capitoli francesi; 136 test Vitest nuovi
   (`front-utility core-unit`). Dettagli: [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md),
   passo «11».
+- **M-24 · La galleria non fissa `navigator.language`** — basso; M (sonda della preparazione di I5), 12/10, riga di
+  backlog per decisione del coordinatore. Dal M-18 l'app scrive le cifre con `uiLocale()`, che legge
+  `navigator.language`.
+  - **Cosa fissa la galleria:** il locale del browser, con `Emulation.setLocaleOverride`
+    (`frontend/e2e/fixtures/galleryLocale.ts`). Quell'override sposta solo il locale di ripiego di `Intl` e
+    l'Accept-Language.
+  - **Oggi:** nel Chromium headless della galleria `navigator.language` resta `en-US` (misurato su macOS con LANG C,
+    it_IT ed en_GB), quindi gli scatti inglesi escono americani, come previsto.
+  - **Il rischio:** con `dev.py mkdocs gallery --headed` o `--ui`, o dove Chromium risponde altrimenti (non misurato),
+    gli scatti inglesi uscirebbero britannici, e nessun test diventerebbe rosso.
+  - **La guardia:** il timbro di `stampDocumentLocale` registra anche `navigator.language`, ed `expectDrawnUnder`
+    controlla che ne venga il locale atteso per ogni lingua.
+
+  Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezioni «21.2» e «23».
 
 ## Q · Documentazione e onboarding (21, 32)
 
@@ -717,7 +778,9 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   - broker: `brokers/broker-create-feedback.spec.ts`, `brokers/broker-recovery.spec.ts`,
     `brokers/brokers-detail.spec.ts`;
   - fx: `fx/fx-flag-font.spec.ts`;
-  - utility: `files.spec.ts`, `files-destructive.spec.ts` (seriale; i broker vivono fino ad `afterAll`);
+  - utility: `files.spec.ts`, `files-destructive.spec.ts` (seriale; i broker vivono fino ad `afterAll`). Correzione del
+    12/10: in `files.spec.ts` il test di `:886` «opens table preview for BRIM files» è di classe A, perché lascia il suo
+    broker e il file BRIM; la cura è nel checkpoint delle lacune 2 e 1;
   - transaction: `tx-broker-icon-hydration`, `tx-bulk-diagnostics`, `tx-bulk-import-handoff`,
     `tx-bulk-promote-cost-basis`, `tx-bulk-row-order`, `tx-clone` (tranne il test di `:549`, che va nella cura A7),
     `tx-fx-completeness`, `tx-import-asset-inspector`, `tx-import-ca-contract`, `tx-import-degiro`,
@@ -851,6 +914,24 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     `operation="create", index=0`. La griglia lo mette sulla riga 1a (IB, modificabile) e non sulla 1b (DEGIRO).
 
   Dettagli: piano della 46, §12.8.
+
+- **V-24 · Nel bulk editor la cella del costo in Auto può mostrare per un attimo «💡 0.00» come `ready`** — basso, UX;
+  test-author di V (lacuna 5), 12/10, letto nel codice e non visto a schermo. Appena un TRANSFER in Auto passa dal form
+  all'editor, il form invia un importo 0 come segnaposto, che porta solo la valuta, e la cella tratta qualsiasi importo
+  come proposta pronta. Il valore si corregge appena torna la validazione dell'editor (150 nel test). Per un istante
+  l'utente vede il sintomo corretto nella 1.2 (costo 0), e `data-state="ready"` non vuol dire «calcolato». Dettagli:
+  piano della 46, §12.9.
+
+- **V-25 · `tx-delete` consuma righe del seed e lascia un broker di `TEST_USER`** — basso; gate di V, 12/10. Nel giro
+  consolidato `front-transaction all`:
+  - «A1-confirm» (`tx-delete.spec.ts:181`) cancella la FEE `[delete-safe] Platform fee for delete test`;
+  - «A2-confirm» cancella la coppia `delete-consume`;
+  - «A1-error» lascia di proposito il broker `T4-delref-<suffix>` (OWNER `e2e_test_user`) e il suo asset
+    (`:390-393`).
+
+  Il DB, quindi, a fine categoria non torna al seed. Le righe consumate sono monouso per costruzione, e ogni invocazione
+  ripopola. Il broker permanente, però, è della classe A7. Cura possibile: righe e broker creati dal test, come in A5
+  e A7. Dettagli: piano della 46, §12.9.
 
 ## 09 · Feedback e backlog strutturale
 

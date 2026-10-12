@@ -93,6 +93,7 @@
     import type {TXReadItem, ValidationIssue} from '../types';
     import type {TransactionCreateItem} from '$lib/types';
     import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Types
@@ -1898,8 +1899,8 @@
                     if (!ev) return {type: 'html', html: `<span class="font-mono text-xs">#${row.fields.asset_event_id}</span>`};
                     const emojiMap: Record<string, string> = {DIVIDEND: '💰', INTEREST: '🏦', SPLIT: '✂️', PRICE_ADJUSTMENT: '📊', MATURITY_SETTLEMENT: '📅'};
                     const emoji = emojiMap[ev.type] ?? '📋';
-                    const shortDate = new Date(ev.date).toLocaleDateString(undefined, {day: 'numeric', month: 'short'});
-                    const fullDate = new Date(ev.date).toLocaleDateString(undefined, {day: 'numeric', month: 'long', year: 'numeric'});
+                    const shortDate = new Date(ev.date).toLocaleDateString(uiLocale(), {day: 'numeric', month: 'short'});
+                    const fullDate = new Date(ev.date).toLocaleDateString(uiLocale(), {day: 'numeric', month: 'long', year: 'numeric'});
                     const amt = parseFloat(ev.amount);
                     let fmtAmt = '';
                     if (amt !== 0) {

@@ -3,10 +3,15 @@
  *
  * The UI language and the browser locale are two settings. The header's selector sets the first; the second is the
  * browser's own. Since M-18 the app writes every figure in the interface locale (`uiLocale()`,
- * `frontend/src/lib/stores/app/uiLocale.ts`): the interface language, plus the browser's region only when the browser
- * speaks that language — otherwise British English for English, the bare language for the others. So the browser locale
- * still decides the English shots (an en-US browser writes «Oct 12, 2026», a browser in another language «12 Oct
- * 2026»), and pinning it for every language keeps each shot independent of the machine's own locale.
+ * `frontend/src/lib/stores/app/uiLocale.ts`): the interface language, plus the region of `navigator.language` only when
+ * it speaks that language and names one — otherwise British English for English, the bare language for the others.
+ *
+ * The locale this file sets is not `navigator.language`. It is the one `Intl` and `toLocaleString()` fall back on when
+ * given none, and the Accept-Language of the requests; through it all, the gallery's headless Chromium answers
+ * `navigator.language` with en-US (measured on Chromium 149 under macOS in Italian, with LANG C, it_IT and en_GB). So
+ * the English shots are American («Oct 12, 2026»), and the others take their bare language, which writes as it-IT, fr-FR
+ * and es-ES do. Pinning the browser locale still covers whatever formats without one — a library, the browser's own
+ * controls — and keeps each shot independent of the machine's own locale.
  *
  * ## Set at runtime, not as a context option
  *
@@ -25,10 +30,11 @@
  *
  * ## Before the page is drawn
  *
- * What a page has drawn keeps the locale it was drawn under. A language switch redraws no number already on screen, and a
- * client-side route keeps the document: only a new document — a load, a reload — is drawn whole under the new locale. So
- * the locale of a shot is set before its page is loaded: first thing in every language loop of the gallery, or in the test
- * such a loop generates.
+ * What a page has drawn keeps the browser locale it was drawn under: the override takes effect at once, yet nothing on
+ * screen is formatted again for it. A switch of the interface language redraws the figures written through `uiLocale()`,
+ * not necessarily the rest, and a client-side route keeps the document. Only a new document, a load or a reload, is drawn
+ * whole under the new locale. So the locale of a shot is set before its page is loaded: first thing in every language
+ * loop of the gallery, or in the test such a loop generates.
  *
  * The stamp makes that checkable instead of hoped for. {@link stampDocumentLocale} has every document record the locale
  * it began under; {@link expectDrawnUnder} reads it at the shot. A forgotten switch point is a red naming its shot, not

@@ -1,6 +1,6 @@
 # Piano — fase 00, 48: la rifinitura UI (BrokerIcon, la modale del broker sbagliato, il pannello della sicurezza, M-20, V-19)
 
-> **Stato**: ✅ chiuso il 2026-10-12, checkpoint al coordinatore (§8, passo 7). Fermo dalle 18:26 alle 19:24 (STOP del developer via coordinatore); ripreso al «riparti» del coordinatore, con la decisione (b) sul reperto di copy-and-go (§8, passo 4). **Seguito**: il lotto 49, la corsa dei contatori di `asset-detail.spec.ts` (§8, passo 5, «Fuori pista»).
+> **Stato**: ✅ chiuso il 2026-10-12, checkpoint al coordinatore (§8, passo 7). Fermo dalle 18:26 alle 19:24 (STOP del developer via coordinatore); ripreso al «riparti» del coordinatore, con la decisione (b) sul reperto di copy-and-go (§8, passo 4). **Seguito**: il lotto 49, la corsa dei contatori di `asset-detail.spec.ts` (§8, passo 5, «Fuori pista»; [piano della 49](../49_requestCountRace/plan-phase00RequestCountRace.prompt.md)).
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`). È la voce della coda di I dopo il piano 47. M-17 è passato a T, dentro M-18.
 > - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base `55304116f` (treno 60).

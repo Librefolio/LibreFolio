@@ -1,4 +1,4 @@
-"""Frontend user E2E tests: multi-user isolation, broker sharing."""
+"""Frontend user E2E tests: multi-user isolation, broker sharing, account deletion."""
 
 import subprocess
 
@@ -43,8 +43,16 @@ def front_broker_sharing(verbose: bool = False, ui: bool = False, headed: bool =
     return _run_playwright("brokers/broker-sharing.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_account_deletion(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the account-deletion E2E: Settings → Profile applies the last-owner rule to every broker."""
+    print_section("Frontend Account Deletion Tests")
+    if not (_ensure_frontend_build() and _ensure_db_populated() and _ensure_test_users()):
+        return False
+    return _run_playwright("brokers/account-deletion.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_user_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, coverage: bool = False) -> bool:
-    """Run all frontend user E2E tests (multi-user, sharing)."""
+    """Run all frontend user E2E tests (multi-user, sharing, account deletion)."""
     print_header("Frontend User Tests (Playwright)")
     if _common.nothing_left_to_run("front-user"):
         return _common.consolidated_verdict("front-user")
@@ -67,10 +75,11 @@ def populate_registry(registry: dict) -> None:
     """Register all frontend user test entries."""
     from ._common import add_test, make_category
     cat = make_category(
-        help_text="Frontend user E2E tests (multi-user isolation, broker sharing)",
+        help_text="Frontend user E2E tests (multi-user isolation, broker sharing, account deletion)",
         description="""Frontend User Tests\n\nOptions: --ui, --headed, --debug""")
     add_test(cat, "multi-user", front_multi_user, name="Multi-User Tests", desc="Data isolation between users", prereq="Multiple test users", tests="brokers/multi-user.spec.ts")
     add_test(cat, "user-unit", front_user_unit, test_names=False, name="User Store Unit Tests", desc="auth + clientSession vitest units", tests="src/lib/stores/app/auth.test.ts")
     add_test(cat, "broker-sharing", front_broker_sharing, name="Broker Sharing Tests", desc="BrokerSharingModal, ownership chart", prereq="Login working, brokers exist", tests="brokers/broker-sharing.spec.ts")
+    add_test(cat, "account-deletion", front_account_deletion, name="Account Deletion Tests", desc="Settings → Profile deletion: the last-owner rule on a shared and a co-owned broker", prereq="Registration enabled; admin user (clean-up fallback)", tests="brokers/account-deletion.spec.ts")
     add_test(cat, "all", front_user_all, test_names=False, name="All User Tests", desc="Run all user E2E tests")
     registry["front-user"] = cat

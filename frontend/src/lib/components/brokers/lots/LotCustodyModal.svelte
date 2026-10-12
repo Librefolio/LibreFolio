@@ -1,6 +1,5 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {schemas} from '$lib/api';
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
@@ -9,7 +8,7 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
-    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {formatExactDecimal} from '$lib/utils/core/formatFixed';
     import {maskableQuantity} from '$lib/utils/privacy/maskable';
     import {safeDecimal} from '$lib/types';
     import {ArrowRightLeft, Info, Minus, Plus, X} from 'lucide-svelte';
@@ -17,6 +16,7 @@
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import {compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, multiplyOrNull, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
     import {isUnknownOrNonZero} from './lotChartShared';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
@@ -65,7 +65,7 @@
         const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(value);
         if (Number.isNaN(date.getTime())) return value;
-        return date.toLocaleDateString($currentLanguage || undefined, kind === 'short' ? {day: '2-digit', month: '2-digit'} : {year: 'numeric', month: 'long', day: 'numeric'});
+        return date.toLocaleDateString(uiLocale(), kind === 'short' ? {day: '2-digit', month: '2-digit'} : {year: 'numeric', month: 'long', day: 'numeric'});
     }
 
     /** A lot quantity; masked under privacy (D5′), with the sign and the unit left outside. */
@@ -74,7 +74,7 @@
         if (parsed == null) return '—';
         const abs = Math.abs(parsed);
         const sign = opts.signed ? (parsed > 0 ? '+' : parsed < 0 ? '-' : '') : '';
-        return `${sign}${maskableQuantity(formatDecimalForDisplay(abs, {minFrac: 0, maxFrac: 8}))}${assetUnitLabel ? ` ${assetUnitLabel}` : ''}`;
+        return `${sign}${maskableQuantity(formatExactDecimal(abs, {minFrac: 0, maxFrac: 8}))}${assetUnitLabel ? ` ${assetUnitLabel}` : ''}`;
     }
 
     function formatPrice(value: string | number | null | undefined): string {
@@ -141,7 +141,7 @@
         if (event.kind === 'SPLIT') {
             const ratio = unwrapScalar<string | null>(event.ratio) ?? null;
             if (ratio == null) return '×';
-            return `×${formatDecimalForDisplay(ratio, {minFrac: 0, maxFrac: 8})}`;
+            return `×${formatExactDecimal(ratio, {minFrac: 0, maxFrac: 8})}`;
         }
         return formatQuantity(event.quantity);
     }
@@ -157,7 +157,7 @@
         }
         if (event.kind === 'SPLIT') {
             const ratio = unwrapScalar<string | null>(event.ratio) ?? null;
-            return ratio != null ? `${eventKindLabel(event.kind)} ×${formatDecimalForDisplay(ratio, {minFrac: 0, maxFrac: 8})}` : eventKindLabel(event.kind);
+            return ratio != null ? `${eventKindLabel(event.kind)} ×${formatExactDecimal(ratio, {minFrac: 0, maxFrac: 8})}` : eventKindLabel(event.kind);
         }
         const brokerName = getBrokerName(event.broker_id ?? lot?.opening_broker_id);
         return brokerName ? `${eventKindLabel(event.kind)} ${brokerName}` : eventKindLabel(event.kind);
@@ -188,7 +188,7 @@
 
         if (event.kind === 'SPLIT') {
             const ratio = unwrapScalar<string | null>(event.ratio) ?? null;
-            return ratio == null ? [] : [{label: $_('brokers.lots.modal.historyDetail.splitRatio'), value: `×${formatDecimalForDisplay(ratio, {minFrac: 0, maxFrac: 8})}`}];
+            return ratio == null ? [] : [{label: $_('brokers.lots.modal.historyDetail.splitRatio'), value: `×${formatExactDecimal(ratio, {minFrac: 0, maxFrac: 8})}`}];
         }
 
         if (event.kind === 'TRANSFER_DEPART') {

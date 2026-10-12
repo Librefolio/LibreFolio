@@ -35,8 +35,9 @@
     import {buildCandleSeriesData, computePercentageBase, formatCandlePrice, formatVolume, hasRenderableVolume, isBullishBar, parseCandleTooltipValue} from './candlestickChartHelpers';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {truncateName} from '$lib/utils/text';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Props
@@ -164,7 +165,7 @@
             void yAxisMin;
             void yAxisMax;
             void secondaryAxisScales;
-            void $currentLanguage;
+            void uiLocale();
             tick().then(renderChart);
         }
     });
@@ -215,7 +216,7 @@
                             const policy = buildResponsiveXAxisPolicy({
                                 width: chartContainer.clientWidth,
                                 values: lastRenderedDates,
-                                locale: $currentLanguage,
+                                locale: uiLocale(),
                                 axisType: 'category',
                             });
                             const wasCompact = responsiveXAxisCompact;
@@ -409,7 +410,7 @@
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: rect.width,
             values: dates,
-            locale: $currentLanguage,
+            locale: uiLocale(),
             axisType: 'category',
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
@@ -511,7 +512,7 @@
 
                 // Overlay signal line
                 if (p.value !== null && p.value !== undefined) {
-                    html += `<div style="font-size:11px"><span style="color:${p.color ?? '#888'}">${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${typeof p.value === 'number' ? p.value.toFixed(4) : p.value}</span></div>`;
+                    html += `<div style="font-size:11px"><span style="color:${p.color ?? '#888'}">${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${typeof p.value === 'number' ? formatFixed(p.value, 4) : p.value}</span></div>`;
                 }
             }
 
