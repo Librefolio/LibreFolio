@@ -8,9 +8,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
-from backend.app.services.financial_math.portfolio.engine import (
-    ScopeAwareTransactionClassifier,
-)
+from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 
 # =============================================================================
 # HELPERS — Mock Transaction builder

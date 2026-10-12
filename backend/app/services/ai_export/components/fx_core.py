@@ -353,7 +353,7 @@ async def _load_asset_facts(context: BuildContext, asset_ids: Sequence[int]) -> 
 def _native_amount_for_holding(holding: PortfolioHolding, quote_base_quantity: int) -> Decimal | None:
     """Honest native-currency amount for `holding`, in `holding.valuation_effective_currency`.
 
-    Mirrors exactly how `backend.app.services.financial_math.portfolio.engine` derived
+    Mirrors exactly how `backend.app.services.financial_math.portfolio.daily_state` derived
     `holding.current_value` before converting it to `target_currency`:
     - MARKET_PRICE / LAST_TRADE_PRICE valuations sit on the market ×quote_base_quantity
       axis, so they scale by `quote_base_quantity` via the same `compute_holding_value`

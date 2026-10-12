@@ -54,7 +54,7 @@ FLOOR_ANALYTICS = [
 
 # Who reads which threshold, and must read it from the shared module.
 CONSUMERS = {
-    "backend/app/services/financial_math/portfolio/engine.py": {"STALE_PRICE_THRESHOLD_DAYS"},
+    "backend/app/services/financial_math/portfolio/daily_state.py": {"STALE_PRICE_THRESHOLD_DAYS"},
     # The holdings read positions through the dust threshold...
     "backend/app/services/portfolio_service.py": {"TRANSACTION_IMPLIED_GRACE_DAYS", "QUANTITY_DUST_THRESHOLD"},
     # ...and so do the asset list's held-now flags.

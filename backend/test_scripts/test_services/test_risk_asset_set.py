@@ -95,7 +95,7 @@ from backend.app.schemas.risk import (
 )
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.financial_math.portfolio.engine import DerivedViewsBuilder, _normalize_fx_pair_slug
+from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, normalize_fx_pair_slug
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk.base import RiskAnalytic, RiskExecutionContext, RiskUnavailableError
@@ -1732,7 +1732,7 @@ async def test_a_currency_nothing_converts_in_the_window_gives_the_issue_of_its_
     portfolio reads it, not assumed from the seed.
     """
     ids, names = lab_assets.ids, lab_assets.names
-    assert _normalize_fx_pair_slug(split.raw_pair) == split.slug
+    assert normalize_fx_pair_slug(split.raw_pair) == split.slug
     assert await route_of(split.slug) == split.route
 
     (result,) = (await ask_the_lab([ids[split.asset_key], ids["fresh"]], LAB_WINDOW)).values()
@@ -1853,11 +1853,12 @@ async def test_a_portfolio_result_keeps_exactly_the_issues_of_the_engine(lab_ass
     The holdings are the lab's own degraded assets, so the per-asset report merged into this
     result carries a stale price and an unconverted pair — what an asset-set result turns into
     issues. The engine has already said it, in its own words and in the portfolio domain. Only
-    the portfolio report is a double: built by the engine's own builder, it is what
+    the portfolio report is a double: built by the engine's own report function, it is what
     `PortfolioService.get_report` would hand over; prices and routes are the stored rows.
     """
     ids, names = lab_assets.ids, lab_assets.names
-    engine_report = DerivedViewsBuilder(daily_states=[], target_currency="EUR").build_data_quality_report(
+    engine_report = build_data_quality_report(
+        [],
         stale_prices_dto=[StalePriceAsset(asset_id=ids["stale"], name=names[ids["stale"]], last_price_date=STALE_LAST_QUOTE, stale_days=(LAB_WINDOW[1] - STALE_LAST_QUOTE).days)],
         missing_fx_pairs_dto=[WACMissingPairInfo(pair=NO_ROUTE.raw_pair, dates=[LAB_WINDOW[1]])],
         configured_fx_pairs=set(),
