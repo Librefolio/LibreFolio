@@ -12,6 +12,7 @@ pestaña **Administración** de configuración de la aplicación.
 - 📦 **[Instalación en el host](host_installation.md)**: Configuración manual usando Python, Node.js y Pipenv directamente en la máquina host.
 - 🐳 **[Docker avanzado](docker_advanced.md)**: Despliegue en contenedores usando Docker Compose, montajes de volumen y configuración de titularidad de GID/UID del usuario.
 - 🌐 **[Exponer de forma segura](service_exposure.md)**: Expón de forma segura tu instancia privada de LibreFolio a través de internet.
+- 🔍 **[Comprobar la seguridad de la conexión](connection_checks.md)**: Comprueba que tus usuarios se conectan de forma segura, y corrige la cookie de sesión o el proxy inverso cuando no es así.
 
 ### ⚙️ Configuración del sistema
 - 📝 **[Variables de entorno](configuration.md)**: Lista completa de variables `.env` soportadas (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) y precedencia de resolución de variables.
