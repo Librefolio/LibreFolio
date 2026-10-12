@@ -1,6 +1,6 @@
 <script lang="ts">
     import {onDestroy, onMount} from 'svelte';
-    import {t, locale} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef, FooterCells} from '$lib/components/table/types';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
@@ -162,8 +162,8 @@
     function valuation(row: DistributionRow): string {
         if (row.manual) return $t('tools.pacAllocator.planner.distribution.manual', {default: 'manual · not in the portfolio'});
         if (!row.held) return $t('tools.pacAllocator.planner.distribution.notHeld', {default: 'not held'});
-        if (row.valuation === 'MARKET_PRICE') return $t('tools.pacAllocator.planner.distribution.marketPrice', {default: 'market price {date}', values: {date: formatPlannerDate(row.referenceDate, $locale)}});
-        if (row.valuation === 'LAST_TRADE_PRICE') return $t('tools.pacAllocator.planner.distribution.lastTrade', {default: 'last trade price {date}', values: {date: formatPlannerDate(row.referenceDate, $locale)}});
+        if (row.valuation === 'MARKET_PRICE') return $t('tools.pacAllocator.planner.distribution.marketPrice', {default: 'market price {date}', values: {date: formatPlannerDate(row.referenceDate)}});
+        if (row.valuation === 'LAST_TRADE_PRICE') return $t('tools.pacAllocator.planner.distribution.lastTrade', {default: 'last trade price {date}', values: {date: formatPlannerDate(row.referenceDate)}});
         return $t('tools.pacAllocator.planner.distribution.missing', {default: 'no price or rate: no weight'});
     }
 

@@ -107,6 +107,7 @@
 
     import type {TransactionCreateItem, BrimFile, BrimParseResponse, BrimPlugin, BrimSetCombineResponse, BrimSetPreview, FilePreviewResponse} from '$lib/types';
     import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Props
@@ -3771,7 +3772,7 @@ ${arrow}<span>${label}</span></span>`,
         const day = String(iso).slice(0, 10);
         const [year, month, date] = day.split('-').map(Number);
         if (!year || !month || !date) return day;
-        return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(undefined, {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
+        return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(uiLocale(), {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
     }
 
     function setRowLabel(set: ReportSetGroup, fileCount: number): string {

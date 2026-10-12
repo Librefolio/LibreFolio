@@ -58,6 +58,7 @@
     import {assetSetCalculationWindow, buildAssetSetBenchmarkPoint, buildAssetSetChartPoints, buildAssetSetPaidRows, calendarLength, withBenchmarkRow, type AssetSetPaidRow} from './assetSetLevels';
     import {dayFormatter} from './eligibility';
     import RiskReturnLevel from './RiskReturnLevel.svelte';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Props {
         assetIds: number[];
@@ -145,7 +146,7 @@
      * so when an asset — or the benchmark — with a shorter history narrowed the window.
      */
     let calculationWindow = $derived(assetSetCalculationWindow([riskReturn, kpi, comparison], dateStart, dateEnd));
-    let formatDay = $derived(dayFormatter($currentLanguage));
+    let formatDay = $derived(dayFormatter(uiLocale()));
     /**
      * The length in calendar years, months and days — «3 mesi e 1 giorno», «1 anno» — never
      * as a count of days (the developer's review, round 4). Zero parts are left out, and the

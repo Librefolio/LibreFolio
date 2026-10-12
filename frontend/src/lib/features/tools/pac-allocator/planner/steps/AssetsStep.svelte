@@ -1,7 +1,7 @@
 <script lang="ts">
     import {onDestroy, onMount, untrack} from 'svelte';
     import {Briefcase, ExternalLink, LoaderCircle, Pencil, Plus, Trash2} from 'lucide-svelte';
-    import {t, locale} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
@@ -109,7 +109,7 @@
     function priceHelp(asset: DraftAsset): string {
         return $t(`${KEY}.priceCopiedHelp`, {
             default: 'Latest price stored in LibreFolio, dated {date}{hasSource, select, yes { (source: {source})} other {}}. It is read again just before the calculation.',
-            values: {date: formatPlannerDate(asset.price?.referenceDate, $locale), hasSource: asset.priceSource ? 'yes' : 'no', source: asset.priceSource ?? ''},
+            values: {date: formatPlannerDate(asset.price?.referenceDate), hasSource: asset.priceSource ? 'yes' : 'no', source: asset.priceSource ?? ''},
         });
     }
 
@@ -117,7 +117,7 @@
         const copied = asset.copiedPrice;
         return $t(`${KEY}.priceManualHelp`, {
             default: 'Your price: the calculation uses it as typed and never reads it again. {hasCopy, select, yes {LibreFolio has {price}, dated {date}: «Auto» brings it back.} other {LibreFolio has no stored price for this Asset.}}',
-            values: {hasCopy: copied ? 'yes' : 'no', price: copied ? formatPlannerPricePlain(copied.amount, copied.currency) : '', date: formatPlannerDate(copied?.referenceDate, $locale)},
+            values: {hasCopy: copied ? 'yes' : 'no', price: copied ? formatPlannerPricePlain(copied.amount, copied.currency) : '', date: formatPlannerDate(copied?.referenceDate)},
         });
     }
 

@@ -11,7 +11,8 @@ The **App & UI State** category contains stores responsible for the global user 
 | **Auth** | `app/auth.ts` | Manages login status, JWT tokens, and the current user object. |
 | **Settings** | `app/settings.ts` | User-specific preferences (language, theme, base currency, avatar). Syncs with the backend. |
 | **Global Settings** | `app/globalSettings.ts` | Application-wide settings (admin-only writes), like max upload sizes. |
-| **Language** | `app/language.ts` | Controls the `svelte-i18n` locale. Reacts to changes in the Settings store. |
+| **Language** | `app/language.ts` | The interface language. `currentLanguage.set()` also sets the `svelte-i18n` locale and saves the choice in this browser (`librefolio-locale`), which the next load starts from. Nothing listens to the Settings store: the language is set explicitly — by the auth store at login, from the user's settings in the login response, and by the UI: the Preferences tab and the Welcome page after their write, or the header selector (this browser only). |
+| **Interface locale** | `app/uiLocale.ts` | The locale every figure is written in: the interface language, plus the browser's region when the browser's primary tag is in that language. Derived from Language, so it follows every switch. Two faces: `uiLocale()` for runes code and as the default of every figure formatter; `uiLocaleStore`, read as `$uiLocaleStore` in a legacy template. See [Numbers, amounts and dates](../i18n.md#ui-locale). |
 | **Theme** | `app/themeStore.ts` | Manages dark/light mode toggling and system-preference detection. |
 | **Privacy** | `app/privacyStore.svelte.ts` | Device-local "hide amounts" flag, read inside the currency formatters. See [Privacy masking](#privacy-masking). |
 | **Navigation** | `app/navigationStore.ts` | Controls the sidebar state (open/closed) and active page tracking. |
@@ -249,6 +250,9 @@ the option is rebuilt with every formatter called again:
 - `lib/components/brokers/lots/LotGanttChart.svelte` — the lot quantity on each bar is built in
   `renderItem`.
 
+The interface locale follows the same pattern: both effects also read `void uiLocale();`, so a language
+switch redraws the chart as a toggle does (see [Numbers, amounts and dates](../i18n.md#ui-locale-reactivity)).
+
 Keep the formatter a pure exported helper, as `formatAxisAmount` and `formatAxisCurrency` in
 `lotComparisonChartHelpers.ts` are, so a unit test can pin it; the effect wiring itself is only
 exercised by a test that mounts the chart.
@@ -267,8 +271,10 @@ results the backend computed from the user's own scenario, so it renders through
 - **`—`** for an empty, non-finite or unavailable value — checked before formatting, never masked;
 - runes mode for the component, and the ECharts rule above for any chart it draws.
 
-The PAC allocator adapter is planned as `lib/features/tools/pac-allocator/planner/format.ts`; it is
-not in the source tree yet. It will render an `exact_ratio` number — the `ExactRatio` branch of
-`backend/app/schemas/pac_allocator.py`, whose authoritative value is its reduced `numerator` and
-`denominator` — as `≈` followed by the backend's `display_decimal`, a projection the schema marks
-`non_authoritative`.
+The PAC allocator renders through `lib/features/tools/pac-allocator/planner/format.ts`, its only privacy
+adapter: every amount, quantity, price, rate and percentage the planner shows goes through it.
+An `exact_ratio` number — the `ExactRatio` branch of `backend/app/schemas/pac_allocator.py`, whose
+authoritative value is its reduced `numerator` and `denominator` — is shown through the backend's
+`display_decimal`, a projection the schema marks `non_authoritative`, with `≈` in front unless that
+projection equals the ratio; an amount is rounded exactly from the ratio to its currency's minor unit
+instead, `≈` marking a rounding that changed it.

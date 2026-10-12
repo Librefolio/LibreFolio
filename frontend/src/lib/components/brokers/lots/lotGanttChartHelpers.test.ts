@@ -9,10 +9,28 @@
  * `formatDate*` label formatters, which are left in place because they carry a
  * timezone defect reported separately.
  *
+ * Without a locale, `formatQuantity` writes in the interface language (M-18 CP2):
+ * every figure follows the UI language through one source, `uiLocale()`, where
+ * until now an absent locale meant the machine's. An explicit locale still wins.
+ * The browser is pinned to en-US before any import — Node's follows the host's ICU
+ * locale — so an English UI is written en-US and an Italian one bare `it` (an en-US
+ * browser lends no region to Italian). The language is switched as
+ * LanguageSelector does and put back to English after each case; Italian digits
+ * come from `Intl.NumberFormat` in this runtime, never typed.
+ *
  * @vitest-environment node
  */
 
-import {describe, it, expect} from 'vitest';
+import {afterAll, afterEach, describe, it, expect, vi} from 'vitest';
+
+// The browser, pinned before any import: the interface locale takes its region from it.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {getBrokerColor} from '$lib/utils/broker/brokerColors';
 import {
     THICKNESS_MIN,
@@ -42,6 +60,10 @@ import {
     applySharedZoomWindow,
     type EventMarkerKind,
 } from './lotGanttChartHelpers';
+
+afterAll(() => {
+    vi.unstubAllGlobals();
+});
 
 describe('safeUnknownString', () => {
     it('unwraps a single-element array', () => {
@@ -153,6 +175,49 @@ describe('formatQuantity', () => {
 
     it('is callable without an explicit locale (default arg path)', () => {
         expect(typeof formatQuantity(5)).toBe('string');
+    });
+});
+
+describe('formatQuantity — without a locale, the interface language (M-18)', () => {
+    /** A quantity as Intl writes it in `locale`, with the formatter's options: up to six fraction digits. */
+    function intlQuantity(locale: string, value: number): string {
+        return new Intl.NumberFormat(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6}).format(value);
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('an Italian UI reads Italian digits without passing a locale; an explicit locale still wins', async () => {
+        // 1234.5 is grouped in en-US only (Italian groups from five digits), 12345.678 in both, and
+        // 1.123456789 is capped at six fraction digits.
+        const quantities = [1234.5, 12345.678, 1.123456789];
+        const italian = quantities.map((value) => intlQuantity('it', value));
+        const american = quantities.map((value) => intlQuantity('en-US', value));
+        italian.forEach((text, index) => expect(text, `control: Italian writes ${quantities[index]} otherwise than en-US`).not.toBe(american[index]));
+        expect(
+            quantities.map((value) => formatQuantity(value)),
+            'control: an English UI on an en-US browser writes en-US',
+        ).toEqual(american);
+
+        await uiLanguage('it');
+        expect(uiLocale(), 'control: an Italian UI on an en-US browser is written bare it').toBe('it');
+        expect(
+            quantities.map((value) => formatQuantity(value, 'en-US')),
+            'an explicit locale still wins',
+        ).toEqual(american);
+
+        expect(
+            quantities.map((value) => formatQuantity(value)),
+            'without a locale, an Italian UI must read Italian quantities',
+        ).toEqual(italian);
     });
 });
 

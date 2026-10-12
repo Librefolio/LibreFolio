@@ -18,13 +18,15 @@
  * cannot see `axisTickAmount` either, because its line carries no currency token, so this file
  * is the only guard of the axis.
  *
- * WHAT IS MOCKED, AND WHY. Three things, each for a gap of the environment:
+ * WHAT IS MOCKED, AND WHY. Four things, each for a gap of the environment:
  *   - `echarts`: a recorder that keeps every `setOption` payload. jsdom has no canvas, and pixels
  *     are not the subject. It follows the same pattern as `GrowthChart.test.ts`.
  *   - `getCurrencyInfo`: the real store is a session cache filled by `GET /currencies`, empty
  *     here, and its fallback reports `symbol = code`. The `€` branch of `shortMoney` would be
  *     unreachable, so EUR gets its real symbol. Every other code keeps the fallback, which is what
  *     sends CHF down the "no symbol" branch (`-••• CHF`).
+ *   - `uiLocale`, the one source of the locale every figure is written in (M-18): the real one,
+ *     unless a case forces a locale the four UI languages do not write (see THE INTERFACE LOCALE).
  *   - the canvas 2D context: see the `beforeAll` below.
  * Everything else is real: the component, its runes and `$derived` rows, the privacy store,
  * `maskable`, `formatCurrencyAmountPlain`, `escapeHtml` and svelte-i18n.
@@ -32,11 +34,20 @@
  * WHAT IS DELIBERATELY NOT ASSERTED. Translated text: the labels, the section header, the status
  * badge and the tooltip captions all change with EN/IT/FR/ES. Rows are found by the asset name or
  * the effect description this file passes in as props. No locale-formatted number is written as
- * a literal against the host's locale. Every expected string is either built with the same
- * `Intl.NumberFormat` or `toLocaleString` call the component makes, so the file passes on any
- * host locale, or pinned as a literal under a locale the case forces. Two kinds of literal are
- * pinned that way on purpose: the U+2212 of the sv-SE cases (D23), where the glyph itself is the
- * subject, and the axis ticks of S7b, where the exact label is the subject.
+ * a literal against a locale the case does not control. Every expected string is either built
+ * with the same `Intl.NumberFormat` or `toLocaleString` call the component makes, in the interface
+ * locale, or pinned as a literal under an interface locale the case forces or checks. Two kinds of
+ * literal are pinned that way on purpose: the U+2212 of the sv-SE cases (D23), where the glyph
+ * itself is the subject, and the axis ticks of S7b, where the exact label is the subject.
+ *
+ * THE INTERFACE LOCALE (M-18). Every figure the chart writes — the ticks, the net labels, their
+ * returns — follows the interface language, through `uiLocale()`: the UI language regionalised by
+ * the browser. Under the English UI on jsdom's en-US browser that is en-US, whatever the host, so
+ * the expectations are built in it. The last describe mounts the chart under an Italian UI and
+ * switches the language in place. The four UI languages all write a hyphen-minus, the very
+ * character a hand-written sign would use, so the D23 cases force sv-SE as the interface locale
+ * through the mock of the source, BEFORE the mount: the chart is then drawn in it whether it reads
+ * the locale when it builds the option or when ECharts calls a formatter.
  *
  * THE AXIS TICKS (S7b: D18, D23, D25). A tick prints the SIGNED amount through one compact
  * `Intl.NumberFormat` call with exact digits: no two ticks share a label, and the minus is the
@@ -140,8 +151,27 @@ vi.mock('$lib/stores/reference/currencyStore', async (importOriginal) => ({
     getCurrencyInfo: (code: string) => (code === EUR_INFO.code ? EUR_INFO : {code, name: code, symbol: code, flag_emoji: '🏳️', country_codes: [], country_names: []}),
 }));
 
+/**
+ * The interface locale as the chart reads it: the real `uiLocale()`, unless a case forces another one
+ * (M-18). A case forces it BEFORE it mounts (`forceInterfaceLocale`), so the chart is drawn in it
+ * however it reads the source; the file-level `afterEach` lifts it. A plain object, not a store:
+ * forcing it redraws nothing, which is the reason the cases force it before they mount.
+ */
+const {interfaceLocale} = vi.hoisted(() => ({interfaceLocale: {forced: undefined as string | undefined}}));
+
+vi.mock('$lib/stores/app/uiLocale', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('$lib/stores/app/uiLocale')>();
+    return {...actual, uiLocale: () => interfaceLocale.forced ?? actual.uiLocale()};
+});
+
+import {flushSync, tick} from 'svelte';
+import {get} from 'svelte/store';
+import {locale, waitLocale} from 'svelte-i18n';
 import {render, setupI18n, waitFor} from '$test/component';
+import {currentLanguage} from '$lib/stores/app/language';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {uiLocale} from '$lib/stores/app/uiLocale';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import PerformanceChart from './PerformanceChart.svelte';
 
@@ -223,6 +253,13 @@ const EUR_LOSS_EFFECT_NET = -3456.78;
 const EUR_LOSS_EFFECT = {description: 'Probe write-down', category: 'Other', period_pnl: decimal(EUR_LOSS_EFFECT_NET), broker_id: 7, broker_name: 'Probe Broker'};
 const EUR_LOSS_EFFECT_PROPS: ChartProps = {positions: [EUR_ASSET], otherEffects: [EUR_LOSS_EFFECT], displayCurrency: 'EUR'};
 
+/** A large loss in a currency with no symbol, on an effect row: the compact branch through the
+ *  no-symbol template, with no return after it. Only the D23 compact case mounts it, under sv-SE,
+ *  where a position's return would be written in Swedish too — not that case's subject (M-18). */
+const CHF_LOSS_EFFECT_NET = -2345.67;
+const CHF_LOSS_EFFECT = {description: 'Probe franc write-down', category: 'Other', period_pnl: decimal(CHF_LOSS_EFFECT_NET), broker_id: 8, broker_name: 'Probe Bank'};
+const CHF_LOSS_EFFECT_PROPS: ChartProps = {positions: [CHF_ASSET], otherEffects: [CHF_LOSS_EFFECT], displayCurrency: 'CHF'};
+
 // =============================================================================
 // What the component prints, rebuilt with the calls it makes
 // =============================================================================
@@ -242,93 +279,61 @@ function splitSign(formatted: string): SignedNumber {
     return {sign, digits: formatted.slice(sign.length)};
 }
 
-/** The real constructor, taken before any case spies on it. The expectations are built through
- *  it, so a spy on `Intl.NumberFormat` can never feed both sides of a comparison. */
-const RealNumberFormat = Intl.NumberFormat;
-
-/** A locale whose minus is U+2212 MINUS SIGN, where Node's default locale writes a hyphen. */
+/** A locale whose minus is U+2212 MINUS SIGN, where the four interface languages write a hyphen. */
 const SWEDISH = 'sv-SE';
+
+/**
+ * Draws the next mount in `locale`, forced as the interface locale (M-18): call it BEFORE the mount,
+ * so the chart is drawn in it whether it reads the source when it builds the option or when ECharts
+ * calls a formatter. `undefined` gives the real source back; the file-level `afterEach` does so too.
+ */
+function forceInterfaceLocale(locale: string | undefined): void {
+    interfaceLocale.forced = locale;
+}
 
 /**
  * What `axisTickAmount` prints, from the same call: compact, with exact digits, on the SIGNED
  * value (S7b). The sign therefore comes out of the call as the locale writes it (D23), and two
- * ticks never share a label (D18). A negative zero prints as zero. Built through the real
- * constructor, like every expectation here. `locale` forces one; `undefined` is this machine's.
+ * ticks never share a label (D18). A negative zero prints as zero. `locale` defaults to the
+ * interface locale, the one the chart writes in (M-18).
  */
-function tickNumber(value: number, locale?: string): string {
-    return new RealNumberFormat(locale, {notation: 'compact', maximumSignificantDigits: 15}).format(value === 0 ? 0 : value);
+function tickNumber(value: number, locale = uiLocale()): string {
+    return new Intl.NumberFormat(locale, {notation: 'compact', maximumSignificantDigits: 15}).format(value === 0 ? 0 : value);
 }
 
 /**
  * What `shortMoney` prints for an amount of 1000 or more, from the same call: compact, on the
  * SIGNED value, with `exceptZero`. The sign therefore comes out of the call as the locale writes
- * it (D23), never from a literal here. `locale` forces one.
+ * it (D23), never from a literal here. `locale` defaults to the interface locale.
  */
-function compactNet(value: number, locale?: string): SignedNumber {
+function compactNet(value: number, locale = uiLocale()): SignedNumber {
     if (Math.abs(value) < 1000) throw new Error(`compactNet mirrors only the compact branch of shortMoney, and ${value} takes the other one`);
-    return splitSign(new RealNumberFormat(locale, {notation: 'compact', maximumFractionDigits: 1, signDisplay: 'exceptZero'}).format(value));
+    return splitSign(new Intl.NumberFormat(locale, {notation: 'compact', maximumFractionDigits: 1, signDisplay: 'exceptZero'}).format(value));
 }
 
-/** What `shortMoney` prints for an amount under 1000, from the same call. `locale` forces one. */
-function plainNet(value: number, locale?: string): SignedNumber {
+/** What `shortMoney` prints for an amount under 1000, from the same call. `locale` defaults to the interface locale. */
+function plainNet(value: number, locale = uiLocale()): SignedNumber {
     const abs = Math.abs(value);
     if (abs >= 1000) throw new Error(`plainNet mirrors only the short branch of shortMoney, and ${value} takes the compact one`);
     return splitSign((value === 0 ? 0 : value).toLocaleString(locale, {minimumFractionDigits: abs % 1 === 0 ? 0 : 2, maximumFractionDigits: 2, signDisplay: 'exceptZero'}));
 }
 
 /**
- * Runs `read` with every `Number.prototype.toLocaleString` call forced to `locale`, the
- * component's own included. Synchronous on purpose: the spy comes off before anything else runs.
+ * `formatSignedPercent` applied to the return on the opening value: `+53.2%`, one decimal, `+` on a
+ * gain. `locale` defaults to the interface locale. Built as a number and a `%`: in English and
+ * Italian that is also what `formatPercent(pct, {digits: 1})` writes, so either cure fits it there.
  */
-function inLocale<T>(locale: string, read: () => T): T {
-    const original = Number.prototype.toLocaleString;
-    const spy = vi.spyOn(Number.prototype, 'toLocaleString').mockImplementation(function (this: number, _locales?: unknown, options?: Intl.NumberFormatOptions) {
-        return original.call(this, locale, options);
-    });
-    try {
-        return read();
-    } finally {
-        spy.mockRestore();
-    }
-}
-
-/**
- * Runs `read` with every `new Intl.NumberFormat(undefined, …)` forced to `locale`: the call the
- * compact branch of `shortMoney` makes, which the spy of `inLocale` does not reach. A call that
- * names its locale passes through untouched. Returns what `read` returned and the options of
- * every call that asked for the default locale, so a case can prove which branch it reached.
- * Synchronous like `inLocale`, and restored whatever the outcome.
- */
-function inNumberFormatLocale<T>(locale: string, read: () => T): {value: T; defaultLocaleCalls: Intl.NumberFormatOptions[]} {
-    const defaultLocaleCalls: Intl.NumberFormatOptions[] = [];
-    // The component calls it with `new`, and the spy forwards `new` to the implementation, so the
-    // implementation must be a constructor: a `function`, never an arrow. A constructor that
-    // returns an object makes that object the result: the component gets a real `NumberFormat`.
-    const spy = vi.spyOn(Intl, 'NumberFormat').mockImplementation(function (...args: ConstructorParameters<typeof Intl.NumberFormat>) {
-        const [locales, options] = args;
-        if (locales !== undefined) return new RealNumberFormat(locales, options);
-        defaultLocaleCalls.push({...options});
-        return new RealNumberFormat(locale, options);
-    });
-    try {
-        return {value: read(), defaultLocaleCalls};
-    } finally {
-        spy.mockRestore();
-    }
-}
-
-/** `formatSignedPercent` applied to the return on the opening value: `+53.2%`. */
-function returnPct(value: number, opening: number): string {
+function returnPct(value: number, opening: number, locale = uiLocale()): string {
     const pct = (value / opening) * 100;
-    return `${pct > 0 ? '+' : ''}${pct.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}%`;
+    return `${pct > 0 ? '+' : ''}${pct.toLocaleString(locale, {minimumFractionDigits: 1, maximumFractionDigits: 1})}%`;
 }
 
 /** The suffix `openingPctPlainSuffix` appends to a net label: ` (+53.2%)`. */
-const labelSuffix = (value: number, opening: number) => ` (${returnPct(value, opening)})`;
+const labelSuffix = (value: number, opening: number, locale = uiLocale()) => ` (${returnPct(value, opening, locale)})`;
 
-/** The number `formatCurrencyAmountPlain` prints in the tooltip: absolute value, two decimals. */
+/** The number `formatCurrencyAmountPlain` prints in the tooltip: absolute value, two decimals, in the interface locale (M-18). */
 function plainAmount(value: number): string {
-    return Math.abs(value).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    return Math.abs(value).toLocaleString(uiLocale(), {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 
 /** What `formatCurrencyAmountPlain` appends for EUR under the currency mock: symbol, flag, code. */
@@ -462,6 +467,11 @@ beforeEach(() => {
     chartInstances.length = 0;
 });
 
+afterEach(() => {
+    // A forced interface locale is module state: whatever case forced it, it ends with that case.
+    forceInterfaceLocale(undefined);
+});
+
 // =============================================================================
 // S2b: privacy masking of the axis ticks, the net labels and the tooltip
 // =============================================================================
@@ -472,33 +482,34 @@ describe('PerformanceChart privacy masking (S2b)', () => {
     afterEach(() => setPrivacyEnabled(false));
 
     describe('with privacy on', () => {
-        it("masks the x-axis ticks, zero included, and keeps the locale's minus outside the mask", async () => {
+        /** The interface locales a masked tick is read in: the real one, and sv-SE forced, whose minus is U+2212. Titles stay under Vitest's 40-character cut. */
+        const TICK_LOCALES = [
+            {title: 'interface locale, en-US here', forced: undefined, minus: undefined},
+            {title: 'sv-SE forced, U+2212', forced: SWEDISH, minus: '\u2212'},
+        ];
+
+        it.each(TICK_LOCALES)("masks the x-axis ticks, zero included, and keeps the locale's minus outside the mask: $title", async ({forced, minus}) => {
             // WHY: the ticks print the scale of the chart (-2K … 2K). A clear tick reveals the
             // size of the largest mover even when every label is masked, and the gate cannot
             // see `axisTickAmount`. Catches the mask dropped from zero (D12) or from any other
             // tick, the compact suffix left outside the mask, or the minus moved inside it. The
-            // minus kept outside is the locale's (D23). On this machine it comes from the same
-            // call the tick makes. Under a forced sv-SE it must be U+2212, which a minus written
-            // by hand in front of the mask never is.
-            // Preconditions: this machine's locale writes a minus on a loss, so the masked loss
-            // is about one; and this Node has Swedish locale data and writes U+2212 there.
-            const hostMinus = splitSign(tickNumber(-1500)).sign;
-            expect(hostMinus).toMatch(/[-\u2212]/);
-            expect(splitSign(tickNumber(-1500, SWEDISH)).sign).toBe('\u2212');
+            // minus kept outside is the interface locale's (D23, M-18): it comes from the same call
+            // the tick makes. With sv-SE forced as the interface locale it must be U+2212, which a
+            // minus written by hand in front of the mask never is.
+            // Why (re-pin, M-18 CP2): the Swedish read used to patch `Intl.NumberFormat` for the
+            // browser's default locale. The chart now writes in the interface locale, so sv-SE is
+            // forced through that source, before the mount.
+            forceInterfaceLocale(forced);
+            // Preconditions: the interface locale writes a minus on a loss, so the masked loss is
+            // about one; forced, this Node has Swedish locale data and writes U+2212 there.
+            const localeMinus = splitSign(tickNumber(-1500)).sign;
+            expect(localeMinus).toMatch(/[-\u2212]/);
+            if (minus !== undefined) expect(localeMinus).toBe(minus);
             setPrivacyEnabled(true);
             const chart = await mountChart(EUR_PROPS);
 
             const axisTick = latestFullOption(chart).xAxis.axisLabel.formatter;
-            expect([1500, -1500, 0].map((value) => axisTick(value))).toEqual([PRIVACY_PLACEHOLDER, `${hostMinus}${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER]);
-
-            const swedish = inNumberFormatLocale(SWEDISH, () => axisTick(-1500));
-            // Guard: the tick asked the default locale for a compact number, so the forced locale
-            // reached it.
-            expect(
-                swedish.defaultLocaleCalls.some(({notation}) => notation === 'compact'),
-                'the masked tick never asked the default locale for a compact number',
-            ).toBe(true);
-            expect(swedish.value).toBe(`\u2212${PRIVACY_PLACEHOLDER}`);
+            expect([1500, -1500, 0].map((value) => axisTick(value))).toEqual([PRIVACY_PLACEHOLDER, `${localeMinus}${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER]);
         });
 
         it('masks a EUR net label as +€•••: sign and symbol readable, compact suffix inside the mask, return kept', async () => {
@@ -590,20 +601,23 @@ describe('PerformanceChart privacy masking (S2b)', () => {
         // output may change. Catches `maskable` made unconditional, a changed compaction step or
         // sign rule, a different composition of sign, symbol and number, or a dropped return.
         // The net label takes its sign from the same Intl call as its digits (D23), so its
-        // expectation takes the sign from that call too, in whatever glyph the locale writes; the
-        // sv-SE cases below pin the glyph itself. The axis tick takes its sign from the same call
-        // as its digits too (S7b, D23), so its expectation is built by that call; the S7b
+        // expectation takes the sign from that call too, in whatever glyph the interface locale
+        // writes; the sv-SE cases below pin the glyph itself. The axis tick takes its sign from the
+        // same call as its digits too (S7b, D23), so its expectation is built by that call; the S7b
         // describe pins its sv-SE glyphs. The tooltip's ASCII sign is the convention of
         // `formatCurrencyAmountPlain` (`currencyFormat.ts`), tracked outside this workstream.
         expect(isPrivacyEnabled()).toBe(false);
+        // Precondition: the interface locale (M-18) is en-US — the English UI on jsdom's en-US
+        // browser — whatever the host, so the literal below is about the chart, not the machine.
+        expect(uiLocale(), 'the interface locale the literal is written in').toBe('en-US');
         const eur = latestFullOption(await mountChart(EUR_PROPS));
 
         const axisTick = eur.xAxis.axisLabel.formatter;
         expect(axisTick(1500)).toBe(tickNumber(1500));
         expect(axisTick(-1500)).toBe(tickNumber(-1500));
-        // Zero is a formatted number like any other tick, so its literal is pinned under a forced
-        // en-US, never against this machine's locale.
-        expect(inNumberFormatLocale('en-US', () => axisTick(0)).value).toBe('0');
+        // Zero is a formatted number like any other tick. Why (re-pin, M-18 CP2): its literal used to
+        // be read under a patched browser locale; the chart now writes in the interface locale, en-US.
+        expect(axisTick(0)).toBe('0');
 
         const eurNet = compactNet(EUR_POSITION.net);
         // Precondition: the net carries a sign, so the check below is about one.
@@ -640,6 +654,15 @@ describe('PerformanceChart privacy masking (S2b)', () => {
 // D23: the net label writes the locale's minus
 // =============================================================================
 
+/**
+ * D23 under M-18. The minus of a net label comes out of the same Intl call as its digits, and that
+ * call writes in the interface locale. The four interface languages all write a hyphen-minus, the
+ * very character a hand-written sign would use, so no case in them can tell the two apart; sv-SE,
+ * whose minus is U+2212, can. Why (re-pin, M-18 CP2): these cases used to force sv-SE by patching
+ * the browser's default locale (`Number.prototype.toLocaleString`, `Intl.NumberFormat`). The chart
+ * now writes in the interface locale, so sv-SE is forced through its one source, `uiLocale()`,
+ * before the mount. The glyphs are literals on purpose: they are the subject.
+ */
 describe('PerformanceChart net label sign (D23)', () => {
     // The flag is module state shared by every case in the file. Whoever switches it on
     // switches it off, whatever the outcome of the case.
@@ -655,79 +678,60 @@ describe('PerformanceChart net label sign (D23)', () => {
         {title: 'CHF, the no-symbol template', props: CHF_EFFECT_PROPS, row: CHF_EFFECT.description, net: CHF_EFFECT_NET, compose: CODE_TEMPLATE},
     ];
 
-    /** Each template through the compact branch, 1000 or more, on a loss. The CHF row is a
-     *  position, so its label ends with its return, which an effect row does not carry. */
+    /** Each template through the compact branch, 1000 or more, on a loss. Both rows are effects,
+     *  which carry no return: under sv-SE a position's return would be Swedish too, and how a
+     *  return is written is the subject of the M-18 describe, not of D23. */
     const COMPACT_TEMPLATES = [
-        {title: 'EUR, the symbol template', props: EUR_LOSS_EFFECT_PROPS, row: EUR_LOSS_EFFECT.description, net: EUR_LOSS_EFFECT_NET, suffix: '', compose: SYMBOL_TEMPLATE},
-        {title: 'CHF, the no-symbol template', props: CHF_PROPS, row: CHF_ASSET.asset_name, net: CHF_POSITION.net, suffix: labelSuffix(CHF_POSITION.net, CHF_POSITION.start), compose: CODE_TEMPLATE},
+        {title: 'EUR, the symbol template', props: EUR_LOSS_EFFECT_PROPS, row: EUR_LOSS_EFFECT.description, net: EUR_LOSS_EFFECT_NET, compose: SYMBOL_TEMPLATE},
+        {title: 'CHF, the no-symbol template', props: CHF_LOSS_EFFECT_PROPS, row: CHF_LOSS_EFFECT.description, net: CHF_LOSS_EFFECT_NET, compose: CODE_TEMPLATE},
     ];
 
-    it.each(TEMPLATES)("writes the locale's own minus in the net label, in the clear and masked, U+2212 in sv-SE: $title", async ({props, row, net, compose}) => {
-        // WHY: in Node's default locale the minus is a hyphen, the very character a hand-written
-        // sign would use, so the cases above cannot tell the two apart. Forcing the one call the
-        // label's short branch makes, `Number.prototype.toLocaleString`, to a locale whose minus
-        // is U+2212 can. Catches a sign written by hand again (`amount < 0 ? '-' : ''`) in either
-        // template, and a mask that swallows it. The glyph is a literal here on purpose: it is
-        // the subject. The compact branch builds its own `Intl.NumberFormat`, which this spy does
-        // not reach: the next case forces that constructor instead.
+    it.each(TEMPLATES)("writes the interface locale's own minus in the net label, in the clear and masked, U+2212 in sv-SE: $title", async ({props, row, net, compose}) => {
+        // WHY: catches a sign written by hand again (`amount < 0 ? '-' : ''`) in either template
+        // of the short branch, and a mask that swallows it. Only a locale whose minus is not a
+        // hyphen can tell the two apart, so sv-SE is the interface locale here.
+        forceInterfaceLocale(SWEDISH);
         // Precondition: this Node has Swedish locale data and writes U+2212 there. Without it the
         // locale would fall back in silence and the check would prove nothing.
         expect(plainNet(-1, SWEDISH).sign).toBe('\u2212');
         expect(isPrivacyEnabled()).toBe(false);
         const chart = await mountChart(props);
 
-        const clear = inLocale(SWEDISH, () => netLabelOf(latestFullOption(chart), row));
-        expect(clear).toBe(compose('\u2212', plainNet(net, SWEDISH).digits));
+        expect(netLabelOf(latestFullOption(chart), row)).toBe(compose('\u2212', plainNet(net, SWEDISH).digits));
 
         const beforeOn = chart.setOptionCalls.length;
         setPrivacyEnabled(true);
         const masked = await fullOptionAfter(chart, beforeOn);
-        expect(inLocale(SWEDISH, () => netLabelOf(masked, row))).toBe(compose('\u2212', PRIVACY_PLACEHOLDER));
+        expect(netLabelOf(masked, row)).toBe(compose('\u2212', PRIVACY_PLACEHOLDER));
     });
 
-    it.each(COMPACT_TEMPLATES)("writes the locale's own minus in a compact net label, in the clear and masked, U+2212 in sv-SE: $title", async ({props, row, net, suffix, compose}) => {
-        // WHY: the compact branch prints the label most real rows show (`+€1.2K`), and it builds
-        // its own `Intl.NumberFormat`, out of reach of the `toLocaleString` spy above. In Node's
-        // default locale its minus is a hyphen too, so a sign written by hand in this branch,
-        // `(amount < 0 ? '-' : '') + format(abs)`, passes every host-locale case. Forcing the
-        // default-locale constructor to a locale whose minus is U+2212 tells the two apart: the
-        // digits turn Swedish either way, the sign only if it comes out of the same call. Catches
-        // that hand-written sign in either template, a mask that swallows the sign, and a mask
-        // that leaks the compact suffix. Swedish writes its thousands as a word (`tn`) after a
-        // no-break space, and a word left outside the mask discloses the order of magnitude just
-        // as `€•••K` would. The glyph is a literal here on purpose: it is the subject. The return
-        // after a position's label goes through `toLocaleString`, which this spy leaves alone, so
-        // it keeps the host's form.
+    it.each(COMPACT_TEMPLATES)("writes the interface locale's own minus in a compact net label, in the clear and masked, U+2212 in sv-SE: $title", async ({props, row, net, compose}) => {
+        // WHY: the compact branch prints the label most real rows show (`+€1.2K`). A sign written
+        // by hand in this branch, `(amount < 0 ? '-' : '') + format(abs)`, passes every case in a
+        // locale whose minus is a hyphen. With sv-SE as the interface locale the digits turn Swedish
+        // either way, the sign only if it comes out of the same call. Catches that hand-written sign
+        // in either template, a mask that swallows the sign, and a mask that leaks the compact
+        // suffix. Swedish writes its thousands as a word (`tn`) after a no-break space, and a word
+        // left outside the mask discloses the order of magnitude just as `€•••K` would.
+        forceInterfaceLocale(SWEDISH);
         const swedish = compactNet(net, SWEDISH);
-        // Preconditions, through the real constructor with an explicit locale. This Node has
-        // Swedish locale data and writes U+2212 in a compact number there: without it the forced
-        // locale would fall back in silence and prove nothing. And the Swedish compact suffix
-        // carries a word, so its absence from the masked label is about something.
+        // Preconditions, with an explicit locale. This Node has Swedish locale data and writes U+2212
+        // in a compact number there: without it the locale would fall back in silence and prove
+        // nothing. And the Swedish compact suffix carries a word, so its absence from the masked
+        // label is about something.
         expect(swedish.sign).toBe('\u2212');
         const suffixWord = /\p{L}+/u.exec(swedish.digits)?.[0] ?? '';
         expect(suffixWord, `the Swedish compact number "${swedish.digits}" carries no word suffix`).not.toBe('');
         expect(isPrivacyEnabled()).toBe(false);
         const chart = await mountChart(props);
 
-        const clear = inNumberFormatLocale(SWEDISH, () => netLabelOf(latestFullOption(chart), row));
-        // Guard: the label asked the default locale for a compact number, so it took the compact
-        // branch and its locale was the forced one.
-        expect(
-            clear.defaultLocaleCalls.some(({notation}) => notation === 'compact'),
-            'the clear label never asked the default locale for a compact number',
-        ).toBe(true);
-        expect(clear.value).toBe(`${compose('\u2212', swedish.digits)}${suffix}`);
+        expect(netLabelOf(latestFullOption(chart), row)).toBe(compose('\u2212', swedish.digits));
 
         const beforeOn = chart.setOptionCalls.length;
         setPrivacyEnabled(true);
-        const maskedOption = await fullOptionAfter(chart, beforeOn);
-        const masked = inNumberFormatLocale(SWEDISH, () => netLabelOf(maskedOption, row));
-        expect(
-            masked.defaultLocaleCalls.some(({notation}) => notation === 'compact'),
-            'the masked label never asked the default locale for a compact number',
-        ).toBe(true);
-        expect(masked.value).toBe(`${compose('\u2212', PRIVACY_PLACEHOLDER)}${suffix}`);
-        expect(masked.value).not.toContain(suffixWord);
+        const masked = netLabelOf(await fullOptionAfter(chart, beforeOn), row);
+        expect(masked).toBe(compose('\u2212', PRIVACY_PLACEHOLDER));
+        expect(masked).not.toContain(suffixWord);
     });
 });
 
@@ -745,9 +749,10 @@ describe('PerformanceChart net label sign (D23)', () => {
  * exactly (`1.5K`, `12.5K`, `1.25M`), and a whole amount with no decimals (`2K`).
  *
  * D23, the locale's glyphs. The tick formats the SIGNED amount, so its minus comes out of the same
- * call as its digits. In Node's default locale that minus is a hyphen, like one written by hand,
- * so the Swedish case forces the call to a locale whose minus is U+2212 and pins the glyph as a
- * literal: the glyph is the subject. Every other literal here is pinned under a forced en-US.
+ * call as its digits, written in the interface locale (M-18). The four interface languages write a
+ * hyphen, like one written by hand, so the Swedish case forces sv-SE as the interface locale, whose
+ * minus is U+2212, and pins the glyph as a literal: the glyph is the subject. Every other literal
+ * here is pinned in en-US, the interface locale of this file, which each case checks.
  *
  * D25, the edges the chart fixes. The axis runs from `-axisBound` to `axisBound`, 5% beyond the
  * widest bar, and ECharts labels both edges with their raw value: exact formatting would print the
@@ -769,57 +774,46 @@ describe('PerformanceChart amount axis ticks (S7b: D18, D23, D25)', () => {
         // Catches any rounding of the compact number to a fixed number of decimals. Exactness
         // must not swing to the other extreme either: catches decimals padded onto a whole
         // amount, and a negative zero let through to the format call, which prints `-0`.
+        // Why (re-pin, M-18 CP2): the literals used to be read under a patched browser locale;
+        // the chart now writes in the interface locale, en-US here, which the precondition checks.
         expect(isPrivacyEnabled()).toBe(false);
+        expect(uiLocale(), 'the interface locale the literals are written in').toBe('en-US');
         const axisTick = latestFullOption(await mountChart(EUR_PROPS)).xAxis.axisLabel.formatter;
 
-        const read = inNumberFormatLocale('en-US', () => {
-            const ticks = [-2_000, -1_500, -1_000, -500, 0, 500, 1_000, 1_500, 2_000].map((value) => axisTick(value));
-            const singles = [12_500, 1_250_000, 2.5, 0.75, -0, 2_000].map((value) => `${show(value)} → ${axisTick(value)}`);
-            return {ticks, distinct: new Set(ticks).size === ticks.length, singles};
-        });
-        // Guard: the ticks asked the default locale for a compact number, so the forced locale
-        // reached them.
-        expect(
-            read.defaultLocaleCalls.some(({notation}) => notation === 'compact'),
-            'the ticks never asked the default locale for a compact number',
-        ).toBe(true);
-        expect(read.value).toEqual({
+        const ticks = [-2_000, -1_500, -1_000, -500, 0, 500, 1_000, 1_500, 2_000].map((value) => axisTick(value));
+        const singles = [12_500, 1_250_000, 2.5, 0.75, -0, 2_000].map((value) => `${show(value)} → ${axisTick(value)}`);
+        expect({ticks, distinct: new Set(ticks).size === ticks.length, singles}).toEqual({
             ticks: ['-2K', '-1.5K', '-1K', '-500', '0', '500', '1K', '1.5K', '2K'],
             distinct: true,
             singles: ['12500 → 12.5K', '1250000 → 1.25M', '2.5 → 2.5', '0.75 → 0.75', '-0 → 0', '2000 → 2K'],
         });
     });
 
-    it("D23: writes the locale's minus and decimal comma on the ticks, in the clear and masked: U+2212 in sv-SE", async () => {
+    it("D23: writes the interface locale's minus and decimal comma on the ticks, in the clear and masked: U+2212 in sv-SE", async () => {
         // WHY: D23 on the axis. A minus written by hand in front of the formatted absolute value
-        // is a hyphen in every locale, and in Node's default locale the locale's own minus is a
-        // hyphen too, so no host-locale case can tell the two apart. Forcing the default-locale
-        // constructor the tick calls to a locale whose minus is U+2212 can: the digits turn
+        // is a hyphen in every locale, and the four interface languages write a hyphen too, so no
+        // case in them can tell the two apart. With sv-SE as the interface locale the digits turn
         // Swedish either way, the sign only if it comes out of the same call. Catches that
         // hand-written sign in the clear tick and in front of the mask, and a mask that swallows
         // the sign. The glyphs are literals on purpose: they are the subject.
-        // Precondition, through the real constructor with an explicit locale: this Node has
-        // Swedish locale data, and writes a compact Swedish amount the way the literals below
-        // do. Without it the forced locale would fall back in silence, or the literals would be
-        // about another ICU.
+        // Why (re-pin, M-18 CP2): sv-SE used to be forced by patching `Intl.NumberFormat` for the
+        // browser's default locale; it is now forced through the interface locale, before the mount.
+        forceInterfaceLocale(SWEDISH);
+        // Precondition, with an explicit locale: this Node has Swedish locale data, and writes a
+        // compact Swedish amount the way the literals below do. Without it the locale would fall
+        // back in silence, or the literals would be about another ICU.
         expect(tickNumber(-1500, SWEDISH)).toBe('\u22121,5\u00a0tn');
         expect(isPrivacyEnabled()).toBe(false);
         const chart = await mountChart(EUR_PROPS);
         const clearTick = latestFullOption(chart).xAxis.axisLabel.formatter;
-        const clear = inNumberFormatLocale(SWEDISH, () => [-1_500, 1_500, -2_000, 0].map((value) => clearTick(value)));
+        const clear = [-1_500, 1_500, -2_000, 0].map((value) => clearTick(value));
 
         const beforeOn = chart.setOptionCalls.length;
         setPrivacyEnabled(true);
         const maskedTick = (await fullOptionAfter(chart, beforeOn)).xAxis.axisLabel.formatter;
-        const masked = inNumberFormatLocale(SWEDISH, () => [-1_500, 1_500, 0].map((value) => maskedTick(value)));
+        const masked = [-1_500, 1_500, 0].map((value) => maskedTick(value));
 
-        // Guards: both reads asked the default locale for a compact number, so the forced locale
-        // reached them.
-        expect({
-            clear: clear.defaultLocaleCalls.some(({notation}) => notation === 'compact'),
-            masked: masked.defaultLocaleCalls.some(({notation}) => notation === 'compact'),
-        }).toEqual({clear: true, masked: true});
-        expect({clear: clear.value, masked: masked.value}).toEqual({
+        expect({clear, masked}).toEqual({
             clear: ['\u22121,5\u00a0tn', '1,5\u00a0tn', '\u22122\u00a0tn', '0'],
             masked: [`\u2212${PRIVACY_PLACEHOLDER}`, PRIVACY_PLACEHOLDER, PRIVACY_PLACEHOLDER],
         });
@@ -843,5 +837,133 @@ describe('PerformanceChart amount axis ticks (S7b: D18, D23, D25)', () => {
         expect(xAxis.max).toBeCloseTo(positiveSide * 1.05, 6);
         expect(xAxis.min).toBe(-(xAxis.max as number));
         expect({showMinLabel: xAxis.axisLabel.showMinLabel, showMaxLabel: xAxis.axisLabel.showMaxLabel}).toEqual({showMinLabel: false, showMaxLabel: false});
+    });
+});
+
+// =============================================================================
+// M-18 — the figures in the interface language
+// =============================================================================
+
+/**
+ * M-18 CP2: every figure the chart writes follows the interface language.
+ *
+ * The ticks (`axisTickAmount`) and the net labels (`shortMoney`) are written by `Intl.NumberFormat`
+ * and `toLocaleString` with `undefined` — the browser's locale — and so are the returns beside them
+ * (`formatSignedPercent`): an Italian on an en-US browser reads `+€2.3K (+53.2%)` beside amounts
+ * written `2.299,21`. Every figure is written in the interface language (the developer's decision
+ * M-18, 2026-10-12), through `uiLocale()`: the same calls in the interface locale, so the digits and
+ * the sign still come out of one call (D23).
+ *
+ * Fixture: the EUR position (a compact net label with its return) and the EUR effect (a short one).
+ * Read: the x-axis ticks, both net labels, and the returns in the asset row's tooltip — not the
+ * tooltip's amounts, which are `formatCurrencyAmountPlain`'s and pinned with it.
+ *
+ * Expectations are built with the calls the component makes, in an explicit locale: English is the
+ * control, Italian the subject. The `beforeAll` checks that Italian differs from English on every
+ * figure read, and that the Italian return reads the same whether it is written as a number and a
+ * `%` or through `formatPercent`, so either cure fits it.
+ *
+ * Language. Switched as LanguageSelector does — `currentLanguage.set`, which also drives svelte-i18n —
+ * with both dictionaries loaded; the `afterEach` puts English back.
+ */
+describe('PerformanceChart figures in the interface language (M-18)', () => {
+    /** Ticks of both magnitudes, a zero and a fraction. */
+    const TICKS = [-1_500, 1_500, 12_500, 0, 2.5];
+    /** The amounts of the asset row whose return its tooltip prints: the net and the four components, costs negative. */
+    const RETURN_AMOUNTS = [EUR_POSITION.net, EUR_POSITION.unrealized, EUR_POSITION.realized, EUR_POSITION.income, -EUR_POSITION.feesTaxes];
+
+    interface Figures {
+        ticks: string[];
+        assetLabel: string;
+        effectLabel: string;
+        /** The `(±x.x%)` returns in the asset row's tooltip, sorted. */
+        returns: string[];
+    }
+
+    /** What the chart must write in `locale`, built with the calls it makes. */
+    function expectedFigures(locale: string): Figures {
+        const asset = compactNet(EUR_POSITION.net, locale);
+        const effect = plainNet(EUR_EFFECT_NET, locale);
+        return {
+            ticks: TICKS.map((value) => tickNumber(value, locale)),
+            assetLabel: `${asset.sign}${EUR_INFO.symbol}${asset.digits}${labelSuffix(EUR_POSITION.net, EUR_POSITION.start, locale)}`,
+            effectLabel: `${effect.sign}${EUR_INFO.symbol}${effect.digits}`,
+            returns: RETURN_AMOUNTS.map((value) => `(${returnPct(value, EUR_POSITION.start, locale)})`).sort(),
+        };
+    }
+
+    /** What the chart writes, read off one full option. */
+    function figuresOf(option: FullOption): Figures {
+        const tooltip = tooltipOf(option, EUR_ASSET.asset_name);
+        return {
+            ticks: TICKS.map((value) => option.xAxis.axisLabel.formatter(value)),
+            assetLabel: netLabelOf(option, EUR_ASSET.asset_name),
+            effectLabel: netLabelOf(option, EUR_EFFECT.description),
+            returns: [...tooltip.matchAll(/\([^()<>]*%\)/g)].map((match) => match[0]).sort(),
+        };
+    }
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    const ENGLISH = expectedFigures('en-US');
+    const ITALIAN = expectedFigures('it');
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; Italian joins it, so a switch never waits on a loader.
+        await waitLocale('it');
+        // Controls: this runtime has Italian data, so every figure read changes notation…
+        expect(ITALIAN.ticks, 'Italian ticks differ from English').not.toEqual(ENGLISH.ticks);
+        expect(ITALIAN.assetLabel, 'the Italian compact label differs from English').not.toBe(ENGLISH.assetLabel);
+        expect(ITALIAN.effectLabel, 'the Italian short label differs from English').not.toBe(ENGLISH.effectLabel);
+        expect(ITALIAN.returns, 'Italian returns differ from English').not.toEqual(ENGLISH.returns);
+        // …and an Italian return reads the same as a number with a `%` and through `formatPercent`.
+        const pct = (EUR_POSITION.net / EUR_POSITION.start) * 100;
+        expect(returnPct(EUR_POSITION.net, EUR_POSITION.start, 'it')).toBe(formatPercent(pct, {digits: 1, locale: 'it'}));
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('English UI on an en-US browser (control): the figures are today’s en-US text', async () => {
+        expect(uiLocale(), 'control: the interface locale is en-US').toBe('en-US');
+        const option = latestFullOption(await mountChart(EUR_PROPS));
+
+        expect(figuresOf(option)).toEqual(ENGLISH);
+    });
+
+    it('mounted with the UI in Italian on an en-US browser: the ticks, the net labels and the returns in Italian notation', async () => {
+        await switchLanguage('it');
+        expect(uiLocale(), 'control: the interface locale is Italian').toBe('it');
+        const option = latestFullOption(await mountChart(EUR_PROPS));
+
+        expect(figuresOf(option), spelled(ITALIAN)).toEqual(ITALIAN);
+    });
+
+    it('follows an in-place switch of the UI language, en → it → en: a new full option each time, its figures in the new language', async () => {
+        const chart = await mountChart(EUR_PROPS);
+        expect(figuresOf(latestFullOption(chart)), 'en, mount — today’s text').toEqual(ENGLISH);
+
+        const beforeItalian = chart.setOptionCalls.length;
+        await switchLanguage('it');
+        expect(figuresOf(await fullOptionAfter(chart, beforeItalian)), `en → it in place — Italian notation, ${spelled(ITALIAN)}`).toEqual(ITALIAN);
+
+        const beforeEnglish = chart.setOptionCalls.length;
+        await switchLanguage('en');
+        expect(figuresOf(await fullOptionAfter(chart, beforeEnglish)), 'it → en in place — today’s text again').toEqual(ENGLISH);
     });
 });

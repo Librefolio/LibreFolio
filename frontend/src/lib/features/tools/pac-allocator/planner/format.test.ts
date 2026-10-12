@@ -42,13 +42,16 @@
  * minor unit as both fraction bounds), with `≈` in front where the rounding changed the value.
  * That would be circular if the shared formatter were broken. So the digits of the clear outputs
  * are checked once against the value put in, and each case that turns on the rounding also checks
- * that the dropped digits are gone. The L2 distance prints its digits with the host's plain number
- * format (`toLocaleString`, at most two decimals), so its expected text is that format applied to
- * the rounded value, its digits are checked in every case, and its values stay below 1000 so that
- * no grouping separator is involved. Masked strings and solver counts have no locale (a
- * placeholder, and `formatDecimalForDisplay`), so those are exact literals. So are the plural
- * counts, plain numbers. `toBe` compares them with `Object.is`, so NaN matches NaN; a plural rule
- * reads -0 as 0, and the table of counts does too.
+ * that the dropped digits are gone. The L2 distance prints its digits with the plain number format
+ * (`toLocaleString`, at most two decimals) of the interface locale — en-US in every case but the
+ * M-18 block's, where the UI is English and the browser pinned to en-US — so its expected text is
+ * that format applied to the rounded value, its digits are checked in every case, and its values
+ * stay below 1000 so that no grouping separator is involved. Masked strings have no locale (a
+ * placeholder), so those are exact literals. A solver count is written by the FX-rate formatter, so
+ * since M-18 CP3a in the interface locale: below 1000 en-US writes the plain decimal, so those stay
+ * literals; the one above 1000 is Intl's en-US output for its digits, grouped. The plural counts,
+ * plain numbers, are exact literals too. `toBe` compares them with `Object.is`, so NaN matches NaN; a
+ * plural rule reads -0 as 0, and the table of counts does too.
  *
  * Privacy. Decision c: wealth is personal. With privacy on the number becomes the placeholder.
  * The `≈` marker, the sign and the currency (symbol, flag, code) stay outside the mask. A solver
@@ -65,8 +68,37 @@
  *
  * Storage. The shared `$app/environment` mock reports `browser: false`, so `setPrivacyEnabled`
  * moves the in-memory rune and never touches `localStorage`.
+ *
+ * The interface language (M-18 CP2). Every figure is written in the interface language — the
+ * developer's rule of 2026-10-12 — through one source, `uiLocale()`: the UI language, regionalised by
+ * the browser only when the two agree. Without a locale, the planner's calendar dates
+ * (`formatPlannerDate`), timestamps (`formatPlannerTimestamp`), copy stamps (`formatCopyStamp`) and
+ * the digits of an L2 distance follow it; until now they followed the browser (`locale ?? undefined`,
+ * `toLocaleString(undefined, …)`). An explicit locale still wins. The browser is pinned to en-US
+ * before any import, since Node's follows the host's ICU locale: an English UI is written en-US, an
+ * Italian one bare `it` (an en-US browser lends no region to Italian, uiLocale.test.ts). The language
+ * is switched as LanguageSelector does and put back to English after every case of that block.
+ *
+ * The exact decimals (M-18 CP3a, last block). A quantity (`formatPlannerQuantity`, personal), a
+ * scenario parameter (`formatPlannerPlainDecimal`, public) and an FX rate (`formatPlannerFxRate`,
+ * public; a solver count goes through it) are exact decimal strings, shown with every digit up to
+ * twenty through `formatDecimalForDisplay`: a dot and no grouping in every language. The cure writes
+ * the same digits in the interface locale through `formatExactDecimal`: an Italian UI reads
+ * `12.345,678901234`, a French one the same with its own separators, and an English one now groups
+ * from a thousand on, `12,345.678`, the new contract of English. `≈` stays in front, outside the
+ * digits, and the privacy rule does not move. The plural counts stay plain: they are read off the
+ * digits, never off the written text, so they do not move with the language (a guard), and the twin
+ * property reads a text the way the interface language writes numbers, its grouping set aside and
+ * its decimal separator marking the fraction: in English as before, in Italian and French red until
+ * the text is theirs. Every expectation is Intl's output for the interface locale, handed the digits
+ * as a string (exact, no double between); no localized literal is typed.
  */
-import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+
+// The browser, pinned before any import: the interface locale takes its region from it.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
 
 // The currency catalogue is the only request in this graph. It is answered so that the output
 // carries a real symbol and flag; everything else is inert.
@@ -93,18 +125,27 @@ import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.
 import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
+import {defaultAsOf} from './defaults';
 import {
     catalogCurrencyDigits,
     exactMoneyDisplay,
     exactQuantityCount,
+    formatCopyStamp,
+    formatExactFxRate,
     formatExactMoneyHtml,
     formatExactMoneyPlain,
     formatExactQuantity,
     formatObjectiveValue,
+    formatPlannerDate,
+    formatPlannerFxRate,
     formatPlannerL2,
     formatPlannerMoneyPlain,
     formatPlannerPlainDecimal,
     formatPlannerQuantity,
+    formatPlannerTimestamp,
     formatSolverNumber,
     plannerPlainDecimalCount,
     plannerQuantityCount,
@@ -148,14 +189,43 @@ function sharedHtml(amount: number, code: string, minFraction: number, maxFracti
     return formatCurrencyAmountHtml(amount, code, {minFraction, maxFraction, showSign, sensitivity: 'personal'});
 }
 
-/** The host's plain number with at most two decimals: how the L2 formatter prints its digits. */
-function plainNumber(amount: number): string {
-    return amount.toLocaleString(undefined, {maximumFractionDigits: 2});
+/**
+ * The interface locale of every case outside the M-18 block: an English UI on the pinned en-US
+ * browser. M-18 rewrite: this helper used the host's locale (`toLocaleString(undefined, …)`), the
+ * L2 formatter's own until the interface language decided its digits.
+ */
+const INTERFACE_LOCALE = 'en-US';
+
+/** A plain number with at most two decimals in `locale`, the interface's by default: how the L2 formatter prints its digits. */
+function plainNumber(amount: number, locale = INTERFACE_LOCALE): string {
+    return amount.toLocaleString(locale, {maximumFractionDigits: 2});
 }
 
 /** The digits of a formatted string, whatever separators the locale puts between them. */
 function digitsOf(text: string): string {
     return text.replace(/\D/g, '');
+}
+
+/**
+ * What Intl writes for the plain decimal `text` in `locale`, with exactly its own fraction digits: how a quantity,
+ * a plain decimal or a rate is written from M-18 CP3a on. Intl is handed the string, which Intl.NumberFormat v3
+ * reads as an exact decimal: no double in between, so the twentieth fraction digit survives.
+ */
+function intlExact(locale: string, text: string): string {
+    const fractionDigits = text.split('.')[1]?.length ?? 0;
+    return new Intl.NumberFormat(locale, {minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits}).format(text as Intl.StringNumericLiteral);
+}
+
+/** The interface languages these cases switch to. */
+type UiLanguage = 'en' | 'it' | 'fr';
+
+/** The interface locale of each on the pinned en-US browser: English keeps the browser's region, the others are bare. */
+const LOCALE_OF: Readonly<Record<UiLanguage, string>> = {en: INTERFACE_LOCALE, it: 'it', fr: 'fr'};
+
+/** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+async function uiLanguage(lang: UiLanguage): Promise<void> {
+    currentLanguage.set(lang);
+    await waitLocale(lang);
 }
 
 /** Moves the flag, and proves it moved. */
@@ -183,6 +253,10 @@ beforeAll(async () => {
 afterEach(() => {
     // The flag is module-level state shared by every test in this file.
     setPrivacyEnabled(false);
+});
+
+afterAll(() => {
+    vi.unstubAllGlobals();
 });
 
 describe('exactMoneyDisplay — the text at the minor unit, and whether the rounding changed it', () => {
@@ -438,7 +512,9 @@ describe('formatSolverNumber — a raw solver number, by the unit of its stage',
         ['2.005', '≈2.01'],
         ['-2.005', '≈-2.01'],
         ['-0.004', '≈0'],
-        ['1234.5678', '≈1234.57'],
+        // M-18 CP3a: a count is written in the interface locale like every rate, so the English UI
+        // (en-US browser) groups it from a thousand on; it read `≈1234.57`.
+        ['1234.5678', '≈' + intlExact(INTERFACE_LOCALE, '1234.57')],
     ])('shows the count %s to two decimals as %s, with ≈ only when the rounding changed it', (value, expected) => {
         expect(formatSolverNumber(value, COUNT, digits)).toBe(expected);
     });
@@ -539,6 +615,87 @@ describe('formatPlannerL2 — an L2 distance in squared valuation money', () => 
         expect(formatPlannerL2(finite('12.5'), 'EUR')).toBe(`${P} EUR²`);
         expect(formatPlannerL2(ratio('1', '3', '0.333333333333333333', 18), 'EUR')).toBe(`≈${P} EUR²`);
         expect(formatSolverNumber('12.345', EUR_SQUARED)).toBe(`≈${P} EUR²`);
+    });
+});
+
+describe('without a locale, the interface language: dates, timestamps, copy stamps and L2 digits (M-18)', () => {
+    /** `formatPlannerDate`'s options. */
+    const DATE = {year: 'numeric', month: '2-digit', day: '2-digit'} as const;
+    /** `formatCopyStamp`'s for data of today: the date and the time the copy ran. */
+    const STAMP = {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'} as const;
+    /** `formatDateTime`'s, through which `formatPlannerTimestamp` writes. */
+    const TIMESTAMP = {year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'} as const;
+
+    /** A local noon: its UTC day is its local day in every zone within twelve hours of UTC. */
+    const NOW = new Date(2026, 9, 12, 12, 0);
+    const TODAY = '2026-10-12';
+    const EARLIER = '2026-10-09';
+    /** When the copy ran: an instant, written in the run's time zone by the helper and the expectation alike. */
+    const CAPTURED_AT = '2026-10-12T09:05:00Z';
+
+    /** The UI in Italian on the pinned en-US browser: the interface locale is bare `it`. */
+    async function italianUi(): Promise<void> {
+        await uiLanguage('it');
+        expect(uiLocale(), 'control: an Italian UI on an en-US browser is written bare it').toBe('it');
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('formatPlannerDate: a calendar date in the interface locale; an explicit locale still wins', async () => {
+        const date = new Date(2026, 9, 12);
+        const italian = date.toLocaleDateString('it', DATE);
+        const american = date.toLocaleDateString('en-US', DATE);
+        expect(italian, 'control: Italian writes the date otherwise than en-US').not.toBe(american);
+        expect(formatPlannerDate(TODAY), 'control: an English UI on an en-US browser writes en-US').toBe(american);
+
+        await italianUi();
+        expect(formatPlannerDate(TODAY, 'en-US'), 'an explicit locale still wins').toBe(american);
+
+        expect(formatPlannerDate(TODAY), 'without a locale, an Italian UI must read an Italian date').toBe(italian);
+    });
+
+    it('formatPlannerTimestamp: when a fact was copied, in the interface locale; an explicit locale still wins', async () => {
+        const instant = new Date(CAPTURED_AT);
+        const italian = instant.toLocaleDateString('it', TIMESTAMP);
+        const american = instant.toLocaleDateString('en-US', TIMESTAMP);
+        expect(italian, 'control: Italian writes the timestamp otherwise than en-US').not.toBe(american);
+        expect(formatPlannerTimestamp(CAPTURED_AT), 'control: an English UI on an en-US browser writes en-US').toBe(american);
+
+        await italianUi();
+        expect(formatPlannerTimestamp(CAPTURED_AT, 'en-US'), 'an explicit locale still wins').toBe(american);
+
+        expect(formatPlannerTimestamp(CAPTURED_AT), 'without a locale, an Italian UI must read an Italian timestamp').toBe(italian);
+    });
+
+    it('formatCopyStamp: data of today shows when the copy ran, data of an earlier day its date — both in the interface locale; an explicit locale still wins', async () => {
+        expect(defaultAsOf(NOW), 'control: the as-of day of NOW is TODAY, so data of TODAY shows a time and data of EARLIER a date').toBe(TODAY);
+        const written = (locale: string) => ({today: new Date(CAPTURED_AT).toLocaleString(locale, STAMP), earlier: new Date(2026, 9, 9).toLocaleDateString(locale, DATE)});
+        const stamps = (locale?: string) => ({today: formatCopyStamp(TODAY, CAPTURED_AT, locale, NOW), earlier: formatCopyStamp(EARLIER, CAPTURED_AT, locale, NOW)});
+        const italian = written('it');
+        const american = written('en-US');
+        expect(italian.today, 'control: Italian writes the date and time otherwise than en-US').not.toBe(american.today);
+        expect(italian.earlier, 'control: Italian writes the date otherwise than en-US').not.toBe(american.earlier);
+        expect(stamps(undefined), 'control: an English UI on an en-US browser writes en-US').toEqual(american);
+
+        await italianUi();
+        expect(stamps('en-US'), 'an explicit locale still wins').toEqual(american);
+
+        expect(stamps(undefined), 'without a locale, an Italian UI must read Italian stamps').toEqual(italian);
+    });
+
+    it('formatPlannerL2: the digits of an L2 distance in the interface locale, through a squared solver number too', async () => {
+        // 12345.678 is shown at two decimals, ≈12345.68: above a thousand, so the grouping is written as well.
+        const italian = `≈${plainNumber(12345.68, 'it')} EUR²`;
+        const american = `≈${plainNumber(12345.68, 'en-US')} EUR²`;
+        expect(italian, 'control: Italian writes the digits otherwise than en-US').not.toBe(american);
+        expect(formatPlannerL2(finite('12345.678'), 'EUR'), 'control: an English UI on an en-US browser writes en-US').toBe(american);
+
+        await italianUi();
+
+        expect({l2: formatPlannerL2(finite('12345.678'), 'EUR'), solver: formatSolverNumber('12345.678', EUR_SQUARED)}, 'an Italian UI must read Italian digits').toEqual({l2: italian, solver: italian});
     });
 });
 
@@ -689,18 +846,56 @@ const TWIN_INPUTS: (string | null | undefined)[] = ['0', '-0', '1', '1.', '1.000
 /**
  * Why a count is not the count of its text, or null when it is. NaN exactly when no digit is shown
  * (the empty cell and the placeholder carry none). Otherwise the integer part shown, its `≈` and
- * sign set aside, and a fraction counted exactly when a point is shown.
+ * sign set aside, and a fraction counted exactly when a decimal separator is shown. The text is read
+ * the way the interface locale writes numbers (M-18 CP3a): its grouping separators set aside, its
+ * decimal separator marking the fraction — `1,000,000` is a million in English, `1,5` one and a
+ * half in Italian.
  */
-function twinMismatch(count: number, text: string): string | null {
+function twinMismatch(count: number, text: string, locale: string = uiLocale()): string | null {
     const digitShown = /\d/.test(text);
     if (Number.isNaN(count)) return digitShown ? 'NaN next to digits' : null;
     if (!digitShown) return 'a number next to no digit';
-    const integerPart = text.replace(/^≈/, '').replace(/^-/, '').split('.')[0];
-    if (Math.trunc(count) !== Number(integerPart)) return `integer part ${Math.trunc(count)}, shown ${integerPart}`;
+    const parts = new Intl.NumberFormat(locale).formatToParts(1234567.5);
+    const group = parts.find((part) => part.type === 'group')?.value ?? '';
+    const decimal = parts.find((part) => part.type === 'decimal')?.value ?? '.';
+    const unsigned = text.replace(/^≈/, '').replace(/^[-\u2212]/, '');
+    const [integerPart, fractionPart] = (group === '' ? unsigned : unsigned.split(group).join('')).split(decimal);
+    if (Math.trunc(count) !== Number(integerPart)) return `integer part ${Math.trunc(count)}, shown ${integerPart} (read in ${locale})`;
     const fractionCounted = count % 1 !== 0;
-    const fractionShown = text.includes('.');
+    const fractionShown = fractionPart !== undefined;
     if (fractionCounted !== fractionShown) return fractionShown ? 'a fraction shown, none counted' : 'a fraction counted, none shown';
     return null;
+}
+
+/**
+ * Every count twin over every input, in the interface language and privacy state of the moment: each
+ * count must be the count of its shown text.
+ */
+function expectTwinProperty(on: boolean): void {
+    privacy(on);
+    const mismatches: string[] = [];
+    const texts = new Set<string>();
+    let read = 0;
+    for (const twin of COUNT_TWINS) {
+        for (const input of TWIN_INPUTS) {
+            const pair = twin.read(input);
+            if (pair === undefined) continue;
+            read += 1;
+            texts.add(pair.text);
+            const mismatch = twinMismatch(pair.count, pair.text);
+            if (mismatch !== null) mismatches.push(`${twin.name}, ${JSON.stringify(input)}: shown ${JSON.stringify(pair.text)}, counted ${pair.count}: ${mismatch}`);
+        }
+    }
+
+    // The walk read what it claims: every input through the two plain twins, every string through the two exact ones.
+    const strings = TWIN_INPUTS.filter((input) => typeof input === 'string').length;
+    expect(read, 'pairs read').toBe(2 * TWIN_INPUTS.length + 2 * strings);
+    // And it met every kind of text: digits, the empty cell, and the placeholder exactly when privacy is on.
+    const digitsShown = [...texts].some((text) => /\d/.test(text));
+    expect(digitsShown, 'some text shows digits').toBe(true);
+    expect(texts.has(EMPTY), 'some text is the empty cell').toBe(true);
+    expect(texts.has(P), 'the placeholder appears exactly when privacy is on').toBe(on);
+    expect(mismatches).toEqual([]);
 }
 
 describe('plural counts — the count is the count of the shown text (twin property)', () => {
@@ -708,29 +903,150 @@ describe('plural counts — the count is the count of the shown text (twin prope
         {privacy: 'off', on: false},
         {privacy: 'on', on: true},
     ])('privacy $privacy', ({on}) => {
-        privacy(on);
-        const mismatches: string[] = [];
-        const texts = new Set<string>();
-        let read = 0;
-        for (const twin of COUNT_TWINS) {
-            for (const input of TWIN_INPUTS) {
-                const pair = twin.read(input);
-                if (pair === undefined) continue;
-                read += 1;
-                texts.add(pair.text);
-                const mismatch = twinMismatch(pair.count, pair.text);
-                if (mismatch !== null) mismatches.push(`${twin.name}, ${JSON.stringify(input)}: shown ${JSON.stringify(pair.text)}, counted ${pair.count}: ${mismatch}`);
-            }
-        }
+        expectTwinProperty(on);
+    });
+});
 
-        // The walk read what it claims: every input through the two plain twins, every string through the two exact ones.
-        const strings = TWIN_INPUTS.filter((input) => typeof input === 'string').length;
-        expect(read, 'pairs read').toBe(2 * TWIN_INPUTS.length + 2 * strings);
-        // And it met every kind of text: digits, the empty cell, and the placeholder exactly when privacy is on.
-        const digitsShown = [...texts].some((text) => /\d/.test(text));
-        expect(digitsShown, 'some text shows digits').toBe(true);
-        expect(texts.has(EMPTY), 'some text is the empty cell').toBe(true);
-        expect(texts.has(P), 'the placeholder appears exactly when privacy is on').toBe(on);
-        expect(mismatches).toEqual([]);
+// ---------------------------------------------------------------------------
+// M-18 CP3a — the exact decimals in the interface language
+// ---------------------------------------------------------------------------
+
+describe('formatPlannerQuantity, formatPlannerPlainDecimal, formatPlannerFxRate — the exact decimals in the interface language (M-18 CP3a)', () => {
+    /** Thousands and more than eight fraction digits: every separator of a notation shows, and no digit may go. */
+    const QUANTITY = '12345.678901234';
+    /** A scenario parameter in the thousands. */
+    const STEP = '25000.5';
+    /** An FX rate with thirteen fraction digits. */
+    const RATE = '1.0823456789012';
+    /** A rate in the thousands (EUR → KRW): four integer digits, which Italian leaves ungrouped and French groups. */
+    const LARGE_RATE = '1480.123456';
+
+    /** Counts above a thousand, where a written text has grouping to misread. */
+    const THOUSANDS_COUNT_CASES: CountCase[] = [
+        {input: '12345.678', count: 12345.5, why: 'integer part 12345, plus 0.5 for the fraction shown'},
+        {input: '1234567', count: 1234567, why: 'a million and more, no fraction'},
+        {input: '-12345.5', count: 12345.5, why: 'plural operands are absolute'},
+    ];
+
+    /** The UI in `lang` on the pinned en-US browser; returns the interface locale that gives, checked. */
+    async function interfaceUi(lang: UiLanguage): Promise<string> {
+        await uiLanguage(lang);
+        expect(uiLocale(), `control: a ${lang} UI on an en-US browser is written ${LOCALE_OF[lang]}`).toBe(LOCALE_OF[lang]);
+        return LOCALE_OF[lang];
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it.each(['it', 'fr'] as const)('%s UI: a quantity, a plain decimal, an FX rate and a solver count keep every digit, written in the language’s notation', async (lang) => {
+        const locale = await interfaceUi(lang);
+        const expected = {
+            quantity: intlExact(locale, QUANTITY),
+            twentyDigits: intlExact(locale, TWENTY_DIGIT_ONE),
+            negative: intlExact(locale, '-1234.5'),
+            step: intlExact(locale, STEP),
+            rate: intlExact(locale, RATE),
+            largeRate: intlExact(locale, LARGE_RATE),
+            solverCount: '≈' + intlExact(locale, '12345.68'),
+        };
+        // Controls: Intl keeps every digit it is handed, and the language really writes them otherwise than English.
+        expect(digitsOf(expected.quantity), 'control: every digit of the quantity').toBe(digitsOf(QUANTITY));
+        expect(digitsOf(expected.twentyDigits), 'control: all twenty fraction digits, which a double reads as 1').toBe(digitsOf(TWENTY_DIGIT_ONE));
+        expect(expected.quantity, 'control: the quantity is written otherwise than in English').not.toBe(intlExact(INTERFACE_LOCALE, QUANTITY));
+        expect(expected.rate, 'control: the rate is written otherwise than in English').not.toBe(intlExact(INTERFACE_LOCALE, RATE));
+
+        expect({
+            quantity: formatPlannerQuantity(QUANTITY),
+            twentyDigits: formatPlannerQuantity(TWENTY_DIGIT_ONE),
+            negative: formatPlannerQuantity('-1234.5'),
+            step: formatPlannerPlainDecimal(STEP),
+            rate: formatPlannerFxRate(RATE),
+            largeRate: formatPlannerFxRate(LARGE_RATE),
+            solverCount: formatSolverNumber('12345.678', COUNT, digits),
+        }).toEqual(expected);
+    });
+
+    it.each(['it', 'fr'] as const)('%s UI: ≈ stays in front of an approximate quantity or rate, outside the digits', async (lang) => {
+        const locale = await interfaceUi(lang);
+
+        expect({
+            quantity: formatPlannerQuantity(QUANTITY, {approx: true}),
+            rate: formatPlannerFxRate(RATE, {approx: true}),
+            exactQuantity: formatExactQuantity(ratio('1', '3', '0.333333')),
+            exactRate: formatExactFxRate(ratio('2', '3', '0.666667')),
+        }).toEqual({
+            quantity: '≈' + intlExact(locale, QUANTITY),
+            rate: '≈' + intlExact(locale, RATE),
+            exactQuantity: '≈' + intlExact(locale, '0.333333'),
+            exactRate: '≈' + intlExact(locale, '0.666667'),
+        });
+    });
+
+    it('Italian UI, privacy on: a quantity stays masked, ≈ outside the mask; a plain decimal and an FX rate are public, written in Italian', async () => {
+        const locale = await interfaceUi('it');
+        privacy(true);
+
+        expect({
+            quantity: formatPlannerQuantity(QUANTITY),
+            approxQuantity: formatPlannerQuantity(QUANTITY, {approx: true}),
+            exactQuantity: formatExactQuantity(ratio('1', '3', '0.333333')),
+            step: formatPlannerPlainDecimal(STEP),
+            rate: formatPlannerFxRate(RATE),
+            approxRate: formatPlannerFxRate(RATE, {approx: true}),
+        }).toEqual({
+            quantity: P,
+            approxQuantity: '≈' + P,
+            exactQuantity: '≈' + P,
+            step: intlExact(locale, STEP),
+            rate: intlExact(locale, RATE),
+            approxRate: '≈' + intlExact(locale, RATE),
+        });
+    });
+
+    it('English UI on an en-US browser: from 1,000 on, a quantity, a plain decimal, an FX rate and a solver count are now grouped — 12,345.678, the new contract of M-18 CP3a; below 1,000 nothing moves', async () => {
+        const locale = await interfaceUi('en');
+        const grouped = intlExact(locale, '12345.678');
+        expect(grouped, 'control: en-US writes a thousands separator').not.toBe('12345.678');
+        expect(digitsOf(grouped), 'control: and keeps every digit').toBe('12345678');
+        expect(intlExact(locale, '123.456'), 'control: below 1,000, en-US writes the plain decimal').toBe('123.456');
+
+        expect({
+            quantity: formatPlannerQuantity('12345.678'),
+            step: formatPlannerPlainDecimal(STEP),
+            rate: formatPlannerFxRate(LARGE_RATE),
+            solverCount: formatSolverNumber('1234.5678', COUNT, digits),
+            belowThousand: formatPlannerQuantity('123.456'),
+        }).toEqual({
+            quantity: grouped,
+            step: intlExact(locale, STEP),
+            rate: intlExact(locale, LARGE_RATE),
+            solverCount: '≈' + intlExact(locale, '1234.57'),
+            belowThousand: '123.456',
+        });
+    });
+
+    it.each(['en', 'it', 'fr'] as const)('%s UI: the plural counts do not move with the language — read off the plain digits, never off the written text (guard)', async (lang) => {
+        await interfaceUi(lang);
+        privacy(false);
+
+        for (const {input, count, why} of [...COUNT_CASES, ...THOUSANDS_COUNT_CASES]) {
+            const shown = JSON.stringify(input) ?? 'undefined';
+            expect(asPlural(plannerQuantityCount(input)), `plannerQuantityCount(${shown}): ${why}`).toBe(count);
+            expect(asPlural(plannerPlainDecimalCount(input)), `plannerPlainDecimalCount(${shown}): ${why}`).toBe(count);
+            if (typeof input === 'string') expect(asPlural(exactQuantityCount(finite(input))), `exactQuantityCount(${shown}): ${why}`).toBe(count);
+        }
+    });
+
+    it.each([
+        {lang: 'it', privacy: 'off', on: false},
+        {lang: 'it', privacy: 'on', on: true},
+        {lang: 'fr', privacy: 'off', on: false},
+        {lang: 'fr', privacy: 'on', on: true},
+    ] as const)('$lang UI, privacy $privacy: the count is still the count of the shown text, read the way the language writes numbers (twin property)', async ({lang, on}) => {
+        await interfaceUi(lang);
+
+        expectTwinProperty(on);
     });
 });

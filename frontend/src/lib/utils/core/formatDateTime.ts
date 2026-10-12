@@ -1,3 +1,5 @@
+import {uiLocale} from '$lib/stores/app/uiLocale';
+
 /**
  * formatDateTime — a locale-aware "date **and** time" label, e.g. "Jun 5, 2024,
  * 04:30 PM".
@@ -13,9 +15,9 @@
  * Two deliberate fidelity choices, so the output stays exactly what the copies
  * produced:
  *
- * - The locale defaults to the environment's, matching the original
- *   `toLocaleDateString(undefined, …)` calls (not the `$currentLanguage` store
- *   the chart formatters thread through).
+ * - The locale defaults to the interface locale (`uiLocale()`, M-18): the
+ *   interface language, with the browser's region only when the two agree.
+ *   The browser's own locale is never read.
  * - The original used `toLocaleDateString` *with* time options rather than
  *   `toLocaleString`. `toLocaleDateString` does honour `hour`/`minute` in
  *   practice, so the two render identically — but this keeps the exact call to
@@ -26,7 +28,7 @@
  * formatters, which echo the raw string on a bad parse, are a separate family
  * with a separate contract.
  */
-export function formatDateTime(value: Date | string, locale?: string): string {
+export function formatDateTime(value: Date | string, locale: string = uiLocale()): string {
     return new Date(value).toLocaleDateString(locale, {
         year: 'numeric',
         month: 'short',

@@ -15,6 +15,7 @@
 import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '../currency/currencyFormat';
 import {getAssetTypeIconUrl} from '../assetTypes';
 import {escapeHtml} from '../core/escapeHtml';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /**
  * Mapping of Pydantic built-in error types to i18n keys.
@@ -190,7 +191,7 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
         const num = parseFloat(rawParams.balance);
         // Asset balances: no forced decimals (show "5" not "5.00"), emoji 📈/📉 after number
         const emoji = num >= 0 ? '📈' : '📉';
-        const formatted = num.toLocaleString(undefined, {
+        const formatted = num.toLocaleString(uiLocale(), {
             minimumFractionDigits: 0,
             maximumFractionDigits: 6,
         });

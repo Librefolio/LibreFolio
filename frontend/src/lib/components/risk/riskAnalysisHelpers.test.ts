@@ -11,17 +11,35 @@
  * formatCurrencyAmount is asserted with an explicit locale ('en-US') so the
  * expected string is deterministic regardless of the host process locale.
  *
+ * Without a locale it writes in the interface language (M-18 CP2): every figure
+ * follows the UI language through one source, `uiLocale()`, where until now an
+ * absent locale meant the browser's (`Intl.NumberFormat(undefined, …)`). An
+ * explicit locale still wins. The browser is pinned to en-US before any import —
+ * Node's follows the host's ICU locale — so an English UI is written en-US and an
+ * Italian one bare `it` (an en-US browser lends no region to Italian). That block
+ * switches the language as LanguageSelector does and puts English back after
+ * each case; its Italian amounts come from `Intl.NumberFormat` in this runtime,
+ * never typed (Italian puts a no-break space before the €).
+ *
  * It is also the one function here that reads a store — the global privacy flag
  * — so this file resets that flag around every test. The reset is not optional:
  * the store is module level and shared with every other suite in the run, and a
  * leftover `true` would turn each `'$1,234.50'` below into a placeholder.
  */
 import {readFileSync} from 'node:fs';
-import {afterEach, beforeEach, describe, expect, it} from 'vitest';
+import {afterAll, afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
+// The browser, pinned before any import: the interface locale takes its region from it.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
 import type {RiskDataQualityReport} from '$lib/risk/riskTypes';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
+import {currentLanguage} from '$lib/stores/app/language';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {
     addDays,
     ASSET_SET_DAILY_VAR_INSTANCE,
@@ -50,6 +68,7 @@ const assetRiskScenariosViewSource = readFileSync(new URL('./AssetRiskScenariosV
 
 beforeEach(() => setPrivacyEnabled(false));
 afterEach(() => setPrivacyEnabled(false));
+afterAll(() => vi.unstubAllGlobals());
 
 /** A result whose only field the code under test reads is `analytic_code`. */
 function result(code: string): RiskAnalyticResult {
@@ -469,6 +488,85 @@ describe('formatScopedCurrencyAmount', () => {
     // the day the backend starts computing them.
     it('still em-dashes a missing amount on a portfolio scope', () => {
         expect(formatScopedCurrencyAmount(null, 'USD', 'portfolio', 'en-US')).toBe('—');
+    });
+});
+
+describe('formatCurrencyAmount / formatScopedCurrencyAmount — without a locale, the interface language (M-18)', () => {
+    /** A gain above a thousand and a loss: the grouping, the decimal separator and the place of the sign. */
+    const AMOUNTS = ['12345.5', '-1234.5'] as const;
+
+    /** Each amount as Intl writes it in `locale`, with the formatter's options. */
+    function intlAmounts(locale: string, currency: string): string[] {
+        const format = new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2});
+        return AMOUNTS.map((value) => format.format(Number(value)));
+    }
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    /** The UI in Italian on the pinned en-US browser: the interface locale is bare `it`. */
+    async function italianUi(): Promise<void> {
+        await uiLanguage('it');
+        expect(uiLocale(), 'control: an Italian UI on an en-US browser is written bare it').toBe('it');
+    }
+
+    /** The two notations, and the premise that they differ amount by amount. */
+    function notations(currency: string): {italian: string[]; american: string[]} {
+        const italian = intlAmounts('it', currency);
+        const american = intlAmounts('en-US', currency);
+        italian.forEach((text, index) => expect(text, `control: Italian writes ${AMOUNTS[index]} ${currency} otherwise than en-US`).not.toBe(american[index]));
+        return {italian, american};
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('formatCurrencyAmount: an Italian UI reads Italian amounts without passing a locale; an explicit locale still wins', async () => {
+        const {italian, american} = notations('EUR');
+        expect(
+            AMOUNTS.map((value) => formatCurrencyAmount(value, 'EUR')),
+            'control: an English UI on an en-US browser writes en-US',
+        ).toEqual(american);
+
+        await italianUi();
+        expect(
+            AMOUNTS.map((value) => formatCurrencyAmount(value, 'EUR', 'en-US')),
+            'an explicit locale still wins',
+        ).toEqual(american);
+
+        expect(
+            AMOUNTS.map((value) => formatCurrencyAmount(value, 'EUR')),
+            `without a locale, an Italian UI must read Italian amounts: ${spelled(italian)}`,
+        ).toEqual(italian);
+    });
+
+    it('formatScopedCurrencyAmount: on a portfolio scope, the same Italian amounts without a locale; an explicit locale still wins', async () => {
+        const {italian, american} = notations('EUR');
+        expect(
+            AMOUNTS.map((value) => formatScopedCurrencyAmount(value, 'EUR', 'portfolio')),
+            'control: an English UI on an en-US browser writes en-US',
+        ).toEqual(american);
+
+        await italianUi();
+        expect(
+            AMOUNTS.map((value) => formatScopedCurrencyAmount(value, 'EUR', 'portfolio', 'en-US')),
+            'an explicit locale still wins',
+        ).toEqual(american);
+
+        expect(
+            AMOUNTS.map((value) => formatScopedCurrencyAmount(value, 'EUR', 'portfolio')),
+            `without a locale, an Italian UI must read Italian amounts: ${spelled(italian)}`,
+        ).toEqual(italian);
     });
 });
 

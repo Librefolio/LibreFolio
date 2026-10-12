@@ -5,7 +5,6 @@
     import {z} from 'zod';
     import {schemas} from '$lib/api';
     import {_} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {CHART_ANIMATION_CONFIG, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {buildDataZoom, getChartZoomWindow} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
@@ -54,6 +53,7 @@
         type LotValueSeriesPoint,
     } from './lotComparisonChartHelpers';
     import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotValueHistoryPoint = z.infer<typeof schemas.LotValueHistoryPoint>;
@@ -226,13 +226,13 @@
     function formatShortDate(value: string): string {
         const date = parseDisplayDate(value);
         if (!date) return value;
-        return date.toLocaleDateString($currentLanguage || undefined, {day: '2-digit', month: '2-digit', year: '2-digit'});
+        return date.toLocaleDateString(uiLocale(), {day: '2-digit', month: '2-digit', year: '2-digit'});
     }
 
     function formatLongDate(value: number | string): string {
         const date = parseDisplayDate(value);
         if (!date) return String(value);
-        return date.toLocaleDateString($currentLanguage || undefined, {year: 'numeric', month: 'short', day: 'numeric'});
+        return date.toLocaleDateString(uiLocale(), {year: 'numeric', month: 'short', day: 'numeric'});
     }
 
     /** This chart's numbers are already percentages, hence scale 1 (the default). */
@@ -381,7 +381,7 @@
 
     function formatTooltipMonth(date: string): string {
         const [year, month] = date.split('-').map(Number);
-        return new Intl.DateTimeFormat($currentLanguage || undefined, {
+        return new Intl.DateTimeFormat(uiLocale(), {
             month: 'long',
             year: 'numeric',
             timeZone: 'UTC',
@@ -1189,7 +1189,7 @@
         return buildResponsiveXAxisPolicy({
             width: chartContainer?.clientWidth ?? 0,
             values: range ? [range.min, range.max] : [],
-            locale: $currentLanguage,
+            locale: uiLocale(),
             axisType: 'time',
             horizontalPadding: 42,
         });
@@ -1312,7 +1312,7 @@
         void resolutionSourceDates;
         void resolutionSourceSignature;
         void emptyMessage;
-        void $currentLanguage;
+        void uiLocale();
         // ECharts calls the axis formatters outside this effect, so the privacy flag they read
         // is not tracked there: read it here, or toggling privacy leaves the axis as it was.
         void isPrivacyEnabled();

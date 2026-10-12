@@ -5,7 +5,6 @@
     import {z} from 'zod';
     import {schemas} from '$lib/api';
     import {_ as t} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {buildDataZoom} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomSync, type DataZoomSyncHandle} from '$lib/components/charts/echartsDataZoomSync';
@@ -47,6 +46,8 @@
     } from './lotGanttChartHelpers';
     import {maskableQuantity} from '$lib/utils/privacy/maskable';
     import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -255,7 +256,7 @@
     function formatDate(value: string, opts: Intl.DateTimeFormatOptions): string {
         const date = parseDisplayDate(value);
         if (!date) return value;
-        return date.toLocaleDateString($currentLanguage || undefined, opts);
+        return date.toLocaleDateString(uiLocale(), opts);
     }
 
     function formatDateShort(value: string): string {
@@ -279,8 +280,7 @@
     function formatSignedPercentField(value: unknown): string {
         const parsed = parseUnknownNumber(value);
         if (parsed == null) return '—';
-        const sign = parsed > 0 ? '+' : '';
-        return `${sign}${(parsed * 100).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}%`;
+        return formatPercent(parsed, {scale: 100});
     }
 
     function lotLabel(openingDate: string): string {
@@ -1025,7 +1025,7 @@
                     show: false,
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate($currentLanguage, value),
+                    formatter: (value: number) => formatAxisDate(uiLocale(), value),
                 },
             },
             yAxis: {
@@ -1111,7 +1111,7 @@
         return buildResponsiveXAxisPolicy({
             width: axisContainer?.clientWidth ?? chartContainer?.clientWidth ?? 0,
             values: range ? [range.min, range.max] : [],
-            locale: $currentLanguage,
+            locale: uiLocale(),
             axisType: 'time',
             horizontalPadding: GRID_LEFT_PX + GRID_RIGHT_PX,
         });
@@ -1407,7 +1407,7 @@
         void closedSelected;
         void axisContainer;
         void axisContentWidthPx;
-        void $currentLanguage;
+        void uiLocale();
         // The bar labels carry the lot quantity, masked under privacy (D5′). ECharts builds them in
         // renderItem, outside this effect, so the flag is not tracked there: read it here, or
         // toggling privacy leaves the labels as they were.
