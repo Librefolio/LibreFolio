@@ -1,5 +1,6 @@
-import {describe, expect, it} from 'vitest';
+import {beforeAll, describe, expect, it} from 'vitest';
 
+import {setupI18n} from '$test/component';
 import {AssetComparisonSignal} from '../AssetComparisonSignal';
 import {CompoundSignal} from '../CompoundSignal';
 import {FxPairSignal} from '../FxPairSignal';
@@ -23,6 +24,14 @@ const baseData = [
 ];
 
 const localSignalTypes = ['fx-pair', 'asset-comparison', 'linear', 'compound', 'sine'];
+
+/**
+ * Rendering a benchmark labels it, and the label is a catalogue message (T-EN2): svelte-i18n throws when it
+ * formats one before it is initialised, so boot it in English, the app's fallback.
+ */
+beforeAll(async () => {
+    await setupI18n('en');
+});
 
 describe('local signal regression', () => {
     it('keeps exactly the local comparison and benchmark signals', () => {

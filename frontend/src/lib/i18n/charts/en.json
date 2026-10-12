@@ -11,7 +11,10 @@
       "valueAt": "Value at {date}",
       "eventsInPeriod": "Events in period:",
       "partialBucket": "Partial: {days} of {total} days",
-      "currentBucket": "In progress: {days} of {total} days"
+      "currentBucket": "In progress: {days} of {total} days",
+      "originalValue": "orig. {value}",
+      "fxRateDate": "fx @ {date}",
+      "fxDaysBack": "({days}d back)"
     },
     "resolution": {
       "weekly": "Weekly",
@@ -70,7 +73,10 @@
       "assetComparisonFull": "Asset Price Overlay",
       "assetComparisonDesc": "Overlay another asset's price on this chart for comparison",
       "fxPairFull": "FX Rate Overlay",
-      "fxPairDesc": "Overlay an FX pair's rate on this chart for comparison"
+      "fxPairDesc": "Overlay an FX pair's rate on this chart for comparison",
+      "linearLabel": "Linear {rate}/yr",
+      "compoundLabel": "Compound {rate}/yr",
+      "sineLabel": "Sine ±{amplitude} / {period}d"
     },
     "params": {
       "annualRate": "Annual Rate",
@@ -186,7 +192,8 @@
     },
     "units": {
       "days": "days",
-      "sessions": "sessions"
+      "sessions": "sessions",
+      "percentPerYear": "%/yr"
     },
     "visual": {
       "components": "Components",

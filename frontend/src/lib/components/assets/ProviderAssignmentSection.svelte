@@ -351,7 +351,8 @@
             const h = history;
             const ccyLabel = formatCurrencyForTooltip(displayCurrency || undefined);
             const hError = h.success ? null : resolveProviderError({error: safeString(h.error), error_code: safeString(h.error_code), error_details: safeScalar(h.error_details)}, $t);
-            const detail = h.success ? `${formatFixed(Number(h.points_count), 0)} points${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${h.date_range}` : ''}` : (hError ?? undefined);
+            const pointCount = Number(h.points_count);
+            const detail = h.success ? `${$t('assets.probe.points', {values: {count: pointCount, n: formatFixed(pointCount, 0)}})}${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${h.date_range}` : ''}` : (hError ?? undefined);
             items.push({
                 success: h.success,
                 status: h.success ? 'success' : isSoftProbeFailure(safeString(h.error) ?? undefined, safeString(h.error_code)) ? 'warning' : 'error',

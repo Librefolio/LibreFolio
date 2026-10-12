@@ -11,7 +11,10 @@
       "valueAt": "Valore al {date}",
       "eventsInPeriod": "Eventi nel periodo:",
       "partialBucket": "Parziale: {days} su {total} giorni",
-      "currentBucket": "In corso: {days} su {total} giorni"
+      "currentBucket": "In corso: {days} su {total} giorni",
+      "originalValue": "orig. {value}",
+      "fxRateDate": "cambio al {date}",
+      "fxDaysBack": "({days}g prima)"
     },
     "resolution": {
       "weekly": "Settimanale",
@@ -70,7 +73,10 @@
       "assetComparisonFull": "Sovrapposizione prezzo asset",
       "assetComparisonDesc": "Sovrapponi il prezzo di un altro asset su questo grafico per confronto",
       "fxPairFull": "Sovrapposizione tasso FX",
-      "fxPairDesc": "Sovrapponi il tasso di una coppia FX su questo grafico per confronto"
+      "fxPairDesc": "Sovrapponi il tasso di una coppia FX su questo grafico per confronto",
+      "linearLabel": "Lineare {rate}/anno",
+      "compoundLabel": "Composta {rate}/anno",
+      "sineLabel": "Sinusoide ±{amplitude} / {period}g"
     },
     "params": {
       "annualRate": "Tasso Annuo",
@@ -186,7 +192,8 @@
     },
     "units": {
       "days": "giorni",
-      "sessions": "sedute"
+      "sessions": "sedute",
+      "percentPerYear": "%/anno"
     },
     "visual": {
       "components": "Componenti",
