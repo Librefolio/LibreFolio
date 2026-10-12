@@ -10,12 +10,13 @@
 >   - checkpoint 1: `883681766`, `3801cf93e`, `5c4c2c0e8`, fusi come `46272c3f0` (treno 32, `dev_release2` = `b20eac991`);
 >   - H: `801b4a168`, `144c9db27`, `fb954577f`, fusi come `8a546c046` (treno 35);
 >   - F, checkpoint F-C1: `36b181836`, `aa6b6077a`, `384253663`, poi il merge `daee275fe` del treno 41 nel ramo;
->   - F, checkpoint F-C2: `a5f41f60c`, `c04e44ff5`, `9a0d9280c`, `a4332b25b`, `56fcf0aac`, fusi come `15cbff6fb` (treno 42), poi il CHANGELOG `5d62658bb`.
+>   - F, checkpoint F-C2: `a5f41f60c`, `c04e44ff5`, `9a0d9280c`, `a4332b25b`, `56fcf0aac`, fusi come `15cbff6fb` (treno 42), poi il CHANGELOG `5d62658bb`;
+>   - F-C3: `f10fcd04a` (C9), poi J1 `deec22bf8` e il merge `d27a2f729` (treno 43).
 > - **Chiuso**: F, approvato dal developer il 2026-10-11 (§0, esito in §17.11). F-0…F-5, F-W e i checkpoint F-C1 e F-C2 ✅ (§9, §15). T8 ✅ (2026-10-12): la sezione I di `BACKLOG_POST_1.2.md`, consegnata col checkpoint F-C3 insieme a questa nota. La seconda descrizione del runner (`:1070`) è passata a T, con T-1 (§15, «T8 / F-C3»).
-> - **Aperto**: solo F-AI (b), il nome «FX on cash» nell'export del portafoglio, che decide il developer. Se resta fuori dalla 1.2, il testo della voce per il backlog è pronto (§15, «F-AI»).
+> - **F-AI deciso dal developer** (2026-10-12): la (a) nella 1.2, cioè niente; la (b) dopo la 1.2, «con un codice tipizzato». La voce è nella sezione I del backlog, consegnata col checkpoint di M-16 (§15, «Treno 43 e F-AI»). Nel lotto non resta niente di aperto.
 >
 > - **Mandato**: coordinatore di Release 2 (`c8328a01-…`), con le decisioni del developer (§1) e l'autorizzazione testuale (§0).
-> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Base attuale `5d62658bb` (treno 42, il CHANGELOG di I): il ramo vi è avanzato in fast-forward il 2026-10-12. F è partito da `251067435` (treno 36: solo journal e `.github`, codice identico a `43d92ed23`, verificata il 2026-10-11). Il lotto è partito da `d59762e0a` (treno 30); l'analisi era stata fatta su `fbb57eb41` (treno 28) e riverificata su `e32f47133` (treno 29). I treni 29 e 30 non toccano le superfici del lotto (§8).
+> - **Workstream I**. Ramo `e-alfy-performance-charts-plan`. Dopo il treno 43 il ramo è avanzato in fast-forward a `d27a2f729`; l'ultima nota (§15, «Treno 43 e F-AI») è scritta su `378338fed`, la base di M-16 ([piano 44](../44_importWizardBrokerGate/plan-phase00ImportWizardBrokerGate.prompt.md)). F-C3 è partito da `5d62658bb` (treno 42, il CHANGELOG di I). F è partito da `251067435` (treno 36: solo journal e `.github`, codice identico a `43d92ed23`, verificata il 2026-10-11). Il lotto è partito da `d59762e0a` (treno 30); l'analisi era stata fatta su `fbb57eb41` (treno 28) e riverificata su `e32f47133` (treno 29). I treni 29 e 30 non toccano le superfici del lotto (§8).
 > - **Corsia**: `--test-port 6157 --data-dir /tmp/librefolio-r2-i-charts`, con `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test …`; un comando alla volta. Mai le porte 6040 e 6041.
 > - **Origine**: G1a, le linee additive del P&L per broker, nel piano archiviato [`plan-phase00PerformanceCharts.prompt.md`](../../phases/20_performanceCharts/plan-phase00PerformanceCharts.prompt.md) (§3.2).
 
@@ -249,10 +250,10 @@ Tutti in `backend/test_scripts/test_services/test_financial/test_portfolio_engin
 | F-4 | Gate, confronto col golden, rapporto sul DB mock, tempi | ✅ 2026-10-12 (§15): 58 report cambiati su 76, tutti con cassa estera; identità tenute; E2E 27 + 37 + 9 |
 | F-5 | Doc EN via `docs-writer` (§17.8) | ✅ 2026-10-12 (§15): 13 pagine EN e il testo del runner; build e check-links verdi; translate-validate misura il debito per M (75 errori, 75 avvisi) |
 | F-W | «FX on cash» negli `other_effects` dei contributi, forma minima (§0); la chiave i18n solo col via del coordinatore | ✅ 2026-10-12 (§15), con la chiave `dashboard.fxOnCash` (via del coordinatore, treno 41) |
-| F-AI | Facoltativo: il costo del nome nell'AI Export, al coordinatore; il codice solo col suo via (§0) | ⏳ costo inviato il 2026-10-12 (§15). Nessun bump (decisione del coordinatore); la (a) è lo stato attuale; la (b) la decide il developer, e il testo per T8 è pronto in §15 |
+| F-AI | Facoltativo: il costo del nome nell'AI Export, al coordinatore; il codice solo col suo via (§0) | ✅ 2026-10-12 (§15): nessun bump (decisione del coordinatore); il developer ha scelto la (a) per la 1.2 e la (b) dopo, «con un codice tipizzato», nella sezione I del backlog |
 | F-C2 | Checkpoint 4, fine F | ✅ 2026-10-12 (§15): C4–C8, nel treno 42 (`15cbff6fb`) |
-| T8 | Indice post-1.2: la sezione I di `BACKLOG_POST_1.2.md` (§11) | ✅ 2026-10-12 (§15, «T8 / F-C3»), senza F-AI (b) |
-| F-C3 | Checkpoint 5: T8 e questa nota; la riga del runner a `:1070` passa a T | ✅ consegnato il 2026-10-12 (§15) |
+| T8 | Indice post-1.2: la sezione I di `BACKLOG_POST_1.2.md` (§11) | ✅ 2026-10-12 (§15, «T8 / F-C3»); F-AI (b) aggiunta col checkpoint di M-16 (§15, «Treno 43 e F-AI») |
+| F-C3 | Checkpoint 5: T8 e questa nota; la riga del runner a `:1070` passa a T | ✅ 2026-10-12 (§15): C9 `f10fcd04a`, nel treno 43 (`d27a2f729`) |
 
 ## 10. Rischi
 
@@ -996,7 +997,7 @@ Testo proposto (bozza del 2026-10-10, in inglese come la wiki; la parte della ca
 >   - S7 riconcilia col riepilogo entro `CONVERSION_DUST`;
 >   - nessun test unitario della mappatura Svelte, come per le righe sorelle: la coprono gli E2E di F-4.
 
-### F-AI — Il nome nell'AI Export: il costo ⏳ (inviato il 2026-10-12)
+### F-AI — Il nome nell'AI Export: il costo ✅ (inviato il 2026-10-12; deciso dal developer)
 
 Solo il costo, come chiede §0: niente codice senza il via del coordinatore. Fonti: `.github/instructions/ai-development.instructions.md`, la skill `ai-export-probe-tuning`, `ai_export_composition.md:387-392` e `ai_export_probe_workflow.md`.
 
@@ -1043,6 +1044,8 @@ Solo il costo, come chiede §0: niente codice senza il via del coordinatore. Fon
 > **⚠️ Fuori pista**:
 > - **L'ipotesi di §0 era sbagliata a metà.** «La cifra resta dentro `period_other_result`» vale per il riepilogo e per l'export del portafoglio. Non vale per gli effetti dell'export del broker, dove la riga compare da sola, già con F-W. Il nome nell'AI Export è quindi in parte già fatto.
 > - **Il mio costo della sonda era sbagliato.** Leggendo `ai_export_probe_workflow.md` («Copied Database and Credentials») avevo concluso che la sonda copiasse per forza il DB di produzione, e quindi toccasse al developer. Il coordinatore mi ha corretto (punto 3): la sonda gira sulla corsia, sui dati sintetici, col metodo che T ha usato per B3b e C-50.
+>
+> **Decisione del developer** (2026-10-12, riportata dal coordinatore): la (a) nella 1.2, cioè niente; la (b) dopo la 1.2, «con un codice tipizzato». Il testo pronto qui sopra è andato nella sezione I del backlog con quel cambio: un campo tipizzato su `OtherPeriodEffect` al posto della costante condivisa, e la stima a ¾ g più la sonda (§15, «Treno 43 e F-AI»).
 
 ### F-4 — Gate, golden, rapporto sul DB mock, tempi ✅ (2026-10-12)
 
@@ -1252,6 +1255,26 @@ Solo pagine EN, senza translate-stamp: le traduzioni vanno nel secondo giro di M
 > - **Il commento PURE del runner** (`:1071-1072`) parla di «the module». Con due moduli può diventare «each module's only I/O is convert_bulk, which every test replaces on its module with a double»: solo un suggerimento per T-1.
 > - **Il significato di B5** l'ho ripreso dall'analisi del 2026-10-10 (D2, D5): nella vista del mittente il residuo del waterfall è MV(t) − costo, in quella del destinatario costo − MV(t).
 > - **Le righe di §14 sono scivolate** da quando sono state scritte (per esempio `get_positions_contribution` da `:1703` a `:1642`, `_get_price_at_date` da `:522` a `:525`). Nel backlog uso quelle di `5d62658bb`; qui restano quelle del loro momento.
+
+### Treno 43 e F-AI ✅ (2026-10-12)
+
+> **Note implementazione**:
+> - **F-C3 nel target**, verificato dal coordinatore:
+>   - C9 è `f10fcd04a`; l'albero `f8c1eb29aced` corrisponde al manifest, e la privacy è pulita;
+>   - treno 43: J1 `deec22bf8`, poi il merge `d27a2f729`. Il ramo è avanzato in fast-forward.
+> - **In J1 il coordinatore ha chiuso le proposte 1 e 2** di «T8 / F-C3»:
+>   - la riga 41 dell'indice, con le mie parole;
+>   - P-3, chiusa con `c04e44ff5` nell'indice e nel backlog 38.
+>
+>   Nella sezione C ha aggiunto anche C-53.
+> - **Le proposte 3, 4 e 5** (T-U1, P1/R4/W1 nel piano 43, il commento PURE del runner) toccano file di T: le ha girate lui a T.
+> - **La decisione del developer su F-AI**, riportata dal coordinatore: la (a) nella 1.2, cioè niente; la (b) dopo la 1.2, «con un codice tipizzato».
+> - **La voce F-AI (b)** è nella sezione I di `BACKLOG_POST_1.2.md`. È il testo pronto di «F-AI», con un cambio: chi legge la riga confronta un codice tipizzato su `OtherPeriodEffect` invece della descrizione inglese. Righe riverificate su `378338fed`.
+> - Consegnato col checkpoint di M-16 ([piano 44](../44_importWizardBrokerGate/plan-phase00ImportWizardBrokerGate.prompt.md), S6): solo documenti, nessun test di questo lotto.
+>
+> **⚠️ Fuori pista**:
+> - **Il codice tipizzato tocca l'API.** Al posto della costante condivisa, che proponevo nel costo, ora c'è un campo dello schema (`schemas/portfolio.py:433-440`). Quindi serve `api sync`, che F-W aveva evitato apposta. In cambio, i due confronti del frontend sulla descrizione (`OtherPeriodEffectsTable.svelte:75`, `PerformanceChart.svelte:291`, entrambi di `9a0d9280c`) possono passare al codice. La stima sale da ½ g a ¾ g, più la sonda.
+> - **Il letterale è scivolato** da `portfolio_service.py:2001` (`5d62658bb`) a `:1978` (`378338fed`), con i riordini di T (`1cc9cd8f5`, `a57a43fbd`). Le righe di `portfolio_financial.py:401,438`, `components/catalog.py:109` e `snapshotDataRenderer.ts:1443` non sono cambiate.
 
 ## 16. Inventario: capitale, investito e guadagno fuori dal motore (T2-inv)
 

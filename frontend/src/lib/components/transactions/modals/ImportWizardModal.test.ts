@@ -21,7 +21,8 @@ import {guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
 import type {AssetGroup} from '$lib/utils/assetGrouping';
 import type {TransactionCreateItem} from '$lib/types';
 import {zodiosApi} from '$lib/api';
-import {getBrokerInfo, getEditableBrokers} from '$lib/stores/reference/brokerStore';
+import {ensureBrokersLoaded, getBrokerInfo, getEditableBrokers, refreshAllBrokers} from '$lib/stores/reference/brokerStore';
+import {ensureTypesLoaded} from '$lib/stores/transactions/transactionTypeStore';
 import {txStoreInvalidate, txStoreSetAll} from '$lib/stores/transactions/txStore.svelte';
 import type {TXReadItem} from '../types';
 
@@ -50,6 +51,29 @@ vi.mock('./ImportWizardModal.svelte', async (importOriginal) => {
                 bulkChildProbe.importProps = args[1] as Record<string, unknown>;
                 return {};
             }
+            return renderActual(...args);
+        }) as typeof actual.default,
+    };
+});
+
+const {brokerModalProbe} = vi.hoisted(() => ({
+    brokerModalProbe: {props: [] as Record<string, unknown>[]},
+}));
+
+/*
+ * The wizard keeps its create-mode BrokerModal mounted (`isOpen` only shows it), and that
+ * modal's `oncreated` prop is the one door to the broker refresh that follows a broker
+ * created from step 1. Recording each mount's props lets a test walk through that door
+ * directly, while the real BrokerModal still renders — the same delegation as the
+ * ImportWizardModal wrapper above.
+ */
+vi.mock('$lib/components/brokers/BrokerModal.svelte', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('$lib/components/brokers/BrokerModal.svelte')>();
+    const renderActual = actual.default as unknown as (...args: unknown[]) => unknown;
+    return {
+        ...actual,
+        default: ((...args: unknown[]) => {
+            brokerModalProbe.props.push(args[1] as Record<string, unknown>);
             return renderActual(...args);
         }) as typeof actual.default,
     };
@@ -489,6 +513,8 @@ describe('ImportWizardModal — onboarding guide integration', () => {
         await setupI18n();
         mount();
         expect(guideMocks.startImportAt).toHaveBeenCalledWith('import.upload', {current: 1, total: 4});
+        // Next answers only once the broker list the wizard loads on open has arrived.
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step1')).toHaveAttribute('data-busy', 'false'));
 
         // Zero pending files: step1CanProceed is true, so Next uploads nothing and
         // moves straight to Step 2. In the real overlay the same target click
@@ -496,6 +522,8 @@ describe('ImportWizardModal — onboarding guide integration', () => {
         guideState.active = null;
         await fireEvent.click(screen.getByTestId('import-wizard-next'));
         await waitFor(() => expect(screen.getByTestId('import-wizard-step-2')).toHaveAttribute('data-step-id', 'select'));
+        // `data-step-id` names the stepper node, not the current step: the Step 2 content proves Next moved on.
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step2')).toBeInTheDocument());
         expect(guideMocks.startImportAt).toHaveBeenLastCalledWith('import.select', {current: 2, total: 4});
 
         // The host still reports Upload when the user goes back. The real guide
@@ -528,8 +556,10 @@ describe('ImportWizardModal — onboarding guide integration', () => {
     it('dismisses the current guide host even after navigating to Step 2 before closing', async () => {
         await setupI18n();
         const {onClose, rerender} = mount();
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step1')).toHaveAttribute('data-busy', 'false'));
         await fireEvent.click(screen.getByTestId('import-wizard-next'));
         await waitFor(() => expect(screen.getByTestId('import-wizard-step-2')).toHaveAttribute('data-step-id', 'select'));
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step2')).toBeInTheDocument());
         guideMocks.dismissHost.mockClear();
 
         await fireEvent.click(screen.getByTestId('import-wizard-close'));
@@ -543,8 +573,10 @@ describe('ImportWizardModal — onboarding guide integration', () => {
         await setupI18n();
         const {onImportBatch, rerender} = mount();
 
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step1')).toHaveAttribute('data-busy', 'false'));
         await fireEvent.click(screen.getByTestId('import-wizard-next'));
         await waitFor(() => expect(screen.getByTestId('import-wizard-step-2')).toHaveAttribute('data-step-id', 'select'));
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step2')).toBeInTheDocument());
         await fireEvent.click(screen.getByTestId('import-wizard-back'));
         await waitFor(() => expect(screen.getByTestId('import-wizard-step-1')).toHaveAttribute('data-step-id', 'upload'));
         await fireEvent.click(screen.getByTestId('import-wizard-close'));
@@ -553,6 +585,192 @@ describe('ImportWizardModal — onboarding guide integration', () => {
         expect(guideMocks.finish).not.toHaveBeenCalled();
         expect(guideMocks.skip).not.toHaveBeenCalled();
         expect(onImportBatch).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * ImportWizardModal — step 1 waits for the broker list.
+ *
+ * Opening the wizard starts the broker, transaction-type and import-plugin loads without
+ * awaiting them, while Step 1 is already on screen. Step 2 asks the server for the files of
+ * the brokers the wizard knows the moment Next moves to it, so a Next pressed before that list
+ * arrives asks with `broker_ids: []`: every broker panel opens empty and the file the user just
+ * uploaded is hidden. Creating a broker from Step 1 reopens the same window, because its
+ * `oncreated` refresh replaces the list with nothing on screen saying so.
+ *
+ * Pinned from the outside only: Step 1 publishes `data-busy="true"` and Next stays disabled for
+ * as long as ANY broker load is in flight (the open load, the refresh after a create, or both
+ * at once); a Next click that lands anyway leaves the wizard on Step 1 without asking for files;
+ * a failed transaction-types load releases Step 1 instead of locking it.
+ *
+ * Every pending load is a deferred held by the test and released in `afterEach`, so no promise
+ * outlives the test that held it.
+ */
+describe('ImportWizardModal — step 1 waits for the broker list', () => {
+    const held: Array<() => void> = [];
+
+    /** A promise this test resolves by hand, tracked so `afterEach` can release it. */
+    function hold(): {promise: Promise<void>; resolve: () => void} {
+        let resolve!: () => void;
+        const promise = new Promise<void>((done) => {
+            resolve = done;
+        });
+        held.push(resolve);
+        return {promise, resolve};
+    }
+
+    const stepOne = () => screen.getByTestId('import-wizard-step1');
+    const nextButton = () => screen.getByTestId('import-wizard-next');
+    const listFiles = () => vi.mocked(zodiosApi.list_files_api_v1_brokers_import_files_get);
+
+    /** The `oncreated` prop the wizard handed its create-mode BrokerModal on this mount. */
+    function createdBrokerHandler(): (detail: {id: number}) => void {
+        const handler = brokerModalProbe.props.filter((props) => props.mode === 'create').at(-1)?.oncreated;
+        if (typeof handler !== 'function') throw new Error('ImportWizardModal did not mount its create-mode BrokerModal with an oncreated handler');
+        return handler as (detail: {id: number}) => void;
+    }
+
+    beforeEach(async () => {
+        guideState.active = null;
+        brokerModalProbe.props.length = 0;
+        vi.mocked(ensureBrokersLoaded).mockClear();
+        vi.mocked(refreshAllBrokers).mockClear();
+        vi.mocked(ensureTypesLoaded).mockClear();
+        vi.mocked(getEditableBrokers).mockClear();
+        // The `$lib/api` Proxy caches one spy per endpoint for the whole file.
+        listFiles().mockClear();
+        await setupI18n();
+    });
+
+    afterEach(async () => {
+        for (const release of held.splice(0)) release();
+        await tick();
+        cleanup();
+        guideAnchors.clear();
+        guideState.active = null;
+        brokerModalProbe.props.length = 0;
+        // `mockReset()` empties the once-queues but also drops the file-level
+        // `mockResolvedValue(undefined)`, so each default is restored explicitly.
+        vi.mocked(ensureBrokersLoaded).mockReset().mockResolvedValue(undefined);
+        vi.mocked(refreshAllBrokers).mockReset().mockResolvedValue(undefined);
+        vi.mocked(ensureTypesLoaded).mockReset().mockResolvedValue(undefined);
+        vi.mocked(getEditableBrokers)
+            .mockReset()
+            .mockImplementation(() => []);
+        vi.mocked(getBrokerInfo).mockReset().mockReturnValue(null);
+    });
+
+    it('V1 keeps Next disabled and Step 1 busy until the broker list has loaded', async () => {
+        const brokersLoad = hold();
+        vi.mocked(ensureBrokersLoaded).mockImplementationOnce(() => brokersLoad.promise);
+        mount();
+
+        // Precondition: the open load is in flight and Step 1 says so.
+        await waitFor(() => expect(stepOne()).toHaveAttribute('data-busy', 'true'));
+        expect(ensureBrokersLoaded).toHaveBeenCalled();
+
+        expect(nextButton(), 'V1: Next must stay disabled while Step 1 is busy loading the broker list').toBeDisabled();
+
+        brokersLoad.resolve();
+        await waitFor(() => expect(stepOne()).toHaveAttribute('data-busy', 'false'));
+        await waitFor(() => expect(nextButton()).toBeEnabled());
+    });
+
+    it('V2 ignores a Next click made while the broker list loads and asks for no files until it has arrived', async () => {
+        const broker = {
+            id: 77,
+            name: 'Broker list gate',
+            default_import_plugin: 'owned-parser',
+            opened_at: '2020-01-01',
+            icon_url: null,
+            portal_url: null,
+        };
+        // The store already holds the broker; the wizard only learns it when its load finishes.
+        vi.mocked(getEditableBrokers).mockReturnValue([broker]);
+        vi.mocked(getBrokerInfo).mockImplementation((id) => (id === broker.id ? broker : null));
+        const brokersLoad = hold();
+        vi.mocked(ensureBrokersLoaded).mockImplementationOnce(() => brokersLoad.promise);
+        mount();
+        await waitFor(() => expect(stepOne()).toHaveAttribute('data-busy', 'true'));
+
+        // Svelte's delegated handler can still run when jsdom clicks a disabled button, so the
+        // click proves nothing by itself: the outcome below is what is asserted.
+        await fireEvent.click(nextButton());
+        brokersLoad.resolve();
+
+        // Barrier: the load has finished, and Step 1 is still the step on screen.
+        await waitFor(() => {
+            const step1 = screen.queryByTestId('import-wizard-step1');
+            expect(step1, 'V2: a Next click made while the broker list was loading must leave the wizard on Step 1').not.toBeNull();
+            expect(step1).toHaveAttribute('data-busy', 'false');
+        });
+        expect(screen.queryByTestId('import-wizard-step2')).toBeNull();
+        expect(listFiles(), 'V2: no broker files may be requested before the broker list has arrived').not.toHaveBeenCalled();
+
+        // Once the list is in, Next works and asks for the files of the broker it now knows.
+        await waitFor(() => expect(nextButton()).toBeEnabled());
+        await fireEvent.click(nextButton());
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step2')).toHaveAttribute('data-busy', 'false'));
+        expect(screen.queryByTestId('import-wizard-step1')).toBeNull();
+        expect(listFiles()).toHaveBeenCalledWith({queries: {broker_ids: [broker.id]}});
+        expect(listFiles()).not.toHaveBeenCalledWith({queries: {broker_ids: []}});
+    });
+
+    it('V3 releases Step 1 and Next when the transaction types fail to load', async () => {
+        vi.mocked(ensureTypesLoaded).mockRejectedValueOnce(new Error('V3 synthetic transaction-types failure'));
+        mount();
+        await waitFor(() => expect(ensureTypesLoaded).toHaveBeenCalled());
+
+        await waitFor(() => expect(stepOne(), 'V3: a failed transaction-types load must not leave Step 1 busy').toHaveAttribute('data-busy', 'false'));
+        expect(nextButton()).toBeEnabled();
+    });
+
+    it('V4 disables Next again while the broker list refreshes after a broker is created from Step 1', async () => {
+        mount();
+        await waitFor(() => expect(stepOne()).toHaveAttribute('data-busy', 'false'));
+        await waitFor(() => expect(nextButton()).toBeEnabled());
+
+        const refresh = hold();
+        vi.mocked(refreshAllBrokers).mockImplementationOnce(() => refresh.promise);
+        createdBrokerHandler()({id: 4242});
+        await tick();
+
+        // Precondition: the create handler started the one refresh this test holds.
+        expect(refreshAllBrokers).toHaveBeenCalledTimes(1);
+        expect(nextButton(), 'V4: Next must stay disabled while the broker list refreshes after a create').toBeDisabled();
+        expect(stepOne()).toHaveAttribute('data-busy', 'true');
+
+        refresh.resolve();
+        await waitFor(() => expect(stepOne()).toHaveAttribute('data-busy', 'false'));
+        await waitFor(() => expect(nextButton()).toBeEnabled());
+    });
+
+    it('V4b keeps Next disabled until every overlapping broker load has finished', async () => {
+        const openLoad = hold();
+        const refresh = hold();
+        vi.mocked(ensureBrokersLoaded).mockImplementationOnce(() => openLoad.promise);
+        vi.mocked(refreshAllBrokers).mockImplementationOnce(() => refresh.promise);
+        mount();
+        await waitFor(() => expect(stepOne()).toHaveAttribute('data-busy', 'true'));
+        expect(nextButton(), 'V4b: Next must stay disabled while the open load is in flight').toBeDisabled();
+
+        createdBrokerHandler()({id: 4343});
+        await tick();
+        expect(refreshAllBrokers).toHaveBeenCalledTimes(1);
+        expect(nextButton(), 'V4b: Next must stay disabled while both loads are in flight').toBeDisabled();
+
+        // The refresh lands first. Barrier: its continuation has read the refreshed list, the one
+        // step that follows `refreshAllBrokers()`; only then can its end be judged.
+        const readsBefore = vi.mocked(getEditableBrokers).mock.calls.length;
+        refresh.resolve();
+        await waitFor(() => expect(vi.mocked(getEditableBrokers).mock.calls.length).toBeGreaterThan(readsBefore));
+        await tick();
+        expect(nextButton(), 'V4b: the refresh ending first must not release Next while the open load is still in flight').toBeDisabled();
+        expect(stepOne()).toHaveAttribute('data-busy', 'true');
+
+        openLoad.resolve();
+        await waitFor(() => expect(stepOne()).toHaveAttribute('data-busy', 'false'));
+        await waitFor(() => expect(nextButton()).toBeEnabled());
     });
 });
 
