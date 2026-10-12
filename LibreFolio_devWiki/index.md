@@ -16,7 +16,7 @@
 | [[domains/fx]] | FX (Foreign Exchange) | F-015–F-023 | stable |
 | [[domains/assets]] | ASSETS | F-024–F-036 | stable |
 | [[domains/signals]] | TECHNICAL ANALYSIS (Signals) | F-037–F-045 | stable |
-| [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | in-progress |
+| [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | implemented (F-048 recognised as shipped, C-64, 2026-10-12) |
 | [[domains/scheduler]] | SCHEDULER | F-052–F-053 | implemented (registry corrected 2026-10-09) |
 | [[domains/dashboard]] | DASHBOARD | F-054–F-055, F-100, F-111–F-113 | implemented |
 | [[domains/calculations]] | CALCULATIONS | F-056–F-058, F-107, F-110 | stable |
@@ -67,7 +67,7 @@
 | [[features/F-039]] | RSI Signal | Signals | implemented |
 | [[features/F-042]] | FX Pair Comparison Signal | Signals | implemented |
 | [[features/F-047]] | Transaction List Page (DataTable, always-pair-adjacent, client-side filters) | Transactions | implemented |
-| [[features/F-048]] | Transaction Modals (Form / Bulk / Delete / Promote / Split — mode-less, Round 6 Plan D done) | Transactions | in-progress |
+| [[features/F-048]] | Transaction Modals (Form / Bulk / Delete / Promote / Split — mode-less, Round 6 Plan D done) | Transactions | documented |
 | [[features/F-054]] | Dashboard KPI & Overview (unified `/portfolio/report`) | Dashboard | implemented |
 | [[features/F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | Dashboard | documented |
 | [[features/F-058]] | ROI Calculations (TWRR + MWRR) | Calculations | implemented |
@@ -296,6 +296,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/gallery-price-guard-expected-tofixed-text]] | **M, batch 28 (train 70).** The gallery's price guard expected `toFixed` text; since M-18's CP1 the cards write prices in the UI locale: red in English on prices over 1,000, unseen by any test run (the runner excludes the gallery). Expected figure in the shot's locale, behind a control that can fail (`e8d5a5668`) | resolved | e2e, gallery, locale |
 | [[problems/base-currency-setting-silently-defaulted-eur]] | **Folder 08 (second clean audit), P0-1.** Swapped arguments and a non-existent key made every base-currency lookup fall back to EUR; `get_effective_base_currency()` (`08b99c3ac`) | resolved | backend, settings, currency |
 | [[problems/asset-events-lost-on-price-cache-hit]] | **Folder 05 (clean audit).** A price-cache hit returned early and skipped the request that also carried the events: «No data» on an asset with events; events-only fall-through (`b45f5afbb`) | resolved | frontend, assets, cache |
 | [[problems/spa-logout-cross-user-cache-leak]] | **Folder 01.** After an SPA logout stores kept the previous account's data; `ClientSessionState` resets them, scopes keys per user, drops stale responses (`5b9dddb45`) | resolved | frontend, auth, session |
@@ -613,6 +614,10 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **C-64, part 1 — the coordinator's decisions.** F-090 and F-094 stay `planned`, and their pages now say what is built (the rest is C-65 and C-66); three page defects fixed | *(none)* |
+| 2026-10-12 | **C-64, part 1 — the status of the unfinished features.** The `planned`, `in-progress` and `idea` rows checked against the code: F-048 had shipped in 1.0.0 (now `documented`); the other thirteen are not in 1.2 | *(none)* |
+| 2026-10-12 | **Train 70 — M's batch 28.** The M-19 spec registered (`front-utility docs-offline-math`); the gallery's price guard follows M-18 | [[problems/gallery-price-guard-expected-tofixed-text]] *(1 page — 1 problem)* |
+| 2026-10-12 | **Lint follow-up (read-only check).** Two old open problems re-checked against today's E2E: the BulkModal toolbar not covered (C-61), the DataTable resize proved on one table only (C-62) | *(none)* |
 | 2026-10-12 | **Historical folder H6 — `06_betaTestingReportAndFixing`.** Drift only: the folder moved to `phases/`, four rows re-based; eleven never-ingested plans listed on [[sources/beta-testing-2026-08-05]] | *(none)* |
 | 2026-10-12 | **Historical folder H5 — `Ai_ideas`; the historical folders are covered.** The July brainstorm as a source page only; the MCP assistant pointed to `TODO_FUTURI.md` | [[sources/release2-ai-ideas-2026-07]] *(1 page — 1 source)* |
 | 2026-10-12 | **Historical folders H4 — `03_brokerImportRecovery`, `04_webSearchEngine`.** 03 already covered by the BRIM pages; 04's switch to `ddgs` filed as a decision | *(1 page — 1 decision; see log)* |
