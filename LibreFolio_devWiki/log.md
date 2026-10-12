@@ -3209,3 +3209,14 @@ K-4 in backlog 38), [[features/registry]] (row, note, statistics: 99 shipped, no
 F-081, F-082, F-084, F-087, F-091, F-094 and F-108 (contract only) stay `planned`; F-085, F-093 and F-096 stay `idea`.
 Listed to the coordinator, not touched: F-090 (parts built under F-051, the provider-change modal and the reverse
 lookup not), F-094 (borderline), page drift on F-082, F-090 and F-096. Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 1 — the coordinator's decisions on F-090, F-094 and three page defects
+Base `f83a1486d` (C-65 and C-66 in the backlog). **Updated** [[features/F-090]]: stays `planned`; what was built under
+[[F-051]] is listed with its paths (the `RESTRICT` FK, `delete_events_bulk` with an outcome per id, the link field and
+rule 9, the event picker), the 409 it promised is gone, and the rest — the provider-change modal, the reverse lookup —
+points to C-65, with the `TODO_FUTURI.md` entry on suggested links as a neighbour. [[features/F-094]]: stays
+`planned`; the three sync dialogs on `SyncModalBase` sync the page's range, the warning on existing data is C-66.
+Page defects fixed: [[features/F-082]] (the staging modal's path), [[features/F-096]] (its two tables separated, the
+editor's path), [[domains/signals]] (`status: stable`, as in the index and the registry). [[features/registry]]: the
+C-64 note cites C-65 and C-66. `index.md`: F-048's row in «Individual Feature Pages» still said `in-progress`, missed
+in part 1 — now `documented`. Graph: not updated (P-6).
