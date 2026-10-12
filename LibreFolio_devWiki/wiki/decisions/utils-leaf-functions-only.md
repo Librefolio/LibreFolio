@@ -51,7 +51,7 @@ ordered layers that use one another.")
   `utils` modules, except `decimal_utils.py`, whose truncation to the database precision imports `db.models`
   (`FxRate`, `PriceHistory`). And `fx.py` still imports `clear_cache` lazily in three places, "to avoid a utils→services
   import cycle", although it already imports `get_ttl_cache` from `cache_utils` at the top and `cache_utils` imports no
-  service.
+  service. *Since BU2 (below) there is no exception left.*
 
 ### BU1 — delivered (2026-10-12, train 50)
 
@@ -71,19 +71,29 @@ ordered layers that use one another.")
   the paths a file computes from its own location (`__file__`, `parents`), not only its imports** — see
   [[problems/docker-system-info-missing-deps]], the original version-in-Docker problem.
 
-### BU2 — planned (not in the code at `bdc078efc`)
+### BU2 — delivered (2026-10-12, train 53)
 
-- The two exceptions to the leaf rule: the truncation of `decimal_utils` leaves `utils/` for
-  `backend/app/db/precision.py` (`parse_decimal_value` stays), and the lazy `clear_cache` imports in `fx.py` go, once no
-  utils→services cycle remains — as does the lazy import of `version` in `config.py`, if no cycle needs it.
-- **Method**, the same as T-1: one commit of renames only (BU1, above), then one for BU2, with the backend suite
-  identical as the gate.
+- **One commit**, `8dae5cc6e` ("refactor(db): move DB precision out of utils"), merged with train 53 (`f0f3de0d9`):
+  `get_model_column_precision`, `truncate_to_db_precision`, `truncate_priceHistory` and `truncate_fx_rate` moved
+  unchanged from `utils/decimal_utils.py` to the new `backend/app/db/precision.py`, next to the models they read.
+  `decimal_utils.py` keeps only `parse_decimal_value` and no longer imports `db.models`, SQLModel or SQLAlchemy, so
+  `utils/asset/geo.py` and `utils/fx/currency.py` no longer load the database models when they are imported. Imports
+  rewritten in 7 files.
+- **The lazy imports went, because none of them broke a cycle**: the three of `clear_cache` in `fx.py` joined the
+  top-level `from …runtime.cache import clear_cache, get_ttl_cache`, and `config.py` imports `get_git_version` at the
+  top. No test patches `clear_cache`, so no patch went mute; importing `backend.app.config` and `backend.app.main`
+  shows no cycle.
+- `all-backend` 12 411 passed, 28 skipped, 0 failed: BU1's count plus the two tests of the `version.py` root.
+- Every module of `utils/` is now a leaf.
 
 ## Consequences
 
 - The layering question has one answer for every new helper: a function that calls a service is not a utility.
 - The devWiki's «Source files» rows that cited the renamed modules — 11 rows in 10 pages, this one included — and 6
-  present-tense mentions in 5 pages were realigned by the historian on 2026-10-12, after BU1 entered the target.
+  present-tense mentions in 5 pages were realigned by the historian on 2026-10-12, after BU1 entered the target. After
+  BU2 one present-tense mention of the truncation ([[features/F-017]]) and this page's own rows followed.
+- The method held for both lots, as for T-1: one commit of renames only, then one for what is not a rename, with the
+  backend suite identical as the gate.
 
 ## Links
 
@@ -96,11 +106,14 @@ ordered layers that use one another.")
 | Role | Path |
 |------|------|
 | The rule | `.github/instructions/backend.instructions.md` |
-| The exception: truncation importing `db.models` | `backend/app/utils/decimal_utils.py` |
-| The lazy `clear_cache` imports | `backend/app/services/fx.py` |
+| BU2: the truncation to the database precision | `backend/app/db/precision.py` |
+| BU2: `decimal_utils`, now only `parse_decimal_value` | `backend/app/utils/decimal_utils.py` |
+| BU2: `clear_cache` imported at the top | `backend/app/services/fx.py` |
+| BU2: `get_git_version` imported at the top | `backend/app/config.py` |
 | The cache helpers (no service import) | `backend/app/utils/runtime/cache.py` |
 | BU1: the root's docstring (leaf rule and map) | `backend/app/utils/__init__.py` |
 | BU1: the project root from the module's dotted name | `backend/app/utils/runtime/version.py` |
 | BU1: the two tests of the near-miss | `backend/test_scripts/test_utilities/test_version.py` |
+| BU2: precision and parsing tests | `backend/test_scripts/test_utilities/test_decimal_utils.py`, `backend/test_scripts/test_db/test_numeric_truncation.py` |
 | Plan (§P2.3, D-P7, BU1/BU2) | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` |
 | Backlog row T-BU1+BU2 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
