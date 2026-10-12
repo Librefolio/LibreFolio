@@ -59,6 +59,10 @@ Outside the monorepo: the exporter 1.0.1 (`6672084`, tag `v1.0.1`), committed an
 
 - The translations of the documentation: done by M's batch 21 on 2026-10-12. A second rewrite of the page, M's batch
   23, is not in the target at `573f7c5c7`.
+  *Update (step B8)*: batch 23 reached the target with train 58 (`11339afa6`). The developer reviewed the page in a live
+  preview and approved it («vista la pagina di scalable, approvata a pieni voti»): accounts with their icons in the
+  first column, «❓ Why two brokers?» as a heading, the exporter recommended in bold, the wrong-broker hint in a blue
+  note — [[sources/phase00-translation-round12-2026-10]], [[problems/mkdocs-material-tables-resist-styling]].
 - The per-broker P&L lines jumped at every merged transfer: found in the developer's test, then fixed by lot 41 —
   [[decisions/portfolio-pnl-series-contracts]], [[sources/phase00-broker-pnl-flows-2026-10]].
 - Reported to P and closed by lot 42 (train 34): see [[decisions/bulk-pairs-new-with-saved]].
