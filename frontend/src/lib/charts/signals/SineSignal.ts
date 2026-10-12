@@ -21,6 +21,8 @@
 
 import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 
 export class SineSignal extends ChartSignal {
     static override signalType = 'sine';
@@ -82,8 +84,8 @@ export class SineSignal extends ChartSignal {
     }
 
     getLabel(): string {
-        const amp = this.params.amplitude ?? 15;
-        const per = this.params.period ?? 45;
-        return `Sine ±${amp}% / ${per}d`;
+        const amplitude = formatPercent(Number(this.params.amplitude ?? 15), {signed: false, trim: true});
+        const period = formatFixed(Number(this.params.period ?? 45), 2, {trim: true});
+        return ChartSignal.text('chartSettings.signals.sineLabel', {amplitude, period});
     }
 }

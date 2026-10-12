@@ -437,13 +437,19 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   cambiare chi legge `$locale` per i link e i testi, oppure formattare le cifre prima di passarle al messaggio, come fa
   già `problemCount`. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione
   «10», M-18 CP2.
-- **T-EN1 · Testo inglese scritto a mano nei tooltip del grafico dei prezzi** — minimo; T, 12/10 (trovato con M-18).
+- ✅ **T-EN1 · Testo inglese scritto a mano nei tooltip del grafico dei prezzi** — chiusa nella 1.2 da T, checkpoint
+  T-EN del 13/10, con le chiavi `chart.tooltip.{originalValue,fxRateDate,fxDaysBack}` e `assets.probe.points` (il
+  plurale: «1 point»). Il commit lo scrive il coordinatore all'integrazione. Era: minimo; T, 12/10 (trovato con M-18).
   `PriceChartFull.svelte:785-788` scrive «orig.», «(Nd back)» e «fx @» in ogni lingua; `ProviderAssignmentSection.svelte:354`
   scrive «points» nel dettaglio della sonda dello storico (la cifra accanto segue la lingua dal CP3b). Servono chiavi
   nuove: dopo la
   divisione dei cataloghi di U. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «10», M-18 CP3.
-- **T-EN2 · Le etichette dei segnali what-if sono in inglese, con cifre grezze** — minimo; T, 12/10 (trovato con M-18).
+- ✅ **T-EN2 · Le etichette dei segnali what-if sono in inglese, con cifre grezze** — chiusa nella 1.2 da T,
+  checkpoint T-EN del 13/10: le chiavi `chartSettings.signals.{linear,compound,sine}Label`, le cifre da
+  `formatPercent` e `formatFixed`. Per decisione del coordinatore include anche le unità dell'editor dei parametri
+  («%/yr», «days»), con `signals.units.percentPerYear`. Il commit lo scrive il coordinatore all'integrazione. Era:
+  minimo; T, 12/10 (trovato con M-18).
   `LinearSignal.ts:74-75`, `CompoundSignal.ts:96-97` e `SineSignal.ts:87` scrivono «Linear 5%/yr +2%», «Compound …» e
   «Sine ±…% / …d»: parole inglesi e numeri stampati grezzi (`${rate}%`) in ogni lingua. Servono chiavi, e le cifre da
   `formatPercent`/`formatFixed`. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
@@ -460,6 +466,23 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   mai chiamata. Da togliere, oppure, se una colonna adotta `relative`, da scrivere con `Intl.RelativeTimeFormat` nella
   lingua dell'interfaccia. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «10», M-18 CP3.
+- **T-ISO · Le date d'osservazione restano ISO nei tooltip del grafico dei prezzi e nella sonda** — basso; T, 13/10
+  (trovato con T-EN1; dopo la 1.2, per decisione del coordinatore). Con M-18 le date seguono la lingua
+  dell'interfaccia, ma alcune date d'osservazione si leggono ancora `2024-03-01`.
+  - In `components/charts/PriceChartFull.svelte`: il segnaposto `{date}` di `chart.tooltip.valueAt` (`:1017`, `:1020`,
+    `:1029`), le righe `↩` (`:1018`) e `💱` (`:1023`) del riferimento, la data dell'evento nei periodi aggregati
+    (`:778`) e quella del cambio (`chart.tooltip.fxRateDate`, `:789`).
+  - In `components/assets/ProviderAssignmentSection.svelte`: la data del prezzo corrente (`:335`) e l'intervallo dello
+    storico, `date_range`, che arriva dal backend come una stringa sola (`:355`).
+
+  Da fare: le date con `formatDateTime`/`formatAxisDate` nella lingua della UI; `date_range` va prima esposto come due
+  date. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «T-EN — analisi».
+- **T-FB · I ripieghi inglesi dei segnali di confronto** — minimo; T, 13/10 (trovato con T-EN2; dopo la 1.2, per
+  decisione del coordinatore). Se l'asset di confronto non c'è più, l'etichetta dice `Asset #N` o `Asset`
+  (`charts/signals/AssetComparisonSignal.ts:173-174`, e `routes/(app)/assets/[id]/+page.svelte:690`, `:871`, `:895`,
+  `:1004`, `:1274`). Una coppia vuota dice `FX Pair` (`charts/signals/FxPairSignal.ts:94`). Si vede solo con una
+  configurazione salvata che punta a un asset cancellato. Da fare: chiavi nel catalogo, lette con `ChartSignal.text`
+  (T-EN2). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «T-EN — analisi».
 
 La voce di `TODO_FUTURI.md` sul riordino del codice si cancella a mano a mano.
 
