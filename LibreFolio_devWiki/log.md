@@ -3057,3 +3057,9 @@ in CALCULATIONS, no new domain; open items as «paused, after 1.2» (D382). Sour
 **Updated**: the registry (113 features, 98 implemented or documented), [[domains/calculations]], [[domains/dashboard]]
 (F-100 added too: it was in the registry's DASHBOARD rows but missing from the domain page).
 Next: R1, the open items. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 68 — M-18 CP1 (T)
+Base `8730f949c` (the target merged into this branch by the coordinator). Source: plan 43, «M-18» sections (`d00c06685`),
+and the code of `5b2aad5c4`. **Created**: [[decisions/figures-in-the-interface-language]] (the developer's rule, CP1
+delivered, CP2 pending). **Updated**: [[problems/playwright-probes-ignore-timeout]] (M-18 moved to T, CP1),
+[[features/F-008]] (status row). Graph: not updated (P-6).
