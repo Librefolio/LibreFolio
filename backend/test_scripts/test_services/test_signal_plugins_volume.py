@@ -19,14 +19,14 @@ from backend.app.schemas.signals import (
     SignalVolumeKind,
 )
 from backend.app.services.provider_registry import SignalPluginRegistry
-from backend.app.services.signal_plugins import mfi as mfi_module
-from backend.app.services.signal_plugins import obv as obv_module
 from backend.app.services.signal_plugins.base import SignalUnavailableError
-from backend.app.services.signal_plugins.mfi import (
+from backend.app.services.signal_plugins.mfi import plugin as mfi_module
+from backend.app.services.signal_plugins.mfi.plugin import (
     MfiSignalParams,
     MfiSignalPlugin,
 )
-from backend.app.services.signal_plugins.obv import (
+from backend.app.services.signal_plugins.obv import plugin as obv_module
+from backend.app.services.signal_plugins.obv.plugin import (
     ObvSignalParams,
     ObvSignalPlugin,
 )

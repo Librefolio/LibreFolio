@@ -374,7 +374,7 @@ class SNBProvider(FXRateProvider):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DEBUG / EXPLORATION — run with: pipenv run python -m backend.app.services.fx_providers.snb
+# DEBUG / EXPLORATION — run with: pipenv run python -m backend.app.services.fx_providers.snb.plugin
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":

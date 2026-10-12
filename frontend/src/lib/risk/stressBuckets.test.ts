@@ -8,7 +8,7 @@ import {buildHypotheticalShockParameters, STRESS_ASSET_CLASSES, uniformAssetClas
  * An `asset_class` stress must name **every** `AssetType`, and nothing that is not one.
  *
  * Neither mistake comes back as an error. A type with no bucket is not rejected:
- * `_resolve_bucket` (`backend/app/services/risk_plugins/stress.py`) shocks that
+ * `_resolve_bucket` (`backend/app/services/risk_plugins/stress/plugin.py`) shocks that
  * exposure by `0.0`, tags it `UNCONFIGURED_ZERO` and carries on — a book of
  * commodity ETFs comes out untouched by a crash meant to hit everything, and the
  * number is simply wrong. A bucket that is not an `AssetType` is rejected, but

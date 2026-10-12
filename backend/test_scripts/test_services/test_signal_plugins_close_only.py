@@ -17,28 +17,28 @@ from backend.app.schemas.signals import (
     SignalStatus,
 )
 from backend.app.services.provider_registry import SignalPluginRegistry
-from backend.app.services.signal_plugins import kama as kama_module
-from backend.app.services.signal_plugins import ppo as ppo_module
-from backend.app.services.signal_plugins import roc as roc_module
-from backend.app.services.signal_plugins import sma as sma_module
-from backend.app.services.signal_plugins import stoch_rsi as stoch_rsi_module
-from backend.app.services.signal_plugins.kama import (
+from backend.app.services.signal_plugins.kama import plugin as kama_module
+from backend.app.services.signal_plugins.kama.plugin import (
     KamaSignalParams,
     KamaSignalPlugin,
 )
-from backend.app.services.signal_plugins.ppo import (
+from backend.app.services.signal_plugins.ppo import plugin as ppo_module
+from backend.app.services.signal_plugins.ppo.plugin import (
     PpoSignalParams,
     PpoSignalPlugin,
 )
-from backend.app.services.signal_plugins.roc import (
+from backend.app.services.signal_plugins.roc import plugin as roc_module
+from backend.app.services.signal_plugins.roc.plugin import (
     RocSignalParams,
     RocSignalPlugin,
 )
-from backend.app.services.signal_plugins.sma import (
+from backend.app.services.signal_plugins.sma import plugin as sma_module
+from backend.app.services.signal_plugins.sma.plugin import (
     SmaSignalParams,
     SmaSignalPlugin,
 )
-from backend.app.services.signal_plugins.stoch_rsi import (
+from backend.app.services.signal_plugins.stoch_rsi import plugin as stoch_rsi_module
+from backend.app.services.signal_plugins.stoch_rsi.plugin import (
     StochRsiSignalParams,
     StochRsiSignalPlugin,
 )

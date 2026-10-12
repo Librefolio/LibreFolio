@@ -42,7 +42,7 @@ the missing work is obvious.
 
 Tool registration (``ToolService``/``ToolOperationPolicy``) is **not** done
 here; this module ships service functions only, and
-``tool_plugins/pac_allocator.py`` owns the dispatch.
+``tool_plugins/pac_allocator/plugin.py`` owns the dispatch.
 
 ``plan_pac_allocation`` is deliberately **not** re-exported from the package
 ``__init__``, and that absence is load-bearing rather than an oversight. The

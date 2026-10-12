@@ -210,13 +210,19 @@ function registeredClassBody(source: string, file: string): string {
  */
 function readImportPluginOptions(): SelectOption[] {
     if (!existsSync(BRIM_PROVIDERS_DIR)) throw new Error(`${BRIM_PROVIDERS_DIR} does not exist: this test reads the plugin sources as text, so a move must stop it rather than let it scrape nothing`);
-    // provider_registry.py imports `sorted(glob('*.py'))`, and that registration order is the order
-    // /brokers/import/plugins serves. On these ASCII names `sort()` agrees with Python's `sorted()`.
-    const files = readdirSync(BRIM_PROVIDERS_DIR)
-        .filter((name) => /^broker_\w+\.py$/.test(name))
+    // Every plugin is a folder, `broker_<name>/plugin.py`. provider_registry.py imports the folders
+    // sorted by name, and that registration order is the order /brokers/import/plugins serves. On
+    // these ASCII names `sort()` agrees with Python's `sorted()`.
+    const folders = readdirSync(BRIM_PROVIDERS_DIR, {withFileTypes: true})
+        .filter((entry) => entry.isDirectory() && /^broker_\w+$/.test(entry.name))
+        .map((entry) => entry.name)
         .sort();
-    return files.map((file) => {
-        const body = registeredClassBody(readFileSync(path.join(BRIM_PROVIDERS_DIR, file), 'utf-8'), file);
+    if (folders.length === 0) throw new Error(`no broker_* plugin folder in ${BRIM_PROVIDERS_DIR}: the scrape would read nothing`);
+    const withoutModule = folders.filter((folder) => !existsSync(path.join(BRIM_PROVIDERS_DIR, folder, 'plugin.py')));
+    if (withoutModule.length > 0) throw new Error(`no plugin.py in ${withoutModule.join(', ')}: a plugin keeps its code in <folder>/plugin.py, so the scrape would silently drop these`);
+    return folders.map((folder) => {
+        const file = `${folder}/plugin.py`;
+        const body = registeredClassBody(readFileSync(path.join(BRIM_PROVIDERS_DIR, folder, 'plugin.py'), 'utf-8'), file);
         return {value: returnedLiteral(body, 'provider_code', file), label: returnedLiteral(body, 'provider_name', file), searchText: returnedLiteral(body, 'description', file)};
     });
 }
@@ -333,7 +339,7 @@ describe('ranking', () => {
             plugins = readImportPluginOptions();
             // Every assertion below reads this scrape, so one that read too little would let them
             // all pass while checking nothing. A floor and anchors, not a count: plugins get added.
-            expect(plugins.length, 'fewer than 25 plugins scraped from backend/app/services/brim_providers: the file filter or the parser no longer matches the sources').toBeGreaterThanOrEqual(25);
+            expect(plugins.length, 'fewer than 25 plugins scraped from backend/app/services/brim_providers: the folder filter or the parser no longer matches the sources').toBeGreaterThanOrEqual(25);
             expect(values(plugins), 'broker_generic_csv, the plugin R13 is about, was not scraped').toContain('broker_generic_csv');
             expect(values(plugins.filter((o) => o.value.trim() === '' || o.label.trim() === '')), 'plugins scraped with an empty code or name').toEqual([]);
             expect(new Set(values(plugins)).size, 'duplicate plugin codes: the scrape read something that is not a plugin').toBe(plugins.length);
