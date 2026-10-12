@@ -965,14 +965,28 @@ plugin.
   caricato ma non le traduzioni, che si uniscono al build, quindi mostra il nome del backend. Servirà un'unione a
   runtime: il backend serve i frammenti, il frontend li aggiunge con `addMessages`. Dettagli: piano della 45, sezioni
   «0» e «9».
+- **U-B2 · Le sorgenti dei sottosistemi accanto al codice** — basso; U, 12/10, decisione D-B del developer: per la 1.2
+  le 17 sorgenti restano in `frontend/src/lib/i18n/<sottosistema>/`. Quando T-FE2…FE11 crea le cartelle per
+  funzionalità (`lib/features/<x>/`), ogni sottosistema si può spostare con la sua funzionalità: è un `git mv` della
+  cartella, che porta con sé il suo `prefixes.txt`, più un glob in più in `discover()` di `scripts/i18n_catalog.py`. Le
+  chiavi e i prefissi non cambiano, e `dev.py i18n check --against <rev>` prova l'equivalenza. Dettagli: piano della 45,
+  sezioni «2.5» e «9».
 - **U-B3 · Le icone dentro la cartella del plugin** — basso; U, 12/10, decisione D-7, che le lascia dove sono nella 1.2.
   Servono `static/` nella cartella, la rotta di `uploads.py` e `generate_static_url` nelle 3 basi. Dettagli: piano della
   45, sezione «9».
 - **U-B4 · `sample_reports/` per plugin** — basso-medio; U, 12/10, decisione D-7. Ci sono 25 percorsi fra E2E e test
   backend. Dettagli: piano della 45, sezione «9».
-- **U-B5 · I vecchi percorsi `<famiglia>/<nome>.py` fuori da U** — basso; U, 12/10. Restano le 84 citazioni in 47
-  pagine del devWiki, per l'historian, come T-W1. ✅ `financial-theory/fundamentals/day-count.{en,it,fr,es}.md:10` è già
-  corretto nelle 4 lingue (`18e872872`). Dettagli: piano della 45, sezione «3».
+- ✅ **U-B5 · I vecchi percorsi `<famiglia>/<nome>.py` fuori da U** — basso; U, 12/10. Chiusa: le due parti erano già
+  fatte.
+  - Il devWiki: W, passo D del 12/10 (`a74a5bfb6`, treno 63). Ha spostato 112 citazioni in 54 pagine e ne ha lasciate 8
+    come storia.
+  - `financial-theory/fundamentals/day-count.{en,it,fr,es}.md:10`: già corretto nelle 4 lingue (`18e872872`).
+
+  Verifica di U, 13/10:
+  - `check_source_paths` non trova percorsi di plugin; i suoi 5 percorsi mancanti sono artefatti ignorati, fuori da U;
+  - i percorsi piatti di plugin restano solo nella cronaca, `log.md` e `raw/ingest-registry.md`.
+
+  Dettagli: piano della 45, sezioni «3» e «10», U-5.
 - **U-B6 · Il server di sviluppo non segue le sorgenti del catalogo** — basso; U, 12/10.
   - Oggi: `npm run dev` genera il catalogo all'avvio (`predev`), e i comandi `dev.py i18n` lo rigenerano da soli.
   - Il limite: una modifica a mano di una sorgente (`base/`, un sottosistema, un frammento di plugin) arriva al server di
