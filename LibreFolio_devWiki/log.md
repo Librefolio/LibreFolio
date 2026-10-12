@@ -3257,3 +3257,12 @@ date and replaced in the pages (17 citations): 615a52eb → `c9f840680`, 78aaa0a
 `93a88be2c`, a688bcb9 → `dadcc4de2`, b5a0bf9 → `82c9224d5`, a7b30d52 → `432d8642a`. Left: 23 in the pages,
 whose match is ambiguous (F-098's four, 3184a969/1a734008, …), and the citations in this log and in the ingest
 registry, kept as written. Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 2 — the history rewrite of 2026-09-04, remapped exactly
+Base `d88e10d15`. The repository's history was rewritten with `git filter-repo` on 2026-09-04: every older commit got
+a new hash, so the hashes written before that day — in this log, the ingest registry and some pages — resolve to
+nothing. With the rewrite's commit map (1 125 old → new pairs, a copy provided by the coordinator), 74 such hashes were
+mapped to today's commits, each unique and an ancestor of HEAD: 48 citations in the pages and the index, 165 in
+[raw/ingest-registry.md](raw/ingest-registry.md), whose drift check works again. The six matched earlier by subject
+and date agree with the map. This log keeps its old hashes as written: look them up in the map. Not a commit, left
+as is: an Alembic revision id. Graph: not updated (P-6).
