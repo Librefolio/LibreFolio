@@ -2586,3 +2586,20 @@ computes from its own location». The same note went into [[problems/docker-syst
 Registry: plan 43 re-read at `390ba7d9a` (the BU1 record).
 Checks: `check_source_paths.py` back to the baseline set — 11 missing (17 occurrences) in the worktree, the same paths
 as before BU1; 0 broken wikilinks in the added text; `git diff --check` clean. Graph: not updated (P-6).
+
+## [2026-10-12] update | BU2 — DB precision out of utils/, and the version rule written down
+Base `f0f3de0d9` (train 53): BU2 (`8dae5cc6e`, journal `f038ce39a`) moved `get_model_column_precision`,
+`truncate_to_db_precision`, `truncate_priceHistory` and `truncate_fx_rate`, unchanged, from `utils/decimal_utils.py`
+to `backend/app/db/precision.py`; `decimal_utils.py` keeps only `parse_decimal_value`. The lazy `clear_cache` imports
+of `fx.py` and the lazy `get_git_version` import of `config.py` became top-level: none broke a cycle. In the wiki only
+one present-tense mention of the truncation existed, in [[features/F-017]] — repointed; no «Source files» row cited
+`decimal_utils` except [[decisions/utils-leaf-functions-only]]'s own, now split into the new module and the reduced
+one. That page records BU2 as delivered: every `utils` module is a leaf.
+The AI Export version rule, flagged by step 3 as living only in the journal, is now written (`4388db8df`): a
+«Versions» section in `.github/instructions/ai-development.instructions.md` and a paragraph in «ComponentSpec» of
+`ai_export_composition.md`, both citing [[decisions/ai-export-version-bump-once-per-release]], which now lists them.
+Correction carried back from the docs-writer's code check: the spec/placeholder version parity is checked at import by
+`catalog.py`, not by "the registry", as the page had copied from the journal.
+Registry: plan 43 re-read at `f038ce39a` (the BU2 record).
+Checks: `check_source_paths.py` — the same 11 missing paths (17 occurrences) as the reference set; 0 broken wikilinks
+in the added text; `git diff --check` clean. Graph: not updated (P-6).

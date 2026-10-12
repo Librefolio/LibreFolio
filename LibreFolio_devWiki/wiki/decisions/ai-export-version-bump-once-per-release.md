@@ -3,6 +3,7 @@ title: "AI Export component versions: bump only when the implementation changes,
 category: decision
 status: resolved
 date: 2026-10-12
+updated: 2026-10-12
 tags: [ai-export, contracts, versioning, components, renderer, compact-tables, release, release-1.2]
 related:
   - decisions/ai-export-versioned-snapshot-boundary
@@ -19,8 +20,8 @@ related:
 
 Every AI Export component carries a stable `component_id` and an implementation `version`
 ([[decisions/ai-export-versioned-snapshot-boundary]]; `ai_export_composition.md`, «ComponentSpec»). The version is
-written in two places — the component's spec and the frozen catalogue placeholder in `components/catalog.py` — and the
-registry checks they match. On the frontend, `snapshotDataRenderer.ts` prints a section as a compact table only when
+written in two places — the component's spec and the frozen catalogue placeholder in `components/catalog.py` — and
+their parity is checked at import, when `catalog.py` builds the central tuple. On the frontend, `snapshotDataRenderer.ts` prints a section as a compact table only when
 its component version is listed in `COMPACT_COMPONENT_VERSIONS` (version 1 alone for a component without an entry);
 any other version falls back to `PAYLOAD YAML FALLBACK`.
 
@@ -61,8 +62,11 @@ the version they already have in this cycle.
 - Several fixes in one cycle cost one version per component, and a reader of a 1.2 prompt sees at most one version
   step from 1.1.
 - Before bumping, check the component's version in the last release tag (`git show v1.1.0:…/catalog.py`).
-- The rule is recorded in the journal (plan 43, C-53; backlog 38, C-53). At `5d0585595` it is not yet written in
-  `.github/instructions/ai-development.instructions.md` nor in `ai_export_composition.md`.
+- **Written down on 2026-10-12** (`4388db8df`, train 53), after this page noted that the rule lived only in the
+  journal: a «Versions» section in `.github/instructions/ai-development.instructions.md` and a paragraph in
+  «ComponentSpec» of `ai_export_composition.md`, both citing this page. Writing the paragraph, docs-writer checked the
+  code and corrected the wording this page had taken from the journal: the parity between a spec and its placeholder
+  is checked at import by `catalog.py`, not by the registry.
 
 ## Links
 
@@ -75,9 +79,10 @@ the version they already have in this cycle.
 
 | Role | Path |
 |------|------|
-| Component catalogue (frozen versions) | `backend/app/services/ai_export/components/catalog.py` |
+| Component catalogue (frozen versions, parity checked at import) | `backend/app/services/ai_export/components/catalog.py` |
 | Compact renderer and `COMPACT_COMPONENT_VERSIONS` | `frontend/src/lib/features/ai-export/templates/snapshotDataRenderer.ts` |
-| Composition doc («ComponentSpec», «Snapshot Data Tables») | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |
+| The rule for agents («Versions», since 2026-10-12) | `.github/instructions/ai-development.instructions.md` |
+| Composition doc («ComponentSpec» with the rule since 2026-10-12, «Snapshot Data Tables») | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |
 | C-53 analysis and the version rule | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` |
 | Backlog C-53 | `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/README.md` |
 | F-AI cost and the no-bump decision | `LibreFolio_developer_journal/Release_2/Phase_0/41_brokerPnlFlows/plan-phase00BrokerPnlFlows.prompt.md` |
