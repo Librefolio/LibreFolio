@@ -34,6 +34,24 @@ export async function appears(locator: Locator, timeout = 2_000): Promise<boolea
 }
 
 /**
+ * True as soon as `locator` is enabled; false if it is not enabled within `timeout` ms.
+ *
+ * `locator.isEnabled({timeout})` waits only for the element to exist, then answers
+ * about that instant: a button the page has not enabled yet reads as "never
+ * enabled", and the branch behind it is skipped in silence. Same remedy as
+ * `appears()`, same rule: when the control MUST become enabled, say so with
+ * `await expect(x).toBeEnabled()`.
+ */
+export async function becomesEnabled(locator: Locator, timeout = 2_000): Promise<boolean> {
+    return expect(locator.first())
+        .toBeEnabled({timeout})
+        .then(
+            () => true,
+            () => false,
+        );
+}
+
+/**
  * The SearchSelect option list has closed.
  *
  * Every SearchSelect in the app renders its options as `search-select-option-*`,
