@@ -3306,3 +3306,9 @@ counts; `waitForCountedRequest`, `6a1d95d85`) and [[problems/release-shots-show-
 [[decisions/security-details-close-after-30-seconds]] (I5 applied, `2d0ca1660`), [[problems/playwright-probes-ignore-timeout]]
 (M-24), [[sources/phase00-ui-polish-2026-10]], [[sources/phase00-translation-round12-2026-10]]. U-B5's devWiki part
 was done in step D. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Train 79 — T-EN1 and T-EN2
+Base `b1a17b49b`. Sources: plan 43 («T-EN»), the backlog, the code of `f31bd6cfd` and the CHANGELOG line `4e11c2f83`.
+**Updated** [[decisions/figures-in-the-interface-language]] (T-EN1, T-EN2 closed; `ChartSignal`'s tracked catalogue;
+T-ISO and T-FB for after 1.2), [[decisions/plugin-folders-and-split-i18n]] (the first `i18n add` after U-3, routed to
+`charts` and `assets`), [[features/F-008]]. Graph: not updated (P-6).
