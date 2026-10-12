@@ -92,9 +92,9 @@ Dettagli: [README della 13](13_pacAllocator/implementation/README.md), «🧭 Ri
 ## I · P&L per broker (41)
 
 Dettagli: [piano della 41](41_brokerPnlFlows/plan-phase00BrokerPnlFlows.prompt.md), §14; dove va ogni voce, §17.6. Il
-lotto è chiuso: il motore nel treno 32, la card (H) nel treno 35, F nel treno 42. Resta aperta solo la decisione del
-developer su F-AI (b), il nome «FX on cash» nell'export del portafoglio: il testo della voce è pronto nel piano (§15,
-«F-AI»). Righe scritte da I il 12/10, coi numeri di riga di `5d62658bb`.
+lotto è chiuso: il motore nel treno 32, la card (H) nel treno 35, F nel treno 42. Su F-AI il developer ha deciso il
+12/10: nella 1.2 la (a), cioè niente; la (b), il nome «FX on cash» nell'export del portafoglio, è la voce qui sotto.
+Righe scritte da I il 12/10, coi numeri di riga di `5d62658bb`; la voce F-AI (b) con quelli di `378338fed`.
 
 Altrove: B9 (T-U3), C1 (T-U4), L1/L2 (T-U6) e KpiSection (T-U8) sono nella sezione T. P1, R4, W1 e X5 sui prezzi F
 non li ha toccati e restano a T: P1 in U4, R4 in U5 con B8, W1 in U7, X5 dei prezzi in U1 (§17.6). Il gruppo I del
@@ -109,6 +109,20 @@ debito di traduzione di F-5 (di M).
   B11 sulla cassa, B12 per le storie e i flussi dei contributi, X5 e O2 sui giri del portafoglio e sulla card.
   Dettagli: [piano della 41](41_brokerPnlFlows/plan-phase00BrokerPnlFlows.prompt.md),
   §15, da «F-0» a «F-5».
+- **F-AI (b) · «FX on cash» per nome nell'export del portafoglio** — basso; I, 12/10. Decisione del developer: dopo la
+  1.2, «con un codice tipizzato». Oggi la riga compare per nome negli `effects` di `broker.flows_income_costs`;
+  nell'export del portafoglio resta dentro `period_other_result`, perché `portfolio.flows_income` tiene solo Income e
+  Cost (`portfolio_financial.py:401,438`).
+  - Il codice: un campo tipizzato su `OtherPeriodEffect` (`schemas/portfolio.py:433-440`), scritto da chi produce la
+    riga (`portfolio_service.py:1978`). Chi la legge confronta il codice, non più la descrizione inglese: l'export e i
+    due confronti del frontend (`OtherPeriodEffectsTable.svelte:75`, `PerformanceChart.svelte:291`). Il campo è
+    additivo, ma cambia l'API: serve `api sync`.
+  - L'export: un campo con le righe «FX on cash» per broker, filtrate per codice. `portfolio.flows_income` passa a v2
+    (`components/catalog.py:109`), con `COMPACT_COMPONENT_VERSIONS` `{1,2}` (`snapshotDataRenderer.ts:1443`) e i test.
+  - Sonda mirata sulla corsia, sui dati sintetici (metodo del piano 43, B3b passo 5).
+  - Facoltativo: una frase sulla cassa rivalutata nella `valuation_semantics` delle due provenance, col loro bump a v3.
+  - Stima ¾ g più la sonda: il codice aggiunge circa 2 h alla ½ g del piano. Rischio basso sulle cifre, che non
+    cambiano; medio sul contratto. Dettagli: idem, §15 «F-AI».
 - **B1 · L'avviso sulle quote diverse non arriva all'utente** — basso; I, 10/10 (D6). Si scrive solo per le coppie di
   più giorni (`portfolio_engine.py:347-350`, nel blocco di `:332`) e finisce in `classifier_warnings` (`:2107`, letto
   a `:2335`), che nessun chiamante passa. Dettagli: idem, §14.
