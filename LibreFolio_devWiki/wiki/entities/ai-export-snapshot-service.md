@@ -147,6 +147,7 @@ The service does not return prompt text, labels, translations, or user notes. `f
 | 2026-08-05 | Final V3 closure reduced the public catalog to 8 datasets/11 analyses over 67 components and 40 internal datasets, removed the entire profile/assembler runtime and proved 114/114 prompt equivalence in candidate `20260804T224056.073291Z`. |
 | 2026-08-05 | Before first release, public snapshot/catalog/selection/instruction/response versions were reset to V1. Probe helper tests stayed in the runner under an explicit helper-only action; real prompt and Task Adequacy runs remained separate. |
 | 2026-10-12 | Release 1.2 cycle: nine components moved one version over `v1.1.0` (provenances, FIFO summaries and lots, `asset.lot_detail`, reconciliations), each in `COMPACT_COMPONENT_VERSIONS`; the developer's rule allows one step per component until the release ships, and none for a change of values only — [[decisions/ai-export-version-bump-once-per-release]]. C-53: `reconciled` true below `CONVERSION_DUST` — [[problems/ai-export-reconciled-false-on-rounding-dust]]. |
+| 2026-10-12 | C-55: the real-prompt probe accepts an empty broker's `null` HHI when the largest weight is `null` too, and counts it (`hhi_unavailable`); the payload contract and the prompts are unchanged — [[problems/ai-export-probe-rejected-unavailable-hhi]]. |
 
 ## Source files
 
