@@ -478,10 +478,12 @@ le prende chi riparte sui BRIM.
 Dettagli: [piano della 46](46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md), §9 «Avanzamento». Righe scritte da
 V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
-- **V-1 · «Sincronizza prezzi» (STALE_PRICE) non aggiorna i pannelli già aperti** — basso; V, 12/10. È il gemello
+- ✅ **V-1 · «Sincronizza prezzi» (STALE_PRICE) non aggiorna i pannelli già aperti** — basso; V, 12/10. È il gemello
   della D2: `handleBannerAction` (`dashboard/+page.svelte`) ricarica il report, ma non incrementa `refreshVersion`. Il
   pannello lotti e il rischio già aperti restano quindi vecchi fino a una ricarica. Dettagli: piano della 46, §9
-  «Passo 4».
+  «Passo 4». **Chiusa il 12/10** nel lotto 2 di V: prima il rosso, poi `refreshVersion += 1` dopo `invalidate()` nel
+  ramo `sync_asset_prices` (`dashboard/+page.svelte:457-458`). Test in `stale-price-banner.spec.ts`. Commit: lotto 2
+  di V, indicato dal coordinatore. Dettagli: idem, §11.3.
 - **V-2 · Il pannello lotti non pubblica `data-busy`** — basso; V, 12/10. Parte con `loading` falso
   (`LotsAnalysisPanel.svelte:91`), quindi un'assenza si legge solo dopo un testimone, cioè le righe dei lotti, o sulla
   risposta. Gli spec della 46 fanno così. Dettagli: idem, §9 «Passo 3».
@@ -491,14 +493,17 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 - **V-4 · Se si chiude P-10, E2 di `data-quality-real.spec.ts` va ricostruito** — minimo; V, 12/10. E2 ottiene
   `MISSING_COST_BASIS` dall'app riclassificando uno SPLIT in PRICE_ADJUSTMENT. E4 (righe legacy) e B1 restano validi.
   Dettagli: idem, §4.
-- **V-5 · Un commento superato in `data-quality-banners.spec.ts:434`** — minimo; V, 12/10. Parla di «the seed's
+- ✅ **V-5 · Un commento superato in `data-quality-banners.spec.ts:434`** — minimo; V, 12/10. Parla di «the seed's
   MISSING_COST_BASIS», ma il populate fallisce se manca un costo (`populate_mock_data.py:3944-3959`): il seed non può
-  produrlo. Dettagli: idem, §1.1.
-- **V-6 · La doc dev elenca solo una parte dei test di `data-quality-banners.spec.ts`** — minimo; docs-writer di V,
+  produrlo. Dettagli: idem, §1.1. **Chiusa il 12/10** nel lotto 2 di V: il commento ora nomina il `TRANSACTION_IMPLIED`
+  che il test inietta. Commit: lotto 2 di V, indicato dal coordinatore.
+- ✅ **V-6 · La doc dev elenca solo una parte dei test di `data-quality-banners.spec.ts`** — minimo; docs-writer di V,
   12/10. Mancano i tre test di «Sincronizza tassi» e quello dei link di `MISSING_PRICE`. Dettagli:
   [data-quality-banner.md](../../../mkdocs_src/docs/developer/frontend/data-quality-banner.md), sezione «Frontend E2E
-  Tests (`e2e/portfolio/data-quality-banners.spec.ts`)».
-- **V-7 · `dashboard-cache.spec.ts:338` rosso accanto a `dashboard-broker-filter-label`** — basso; V, 12/10.
+  Tests (`e2e/portfolio/data-quality-banners.spec.ts`)». **Chiusa il 12/10** nel lotto 2 di V: la sezione elenca tutti
+  i 18 test, per contesto, e spiega perché lo spec inietta le issue. Aggiornate anche la riga `sync_asset_prices`
+  della tabella delle CTA (V-1) e la sezione di `stale-price-banner`. Commit: lotto 2 di V, indicato dal coordinatore.
+- ✅ **V-7 · `dashboard-cache.spec.ts:338` rosso accanto a `dashboard-broker-filter-label`** — basso; V, 12/10.
   Preesistente, fuori scope, i due spec non sono di V. Nel giro consolidato `--workers 4 front-portfolio all`:
   - `dashboard-broker-filter-label` crea e cancella un broker di `TEST_USER` (11:52:46 → :51/:52 UTC);
   - nel frattempo `dashboard-cache` aveva letto i broker posseduti dello stesso utente;
@@ -506,7 +511,70 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     could not be loaded».
   Da solo, a 4 worker, `dashboard-cache` passa 6/6. La cura probabile: `broker-filter-label` su un account
   usa-e-getta. Da decidere se il pannello debba rileggere i broker posseduti dopo un 403. Dettagli: piano della 46,
-  §9 «Passo 7».
+  §9 «Passo 7». **Chiusa il 12/10** nel lotto 2 di V: `broker-filter-label` gira su un account usa-e-getta con due
+  broker suoi, e `TEST_USER` non viene più toccato. Nel giro consolidato a 4 worker passano 157/157, con
+  `dashboard-cache:338` accanto ai test di `broker-filter-label`. La domanda sul 403 continua in V-8. Commit: lotto 2
+  di V, indicato dal coordinatore.
+- **V-8 · Il pannello Rischio con un broker sparito: 403 e nessuna rilettura** — basso, serve una decisione; V,
+  12/10. Se un broker posseduto sparisce dopo che la Dashboard ha letto i broker, per esempio cancellato in un'altra
+  scheda, la `risk/query` riceve 403 «Requested portfolio broker subset is not fully accessible» (`risk.py:73,89`).
+  Il tab Rischio mostra «Risk data could not be loaded» finché la pagina non rilegge i broker. Da decidere se il
+  pannello debba rileggere i broker posseduti e riprovare. Dettagli: piano della 46, §9 «Passo 7» e §11.
+- ✅ **V-9 · Due frasi superate nella doc del banner** — minimo; docs-writer di V, 12/10. In
+  [data-quality-banner.md](../../../mkdocs_src/docs/developer/frontend/data-quality-banner.md):
+  - la sezione «Component Modes → grouped» dice che le prime 3 issue sono visibili e che un pulsante appare quando
+    sono di più. In realtà il banner parte chiuso (`expanded = false`) e l'intestazione `data-quality-toggle` apre e
+    chiude tutto l'elenco;
+  - la regola di `TRANSACTION_IMPLIED` cita il testo inglese «still valued at cost», mentre `en.json` dice «valued at
+    their last transaction price…».
+
+  **Chiusa il 12/10**, lavoro 3 di V, passo 1. La sezione «grouped» descrive il banner chiuso, il toggle e
+  l'intestazione che conta solo errori e avvisi diversi da zero. La regola cita il testo attuale. Commit: lavoro 3 di
+  V, passo 1, indicato dal coordinatore. Dettagli: piano della 46, §12.2.
+- ✅ **V-10 · Due difetti latenti in `data-quality-banners.spec.ts`** — minimo; docs-writer di V, 12/10:
+  - i commenti citano `hasFailedConversion` (`assets/[id]/+page.svelte:501`), che non esiste più; ora c'è
+    `getComparisonEventFxDependency`;
+  - nel test «header does not show "0 errors, 0 warnings"», la regex `/0 error/i` colpisce anche «10 error(s)»: con
+    10 errori o più fallirebbe senza ragione.
+  Dettagli: piano della 46, §11.3.
+
+  **Chiusa il 12/10**, lavoro 3 di V, passo 1.
+  - Prima il rosso: dieci errori serviti, e la vecchia regex respinge «10 error(s)».
+  - Poi tre test deterministici, che servono l'elenco intero e leggono i numeri di `data-quality-toggle`: solo info,
+    dieci errori, l'ordine per severità.
+  - Il commento ora descrive `getComparisonEventFxDependency`.
+  - Verdi 20/20 a 1 e a 4 worker.
+
+  Commit: lavoro 3 di V, passo 1, indicato dal coordinatore. Dettagli: piano della 46, §12.2.
+- **V-11 · `TRANSACTION_IMPLIED` può dire «nessun prezzo di mercato da oltre 2 settimane» per un asset quotato ieri**
+  — basso, da confermare con un test; docs-writer di V, 12/10. Per lettura del codice:
+  - `AssetPriceSeries.resolve` (`financial_math/price_marks.py:197-223`) prende l'osservazione più recente, quote o
+    trade che sia. Un BUY registrato oggi, prima del sync della quotazione di oggi, batte quindi la quotazione di ieri:
+    `LAST_TRADE_PRICE`, l'asset è «implied»;
+  - superato il periodo di grazia, contato dal primo BUY/SELL e non dall'ultima quotazione
+    (`portfolio_service.py:1083-1088`), compare l'avviso, e il testo di `en.json:1719` parla di oltre 2 settimane
+    senza prezzo di mercato.
+  La valutazione al prezzo del trade è sensata; sbagliato è solo il messaggio. Dettagli: piano della 46, §12.2.
+- **V-12 · La doc del banner attribuisce il modo `grouped` alla sola Dashboard** — minimo; docs-writer di V, 12/10. In
+  [data-quality-banner.md](../../../mkdocs_src/docs/developer/frontend/data-quality-banner.md), sezione «Component
+  Modes», il titolo dice «`grouped` — Dashboard». Lo usano anche `RiskAnalysisPanel.svelte:619`,
+  `AssetSetRiskPanel.svelte:848` e `risk/levels/RiskPanelHeader.svelte:116`.
+- **V-13 · Commenti del backend che dicono ancora «valued at cost»** — minimo; docs-writer di V, 12/10.
+  `TRANSACTION_IMPLIED` valuta all'ultimo prezzo di transazione (`en.json:1719`). Dicono ancora «at cost»:
+  - `financial_math/portfolio/data_quality.py:66` e `:115`;
+  - `portfolio_service.py:1069`, che cita il messaggio come se fosse ancora quello vecchio.
+- **V-14 · Sonde legate al seed rimaste in `data-quality-banners.spec.ts`** — basso; test-author di V, 12/10. Sono
+  le stesse classi del test riscritto in V-10, ma non sono state toccate:
+  - `expandDataQualityBanner` (`:74`) decide se agire con `isVisible({timeout: 3000}).catch(() => false)`, e
+    `isVisible` ignora il timeout;
+  - il test «when data quality banner is present it is grouped with issue rows» (`:401`, sonda a `:404`) e il test
+    «range-before-data issue appears when URL date precedes first data» (`:697`, sonda a `:704`) annotano invece di
+    fallire quando manca la condizione;
+  - `goToFirstAssetDetail` (`:44`) apre il primo `asset-card-*` senza filtro; lo usano tre test della pagina asset;
+  - il commento del test «FX pair missing issue has add-fx-pair CTA in flat mode» cita righe superate (`:483` → oggi
+    `:669`; `:1052` → oggi `:2631`).
+  Cura: servire le issue con `serveDashboardIssues`, come in V-10, e un asset scelto per id. Dettagli: piano della
+  46, §12.2.
 
 ## 09 · Feedback e backlog strutturale
 
