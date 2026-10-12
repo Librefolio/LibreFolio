@@ -24,7 +24,7 @@ You need an administrator account and, for the last two checks, a phone on mobil
    LibreFolio does not know about the HTTPS: see [Behind a reverse proxy](#reverse-proxy).
 3. **Ask the server.** In a new tab, open `https://<your address>/api/v1/system/connection`: the
    answer contains `"cookie_secure":true` ([The server's view](#server-view)).
-4. **Optionally, look at the cookie.** In the browser's developer tools, the `session` cookie is
+4. **Look at the cookie.** In the browser's developer tools, the `session` cookie is
    marked `Secure` ([The session cookie](#session-cookie)).
 5. **From outside, open the HTTPS address.** On the phone, with Wi-Fi off, the page loads and, once
    you sign in, the indicator shows 🟢 **Connection: secure**. Keep Tailscale off on the phone for a
