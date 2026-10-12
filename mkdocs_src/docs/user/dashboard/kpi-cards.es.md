@@ -36,7 +36,7 @@ Las tres tarjetas en la parte superior del panel responden tres preguntas de un 
 **Cómo interpretarlo**
 
 - **Verde es ganancia, rojo es pérdida** — y un depósito o un retiro no es ninguna de las dos.
-- **Las cuatro filas explican el número grande.** Lo que no pueden ver, como activos que se mueven entre dos de tus brókeres el primer o el último día, va al **Otro / residuo de conciliación** de la [vista Rendimiento](positions.md#performance).
+- **Las cuatro filas explican el número grande.** Lo que no pueden ver va a la [vista Rendimiento](positions.md#performance): lo que los tipos de cambio hicieron con el efectivo que mantienes en otra divisa aparece allí como **Efecto del tipo de cambio sobre el efectivo**, una fila por cada bróker cuyo efectivo movieron los tipos, y el resto — como activos que se mueven entre dos de tus brókeres el primer o el último día — como **Otro / residuo de conciliación**.
 - **La barra más larga** es la fila que más movió tu resultado.
 
 ??? info "📏 La línea bajo el número grande — cómo se calcula"

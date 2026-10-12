@@ -38,6 +38,7 @@ $$
 - `estimated=True` indique une origine TRADE. Une cotation MARKET reportée obsolète est obsolète, pas estimée.
 - Les valorisations restent en devise native ; chaque consommateur les convertit en $C^*$ à la date de valorisation $t$.
 - Le taux de change du coût de base reste fixé à la date de transaction.
+- Les liquidités restent dans la devise où elles ont été enregistrées, courtier par courtier, et sont valorisées au taux de $t$ (§5) ; chaque mouvement de trésorerie reste comptabilisé, et chaque flux de trésorerie externe entre dans le capital, au taux de sa propre date.
 - Le PRU n'est **jamais** utilisé comme prix de valorisation.
 
 Voir [Résolution des prix](price-resolution.md) pour le contrat du résolveur et la sémantique de qualité des données.
@@ -115,6 +116,14 @@ $$
 \mathrm{UGL}(t) = \mathrm{NAV}(t) - \mathrm{Book}(t)
 $$
 
+$\mathrm{Cash}(t)$ représente les liquidités de chaque courtier, conservées dans les devises où elles ont été enregistrées et valorisées au taux de $t$ :
+
+$$
+\mathrm{Cash}(t) = \sum_{b \in S} \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t)
+$$
+
+où $N_{b,c}(t)$ est le solde du courtier $b$ dans la devise $c$ après ses mouvements datés de $t$ ou antérieurs, au prorata de la [part de propriété](../../../../user/brokers/sharing.md) du courtier, et $\mathrm{fx}(c, C^*, t)$ est le dernier taux connu à la date $t$ ou avant ($1$ pour $c = C^*$). Le même terme figure dans la NAV et dans le Book, de sorte que l'effet de change sur les liquidités s'annule dans l'UGL : il est comptabilisé comme résultat de change (§6) et appartient au P&L total.
+
 ---
 
 ## 📐 6. Modèle de trésorerie à trois pools — Par courtier $(K_b, R_b, W)$ {: #6-three-pool-cash-model-per-broker-k_b-r_b-w }
@@ -145,6 +154,22 @@ Trois pools d'accumulation suivent la provenance des liquidités. $K$ et $R$ son
 
 Si les dates de départ et d'arrivée diffèrent, le virement est en transit : soustrait de $s$ au jour de départ, ajouté à $d$ au jour d'arrivée. Entre ces dates, $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$ du montant en transit — géré par réconciliation proportionnelle.
 
+### 💱 Résultat de change sur les liquidités en devises {: #exchange-result-on-foreign-cash }
+
+Chaque mouvement de trésorerie entre dans les liquidités du courtier, et dans ses pools, au taux de sa propre date ; le solde détenu ensuite suit le taux (§5). Chaque jour $t$ où le taux d'une devise étrangère détenue en liquidités dans $S$ varie — y compris son premier taux connu —, après les mouvements de trésorerie de ce jour et avant que les transactions de ce jour ne mettent à jour les pools, chaque courtier $b$ détenant des liquidités en devises est réévalué :
+
+$$
+\varepsilon_b(t) = \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t) - \mathrm{Cash}^{\text{replay}}_b(t)
+$$
+
+$$
+\mathrm{Cash}^{\text{replay}}_b \mathrel{+}= \varepsilon_b, \qquad
+R_b \mathrel{+}= \varepsilon_b, \qquad
+\text{si } R_b < 0\text{: } K_b \mathrel{+}= R_b,\; R_b = 0
+$$
+
+$\mathrm{Cash}^{\text{replay}}_b(t)$ représente les liquidités que le rejeu porte pour $b$ : leur valeur à la réévaluation précédente plus chaque mouvement ultérieur au taux de sa propre date. Un gain va aux rendements ; une perte consomme d'abord les rendements puis le capital, exactement comme des FRAIS. La référence de capital ne bouge pas : un résultat de change est un résultat, pas un apport ; il figure donc dans la NAV, le P&L total, le ROI, le TWRR et le MWRR, jamais dans le capital versé.
+
 ### 🧮 Agrégation pour la sortie
 
 $$
@@ -161,7 +186,13 @@ $$
 \mathrm{Cash}_{\text{like}}(t) \approx \sum_{b \in S} K_b(t) + \sum_{b \in S} R_b(t)
 $$
 
-Mise à l'échelle proportionnelle par courtier appliquée si la dérive $> 0.01$ (due à l'arrondi FX ou au timing en transit).
+Les deux pools sont d'abord bornés à zéro pour chaque courtier. Si les pools ne sont pas vides et que la dérive dépasse encore $0.01$, les pools **cumulés** sont mis à l'échelle de $\mathrm{Cash}_{\text{like}}$, les liquidités plus les liquidités en transit — une mise à l'échelle globale, et non par courtier, chaque résultat étant borné à zéro :
+
+$$
+\mathrm{CashFromCapital}(t) = \sum_{b \in S} K_b(t)
+$$
+
+Sinon, $\mathrm{CashFromCapital}(t) = \min\bigl(\sum_b K_b(t),\, \mathrm{Cash}_{\text{like}}(t)\bigr)$ et $\mathrm{CashFromReturns}$ est le reste, borné à zéro. Les résultats de change sur les liquidités au repos sont comptabilisés dans les pools (ci-dessus) : la dérive restante vient donc du timing en transit — les liquidités en transit, et la variation de leur taux de change pendant le trajet, ne sont dans les pools d'aucun courtier.
 
 ---
 
@@ -190,7 +221,13 @@ $$
 \mathrm{PnL}_{period} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Les frais/revenus non alloués sans `asset_id` sont regroupés par courtier comme autres effets de période.
+Comme l'UGL ne peut pas contenir le résultat de change sur les liquidités (§5), Other se décompose en résultat de change de chaque courtier sur la période et en ce qui reste :
+
+$$
+\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
+$$
+
+Les frais/revenus non alloués sans `asset_id` sont regroupés par courtier comme autres effets de période, de même que $\mathrm{FXonCash}_b$ : une ligne par courtier détenant des liquidités en devises, affichée lorsque son résultat n'est pas nul. Voir [PnL de la période — Effet de change sur les liquidités](period-pnl.md#fx-on-cash).
 
 ---
 
@@ -217,7 +254,7 @@ Où $w_{\text{pre}}$ est le PRU en $C^*$ **avant** la réduction du pool (même 
 | Pré-frame | $[t_{\mathrm{first}},\ t_0)$ | Liquidités, qté, PRU, pools — aucune évaluation de marché |
 | Frame | $[t_0,\ t_1]$ | Quotidien complet : prix, FX, états de position, états de portefeuille |
 
-Les transactions pré-frame mettent à jour les accumulateurs (registre de liquidités, pools PRU, K/R/W à 3 pools) sans consommer de données de prix ou FX. Cela permet un cache efficace basé sur les plages.
+Les transactions pré-frame mettent à jour les accumulateurs (registre de liquidités, pools PRU, K/R/W à 3 pools) sans aucune évaluation de marché : aucun prix n'est lu et aucune position n'est valorisée. Chaque mouvement est converti au taux de sa propre date, comme dans le frame, et chaque jour où le taux d'une devise étrangère détenue varie, les liquidités sont réévaluées au taux de ce jour et le résultat de change entre dans les pools (§6), de sorte que les pools sont justes à $t_0$. Cela permet un cache efficace basé sur les plages.
 
 ---
 

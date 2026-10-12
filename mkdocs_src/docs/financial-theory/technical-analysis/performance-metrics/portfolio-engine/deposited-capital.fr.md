@@ -36,6 +36,7 @@ Ces lignes déplacent de la valeur sans trésorerie : elles constituent du capit
 | ADJUSTMENT avec `cost_basis_override`, non liée à une division | ✅ Oui, capital en nature au coût |
 | ADJUSTMENT liée à une DIVISION | ❌ Non, simple remise à l'échelle de la quantité |
 | BUY, SELL, DIVIDEND, INTEREST, FEE, TAX | ❌ Non |
+| Variation du taux de change des liquidités détenues dans une autre devise (aucune transaction) | ❌ Non : un résultat, compris dans le TotalPnL ; les flux de capital (dépôts, retraits, jambes de trésorerie orphelines) sont entrés dans la référence au taux de leurs propres dates |
 
 ---
 
@@ -93,7 +94,7 @@ $s_A$ est la [part de propriété](../../../../user/brokers/sharing.md) de l'exp
 
 Lorsque les jambes tombent à des jours différents, la valeur voyage du jour de départ $t_{dep}$ jusqu'au jour précédant $t_{arr}$. Pendant ce temps, elle fait partie de $\mathrm{InTransit}_A$, à la part de l'expéditeur $s_A$, valorisée chaque jour : la trésorerie au taux de change du jour, les titres au prix de valorisation du jour (au coût enregistré lors du transfert si le titre n'a aucun prix du tout). Aucun flux n'a lieu pendant que la valeur voyage, donc ses variations de prix et de taux de change restent dans la ligne de $A$, y compris la variation propre du jour d'arrivée ; la ligne de $B$ démarre à la valeur reçue.
 
-Par exemple, $A$ reçoit un dépôt de 1 000 USD au jour 0 à 0,90 EUR par USD ($C_A = 900$) et envoie les dollars au jour 1 ; $B$ les reçoit au jour 4. Avec le taux à 0,90, 0,91, 0,92, 0,93 aux jours 1–4, la ligne de $A$ affiche 0, +10, +20, +30 et celle de $B$ reste à 0. Au jour 4, $X = 930$ et $C_A = 900 - 930 = -30$.
+Par exemple, $A$ reçoit un dépôt de 1 000 USD au jour 0 à 0,90 EUR par USD ($C_A = 900$) et envoie les dollars au jour 1 ; $B$ les reçoit au jour 4. Avec le taux à 0,90, 0,91, 0,92, 0,93 aux jours 1–4, la ligne de $A$ affiche 0, +10, +20, +30 et celle de $B$ reste à 0. Au jour 4, $X = 930$ et $C_A = 900 - 930 = -30$. Une fois arrivés, les dollars sont des liquidités de $B$, réévaluées chaque jour : à partir du jour 5, la ligne de $B$ suit donc le taux ; à 0,94, elle affiche +10.
 
 ### 🧩 Cas particuliers
 
@@ -185,6 +186,7 @@ $$
     - $\mathrm{CapitalBaseline}$ = somme historique des flux de trésorerie et de capital en nature. $\sum K_b$ = quelle part de la trésorerie actuelle est du capital externe. Ils divergent après un BUY/SELL.
     - Un BUY chez le courtier $b_1$ ne consomme que $R_{b_1}$, jamais $R_{b_2}$.
     - Les transferts de trésorerie entre courtiers déplacent $R$ et $K$ de la source vers la destination sans toucher à $W$.
+    - Un résultat de change sur les liquidités qu'un courtier détient dans une autre devise va dans $R_b$ ; une perte supérieure à $R_b$ sort de $K_b$, comme le fait un FEE. $\mathrm{CapitalBaseline}$ ne bouge pas ([Moteur de portefeuille — §6](index.md#exchange-result-on-foreign-cash)).
 
 🔗 Règles complètes de mise à jour par courtier : **[Moteur de portefeuille — §6 Modèle de trésorerie à trois réservoirs](index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)**
 
@@ -223,6 +225,19 @@ Après l'étape 5 : Trésorerie=30, K=0, R=30 ✓ (rendements restaurés depuis 
 
 Le capital retourne correctement en $K$ ; seuls 5 € de gain vont en $R$. **Non**, les 1 005 € ne vont pas tous en $R$.
 
+### 💱 D — Des dollars détenus pendant que le taux varie
+
+Un seul courtier, devise de reporting EUR, taux en EUR par USD ; $\varepsilon$ est le [résultat de change sur les liquidités](index.md#exchange-result-on-foreign-cash).
+
+| Étape | Événement | $\varepsilon$ | $K$ | $R$ | Trésorerie | TotalPnL |
+|------|-------|---------------|-----|-----|------|----------|
+| 1 | DEPOSIT 1 000 USD à 0,90 | — | 900 | 0 | 900 | 0 |
+| 2 | Le taux monte à 0,95 | +50 | 900 | 50 | 950 | +50 |
+| 3 | Le taux descend à 0,85 ($R$ = 50 − 100, $K$ absorbe −50) | −100 | 850 | 0 | 850 | −50 |
+| 4 | BUY pour 1 000 USD à 0,85 (850 €) | — | 0 | 0 | 0 | MV − 900 |
+
+La CapitalBaseline reste à 900 € tout du long : les résultats de change sont des profits et des pertes, pas du capital. Après l'étape 4, TotalPnL est la valeur de marché MV du titre moins les 900 € déposés — soit −50 le jour de l'achat si MV est égale aux 850 € payés.
+
 ---
 
 ## ⚙️ Implémentation
@@ -231,6 +246,8 @@ Le modèle à 3 réservoirs s'exécute dans une **boucle unique par transaction*
 
 1. On prend la part de la transaction dans le pool de PRU de sa position, calculée avant le rejeu — pour un SELL, le coût qu'elle retire ($C$ = PRU avant vente × quantité vendue, aux taux historiques)
 2. On met à jour K/R/W selon les règles du type de transaction, avec ce $C$ pour un SELL
+
+Chaque jour où le taux de change d'une devise étrangère détenue en liquidités varie, le résultat de change de chaque courtier sur ces liquidités est lui aussi comptabilisé dans ses réservoirs, après les mouvements de trésorerie du jour et avant les transactions du jour ([§6](index.md#exchange-result-on-foreign-cash)).
 
 La série d'entrée du ROI/TWRR/MWRR est dérivée des variations jour après jour de `cumulative_external_cash_flow`, la référence de capital. Elle n'est pas dérivée du champ `external_cash_flow` limité à la trésorerie.
 

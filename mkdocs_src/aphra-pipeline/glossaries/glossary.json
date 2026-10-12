@@ -334,6 +334,16 @@
       "fr": "variation non réalisée",
       "es": "variación no realizada"
     },
+    "FX on cash": {
+      "it": "effetto cambio sulla liquidità",
+      "fr": "effet de change sur les liquidités",
+      "es": "efecto del tipo de cambio sobre el efectivo"
+    },
+    "exchange result on cash": {
+      "it": "risultato di cambio sulla liquidità",
+      "fr": "résultat de change sur les liquidités",
+      "es": "resultado de cambio sobre el efectivo"
+    },
     "period P&L": {
       "it": "P&L periodo",
       "fr": "P&L période",

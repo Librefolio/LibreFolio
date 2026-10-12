@@ -84,7 +84,7 @@ LibreFolio recuerda tus elecciones.
 - **P&L período**, dividido como en la [Tarjeta P&L período](kpi-cards.md#card-1-period-pl) en **Variación no realizada**, **Ventas**, **Dividendos e intereses** y **Costes** → [P&L período](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **Anualizado** — el resultado del período como tasa anual, durante el tiempo que la posición se mantuvo en el período → [Rentabilidad anualizada neta](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md)
 - **Δ1** / **Δ1%** para posiciones abiertas y, ocultos por defecto, **Valor inicial**, **Valor final**, **Lote abierto más antiguo** y **Estado**
-- **Otros efectos del período** — lo que no pertenece a ninguna posición: **Ingreso no asignado** y **Costes no asignados**, registrados sin un activo, y el **Otro / residuo de conciliación**
+- **Otros efectos del período** — lo que no pertenece a ninguna posición: **Ingreso no asignado** y **Costes no asignados**, registrados sin un activo; **Efecto del tipo de cambio sobre el efectivo**, lo que los tipos de cambio hicieron en el período con el efectivo que mantienes en otra divisa, con una fila solo para un bróker cuyo efectivo movieron; y el **Otro / residuo de conciliación**, lo que queda — un cambio de divisas con coste, el movimiento del tipo de cambio sobre el efectivo en camino entre dos de tus brókeres, títulos en camino entre ellos el primer o el último día del período, o una venta excluida de **Ventas** porque falta un tipo de cambio o un coste de compra → [Efecto del tipo de cambio sobre el efectivo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md#fx-on-cash)
 
 **Cómo leerlo**
 

@@ -28,15 +28,52 @@ $$
 | Realized | Somme des (produits de vente − coût historique des unités vendues) pour les SELL de la période ; les produits sont convertis à la date de la vente |
 | Income | DIVIDEND + INTEREST de la période |
 | FeesTaxes | FEE + TAX de la période |
-| Other | Résidu qui referme l'identité |
+| Other | Ce qui referme l'identité : le résultat de change sur les liquidités détenues dans une autre devise (Effet de change sur les liquidités) plus un résidu |
 
-Le résidu est calculé comme suit :
+Other est calculé comme suit :
 
 $$
 \mathrm{Other} = \mathrm{PnL}_{\text{period}} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Comme le coût de base conserve ses taux de change historiques (voir [Valeur comptable](book-value.md)), l'effet des taux de change sur les actifs étrangers fait partie de $\Delta\mathrm{UGL}$ et non de Other. Ce que Other contient encore, c'est ce que les quatre composants ne peuvent pas voir, par exemple la valeur d'actifs transférés entre deux courtiers lors d'un jour de bascule, ou une vente exclue de Realized parce que son produit n'a pas pu être converti ou que le coût de sa position est incomplet.
+Comme le coût de base conserve ses taux de change historiques (voir [Valeur comptable](book-value.md)), l'effet des taux de change sur les actifs étrangers fait partie de $\Delta\mathrm{UGL}$ et non de Other. Les liquidités détenues dans une autre devise sont un cas à part : la NAV et la valeur comptable les valorisent toutes deux au taux de chaque jour, de sorte que leur effet de change s'annule dans les plus/moins-values latentes et n'est pas dans $\Delta\mathrm{UGL}$. C'est la première partie de Other, l'[Effet de change sur les liquidités](#fx-on-cash) de chaque courtier $b$, que la vue Performance affiche par courtier :
+
+$$
+\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
+$$
+
+Le résidu contient ce que ni les quatre composants ni le résultat de change sur les liquidités ne peuvent voir :
+
+- la variation du taux de change des liquidités pendant leur trajet entre deux courtiers : en transit, elles n'appartiennent au solde d'aucun courtier ;
+- le coût d'un change de devises, chez un courtier ou entre deux : −1 000 USD valant 920 € au taux du jour, convertis en +900 €, donnent −20 €, qui ne sont ni des frais ni une vente ;
+- la valeur d'actifs transférés entre deux courtiers lors d'un jour de bascule ;
+- une vente exclue de Realized parce que son produit n'a pas pu être converti ou que le coût de sa position est incomplet.
+
+### 💵 Effet de change sur les liquidités {: #fx-on-cash }
+
+Pour chaque courtier $b$ détenant des liquidités dans une devise autre que $C^*$, sur la période $(t_0, t_1]$, $t_0$ étant l'état d'ouverture :
+
+$$
+\mathrm{FXonCash}_b = \sum_{c \neq C^*} \Bigl[N_{b,c}(t_1)\,\mathrm{fx}(c, C^*, t_1) - N_{b,c}(t_0)\,\mathrm{fx}(c, C^*, t_0)\Bigr] - \sum_{\substack{m \in (t_0, t_1] \\ \mathrm{ccy}(m) \neq C^*}} s_m \cdot \mathrm{amount}_m \cdot \mathrm{fx}(\mathrm{ccy}(m), C^*, d_m)
+$$
+
+$N_{b,c}(t)$ est le solde que $b$ détient dans la devise $c$ à la date $t$, au prorata de la part du courtier, et $\mathrm{fx}$ le dernier taux connu ce jour-là ou avant. La seconde somme parcourt les mouvements de $b$ dans une devise étrangère datés de la période : chaque montant, au prorata de la part $s_m$, au taux de sa propre date $d_m$. Le premier terme est la variation de valeur des liquidités en devises, le second ce que les mouvements ont apporté ou retiré : la différence est ce que les taux de change ont fait aux liquidités que le courtier détenait. Elle est égale aux résultats de change que le moteur comptabilise les jours de la période où le taux change ([Moteur de portefeuille — §6](index.md#exchange-result-on-foreign-cash)). Les liquidités en $C^*$ n'en ont pas.
+
+??? example "Exemple : des dollars chez un courtier sur un tableau de bord en euros"
+
+    Un courtier détient 1 000 USD pendant toute la période tandis que le taux passe de 0,90 à 0,92 EUR par USD :
+
+    $$
+    \mathrm{FXonCash} = 1\,000 \times 0.92 - 1\,000 \times 0.90 = +20 \text{ EUR}
+    $$
+
+    Avec un dépôt de 500 USD au milieu de la période à 0,91, et 0,92 à la fin :
+
+    $$
+    \mathrm{FXonCash} = 1\,500 \times 0.92 - 1\,000 \times 0.90 - 500 \times 0.91 = 1\,380 - 900 - 455 = +25 \text{ EUR}
+    $$
+
+    Le dépôt est entré dans le capital pour 455 € ; les +25 € sont ce que les dollars ont gagné face à l'euro pendant que le courtier les détenait.
 
 ---
 

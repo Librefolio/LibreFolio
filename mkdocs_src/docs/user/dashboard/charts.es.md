@@ -30,12 +30,12 @@ El gráfico recuerda tu última vista, incluida la subvista de P&L, en este nave
 | Elemento | Color | Significado |
 |---------|-------|---------|
 | Área — **Coste de Compra** | Azul | Lo que te costaron las posiciones que mantienes (coste medio × cantidad) |
-| Área — **Rendimiento** | Esmeralda | Rentabilidades mantenidas como efectivo (dividendos, intereses, ganancias realizadas aún no reinvertidas) |
+| Área — **Rendimiento** | Esmeralda | Rentabilidades mantenidas como efectivo (dividendos, intereses, ganancias realizadas aún no reinvertidas, ganancias de cambio sobre el efectivo que mantienes en otra divisa) |
 | Área — **Capital** | Verde grisáceo | Depósitos aún no invertidos, mantenidos como efectivo |
 | Línea — **[Valor neto (NAV)](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Verde oscuro continua | Valor total de la cartera a los precios de mercado actuales |
 | Línea — **[Capital Depositado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Gris discontinua | Capital externo neto aportado a lo largo del tiempo |
 
-**La brecha entre las dos líneas es tu P&L Total**: cada ganancia obtenida alguna vez (no realizada, realizada, intereses y dividendos) menos comisiones e impuestos. La información emergente muestra ambas líneas, el P&L Total en verde o rojo, y el desglose: **Coste de los activos** (el área azul, incluidos los activos que se mueven entre tus brókeres), **Rendimiento** y **Capital**.
+**La brecha entre las dos líneas es tu P&L Total**: cada ganancia obtenida alguna vez (no realizada, realizada, intereses, dividendos y ganancias o pérdidas de cambio sobre el efectivo mantenido en otra divisa) menos comisiones e impuestos. La información emergente muestra ambas líneas, el P&L Total en verde o rojo, y el desglose: **Coste de los activos** (el área azul, incluidos los activos que se mueven entre tus brókeres), **Rendimiento** y **Capital**.
 
 **Los activos valorados a su precio de compra**, como los préstamos P2P sin precio de mercado en vivo, mantienen el NAV cerca del Coste de Compra, por lo que la brecha puede ser estrecha: lee el **P&L Total** en la información emergente.
 

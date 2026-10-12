@@ -30,12 +30,12 @@ Il grafico ricorda la tua ultima vista, inclusa la sotto-vista P&L, in questo br
 | Elemento | Colore | Significato |
 |---------|-------|---------|
 | Area — **Valore di acquisto** | Blu | Quanto ti sono costate le posizioni che detieni (costo medio × quantità) |
-| Area — **Rendimento** | Smeraldo | Rendimenti detenuti come liquidità (dividendi, interessi, plusvalenze realizzate non ancora reinvestite) |
+| Area — **Rendimento** | Smeraldo | Rendimenti detenuti come liquidità (dividendi, interessi, plusvalenze realizzate non ancora reinvestite, guadagni di cambio sulla liquidità che detieni in un'altra valuta) |
 | Area — **Capitale** | Grigio-verde | Depositi non ancora investiti, detenuti come liquidità |
 | Linea — **[Valore netto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Verde scuro pieno | Valore totale del portafoglio ai prezzi di mercato correnti |
 | Linea — **[Capitale versato](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Grigio tratteggiato | Capitale esterno netto conferito nel tempo |
 
-**Il divario tra le due linee è il tuo P&L Totale**: ogni guadagno mai ottenuto (non realizzato, realizzato, interessi e dividendi) meno commissioni e imposte. Il tooltip mostra entrambe le linee, il P&L Totale in verde o rosso e la ripartizione: **Costo degli asset** (l'area blu, inclusi gli asset che si spostano tra i tuoi broker), **Rendimento** e **Capitale**.
+**Il divario tra le due linee è il tuo P&L Totale**: ogni guadagno mai ottenuto (non realizzato, realizzato, interessi, dividendi e guadagni o perdite di cambio sulla liquidità detenuta in un'altra valuta) meno commissioni e imposte. Il tooltip mostra entrambe le linee, il P&L Totale in verde o rosso e la ripartizione: **Costo degli asset** (l'area blu, inclusi gli asset che si spostano tra i tuoi broker), **Rendimento** e **Capitale**.
 
 **Gli asset valutati al loro prezzo di acquisto**, come i prestiti P2P senza un prezzo live, mantengono il NAV vicino al Valore di acquisto, quindi il divario può essere sottile: leggi il **P&L Totale** nel tooltip.
 

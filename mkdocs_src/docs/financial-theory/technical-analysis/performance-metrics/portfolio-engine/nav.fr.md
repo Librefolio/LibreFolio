@@ -22,6 +22,14 @@ $$
 \cdot \mathrm{fx}(\mathrm{ccy}_{mark}, C^*, t)
 $$
 
+et les liquidités de chaque courtier, conservées dans les devises où elles ont été enregistrées et valorisées au taux de $t$ :
+
+$$
+\mathrm{Cash}(t) = \sum_{b \in S} \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t)
+$$
+
+avec $N_{b,c}(t)$ le solde que le courtier $b$ détient dans la devise $c$ à la date $t$, au prorata de la [part de propriété](../../../../user/brokers/sharing.md) du courtier, et $\mathrm{fx}(c, C^*, t)$ le dernier taux connu à la date $t$ ou avant ($1$ pour $c = C^*$). Les liquidités détenues dans une autre devise font donc varier la NAV quand leur taux de change varie.
+
 🔗 Voir **[Portfolio Engine — §5 Aggregation](index.md#5-portfolio-aggregation)** pour la dérivation complète.
 
 ---
@@ -35,7 +43,7 @@ Le cours $\operatorname{mark}(a,t)$ provient du resolver unifié :
 3. **CARRIED** — dernière observation antérieure à $t$, projetée en avant (LOCF).
 4. **MISSING** — aucune observation à la date $t$ ou antérieurement.
 
-Les marks restent en devise native jusqu'à la valorisation ; la conversion FX a lieu à $t$. Le PRU n'est **jamais** utilisé pour la valorisation. Voir [Résolution des Prix](price-resolution.md).
+Les marks restent en devise native jusqu'à la valorisation, de même que les soldes de liquidités, chacun dans la devise où il a été enregistré ; la conversion FX a lieu à $t$. Le PRU n'est **jamais** utilisé pour la valorisation. Voir [Résolution des Prix](price-resolution.md).
 
 ---
 
