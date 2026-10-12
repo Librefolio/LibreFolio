@@ -3,7 +3,8 @@ Unit tests for native cash (Lot 41, step F): cash held in the currency it was pa
 
 Module under test: ``backend/app/services/financial_math/native_cash.py`` —
 ``effective_share``, ``cash_movement_from_transaction``, ``compute_native_cash`` and the
-value objects they exchange (CashMovement, NativeCash, CashFlows, MissingCashConversion).
+value objects they exchange (CashMovement, NativeCash, CashFlows, MissingCashConversion);
+from step F-W also ``NativeCash.exchange_results`` and ``CONVERSION_DUST``.
 
 What the module owes its callers, in one line: a broker's cash is the native balance of every
 currency it holds, worth on any day that balance at that day's rate — every foreign amount
@@ -21,6 +22,11 @@ an EUR-only history must come out byte-identical, so ``Decimal("950.00")`` is no
 The ``flows`` tests also carry the engine accumulator tests that step F-2 retired from the
 builder (``test_portfolio_engine_vnext.py`` period accumulators, ``test_signed_income.py``):
 the same histories and the same numbers, asked of the module instead.
+
+Section 11 (``exchange_results`` and ``CONVERSION_DUST``) is red until step F-W. The constant
+is read inside the tests as ``native_cash.CONVERSION_DUST`` and never imported at module level,
+so before F-W those tests fail at run time with an AttributeError while every other test in
+this file still collects and runs.
 """
 
 from __future__ import annotations
@@ -1056,3 +1062,225 @@ class TestMissingConversions:
 
         assert cash.missing_conversions() == []
         print_success("[]")
+
+
+# =============================================================================
+# 11 — exchange_results and CONVERSION_DUST
+# =============================================================================
+
+C = 30  # broker
+G = 40  # broker
+
+_DAY_NAMES = {D0: "d0", D1: "d1", D2: "d2", D3: "d3", D4: "d4"}
+
+_EXCHANGE_UNIT_RATES = {("USD", D1): "0.8", ("USD", D2): "0.7", ("USD", D3): "0.625"}
+
+# (date_from, date_to, broker A's result with the base rows at share 1)
+_EXCHANGE_WINDOWS = [
+    (None, D3, "-212.5"),
+    (D0, D3, "-212.5"),
+    (D1, D3, "-212.5"),
+    (D1, D2, "-100"),
+    (D2, D3, "-112.5"),
+    (None, D1, "0"),
+]
+_EXCHANGE_WINDOW_IDS = ["none-to-d3", "d0-to-d3", "d1-to-d3", "d1-to-d2", "d2-to-d3", "none-to-d1"]
+
+_PROPERTY_WINDOWS = [(date_from, date_to) for date_from in [None, D0, D1, D2, D3, D4] for date_to in [D0, D1, D2, D3, D4] if date_from is None or date_from < date_to]
+_PROPERTY_WINDOW_IDS = [f"{'none' if date_from is None else _DAY_NAMES[date_from]}-to-{_DAY_NAMES[date_to]}" for date_from, date_to in _PROPERTY_WINDOWS]
+
+
+def _exchange_rows(share: str = "1") -> list[tuple[CashMovement, str]]:
+    """Broker A's base rows: USD 1000 on D1 booked at 800, USD 500 on D2 booked at 350."""
+    return [
+        (movement(D1, "USD", "1000", share=share), "800"),
+        (movement(D2, "USD", "500", share=share), "350"),
+    ]
+
+
+def _exchange_cash(*extra: CashMovement | tuple[CashMovement, str | None], share: str = "1", unit_rates: dict[tuple[str, date], str] | None = None) -> NativeCash:
+    """The base rows (USD 0.8 on D1, 0.7 on D2, 0.625 on D3) followed by ``extra``."""
+    return native_cash_of(*_exchange_rows(share), *extra, unit_rates=_EXCHANGE_UNIT_RATES if unit_rates is None else unit_rates)
+
+
+def _property_cash() -> NativeCash:
+    """Four brokers, three currencies, shares 1 / 0.5 / 0.25, a missing and a zero row; every product exact.
+
+    A (share 1): USD +1000 D0 (900), EUR +500 D1, USD −200 D2 (−190), GBP +100 D3 (120).
+    B (share 0.5): EUR +1000 D0, USD +400 D1 (380), USD +300 D2 missing, USD 0 D3, USD −100 D4 (−80).
+    C (share 0.25): EUR +800 D1, EUR −100 D3 — report currency only.
+    G (share 1): GBP +200 D2 (230), GBP −50 D4 (−62.5).
+    """
+    return native_cash_of(
+        (movement(D0, "USD", "1000"), "900"),
+        movement(D1, "EUR", "500"),
+        (movement(D2, "USD", "-200", transaction_type="WITHDRAWAL"), "-190"),
+        (movement(D3, "GBP", "100"), "120"),
+        movement(D0, "EUR", "1000", broker_id=B, share="0.5"),
+        (movement(D1, "USD", "400", broker_id=B, share="0.5"), "380"),
+        (movement(D2, "USD", "300", broker_id=B, share="0.5"), None),
+        movement(D3, "USD", "0", broker_id=B, share="0.5", transaction_type="INTEREST"),
+        (movement(D4, "USD", "-100", broker_id=B, share="0.5", transaction_type="WITHDRAWAL"), "-80"),
+        movement(D1, "EUR", "800", broker_id=C, share="0.25"),
+        movement(D3, "EUR", "-100", broker_id=C, share="0.25", transaction_type="WITHDRAWAL"),
+        (movement(D2, "GBP", "200", broker_id=G), "230"),
+        (movement(D4, "GBP", "-50", broker_id=G, transaction_type="WITHDRAWAL"), "-62.5"),
+        unit_rates={("USD", D0): "0.9", ("USD", D1): "0.95", ("USD", D2): "0.95", ("USD", D3): "0.85", ("USD", D4): "0.8", ("GBP", D2): "1.15", ("GBP", D3): "1.2", ("GBP", D4): "1.25"},
+    )
+
+
+def _booked(cash: NativeCash, broker_id: int, date_from: date | None, date_to: date) -> Decimal:
+    """What ``broker_id``'s counted rows in ``(date_from, date_to]`` were worth when booked: Σ converted × share, every currency."""
+    total = Decimal(0)
+    for row, value in zip(cash.movements, cash.converted, strict=True):
+        if row.broker_id == broker_id and row.amount != 0 and value is not None and (date_from is None or row.date > date_from) and row.date <= date_to:
+            total += value * row.share
+    return total
+
+
+class TestExchangeResults:
+    """``exchange_results(date_from, date_to)``: what each broker's foreign cash gained or lost to exchange over ``(date_from, date_to]``.
+
+    Per broker with foreign cash: Σ over its foreign currencies of balance × rate on ``date_to``
+    minus the same on ``date_from``, less what its foreign rows in the window were worth when
+    booked (``converted × share``). Red until step F-W.
+    """
+
+    @pytest.mark.parametrize(("date_from", "date_to", "expected"), _EXCHANGE_WINDOWS, ids=_EXCHANGE_WINDOW_IDS)
+    def test_windows(self, date_from, date_to, expected):
+        """USD 1000 booked at 800 (0.8) on D1, USD 500 at 350 (0.7) on D2, rate 0.625 on D3: 1500 USD worth 937.5 against 1150 booked."""
+        print_section(f"11 — exchange_results({date_from}, {date_to})")
+        result = _exchange_cash().exchange_results(date_from, date_to)
+
+        assert result == {A: Decimal(expected)}
+        print_success(f"A {result[A]}")
+
+    def test_adjacent_windows_add_up(self):
+        """(D1, D2] + (D2, D3] == (D1, D3]: −100 + −112.5 = −212.5."""
+        print_section("11 — exchange_results over adjacent windows")
+        cash = _exchange_cash()
+
+        first, second, whole = cash.exchange_results(D1, D2), cash.exchange_results(D2, D3), cash.exchange_results(D1, D3)
+
+        assert first[A] + second[A] == whole[A] == Decimal("-212.5")
+        print_success(f"{first[A]} + {second[A]} = {whole[A]}")
+
+    @pytest.mark.parametrize(("date_from", "date_to", "expected"), _EXCHANGE_WINDOWS, ids=_EXCHANGE_WINDOW_IDS)
+    def test_report_currency_rows_change_nothing(self, date_from, date_to, expected):
+        """EUR +1000 on D1 and −200 on D2 at the same broker: booked at their own value, they owe nothing to exchange."""
+        print_section(f"11 — exchange_results({date_from}, {date_to}) with EUR rows at A")
+        cash = _exchange_cash(movement(D1, "EUR", "1000"), movement(D2, "EUR", "-200", transaction_type="WITHDRAWAL"))
+
+        assert cash.exchange_results(date_from, date_to) == {A: Decimal(expected)}
+        print_success(f"A {expected}")
+
+    @pytest.mark.parametrize(("date_from", "date_to", "expected"), _EXCHANGE_WINDOWS, ids=_EXCHANGE_WINDOW_IDS)
+    def test_the_share_scales_the_result(self, date_from, date_to, expected):
+        """Share 0.5 on the USD rows: half the balance, half the booked value, half the result (−106.25 over (None, D3])."""
+        print_section(f"11 — exchange_results({date_from}, {date_to}) at share 0.5")
+        result = _exchange_cash(share="0.5").exchange_results(date_from, date_to)
+
+        assert result == {A: Decimal(expected) * Decimal("0.5")}
+        print_success(f"A {result[A]}")
+
+    @pytest.mark.parametrize(("date_from", "date_to", "expected"), _EXCHANGE_WINDOWS, ids=_EXCHANGE_WINDOW_IDS)
+    def test_a_missing_conversion_is_left_out(self, date_from, date_to, expected):
+        """USD 300 on D2 with no conversion: out of the balance and out of the booked value, as ``value_at`` leaves it out."""
+        print_section(f"11 — exchange_results({date_from}, {date_to}) with a missing USD row")
+        cash = _exchange_cash((movement(D2, "USD", "300"), None))
+
+        assert cash.exchange_results(date_from, date_to) == {A: Decimal(expected)}
+        print_success(f"A {expected}")
+
+    def test_keys_are_the_foreign_cash_brokers_ascending_a_zero_included(self):
+        """C holds JPY 100 booked at 0.6 with one rate 0.006 (exactly 0), B only EUR: keys A and C, ascending, B absent."""
+        print_section("11 — exchange_results keys")
+        cash = native_cash_of(
+            (movement(D1, "JPY", "100", broker_id=C), "0.6"),
+            movement(D1, "EUR", "1000", broker_id=B),
+            movement(D2, "EUR", "-50", broker_id=B, transaction_type="WITHDRAWAL"),
+            *_exchange_rows(),
+            unit_rates={**_EXCHANGE_UNIT_RATES, ("JPY", D1): "0.006"},
+        )
+        assert cash.foreign_cash_broker_ids == frozenset({A, C}), "precondition"
+
+        result = cash.exchange_results(None, D3)
+
+        assert result == {A: Decimal("-212.5"), C: Decimal("0")}
+        assert list(result) == [A, C], "ascending broker ids, whatever the row order"
+        assert all(isinstance(value, Decimal) for value in result.values())
+        print_success(f"{_str_dict(result)}")
+
+    @pytest.mark.parametrize(("date_from", "date_to"), [(D2, D2), (D3, D1)], ids=["same-day", "reversed"])
+    def test_an_empty_window_is_an_empty_dict(self, date_from, date_to):
+        """``date_from >= date_to`` is an empty window: ``{}``, not a dict of zeros."""
+        print_section(f"11 — exchange_results({date_from}, {date_to}): empty window")
+
+        assert _exchange_cash().exchange_results(date_from, date_to) == {}
+        print_success("{}")
+
+    def test_every_foreign_currency_counts_a_negative_balance_too(self):
+        """GBP 100 booked at 115 (1.15) on D1, −300 at −348 (1.16) on D2, 1.2 on D3: −200 GBP worth −240 against −233 booked, −7; with the USD rows A is −219.5."""
+        print_section("11 — exchange_results over two foreign currencies")
+        gbp_rows = [(movement(D1, "GBP", "100"), "115"), (movement(D2, "GBP", "-300", transaction_type="WITHDRAWAL"), "-348")]
+        gbp_rates = {("GBP", D1): "1.15", ("GBP", D2): "1.16", ("GBP", D3): "1.2"}
+
+        gbp_only = native_cash_of(*gbp_rows, unit_rates=gbp_rates).exchange_results(None, D3)
+        both = _exchange_cash(*gbp_rows, unit_rates={**_EXCHANGE_UNIT_RATES, **gbp_rates}).exchange_results(None, D3)
+
+        assert gbp_only == {A: Decimal("-7")}
+        assert both == {A: Decimal("-219.5")}
+        print_success(f"GBP {gbp_only[A]}, USD and GBP {both[A]}")
+
+    @pytest.mark.parametrize(("date_from", "date_to"), [(None, D1), (D1, D3)], ids=["to-side", "from-side"])
+    def test_a_balance_with_no_rate_raises(self, date_from, date_to):
+        """USD 100 booked on D1, USD rates only from D2: the D1 balance cannot be valued, on either side of the window."""
+        print_section(f"11 — exchange_results({date_from}, {date_to}) with no USD rate on D1")
+        cash = native_cash_of((movement(D1, "USD", "100"), "80"), unit_rates={("USD", D2): "0.8", ("USD", D3): "0.8"})
+        with pytest.raises(ValueError, match="no USD/EUR rate"):
+            cash.value_at(D1)  # precondition: the same balance value_at refuses
+
+        with pytest.raises(ValueError, match="no USD/EUR rate"):
+            cash.exchange_results(date_from, date_to)
+        print_success("ValueError")
+
+    def test_the_raw_difference_is_returned_dust_included(self):
+        """USD 5000 booked at 5000 / 1.1 while its unit rate is 1 / 1.1: the two roundings differ by about 1E-24, returned as is (the caller filters)."""
+        print_section("11 — exchange_results returns a sub-dust difference unfiltered")
+        booked = Decimal(5000) / Decimal("1.1")
+        unit_rate = Decimal(1) / Decimal("1.1")
+        assert Decimal(5000) * unit_rate != booked, "precondition: the two conversions round differently"
+        cash = native_cash_of((movement(D1, "USD", "5000"), str(booked)), unit_rates={("USD", D1): str(unit_rate)})
+
+        result = cash.exchange_results(None, D3)
+
+        assert result[A] != 0, "no dust filtering in the module"
+        assert abs(result[A]) < native_cash.CONVERSION_DUST
+        print_success(f"A {result[A]}")
+
+    @pytest.mark.parametrize(("date_from", "date_to"), _PROPERTY_WINDOWS, ids=_PROPERTY_WINDOW_IDS)
+    def test_value_change_less_booked_flows_for_every_window(self, date_from, date_to):
+        """result[b] == value_at(to)[b] − value_at(from)[b] − Σ converted × share of b's counted rows in (from, to], every currency included.
+
+        Report-currency rows are booked at their own value, so they cancel out of the identity:
+        over the whole cash, the exchange result is what the cash is worth beyond what was paid in.
+        """
+        print_section(f"11 — exchange_results({date_from}, {date_to}) against value_at")
+        cash = _property_cash()
+        value_to = cash.value_at(date_to)
+        value_from = {} if date_from is None else cash.value_at(date_from)
+        expected = {broker_id: value_to.get(broker_id, Decimal(0)) - value_from.get(broker_id, Decimal(0)) - _booked(cash, broker_id, date_from, date_to) for broker_id in sorted(cash.foreign_cash_broker_ids)}
+
+        result = cash.exchange_results(date_from, date_to)
+
+        assert list(result) == sorted(cash.foreign_cash_broker_ids) == [A, B, G]
+        assert result == expected
+        print_success(f"{_str_dict(result)}")
+
+    def test_conversion_dust_is_one_billionth(self):
+        """``CONVERSION_DUST``: the threshold under which a caller treats a conversion difference as rounding."""
+        print_section("11 — CONVERSION_DUST")
+
+        assert isinstance(native_cash.CONVERSION_DUST, Decimal)
+        assert native_cash.CONVERSION_DUST == Decimal("1e-9")
+        print_success(f"{native_cash.CONVERSION_DUST}")
