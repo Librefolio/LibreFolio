@@ -43,6 +43,9 @@ the other parts are ingested in steps R1–R6.
 ## Pages created from this source
 
 - [[features/F-110]], [[features/F-111]], [[features/F-112]], [[features/F-113]] (step R0).
+- [[decisions/risk-answers-four-questions]], [[concepts/risk-binding-decisions]] (step R2).
+- From `implementation_2/` (step R3): [[decisions/asset-set-one-preparation-not-fan-out]],
+  [[decisions/l3-reads-current-composition]], [[problems/runner-catalog-merge-not-line-union]].
 
 ## Source files
 

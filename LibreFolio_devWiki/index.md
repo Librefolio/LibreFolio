@@ -90,6 +90,8 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/asset-set-one-preparation-not-fan-out]] | **Folder 02, round 2.** The Lab asks one `ASSET_SET` request (one preparation, one calendar), not one per asset: «Il fan-out non era caro: era sbagliato» (`d3afb92b6`) | 2026-09-21 | risk, lab, asset-set |
+| [[decisions/l3-reads-current-composition]] | **Folder 02, S3.** L3 measures today's composition replayed over the past, and every card names its mode; arithmetic annualisation (`afd480a89`) | 2026-09-18 | risk, l3, beta |
 | [[decisions/risk-answers-four-questions]] | **Folder 02, the thesis.** Risk answers «is my portfolio what I think it is?»: four questions, one per level (L1 hurt, L2 diversification, L3 paid for risk, L4 what if) | 2026-09-16 | risk, levels, thesis |
 | [[decisions/figures-in-the-interface-language]] | **T, M-18.** «Lingua della UI per tutto»: one reactive source, `uiLocale()`, the browser's region only when it speaks the UI language, en-GB for English; CP1 delivered (percentages, decimals, bytes, durations), CP2 to come | 2026-10-12 | i18n, locale, numbers |
 | [[decisions/changelog-translated-by-heading-pieces]] | **M, batch 25.** The CHANGELOG translated by pieces keyed by their headings (`changelog.py`, 30,000-character units); version lines copied; a translation that changes the structure refused; the open chapter informational until its tag | 2026-10-12 | translation, aphra, changelog |
@@ -288,6 +290,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/runner-catalog-merge-not-line-union]] | **Folder 02, register R2-116.** A line-by-line union of a test-runner catalogue conflict would have dropped a new action; graft the additions and check `--help` | resolved | testing, git, merge |
 | [[problems/mathjax-fonts-missing-from-local-copy]] | **M, batch 25.** The vendored MathJax had no fonts: after M-19, formulas drew in the page's font; companions listed from the script's text and checked every run (`92fb9c83e`); M-22, Mermaid, still needs internet | resolved | docs, mathjax, vendoring |
 | [[problems/fast-forward-blocked-by-a-dirty-file]] | **M, batch 25.** Git refuses a fast-forward over a locally modified file the target also changes; save outside, reset the file to HEAD, fast-forward, `git merge-file -p` on copies | resolved | git, worktree, coordination |
 | [[problems/e2e-writes-leaked-into-shared-state]] | **V, work 3.** E2E tests left a saved language on `TEST_USER`, the scheduler's five global keys, and EUR-USD rates fetched from the network; 2a (train 64): reserved MOCKFX pairs, disposable accounts, keys restored in `finally`; A4–A7 to come | open | testing, e2e, isolation |
@@ -591,6 +594,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Folder 02, step R3a — `implementation_2/`, the contract and the levels.** One asset-set preparation, L3 on today's composition, a merge recipe for the runner's catalogue | *(3 pages — 2 decisions, 1 problem; see log)* |
 | 2026-10-12 | **Train 69 in the wiki — M-23 (M's batch 27).** The in-app changelog typesets French like the docs: M-23 resolved in 1.2 | *(none)* |
 | 2026-10-12 | **Folder 02, step R2 — the decisions that bind Risk.** The thesis as a decision page; the README's binding list in English as a concept page, linked from F-110…F-112 | *(2 pages — 1 decision, 1 concept; see log)* |
 | 2026-10-12 | **Folder 02, step R1 — what is open in Risk.** The README's open items, re-checked where possible on the code, as «Still open (paused, after 1.2 — D382)» on [[features/F-110]], [[features/F-111]], [[features/F-112]] | *(none)* |
