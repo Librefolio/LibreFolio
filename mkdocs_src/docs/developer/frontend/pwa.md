@@ -59,6 +59,7 @@ LibreFolio is installable as a **Progressive Web App (PWA)**. This page document
 | `frontend/static/icons/apple-touch-icon.png` | iOS home-screen icon, 180×180 (generated) |
 | `frontend/src/lib/components/layout/HelpMenu.svelte` | Install button logic |
 | `dev.py` → `generate_pwa_icons()` | Icon generation from `logo_square.png` |
+| `frontend/generated-icons.json` | Committed record of the source sha256 and recipe each generated icon set was drawn from: an icon set is redrawn only when it no longer matches |
 | `dev.py` → `stamp_service_worker()` | Writes the `// build:` stamp of `sw.js` from `offline.html` |
 | `backend/test_scripts/test_utilities/test_pwa_assets.py` | Gate: icons, manifest icon entries, `apple-touch-icon` link, `sw.js` stamp |
 
@@ -157,7 +158,7 @@ The iOS home-screen icon is `apple-touch-icon.png` (180×180), linked from `app.
 
 Every icon is saved as opaque RGB, with no alpha channel. The logo is resized premultiplied (`RGBa`), so its transparent black pixels do not bleed a dark fringe into its edge, then laid on the background with `Image.alpha_composite`.
 
-The generator runs inside `copy_docs_assets()`, right before `stamp_service_worker()`: on `./dev.py mkdocs build`, `serve` and `deploy`, and when `./dev.py server` or `./dev.py docker build` rebuilds a stale docs site. `./dev.py front build` does not run it. The PNGs are committed, and mirrored into `mkdocs_src/docs/static/icons/`: after changing `logo_square.png`, run `./dev.py mkdocs build` and commit the regenerated icons.
+The generator runs inside `copy_docs_assets()`, right before `stamp_service_worker()`: on `./dev.py mkdocs build`, `serve` and `deploy`, and when `./dev.py server` or `./dev.py docker build` rebuilds a stale docs site. `./dev.py front build` does not run it. The PNGs are committed, and mirrored into `mkdocs_src/docs/static/icons/`: after changing `logo_square.png`, run `./dev.py mkdocs build` and commit the regenerated icons together with `frontend/generated-icons.json`, which records the sha256 of the logo they were drawn from. The generator redraws only when an icon is missing or when that hash, or `PWA_ICONS_RECIPE` in `dev.py`, no longer matches the record: Pillow does not write the same PNG bytes on every platform, so the decision never looks at the PNGs themselves. A change to the code that draws the icons must therefore bump `PWA_ICONS_RECIPE`, or nothing is regenerated.
 
 !!! note "Icons and the splash screen"
 
