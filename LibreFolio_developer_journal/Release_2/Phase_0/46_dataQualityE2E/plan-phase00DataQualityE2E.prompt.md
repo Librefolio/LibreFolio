@@ -700,3 +700,96 @@ Spec separato: `frontend/e2e/portfolio/data-quality-legacy.spec.ts`.
 
 Il manifest coi blob, i commit proposti in ASCII e le prove sono nel messaggio di checkpoint al coordinatore (12/10).
 Le prove sono anche nelle voci di §11.3.
+
+## 12. Lavoro 3 (12/10): V-9 e V-10, isolamento degli E2E, lacune della 1.2
+
+> **Mandato** (coordinatore, 12/10, su richiesta del developer: «riusciamo a riassegnargli qualcosa?»). Base: il mio
+> ramo con il lotto 2 committato (`a0722f755`, `4e710a1f9`, `6f5a3bcff`, `d09fb30c0`). Corsia 6175, un checkpoint
+> FROZEN per passo.
+> 1. V-9 e V-10;
+> 2. isolamento degli E2E, la classe di V-7: prima un rapporto con le priorità, poi la cura dei casi peggiori con
+>    account usa-e-getta. `gallery.spec.ts` e le sue fixture sono di M: solo segnalazioni;
+> 3. sola lettura: le funzioni nuove della 1.2 senza test automatici, una tabella delle 5-10 lacune di più valore.
+>
+> V-3 e V-8 restano nel backlog: li porta il coordinatore al developer.
+
+### 12.1 Passo 1, stato verificato (HEAD `d09fb30c0`)
+
+- **V-9**, in `mkdocs_src/docs/developer/frontend/data-quality-banner.md`:
+  - `:49` dice «First 3 issues are visible; an expand button appears when there are more», ma il banner raggruppato
+    parte chiuso (`expanded = false`) e `data-quality-toggle` apre e chiude tutto l'elenco;
+  - `:113` cita il testo inglese «still valued at cost», mentre `dataQuality.transactionImplied` dice «valued at their
+    last transaction price…».
+- **V-10**, in `frontend/e2e/portfolio/data-quality-banners.spec.ts`:
+  - il commento a `:282` cita `hasFailedConversion` (`assets/[id]/+page.svelte:501`), che non esiste più. Oggi è
+    `getComparisonEventFxDependency` (`frontend/src/lib/charts/loadComparisonData.ts:86`), chiamata da
+    `assets/[id]/+page.svelte:697`;
+  - il test a `:356-369` è un'asserzione vera: `expect(headerText).not.toMatch(/0 error/i)`. Ha tre difetti:
+    - «10 error(s)» contiene «0 error», quindi con 10 errori o più fallirebbe senza ragione;
+    - legge l'intestazione con la classe CSS `.font-medium`, vietata;
+    - dipende dal seed, con una sonda da 3 s e un'annotazione se il banner non c'è.
+  - La cura: prima il rosso che dimostra il difetto, iniettando 10 errori con la vecchia asserzione. Poi un test
+    deterministico: issue sostituite per intero, intestazione letta da `data-quality-toggle`, controllo indipendente
+    dalla lingua (nessun numero «0» fra i numeri dell'intestazione).
+
+### 12.2 Passo 1, avanzamento
+
+- ✅ **V-10, rosso** (12/10). Test-author di V. Il vecchio controllo, invariato, su un'intestazione decisa dal test:
+  dieci `MISSING_PRICE`, ciascuna col suo `group_key`, servite come elenco intero.
+  `$P --fresh-run --workers 1 front-portfolio banners`, ristretto al solo test del rosso → 1 test, ✘
+  `expect(received).not.toMatch(expected)`, `Expected pattern:
+  not /0 error/i`, `Received string: " 10 error(s) "` (`/tmp/libreFolio_v_w3_v10_red.log`, righe 36-50).
+  > **Note implementazione**: il difetto è dimostrato, non dedotto: con dieci errori il vecchio test falliva senza
+  > ragione.
+- ✅ **V-10, cura** (12/10). Test-author di V, solo `frontend/e2e/portfolio/data-quality-banners.spec.ts`.
+  - Quattro helper:
+    - `serveDashboardIssues` sostituisce per intero `summary.data_quality.issues` del report, e controlla prima che
+      ogni issue abbia la sua coppia `code + group_key`;
+    - `headerIssue(severity, n)` costruisce le issue;
+    - `headerCounts` legge i numeri di `data-quality-toggle`;
+    - `expectHeaderCounts` fa `expect.poll(...).toEqual(...)`, poi `not.toContain('0')`.
+  - Il vecchio test (sonda da 3 s, annotazione, `.font-medium`) è sostituito da tre test:
+    - solo info → nessun numero; prima un testimone, la riga servita con `2019-03-04`;
+    - dieci errori → `['10']`;
+    - avviso, info, errore, avviso → `['1', '2']`: l'ordine segue la severità, e l'info non è contata.
+  - Il commento di `injectForeignEvent` ora descrive `getComparisonEventFxDependency`
+    (`charts/loadComparisonData.ts`) e cita i nomi, non le righe: `FAAssetEventPointOut` al posto di
+    `schemas/prices.py:326`, anche quello superato.
+  - Prove:
+    - `$P --fresh-run --workers 1 front-portfolio banners` → 20 passed (2.2 min, `/tmp/libreFolio_v_w3_v10_w1.log`);
+    - `$P --fresh-run --workers 4 front-portfolio banners` → 20 passed (25.5 s, `/tmp/libreFolio_v_w3_v10_w4.log`);
+    - prettier pulito; tsc offline con un tsconfig temporaneo che estende `tsconfig.e2e.json`: exit 0, poi
+      cancellato;
+    - porta 6175 libera.
+  > **Note implementazione**: il nuovo controllo legge numeri, non parole. Test-author l'ha verificato offline con
+  > `intl-messageformat` sui quattro cataloghi: dà `[]`, `['10']` e `['1','2']` in ogni lingua. La vecchia regex,
+  > invece, sbagliava due volte: falliva su «10 error(s)» in inglese, italiano e spagnolo, e in francese non avrebbe
+  > mai visto «0 erreur(s)».
+  > **⚠️ Fuori pista**: test-author ha trovato altre sonde legate al seed nello stesso spec, e non le ha toccate.
+  > Vanno nel backlog come V-14:
+  > - `expandDataQualityBanner` `:74`;
+  > - il test «…grouped with issue rows», `:401` e `:404`;
+  > - il test «range-before-data…», `:697` e `:704`;
+  > - `goToFirstAssetDetail` `:44`, che apre il primo `asset-card-*` senza filtro;
+  > - le righe superate nel commento del test «FX pair missing…».
+- ✅ **V-9** (12/10). Docs-writer di V, solo `mkdocs_src/docs/developer/frontend/data-quality-banner.md`.
+  - «Component Modes → grouped»:
+    - il banner parte chiuso;
+    - `data-quality-toggle` apre e chiude tutto l'elenco;
+    - errori e avvisi stanno in `data-quality-actionable`, le note info in `data-quality-info`;
+    - l'intestazione conta solo errori e avvisi, e nomina solo quelli diversi da zero (`en.json:1715-1717`).
+  - La regola `TRANSACTION_IMPLIED` cita il testo attuale di `en.json:1719`. Docs-writer ha aggiunto una frase: le «2
+    settimane» sono il periodo di grazia di 14 giorni, contato dal primo BUY/SELL (`portfolio_service.py:1083-1088`).
+  - La pagina non ha traduzioni: niente stamp.
+  - Prove, dopo il «SITE FREE» (nessun backend nella corsia):
+    - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py mkdocs build` → exit 0, «Documentation
+      built in 39.59 seconds», «All 3012 relative asset URL(s) in the built site resolve», nessun WARNING
+      (`/tmp/libreFolio_v_w3_docs_build.log`);
+    - `… dev.py mkdocs check-links` → exit 0, «95 valid link(s)», «All cross-boundary links are valid!»
+      (`/tmp/libreFolio_v_w3_docs_links.log`);
+    - `mkdocs_src/site` è ignorato (`.gitignore:76`).
+  > **⚠️ Fuori pista**: tre rilievi fuori perimetro, verificati da me e messi nel backlog:
+  > - V-11: il messaggio `TRANSACTION_IMPLIED` può sbagliare, perché `price_marks.py:197-223` prende l'osservazione
+  >   più recente, e un trade di oggi batte la quotazione di ieri;
+  > - V-12: il titolo `grouped` nomina solo la Dashboard, ma lo usano anche tre pannelli del Rischio;
+  > - V-13: commenti del backend che dicono ancora «valued at cost».
