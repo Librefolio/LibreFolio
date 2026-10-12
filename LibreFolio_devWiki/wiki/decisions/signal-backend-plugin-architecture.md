@@ -35,6 +35,10 @@ The frontend keeps `SignalConfig` and all local style/view behavior. Backend cat
 - *Planned (2026-10-12)*: each signal plugin becomes a folder (`<plugin>/plugin.py`) with its own translations —
   [[decisions/plugin-folders-and-split-i18n]].
 
+
+How each plugin sizes its warm-up against the reference library: [[decisions/signal-indicator-warmup-sizing]]. The same
+migration commit isolated client sessions: [[problems/spa-logout-cross-user-cache-leak]].
+
 ## Source files
 
 | Role | Path |
