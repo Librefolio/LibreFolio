@@ -631,11 +631,18 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   - un utente nuovo non lo vede; le build di sviluppo (`vX.Y.Z-N-gSHA`) contano come la loro versione base.
   Da decidere allora: chi non ha ancora una versione vista la prima volta vede le novità al primo login, oppure no.
   Stima: 1–1,5 giornate.
-- **C-55 · L'AI Export di un broker senza posizioni non passa i controlli pubblici «invalid HHI points»** — basso,
-  **da verificare** (T, sonda di C-53, 12/10). Sul broker senza posizioni dei dati sintetici la sonda segna fallite le
-  verifiche pubbliche «invalid HHI points» di `broker.allocation_concentration` e `broker.concentration_context`,
-  con risposta HTTP 200. Preesistente. Da capire se è il controllo della sonda a non prevedere un insieme vuoto, o il
-  payload a esporre punti HHI non validi; poi la cura.
+- ✅ **C-55 · L'AI Export di un broker senza posizioni non passa i controlli pubblici «invalid HHI points»** — chiusa
+  nella 1.2 (developer, 12/10: «Sì, nella 1.2»), T, treno 56. Sul broker senza posizioni dei dati sintetici la sonda
+  segnava fallite le verifiche pubbliche «invalid HHI points» di `broker.allocation_concentration` e
+  `broker.concentration_context`, con risposta HTTP 200.
+  - **Il difetto era nella sonda** (`ai_export_real_prompt_probe.py`), che contava ogni HHI nullo come violazione.
+  - **Il payload è corretto**: HHI e peso massimo sono `null` insieme, perché un HHI di 0 direbbe «diversificazione
+    perfetta», e il prompt legge `null` come «esplicitamente non disponibile».
+  - **La cura**: un `null` passa solo se anche `largest_position_weight_percent` è `null`, e si conta in
+    `hhi.unavailable`; tutti gli altri casi restano rossi.
+  - **La matrice reale**: 24 casi su 24, con i prompt identici. Niente bump e niente CHANGELOG. Il `reason_code`
+    impreciso è in T-U9.
+  - Dettagli: [piano della 43](../43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), «C-55 — analisi».
 
 ## Tracciate altrove
 
