@@ -39,8 +39,8 @@ from backend.app.schemas.portfolio import (
     PortfolioPlannerWacContext,
 )
 from backend.app.services.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
+from backend.app.utils.asset.sector import FinancialSector
 from backend.app.utils.datetime_utils import utcnow
-from backend.app.utils.sector_fin_utils import FinancialSector
 
 
 async def _load_holding_rows(
@@ -152,7 +152,7 @@ _ENGINE_PROVENANCE_ID = "source:portfolio-engine"
 _KNOWN_SECTORS = frozenset(sector.value for sector in FinancialSector)
 # The metadata writers store Pydantic JSON, where a Decimal weight is plain decimal text ("0.6000").
 _SAVED_WEIGHT_TEXT = re.compile(r"[0-9]+(?:\.[0-9]+)?")
-# The catch-all geographic key the writers keep as it is (geo_utils.normalize_country_keys).
+# The catch-all geographic key the writers keep as it is (utils.asset.geo.normalize_country_keys).
 _GEOGRAPHY_OTHER = "Other"
 
 

@@ -104,7 +104,7 @@ from backend.app.services.financial_math.yield_on_cost import (
 )
 from backend.app.services.fx import convert_bulk
 from backend.app.services.settings_service import get_effective_base_currency
-from backend.app.utils.cache_utils import get_ttl_cache
+from backend.app.utils.runtime.cache import get_ttl_cache
 
 _logger = structlog.get_logger(__name__)
 

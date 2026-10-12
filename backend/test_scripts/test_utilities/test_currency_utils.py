@@ -11,7 +11,7 @@ Ensures:
 """
 
 from backend.app.schemas.common import _validate_currency_code_cached
-from backend.app.utils.currency_utils import (
+from backend.app.utils.fx.currency import (
     _build_currency_to_flag_map,
     list_currencies,
     normalize_currency,

@@ -14,6 +14,15 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 
+def _project_root() -> Path:
+    """The directory that holds ``backend/``: the repository root, or the image's app root (``/app``).
+
+    Derived from the module's dotted name, so a move inside the package keeps it right:
+    ``backend.app.utils.runtime.version`` is five names deep, so the root is four directories up.
+    """
+    return Path(__file__).resolve().parents[__name__.count(".")]
+
+
 @lru_cache(maxsize=1)
 def get_git_version() -> str:
     """
@@ -29,7 +38,7 @@ def get_git_version() -> str:
         Version string like 'v1.2.3' (on tag) or 'v1.2.3-5-gabcdef-dirty' (commits after tag)
         or 'unknown' if neither source is available.
     """
-    project_root = Path(__file__).parent.parent.parent.parent
+    project_root = _project_root()
 
     version_file = project_root / "VERSION"
     try:

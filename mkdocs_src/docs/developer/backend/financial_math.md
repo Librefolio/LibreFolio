@@ -120,7 +120,7 @@ flowchart LR
         FX["fx.convert_bulk()"]
         Settings["settings_service<br/>base currency"]
         Thresholds["data_quality_thresholds"]
-        Cache["cache_utils<br/>TTL cache"]
+        Cache["utils/runtime/cache<br/>TTL cache"]
         DB[("Database<br/>named read points")]
     end
     Services --> Math

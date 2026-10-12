@@ -6,10 +6,10 @@
  * (currencies, countries, sectors).
  *
  * These tests cover backend functions that serve UI presentation data:
- * - normalize_currency() → currency_utils.py
- * - list_currencies() → currency_utils.py
- * - list_countries() → geo_utils.py
- * - FinancialSector.list_all() → sector_fin_utils.py
+ * - normalize_currency() → utils/fx/currency.py
+ * - list_currencies() → utils/fx/currency.py
+ * - list_countries() → utils/asset/geo.py
+ * - FinancialSector.list_all() → utils/asset/sector.py
  */
 
 import {expect, test} from './fixtures/playwright';
