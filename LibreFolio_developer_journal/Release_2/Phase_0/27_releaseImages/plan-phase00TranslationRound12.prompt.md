@@ -898,3 +898,73 @@ T's CP1 of M-18 (train 68); the file passes to I next, for its `clipboardSink` g
 >   changed. Then the dry-run was empty.
 > - Gates (script `b29_final_gates.sh`, load 31–49): `translate-validate` 630 files 0/0, `translate-diff` 642 of 642
 >   clean, strict build 0 (all 3,012 relative asset URLs resolve), `check-links` 95 valid, `git diff --check` clean.
+
+### 19. ✅ Batch 30: I2, the figures as the UI writes them since M-18, and the formats sentence — 2026-10-12 22:00
+
+Base `c57acf510` (train 71). T's CP2 formats (coordinator, 21:44; the full list in `/tmp/libreFolio_m18cp2_examples.txt`):
+
+- `en` → `en-GB` unless the browser is in English; `it`, `fr` and `es` are bare;
+- French groups with U+202F; French and Spanish put U+00A0 before `%`;
+- Italian and Spanish do not group four digits.
+
+The kit was prepared at 21:00, outside the repo (`release-pipeline/i2/`, with a README).
+
+**19.1 ✅ The figures**
+> **Note implementazione**: `release-pipeline/scripts/i2_figures.mjs` scans every figure of the docs (2,979) and computes
+> the text the app writes for it in the page's language, with the app's own formula: `toFixed` first, then `Intl`, as
+> in `formatFixed`, `formatPercent` and the amounts.
+> - **Chromium:** 2,951 of 2,951 expected texts equal in Chromium 149 and in Node (ICU 78.3).
+> - **The decisions** are rules by page and figure (`i2/i2_rules.json`), so they survive line shifts.
+> - **Classes:** UI output (in code spans, or a sentence quoting the UI), input examples, prose, theory.
+>
+> **Written:** 34 figures in 11 files.
+> - `user/dashboard/kpi-cards` fr/es: the lines in code, e.g. `+91,31 € (+16,36 %)`, `-558,10 €`,
+>   `+12 450,30 (+24,85 %)`;
+> - `user/dashboard/positions` and `user/brokers/index`, it/fr/es: `0,00%` / `0,00 %`;
+> - `user/settings/preferences`, it/fr/es: the privacy table's amounts (`1234,56 €`, `1 234,56 €`) and `••• (60 %)`.
+>
+> **Spaces:** plain in the sources (`--spaces plain`), as every translation; the French hook adds U+202F in prose.
+>
+> **The privacy table's third row, by hand, in all four:** `€1,234.56` is the English UI's prefix; the suffix is now
+> written in the page language's format (`1234,56 €`, French `1 234,56 €`).
+>
+> **Left as written:**
+> - prose percentages, the doc's own text;
+> - the CSV values `Italy;12,5`;
+> - IP ranges;
+> - the catalogue's warning *dépasse 100%*;
+> - theory pages (ISO dates, formulas);
+> - `admin/`;
+> - the English pages, which already follow `en-GB`.
+
+**19.2 ✅ The validator accepts a localized percentage in a code span**
+> **Note implementazione**:
+> - **The gap:** `translate-validate`'s `inline-code-missing` compared code spans without the digit grouping, but not
+>   without the space French and Spanish put before `%`, so each localized percentage would have been a warning.
+> - **The fix:** `_PERCENT_SPACE` in `mkdocs_src/aphra-pipeline/validate_translations.py`. An identifier that changes,
+>   a digit, or the sign still warns.
+> - **Tests (test-author):** 12 cases in `test_translation_validator.py`, `utils translation-validator` 186 passed. With
+>   the pattern disabled in memory, the 7 cases with a space before `%` go red.
+
+**19.3 ✅ `user/settings/preferences`: numbers and dates follow the interface language**
+> **Note implementazione**: written by M in EN, it, fr and es, as the coordinator decided (20:37):
+> - a clause at the end of the **Language** cell;
+> - an `!!! info` after the table, giving the same examples in all four pages (T's formats: `14.788,01` /
+>   `12 ott 2026`, `14 788,01` / `12 oct. 2026`, `14.788,01` / `12 oct 2026`) and the region rule (a US-English browser
+>   writes `14,788.01` and `Oct 12, 2026`; a browser in another language gets the British `12 Oct 2026`).
+>
+> Same examples, same order, so the code spans match across the four files. The page is stamped (before: ×3,
+> ~32.7K tokens each).
+
+**19.4 ✅ Gates** (`release-pipeline/scripts/b30_final_gates.sh`, load 14–25)
+> - dry-run empty after the stamp;
+> - `utils translation-validator` 186;
+> - `translate-validate` 630 files 0/0, with the localized percentages in code;
+> - `translate-diff` 642 of 642 clean;
+> - strict build 0 (all 3,012 asset URLs resolve); `check-links` 95; `git diff --check` clean;
+> - the I2 re-scan plans 0 figures, and every UI difference left has its rule;
+> - the label scan: 370 rows, the same set as batch 29 (3 accepted rows moved 8 lines down).
+>
+> **⚠️ Fuori pista — the catalogue is generated now:** since U's split (train 71), `frontend/src/lib/i18n/<lang>.json`
+> exists only after a build. The label scan (M's tool, outside the repo) now reads the catalogue assembled in memory by
+> `scripts/i18n_catalog.py`'s `load_catalog`.
