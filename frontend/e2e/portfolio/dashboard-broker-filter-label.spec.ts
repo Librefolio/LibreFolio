@@ -49,19 +49,25 @@
  * reload is pending: `data-busy` stays false meanwhile. Its request is the only witness, and a certain one: the report
  * cache lives in the page, and this document has never asked for this scope.
  *
- * Ownership. The broker is this test's: created for TEST_USER over the API with a long unique name, selected through the
- * panel (a toggle held in component state, nothing persisted), and deleted by id at the end whatever happens, once the
- * page has left the dashboard. Without `force`: it never held a transaction, and a plain delete refuses to take one a
- * neighbour may have written to it. It holds nothing, so no total moves under a neighbour, and no existing row is
- * borrowed. Seeded broker icon and portal URLs point at the internet: refused.
+ * Ownership. Everything this test touches is its own: a disposable account, registered for the test and signed in
+ * through the real form (welcome finished, intro closed, every guide skipped, so no overlay competes for the bar), and
+ * the two brokers it owns, created over the API: the long-named one under test and a plain one with a short unique
+ * name, since the trigger names a broker only when it is the one selected out of several. Both hold nothing, and need
+ * nothing: the dashboard draws the trigger whatever the data, and asks for its report as soon as the account owns a
+ * broker (`canAsk`), transactions or not. The broker is selected through the panel (a toggle kept in this tab's session
+ * storage, nothing on the server). At the end, whatever happens, once the page has left the dashboard, both brokers are
+ * deleted by id, without `force` (a plain delete would refuse, loudly, one that held a transaction), then the account.
+ * TEST_USER and its brokers are never touched: a TEST_USER broker created and deleted under a neighbour's feet made
+ * dashboard-cache's risk query, which still carried its id, answer 403 (12/10). Nothing leaves the app's origin: the
+ * brokers carry no icon or portal URL, and any request that would is refused all the same.
  *
  * Registered as `./dev.py test front-portfolio broker-filter-label` (desktop project, the runner default).
  */
-import {expect, test as base, type Page, type Request} from '../fixtures/playwright';
+import {expect, test as base, type APIRequestContext, type Page, type Request} from '../fixtures/playwright';
 import {schemas} from '../../src/lib/api/generated';
 import {waitForSettled} from '../fixtures/app-events';
-import {login, navigateTo} from '../fixtures/auth-helpers';
-import {TEST_USER} from '../fixtures/test-users';
+import {navigateTo} from '../fixtures/auth-helpers';
+import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {uniqueSuffix} from '../fixtures/unique';
 
 const API = '/api/v1';
@@ -89,6 +95,10 @@ const TOLERANCE_PX = 1;
  */
 const BROKER_NAME_BASE = 'Interactive Brokers Ireland Ltd - Pension Account';
 const MIN_NAME_CHARS = 45;
+/** The second broker's name, before its unique suffix: it only has to exist, so that one broker is one of several. */
+const PLAIN_BROKER_NAME_BASE = 'broker-filter-plain';
+/** The disposable account's username tag: `guides_<tag>_<suffix>`, well under the 50-character cap. */
+const ACCOUNT_TAG = 'brokerlabel';
 /** Two identical readings at least this far apart: the date picker's 100 ms resize debounce fires in between. */
 const SETTLE_INTERVAL_MS = 250;
 const SETTLE_TIMEOUT_MS = 15_000;
@@ -109,8 +119,10 @@ const PAGE_PROBE_PAST_PX = 4;
 
 type Tier = 'oneRow' | 'denseRow' | 'stackFilters' | 'oneColumn';
 
-/** The broker this test created, by id: deleted at the end whatever happened. */
+/** What this test created, by id: deleted at the end whatever happened — the brokers, then the account. */
 interface Owned {
+    /** The disposable account the dashboard belongs to; null until it is registered. */
+    user: DisposableUser | null;
     brokerIds: number[];
 }
 
@@ -119,7 +131,7 @@ interface OwnedBroker {
     name: string;
 }
 
-/** The dashboard, scoped to the owned broker alone, and the narrow viewport this host needs for a 320 px layout. */
+/** The dashboard, scoped to the long-named broker alone, and the narrow viewport this host needs for a 320 px layout. */
 interface Scoped {
     broker: OwnedBroker;
     /** The scrollbar gutter measured at load. */
@@ -564,7 +576,7 @@ async function proveTheClipReaderSeesTruncation(page: Page, name: string): Promi
 }
 
 // =============================================================================
-// The broker, the page, the cleanup
+// The account, its brokers, the page, the cleanup
 // =============================================================================
 
 type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
@@ -581,27 +593,30 @@ function isScopedReport(request: Request, brokerId: number): boolean {
     return Array.isArray(ids) && ids.length === 1 && ids[0] === brokerId;
 }
 
-/** A broker of TEST_USER's own, with a long unique name. Its id is recorded for cleanup before it is checked. */
-async function createOwnedBroker(page: Page, owned: Owned): Promise<OwnedBroker> {
-    const item = {name: `${BROKER_NAME_BASE} ${uniqueSuffix()}`};
-    expect(item.name.length, `the broker name is long enough to stick out of any phone's bar: "${item.name}"`).toBeGreaterThanOrEqual(MIN_NAME_CHARS);
+/**
+ * A broker of the signed-in disposable account (`page.request` shares the browser's session). Its id is recorded for
+ * cleanup before it is checked.
+ */
+async function createOwnedBroker(page: Page, owned: Owned, name: string, kind: string): Promise<OwnedBroker> {
+    const item = {name};
     schemas.BRCreateItem.parse(item);
-    const created = schemas.BRBulkCreateResponse.parse(await jsonFrom(await page.request.post(`${API}/brokers`, {data: [item]}), 'create the owned broker'));
+    const created = schemas.BRBulkCreateResponse.parse(await jsonFrom(await page.request.post(`${API}/brokers`, {data: [item]}), `create the ${kind} broker`));
     const row = created.results.find((result) => result.name === item.name);
     if (typeof row?.broker_id === 'number') owned.brokerIds.push(row.broker_id);
     if (!row?.success || typeof row.broker_id !== 'number') throw new Error(`Broker creation failed: ${JSON.stringify(created)}`);
     // The id goes to the run log, so the cleanup can be checked against the database afterwards.
-    console.log(`owned broker #${row.broker_id} created: "${item.name}"`);
+    console.log(`owned broker #${row.broker_id} created (${kind}): "${item.name}"`);
     return {id: row.broker_id, name: item.name};
 }
 
 /**
- * Deletes what the test created, by the ids it recorded. Routes and the dashboard go first, so no debounced reload
- * reads the broker while it goes; `page.request` shares the browser's session. No `force`: the broker never held a
- * transaction, and a plain delete refuses to take one a neighbour may have written to it.
+ * Deletes what the test created, by the ids it recorded: the brokers, then the account. Routes and the dashboard go
+ * first, so no debounced reload reads a broker while it goes. The brokers are deleted by the account that owns them
+ * (`page.request` shares the browser's session), without `force`: they never held a transaction, and a plain delete
+ * would refuse, loudly, one that did. The account goes last, through the standalone `request` context it was
+ * registered with, which signs in as that account on its own and checks the id before deleting it.
  */
-async function releaseOwned(page: Page, owned: Owned): Promise<void> {
-    if (owned.brokerIds.length === 0) return;
+async function releaseOwned(page: Page, request: APIRequestContext, owned: Owned): Promise<void> {
     const failures: string[] = [];
     const attempt = async (label: string, action: () => Promise<unknown>): Promise<void> => {
         try {
@@ -614,30 +629,39 @@ async function releaseOwned(page: Page, owned: Owned): Promise<void> {
     await attempt('leave the dashboard', () => page.goto('about:blank'));
     for (const brokerId of owned.brokerIds) {
         await attempt(`broker ${brokerId}`, async () => {
-            const deleted = schemas.BRBulkDeleteResponse.parse(await jsonFrom(await page.request.delete(`${API}/brokers?ids=${brokerId}`), 'delete the owned broker'));
+            const deleted = schemas.BRBulkDeleteResponse.parse(await jsonFrom(await page.request.delete(`${API}/brokers?ids=${brokerId}`), 'delete an owned broker'));
             expect(deleted.results.find((result) => result.id === brokerId)?.success, `broker ${brokerId} deleted: ${JSON.stringify(deleted)}`).toBe(true);
             console.log(`owned broker #${brokerId} deleted`);
         });
     }
-    expect(failures, 'every cleanup step is scoped to the broker this test created').toEqual([]);
+    const user = owned.user;
+    if (user) {
+        await attempt(`account ${user.username}`, async () => {
+            await deleteDisposableUser(request, user);
+            console.log(`account ${user.username} (#${user.id}) deleted`);
+        });
+    }
+    expect(failures, 'every cleanup step is scoped to the account and the brokers this test created').toEqual([]);
 }
 
 const test = base.extend<{owned: Owned}>({
-    owned: async ({page}, use) => {
-        const owned: Owned = {brokerIds: []};
+    owned: async ({page, request}, use) => {
+        const owned: Owned = {user: null, brokerIds: []};
         try {
             await use(owned);
         } finally {
-            await releaseOwned(page, owned);
+            await releaseOwned(page, request, owned);
         }
     },
 });
 
-// Login, a full dashboard load, a 2 s debounced reload, up to three settled widths and the cleanup share the budget.
+// Registration, the sign-in through welcome, a full dashboard load, a 2 s debounced reload, up to three settled widths
+// and the cleanup, the account's included, share the budget.
 test.setTimeout(120_000);
 
 async function keepOffline(page: Page, origin: string): Promise<void> {
-    // Seeded broker icon and portal URLs point at the internet: refused, the icons fall back to their fixed-size placeholders.
+    // Nothing here should leave the app's origin (the account's brokers carry no icon or portal URL): whatever would is
+    // refused, so the spec never reaches the internet.
     await page.route(
         (url) => (url.protocol === 'http:' || url.protocol === 'https:') && url.origin !== origin,
         (route) => route.abort('blockedbyclient'),
@@ -645,17 +669,28 @@ async function keepOffline(page: Page, origin: string): Promise<void> {
 }
 
 /**
- * Signs in as TEST_USER, creates the broker, opens the dashboard at WIDE_VW, measures the scrollbar gutter once it has
- * loaded and settled, and selects that broker alone through the panel. Ends once the report scoped to it is in and the
- * page has settled, with the trigger naming the broker.
+ * Registers the disposable account and signs it in through the real form, creates its two brokers, opens the dashboard
+ * at WIDE_VW with a full load, measures the scrollbar gutter once it has loaded and settled, and selects the long-named
+ * broker alone through the panel. Ends once the report scoped to it is in and the page has settled, with the trigger
+ * naming the broker.
  */
-async function openDashboardScopedToOwnedBroker(page: Page, baseURL: string | undefined, owned: Owned): Promise<Scoped> {
+async function openDashboardScopedToOwnedBroker(page: Page, request: APIRequestContext, baseURL: string | undefined, owned: Owned): Promise<Scoped> {
     if (!baseURL) throw new Error('This spec needs the runner-provided baseURL');
     await keepOffline(page, new URL(baseURL).origin);
-    await login(page, TEST_USER);
-    const broker = await createOwnedBroker(page, owned);
+    // Registered through the standalone `request` context, like the other owned-account specs; the browser signs in
+    // through the real login form, and is left on a dashboard that knew no broker.
+    const user = await registerDisposableUser(request, ACCOUNT_TAG);
+    owned.user = user;
+    console.log(`account ${user.username} (#${user.id}) registered`);
+    await prepareOnboardingAccount(page, user, []);
+    const name = `${BROKER_NAME_BASE} ${uniqueSuffix()}`;
+    expect(name.length, `the broker name is long enough to stick out of any phone's bar: "${name}"`).toBeGreaterThanOrEqual(MIN_NAME_CHARS);
+    const broker = await createOwnedBroker(page, owned, name, 'long-named');
+    // The trigger names a broker only when it is the one selected out of several: this one makes it several.
+    const plain = await createOwnedBroker(page, owned, `${PLAIN_BROKER_NAME_BASE}-${uniqueSuffix()}`, 'plain');
 
     await page.setViewportSize({width: WIDE_VW, height: VIEWPORT_HEIGHT_PX});
+    // A full load: the document the onboarding left open knows neither broker, and its onboarding progress is stale.
     await navigateTo(page, '/dashboard');
     const dashboard = page.getByTestId('dashboard-page');
     await waitForSettled(dashboard, 30_000);
@@ -665,6 +700,7 @@ async function openDashboardScopedToOwnedBroker(page: Page, baseURL: string | un
     await trigger.click();
     const item = page.getByTestId(`broker-filter-item-${broker.id}`);
     await expect(item, 'precondition: the filter panel lists the broker this test created').toBeVisible({timeout: 5_000});
+    await expect(page.getByTestId(`broker-filter-item-${plain.id}`), 'precondition: and the plain one, so that this broker is selected out of several').toBeVisible();
     // Armed before the click: the reload is the only witness that the selection reached the page (see the header). It is
     // awaited below; the empty catch only keeps a failure in between from also surfacing as an unhandled rejection.
     const reload = page.waitForResponse((response) => isScopedReport(response.request(), broker.id), {timeout: 20_000});
@@ -688,8 +724,8 @@ async function openDashboardScopedToOwnedBroker(page: Page, baseURL: string | un
 // =============================================================================
 
 test.describe('Dashboard broker filter: a long broker name stays inside its bar (K step 15, item b)', () => {
-    test(`layout ${NARROW_LAYOUT_PX} px (viewport ${NARROW_LAYOUT_PX} + scrollbar gutter): the trigger and its visible label stay inside the bar card, the page does not scroll sideways, the name stays whole`, async ({page, baseURL, owned}) => {
-        const {broker, narrowVw} = await openDashboardScopedToOwnedBroker(page, baseURL, owned);
+    test(`layout ${NARROW_LAYOUT_PX} px (viewport ${NARROW_LAYOUT_PX} + scrollbar gutter): the trigger and its visible label stay inside the bar card, the page does not scroll sideways, the name stays whole`, async ({page, baseURL, request, owned}) => {
+        const {broker, narrowVw} = await openDashboardScopedToOwnedBroker(page, request, baseURL, owned);
         const trigger = page.getByTestId(TRIGGER_ID);
 
         const layout = await settleAt(page, narrowVw, 'oneColumn');
@@ -716,8 +752,8 @@ test.describe('Dashboard broker filter: a long broker name stays inside its bar 
         expect(verdict.over, describeBarVerdict(layout, reading, verdict)).toBeLessThanOrEqual(TOLERANCE_PX);
     });
 
-    test(`vw ${WIDE_VW} (oneRow, room to spare): the whole name is shown unclipped, on arrival and after a trip to the ${NARROW_LAYOUT_PX} px layout`, async ({page, baseURL, owned}) => {
-        const {broker, narrowVw} = await openDashboardScopedToOwnedBroker(page, baseURL, owned);
+    test(`vw ${WIDE_VW} (oneRow, room to spare): the whole name is shown unclipped, on arrival and after a trip to the ${NARROW_LAYOUT_PX} px layout`, async ({page, baseURL, request, owned}) => {
+        const {broker, narrowVw} = await openDashboardScopedToOwnedBroker(page, request, baseURL, owned);
         const trigger = page.getByTestId(TRIGGER_ID);
 
         const arrival = await settleAt(page, WIDE_VW, 'oneRow');

@@ -16,7 +16,14 @@
  *      (disabled) while the sync runs;
  *   4. once the sync answers, the dashboard reloads its report and the CTA is usable again.
  *
- * Ownership. A disposable account owns the whole dashboard under test — its broker, a
+ * V-1, the twin of D2 («Sync rates», `data-quality-real.spec.ts` E1) on «Sync prices». The second test opens the
+ * positions tab with the lots panel of the stale holding (`?asset=`) and requires the panel to ask its analysis again
+ * by itself once the price sync has answered, in the same document. Written RED-FIRST: the `sync_asset_prices` branch
+ * reloads the report but does not bump the dashboard's `refreshVersion`, the signal `LotsAnalysisPanel` listens to,
+ * so the open panel keeps its old answer until a reload. The canned sync writes nothing: the test asserts that the
+ * panel asked and was answered, not that a figure moved.
+ *
+ * Ownership. Each test registers a disposable account that owns the whole dashboard under test — its broker, a
  * DEPOSIT and a BUY — so no shared NAV moves under a neighbour, and "exactly one sync item"
  * is a count this spec created. The asset and its prices are global rows: unique name,
  * deleted by the fixture teardown (broker first — an asset with transactions cannot be
@@ -42,11 +49,14 @@ import {uniqueSuffix} from '../fixtures/unique';
 const API = '/api/v1';
 const REPORT_PATH = `${API}/portfolio/report`;
 const SYNC_PATH = `${API}/assets/prices/sync`;
+const LOTS_PATH = `${API}/portfolio/lots/analysis`;
 /** mockprov.get_current_value raises NOT_FOUND for exactly this identifier: nothing is written back. */
 const OFFLINE_IDENTIFIER = 'INVALID_TICKER_12345';
 /** Market quotes, oldest first; the newest is 10 days old — past the 7-day threshold. */
 const PRICE_DAYS_AGO = [40, 30, 20, 10] as const;
 const LAST_PRICE_DAYS_AGO = 10;
+/** How long, from the click on «Sync prices», the open lots panel has to ask again (V-1; the same bound as D2). */
+const LOTS_REFRESH_TIMEOUT_MS = 45_000;
 
 type SyncItem = {asset_id: number; date_range: {start: string; end: string}};
 type ReportRequestBody = {include_summary?: boolean; date_range?: {start?: string; end?: string}};
@@ -54,6 +64,8 @@ type ReportIssue = {code: string; severity: string; cta_action?: string | null; 
 type ReportHolding = {asset_id: number; valuation_source?: string | null; valuation_reference_date?: string | null};
 type ReportBody = {summary?: {holdings?: ReportHolding[]; data_quality?: {issues?: ReportIssue[]} | null} | null};
 type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
+type LotsRequestBody = {asset_id?: number; requested_analyses?: string[]};
+type LotsBody = {lots?: Array<{lot_id: number; opening_broker_id: number}> | null};
 
 type Owned = {user: DisposableUser | null; brokerIds: number[]; assetIds: number[]};
 type Seeded = {assetId: number; brokerId: number};
@@ -67,6 +79,16 @@ type SyncProbe = {
     release: () => void;
 };
 
+/**
+ * A wait armed before the action and awaited later. If the test fails in between, the pending wait would reject
+ * unobserved when the page closes, and that noise would be reported beside the real failure; awaiting the
+ * returned promise still throws as usual.
+ */
+function armed<T>(wait: Promise<T>): Promise<T> {
+    wait.catch(() => undefined);
+    return wait;
+}
+
 async function jsonFrom<T>(response: HttpResponse, purpose: string): Promise<T> {
     expect(response.ok(), `${purpose}: HTTP ${response.status()} ${await response.text()}`).toBeTruthy();
     return (await response.json()) as T;
@@ -76,6 +98,13 @@ async function jsonFrom<T>(response: HttpResponse, purpose: string): Promise<T> 
 function isSummaryReport(req: Request): boolean {
     if (req.method() !== 'POST' || new URL(req.url()).pathname !== REPORT_PATH) return false;
     return (req.postDataJSON() as ReportRequestBody | null)?.include_summary === true;
+}
+
+/** The lots panel's main analysis of `assetId`, the answer its lots table comes from (the selection histories are a second request). */
+function isMainLotsRequest(req: Request, assetId: number): boolean {
+    if (req.method() !== 'POST' || new URL(req.url()).pathname !== LOTS_PATH) return false;
+    const body = req.postDataJSON() as LotsRequestBody | null;
+    return body?.asset_id === assetId && (body.requested_analyses ?? []).includes('LOT_SUMMARY');
 }
 
 /**
@@ -320,5 +349,83 @@ test.describe('STALE_PRICE banner — dashboard (D8)', () => {
         await expect(cta, 'the busy state ends with the sync').toBeEnabled({timeout: 10_000});
         expect(sync.bodies, 'one click, one sync').toHaveLength(1);
         expect(sync.unexpected).toEqual([]);
+    });
+
+    test('«Sync prices» refreshes the lots panel already open: it asks the analysis again by itself, without a reload', async ({page, request, owned}) => {
+        // Set up as the test above, on an account of its own: nothing reaches a provider, no price is written.
+        const user = await registerDisposableUser(request, 'stalelots');
+        owned.user = user;
+        await prepareOnboardingAccount(page, user, []);
+        const seeded = await seedStaleHolding(page, owned);
+        const sync = await interceptAssetSync(page);
+
+        // Full load on the positions tab, where `asset` opens the lots panel of the stale holding. The report and the
+        // panel's first main analysis are the application's own answers, captured read-only.
+        const firstReport = armed(page.waitForResponse((response) => isSummaryReport(response.request()), {timeout: 30_000}));
+        const firstLots = armed(page.waitForResponse((response) => isMainLotsRequest(response.request(), seeded.assetId), {timeout: 30_000}));
+        await page.goto(`/dashboard?tab=posizioni&asset=${seeded.assetId}&start=${daysAgoIso(90)}&end=${todayIso()}`);
+        const lotsPanel = page.getByTestId('lots-analysis-panel');
+
+        const lotId = await test.step('precondition: the report flags the holding as STALE_PRICE, and the lots panel already open shows its lot', async () => {
+            const report = await jsonFrom<ReportBody>(await firstReport, 'dashboard report');
+            const issues = report.summary?.data_quality?.issues ?? [];
+            const staleIssue = issues.find((issue) => issue.code === 'STALE_PRICE');
+            expect(staleIssue, `the report must flag the seeded asset as STALE_PRICE; it carries ${JSON.stringify(issues.map((issue) => issue.code))}`).toBeTruthy();
+            expect(staleIssue, 'the issue offers «Sync prices» for this asset').toMatchObject({cta_action: 'sync_asset_prices', affected_asset_ids: [seeded.assetId]});
+
+            // One BUY on the account's only broker: exactly one lot opened there is a count this test created.
+            const lots = await jsonFrom<LotsBody>(await firstLots, 'first answer of the lots panel');
+            const ownLots = (lots.lots ?? []).filter((lot) => lot.opening_broker_id === seeded.brokerId);
+            expect(ownLots, `the lots answer lists the lot of the seeded BUY; it lists ${JSON.stringify(lots.lots ?? [])}`).toHaveLength(1);
+
+            // Witness: the panel publishes no busy state and starts with `loading` false, so the lot of that answer on
+            // screen is what says the answer is there.
+            await expect(lotsPanel).toBeVisible({timeout: 15_000});
+            await expect(lotsPanel.getByTestId('unified-lots-table').locator(`tbody tr[data-row-id="${ownLots[0].lot_id}"]`), 'witness: the lot of the first answer is on screen').toBeVisible({timeout: 20_000});
+            return ownLots[0].lot_id;
+        });
+
+        const dashboard = page.getByTestId('dashboard-page');
+        await waitForSettled(dashboard, 25_000);
+        await expandBanner(page);
+        const cta = page.getByTestId('data-quality-issue-STALE_PRICE').getByTestId('data-quality-cta-STALE_PRICE');
+        await expect(cta).toBeVisible({timeout: 10_000});
+        await expect(cta).toBeEnabled();
+        expect(sync.unexpected, 'nothing may sync before the user asks').toEqual([]);
+
+        // Armed before the click. `answered` flips just before the held sync is answered, so a request that passes these
+        // filters was sent because of the sync: the panel's own first load cannot count. A reload would start a new
+        // document, with a new time origin.
+        const documentOrigin = await page.evaluate(() => performance.timeOrigin);
+        sync.armed = true;
+        const syncRequest = armed(page.waitForRequest((req) => req.method() === 'POST' && new URL(req.url()).pathname === SYNC_PATH, {timeout: 10_000}));
+        const reloadRequest = armed(page.waitForRequest((req) => sync.answered && isSummaryReport(req), {timeout: 30_000}));
+        // Null when the panel never asks again: the V-1 step turns that into its own failure message.
+        const lotsRefresh = page.waitForRequest((req) => sync.answered && isMainLotsRequest(req, seeded.assetId), {timeout: LOTS_REFRESH_TIMEOUT_MS}).catch(() => null);
+
+        await test.step('«Sync prices» syncs the stale asset, and once the sync answers the dashboard reloads its report', async () => {
+            await cta.click();
+            const sent = (await syncRequest).postDataJSON() as SyncItem[];
+            expect(
+                sent.map((item) => item.asset_id),
+                'the CTA syncs the stale asset, nothing else',
+            ).toEqual([seeded.assetId]);
+            sync.release();
+            await reloadRequest;
+        });
+
+        await test.step('V-1: the lots panel already open asks again by itself, without a reload', async () => {
+            const refreshed = await lotsRefresh;
+            expect(refreshed, 'the open lots panel did not ask again after «Sync prices»: no POST /portfolio/lots/analysis for this asset once the sync had answered').not.toBeNull();
+            const refreshedAnswer = await refreshed?.response();
+            if (!refreshedAnswer) throw new Error('The lots analysis asked again after the sync got no answer');
+            // The canned sync wrote nothing, so the answer cannot move: asked and answered is the whole claim.
+            const lotsAfter = await jsonFrom<LotsBody>(refreshedAnswer, 'lots analysis asked again after the sync');
+            expect(
+                (lotsAfter.lots ?? []).map((lot) => lot.lot_id),
+                'the answer asked again still lists the lot',
+            ).toContain(lotId);
+            expect(await page.evaluate(() => performance.timeOrigin), 'asked by the document already open: nothing reloaded the page').toBe(documentOrigin);
+        });
     });
 });

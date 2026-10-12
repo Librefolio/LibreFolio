@@ -45,8 +45,8 @@ graph TD
 ### 1. `grouped` — Dashboard 📊
 * Single amber/sky container grouping all issues.
 * Issues are sorted by severity: **Error** 🔴 → **Warning** 🟡 → **Info** 🔵.
-* The header adapts dynamically: `"1 error"`, `"2 warnings"`, or `"Data quality note"` (for info-only alerts).
-* First 3 issues are visible; an expand button appears when there are more.
+* The header counts errors and warnings only, naming just the non-zero counts: `"1 error(s)"`, `"2 warning(s)"` or `"1 error(s), 2 warning(s)"` (`dataQuality.headerErrors`, `dataQuality.headerWarnings`). With neither — info issues only — it reads `"Data quality note"` (`dataQuality.headerInfoOnly`).
+* The banner starts collapsed, showing only its header (`let expanded = $state(false)`). The header is itself the toggle: a button (test id `data-quality-toggle`, with `aria-expanded` and a chevron) that opens and closes the whole list. Once open, the errors and warnings — the issues the header counts — sit indented under it (`data-quality-actionable`); the info issues follow apart, not indented (`data-quality-info`), below a thin rule when errors or warnings precede them.
 
 ```svelte
 <DataQualityBanner issues={dataQualityIssues} mode="grouped" onaction={handleBannerAction} />
@@ -78,7 +78,7 @@ onaction?: (action: string, target: string | null, issue: DataQualityIssue) => v
 | `navigate_fx` | FX pair slug | `goto('/fx/' + target)` on the dashboard; the asset detail adds `?start=...&end=...` | Redirects to the FX pair details page. |
 | `add_fx_pair` | FX pair slug | `FxPairAddModal` | Opens the modal to configure the missing FX pair. |
 | `sync_fx_pair` | First affected pair, unused — the handler syncs every pair in `issue.affected_fx_pairs` (`cta_target` only when that list is empty) | `POST /api/v1/fx/currencies/sync` (dashboard `syncMissingFxRates`) | Body built by `buildMissingFxRatesSyncRequest` (`utils/sync/syncRange.ts`): `{pairs, start, end}`, the pairs as alphabetical slugs and the issue's `message_params.date_from`…`date_to` widened by `padSyncRange` to 7 days either side, the end capped at today — the margin `buildComparisonSyncRange` also uses. E.g. `2022-11-03`…`2023-06-27` → `start: '2022-10-27'`, `end: '2023-07-04'`. Without usable dates: the full history (`start: 'min'`, `end`: today). Timeout 120 s (`FX_SYNC_TIMEOUT_MS`). After the answer — not after a transport error — the dashboard bumps `refreshVersion` and reloads its report. `refreshVersion` is the signal **Refresh** sends too ([How a page uses the cache](state/domain-state.md#how-a-page-uses-the-cache)): new rates change the lots and risk figures, so an open `LotsAnalysisPanel` asks `POST /api/v1/portfolio/lots/analysis` again with `force` and drops a warning the sync fixed, and a mounted `RiskLevelsPanel` (Risk tab) reloads too. Then the dashboard emits one notification, `fx.rates.synced`, detail `{origin: 'dashboard-banner', pairs, start, end, outcome, stillMissing}` (`stillMissing` is `null` when the report was not reloaded); its toast has one line per pair. When the sync answered `ok` or `partial` but the reloaded report still has a `sync_fx_pair` issue for one of those pairs, the toast appends `dataQuality.missingFxRatesAfterSync` and a success becomes a warning. |
-| `sync_asset_prices` | First affected id, unused — the handler syncs every id in `issue.affected_asset_ids` | `POST /api/v1/assets/prices/sync` (dashboard `handleBannerAction`) | Sends one item per affected asset: `{asset_id, date_range: {start: 'resume', end: <dashboard end date>}}`. `'resume'` is the backend sentinel for "the day after the last stored price" (full history when there is none). Shows one toast per asset result, then reloads the dashboard report. |
+| `sync_asset_prices` | First affected id, unused — the handler syncs every id in `issue.affected_asset_ids` | `POST /api/v1/assets/prices/sync` (dashboard `handleBannerAction`) | Sends one item per affected asset: `{asset_id, date_range: {start: 'resume', end: <dashboard end date>}}`. `'resume'` is the backend sentinel for "the day after the last stored price" (full history when there is none). After the answer — not after a failed request, which shows one error toast and reloads nothing — it shows one toast per asset result, bumps `refreshVersion` as `sync_fx_pair` does (new prices change the lots and risk figures too: an open `LotsAnalysisPanel` and a mounted `RiskLevelsPanel` ask again), and reloads the dashboard report. |
 
 In grouped mode, `navigate_asset` renders one link per affected asset; every other action, `sync_asset_prices` included, renders a single CTA button. While a sync request runs, the dashboard passes the issue's code as the `busyCode` prop: that issue's CTA button shows a spinner and stays disabled until the request settles. The CTA test id (`data-quality-cta-{code}`) and `busyCode` are keyed by the issue code alone, so the two `MISSING_FX_RATES` rows share them: while **Sync rates** runs, the MANUAL row's **View FX** button spins and is disabled too (known limitation).
 
@@ -110,7 +110,7 @@ In grouped mode, `navigate_asset` renders one link per affected asset; every oth
 * the assets whose first `BUY` or `SELL` (`first_position_dates`, the earliest over their brokers) is at most `TRANSACTION_IMPLIED_GRACE_DAYS` (14, `backend/app/services/data_quality_thresholds.py`) days before the end date: a normal placement lag, e.g. a bond bought at issue before its first quote. An asset with no `BUY` or `SELL` gets no grace period;
 * the assets without a provider (no `AssetProviderAssignment`): valuing them at their last trade price is their intended behaviour.
 
-The list holds one entry per open position, so an asset held at two brokers counts twice in `count`. `as_of_date` is the date of the last daily state. The English message of `dataQuality.transactionImplied` reads "still valued at cost"; the engine values these assets at their latest trade price.
+The list holds one entry per open position, so an asset held at two brokers counts twice in `count`. `as_of_date` is the date of the last daily state. The English message of `dataQuality.transactionImplied` reads "{count} asset(s) valued at their last transaction price — no market price available for over 2 weeks (as of {as_of_date})": the engine does value these assets at their latest trade price, and the "over 2 weeks" matches the 14-day grace period, which counts from the first `BUY` or `SELL`, not from the latest quote.
 
 **`STALE_PRICE` rule.** `PortfolioService.get_summary` builds the list and passes it to `build_data_quality_report` as `stale_prices_dto`. An asset is listed when, at the end date, all of these hold:
 
@@ -269,13 +269,28 @@ pipenv run ./dev.py test services roi-fifo-utils TestCostDiagnostics TestLotsAve
 *(Covers `test_services/test_financial/` — includes `test_portfolio_engine/test_data_quality_report.py`, `test_portfolio_service.py` and `test_portfolio_cost_currency.py`)*
 
 ### 🎭 Frontend E2E Tests (`e2e/portfolio/data-quality-banners.spec.ts`)
-* Dashboard loads without JS errors.
-* Legacy inline banners removed (old testids gone).
-* Grouped mode structure checks when issues present.
-* Header does not show `"0 errors, 0 warnings"` for info-only issues.
-* NAV incomplete message includes dates.
-* Flat mode: checks that no grouped container is rendered.
-* FX pair missing: CTA button checks.
+Every test signs in as the shared E2E user (`TEST_USER`) and runs on the seeded data, in parallel with other specs. The dashboard states it needs are portfolio-wide: seeding them for real would mean committing transactions that move the NAV those specs read. So the file injects the issues into the real report it intercepts (`injectDashboardIssues`, and `serveMissingFxRates` for `MISSING_FX_RATES`; both first drop any real issue with the same code, so the row under test is the only one with its code), and it fakes the FX sync (`holdFxSync`: no provider is reached, no rate is written). What it tests is the rendering, the request a CTA builds and what the page does with the answer, not whether the engine emits the issue. `data-quality-real.spec.ts` (below) is the counterpart that mocks nothing: it follows the engine's own issues on disposable accounts.
+
+**Dashboard (grouped mode)**
+
+* The dashboard loads without JS errors, shows its page and its KPI row (`kpi-row`), and no longer renders the pre-migration banners `dashboard-missing-prices-banner` and `dashboard-missing-fx-banner` (three tests).
+* Two data-conditional checks on the seed's own issues: a banner on screen is a single grouped container with at least one issue row, and its header names no zero count (no "0 error", no "0 warning"). When the seed shows no banner, each test records an `info` annotation and passes.
+* `NAV_INCOMPLETE`, injected with `date_from` `2019-03-04` and `date_to` `2019-03-06`: its row shows both dates, interpolated from `message_params`.
+* `MISSING_PRICE`, injected with two assets: its row renders one `navigate_asset` link per asset. The links are counted inside the row (`data-quality-nav-assets-MISSING_PRICE`), because every `navigate_asset` issue names its links with the same pattern, `data-quality-nav-asset-{id}`. A `TRANSACTION_IMPLIED` sibling, injected beside it with a third asset, shows its link in its own row: the page has another link, and the count leaves it out by scope.
+* **Sync rates** on an injected `MISSING_FX_RATES` issue for `EUR-USD`, missing dates `2022-11-03`…`2023-06-27`: nothing syncs before the click, then one `POST /api/v1/fx/currencies/sync` with `{pairs: ['EUR-USD'], start: '2022-10-27', end: '2023-07-04'}`, a week either side. While `holdFxSync` holds it, the CTA is disabled and the page's `data-busy` is `true`. Once the canned `ok` answer is released, the dashboard reloads its report and emits `fx.rates.synced` with `{origin: 'dashboard-banner', pairs, start, end, outcome: 'ok', stillMissing: false}`; one click, one sync.
+* **Sync rates** with missing dates from 30 to 2 days ago: the request starts 37 days ago and ends today, not 5 days ahead — the end is capped at today — and `fx.rates.synced` carries that range.
+* **Sync rates** when the reloaded report still carries the issue (`serveMissingFxRates` keeps it after the sync, as when the provider had nothing for those dates): `fx.rates.synced` reports `outcome: 'ok'` with `stillMissing: true`, and a warning toast is on screen.
+
+**Asset Detail (flat mode)**
+
+* The first asset of the assets page opens without JS errors, without the pre-migration `asset-archived-banner`, and without a grouped container: flat mode never renders `data-quality-banner` (three tests).
+* `FX_PAIR_MISSING`: the FX routes the page reads (`GET /api/v1/fx/providers/routes`) are stubbed to none (`stubFxRoutes`), and `injectForeignEvent` appends to every `POST /api/v1/assets/prices/query` result a `DIVIDEND` in USD (GBP for a USD asset) without `original_value` — how the backend returns an event whose conversion failed. The event's pair is required and not configured: the issue row and its CTA button (`add_fx_pair`) are visible.
+* `FX_PAIR_NO_DATA`: the same injected event, in a currency the asset's currency has a configured route with (the real routes): the pair exists but the event came back unconverted, so the row and its CTA button (`navigate_fx`) are visible. Neither FX test clicks the CTA, and both pick a seeded asset first (Apple, Microsoft, NVIDIA): the shared listing also holds assets that neighbouring specs have just created, usually with no data.
+
+**FX Detail (flat mode)**, on `EUR-USD`
+
+* The pair's page loads without JS errors and renders no grouped container (two tests).
+* Data-conditional: `/fx/EUR-USD?start=2000-01-01&end=2000-12-31` shows `RANGE_BEFORE_FIRST_DATA`, whose message names the first available date (the test looks for a year). When the issue does not show — the pair's data starts before 2000 — the test records an `info` annotation and passes.
 
 Run test suite:
 ```bash
@@ -287,6 +302,7 @@ pipenv run ./dev.py test front-portfolio banners
 * The grouped banner shows the issue with its single CTA button, not per-asset links.
 * The CTA posts one item per affected asset to `POST /api/v1/assets/prices/sync` (`start: 'resume'`, `end`: the dashboard end date), and the button is disabled while the sync runs.
 * Once the sync answers, the dashboard reloads its report and the CTA is enabled again. The sync is intercepted with a canned response: no provider is called and no price is written.
+* A second test, on an account of its own, opens the dashboard with the stale holding's lots panel already open (`?tab=posizioni&asset={id}`), the lot of the seeded `BUY` on screen. Once **Sync prices** — intercepted the same way — has answered, the open panel asks `POST /api/v1/portfolio/lots/analysis` again by itself, and the answer still lists the lot, in the same document: nothing reloaded the page (`performance.timeOrigin` unchanged). The canned sync moves no figure, so asked and answered is the whole claim — E1's lots-panel check (below), for **Sync prices**.
 
 Run test suite:
 ```bash
