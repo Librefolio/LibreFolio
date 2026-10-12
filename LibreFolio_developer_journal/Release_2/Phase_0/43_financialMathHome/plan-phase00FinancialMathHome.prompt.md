@@ -2786,3 +2786,159 @@ Correzioni al conteggio automatico:
   1. `fix(i18n): probe figures in the UI language` (`/tmp/libreFolio_commit_t_m18cp3b_1.txt`);
   2. `docs(journal): record M-18 CP3b` (`/tmp/libreFolio_commit_t_m18cp3b_2.txt`).
 - **Per il CHANGELOG del coordinatore**: M-18 è completo. Le cifre di ogni tipo (percentuali, decimali, byte, durate, importi, date, assi, decimali esatti) seguono la lingua dell'interfaccia; M-17 è risolto. Le voci aperte di backlog sono T-DI, T-ST, T-ICU, T-EN1, T-EN2, T-COL e T-DEAD.
+
+### T-EN1 + T-EN2 — via (coordinatore, 2026-10-12 23:54)
+- **Base**: HEAD `104ba23d0` = target `dev_release2` (treno 75: il CP2 e il CP3 di M-18 sono dentro), worktree pulita. Corsia 6164.
+- **Mandato**: le chiavi con `dev.py i18n add`, che sceglie la sorgente giusta (dopo lo split di U-3); il controllo con `dev.py i18n where`; prima i rossi, via test-author; il gate `utils gate-plugin-i18n-ownership` resta verde; `toolbar-width-sweep` non serve, salvo un'etichetta che allarghi una barra. Restano dopo la 1.2: T-ICU, T-COL, T-DEAD, T-DI, T-ST. La galleria di M aspetta questo lotto.
+
+#### T-EN — analisi (2026-10-12 notte)
+**I siti** (riverificati su `104ba23d0`):
+- **T-EN1, il tooltip degli eventi del grafico dei prezzi**. `PriceChartFull.svelte:776-792` (`formatEventEntry`): quando il valore dell'evento è convertito, scrive in ogni lingua:
+  - «orig.» (`:786`);
+  - «(Nd back)» (`:788`);
+  - «fx @» (`:789`).
+- **T-EN1, la sonda dello storico**. `ProviderAssignmentSection.svelte:354` scrive «points». È anche sbagliata al singolare: «1 points».
+- **T-EN2, le etichette dei segnali what-if**: `LinearSignal.ts:75`, `CompoundSignal.ts:97`, `SineSignal.ts:87`.
+  - `getLabel()` diventa `RenderedSignal.label` (`ChartSignal.ts:408`), cioè il nome della serie nella legenda e nel tooltip.
+  - Le parole sono inglesi; le cifre sono stampate grezze (`${rate}%`, `${per}d`).
+  - Chi la chiama: i `$derived` delle sovrapposizioni, in 4 pagine (`assets/[id]`, `assets`, `fx/[pair]`, `fx`) e nell'anteprima di `ChartSettingsModal`. Tutti in modalità runes.
+
+**Le chiavi**, 7. La sorgente è quella indicata da `where`.
+
+| chiave | sorgente | en | it | fr | es |
+|---|---|---|---|---|---|
+| `chart.tooltip.originalValue` | `i18n/charts/` | `orig. {value}` | `orig. {value}` | `orig. {value}` | `orig. {value}` |
+| `chart.tooltip.fxRateDate` | `i18n/charts/` | `fx @ {date}` | `cambio al {date}` | `change au {date}` | `cambio al {date}` |
+| `chart.tooltip.fxDaysBack` | `i18n/charts/` | `({days}d back)` | `({days}g prima)` | `({days}j avant)` | `({days}d antes)` |
+| `chartSettings.signals.linearLabel` | `i18n/charts/` | `Linear {rate}/yr` | `Lineare {rate}/anno` | `Linéaire {rate}/an` | `Lineal {rate}/año` |
+| `chartSettings.signals.compoundLabel` | `i18n/charts/` | `Compound {rate}/yr` | `Composta {rate}/anno` | `Composée {rate}/an` | `Compuesto {rate}/año` |
+| `chartSettings.signals.sineLabel` | `i18n/charts/` | `Sine ±{amplitude} / {period}d` | `Sinusoide ±{amplitude} / {period}g` | `Sinusoïde ±{amplitude} / {period}j` | `Sinusoide ±{amplitude} / {period}d` |
+| `assets.probe.points` | `i18n/assets/` | `{count, plural, one {{n} point} other {{n} points}}` | `… one {{n} punto} other {{n} punti}` | `… one {{n} point} many {{n} points} other {{n} points}` | `… one {{n} punto} other {{n} puntos}` |
+
+**Le scelte**:
+- **Le cifre entrano già scritte**, da `formatPercent` e `formatFixed` nella lingua della UI.
+  - Un segnaposto semplice `{x}` stampa `String(value)`, quindi la cifra la scrive il formattatore di M-18, non ICU: nessun nuovo caso T-ICU.
+  - Il conteggio della sonda usa la forma dei `stepUnits` del PAC: `count` sceglie il plurale, `{n}` porta la cifra scritta.
+  - Il francese ha un ramo `many` uguale a `other`: un testo ICU identico in due cataloghi terrebbe le regole del primo che lo compila (cache di svelte-i18n, gate `catalogIcuLocale.test.ts`).
+- **L'inglese resta com'è**: le stesse parole.
+  - Cambiano solo i tassi e i periodi da 1 000 in su, ora raggruppati (`1,000%/yr`, `3,650d`), che è il contratto di M-18.
+  - E il singolare «1 point».
+  - «orig.» è la stessa abbreviazione nelle 4 lingue, ma con la chiave si può tradurre.
+- **Le parole delle etichette nei segnali**: un traduttore tracciato in `ChartSignal`, `fromStore(_)`, lo stesso modello di `uiLocale()`.
+  - Letto dentro il `$derived` che disegna le sovrapposizioni, è tracciato. Al cambio di lingua l'etichetta si riscrive, insieme alle cifre (`formatPercent` legge `uiLocale()`).
+  - Non cambiano le firme di `render`, `renderMulti` e `getLabel`, e i 5 chiamanti non si toccano.
+  - **Costo**: i test che chiamano `getLabel()` o `render()` senza i18n devono avviarlo (`setupI18n`). Sono `syntheticSignals`, `registry` e `localSignalRegression`.
+  - **L'alternativa scartata**: passare `$t` come parametro, come `backendRenderer` e `translateOr`. Avrebbe toccato 6 classi e 5 chiamanti, fra cui la pagina dell'asset e le pagine FX, che altri workstream toccano spesso.
+
+**Trovati fuori perimetro** (al coordinatore):
+- **Q1**: l'editor dei parametri dei 3 segnali what-if scrive il suffisso grezzo (`ChartSignalsSection.svelte:612`): «%/yr» e «days» in ogni lingua.
+  - I segnali del backend lo traducono già con `signals.units.*` (`SignalParamControl.svelte:39-44`; `signals.units.days` c'è nelle 4 lingue).
+  - **Proposta**:
+    - la stessa ricerca nel ramo locale;
+    - `suffix: 'percentPerYear'` nei 2 descrittori, che diventano gettoni come quelli del backend;
+    - 1 chiave, `signals.units.percentPerYear`.
+- **F1**: le date d'osservazione ISO grezze.
+  - Nei tooltip del grafico dei prezzi: `valueAt`, `↩`, `💱`, la data dell'evento a `:778`, `fxRateDate`.
+  - Nella sonda: `cpDate`, `date_range`.
+  - M-18 le ha lasciate ISO. Proposta: una voce di backlog.
+- **F2**: i ripieghi inglesi `Asset #N` e `Asset` (`AssetComparisonSignal.ts:169-174`, `assets/[id]/+page.svelte:870`, `:893`) e `FX Pair` (`FxPairSignal.ts:94`). Si vedono solo se l'asset di confronto manca. Proposta: backlog.
+
+**I passi**:
+1. le 7 chiavi, poi `where`, `i18n check` e `i18n build`;
+2. i rossi, via test-author;
+3. la cura;
+4. i gate:
+   - `i18n check`;
+   - `utils gate-plugin-i18n-ownership`, `gate-i18n-usage`, `gate-i18n-catalog`;
+   - `front-utility core-unit` e `component-unit`, `front-asset asset-unit`;
+   - `check-orphans`, `front check`.
+
+**Le decisioni del coordinatore** (2026-10-13, 00:0x):
+1. **Q1 sì**: il suffisso dell'editor dei what-if, con la chiave `signals.units.percentPerYear` (en `%/yr`, it `%/anno`, fr `%/an`, es `%/año`) e i descrittori a gettone. Le chiavi diventano 8.
+2. **Nessuna sovrapposizione su `PriceChartFull.svelte`**: il lotto 49 di I tocca solo `asset-detail.spec.ts`.
+3. **F1 e F2 diventano voci T-\*** nella mia sezione del backlog, scritte nel journal di questo lotto. Non si fanno ora.
+
+#### T-EN passo 1 — le 8 chiavi ✅ (2026-10-13)
+> **Note implementazione**: `/tmp/libreFolio_ten_keys.sh`, 8 volte `dev.py i18n add`.
+> - 7 chiavi in `i18n/charts/` e `assets.probe.points` in `i18n/assets/`, nelle 4 lingue. `where` le conferma tutte e 8.
+> - `dev.py i18n check`: 4 359 chiavi in modalità stretta.
+> - Il diff è fatto solo di aggiunte (8 file sorgente, una virgola per blocco).
+
+#### T-EN passo 2 — i rossi ✅ (2026-10-13)
+> **Note implementazione**: test-author H ha scritto 16 rossi e 6 guardie. Li ho visti rossi anche io: `vitest run` sugli 8 file toccati dà 16 falliti e 134 verdi (log `/tmp/libreFolio_ten_reds_before.log`). Ogni rosso fallisce sull'asserzione finale e per il motivo giusto: inglese, o un'etichetta che non si riscrive.
+>
+> **I rossi**:
+>
+> | file | rossi | cosa legge |
+> |---|---|---|
+> | `syntheticSignals.test.ts` | 6 | in it e fr: le etichette con tasso, offset con segno, ampiezza e periodo; i default; la stessa etichetta passata da `renderMulti` |
+> | `syntheticSignals.languageSwitch.test.ts` (nuovo, jsdom) | 2 | l'etichetta letta in un effetto (`recordReads`) si riscrive al cambio di lingua sul posto, en → it e en → fr |
+> | `ChartSignalsSection.test.ts` | 2 | le unità dell'editor in it e fr |
+> | `PriceChartFull.test.ts` (nuovo, jsdom; ECharts registrato) | 3 | le tre righe della conversione in it e fr; un caso con una locale di marcatori, che prova che ogni riga viene dalla sua chiave (`orig.` è uguale nelle 4 lingue) |
+> | `ProviderAssignmentSection.test.ts` | 3 | «12.345 punti» in italiano; «1 point» al singolare in inglese e in francese |
+>
+> - **Le guardie**:
+>   - le etichette inglesi sotto 1 000;
+>   - `%` resta `%`;
+>   - le righe inglesi del tooltip;
+>   - «12,345 points»;
+>   - `catalogIcuLocale.test.ts`.
+> - **Avviano i18n in inglese** (`beforeAll(setupI18n('en'))`): `registry.test.ts`, `localSignalRegression.test.ts` e `syntheticSignals.test.ts`. Senza, dopo la cura, svelte-i18n solleverebbe un errore.
+> - **Nel runner** (`_frontend_utility.py`), solo le 2 righe dei file nuovi:
+>   - `syntheticSignals.languageSwitch.test.ts` in `front_utility_unit`, accanto a `signalLabel.test.ts`, anch'esso jsdom;
+>   - `PriceChartFull.test.ts` in `front_component_unit`.
+> - **Le note di test-author**:
+>   - il test del cambio di lingua morde solo al primo passaggio: la precondizione è che il catalogo di arrivo non sia ancora caricato;
+>   - lo sfasamento di 3 giorni si scrive uguale in ogni lingua, quindi non distingue `formatFixed` dalla cifra grezza;
+>   - da 1 000 in su l'inglese raggruppa (`1,000%/yr`, `3,650d`): è già nella mia analisi.
+> - **⚠️ Fuori pista**: nei titoli dei test le etichette T-EN1 e T-EN2 sono scambiate per la sonda e per i segnali. Le correggo con test-author dopo la cura.
+
+#### T-EN passo 3 — la cura ✅ (2026-10-13)
+> **Note implementazione**: `/tmp/libreFolio_ten_apply.py`, 15 operazioni su 7 file, provate prima a secco. Gli 8 file di test passano 150/150 (log `/tmp/libreFolio_ten_after.log`).
+>
+> **Cosa cambia, file per file**:
+> - **`ChartSignal.ts`**:
+>   - `protected static text(key, values)`, il catalogo letto con `fromStore(_)`. Il lettore nasce alla prima etichetta, così un modulo che non etichetta nessun segnale non tocca svelte-i18n: serve ai test che sostituiscono `$lib/i18n` per intero.
+>   - Il commento di `suffix`: ora è un gettone tradotto con `signals.units.<gettone>`, come l'`x-suffix` del backend.
+> - **`LinearSignal.ts`, `CompoundSignal.ts`, `SineSignal.ts`**:
+>   - `getLabel()` passa dal catalogo, con le cifre di `formatPercent` (`signed: false, trim: true`; l'offset col segno) e di `formatFixed(…, 2, {trim: true})`;
+>   - `annualRate.suffix` diventa `'percentPerYear'`.
+> - **`ChartSignalsSection.svelte:613`**: il ramo locale scrive `translateOr($t, 'signals.units.' + suffix, suffix)`, cioè lo stesso esito del ramo backend (`SignalParamControl`).
+> - **`PriceChartFull.svelte:786-789`**: le tre righe vengono da `chart.tooltip.*`; i giorni di sfasamento sono scritti con `formatFixed(…, 0)`.
+> - **`ProviderAssignmentSection.svelte:354-355`**: `assets.probe.points`, con `count` per il plurale e `n` per la cifra.
+>
+> **Backlog**:
+> - T-EN1 e T-EN2 sono marcate ✅; il commit lo aggiunge il coordinatore.
+> - Le voci nuove T-ISO (F1) e T-FB (F2) sono in fondo alla sezione T.
+
+#### T-EN passo 4 — i gate ✅ (2026-10-13)
+> **Note implementazione**:
+> - **Etichette dei test**: test-author ha corretto quelle scambiate (T-EN1 per la sonda, T-EN2 per i segnali). Ancora 150/150.
+> - **Corsia 6164**, 8 azioni in sequenza, tutte `exit=0` (log `/tmp/libreFolio_t1_tenv_*`):
+>
+>   | azione | risultato |
+>   |---|---|
+>   | `utils gate-plugin-i18n-ownership` (R1–R4) | 45 |
+>   | `utils gate-i18n-usage` | 195 |
+>   | `utils gate-i18n-catalog` | 176 |
+>   | `front-utility core-unit` | 4 099 |
+>   | `front-utility component-unit` | 3 090 |
+>   | `front-asset asset-unit` | 762 |
+>   | `check-orphans` | pulito |
+>   | `front-asset asset-detail` (E2E, prova a runtime della pagina coi grafici e i segnali) | 32 |
+>
+>   Alla fine la porta 6164 è libera.
+> - **Statici e catalogo**:
+>   - `dev.py front check`: 0 errori, 0 avvisi; Prettier pulito sui file toccati.
+>   - `dev.py i18n check`: 4 359 chiavi in modalità stretta.
+> - **`dev.py i18n audit`**:
+>   - 0 chiavi morte e 0 traduzioni mancanti.
+>   - Le chiavi nuove risultano usate, tranne `signals.units.percentPerYear`, che è «non verificata». È il limite noto della skill: chi costruisce la chiave è `ChartSignalsSection`, mentre il gettone sta in `LinearSignal.ts`, a due import di distanza, come per `chartSettings.params.amplitude`.
+>   - «Non verificata» non vuol dire morta, e nessun gate la conta.
+> - **v1.1.0**: le quattro scritte inglesi c'erano già. Per il CHANGELOG serve quindi una riga 🐛.
+
+### Checkpoint T-EN 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
+- **Base**: `104ba23d0`. **Delta**: 23 file modificati più 2 nuovi, 25 in tutto.
+- **Commit proposti**:
+  1. `/tmp/libreFolio_commit_t_ten_1.txt`, `fix(i18n): chart and probe texts in UI language`: codice, test, cataloghi, runner;
+  2. `/tmp/libreFolio_commit_t_ten_2.txt`, `docs(journal): record T-EN1 and T-EN2`: il piano e il backlog.
