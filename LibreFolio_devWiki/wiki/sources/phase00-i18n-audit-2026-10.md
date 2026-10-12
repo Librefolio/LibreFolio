@@ -55,6 +55,6 @@ errors in English, upstream report of the formatter cache) and O-19 / O-20 from
 | Plan (S0–S22, residuals) | `LibreFolio_developer_journal/Release_2/phases/29_i18nAudit/plan-phase00I18nAudit.prompt.md` |
 | Audit command | `frontend/scripts/i18n-audit.py` |
 | Usage analysis | `scripts/i18n_usage.py` |
-| Catalogues | `frontend/src/lib/i18n/en.json` |
+| Catalogues | `frontend/src/lib/i18n/base/en.json` |
 | ICU/locale gate | `frontend/src/lib/i18n/catalogIcuLocale.test.ts` |
 | Developer doc | `mkdocs_src/docs/developer/frontend/i18n.md` |

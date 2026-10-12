@@ -2771,7 +2771,7 @@
     <!--               [ actions ── 2×2   ]  (narrowest tier — Round 12 removed iconOnly)     -->
     <!-- ======================================================================= -->
     <PageToolbar
-        thresholds={{oneRow: 1215, denseRow: 850, stackFilters: 510, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}}
+        thresholds={{oneRow: 1215, denseRow: 890, stackFilters: 510, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}}
         tabs={assetDetailTabs}
         {activeTab}
         ontabchange={handleAssetDetailTabChange}

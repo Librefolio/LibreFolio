@@ -3043,3 +3043,192 @@ the backlog's M-23. The ✨ line of `b91d6d902` was ported by hand into `CHANGEL
 (what the build-time hook cannot reach: M-23, open, planned in 1.2 by the coordinator), [[features/F-109]] (still open:
 M-23). Checked on the code: `changelog.ts` and `ChangelogModal.svelte` apply no French spacing rule.
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R0 — the features and the map
+Base `551d8cbb4`. Plan approved by the coordinator: R0 → R6, trains first; three UI features in DASHBOARD, the engine
+in CALCULATIONS, no new domain; open items as «paused, after 1.2» (D382). Source of this step: the folder's README
+(`107098edf`), whose code map was checked path by path on this tree.
+
+**Created (5)**: [[features/F-110]] (engine: `services/risk/`, fifteen plugins, four endpoints, documented),
+[[features/F-111]] (four levels on the Dashboard and broker pages; only the simulation rung stays beta),
+[[features/F-112]] (the Lab of Asset Global), [[features/F-113]] (the legacy Asset Detail tab, beta, implemented),
+[[sources/phase00-risk-integration-2026-09]] (the folder, its parts, D382).
+
+**Updated**: the registry (113 features, 98 implemented or documented), [[domains/calculations]], [[domains/dashboard]]
+(F-100 added too: it was in the registry's DASHBOARD rows but missing from the domain page).
+Next: R1, the open items. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 68 — M-18 CP1 (T)
+Base `8730f949c` (the target merged into this branch by the coordinator). Source: plan 43, «M-18» sections (`d00c06685`),
+and the code of `5b2aad5c4`. **Created**: [[decisions/figures-in-the-interface-language]] (the developer's rule, CP1
+delivered, CP2 pending). **Updated**: [[problems/playwright-probes-ignore-timeout]] (M-18 moved to T, CP1),
+[[features/F-008]] (status row). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R1 — the open items
+Base `86de5e903`. Source: the README's lists «Lavoro pianificato e non fatto», «Buchi veri», «Difetti noti», «Buchi nei
+test», «Domande mai decise», the backlog-38 family and the `TODO_FUTURI.md` deferrals (`107098edf`, verified by their
+authors on 2026-10-10). Re-checked on the code: A6, C-22 (D381 clamp; Sturges only for a zero IQR), C4, B7, B8 and
+`HurtRow.secondaryLoss`. **Updated**: [[features/F-110]], [[features/F-111]], [[features/F-112]] («Still open (paused,
+after 1.2 — D382)»); F-113 already carried A2 and T-DI. No problem page: every item is paused by the developer's D382,
+and the README stays its single home. The post-integration review `08` is the first round's history: steps R3/R4.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R2 — the decisions that bind
+Base `e3a55b85f`. Sources: the README's «Decisioni che vincolano il lavoro» (`107098edf`) and the thesis
+`01-tesi-e-quattro-domande.md` (`245aabf97`). **Created**: [[decisions/risk-answers-four-questions]],
+[[concepts/risk-binding-decisions]] (D374 and D380–D381 checked on the code). **Updated**: F-110…F-112 (a link). The
+full records of `04` (1,076 lines) stay in the journal; individual pages come only where a later step needs one.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 69 — M-23 resolved (M's batch 27)
+Base `d877a4e14`. Source: step 11 of `27_releaseImages/plan-phase00ChangelogTranslation.prompt.md` (`1ed372534`) and
+the code of `99aa2f4ec`, `53673ae9f`. **Updated**: [[decisions/fr-typography-at-build-time]] and [[features/F-109]]
+(M-23 open → resolved in 1.2: `typesetFrench()` in `changelog.ts`). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R3a — implementation_2, the contract and the levels
+Base `4549376b8`. Sources: `implementation_2/` top files (00, A, F1, F2, PRIMITIVE, S1–S5, `_comune`, REGISTRO,
+R5-tempo2), digested by an explore agent and checked here (quotes by grep; hashes and paths verified). **Created**:
+[[decisions/asset-set-one-preparation-not-fan-out]], [[decisions/l3-reads-current-composition]],
+[[problems/runner-catalog-merge-not-line-union]]. **Updated**: [[features/F-111]], [[features/F-112]],
+[[sources/phase00-risk-integration-2026-09]]. Overtaken in the journal, noted on the pages: the contract's table of
+`ASSET_SET` plugins. Next: R3b, the post-merge review R5 and the progress logs. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R3b — the post-merge review R5
+Base `e050cc142`. Source: `implementation_2/R5-post-merge-e-review.md` (`107098edf`), digested by an explore agent
+(sections around the «⚠️ Fuori pista» markers; the four big progress logs were not read — their history is covered by
+the review and the code). Quotes kept only where grep found them verbatim. **Created**:
+[[problems/risk-stress-buckets-hand-listed]], [[problems/replay-baseline-shortened-by-late-starter]],
+[[problems/echarts-stacked-band-null-base]]. **Updated**: [[concepts/echarts-chart-gotchas]], F-110, F-113, the folder
+source. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R4 — the first round, implementation/
+Base `97eecde84`. Sources: `implementation/` (README, contracts K1–K9, streams, the A progress log), digested by an
+explore agent; quotes re-found by grep, hashes and paths verified. **Created**: [[concepts/risk-contracts-k1-k9]],
+[[decisions/histogram-grid-pinned-to-var-cut]], [[problems/annualization-factor-not-coverage]] (no delivering commit
+isolated for the observed factor: cited by its code). **Updated**: [[features/F-110]], the folder source.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R5 — the analysis documents
+Base `b4acfb250`. Sources: `00`, `02`, `03`, `05`, `06`, `07`, digested by an explore agent; quotes re-found by grep.
+**Created**: [[decisions/risk-tool-verdicts]] (with today's departures: TE and IR still in the contracts and on the
+legacy panel, optimization delivered as a plugin), [[decisions/risk-library-versus-own-maths]] (coherent CVaR and
+vectorised rolling checked in the code). The visual grammar of `05` and the plans `03`, `07` left in the journal: the
+levels pages and the features already carry what shipped. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R6 — the archive G0–G6; folder 02 covered
+Base `843c9a9d2`. Source: `_archive-backendFirst-G0G6/README.md` (`33d5a599b`) and the archive's history since the July
+ingest: archived on 2026-09-16 (`245aabf97`), aligned once on 2026-10-09 (`33d5a599b`, 4 files). **Updated**:
+[[sources/phase00-risk-analysis-backend]] (what still holds, what is superseded), [[sources/phase00-risk-integration-2026-09]].
+Folder 02 is now covered by steps R0–R6: 4 features, 6 decisions, 2 concepts, 5 problems and 1 source, with the open
+items as «paused, after 1.2 (D382)». Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 09, step F0 — the feedback jobs
+Base `dc00cbe9f`. Plan approved by the coordinator: F0 → F2, then H1 → H5 (`Ai_ideas`: a source page only, linked to
+`TODO_FUTURI.md` themes). Sources: `09_feedbackJobs/README.md` and `06_piano_sprint.md` (`d614daed9`), digested by an
+explore agent; the hashes verified as ancestors, the README's open items rewritten with today's paths (BU1, U-1).
+**Created**: [[sources/phase00-feedback-jobs-2026-09]]. **Updated**: [[sources/phase00-feedback-import-urgent-2026-09]]
+(a link). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 09, step F1 — the structural backlog P4 and the static analysis
+Base `7ff48ac9b`. Sources: `00_backlog_strutturale_P4.md` and `09_reperti_analisi_statica_20260922.md` (`d614daed9`),
+digested by an explore agent; hashes verified, the two fixes re-read in the code. **Created**:
+[[problems/privacy-gate-blind-to-formatter-consumers]], [[problems/missing-event-detail-read-as-consent]]. **Updated**:
+[[sources/phase00-feedback-jobs-2026-09]] (the F1 statuses). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 09, step F2 — the areas and the visual review; folder 09 covered
+Base `5c82d9bd4`. Sources: `01`–`05`, `07`, `08` of `09_feedbackJobs/` (`d614daed9`), digested by an explore agent
+that grepped the wiki for each topic; only R2 was missing. **Created**: [[problems/stale-version-file-shadows-git-describe]]
+(open; the mechanism checked in `utils/runtime/version.py` and `dev.py`). **Updated**: [[sources/phase00-feedback-jobs-2026-09]],
+[[features/F-062]]. Folder 09 covered by F0–F2. Next: the historical folders H1–H5. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H1 — 01_signalMigration (drift and gaps)
+Base `62471add2`. The four rows ingested in July (`02_aiExport/`, hash `untracked`, old `Phase_0/` path) are re-based
+on `8da24ef22` and the `phases/` path; 32 files were never ingested — mostly the AI Export reports, whose outcomes the
+AI Export pages already carry. Gaps found by an explore agent and checked in the code: **Created**
+[[decisions/signal-indicator-warmup-sizing]], [[problems/spa-logout-cross-user-cache-leak]]. **Updated**
+[[decisions/signal-backend-plugin-architecture]], [[features/F-001]]. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H2 — 05_cleanAudit
+Base `42fc4dd7f`. Source: `phases/05_cleanAudit/` (`8da24ef22`; never ingested), digested by an explore agent that
+grepped the wiki before naming a gap. **Created**: [[sources/phase00-clean-audit-2026-08]],
+[[problems/asset-events-lost-on-price-cache-hit]] (`b45f5afbb`; the journal cites, for the cause, a hash that does
+not resolve in this repository — `git log -S` points to `5b9dddb45`). **Updated**: [[concepts/test-isolation-classes]] (the
+first `test all` that could not pass). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H3 — 08_newCleanAndDocumentation_audit
+Base `61f7c970b`. Source: `phases/08_newCleanAndDocumentation_audit/` (`a9138140a`; never ingested), digested by an
+explore agent. **Created**: [[problems/base-currency-setting-silently-defaulted-eur]] (`08b99c3ac`; the helper and its
+callers checked in the code). **Updated**: [[sources/phase00-clean-audit-2026-08]] (the second audit), [[features/F-092]].
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folders H4 — 03_brokerImportRecovery and 04_webSearchEngine
+Base `63121ee78`. Sources: both folders (never ingested), digested by an explore agent. 03 (the Intesa and Crédit
+Agricole recovery, `0e07359b4`) is already covered by [[decisions/credit-agricole-securities-only-cash-neutral-brim]]
+and the BRIM pages; its ISIN auto-binding note was too thin for a page of its own. **Created**
+[[decisions/web-link-finder-ddgs]] (`ae417b9ab`; the engine settings checked in `web_link_finder.py`). **Updated**
+[[features/F-028]]. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H5 — Ai_ideas; the historical folders covered
+Base `b899903db`. Source: `Release_2/Ai_ideas/` (four files, 2026-07-20 → 08-05; never ingested). By the coordinator's
+rule a source page only, no `idea` features: **Created** [[sources/release2-ai-ideas-2026-07]] (what held — signals,
+then risk, the rolling chart — and the MCP assistant deferred to `TODO_FUTURI.md`, «QuarkAI»). **Updated**
+[[decisions/signal-backend-plugin-architecture]] (a link). With H5, the plan of folder 09 and the historical folders
+(F0–F2, H1–H5) is complete. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H6 — 06_betaTestingReportAndFixing (drift)
+Base `6e3d1368c`. The four July rows (hashes that no longer resolve, old `Phase_0/` path) re-based on `91e88b8d1` and
+the `phases/` path; three reports moved unchanged, `INDEX.md` edited. Eleven files never ingested, listed on
+[[sources/beta-testing-2026-08-05]]; their topics already have pages, so no new page — a content check of the ten plans
+stays a candidate for a later lint. Graph: not updated (P-6).
+
+## [2026-10-12] lint | Follow-up of the read-only lint — two open problems re-checked
+Base `4d0cedec7`. The coordinator's decisions on the lint: re-check the two stale open problems against today's E2E;
+M-20 waits for I's plan 48 (FileGrid and FilesTable will be C-63); the unchecked areas become C-64. An explore agent
+read the specs. **Updated**: [[problems/bulk-modal-sticky-z-index]] (not covered → open, re-test after 1.2, C-61),
+[[problems/datatable-column-resize-noop]] (resize proved on the Risk Lab L1° table, `f55b2e42a`; others untested → open,
+C-62). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 70 — M's batch 28: the M-19 spec registered, the gallery's price guard after M-18
+Base `afd7d4821` (the target `b063b16ca` merged into W). Source: M's journal of round 12, §16.7 and §17 (batch 28),
+with the code of `0fe5195e8` and `e8d5a5668`, and T's CP1 note that found the guard (`43_financialMathHome`, before the
+STOP). **Created** [[problems/gallery-price-guard-expected-tofixed-text]] (resolved: red in English on prices over
+1,000, unseen because the runner excludes the gallery; the first control could not fail). **Updated**
+[[problems/docs-mathjax-looked-in-the-page-folder]] and [[problems/mathjax-fonts-missing-from-local-copy]] (the spec is
+in the repository, `front-utility docs-offline-math`), [[decisions/figures-in-the-interface-language]] (a consequence
+for tests), [[decisions/gallery-is-a-release-gate-with-real-data]], [[features/F-069]],
+[[sources/phase00-translation-round12-2026-10]] (batch 28; its stale «M-14 still in progress» line corrected). Graph:
+not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 1 — the unfinished features against today's code
+Base `0bd1a8368`. Asked by the coordinator before the tag, so that the wiki says what 1.2 really contains. Two explore
+agents read the code and the history of the 14 features not `implemented` or `documented`; F-048's findings were
+re-checked by hand, on the code and on the trees of `v1.0.0` and `v1.1.0`. **Updated** [[features/F-048]]
+(`in-progress` → `documented`: its four open items were delivered and shipped in 1.0.0, `dce60a5ee`; residuals K-1 …
+K-4 in backlog 38), [[features/registry]] (row, note, statistics: 99 shipped, none in progress),
+[[domains/transactions]], [[domains/brokers]], `index.md` (Domains row). Unchanged after the check: F-077, F-079,
+F-081, F-082, F-084, F-087, F-091, F-094 and F-108 (contract only) stay `planned`; F-085, F-093 and F-096 stay `idea`.
+Listed to the coordinator, not touched: F-090 (parts built under F-051, the provider-change modal and the reverse
+lookup not), F-094 (borderline), page drift on F-082, F-090 and F-096. Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 1 — the coordinator's decisions on F-090, F-094 and three page defects
+Base `f83a1486d` (C-65 and C-66 in the backlog). **Updated** [[features/F-090]]: stays `planned`; what was built under
+[[F-051]] is listed with its paths (the `RESTRICT` FK, `delete_events_bulk` with an outcome per id, the link field and
+rule 9, the event picker), the 409 it promised is gone, and the rest — the provider-change modal, the reverse lookup —
+points to C-65, with the `TODO_FUTURI.md` entry on suggested links as a neighbour. [[features/F-094]]: stays
+`planned`; the three sync dialogs on `SyncModalBase` sync the page's range, the warning on existing data is C-66.
+Page defects fixed: [[features/F-082]] (the staging modal's path), [[features/F-096]] (its two tables separated, the
+editor's path), [[domains/signals]] (`status: stable`, as in the index and the registry). [[features/registry]]: the
+C-64 note cites C-65 and C-66. `index.md`: F-048's row in «Individual Feature Pages» still said `in-progress`, missed
+in part 1 — now `documented`. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 71 — U-2 (the catalogue built from its sources), M's batch 29, a merge that died on a lock
+Base `c57acf510` (train 71, gates green). Sources: plan 45 §10 (U-2) and the code of `1b31f9057`; backlog U-B6; M's
+journal of round 12, §18 (batch 29, `18e872872`); the coordinator's report on train 71, with the mechanism checked in
+Git's own sources at v2.53.0. **Created** [[problems/git-merge-stash-failed-on-locked-index]] (Git 2.53 runs
+`git stash create` before every real merge; an IDE or a watcher holding `index.lock` killed it before it started;
+workaround: the train retries up to 5 times). **Updated** [[decisions/plugin-folders-and-split-i18n]] (U-2 delivered:
+generated catalogue, sources in `base/`, read-only and stamped, hooks, gate `utils gate-i18n-catalog`; U-3 and U-B6
+open), [[features/F-008]], [[sources/phase00-translation-round12-2026-10]] (batch 29),
+[[problems/fast-forward-blocked-by-a-dirty-file]] (see also). **Paths**: U-2 moved the four catalogues, so 28
+citations of `frontend/src/lib/i18n/<lang>.json` in 13 pages and 5 written as `{en,it,fr,es}` now point to `base/`;
+`$lib/i18n/en.json` imports stay (they name the generated file). Graph: not updated (P-6).

@@ -10,6 +10,7 @@ import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
+import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -177,9 +178,25 @@ async function handleDiscardDialog(page: Page) {
 // ---------------------------------------------------------------------------
 
 test.describe('Transactions', () => {
+    // Whoever commits, cleans up. T1 commits a real BUY into one of TEST_USER's
+    // seeded brokers, and `Transaction` is global: left there, it shifts the NAV,
+    // positions, counts and pages of every later test, and the txHygiene net that
+    // used to hide it exists only at one worker. The tracker records the rows this
+    // page's commits create and deletes exactly those, at any worker count. It
+    // starts after login (it reads through `page.request`, which needs the session
+    // cookie) and so before any commit; `afterEach` runs for a red test too.
+    let txWrites: TransactionWriteTracker | undefined;
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
+        txWrites = await trackTransactionWrites(page);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async () => {
+        const tracker = txWrites;
+        txWrites = undefined;
+        await tracker?.cleanup();
     });
 
     // ===================================================================
@@ -201,9 +218,17 @@ test.describe('Transactions', () => {
 
             // Commit — may roll back due to balance checks, which is acceptable
             const commitBtn = page.getByTestId('tx-bulk-commit');
+            // Armed before the click, read after the outcome: when the batch commits,
+            // its answer carries the id of the row this test now owns, and the tracker
+            // can delete only what it has read before the test ends — its own read of
+            // this body was issued first, on the response event. A click that never
+            // commits costs nothing extra: both waits run out together.
+            const commitAnswer = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 10_000}).catch(() => null);
             await commitBtn.click();
             // Wait for either success (close) or rollback (error banner)
             await Promise.race([page.getByTestId('tx-bulk-modal').waitFor({state: 'hidden', timeout: 10_000}), page.getByTestId('tx-bulk-error').waitFor({state: 'visible', timeout: 10_000})]).catch(() => {});
+            const answer = await commitAnswer;
+            await answer?.json().catch(() => null);
         });
 
         test('Apply button disabled when form incomplete', async ({page}) => {

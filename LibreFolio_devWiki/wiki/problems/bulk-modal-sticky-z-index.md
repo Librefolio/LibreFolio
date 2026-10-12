@@ -3,6 +3,7 @@ title: "BulkModal row-selector toolbar hidden after BRIM import"
 category: problem
 status: open
 date: 2026-06-25
+updated: 2026-10-12
 tags: [frontend, bulk-modal, z-index, overflow, sticky, import, svelte5, css]
 related:
   - problems/datatable-actions-column-on-mobile
@@ -42,6 +43,13 @@ When embedding a DataTable inside a scrollable modal container, verify: (1) sele
 ## Impact
 
 After importing transactions, users cannot bulk-select rows, bulk-delete, or perform other multi-row operations. They must close and re-open BulkModal to get a working selection UI.
+
+## Re-check (2026-10-12)
+
+Still open, to re-test after release 1.2 (backlog C-61). No E2E covers the symptom: `tx-bulk-import-handoff.spec.ts`
+checks the hand-off from the import wizard (the selected count, the rows in the editor, the validation, the to-do
+banner) but never selects a row in the BulkModal or checks that its selection toolbar is visible; the guide step
+`transaction.bulk.selection` exists only in the onboarding catalogue. Neither proposed cure is in the code.
 
 ## Source files
 

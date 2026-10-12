@@ -1,7 +1,7 @@
 ---
 title: "Domain: CALCULATIONS"
 category: domain
-features: [F-056, F-057, F-058, F-107]
+features: [F-056, F-057, F-058, F-107, F-110]
 status: stable
 mkdocs: null
 ---
@@ -32,6 +32,7 @@ ledger ([[decisions/native-cash-daily-revaluation]]).
 | [[F-057]] | Currency Conversion (triangulation via FX graph) | backend | core — multi-hop cross-currency conversion | implemented |
 | [[F-058]] | ROI Calculations (TWRR + MWRR) | backend | core — portfolio return percentage computation | implemented |
 | [[F-107]] | PAC allocator (a Tool: SCIP search, exact Decimal replay) | fullstack | plans purchases toward target weights; the frontend only builds the scenario and shows the result | documented |
+| [[F-110]] | Risk engine (analytic plugins over prepared series; QuantLib and riskfolio-lib in spawned processes) | backend | computes every risk figure the Risk tabs and the Lab show | documented |
 
 ## Architecture at a glance
 

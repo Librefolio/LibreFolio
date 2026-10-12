@@ -275,7 +275,8 @@
     "probe": {
       "history": "Historial",
       "notTested": "No probado",
-      "totalTime": "Total"
+      "totalTime": "Total",
+      "copyErrorDetail": "Copiar el detalle del error"
     },
     "identifiers": {
       "askProvider": "Consultar Proveedor",
@@ -933,9 +934,9 @@
       "targetMany": "Lo leen los plugins de importación predeterminados de estos brókers: elige adónde moverlo.",
       "noTarget": "Lo lee {plugins}, pero ninguno de tus brókers lo usa como plugin de importación predeterminado.",
       "noReader": "Ningún plugin de importación puede leerlo.",
-      "move": "Mover a {broker}",
+      "move": "Mover",
       "keep": "Dejarlo aquí",
-      "remove": "Quitar el archivo",
+      "remove": "Quitar",
       "moveFailed": "No se pudo mover el archivo",
       "removeFailed": "No se pudo quitar el archivo",
       "fromLabel": "Asignado a",

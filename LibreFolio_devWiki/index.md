@@ -16,10 +16,10 @@
 | [[domains/fx]] | FX (Foreign Exchange) | F-015–F-023 | stable |
 | [[domains/assets]] | ASSETS | F-024–F-036 | stable |
 | [[domains/signals]] | TECHNICAL ANALYSIS (Signals) | F-037–F-045 | stable |
-| [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | in-progress |
+| [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | implemented (F-048 recognised as shipped, C-64, 2026-10-12) |
 | [[domains/scheduler]] | SCHEDULER | F-052–F-053 | implemented (registry corrected 2026-10-09) |
-| [[domains/dashboard]] | DASHBOARD | F-054–F-055, F-100 | implemented |
-| [[domains/calculations]] | CALCULATIONS | F-056–F-058, F-107 | stable |
+| [[domains/dashboard]] | DASHBOARD | F-054–F-055, F-100, F-111–F-113 | implemented |
+| [[domains/calculations]] | CALCULATIONS | F-056–F-058, F-107, F-110 | stable |
 | [[domains/infrastructure]] | INFRASTRUCTURE | F-059–F-074, F-106 | stable |
 
 ---
@@ -28,7 +28,7 @@
 
 | Page | Description |
 |------|-------------|
-| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (109 features across 12 domains, 2026-10-12) |
+| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (113 features across 12 domains, 2026-10-12) |
 
 ## Individual Feature Pages
 
@@ -43,6 +43,10 @@
 
 | Page | Title | Domain | Status |
 |------|-------|--------|--------|
+| [[features/F-110]] | Risk engine — risk analytics as plugins over prepared return series, the quant libraries in spawned processes | Calculations | documented |
+| [[features/F-111]] | Risk tab of the Dashboard and broker pages — four progressive levels; only the simulation rung stays beta | Dashboard | documented |
+| [[features/F-112]] | Risk Lab of Asset Global — correlation, losses, risk–return against a benchmark, replay | Dashboard | documented |
+| [[features/F-113]] | Risk tab of Asset Detail — the legacy panel, still beta, to be rebuilt after 1.2 | Dashboard | implemented |
 | [[features/F-109]] | In-app changelog — the bundled CHANGELOG in a modal; each release in the UI language when translated, English with a label otherwise | Layout & Settings | documented |
 | [[features/F-107]] | PAC allocator — a purchase planner in broker increments: SCIP searches, an exact Decimal replay certifies, a fixed-reference L2 first | Calculations | documented |
 | [[features/F-108]] | Portfolio Rebalancer — the PAC engine with existing positions, sales and a tax reserve; designed, contract without a service | Planned | planned |
@@ -63,7 +67,7 @@
 | [[features/F-039]] | RSI Signal | Signals | implemented |
 | [[features/F-042]] | FX Pair Comparison Signal | Signals | implemented |
 | [[features/F-047]] | Transaction List Page (DataTable, always-pair-adjacent, client-side filters) | Transactions | implemented |
-| [[features/F-048]] | Transaction Modals (Form / Bulk / Delete / Promote / Split — mode-less, Round 6 Plan D done) | Transactions | in-progress |
+| [[features/F-048]] | Transaction Modals (Form / Bulk / Delete / Promote / Split — mode-less, Round 6 Plan D done) | Transactions | documented |
 | [[features/F-054]] | Dashboard KPI & Overview (unified `/portfolio/report`) | Dashboard | implemented |
 | [[features/F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | Dashboard | documented |
 | [[features/F-058]] | ROI Calculations (TWRR + MWRR) | Calculations | implemented |
@@ -86,6 +90,15 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/web-link-finder-ddgs]] | **Folder 04.** The web link finder uses `ddgs` instead of a DuckDuckGo HTML scraper whose 202 «anomaly» pages were cached as empty results; SearXNG dropped (`ae417b9ab`) | 2026-07-28 | backend, search, ddgs |
+| [[decisions/signal-indicator-warmup-sizing]] | **Folder 01 (signals migration).** Each plugin's warm-up measured across periods 2–200 against the reference (1e-6): KAMA `max(30, period + 1)`, ADX 18 × period (`5b9dddb45`) | 2026-07-23 | signals, indicators, warm-up |
+| [[decisions/risk-library-versus-own-maths]] | **Folder 02, analysis 06.** A library only where our maths duplicates it badly (rolling, CVaR, matrices), our own where it composes; correctness decides; riskfolio-lib first as the oracle | 2026-09-16 | risk, metrics, riskfolio |
+| [[decisions/risk-tool-verdicts]] | **Folder 02, analysis 02.** Every tool judged by the four questions — core, fixed, cut (TE, IR), deferred (optimization); today's code partly reverses it | 2026-09-16 | risk, tools, verdicts |
+| [[decisions/histogram-grid-pinned-to-var-cut]] | **Folder 02, round 1 (A).** The histogram grid is shifted so one edge falls on the VaR cut — the red area is the declared percentage; an oracle pins the maths before vectorising (`f5fe80d44`) | 2026-09-18 | risk, var, histogram |
+| [[decisions/asset-set-one-preparation-not-fan-out]] | **Folder 02, round 2.** The Lab asks one `ASSET_SET` request (one preparation, one calendar), not one per asset: «Il fan-out non era caro: era sbagliato» (`d3afb92b6`) | 2026-09-21 | risk, lab, asset-set |
+| [[decisions/l3-reads-current-composition]] | **Folder 02, S3.** L3 measures today's composition replayed over the past, and every card names its mode; arithmetic annualisation (`afd480a89`) | 2026-09-18 | risk, l3, beta |
+| [[decisions/risk-answers-four-questions]] | **Folder 02, the thesis.** Risk answers «is my portfolio what I think it is?»: four questions, one per level (L1 hurt, L2 diversification, L3 paid for risk, L4 what if) | 2026-09-16 | risk, levels, thesis |
+| [[decisions/figures-in-the-interface-language]] | **T, M-18.** «Lingua della UI per tutto»: one reactive source, `uiLocale()`, the browser's region only when it speaks the UI language, en-GB for English; CP1 delivered (percentages, decimals, bytes, durations), CP2 to come | 2026-10-12 | i18n, locale, numbers |
 | [[decisions/changelog-translated-by-heading-pieces]] | **M, batch 25.** The CHANGELOG translated by pieces keyed by their headings (`changelog.py`, 30,000-character units); version lines copied; a translation that changes the structure refused; the open chapter informational until its tag | 2026-10-12 | translation, aphra, changelog |
 | [[decisions/e2e-gaps-of-1-2-before-release]] | **V, plan 46 §12.4.** Eight E2E gaps of 1.2 (real Risk query, FX on cash, account deletion, YoC, the PDF preview offline, the transfer in Auto, PAC; Scalable later): «Tutte e 7 nella 1.2», order 2-1-6-4-7-5-3 — planned | 2026-10-12 | testing, e2e, release-1.2 |
 | [[decisions/changelog-translated-by-chapter]] | **T, CL.** The English CHANGELOG decides which releases exist; `CHANGELOG.<xx>.md` load lazily per language, a translated chapter with content replaces its twin, the rest stays English with «Not translated yet»; one DOMPurify path | 2026-10-12 | changelog, i18n, lazy-loading |
@@ -116,7 +129,7 @@
 | [[decisions/import-wizard-default-plugin-check]] | **S, plan 37.** `cannot_parse_detail` (`BRIMRefusal`) and `GET …/plugin-check`: after the upload, a file its broker's default plugin cannot read opens a modal — Move, Keep here, Remove — for every broker; report-set files exempt, fallback plugins only as a last destination | 2026-10-09 | brim, import-wizard, plugins, api |
 | [[decisions/broker-icon-order-dedicated-plugin-first]] | **S, step 12d.** Custom icon → dedicated plugin → portal favicon → fallback plugin → briefcase (developer, 2026-10-10); one threshold, `FALLBACK_PLUGIN_PRIORITY_LIMIT = 50`, pinned by a backend test; a selector after 1.2 (C-40) | 2026-10-10 | frontend, brokers, icons, plugins |
 | [[decisions/bulk-pairs-new-with-saved]] | **S, plan 37 §8.** The bulk editor pairs new rows with saved ones, reminds before saving, «Merge all»; securities pairs only when the quantities cancel in exact decimals; overtaken suggestion answers discarded | 2026-10-10 | frontend, bulk-editor, promote, suggest |
-| [[decisions/plugin-folders-and-split-i18n]] | **U-1 in the code (`2eed3d26c`, train 61); the i18n split planned.** Every plugin a folder: `__init__.py` docstring only, code in `<plugin>/plugin.py` by convention (no re-export: mute patches); translations in the plugin's folder, the catalogues split into 17 subsystems plus a `base`; the merged file generated and git-ignored, English fallback with a warning at build, a strict audit; no key renamed (D-1, D-4, D-A, D-B, D-C) | 2026-10-12 | backend, frontend, plugins, i18n, build, planned |
+| [[decisions/plugin-folders-and-split-i18n]] | **U-1 in the code (`2eed3d26c`, train 61); U-2 too (`1b31f9057`, train 71): the catalogue generated from `base/`, read-only, a hand edit stops the build; the split itself (U-3) planned.** Every plugin a folder: `__init__.py` docstring only, code in `<plugin>/plugin.py` by convention (no re-export: mute patches); translations in the plugin's folder, the catalogues split into 17 subsystems plus a `base`; the merged file generated and git-ignored, English fallback with a warning at build, a strict audit; no key renamed (D-1, D-4, D-A, D-B, D-C) | 2026-10-12 | backend, frontend, plugins, i18n, build, planned |
 | [[decisions/data-quality-proved-on-real-data]] | **V, plan 46.** Items 21–23 of the server checklist proved end to end on real data: a missing cost three ways (D1 «(c) Entrambe»: P-10, legacy rows written by a test-DB-only helper, a backend test), a real «Sync rates» offline with MOCKFX, reserved currencies per project | 2026-10-12 | testing, e2e, data-quality, fx, mockfx |
 | [[decisions/native-cash-daily-revaluation]] | **Lot 41 F.** One native-cash ledger (`financial_math/native_cash.py`) replaces four loops; foreign cash revalued on every rate-change day; the exchange result goes to R, a loss beyond R to K, capital never moves (k2, k1 rejected); missing rate → left out and reported (policy (a)); «FX on cash» row in the Performance view (minimal form); F-AI (a) now, (b) after 1.2 with a typed code. Confirmed on the developer's Scalable data | 2026-10-12 | backend, portfolio-engine, financial-math, native-cash, fx, k-r-w-pools |
 | [[decisions/financial-math-one-home]] | **T-1.** Every financial calculation in `financial_math/` (returns, valuation, price_marks, yield_on_cost, fifo/, portfolio/, lots/); no shims, no re-exports (tests patch module globals); a rename commit then a cut, so `git log --follow` stays continuous; AST guard `test_layer_boundaries.py`; D-11 instructions file | 2026-10-12 | backend, architecture, financial-math, refactor, layering, git-history |
@@ -211,6 +224,8 @@
 
 | Page | Summary | Tags |
 |------|---------|------|
+| [[concepts/risk-contracts-k1-k9]] | **Folder 02, round 1.** The contracts K1–K9 between the Risk streams (histogram bins, asset types, benchmark selector, portfolio slice, primitives, simulation axes, doc slugs, acquired KPIs, replay) and where each lives today | — | risk, contracts |
+| [[concepts/risk-binding-decisions]] | **Folder 02.** The decisions that bind Risk work (D8…D384, the thesis, the 1.2 CHANGELOG rules), in English, with where each lives | — | risk, decisions |
 | [[concepts/marker-locale-for-catalogue-labels]] | Prove a label is not hardcoded: mount in the marker locale `qaa`, where every key shows as `⟦key⟧`; a literal shows itself; plus a test that the keys exist in the four catalogues | testing, i18n, frontend |
 | [[concepts/brim-texts-translated-by-code]] | Plugin names and descriptions, notices, evidence captions and refusals are translated through keys built from stable codes (`brimPlugins.*`, `importWizard.brimNotice.*`, `brimEvidence.*`, `parseRefusal.*`), English as the fallback; guarded by backend tests | brim, i18n, plugins |
 | [[concepts/stale-while-revalidate-page-cache]] | A write marks portfolio answers stale and keeps them; pages show the old figures and refresh in background (E1); a sync is a write only if it wrote; phase 2 outside the portfolio is backlog N-1 | frontend, stores, cache, portfolio, ux |
@@ -281,6 +296,19 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/git-merge-stash-failed-on-locked-index]] | **Train 71.** Git 2.53 runs `git stash create` before every real merge (`save_state()`); with an IDE or a watcher holding `index.lock` the merge died «stash failed» before starting, no `MERGE_HEAD`. Workaround: the train retries up to 5 times | resolved | git, merge, release-trains |
+| [[problems/gallery-price-guard-expected-tofixed-text]] | **M, batch 28 (train 70).** The gallery's price guard expected `toFixed` text; since M-18's CP1 the cards write prices in the UI locale: red in English on prices over 1,000, unseen by any test run (the runner excludes the gallery). Expected figure in the shot's locale, behind a control that can fail (`e8d5a5668`) | resolved | e2e, gallery, locale |
+| [[problems/base-currency-setting-silently-defaulted-eur]] | **Folder 08 (second clean audit), P0-1.** Swapped arguments and a non-existent key made every base-currency lookup fall back to EUR; `get_effective_base_currency()` (`08b99c3ac`) | resolved | backend, settings, currency |
+| [[problems/asset-events-lost-on-price-cache-hit]] | **Folder 05 (clean audit).** A price-cache hit returned early and skipped the request that also carried the events: «No data» on an asset with events; events-only fall-through (`b45f5afbb`) | resolved | frontend, assets, cache |
+| [[problems/spa-logout-cross-user-cache-leak]] | **Folder 01.** After an SPA logout stores kept the previous account's data; `ClientSessionState` resets them, scopes keys per user, drops stale responses (`5b9dddb45`) | resolved | frontend, auth, session |
+| [[problems/stale-version-file-shadows-git-describe]] | **Folder 09, R2.** A leftover `VERSION` is read before `git describe` and nothing removes it: the reported version freezes on a dev host; design defect, open | open | backend, version, docker |
+| [[problems/privacy-gate-blind-to-formatter-consumers]] | **Folder 09, P4-11.** The money-render gate missed a formatter's consumers: the Growth chart showed amounts in privacy mode; mask at the formatter (`804bc9903`) | resolved | privacy, charts, gate |
+| [[problems/missing-event-detail-read-as-consent]] | **Folder 09, §2.5.** `{accepted: true}` as a default read a missing sync detail as consent; now an omission means cancel (`ff9038487`) | resolved | frontend, events, defaults |
+| [[problems/annualization-factor-not-coverage]] | **Folder 02, round 1 (A).** A fixed factor of 252 overstated Sharpe; «coverage» would have looked fine; `f` now observed from the data, used for volatility and the risk-free rate | resolved | risk, annualization |
+| [[problems/echarts-stacked-band-null-base]] | **Folder 02, R5.** A stacked band's base null on weekends → ECharts stacks on the origin; bridge base and delta, out of the tooltip (`840bdbc0d`) | resolved | charts, echarts |
+| [[problems/replay-baseline-shortened-by-late-starter]] | **Folder 02, R5.** A late-starting asset moved the replay's joint baseline, halving everyone's crisis; auto-exclusion instead (`a766a9d5d`) | resolved | risk, replay |
+| [[problems/risk-stress-buckets-hand-listed]] | **Folder 02, R5.** The stress editor listed 9 of 17 asset types; a missing bucket got a silent 0 % shock; buckets from the enum (`a5f6776aa`) | resolved | risk, stress |
+| [[problems/runner-catalog-merge-not-line-union]] | **Folder 02, register R2-116.** A line-by-line union of a test-runner catalogue conflict would have dropped a new action; graft the additions and check `--help` | resolved | testing, git, merge |
 | [[problems/mathjax-fonts-missing-from-local-copy]] | **M, batch 25.** The vendored MathJax had no fonts: after M-19, formulas drew in the page's font; companions listed from the script's text and checked every run (`92fb9c83e`); M-22, Mermaid, still needs internet | resolved | docs, mathjax, vendoring |
 | [[problems/fast-forward-blocked-by-a-dirty-file]] | **M, batch 25.** Git refuses a fast-forward over a locally modified file the target also changes; save outside, reset the file to HEAD, fast-forward, `git merge-file -p` on copies | resolved | git, worktree, coordination |
 | [[problems/e2e-writes-leaked-into-shared-state]] | **V, work 3.** E2E tests left a saved language on `TEST_USER`, the scheduler's five global keys, and EUR-USD rates fetched from the network; 2a (train 64): reserved MOCKFX pairs, disposable accounts, keys restored in `finally`; A4–A7 to come | open | testing, e2e, isolation |
@@ -450,6 +478,10 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/release2-ai-ideas-2026-07]] | `Release_2/Ai_ideas/` — the July brainstorm: signals and risk in the backend first, an AI assistant through MCP later (deferred: `TODO_FUTURI.md`, QuarkAI) | 2026-10-12 | release2, ai, mcp, roadmap |
+| [[sources/phase00-clean-audit-2026-08]] | `Release_2/phases/05_cleanAudit/` — the August code-cleanliness audit: mostly healthy, the debt in a few places, remediation S1–S3, the full suite made runnable | 2026-10-12 | phase0, audit, cleanliness |
+| [[sources/phase00-feedback-jobs-2026-09]] | `Release_2/Phase_0/09_feedbackJobs/` — the September backlog in 16 sprints, each area mapped to the lot that delivered it; what is still open (P4-7, P4-9, P4-10, R2, §2.4, SP14, SP15) | 2026-10-12 | phase0, feedback, backlog |
+| [[sources/phase00-risk-integration-2026-09]] | `Release_2/Phase_0/02_riskfolioIntegration/` — Risk Analysis replanned and rebuilt (two rounds), paused until after 1.2 (D382); README ingested in step R0, the rest in R1–R6 | 2026-10-12 | phase0, risk, levels, lab |
 | [[sources/phase00-chart-axis-day-labels-2026-10]] | `Release_2/Phase_0/47_chartAxisDayLabels/` — workstream I: the day back on line-chart x-axes, localized labels, the stale P&L lines | 2026-10-12 | phase0, charts, echarts, workstream-i |
 | [[sources/phase00-docs-english-12-2026-10]] | `Release_2/Phase_0/32_docsEnglish12/` — workstream Q: the English docs aligned with 1.2 (Q1, Q2, S1–S23), the developer's reviews, the drifts found in the code | 2026-10-12 | phase0, docs, mkdocs, workstream-q |
 | [[sources/phase00-release-images-and-gallery-2026-10]] | `Release_2/Phase_0/27_releaseImages/` (three plans) — workstream M: release images and gzip, translated code blocks, the release pipeline and its gallery (R12, batches 5–12) | 2026-10-12 | phase0, release, docker, gallery, workstream-m |
@@ -583,6 +615,30 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Train 71 — U-2 and M's batch 29.** The i18n catalogue generated from its sources (U-2); 28 + 5 citations of the old catalogue paths realigned to `base/`; `day-count`'s plugin path; a merge that died on a locked index | [[problems/git-merge-stash-failed-on-locked-index]] *(1 page — 1 problem)* |
+| 2026-10-12 | **C-64, part 1 — the coordinator's decisions.** F-090 and F-094 stay `planned`, and their pages now say what is built (the rest is C-65 and C-66); three page defects fixed | *(none)* |
+| 2026-10-12 | **C-64, part 1 — the status of the unfinished features.** The `planned`, `in-progress` and `idea` rows checked against the code: F-048 had shipped in 1.0.0 (now `documented`); the other thirteen are not in 1.2 | *(none)* |
+| 2026-10-12 | **Train 70 — M's batch 28.** The M-19 spec registered (`front-utility docs-offline-math`); the gallery's price guard follows M-18 | [[problems/gallery-price-guard-expected-tofixed-text]] *(1 page — 1 problem)* |
+| 2026-10-12 | **Lint follow-up (read-only check).** Two old open problems re-checked against today's E2E: the BulkModal toolbar not covered (C-61), the DataTable resize proved on one table only (C-62) | *(none)* |
+| 2026-10-12 | **Historical folder H6 — `06_betaTestingReportAndFixing`.** Drift only: the folder moved to `phases/`, four rows re-based; eleven never-ingested plans listed on [[sources/beta-testing-2026-08-05]] | *(none)* |
+| 2026-10-12 | **Historical folder H5 — `Ai_ideas`; the historical folders are covered.** The July brainstorm as a source page only; the MCP assistant pointed to `TODO_FUTURI.md` | [[sources/release2-ai-ideas-2026-07]] *(1 page — 1 source)* |
+| 2026-10-12 | **Historical folders H4 — `03_brokerImportRecovery`, `04_webSearchEngine`.** 03 already covered by the BRIM pages; 04's switch to `ddgs` filed as a decision | *(1 page — 1 decision; see log)* |
+| 2026-10-12 | **Historical folder H3 — `08_newCleanAndDocumentation_audit`.** The second clean audit, added to the first one's source; its P0-1 kept as a problem | *(1 page — 1 problem; see log)* |
+| 2026-10-12 | **Historical folder H2 — `05_cleanAudit`.** The August audit summarised; one solved problem kept (events lost on a price-cache hit) | [[sources/phase00-clean-audit-2026-08]] *(2 pages — 1 source, 1 problem; see log)* |
+| 2026-10-12 | **Historical folder H1 — `01_signalMigration`.** Drift: four July rows re-baselined (path moved to `phases/`); gaps: indicator warm-up sizing, the SPA logout leak | *(2 pages — 1 decision, 1 problem; see log)* |
+| 2026-10-12 | **Folder 09, step F2 — the areas and the visual review; folder 09 covered.** No gap in the areas; R2 of the visual review filed as an open design defect | *(1 page — 1 problem; see log)* |
+| 2026-10-12 | **Folder 09, step F1 — the structural backlog and the static analysis.** Statuses checked on the code; two solved defects kept as problems | *(2 pages — 2 problems; see log)* |
+| 2026-10-12 | **Folder 09, step F0 — the feedback jobs.** The September backlog and its sprints, each area mapped to the lot and the wiki source that cover it | [[sources/phase00-feedback-jobs-2026-09]] *(1 page — 1 source)* |
+| 2026-10-12 | **Folder 02, step R6 — the archive G0–G6.** Drift only: archived on 2026-09-16, one alignment since; what still holds and what is superseded, on [[sources/phase00-risk-analysis-backend]]. Folder 02 covered (R0–R6) | *(none)* |
+| 2026-10-12 | **Folder 02, step R5 — the analysis documents.** The per-tool verdicts (and where today's code departs from them), the rule for library versus own maths | *(2 pages — 2 decisions; see log)* |
+| 2026-10-12 | **Folder 02, step R4 — the first round, `implementation/`.** The contracts K1–K9 and their homes, the histogram pinned on the VaR cut, the observed annualisation factor | *(3 pages — 1 concept, 1 decision, 1 problem; see log)* |
+| 2026-10-12 | **Folder 02, step R3b — the post-merge review R5.** Stress buckets from the enum, replay auto-exclusion, the band chart's null base | *(3 pages — 3 problems; see log)* |
+| 2026-10-12 | **Folder 02, step R3a — `implementation_2/`, the contract and the levels.** One asset-set preparation, L3 on today's composition, a merge recipe for the runner's catalogue | *(3 pages — 2 decisions, 1 problem; see log)* |
+| 2026-10-12 | **Train 69 in the wiki — M-23 (M's batch 27).** The in-app changelog typesets French like the docs: M-23 resolved in 1.2 | *(none)* |
+| 2026-10-12 | **Folder 02, step R2 — the decisions that bind Risk.** The thesis as a decision page; the README's binding list in English as a concept page, linked from F-110…F-112 | *(2 pages — 1 decision, 1 concept; see log)* |
+| 2026-10-12 | **Folder 02, step R1 — what is open in Risk.** The README's open items, re-checked where possible on the code, as «Still open (paused, after 1.2 — D382)» on [[features/F-110]], [[features/F-111]], [[features/F-112]] | *(none)* |
+| 2026-10-12 | **Train 68 in the wiki — M-18 CP1 (T).** Figures in the interface language through `uiLocale()`; the rest of the rule (amounts, dates, axes, M-17) in CP2 | *(1 page — 1 decision; see log)* |
+| 2026-10-12 | **Folder 02, step R0 — the Risk features.** The Risk subsystem had no feature code: engine F-110, the four-level Risk tab F-111, the Lab F-112, the legacy Asset Detail tab F-113; the folder's source page from its README | [[sources/phase00-risk-integration-2026-09]] *(5 pages — 4 features, 1 source; see log)* |
 | 2026-10-12 | **Train 67 in the wiki — M's batch 26.** The first append to the translated CHANGELOG, ported by hand and stamped; M-23 (French spacing in the app's changelog) recorded as open, planned in 1.2 | *(none)* |
 | 2026-10-12 | **Train 66 in the wiki.** V-16 resolved (bcrypt off the event loop); M's batch 25: the CHANGELOG translated by pieces, the MathJax fonts, a fast-forward over a dirty file; the ✨ line «The changelog speaks your language»; the changelog decision corrected | *(3 pages — 1 decision, 2 problems; see log)* |
 | 2026-10-12 | **Trains 58 and 64 in the wiki — V's batch 2 and work 3 (plan 46 §11–§12).** V-1 closed (the price sync refreshes open panels), V-5…V-7, V-9, V-10; the E2E isolation audit and cures A1–A3; bcrypt in the event loop (V-16); the developer's «Tutte e 7 nella 1.2» for the E2E gaps | *(3 pages — 1 decision, 2 problems; see log)* |

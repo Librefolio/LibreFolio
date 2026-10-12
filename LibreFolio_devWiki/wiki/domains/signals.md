@@ -2,7 +2,7 @@
 title: "Domain: TECHNICAL ANALYSIS (Signals)"
 category: domain
 features: [F-037, F-038, F-039, F-040, F-041, F-042, F-043, F-044, F-045]
-status: in-progress
+status: stable
 mkdocs: null
 related: [signal-backend-plugin-architecture, openapi-zod-discriminator-type-erasure]
 ---

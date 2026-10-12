@@ -18,6 +18,7 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
+import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
 
 interface CommitPayload {
     creates?: Record<string, unknown>[];
@@ -72,17 +73,40 @@ async function commitBulkModal(page: Page): Promise<{payload: CommitPayload}> {
     const commitBtn = page.getByTestId('tx-bulk-commit');
     await expect(commitBtn).toBeEnabled({timeout: 8_000});
     const commitPromise = page.waitForRequest((req) => req.url().includes('/transactions/commit') && req.method() === 'POST', {timeout: 15_000});
+    // The answer is read as well: it carries the id of the row this test now owns,
+    // and the tracker can delete only what it has read before the test ends — its
+    // own read of this body was issued first, on the response event.
+    const answerPromise = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 15_000});
     await commitBtn.click();
     const req = await commitPromise;
     const payload = req.postDataJSON() as CommitPayload;
+    const answer = (await (await answerPromise).json()) as {committed?: boolean; issues?: unknown[]};
+    expect(answer.committed, `commit was rolled back: ${JSON.stringify(answer.issues ?? [])}`).toBe(true);
     await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 10_000});
     return {payload};
 }
 
 test.describe('Cost Basis Override — Total/Per unit toggle', () => {
+    // Whoever commits, cleans up. The commit-payload test writes a real ADJUSTMENT
+    // into one of TEST_USER's seeded brokers, and `Transaction` is global: left
+    // there, it shifts the positions, counts and pages of every later test, and the
+    // txHygiene net that used to hide it exists only at one worker. The tracker
+    // records the rows this page's commits create and deletes exactly those, at any
+    // worker count. It starts after login (it reads through `page.request`, which
+    // needs the session cookie) and so before any commit; `afterEach` runs for a red
+    // test too.
+    let txWrites: TransactionWriteTracker | undefined;
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
+        txWrites = await trackTransactionWrites(page);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async () => {
+        const tracker = txWrites;
+        txWrites = undefined;
+        await tracker?.cleanup();
     });
 
     test('toggle is visible with "Per unit" selected by default', async ({page}) => {

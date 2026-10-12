@@ -14,6 +14,7 @@ import {expect, test, type Page, type Locator} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
+import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
 import {API_BASE} from '../assets/assets-helpers';
 
 // Payload type for commit POST
@@ -39,6 +40,35 @@ interface CommitResponse {
 const BROKER_OWNER_A = 'Interactive Brokers'; // OWNER
 const BROKER_OWNER_B = 'Directa SIM'; // EDITOR (avoid Coinbase — has pre-existing asset balance issues)
 const BROKER_EDITOR = 'Directa SIM'; // EDITOR
+
+// ---------------------------------------------------------------------------
+// Cleanup — whoever commits, cleans up
+// ---------------------------------------------------------------------------
+
+/**
+ * Nearly every test here commits real rows into TEST_USER's seeded brokers, and
+ * `Transaction` is a global table: whatever a test leaves behind shows up in the
+ * NAV, positions, counts and pages of every test after it — this file's
+ * neighbours and, in a consolidated run, the categories that follow. The
+ * txHygiene net does not cover it: that net exists only at one worker. So every
+ * test records the rows its own commits created and deletes exactly those, at
+ * any worker count.
+ *
+ * Started right after login (the tracker reads through `page.request`, which
+ * needs the session cookie) and so before the first commit; drained in
+ * `afterEach`, which runs for a red test too.
+ */
+let txWrites: TransactionWriteTracker | undefined;
+
+async function trackCommits(page: Page) {
+    txWrites = await trackTransactionWrites(page);
+}
+
+async function deleteOwnCommits() {
+    const tracker = txWrites;
+    txWrites = undefined;
+    await tracker?.cleanup();
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -338,7 +368,12 @@ async function addBulkRow(page: Page) {
 test.describe('Create + Commit — Standalone Types', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
+        await trackCommits(page);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async () => {
+        await deleteOwnCommits();
     });
 
     test('DEPOSIT create → commit', async ({page}) => {
@@ -416,7 +451,12 @@ test.describe('Create + Commit — Standalone Types', () => {
 test.describe('Create + Commit — Paired Types', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
+        await trackCommits(page);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async () => {
+        await deleteOwnCommits();
     });
 
     test('FX_CONVERSION create → apply to BulkModal (dual form)', async ({page}) => {
@@ -527,7 +567,12 @@ test.describe('Create + Commit — Paired Types', () => {
 test.describe('Edit + Commit', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
+        await trackCommits(page);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async () => {
+        await deleteOwnCommits();
     });
 
     test('edit standalone → change description → commit', async ({page}) => {
@@ -584,9 +629,16 @@ test.describe('Edit + Commit', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Delete + Commit', () => {
+    // The rows these tests delete are rows they created themselves; the tracker
+    // only matters when a test goes red between its create and its delete.
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
+        await trackCommits(page);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async () => {
+        await deleteOwnCommits();
     });
 
     test('delete via BulkModal mark-delete → commit', async ({page}) => {
@@ -687,7 +739,12 @@ test.describe('Delete + Commit', () => {
 test.describe('Cost Basis Override', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
+        await trackCommits(page);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async () => {
+        await deleteOwnCommits();
     });
 
     test('TRANSFER with cost_basis_override → commit → verify saved value', async ({page}) => {
