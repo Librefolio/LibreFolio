@@ -2603,3 +2603,19 @@ Correction carried back from the docs-writer's code check: the spec/placeholder 
 Registry: plan 43 re-read at `f038ce39a` (the BU2 record).
 Checks: `check_source_paths.py` — the same 11 missing paths (17 occurrences) as the reference set; 0 broken wikilinks
 in the added text; `git diff --check` clean. Graph: not updated (P-6).
+
+## [2026-10-12] update | M-14 closed — the gallery shoots each language in its own browser locale
+Base `9e31ea2ba`. At step 3 [[problems/playwright-probes-ignore-timeout]] recorded only M-14's diagnosis, since the fix
+was in progress; batch 20 of M closed it the same day (`51b581636`, journal `63b3e5971` §11, train 52 `d33fca26f`), on
+the developer's decision «impostiamo il locale in playwright sin da ora». Checked on the code:
+`frontend/e2e/fixtures/galleryLocale.ts` (`setBrowserLocale` → Chromium's `Emulation.setLocaleOverride` from the page's
+CDP session, `stampDocumentLocale`, `expectDrawnUnder`), 76 `setBrowserLocale(page, lang)` in `gallery.spec.ts`, the
+gallery's describe yielding `undefined` for Playwright's `locale` fixture (the default `en-US` would make Chromium refuse
+the override). The page now describes the fix, its guard and its proof. M-16 — the wizard's «Next» before the broker
+list — moves among the closed items: fixed by I in train 48 (`3cd25af4f`, `trackBrokerLoad` and `Promise.allSettled`,
+checked on the code). M-17 and M-18, found by M-14, are planned in release 1.2 and assigned to I (the coordinator's and
+the developer's decisions); M-15 stays open after 1.2. The index row followed.
+[[sources/phase00-translation-round12-2026-10]] stays as written: it is the snapshot of the step-3 ingest.
+Registry: plan 27 round 12 re-read at `63b3e5971` (§11); plan 44 (`Phase_0/44_importWizardBrokerGate/`) read at
+`8339b0a06`.
+Checks: `check_source_paths.py` on the reference set; 0 broken wikilinks in the added text; `git diff --check` clean.
