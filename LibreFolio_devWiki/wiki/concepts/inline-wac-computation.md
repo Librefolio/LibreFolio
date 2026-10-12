@@ -176,7 +176,7 @@ later purchases.
 
 | Role | Path |
 |------|------|
-| Engine implementation (positions, replay of the cost steps) | `backend/app/services/portfolio_engine.py` |
+| Engine implementation (positions, replay of the cost steps) | `backend/app/services/financial_math/portfolio/derived_views.py`, `backend/app/services/financial_math/portfolio/daily_state.py` |
 | Average-cost function (pool rules, conversions) — since 2026-10-07 | `backend/app/services/financial_math/average_cost.py` |
 | WAC facade (`compute_wac_iterative`) and realized P&L from `realized_sales` | `backend/app/services/portfolio_service.py` |
 | vNext unit tests (20 at creation, 40 test functions by 2026-10-07) | `backend/test_scripts/test_services/test_portfolio_engine_vnext.py` |

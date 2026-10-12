@@ -834,7 +834,7 @@ async def test_manual_reupsert_stamps_fetched_at_and_keeps_row_id():
     """A manual edit of an existing price must move fetched_at, or it stays invisible.
 
     The portfolio cache key is COUNT + MAX(fetched_at) (``_compute_price_fingerprint``,
-    portfolio_engine.py). Re-writing a date that already exists leaves COUNT alone, so
+    financial_math/portfolio/engine.py). Re-writing a date that already exists leaves COUNT alone, so
     fetched_at is the only thing left to tell the cache to recompute — a manual write
     that skipped it would be swallowed by a stale blob and the user's own edit would not
     show. This used to hold only by accident: the code asked for ``fetched_at=None`` on

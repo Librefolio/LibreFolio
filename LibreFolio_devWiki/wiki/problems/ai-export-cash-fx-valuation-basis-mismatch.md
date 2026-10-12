@@ -72,7 +72,7 @@ The 27 July Phase 0 gate retained the corrected denominator through the cross-do
 | Portfolio financial components (cash totals, balances, allocations) | `backend/app/services/ai_export/components/portfolio_financial.py` |
 | Composition entrypoint | `backend/app/services/ai_export/composer.py` |
 | Regression tests (successors) | `backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_financial.py`, `backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_integration.py` |
-| Transaction-date cash conversion | `backend/app/services/portfolio_engine.py` |
+| Transaction-date cash conversion | `backend/app/services/financial_math/portfolio/daily_state.py` |
 | Portfolio summary/history source | `backend/app/services/portfolio_service.py` |
 | Snapshot service / error boundary | `backend/app/services/ai_export/runtime_service.py` |
 | Live browser E2E | `frontend/e2e/ai-export/` |

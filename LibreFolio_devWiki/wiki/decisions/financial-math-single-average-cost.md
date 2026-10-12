@@ -217,7 +217,7 @@ average cost comes from this one function.
 |------|------|
 | Layer rule (package docstring) | `backend/app/services/financial_math/__init__.py` |
 | The function, adapter and target-currency helper | `backend/app/services/financial_math/average_cost.py` |
-| Engine consumer (`build_cost_positions`, `DailyStateBuilder`, `RealizedSale`, `UnrealizedSplit`) | `backend/app/services/portfolio_engine.py` |
+| Engine consumer (`build_cost_positions`, `DailyStateBuilder`, `RealizedSale`, `UnrealizedSplit`) | `backend/app/services/financial_math/portfolio/derived_views.py`, `backend/app/services/financial_math/portfolio/daily_state.py`, `backend/app/services/financial_math/portfolio/models.py` |
 | WAC facade, realized P&L, boundary costs, breakdown rows | `backend/app/services/portfolio_service.py` |
 | Lots WAC lines and gaps | `backend/app/services/lots_analysis_service.py` |
 | Broker summary holdings cost | `backend/app/services/broker_service.py` |

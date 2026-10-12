@@ -56,6 +56,7 @@ from backend.app.schemas.risk import (
 )
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.financial_math.portfolio.data_quality import normalize_fx_pair_slug
 from backend.app.services.market_calendar import ensure_market_holidays
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.provider_registry import RiskAnalyticRegistry
@@ -1301,7 +1302,7 @@ def _issue_asset_ids(data_quality: DataQualityReport) -> set[int]:
 def _issue_fx_pairs(data_quality: DataQualityReport) -> list[str]:
     """Every pair the report names, as the slug the FX pages and the banner's actions use."""
     raw = [*data_quality.unresolved_fx_pairs, *(item.pair for item in data_quality.missing_fx_pairs), *data_quality.carried_forward_fx_pairs]
-    return sorted({PortfolioService._normalize_fx_pair_slug(pair) for pair in raw})
+    return sorted({normalize_fx_pair_slug(pair) for pair in raw})
 
 
 def _asset_issue(code: IssueCode, severity: IssueSeverity, *, message_i18n_key: str, action: str, group_key: str, ids: list[int], names: dict[int, str]) -> DataQualityIssue:
