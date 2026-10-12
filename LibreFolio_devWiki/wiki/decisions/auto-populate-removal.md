@@ -7,7 +7,7 @@ tags: [backend, assets, providers, metadata, architecture]
 related:
   - features/F-024
   - features/F-025
-  - problems/classification-params-race-condition
+  - sources/phase07-part4-round6-planc2-bugfix-pair-validation
 ---
 
 # Decision: Remove Auto-Populate — Metadata Flow is Frontend-Driven

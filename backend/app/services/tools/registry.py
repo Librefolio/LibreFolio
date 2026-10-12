@@ -15,7 +15,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from backend.app.logging_config import get_logger
 from backend.app.schemas.tools import ToolDescriptor, ToolDiscoveryFailure, ToolDiscoveryReason
-from backend.app.services.provider_registry import AbstractPluginRegistry
+from backend.app.services.provider_registry import PLUGIN_MODULE_NAME, AbstractPluginRegistry
 from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin, ToolService
 from backend.app.services.tools.schema import declared_operations, generate_tool_schema, require_roundtrip_output, schema_fingerprint
 from backend.app.services.tools.wire import encode_json
@@ -57,8 +57,13 @@ def _claimed_services(plugin_class: object) -> tuple[object, ...]:
     return value
 
 
-def _safe_filename(module_name: str) -> str:
-    stem = module_name.rsplit(".", 1)[-1]
+def _safe_filename(module_name: str, namespace: str) -> str:
+    """The plugin's file within its family folder: ``<name>/plugin.py`` for a folder, ``<stem>.py`` for a module."""
+    relative = module_name[len(namespace) + 1 :] if module_name.startswith(namespace + ".") else module_name.rsplit(".", 1)[-1]
+    folder, _, leaf = relative.rpartition(".")
+    if leaf == PLUGIN_MODULE_NAME and folder and "." not in folder and _MODULE_STEM_PATTERN.fullmatch(folder):
+        return f"{folder}/{PLUGIN_MODULE_NAME}.py"
+    stem = relative.rsplit(".", 1)[-1]
     return f"{stem}.py" if _MODULE_STEM_PATTERN.fullmatch(stem) else "plugin.py"
 
 
@@ -143,6 +148,7 @@ def _resolve_claim(
     module_name: str,
     failed_modules: set[str],
     collisions: set[str],
+    namespace: str,
 ) -> ToolDefinition | ToolDiscoveryFailure:
     code = _claim_code(service)
     reason: ToolDiscoveryReason
@@ -163,7 +169,7 @@ def _resolve_claim(
             reason = exc.reason
         except Exception:
             reason = "invalid_descriptor"
-    return ToolDiscoveryFailure(tool_code=code, filename=_safe_filename(module_name), reason=reason)
+    return ToolDiscoveryFailure(tool_code=code, filename=_safe_filename(module_name, namespace), reason=reason)
 
 
 class ToolPluginRegistry(AbstractPluginRegistry):
@@ -216,9 +222,10 @@ class ToolPluginRegistry(AbstractPluginRegistry):
     @classmethod
     def _publish_snapshot(cls) -> None:
         failed_modules = {failure.module_name for failure in cls._discovery_errors}
-        namespace = cls._get_module_namespace() + "."
+        module_namespace = cls._get_module_namespace()
+        namespace = module_namespace + "."
         failed_modules.update(module_name for module_name in cls._claims if module_name.startswith(namespace) and module_name not in sys.modules)
-        failures = [ToolDiscoveryFailure(tool_code=None, filename=_safe_filename(module_name), reason="import_failed") for module_name in sorted(failed_modules)]
+        failures = [ToolDiscoveryFailure(tool_code=None, filename=_safe_filename(module_name, module_namespace), reason="import_failed") for module_name in sorted(failed_modules)]
         expanded: list[tuple[str, object, object]] = []
         by_code: dict[str, list[tuple[object, object]]] = {}
         for module_name, claims in sorted(cls._claims.items()):
@@ -231,7 +238,7 @@ class ToolPluginRegistry(AbstractPluginRegistry):
         collisions = {code for code, claims in by_code.items() if len(claims) > 1}
         definitions: dict[str, ToolDefinition] = {}
         for module_name, claim, service in expanded:
-            entry = _resolve_claim(claim, service, module_name, failed_modules, collisions)
+            entry = _resolve_claim(claim, service, module_name, failed_modules, collisions, module_namespace)
             if isinstance(entry, ToolDefinition):
                 definitions[entry.descriptor.tool_code] = entry
             else:

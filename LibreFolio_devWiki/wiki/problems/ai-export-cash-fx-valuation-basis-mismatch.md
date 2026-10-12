@@ -3,9 +3,9 @@ title: "AI Export falsely required transaction-date engine cash to equal snapsho
 category: problem
 status: resolved
 date: 2026-07-26
-updated: 2026-07-27
+updated: 2026-10-12
 mkdocs: "developer/architecture/patterns/ai_export_snapshot.md"
-tags: [backend, ai-export, portfolio, cash, fx, denominator, e2e, financial-semantics]
+tags: [backend, ai-export, portfolio, cash, fx, denominator, e2e, financial-semantics, native-cash]
 related:
   - sources/phase00-ai-export-backend-snapshot
   - decisions/ai-export-versioned-snapshot-boundary
@@ -13,6 +13,8 @@ related:
   - entities/portfolio-engine
   - entities/portfolio-service
   - concepts/3-pool-cash-model
+  - decisions/native-cash-daily-revaluation
+  - problems/foreign-cash-never-revalued
 ---
 
 # Problem: AI Export falsely required transaction-date engine cash to equal snapshot-date native-cash exposure
@@ -29,6 +31,14 @@ The compared values are both factual, but they answer different questions on dif
 - **Native-currency cash exposure** preserves actual currency balances, then converts each balance at `snapshot_as_of` so the export can describe current currency exposure.
 
 FX movement between transaction dates and the snapshot date makes those totals legitimately different. The equality check therefore conflated engine-owned accounting/NAV with a snapshot-date exposure view and treated a valid temporal-basis difference as source corruption.
+
+> **Update 2026-10-12.** The first bullet above described a defect of the engine, not a design: foreign cash kept the
+> rate of each movement's date and was never revalued (backlog B4, [[problems/foreign-cash-never-revalued]]). Since lot
+> 41 F (2026-10-11/12) the engine's cash is every broker's native balance at each day's rate
+> ([[decisions/native-cash-daily-revaluation]]), so on the valuation date `cash_total` and the native balances
+> converted at that date agree — up to conversion dust, and except a movement with no rate at all, which the engine
+> leaves out and reports (policy (a)). The decision recorded here still stands: the exposure allocation keeps its own
+> denominator and its own conversion at `snapshot_as_of`, and no cross-basis equality is checked.
 
 ## Solution
 
@@ -72,7 +82,7 @@ The 27 July Phase 0 gate retained the corrected denominator through the cross-do
 | Portfolio financial components (cash totals, balances, allocations) | `backend/app/services/ai_export/components/portfolio_financial.py` |
 | Composition entrypoint | `backend/app/services/ai_export/composer.py` |
 | Regression tests (successors) | `backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_financial.py`, `backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_integration.py` |
-| Transaction-date cash conversion | `backend/app/services/portfolio_engine.py` |
+| Transaction-date cash conversion | `backend/app/services/financial_math/portfolio/daily_state.py` |
 | Portfolio summary/history source | `backend/app/services/portfolio_service.py` |
 | Snapshot service / error boundary | `backend/app/services/ai_export/runtime_service.py` |
 | Live browser E2E | `frontend/e2e/ai-export/` |

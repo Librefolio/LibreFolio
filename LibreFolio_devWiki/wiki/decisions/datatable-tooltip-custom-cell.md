@@ -51,6 +51,11 @@ Early cells in the TransactionsTable used `title="..."` HTML attributes for tool
 - `title=""` is acceptable on non-DataTable content (regular page elements where native tooltip is fine)
 - Purely decorative content with no interactive/hover intent may omit tooltip entirely
 
+## Links
+
+- [[problems/tooltip-click-pins-over-modal]] — a button inside a `Tooltip` that opens a modal pinned its hint over the
+  modal
+
 ## Affected Files
 
 - `frontend/src/lib/components/transactions/TransactionsTable.svelte` — all custom cells use Tooltip.svelte

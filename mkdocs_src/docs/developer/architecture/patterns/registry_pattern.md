@@ -156,9 +156,8 @@ Each subsystem has its own detailed guide with ABC method tables, flow diagrams,
 | **Assets** | [Asset Plugin Guide](asset_plugin_guide.md) | `AssetSourceProvider` | Fetch current and historical asset prices |
 | **FX** | [FX Plugin Guide](fx_plugin_guide.md) | `FXRateProvider` | Fetch exchange rates from central banks |
 | **Signals** | [Signal Plugin Guide](signal_plugin_guide.md) | `SignalPlugin` | Compute backend technical indicators and expose schema-driven UI metadata |
+| **Risk** | [Adding a Risk Analytic](../../backend/risk/architecture.md#adding-an-analytic) | `RiskAnalytic` (`backend/app/services/risk/base.py`) | Compute multi-asset risk analytics over prepared return series |
 | **Tools** | [Tool Plugin Guide](tool_plugins.md) | `ToolPlugin` | Publish atomic, versioned calculations with generated codecs and compiled renderers |
-
-Risk analytics have their guide in the Risk Engine page: [Adding a Risk Analytic](../../backend/risk/architecture.md#adding-an-analytic). Their contract is the `RiskAnalytic` base class in `backend/app/services/risk/base.py`, and every module in `backend/app/services/risk_plugins/` is a working example.
 
 ---
 

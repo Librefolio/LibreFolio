@@ -61,6 +61,11 @@ Promote is the inverse of split.
 - `consumed_link_uuids` prevents double-processing when promotes use link_uuids from creates in the same batch
 - PMC (weighted average cost) auto-calculated on TRANSFER receiver when cost_basis_override is null
 
+## Links
+
+- [[decisions/transfer-pair-same-asset-opposite-quantity]] and [[decisions/promote-respects-asset-event-link]] — the checks lot 42 added to
+  promotes and to the pairs they produce (2026-10-10/11).
+
 ## Source files
 
 | Role | Path |

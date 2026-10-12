@@ -21,7 +21,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, computed_field
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from backend.app.schemas.tools import ToolDocumentation, ToolOperationPolicy, ToolPlatformPolicy, ToolUIDescriptor
+from backend.app.schemas.tools import ToolDiscoveryFailure, ToolDocumentation, ToolOperationPolicy, ToolPlatformPolicy, ToolUIDescriptor
 from backend.app.services.provider_registry import AbstractPluginRegistry, register_plugin
 from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin, ToolService
 from backend.app.services.tools.catalog import effective_catalog_entries, effective_operation, get_tool_catalog
@@ -265,10 +265,20 @@ class _DiscoveryFixture:
     namespace: str
     registry_symbol: str
 
+    def _imports(self) -> str:
+        return f"from {__name__} import {self.registry_symbol} as Registry\n" f"from {__name__} import _PrivatePlugin, _private_service, " "_register_through_helper\n" "from backend.app.services.provider_registry import register_plugin\n"
+
     def write_module(self, stem: str, body: str) -> str:
-        imports = f"from {__name__} import {self.registry_symbol} as Registry\n" f"from {__name__} import _PrivatePlugin, _private_service, " "_register_through_helper\n" "from backend.app.services.provider_registry import register_plugin\n"
-        (self.directory / f"{stem}.py").write_text(imports + dedent(body), encoding="utf-8")
+        (self.directory / f"{stem}.py").write_text(self._imports() + dedent(body), encoding="utf-8")
         return f"{self.namespace}.{stem}"
+
+    def write_folder(self, name: str, body: str) -> str:
+        """A plugin as the first-party families lay one out: ``<name>/__init__.py`` (a docstring) and ``<name>/plugin.py``."""
+        folder = self.directory / name
+        folder.mkdir()
+        (folder / "__init__.py").write_text('"""Private Tool fixture: the code is in plugin.py."""\n', encoding="utf-8")
+        (folder / "plugin.py").write_text(self._imports() + dedent(body), encoding="utf-8")
+        return f"{self.namespace}.{name}.plugin"
 
 
 @pytest.fixture
@@ -994,6 +1004,92 @@ def test_import_failure_diagnostics_sanitize_an_unsafe_module_filename(discovery
     assert "PRIVATE_RAW_EXCEPTION_SENTINEL" not in public_json
     assert "private é" not in public_json
     assert str(discovery.directory) not in public_json
+
+
+# ---------------------------------------------------------------------------
+# Plugin folders (U-1): a Tool plugin is ``<name>/plugin.py``, loaded as
+# ``<namespace>.<name>.plugin``. A failure names the file that failed within
+# the family folder — ``<name>/plugin.py`` — and nothing more of the path.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("registers_first", [False, True], ids=["raises-before-registering", "registers-then-raises"])
+def test_a_folder_plugin_failing_to_import_is_reported_as_its_plugin_module(registers_first, discovery_factory):
+    discovery = discovery_factory()
+    registration = 'class Broken(_PrivatePlugin):\n    services = (_private_service("private_broken"),)\nregister_plugin(Registry)(Broken)\n' if registers_first else ""
+    failed_module = discovery.write_folder("a_broken", registration + 'raise RuntimeError("PRIVATE_IMPORT_INPUT_SENTINEL")\n')
+    healthy_module = discovery.write_folder(
+        "z_healthy",
+        """
+        @register_plugin(Registry)
+        class Healthy(_PrivatePlugin):
+            services = (_private_service("private_healthy"),)
+        """,
+    )
+
+    snapshot = discovery.registry.get_snapshot()
+
+    # Discovery went on past the failure, and a folder plugin publishes through its plugin module.
+    assert set(snapshot.definitions) == {"private_healthy"}
+    assert snapshot.definitions["private_healthy"].plugin_class.__module__ == healthy_module
+    # The failed folder leaves neither its plugin module nor its package behind.
+    assert failed_module not in sys.modules
+    assert failed_module.removesuffix(".plugin") not in sys.modules
+    expected = [(None, "a_broken/plugin.py", "import_failed")]
+    if registers_first:
+        expected.append(("private_broken", "a_broken/plugin.py", "import_failed"))
+    assert [(failure.tool_code, failure.filename, failure.reason) for failure in snapshot.failures] == expected
+    public_json = json.dumps([failure.model_dump(mode="json") for failure in snapshot.failures])
+    assert "PRIVATE_IMPORT_INPUT_SENTINEL" not in public_json
+    assert str(discovery.directory) not in public_json
+    assert "Traceback" not in public_json
+    catalog = get_tool_catalog(ToolPlatformPolicy(), discovery.registry)
+    assert {descriptor.tool_code for descriptor in catalog.items} == {"private_healthy"}
+    if registers_first:
+        assert ("private_broken", "unavailable") in {(item.tool_code, item.reason) for item in catalog.unavailable}
+
+
+def test_an_unsafe_plugin_folder_name_is_reported_as_plugin_py(discovery_factory):
+    discovery = discovery_factory()
+    discovery.write_folder("private é", 'raise RuntimeError("PRIVATE_RAW_EXCEPTION_SENTINEL")\n')
+
+    snapshot = discovery.registry.get_snapshot()
+
+    assert not snapshot.definitions
+    assert [(failure.filename, failure.reason) for failure in snapshot.failures] == [("plugin.py", "import_failed")]
+    public_json = json.dumps([failure.model_dump(mode="json") for failure in snapshot.failures])
+    assert "PRIVATE_RAW_EXCEPTION_SENTINEL" not in public_json
+    assert "private é" not in public_json
+    assert str(discovery.directory) not in public_json
+
+
+# What a failure may name: a module of the family root, or the plugin module of
+# one of its folders — at most 128 characters of folder name, then /plugin.py.
+_LONGEST_FOLDER = "f" * 128
+
+
+@pytest.mark.parametrize("filename", ["a_broken.py", "plugin.py", "a_broken/plugin.py", f"{_LONGEST_FOLDER}/plugin.py"])
+def test_a_discovery_failure_names_a_family_module_or_a_plugin_folder_module(filename):
+    assert ToolDiscoveryFailure(tool_code=None, filename=filename, reason="import_failed").filename == filename
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "a/b.py",  # a module of a folder that is not plugin.py
+        "name/other.py",
+        "../plugin.py",  # a path out of the family folder
+        "./plugin.py",
+        "a/b/plugin.py",  # deeper than one folder
+        "/plugin.py",  # an absolute path
+        "name/plugin.py/",
+        "name\\plugin.py",
+        f"{_LONGEST_FOLDER}x/plugin.py",  # 139 characters
+    ],
+)
+def test_a_discovery_failure_never_names_another_path(filename):
+    with pytest.raises(ValidationError):
+        ToolDiscoveryFailure(tool_code=None, filename=filename, reason="import_failed")
 
 
 def test_snapshot_cannot_publish_during_an_import(discovery_factory):

@@ -1633,7 +1633,7 @@ def test_currency_catalog_publishes_the_babel_quantum_of_every_referenced_curren
 _ENUMERATION_CHECKPOINT_BUDGET = 2_000
 
 # The engine window the Tool claims for a plan (``engine_timeout_ms=30_000`` in
-# ``tool_plugins/pac_allocator.py``), so the X1 scenario is planned exactly as
+# ``tool_plugins/pac_allocator/plugin.py``), so the X1 scenario is planned exactly as
 # production plans it. A budget handed to SCIP, never an assertion: the test
 # itself neither reads nor asserts on the clock.
 _TOOL_ENGINE_WINDOW_SECONDS = 30.0

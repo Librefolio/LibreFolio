@@ -10,6 +10,7 @@ Ce manuel s'adresse aux personnes qui installent et exploitent LibreFolio. La pl
 - 📦 **[Installation sur l'hôte](host_installation.md)** : configuration manuelle avec Python, Node.js et Pipenv directement sur la machine hôte.
 - 🐳 **[Docker avancé](docker_advanced.md)** : déploiement conteneurisé avec Docker Compose, montages de volumes et configuration de la propriété GID/UID de l'utilisateur.
 - 🌐 **[Exposer en toute sécurité](service_exposure.md)** : exposez en toute sécurité votre instance privée LibreFolio sur Internet.
+- 🔍 **[Vérifier la sécurité de la connexion](connection_checks.md)** : vérifiez que vos utilisateurs se connectent en toute sécurité, et corrigez le cookie de session ou le proxy inverse quand ce n'est pas le cas.
 
 ### ⚙️ Configuration système
 - 📝 **[Variables d'environnement](configuration.md)** : liste complète des variables `.env` prises en charge (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) et priorité de résolution des variables.

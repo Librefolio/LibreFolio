@@ -235,7 +235,8 @@ def collect_backend(services_dir: Path) -> Discovery:
         {d for pattern in BACKEND_SERVICE_GLOB for d in services_dir.glob(pattern) if d.is_dir()}
     )
     for pdir in seen_dirs:
-        for path in sorted(pdir.glob("*.py")):
+        # rglob: a plugin is a folder, ``<name>/plugin.py``; the family's ``_*.py`` helpers sit at the root.
+        for path in sorted(p for p in pdir.rglob("*.py") if "__pycache__" not in p.parts):
             try:
                 content = path.read_text()
             except OSError:

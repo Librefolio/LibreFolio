@@ -103,10 +103,12 @@ reload it to read it again.
 
 ## 📜 Changelog Modal {: #changelog-modal }
 
-The in-app **changelog modal** renders the bundled `CHANGELOG.md`. You can reach it from two places:
+The in-app **changelog modal** shows the changelog bundled with LibreFolio, in your interface language. You can reach it from two places:
 
 - the **version number at the bottom of the sidebar** (any page), and
 - the **version label right below the title of this About page** (Settings → About).
+
+Each release is shown in your language when its translation is available; a release not translated yet appears in English, marked with a small **Not translated yet** label.
 
 - One **foldable panel per release** — only the most recent release starts open; sections and sub-sections fold too.
 - A **version index** of chips across the top: clicking a version unfolds it and scrolls straight to it.

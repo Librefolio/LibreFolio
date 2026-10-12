@@ -13,7 +13,7 @@ Un **fondo de inversión** es un vehículo de inversión gestionado profesionalm
 | **Moneda** | Denominado en la moneda base del fondo |
 | **Dividendos** | Puede distribuir (fondos de reparto) o reinvertir (fondos de acumulación) |
 | **Comisiones** | Comisión de gestión (TER), comisiones de entrada/salida |
-| **Proveedores típicos** | Yahoo Finance, Manual |
+| **Proveedores típicos** | Yahoo Finance, Borsa Italiana, o precios introducidos a mano en el [Editor de datos](../../../user/assets/detail/data-editor.md) |
 
 ---
 

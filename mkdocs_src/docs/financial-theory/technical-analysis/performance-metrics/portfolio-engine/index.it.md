@@ -38,6 +38,7 @@ $$
 - `estimated=True` significa origine TRADE. Una quotazione MARKET obsoleta mantenuta è obsoleta, non stimata.
 - I prezzi di valutazione rimangono nella valuta nativa; ogni consumatore converte in $C^*$ alla data di valutazione $t$.
 - L'FX del costo di carico rimane ancorato alla data della transazione.
+- La liquidità resta nella valuta in cui è stata registrata, broker per broker, ed è valutata al tasso di $t$ (§5); ogni movimento di cassa resta registrato, e ogni flusso di cassa esterno entra nel capitale, al tasso della propria data.
 - Il PMC **non** viene mai usato come prezzo di valutazione.
 
 Vedi [Risoluzione del prezzo](price-resolution.md) per il contratto del resolver e la semantica della qualità dei dati.
@@ -115,6 +116,14 @@ $$
 \mathrm{UGL}(t) = \mathrm{NAV}(t) - \mathrm{Book}(t)
 $$
 
+$\mathrm{Cash}(t)$ è la liquidità di ciascun broker, mantenuta nelle valute in cui è stata registrata e valutata al tasso di $t$:
+
+$$
+\mathrm{Cash}(t) = \sum_{b \in S} \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t)
+$$
+
+dove $N_{b,c}(t)$ è il saldo del broker $b$ nella valuta $c$ dopo i suoi movimenti con data uguale o precedente a $t$, in proporzione alla [quota di proprietà](../../../../user/brokers/sharing.md) del broker, e $\mathrm{fx}(c, C^*, t)$ è l'ultimo tasso disponibile alla data $t$ o prima ($1$ per $c = C^*$). Lo stesso termine compare nel NAV e nel Book, quindi l'effetto di cambio sulla liquidità si annulla nell'UGL: è registrato come risultato di cambio (§6) e appartiene al P&L totale.
+
 ---
 
 ## 📐 6. Modello di Liquidità a Tre Pool — Per Broker $(K_b, R_b, W)$ {: #6-three-pool-cash-model-per-broker-k_b-r_b-w }
@@ -145,6 +154,22 @@ Tre pool di accumulo tracciano la provenienza della liquidità. $K$ e $R$ sono m
 
 Se le date di partenza e arrivo differiscono, il giroconto è in transito: sottratto da $s$ il giorno di partenza, aggiunto a $d$ il giorno di arrivo. Tra queste date, $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$ dell'importo in transito — gestito dalla riconciliazione proporzionale.
 
+### 💱 Risultato di cambio sulla liquidità in valuta {: #exchange-result-on-foreign-cash }
+
+Ogni movimento di cassa entra nella liquidità del broker, e nei suoi pool, al tasso della propria data; il saldo detenuto in seguito segue il tasso (§5). In ogni giorno $t$ in cui cambia il tasso di una valuta estera detenuta come liquidità in $S$ — compreso il suo primo tasso noto — dopo i movimenti di cassa di quel giorno e prima che le transazioni di quel giorno aggiornino i pool, ciascun broker $b$ che detiene liquidità in valuta estera viene rivalutato:
+
+$$
+\varepsilon_b(t) = \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t) - \mathrm{Cash}^{\text{replay}}_b(t)
+$$
+
+$$
+\mathrm{Cash}^{\text{replay}}_b \mathrel{+}= \varepsilon_b, \qquad
+R_b \mathrel{+}= \varepsilon_b, \qquad
+\text{if } R_b < 0\text{: } K_b \mathrel{+}= R_b,\; R_b = 0
+$$
+
+$\mathrm{Cash}^{\text{replay}}_b(t)$ è la liquidità che il replay porta per $b$: il suo valore alla rivalutazione precedente più ogni movimento successivo al tasso della propria data. Un guadagno va ai rendimenti; una perdita consuma prima i rendimenti e poi il capitale, esattamente come una COMMISSIONE. La base del capitale non si muove: un risultato di cambio è un risultato, non un apporto, quindi è nel NAV, nel P&L totale, nel ROI, nel TWRR e nel MWRR, mai nel capitale versato.
+
 ### 🧮 Aggregazione per l'output
 
 $$
@@ -161,7 +186,13 @@ $$
 \mathrm{Cash}_{\text{like}}(t) \approx \sum_{b \in S} K_b(t) + \sum_{b \in S} R_b(t)
 $$
 
-Ridimensionamento proporzionale per broker applicato se lo scostamento $> 0.01$ (da arrotondamento FX o tempistica in transito).
+Entrambi i pool vengono prima limitati a zero per ciascun broker. Se i pool non sono vuoti e lo scostamento supera ancora $0.01$, i pool **sommati** vengono ridimensionati a $\mathrm{Cash}_{\text{like}}$, la liquidità più la liquidità in transito — un ridimensionamento aggregato, non per broker, con ogni risultato limitato inferiormente a zero:
+
+$$
+\mathrm{CashFromCapital}(t) = \sum_{b \in S} K_b(t)
+$$
+
+Altrimenti $\mathrm{CashFromCapital}(t) = \min\bigl(\sum_b K_b(t),\, \mathrm{Cash}_{\text{like}}(t)\bigr)$ e $\mathrm{CashFromReturns}$ è il resto, limitato inferiormente a zero. I risultati di cambio sulla liquidità ferma sono registrati nei pool (sopra), quindi lo scostamento che resta viene dalla tempistica in transito: la liquidità in transito — e il movimento del suo tasso di cambio mentre viaggia — non è nei pool di alcun broker.
 
 ---
 
@@ -190,7 +221,13 @@ $$
 \mathrm{PnL}_{period} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Commissioni/redditi non allocati senza `asset_id` sono raggruppati per broker come altri effetti del periodo.
+Poiché l'UGL non può contenere il risultato di cambio sulla liquidità (§5), Other si divide nel risultato di cambio di ciascun broker sul periodo e in ciò che resta:
+
+$$
+\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
+$$
+
+Commissioni/redditi non allocati senza `asset_id` sono raggruppati per broker come altri effetti del periodo, e così $\mathrm{FXonCash}_b$: una riga per ogni broker che detiene liquidità in valuta estera, mostrata quando il suo risultato non è zero. Vedi [P&L periodo — Effetto cambio sulla liquidità](period-pnl.md#fx-on-cash).
 
 ---
 
@@ -217,7 +254,7 @@ Dove $w_{\text{pre}}$ è il PMC in $C^*$ **prima** della riduzione del pool (ste
 | Pre-frame | $[t_{\mathrm{first}},\ t_0)$ | Liquidità, quantità, PMC, pool — nessuna valutazione di mercato |
 | Frame | $[t_0,\ t_1]$ | Giornaliero completo: prezzi, FX, stati delle posizioni, stati del portafoglio |
 
-Le transazioni pre-frame aggiornano gli accumulatori (registro di cassa, pool PMC, K/R/W a 3 pool) senza consumare dati di prezzo o FX. Ciò consente un caching efficiente basato su intervalli.
+Le transazioni pre-frame aggiornano gli accumulatori (registro di cassa, pool PMC, K/R/W a 3 pool) senza alcuna valutazione di mercato: nessun prezzo viene letto e nessuna posizione viene valutata. Ogni movimento è convertito al tasso della propria data, come nel frame, e in ogni giorno in cui cambia il tasso di una valuta estera detenuta, la liquidità viene rivalutata al tasso di quel giorno e il risultato di cambio entra nei pool (§6), così i pool sono corretti a $t_0$. Ciò consente un caching efficiente basato su intervalli.
 
 ---
 

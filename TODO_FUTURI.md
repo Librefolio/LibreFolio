@@ -1003,7 +1003,7 @@ Spawning di un **processo cache dedicato** dal `lifespan()` di FastAPI, che usa 
 
 1. **`backend/app/utils/cache_server.py`** (nuovo): `CacheManager(BaseManager)` con metodi `cache_get/set/delete/clear/get_or_create` registrati. Il server process usa theine direttamente.
 
-2. **`cache_utils.py`**: `NamedCache` riceve un flag `_remote_manager`. Se attivo, delega get/set/delete via proxy al cache server. Se non attivo (single-worker), usa theine locale come oggi. Zero cambiamenti nei callsite (`get_ttl_cache()` API invariata).
+2. **`utils/runtime/cache.py`**: `NamedCache` riceve un flag `_remote_manager`. Se attivo, delega get/set/delete via proxy al cache server. Se non attivo (single-worker), usa theine locale come oggi. Zero cambiamenti nei callsite (`get_ttl_cache()` API invariata).
 
 3. **`main.py` `lifespan()`**: Se `workers > 1`, spawna il cache server subprocess prima di avviare l'app. Passa l'indirizzo socket via env var. Shutdown: termina il subprocess.
 
@@ -1022,7 +1022,7 @@ Spawning di un **processo cache dedicato** dal `lifespan()` di FastAPI, che usa 
 ### File coinvolti
 
 - `backend/app/utils/cache_server.py` (nuovo)
-- `backend/app/utils/cache_utils.py` (adattare `NamedCache`)
+- `backend/app/utils/runtime/cache.py` (adattare `NamedCache`)
 - `backend/app/main.py` (spawn/shutdown cache process)
 
 
@@ -1338,6 +1338,17 @@ operativa su esempi sintetici multi-valuta e hedged.
 **Gate:** fonte e refresh dei metadati, aggregazione/normalizzazione, disponibilità,
 FX e criteri di esposizione. Eventuali colonne/tabelle nuove tramite migrazione Alembic
 incrementale generica. Nessuna modifica Asset o grafico di esposizione in questo hotfix.
+
+**Da non dimenticare: la variazione non realizzata** (developer, 12/10/2026, verifiche
+sul server, voce 23).
+- Oggi il tooltip della variazione non realizzata nei KPI della Dashboard
+  (`period_unrealized_breakdown`, `KpiSection.svelte`) separa, valuta per valuta,
+  l'effetto dell'asset da quello del cambio, ma ragiona solo sulla valuta di quotazione.
+- Quando l'asset avrà la sua valuta originale, la scomposizione dovrà usarla anche lei.
+  Con un cambio al contrario, dalla valuta di quotazione a quella originale, se la
+  coppia è configurata, si vedrà quanta parte del movimento del prezzo viene dal cambio
+  e quanta dall'asset.
+- Il come è da progettare insieme a questa voce.
 
 ## Espandere i provider aggiungendo extraetf.com e mettendo anche la distribuzione valutaria, potrebbe sposarsi con l'idea della valuta originaria del fondo, trasformandola di fatto in una distribuzione anche lei.
 Possibilità di integrare queste informazioni nella UI e nei calcoli backend, mantenendo la tracciabilità delle fonti e la coerenza con le regole di esposizione valutaria già definite.
@@ -2030,20 +2041,20 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
     il cursore non aiuta perché `portfolio_engine` passa le date in ordine sparso (le raccoglie in
     un `set`).
 - Lo stesso schema della query dei cambi c'è nel motore del portafoglio:
-  - `backend/app/services/portfolio_engine.py:2452` precarica i prezzi con solo `date <= actual_to`,
+  - `backend/app/services/financial_math/portfolio/engine.py:312` precarica i prezzi con solo `date <= actual_to`,
     come oggetti ORM completi (`select(PriceHistory)`);
   - quindi legge tutta la storia di ogni asset posseduto, anche gli anni prima del primo acquisto o
-    del periodo richiesto (`actual_from = date_from or first_tx_date`, `:2386`).
+    del periodo richiesto (`actual_from = date_from or first_tx_date`, `:246`).
 - A cosa servono i prezzi caricati:
-  - il calcolo dei giorni che cambiano (`:855`), che dei prezzi precedenti a `frame_start` usa solo
+  - il calcolo dei giorni che cambiano (`daily_state.py:366`), che dei prezzi precedenti a `frame_start` usa solo
     l'ultimo;
-  - il resolver `AssetPriceSeries` (`backend/app/services/price_resolver.py:146`), che con `bisect`
+  - il resolver `AssetPriceSeries` (`backend/app/services/financial_math/price_marks.py:146`), che con `bisect`
     trova l'ultima osservazione ≤ data.
 - `get_prices_bulk` (`backend/app/services/asset_sources/price_query.py:149`), il corrispettivo di
   `convert_bulk` per i prezzi, ha già la finestra con minimo e massimo.
 
 ### Azione Futura
-- **Prima misurare**, su una copia dei dati reali: righe lette e tempo della query a `:2452` rispetto
+- **Prima misurare**, su una copia dei dati reali: righe lette e tempo della query a `:312` rispetto
   al calcolo intero, con e senza `date_from`.
 - Se conviene:
   - limitare la query a [ultimo prezzo ≤ `frame_start` per asset, `actual_to`], con la stessa

@@ -1,9 +1,12 @@
 # 🔐 Sécurité de la connexion
 
-L'indicateur de sécurité de la connexion dans la barre latérale de LibreFolio vous indique si ce que vous saisissez — votre mot de passe, vos chiffres — circule chiffré entre votre appareil et votre serveur. Il affiche l'un des trois niveaux, selon l'adresse que vous avez ouverte et le réseau sur lequel vous vous trouvez. Cliquez sur sa ligne pour ouvrir ou fermer ses détails : la raison du niveau et le lien **Comment se connecter en toute sécurité**, qui ouvre cette page.
-Lorsque la barre latérale est repliée, le bouclier affiche le niveau lorsque vous le survolez, et un clic ouvre la barre latérale avec les détails.
+L'indicateur de sécurité de la connexion, dans la barre latérale de LibreFolio, vous dit si ce que
+vous saisissez — votre mot de passe, vos montants — circule chiffré entre votre appareil et votre
+serveur. Il affiche l'un de trois niveaux, **sécurisée**, **réseau local** ou **non sécurisée**,
+selon l'adresse que vous avez ouverte et le réseau sur lequel vous êtes.
 
-Pour une sécurité maximale, donnez à LibreFolio une adresse HTTPS et utilisez-la partout, même sur votre réseau domestique.
+Pour une sécurité maximale, donnez à LibreFolio une adresse HTTPS et utilisez-la partout, même sur
+votre réseau domestique.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="security" data-name="connection-indicator" alt="L'indicateur de sécurité de la connexion en bas de la barre latérale, ouvert sur Connexion : réseau local : sa raison, à savoir que toute personne sur le même réseau peut lire le trafic, et le lien Comment se connecter en toute sécurité" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -15,144 +18,154 @@ Pour une sécurité maximale, donnez à LibreFolio une adresse HTTPS et utilisez
 
 ### 🟢 Connexion : sécurisée {: #connection-secure }
 
-Vert : ce que vous saisissez est chiffré, ou ne quitte jamais le serveur. Les détails donnent la raison :
+Ce que vous saisissez est chiffré, ou ne quitte jamais le serveur.
 
-- HTTPS : la connexion est chiffrée, et votre navigateur la considère comme sécurisée.
-- Sur le serveur lui-même (`localhost`) : le trafic ne quitte pas cet ordinateur.
-- VPN (Tailscale) : Tailscale chiffre le trafic entre votre appareil et le serveur, même si
-  l'adresse commence par `http://`, par exemple `http://100.110.x.x:6040`.
+<div class="lf-pros-cons" markdown>
 
-Avec la raison VPN, l'adresse reste en simple `http://`, donc votre navigateur ne pourra pas
-[installer LibreFolio en tant qu'application](pwa.md) à partir de celle-ci : [l'étape 1](#https-address) ajoute HTTPS.
+| ✅ Avantage | ⚠️ Inconvénient |
+|:--|:--|
+| Personne sur le trajet ne peut le lire ni le modifier, même sur un Wi-Fi public. | Aucun, du point de vue du risque. |
+
+</div>
+
+!!! warning "📱 Tailscale en HTTP en clair et l'application"
+
+    Via Tailscale avec une adresse en simple `http://`, comme `http://100.110.x.x:6040`, votre
+    navigateur n'[installera pas LibreFolio comme application](pwa.md). C'est pourquoi une adresse
+    HTTPS reste préférable : du point de vue du risque, les deux se valent, car Tailscale chiffre
+    aussi le trafic.
+
+👉 **Que faire :** rien, continuez à utiliser cette adresse. Pour l'application, passez à une
+[adresse HTTPS](#https-address).
+
+??? info "🔍 Quand une connexion est sécurisée"
+
+    Les détails donnent l'une de trois raisons :
+
+    - **HTTPS** : toute adresse `https://`. Votre navigateur décide seul, quoi que voie le serveur.
+    - **Sur le serveur lui-même** : `localhost`, les noms qui se terminent par `.localhost` et les
+      adresses de bouclage comme `127.0.0.1` et `::1`. Votre navigateur décide seul : le trafic ne
+      quitte pas cet ordinateur.
+    - **VPN (Tailscale)** : une adresse en simple `http://` dans les plages de Tailscale,
+      `100.64.0.0/10` et `fd7a:115c:a1e0::/48`, ou un nom qui se termine par `.ts.net`. Tailscale
+      chiffre le trafic entre votre appareil et le serveur. Si le serveur voit au contraire la
+      requête arriver d'Internet, le niveau est [réseau local](#connection-local-network), comme
+      incertain.
 
 ### 🏠 Connexion : réseau local {: #connection-local-network }
 
-Vert clair : vous avez ouvert LibreFolio en simple `http://` à l'intérieur de votre réseau domestique ou professionnel, par
-exemple `http://192.168.1.100:6040`, l'adresse que les autres appareils utilisent après une
-[installation](installation.md) standard. Le trafic n'est pas chiffré : toute personne sur le même réseau, comme
-un invité sur votre Wi-Fi, pourrait le lire, mot de passe inclus. Pour une sécurité optimale, utilisez aussi l'adresse HTTPS
-à la maison.
+Vous avez ouvert LibreFolio en simple `http://` à l'intérieur de votre réseau domestique ou
+professionnel, par exemple à `http://192.168.1.100:6040`, l'adresse qu'utilisent les autres
+appareils après une [installation](installation.md) standard.
 
-**Connexion : réseau local** apparaît également, avec une raison commençant par *Incertain* dans les détails, lorsque
-l'adresse que vous avez ouverte et la source que le serveur voit ne concordent pas : une adresse d'apparence publique que le
-serveur voit provenir de votre réseau local (DNS scindé, ou un proxy local), ou une adresse locale ou Tailscale
-que le serveur voit provenir d'Internet. Le trafic n'est pas chiffré, et
-LibreFolio ne peut pas déterminer où vous vous trouvez réellement : utilisez l'adresse HTTPS.
+<div class="lf-pros-cons" markdown>
+
+| 🤷 Vous vous contentez de | ⚠️ Inconvénient |
+|:--|:--|
+| Une connexion qui ne demande aucune configuration, et dont le trafic reste à l'intérieur de votre réseau. | Rien n'est chiffré : toute personne sur le même réseau, comme un invité sur votre Wi-Fi, pourrait lire le trafic, mot de passe compris. |
+
+</div>
+
+👉 **Que faire :** utilisez l'[adresse HTTPS](#https-address) à la maison aussi.
+
+Le même niveau apparaît avec une raison commençant par *Incertaine* quand LibreFolio ne peut pas
+savoir où vous êtes vraiment : le conseil ne change pas.
+
+??? info "🔍 Quand une connexion est en réseau local"
+
+    **Une adresse locale en simple `http://`** : une adresse en `10.x`, de `172.16.x` à `172.31.x`,
+    en `192.168.x` ou en `169.254.x`, une adresse IPv6 de lien local ou locale unique, ou un nom qui
+    se termine par `.local`, `.lan`, `.home.arpa` ou `.internal`, ou sans aucun point, comme
+    `http://nas:6040`. Un nom MagicDNS court de Tailscale, comme `http://my-server:6040`, n'a pas
+    de point non plus, il compte donc ici : l'IP Tailscale ou le nom complet qui se termine par
+    `.ts.net` compte comme [sécurisé](#connection-secure).
+
+    **Incertaine** : votre navigateur juge l'adresse que vous avez ouverte, puis le serveur indique
+    d'où il voit arriver la requête, seulement le type d'adresse et jamais votre adresse IP. Le
+    serveur peut confirmer le verdict du navigateur ou le rendre incertain, mais jamais faire
+    compter une connexion comme sécurisée ; tant qu'il ne répond pas, le verdict du navigateur
+    tient. Quand les deux ne concordent pas, le niveau est réseau local et la raison commence par
+    *Incertaine* :
+
+    - une adresse qui semble publique, que le serveur voit arriver de votre réseau local, de
+      Tailscale ou du serveur lui-même, par exemple via un split DNS ou un proxy local ;
+    - une adresse locale ou Tailscale que le serveur voit arriver d'Internet.
+
+    Le trafic n'est pas chiffré, et LibreFolio ne peut pas savoir où vous êtes vraiment.
 
 ### 🔴 Connexion : non sécurisée {: #connection-not-secure }
 
-Rouge : vous avez atteint LibreFolio en simple `http://` depuis Internet, par exemple via un port
-ouvert sur votre routeur. Les mots de passe et les données circulent en clair sur des réseaux que vous ne contrôlez pas :
-toute personne sur le chemin pourrait les lire, ou même les modifier. Sur un téléphone, un point rouge sur le bouton du menu
-vous avertit même lorsque la barre latérale est fermée.
+Vous avez atteint LibreFolio en simple `http://` depuis Internet, par exemple via un port ouvert sur
+votre routeur. Sur un téléphone, un point rouge sur le bouton du menu vous avertit même quand la
+barre latérale est fermée.
 
-Évitez cette adresse. Si vous exploitez le serveur, donnez à LibreFolio une adresse HTTPS
-([l'étape 1](#https-address)) et cessez d'exposer du HTTP en clair. Ensuite, changez votre mot de passe :
-**Paramètres** → [**Profil**](settings/profile.md) → **Changer le mot de passe**.
+<div class="lf-pros-cons" markdown>
 
-??? info "🔍 Comment le niveau est choisi"
+| ✅ Avantage | ⚠️ Inconvénient |
+|:--|:--|
+| Aucun. | Les mots de passe et les données circulent en clair sur des réseaux que vous ne contrôlez pas : n'importe qui sur le trajet pourrait les lire, voire les modifier. |
 
-    Votre navigateur classe l'adresse que vous avez saisie dans l'une des quatre catégories :
+</div>
 
-    - cet ordinateur : `localhost` et les adresses de bouclage ;
-    - Tailscale : `100.64.0.0/10`, `fd7a:115c:a1e0::/48` et les noms se terminant par `.ts.net` ;
-    - réseau local : les adresses `10.x`, `172.16.x` à `172.31.x`, `192.168.x` et `169.254.x`, les adresses IPv6
-      link-local et locales uniques, et les noms se terminant par `.local`, `.lan`, `.home.arpa` ou
-      `.internal`, ou sans aucun point ;
-    - Internet : tout le reste.
+👉 **Que faire :** évitez cette adresse. Si vous gérez le serveur, donnez à LibreFolio une
+[adresse HTTPS](#https-address) et cessez d'exposer le HTTP en clair. Changez ensuite votre mot de
+passe : **Paramètres** → [**Profil**](settings/profile.md) → **Changer le mot de passe**.
 
-    HTTPS est toujours sécurisé. Le HTTP en clair est considéré comme sécurisé pour `localhost`, et pour une adresse Tailscale
-    sauf si le serveur voit la requête provenir d'Internet.
+??? info "🔍 Quand une connexion n'est pas sécurisée"
 
-    Le serveur classe l'adresse d'où provient chaque requête dans les mêmes catégories et ne rapporte que la
-    catégorie, jamais votre adresse IP. Il peut confirmer le verdict du navigateur ou le rendre incertain, mais
-    jamais faire qu'une connexion soit considérée comme sécurisée. Tant qu'il n'a pas répondu, le verdict du navigateur prévaut.
+    **Une adresse publique en simple `http://`** : une adresse ou un nom qui n'est ni local, ni
+    Tailscale, ni le serveur lui-même, comme une IP publique ou un nom de domaine comme
+    `http://myhome.duckdns.org:6040`. Le niveau tient quand le serveur voit lui aussi la requête
+    arriver d'Internet, ou ne peut pas le dire. S'il la voit arriver de votre réseau local, de
+    Tailscale ou du serveur lui-même, le niveau est [réseau local](#connection-local-network), comme
+    incertain.
 
 ---
 
-## 🔒 Comment se connecter en toute sécurité
+## 🔒 Comment se connecter en toute sécurité {: #https-address }
 
-### 🌐 1. Donnez à LibreFolio une adresse HTTPS {: #https-address }
+Donnez à LibreFolio une adresse HTTPS, puis n'utilisez plus que celle-ci. La personne qui gère le
+serveur la met en place, de l'une de ces deux façons :
 
-C'est le travail de la personne qui exploite le serveur : si ce n'est pas vous, demandez-lui l'adresse HTTPS. Deux
-façons :
-
-- Tailscale : suivez [Exposer en toute sécurité](../admin/service_exposure.md). Avec son niveau 1 (VPN privé) en place, exécutez `tailscale serve --bg 6040` sur le serveur (ou votre propre `PORT`), puis ouvrez
-  `https://<server-name>.your-tailnet.ts.net`. Pour une adresse HTTPS publique qui ne nécessite pas Tailscale
-  sur vos appareils, utilisez Funnel (niveaux 3 et 4).
-- Un proxy inverse avec un certificat TLS, tel que Caddy, Traefik ou Nginx : voir
+- **Tailscale**, sans ouvrir de port sur votre routeur : Tailscale Serve donne une adresse HTTPS
+  aux appareils de votre tailnet, et Funnel une adresse publique qui ne demande pas Tailscale sur
+  vos appareils. Voir [Exposer en toute sécurité](../admin/service_exposure.md).
+- **Un proxy inverse** avec un certificat TLS, comme Caddy, Traefik ou Nginx : voir
   [Docker avancé](../admin/docker_advanced.md).
 
-Tailscale, Caddy et Traefik indiquent à LibreFolio que la connexion est en HTTPS, de leur propre chef ; Nginx a besoin de deux lignes : voir
-[Derrière un proxy inverse](#reverse-proxy).
+Suivez ensuite quelques bonnes habitudes :
 
-### 🔖 2. Utilisez l'adresse HTTPS partout
+- utilisez l'adresse `https://` sur chaque appareil, à la maison aussi ;
+- mettez-la en favori, et mettez à jour les anciens favoris et les raccourcis de l'écran d'accueil
+  qui pointent encore vers `http://` ;
+- si vous ne gérez pas le serveur, demandez l'adresse à la personne qui le gère ;
+- regardez l'indicateur : il doit afficher **Connexion : sécurisée**.
 
-Utilisez-la sur chaque appareil, à la maison aussi :
-
-- Mettez `https://…` en favori, pas `http://192.168.x.x:6040`.
-- Mettez à jour les anciens favoris et raccourcis d'écran d'accueil qui pointent encore vers `http://`.
-- Ouvrez LibreFolio depuis la nouvelle adresse : l'indicateur affiche **Connexion : sécurisée**.
-
----
-
-## 🧰 Derrière un proxy inverse {: #reverse-proxy }
-
-*Pour les administrateurs.* Un proxy inverse reçoit la connexion HTTPS et la transmet à LibreFolio
-en simple HTTP. Ce qui compte ici, c'est le cookie de session qui vous maintient connecté : avec
-`SESSION_COOKIE_SECURE=auto`, la valeur par défaut, LibreFolio le marque `Secure` (envoyé uniquement via HTTPS) lorsque
-la requête est en HTTPS, soit directement, soit parce que le proxy envoie `X-Forwarded-Proto: https`.
-
-Tailscale Serve et Funnel, Caddy et Traefik envoient cet en-tête de leur propre chef. Caddy et Traefik transmettent aussi
-votre adresse dans `X-Forwarded-For`, ce qui permet à l'indicateur de voir d'où vous vous connectez. Nginx
-a besoin des deux lignes dans le bloc `location` qui transmet les requêtes à LibreFolio :
-
-```nginx
-proxy_set_header X-Forwarded-Proto $scheme;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-```
-
-Si votre navigateur utilise HTTPS mais que le cookie de session n'est pas marqué `Secure`, parce que le proxy n'envoie pas
-`X-Forwarded-Proto` ou parce que `SESSION_COOKIE_SECURE` vaut `never`, les administrateurs voient une ligne supplémentaire
-dans les détails de l'indicateur. Le niveau reste **Connexion : sécurisée**, car la connexion est
-chiffrée ; seul le cookie n'a pas `Secure` :
-
-> Votre navigateur utilise HTTPS, mais le cookie de session n'est pas marqué Secure. Faites en sorte que le proxy inverse envoie
-> X-Forwarded-Proto (Nginx : `proxy_set_header X-Forwarded-Proto $scheme;`), ou remettez
-> SESSION_COOKIE_SECURE sur auto s'il vaut never.
-
-??? tip "⚙️ Définir plutôt `SESSION_COOKIE_SECURE`"
-
-    Envoyer l'en-tête est la meilleure solution. Si vous n'atteignez LibreFolio que via HTTPS, vous pouvez
-    plutôt ajouter cette ligne à `.env` :
-
-    ```bash
-    SESSION_COOKIE_SECURE=always
-    ```
-
-    Redémarrez ensuite LibreFolio : avec Docker, exécutez `docker compose up -d` (un simple
-    `docker compose restart` conserve l'ancien environnement) ; sur une installation sur l'hôte, redémarrez
-    `./dev.py server`, qui lit aussi `.env`.
-
-    L'option accepte `auto` (la valeur par défaut), `always` ou `never` ; la casse et les espaces n'ont pas d'importance, et
-    toute autre valeur arrête LibreFolio au démarrage. N'utilisez `never` que pour le rare proxy qui prétend
-    être en HTTPS alors que le navigateur est en simple HTTP. Voir [Configuration](../admin/configuration.md) pour
-    toutes les options.
+Si vous gérez le serveur, [Vérifier la sécurité de la connexion](../admin/connection_checks.md)
+montre comment contrôler le résultat.
 
 ---
 
 ## 🧭 Ce que l'indicateur ne fait pas
 
-- Il ne bloque rien : c'est un conseil, pas un contrôle.
-- Il décrit la connexion que vous utilisez à l'instant présent : le même LibreFolio peut afficher
-  **Connexion : sécurisée** sur votre ordinateur portable et **Connexion : non sécurisée** sur votre téléphone.
-- Il ne vérifie pas les certificats : un certificat auto-signé que vous avez accepté dans le navigateur affiche
-  **Connexion : sécurisée**. Le trafic est chiffré, mais personne ne garantit que le serveur est bien le vôtre.
-- Il ne peut pas toujours voir où vous êtes. Avec Docker Desktop exposé directement, ou derrière un proxy qui
-  ne transmet pas votre adresse dans `X-Forwarded-For`, le serveur voit chaque visiteur comme local : du HTTP en clair
-  depuis Internet affiche alors **Connexion : réseau local**, comme incertain, au lieu de
-  **Connexion : non sécurisée**. Docker Engine sous Linux conserve votre adresse. Le conseil ne
-  change pas : utilisez l'adresse HTTPS.
+L'indicateur décrit la connexion que vous utilisez à l'instant, et vous conseille. Trois choses
+échappent à son rôle.
+
+**Il ne bloque rien.** C'est un conseil, pas un contrôle. Et comme il décrit la connexion de
+l'appareil que vous utilisez, le même LibreFolio peut afficher **Connexion : sécurisée** sur votre
+ordinateur portable et **Connexion : non sécurisée** sur votre téléphone.
+
+**Il ne vérifie pas les certificats.** Un certificat auto-signé que vous avez accepté dans le
+navigateur affiche **Connexion : sécurisée**. Le trafic est chiffré, mais personne ne garantit que
+le serveur est bien le vôtre.
+
+**Il ne voit pas toujours où vous êtes.** Quand LibreFolio tourne dans Docker Desktop et est exposé
+directement, ou se trouve derrière un proxy qui ne transmet pas votre adresse dans
+`X-Forwarded-For`, le serveur voit chaque visiteur comme local. Le HTTP en clair depuis Internet
+affiche alors **Connexion : réseau local**, comme incertaine, au lieu de
+**Connexion : non sécurisée**. Docker Engine sous Linux conserve votre adresse.
+
+Quoi qu'affiche l'indicateur, le conseil reste le même : utilisez l'adresse HTTPS.
 
 ---
 
@@ -160,6 +173,8 @@ chiffrée ; seul le cookie n'a pas `Secure` :
 
 - 🌐 **[Exposer en toute sécurité](../admin/service_exposure.md)** — Tailscale, d'un VPN privé à une
   adresse HTTPS publique
+- 🔍 **[Vérifier la sécurité de la connexion](../admin/connection_checks.md)** — Pour les
+  administrateurs : l'adresse HTTPS, le cookie de session et le proxy inverse
 - 🐳 **[Docker avancé](../admin/docker_advanced.md)** — Fichier Compose, variables d'environnement,
   proxy inverse
 - 📝 **[Configuration](../admin/configuration.md)** — Toutes les options du fichier `.env`

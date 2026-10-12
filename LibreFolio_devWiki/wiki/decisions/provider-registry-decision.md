@@ -31,6 +31,11 @@ The decorator is co-located with the class — you cannot create a provider with
 ## Related
 - [[F-059]] — Provider Registry Pattern (the feature implementing this decision)
 - [[F-015]] — FX Provider Registry (FX application of this pattern)
+- [[F-106]] — the Tool platform reuses the discovery for `tool_plugins/` but changes the collision rule: every claimant
+  of a duplicate code is quarantined, and a failed import leaves no partial registration
+  ([[decisions/tool-contract-from-pydantic-compiled-renderer]])
+- *Planned (2026-10-12)*: every plugin becomes a folder, `<plugin>/plugin.py` loaded by convention, with its own
+  translations — [[decisions/plugin-folders-and-split-i18n]]
 
 ## Source files
 

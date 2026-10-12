@@ -1655,7 +1655,7 @@ def test_resource_limit_remedies_agree_between_backend_and_frontend():
     """
     # Imported here, not at the top: this file's top-level imports stay schema-only, and a
     # renamed table fails this test alone rather than the collection of the whole file.
-    from backend.app.services.risk_plugins.simulation import _REMEDY_BY_METRIC  # noqa: PLC0415
+    from backend.app.services.risk_plugins.simulation.plugin import _REMEDY_BY_METRIC  # noqa: PLC0415
 
     emitted = set(_REMEDY_BY_METRIC.values())
     worded = set(_resource_limit_display_codes())

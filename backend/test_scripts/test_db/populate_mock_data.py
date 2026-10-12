@@ -74,7 +74,7 @@ from backend.app.db import (
 from backend.app.db.models import UserOnboardingStepProgress
 from backend.app.services.auth_service import hash_password
 from backend.app.services.brim_provider import save_uploaded_file
-from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
+from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
 from backend.app.services.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.static_uploads import get_uploads_dir, save_upload, seed_default_avatars
@@ -2850,8 +2850,8 @@ def create_split_transaction(session: Session):
 
     A split is modelled as an ADJUSTMENT transaction linked to an AssetEvent of type
     SPLIT. The two engines read it differently and MUST stay consistent:
-      • fifo_lot_engine multiplies the fragment quantity by AssetEvent.value (ratio),
-      • portfolio_engine adds the transaction quantity to the WAC pool (increment).
+      • the FIFO lot engine (financial_math/fifo) multiplies the fragment quantity by AssetEvent.value (ratio),
+      • the portfolio engine (financial_math/portfolio) adds the transaction quantity to the WAC pool (increment).
     So for a 2:1 split of an N-share open position: value=2 AND tx quantity=+N. eToro
     holds a single, isolated AAPL lot (no sells/transfers) which keeps N stable, so the
     injected split does not desync the ratio-based vs increment-based engines.

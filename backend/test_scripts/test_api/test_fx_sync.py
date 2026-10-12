@@ -26,7 +26,7 @@ from backend.app.schemas.fx import (
 from backend.app.schemas.refresh import FXSyncBulkResponse, SyncStatus
 
 # Import mock provider constants for precise assertions
-from backend.app.services.fx_providers.mockfx import MockFXFailProvider
+from backend.app.services.fx_providers.mockfx.plugin import MockFXFailProvider
 
 # Test server fixture
 from backend.test_scripts.test_server_helper import _TestingServerManager

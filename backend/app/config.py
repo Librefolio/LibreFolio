@@ -37,6 +37,8 @@ from typing import Literal
 from pydantic import ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings
 
+from backend.app.utils.runtime.version import get_git_version
+
 # =============================================================================
 # Constants (not configurable via .env — change here if needed)
 # =============================================================================
@@ -318,8 +320,6 @@ def get_version() -> str:
     Get application version from git tags.
     Same logic as ./dev.py info version and frontend APP_VERSION.
     """
-    from backend.app.utils.version import get_git_version  # noqa: PLC0415 — lazy import / avoid circular
-
     return get_git_version()
 
 

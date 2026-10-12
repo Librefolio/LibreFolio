@@ -8,7 +8,7 @@ en el [Resumen de exportación IA](index.md).
 
 ## 📍 Dónde encontrarla
 
-En la página de detalle de un bróker, selecciona **Exportar IA** en la barra de herramientas, junto a **Actualizar**: funciona desde
+En la página de detalle de un bróker, selecciona **Exportación IA** en la barra de herramientas, junto a **Actualizar**: funciona desde
 cualquier pestaña. Se abre primero en **Revisión del bróker**.
 
 La exportación cubre **solo ese bróker**, en la divisa que muestra la página, con el último día del

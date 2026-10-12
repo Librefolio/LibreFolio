@@ -6,21 +6,24 @@
   - Chip index of all versions: clicking a chip unfolds AND scrolls to it.
   - Search descends into the folds: matching branches auto-open while typing.
   - Expand-all / collapse-all buttons.
+  - Chapters in the interface language, chapter by chapter: an English chapter
+    in a translated interface carries a discreet "not translated yet" pill.
 -->
 <script lang="ts">
-    import {_} from '$lib/i18n';
+    import {_, locale} from '$lib/i18n';
     import {marked} from 'marked';
     import {onDestroy, tick} from 'svelte';
     import {ChevronDown, ChevronsDownUp, ChevronsUpDown, ExternalLink, RefreshCw, Search} from 'lucide-svelte';
     import AskAdminModal from '$lib/components/auth/AskAdminModal.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
-    import {CHANGELOG_REMOTE_URL, changelogChapters, type ChangelogChapter, type ChangelogSection} from '$lib/features/changelog/changelog';
+    import {CHANGELOG_REMOTE_URL, baseLanguage, localizedChangelog, type ChangelogChapter, type ChangelogSection, type DisplayedChapter} from '$lib/features/changelog/changelog';
     import {auth} from '$lib/stores/app/auth';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {zodiosApi} from '$lib/api';
     import {checkForUpdates, type UpdateCheckResult} from '$lib/features/update-check/updateCheck';
     import {updateAvailable} from '$lib/features/update-check/updateCheckStore.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
 
     interface Props {
         open: boolean;
@@ -30,6 +33,29 @@
     }
 
     let {open, onClose, currentVersion = ''}: Props = $props();
+
+    /** The interface language: a chapter shown in another language carries a discreet pill. */
+    const uiLanguage = $derived(baseLanguage($locale));
+    /** The last load, kept for the language it was for (a failed load holds the English fallback). */
+    let loaded = $state<{language: string; chapters: DisplayedChapter[]} | null>(null);
+    /** Chapters in the interface language, chapter by chapter; undefined while its translation loads. */
+    const ready: DisplayedChapter[] | undefined = $derived(localizedChangelog.peek(uiLanguage) ?? (loaded?.language === uiLanguage ? loaded.chapters : undefined));
+    const chapters = $derived(ready ?? []);
+    const loading = $derived(ready === undefined);
+
+    // The first time the modal opens in a language, fetch its translation (a lazy chunk).
+    $effect(() => {
+        if (!open) return;
+        const language = uiLanguage;
+        if (localizedChangelog.peek(language)) return;
+        let live = true;
+        localizedChangelog.load(language).then((result) => {
+            if (live) loaded = {language, chapters: result};
+        });
+        return () => {
+            live = false;
+        };
+    });
 
     /** Fold state per chapter / section ("ci:si") / subsection ("ci:si:ssi").
      *  Newest chapter starts open; everything else folded. */
@@ -79,19 +105,19 @@
     }
 
     function setAll(openIt: boolean) {
-        const chapters: Record<number, boolean> = {};
-        const sections: Record<string, boolean> = {};
-        changelogChapters.forEach((c, ci) => {
-            chapters[ci] = openIt;
+        const chapterFolds: Record<number, boolean> = {};
+        const sectionFolds: Record<string, boolean> = {};
+        chapters.forEach((c, ci) => {
+            chapterFolds[ci] = openIt;
             c.sections.forEach((s, si) => {
-                sections[`${ci}:${si}`] = openIt;
+                sectionFolds[`${ci}:${si}`] = openIt;
                 s.subsections.forEach((_sub, ssi) => {
-                    sections[`${ci}:${si}:${ssi}`] = openIt;
+                    sectionFolds[`${ci}:${si}:${ssi}`] = openIt;
                 });
             });
         });
-        openChapters = chapters;
-        openSections = sections;
+        openChapters = chapterFolds;
+        openSections = sectionFolds;
     }
 
     async function jumpTo(i: number) {
@@ -100,8 +126,16 @@
         document.querySelector(`[data-testid="changelog-chapter-${i}"]`)?.scrollIntoView({block: 'start'});
     }
 
+    /** marked output per body: bodies never change while the app runs, and a search re-renders every open one on each keystroke. */
+    const markdownByBody = new Map<string, string>();
+
     function renderMarkdown(body: string): string {
-        return marked.parse(body, {async: false}) as string;
+        let html = markdownByBody.get(body);
+        if (html === undefined) {
+            html = marked.parse(body, {async: false}) as string;
+            markdownByBody.set(body, html);
+        }
+        return html;
     }
 
     /** Escape the needle for use in a RegExp. */
@@ -111,9 +145,11 @@
 
     /**
      * Render markdown AND highlight needle occurrences in the visible text.
-     * The marked output is trusted (bundled changelog); the highlight runs on
-     * the HTML string with a needle-escaped regex, wrapping matches in <mark>.
-     * Tags/attributes are skipped via a simple tag-boundary split.
+     * The highlight runs on the HTML string with a needle-escaped regex,
+     * wrapping matches in <mark>; tags/attributes are skipped via a simple
+     * tag-boundary split. Every sink passes the result through sanitizeHtml:
+     * the translated chapters come from an LLM pipeline, and one path serves
+     * every language.
      */
     function renderHighlighted(body: string): string {
         let html = renderMarkdown(body);
@@ -147,7 +183,7 @@
     let searchHits = $derived.by((): SearchHit[] => {
         if (!needle) return [];
         const hits: SearchHit[] = [];
-        changelogChapters.forEach((chapter, ci) => {
+        chapters.forEach((chapter, ci) => {
             chapter.sections.forEach((section, si) => {
                 // Title match OR body-only match (round 5 follow-up): a bullet deep
                 // inside a section is still a clickable "go there" hit.
@@ -325,12 +361,14 @@
             <AskAdminModal open={true} {admins} onClose={() => (checkState = 'idle')} />
         {/if}
 
-        {#if changelogChapters.length === 0}
+        {#if loading}
+            <p class="p-6 text-sm text-gray-500 dark:text-gray-400" data-testid="changelog-loading" aria-busy="true">{$_('common.loading')}</p>
+        {:else if chapters.length === 0}
             <p class="p-6 text-sm text-gray-500 dark:text-gray-400" data-testid="changelog-empty">{$_('changelog.empty')}</p>
         {:else}
             <!-- Version index -->
             <div class="flex gap-1.5 overflow-x-auto px-4 py-2 border-b border-gray-100 dark:border-slate-700 shrink-0" data-testid="changelog-index">
-                {#each changelogChapters as chapter, i (chapter.version + chapter.date)}
+                {#each chapters as chapter, i (chapter.version + chapter.date)}
                     <button
                         type="button"
                         class="px-2.5 py-1 text-xs font-mono font-medium rounded-full whitespace-nowrap transition-colors {isChapterOpen(i, chapter) ? 'bg-libre-green text-white' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
@@ -344,8 +382,8 @@
 
             <!-- Chapters -->
             <div class="flex-1 overflow-y-auto p-4 space-y-3" data-testid="changelog-chapters">
-                {#each changelogChapters as chapter, ci (chapter.version + chapter.date)}
-                    <section class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="changelog-chapter-{ci}">
+                {#each chapters as chapter, ci (chapter.version + chapter.date)}
+                    <section class="rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="changelog-chapter-{ci}" data-version={chapter.version} lang={chapter.lang}>
                         <button
                             type="button"
                             class="flex w-full items-center gap-2 px-3 py-2 text-left bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
@@ -358,6 +396,10 @@
                             {#if chapter.date}
                                 <span class="text-xs text-gray-400 dark:text-gray-500">{chapter.date}</span>
                             {/if}
+                            {#if chapter.lang !== uiLanguage}
+                                <!-- An English chapter in a translated interface: its translation is not out yet. -->
+                                <span class="rounded-full border border-gray-200 dark:border-slate-600 px-1.5 text-[10px] font-medium leading-4 text-gray-400 dark:text-gray-500" lang={uiLanguage} data-testid="changelog-not-translated-{ci}">{$_('changelog.notTranslated')}</span>
+                            {/if}
                         </button>
                         {#if isChapterOpen(ci, chapter)}
                             <div class="px-3 py-2 space-y-1">
@@ -365,7 +407,7 @@
                                     {#if section.title === null}
                                         <!-- intro block before the first ### — always visible -->
                                         <div class="changelog-body text-sm text-gray-700 dark:text-gray-300 leading-relaxed py-1" data-testid="changelog-intro-{ci}">
-                                            {@html renderHighlighted(section.body)}
+                                            {@html sanitizeHtml(renderHighlighted(section.body))}
                                         </div>
                                         {#each section.subsections as sub, ssi}
                                             <!-- #### before any ### — render at section level -->
@@ -387,7 +429,7 @@
                                                 <div class="pl-6 pr-1 py-1 space-y-1">
                                                     {#if section.body.trim().length > 0}
                                                         <div class="changelog-body text-sm text-gray-700 dark:text-gray-300 leading-relaxed" data-testid="changelog-section-body-{ci}-{si}">
-                                                            {@html renderHighlighted(section.body)}
+                                                            {@html sanitizeHtml(renderHighlighted(section.body))}
                                                         </div>
                                                     {/if}
                                                     {#each section.subsections as sub, ssi}
@@ -422,15 +464,15 @@
         </button>
         {#if isSubsectionOpen(ci, si, ssi, title, body)}
             <div class="changelog-body pl-7 pr-1 py-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed" data-testid="changelog-subsection-body-{ci}-{si}-{ssi}">
-                {@html renderHighlighted(body)}
+                {@html sanitizeHtml(renderHighlighted(body))}
             </div>
         {/if}
     </div>
 {/snippet}
 
 <style>
-    /* Minimal markdown typography for the bundled changelog (trusted content —
-       the file ships with the app build). */
+    /* Minimal markdown typography for the bundled changelog (the files ship
+       with the app build; every sink sanitises their HTML). */
     .changelog-body :global(h3),
     .changelog-body :global(h4) {
         font-size: 0.875rem;

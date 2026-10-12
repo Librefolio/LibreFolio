@@ -312,6 +312,8 @@ Exposez LibreFolio de manière sécurisée via **Tailscale** (recommandé, et le
 - **Tailscale (recommandé)** : accès sécurisé avec HTTPS automatique, sans ouvrir de ports sur le routeur ni configurer d'enregistrements DNS publics. Voir le **[Guide d'exposition Tailscale](service_exposure.md)** détaillé.
 - **Proxy inverse classique (Nginx/Traefik)** : utile si vous disposez déjà d'une infrastructure web, ou si vous souhaitez gérer des certificats SSL/TLS personnalisés, servir plusieurs applications sur un même serveur, ou ajouter des en-têtes de sécurité personnalisés et une limitation de débit.
 
+Une fois LibreFolio exposé, la page [Vérifier la sécurité de la connexion](connection_checks.md) explique comment contrôler que vos utilisateurs se connectent en toute sécurité et, [derrière un proxy inverse](connection_checks.md#reverse-proxy), que le cookie de session est marqué `Secure`.
+
 LibreFolio compresse déjà ses réponses en gzip (JSON de l'API, JavaScript et CSS de l'application web, pages de documentation) et envoie les images et le flux de recherche d'actifs en direct tels quels : le proxy n'a pas besoin de les compresser à nouveau.
 
 ### 💾 3. Sauvegarde de la base de données

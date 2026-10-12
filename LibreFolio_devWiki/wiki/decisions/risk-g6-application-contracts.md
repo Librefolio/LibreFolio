@@ -67,6 +67,8 @@ filtering, grouping, or tag UI.
   residual; remaining assets are not renormalized.
 - Execution proceeds backend-first, then one functional view at a time with a
   mandatory human visual gate.
+- The canonical request identity sorts `asset_ids`, so a risk payload's order is not the order of the selection
+  on screen: [[problems/risk-request-sorts-asset-ids]].
 
 ## Source files
 

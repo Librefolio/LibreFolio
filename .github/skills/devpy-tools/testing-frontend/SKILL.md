@@ -72,6 +72,22 @@ frontend/
 ./dev.py mkdocs gallery -l              # list available tests
 ```
 
+### Gallery: a language's shots are taken by a browser of that language
+
+The app formats amounts and many dates with the browser's locale, so an Italian shot needs an Italian browser,
+not only the Italian UI. `fixtures/galleryLocale.ts` sets it at runtime through the page's CDP session
+(Playwright's `locale` is fixed per context, and a gallery test walks four languages in one page):
+
+- **First thing in every language loop**: `await setBrowserLocale(page, lang);` — before the page of the
+  shot is loaded. A language switch redraws no number already on screen, so a page set up once before the
+  loop must be loaded again per language (`perLanguage` in `gallery.spec.ts`).
+- **The gallery's describe yields no context locale** (`test.use({locale: async ({}, use) => use(undefined)})`):
+  `@playwright/test` defaults to `en-US`, and Chromium refuses a second locale override while one is in effect.
+  The outer `beforeEach` pins `en-US` itself.
+- **The guard**: every document is stamped with the locale it began under, and `screenshot()`/`shootFiles()`
+  fail a shot whose page was drawn under another locale (`expectDrawnUnder`). A forgotten switch point is a
+  red, not an en-US number in a French picture.
+
 ### Consolidation is on by default
 
 A category no longer launches one Playwright process per action. `_consolidate.py` groups every unit

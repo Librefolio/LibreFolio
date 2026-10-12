@@ -69,6 +69,9 @@ utilisateurs partent de la **Devise par défaut** dans les [Paramètres globaux]
     - **Tout autre proxy** : faites-lui envoyer l’en-tête ou, si LibreFolio n’est accessible qu’à travers lui,
       définissez `SESSION_COOKIE_SECURE=always`.
 
+    Pour vérifier dans votre navigateur si le cookie de session est marqué `Secure`, voir
+    [Vérifier la sécurité de la connexion](connection_checks.md#session-cookie).
+
 ??? info "🧮 Workers du moteur de risque — réglage avancé"
 
     Les simulations de risque et les optimisations de portefeuille s’exécutent dans des processus workers séparés, démarrés à

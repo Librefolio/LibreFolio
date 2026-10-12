@@ -245,7 +245,7 @@ Generated: ${new Date().toISOString()}
     }
 </script>
 
-<div class="space-y-8" data-testid="about-tab">
+<div class="space-y-8" data-testid="about-tab" data-busy={isLoading ? 'true' : 'false'} aria-busy={isLoading}>
     <!-- App Info -->
     <div class="flex items-center space-x-4">
         <div class="w-14 h-14 rounded-xl shadow-sm flex items-center justify-center p-2" style="background:#fff">

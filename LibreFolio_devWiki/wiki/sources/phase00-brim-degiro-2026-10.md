@@ -53,7 +53,7 @@ None of its own. Closing issue #35 at release is backlog P-7.
 | Role | Path |
 |------|------|
 | Plan | `LibreFolio_developer_journal/Release_2/phases/31_brimDegiro/plan-phase00BrimDegiro.prompt.md` |
-| Plugin | `backend/app/services/brim_providers/broker_degiro.py` |
+| Plugin | `backend/app/services/brim_providers/broker_degiro/plugin.py` |
 | Wizard pairing | `frontend/src/lib/utils/transactions/importPairs.ts` |
 | Tests | `backend/test_scripts/test_external/test_brim_degiro.py` |
 | E2E | `frontend/e2e/transactions/tx-import-degiro.spec.ts` |
