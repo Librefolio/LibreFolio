@@ -3232,3 +3232,44 @@ open), [[features/F-008]], [[sources/phase00-translation-round12-2026-10]] (batc
 [[problems/fast-forward-blocked-by-a-dirty-file]] (see also). **Paths**: U-2 moved the four catalogues, so 28
 citations of `frontend/src/lib/i18n/<lang>.json` in 13 pages and 5 written as `{en,it,fr,es}` now point to `base/`;
 `$lib/i18n/en.json` imports stay (they name the generated file). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 72 — I's plan 48 (UI polish) and V's step 2b (the E2E cleanup)
+Base `0071b9703` (train 72, gates green). Sources: plan 48 and plan 46 §2b, digested by two explore agents, with the
+quotes, paths and figures re-checked on the files and the code. **Created** [[sources/phase00-ui-polish-2026-10]],
+[[problems/late-img-error-marked-the-visible-icon-failed]] (`2412c3fe4`), [[problems/test-passed-only-on-leftovers-of-other-tests]]
+(WB5, `1ea16aace`, linked to the isolation classes), [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]]
+(V-19, `7f8febd9d`), [[decisions/clipboard-through-one-helper-with-a-gate]] (M-20 and C-63, `65d20910e`),
+[[decisions/security-details-close-after-30-seconds]] (`5e9eff52d`). **Updated** [[problems/broker-icon-race-condition]]
+(the October symptoms had another cause; C-56, C-57 open), [[problems/copy-buttons-without-http-fallback]] (resolved),
+[[concepts/responsive-4mode-layout]] (the cure delivered), [[problems/e2e-writes-leaked-into-shared-state]] (checkpoint
+2b; V-21, V-17, V-18 still open), [[sources/phase00-data-quality-e2e-2026-10]], [[features/F-102]],
+[[decisions/plugin-folders-and-split-i18n]] (I's batch reached `base/` through the rename). Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 2 — dates and hashes in conflict between pages
+Base `fef272b65`. A script compared each of the 1 567 backticked hashes with the date written beside it and with Git;
+two explore agents compared trains, versions, archive dates, backlog and decision IDs, feature status events and
+batches across pages. **No real conflict**: every date that differs from a commit's own belongs to another event (the
+decision's date in the index's Date column, a report, an archive, a range such as `2026-06-08/09`); the two commits
+with one subject, `3e3f9c41f` and `f32e460ca`, are a parent and its follow-up, each cited for its own change; every
+dated train has one date. **A history rewrite**: 98 cited 7–8-character hashes resolve to nothing in today's
+repository (5b1333fa6b07 is an Alembic revision, not a commit). Six were matched to today's commit by subject and
+date and replaced in the pages (17 citations): 615a52eb → `c9f840680`, 78aaa0a3 → `13052a006`, ddb1fcfb →
+`93a88be2c`, a688bcb9 → `dadcc4de2`, b5a0bf9 → `82c9224d5`, a7b30d52 → `432d8642a`. Left: 23 in the pages,
+whose match is ambiguous (F-098's four, 3184a969/1a734008, …), and the citations in this log and in the ingest
+registry, kept as written. Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 2 — the history rewrite of 2026-09-04, remapped exactly
+Base `d88e10d15`. The repository's history was rewritten with `git filter-repo` on 2026-09-04: every older commit got
+a new hash, so the hashes written before that day — in this log, the ingest registry and some pages — resolve to
+nothing. With the rewrite's commit map (1 125 old → new pairs, a copy provided by the coordinator), 74 such hashes were
+mapped to today's commits, each unique and an ancestor of HEAD: 48 citations in the pages and the index, 165 in
+[raw/ingest-registry.md](raw/ingest-registry.md), whose drift check works again. The six matched earlier by subject
+and date agree with the map. This log keeps its old hashes as written: look them up in the map. Not a commit, left
+as is: an Alembic revision id. Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 2 — the dates the remap brought to light
+Base `8ba2db509`. The coordinator's decisions: beside a hash goes its commit's date. `c7cf528c4` (Policy D, the backup
+router) is dated 2026-04-24, its commit's date, in [[decisions/policy-d-currency-wipe]], [[entities/backup-router]]
+(twice) and [[sources/phase07-part3-closure]] — all four sentences describe the commit itself; [[features/F-099]]'s
+status row goes to 2026-05-30, the date of `9b9fcbb65`. In the ingest registry, the knowledge-base overview's row
+linked a page that never existed: it now names the two concepts that draw on that source. Graph: not updated (P-6).
