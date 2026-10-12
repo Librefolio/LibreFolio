@@ -20,11 +20,22 @@ network.
 
 What you type is encrypted, or it never leaves the server.
 
-- ✅ **Pro:** nobody along the way can read or change it, not even on a public Wi-Fi.
-- ⚠️ **Con:** through Tailscale with a plain `http://` address, such as `http://100.110.x.x:6040`,
-  your browser will not [install LibreFolio as an app](pwa.md).
-- 👉 **What to do:** nothing, keep using this address. For the app, switch to an
-  [HTTPS address](#https-address).
+<div class="lf-pros-cons" markdown>
+
+| ✅ Pro | ⚠️ Con |
+|:--|:--|
+| Nobody along the way can read or change it, not even on a public Wi-Fi. | Nothing, as far as risk goes. |
+
+</div>
+
+!!! warning "📱 Tailscale over plain HTTP and the app"
+
+    Through Tailscale with a plain `http://` address, such as `http://100.110.x.x:6040`, your
+    browser will not [install LibreFolio as an app](pwa.md). That is why an HTTPS address is still
+    better: as a risk the two are the same, since Tailscale encrypts the traffic too.
+
+👉 **What to do:** nothing, keep using this address. For the app, switch to an
+[HTTPS address](#https-address).
 
 ??? info "🔍 When a connection counts as secure"
 
@@ -45,10 +56,15 @@ You opened LibreFolio over plain `http://` inside your home or office network, f
 `http://192.168.1.100:6040`, the address other devices use after a standard
 [installation](installation.md).
 
-- ✅ **Pro:** it works with no setup, and the traffic stays inside your network.
-- ⚠️ **Con:** nothing is encrypted: anyone on the same network, such as a guest on your Wi-Fi,
-  could read the traffic, password included.
-- 👉 **What to do:** use the [HTTPS address](#https-address) at home too.
+<div class="lf-pros-cons" markdown>
+
+| 🤷 You settle for | ⚠️ Con |
+|:--|:--|
+| A connection that needs no setup, and whose traffic stays inside your network. | Nothing is encrypted: anyone on the same network, such as a guest on your Wi-Fi, could read the traffic, password included. |
+
+</div>
+
+👉 **What to do:** use the [HTTPS address](#https-address) at home too.
 
 The same level appears with a reason starting with *Unclear* when LibreFolio cannot tell where you
 really are: the advice does not change.
@@ -79,12 +95,17 @@ really are: the advice does not change.
 You reached LibreFolio over plain `http://` from the internet, for example through a port opened on
 your router. On a phone, a red dot on the menu button warns you even while the sidebar is closed.
 
-- ✅ **Pro:** it works from anywhere, with nothing to install.
-- ⚠️ **Con:** passwords and data travel in clear text over networks you do not control: anyone
-  along the way could read them, or even change them.
-- 👉 **What to do:** avoid this address. If you run the server, give LibreFolio an
-  [HTTPS address](#https-address) and stop exposing plain HTTP. Then change your password:
-  **Settings** → [**Profile**](settings/profile.md) → **Change Password**.
+<div class="lf-pros-cons" markdown>
+
+| ✅ Pro | ⚠️ Con |
+|:--|:--|
+| None. | Passwords and data travel in clear text over networks you do not control: anyone along the way could read them, or even change them. |
+
+</div>
+
+👉 **What to do:** avoid this address. If you run the server, give LibreFolio an
+[HTTPS address](#https-address) and stop exposing plain HTTP. Then change your password:
+**Settings** → [**Profile**](settings/profile.md) → **Change Password**.
 
 ??? info "🔍 When a connection counts as not secure"
 
@@ -99,8 +120,8 @@ your router. On a phone, a red dot on the menu button warns you even while the s
 
 ## 🔒 How to Connect Securely {: #https-address }
 
-Give LibreFolio an HTTPS address, then use only that one. Setting it up is a job for whoever runs
-the server: if that is not you, ask them for the address.
+Give LibreFolio an HTTPS address, then use only that one. Whoever runs the server sets it up, in
+one of two ways:
 
 - **Tailscale**, with no port opened on your router: Tailscale Serve gives an HTTPS address to the
   devices of your tailnet, and Funnel a public one that needs no Tailscale on your devices. See
@@ -108,9 +129,13 @@ the server: if that is not you, ask them for the address.
 - **A reverse proxy** with a TLS certificate, such as Caddy, Traefik or Nginx: see
   [Advanced Docker](../admin/docker_advanced.md).
 
-Use the `https://` address on every device, at home too: bookmark it, and update old bookmarks and
-home-screen shortcuts that still point to `http://`. The indicator then shows
-**Connection: secure**.
+Then follow a few good habits:
+
+- use the `https://` address on every device, at home too;
+- bookmark it, and update the old bookmarks and home-screen shortcuts that still point to
+  `http://`;
+- if you do not run the server, ask whoever runs it for the address;
+- check the indicator: it should show **Connection: secure**.
 
 If you run the server, [Checking Connection Security](../admin/connection_checks.md) shows how to
 verify the result.
@@ -119,19 +144,24 @@ verify the result.
 
 ## 🧭 What the Indicator Does Not Do
 
-The indicator is advice, not a check: it blocks nothing. It describes the connection you are using
-right now, so the same LibreFolio can show **Connection: secure** on your laptop and
+The indicator describes the connection you are using right now, and gives advice. Three things are
+beyond it.
+
+**It blocks nothing.** It is advice, not a check. And since it describes the connection of the
+device you are on, the same LibreFolio can show **Connection: secure** on your laptop and
 **Connection: not secure** on your phone.
 
-It does not check certificates either. A self-signed certificate that you accepted in the browser
-shows **Connection: secure**: the traffic is encrypted, but nobody vouches that the server is really
-yours.
+**It does not check certificates.** A self-signed certificate that you accepted in the browser
+shows **Connection: secure**. The traffic is encrypted, but nobody vouches that the server is
+really yours.
 
-Nor can it always see where you are. When LibreFolio runs in Docker Desktop and is exposed directly,
-or sits behind a proxy that does not pass your address in `X-Forwarded-For`, the server sees every
-visitor as local: plain HTTP from the internet then shows **Connection: local network**, as
-unclear, instead of **Connection: not secure**. Docker Engine on Linux keeps your address. Either
-way, the advice stays the same: use the HTTPS address.
+**It cannot always see where you are.** When LibreFolio runs in Docker Desktop and is exposed
+directly, or sits behind a proxy that does not pass your address in `X-Forwarded-For`, the server
+sees every visitor as local. Plain HTTP from the internet then shows
+**Connection: local network**, as unclear, instead of **Connection: not secure**. Docker Engine on
+Linux keeps your address.
+
+Whatever the indicator shows, the advice stays the same: use the HTTPS address.
 
 ---
 
