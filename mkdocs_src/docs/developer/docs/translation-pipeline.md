@@ -531,7 +531,8 @@ repository's CHANGELOG.
   for byte (`assemble()`). The app splits a changelog at these lines and reads each chapter
   by the version between the brackets (`parseChangelog()` in
   `frontend/src/lib/features/changelog/changelog.ts`, whose foldable sections are the `###`
-  and `####` headings).
+  and `####` headings). The French chapters are shown with French spacing, applied when the
+  app loads `CHANGELOG.fr.md` ([French Typography](#french-typography)).
 - **A chapter not translated yet is absent**, never an English copy: for that version, the
   app shows the English chapter.
 - **Structure never reaches the model.** The chapter line and the `---` rule that closes a
@@ -763,8 +764,38 @@ and formula content; plain whitespace before `: ; ? ! %` in their French text (s
 included) drops from 6,580 to 0, while the 28 in the English text of the English fallback
 pages stay, by design.
 
+The hook does not reach the app's changelog modal, which renders `CHANGELOG.fr.md` with
+`marked`, outside MkDocs. `frontend/src/lib/features/changelog/changelog.ts` therefore
+exports `typesetFrench()`, the hook's `typeset()` ported with the same rules and the same
+characters (the table above), and `typesetFrenchMarkdown()`, which applies it to the prose
+of a Markdown text. In `createLocalizedChangelog()`, `load()` typesets the French file
+before `parseChangelog()` cuts it into chapters, through `TYPESETTERS`, a per-language table
+in which only `fr` has an entry. The English chapters the French UI shows for versions not
+translated yet, and the Italian, Spanish and English changelogs, stay as written;
+`CHANGELOG.fr.md` itself keeps the plain spaces the pipeline writes.
+
+- **What stays byte for byte**: fenced code, backtick or tilde, at any indentation (a fence
+  inside a list item included); inline code spans, which never cross into another block;
+  link destinations with their titles; inline images whole (`![alt](src "title")`), since
+  in HTML the alt is an attribute; reference definitions and autolinks; HTML comments, tags
+  with their attributes, and the content of `code`, `pre`, `kbd`, `samp`, `var`, `svg`,
+  `math`, `script`, `style` and `textarea`; bare URLs.
+- **A marker ends a run of text**, as a tag does in the hook's HTML: `:` `;` `?` `!` also
+  count before an emphasis, code, link or tag marker (`*` `_` `~` `` ` `` `[` `<`), so
+  `*Mot de passe oublié ?*` gets the narrow no-break space the hook gives
+  `<em>Mot de passe oublié ?</em>`.
+- **Measured** on 12 October 2026 with a Node probe against the hook, on the real
+  `CHANGELOG.fr.md` (4 chapters, 7 italic questions like the one above): `typesetFrench()`
+  equals `typeset()` on all 617 prose runs, and for each chapter the HTML `marked` renders
+  from the typeset Markdown is byte-identical to `typeset_html()` applied to the HTML of the
+  plain chapter (197 no-break and 178 narrow no-break spaces); the same holds on a synthetic
+  document covering every construct above.
+
 Tests: `./dev.py test utils docs-fr-typography`
-(`backend/test_scripts/test_utilities/test_docs_fr_typography.py`).
+(`backend/test_scripts/test_utilities/test_docs_fr_typography.py`) for the hook, and
+`./dev.py test front-utility core-unit` for the changelog
+(`frontend/src/lib/features/changelog/changelog.test.ts`, with the hook's `typeset()` cases
+ported as tables).
 
 ---
 

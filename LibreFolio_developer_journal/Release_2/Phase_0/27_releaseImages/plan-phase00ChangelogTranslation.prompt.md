@@ -279,3 +279,74 @@ runner registration); the cache sandbox points the changelog at `tmp_path`.
     >   spaces. The in-app modal renders `CHANGELOG.fr.md` without MkDocs (`frontend/src/lib/features/changelog/changelog.ts`
     >   applies no such rule), so a line there can break before `;` `:` `?` `!` `%` or inside « ». The same rules belong
     >   in the modal's renderer, for French. That is outside M's scope; filed as M-23.
+11. ✅ M-23, French spacing in the app's changelog — assigned to M for 1.2 by the coordinator (2026-10-12 18:03);
+    done 2026-10-12 19:40. **FROZEN from 18:27 to 19:24**: the developer's stop, relayed by the coordinator, then «riparti».
+    - **Assignment and rules**:
+      - files: `frontend/src/lib/features/changelog/changelog.ts` and its tests (`changelog.test.ts`;
+        `ChangelogModal.test.ts` only if needed);
+      - the rules of `mkdocs_src/hooks/fr_typography.py`, applied only to chapters in `fr`, outside code (inline and
+        blocks) and outside URLs;
+      - `CHANGELOG.fr.md` unchanged; the red first, through test-author, in the Vitest selector that covers
+        `changelog.test.ts` (`front-utility core-unit`), then the cure;
+      - no CHANGELOG line (the defect never shipped); in the backlog, M-23 «nella 1.2, M» at the checkpoint.
+    > **Done**:
+    > - **Design.** The modal renders each body with `marked` + `sanitizeHtml`, and does not know the chapter's
+    >   language. The modal is not M's (and its test mocks the whole `changelog` module). So the cure goes in
+    >   `changelog.ts`, on the Markdown: `createLocalizedChangelog.load` typesets the French text before
+    >   `parseChangelog`.
+    >   - Two exports: `typesetFrench(text)`, the hook's `typeset`, the same rules and characters;
+    >     `typesetFrenchMarkdown(markdown)`, the same on the prose only.
+    >   - The Markdown version leaves byte for byte: fences (with any indent: a fence in a list item is indented),
+    >     code spans (not across a block), link destinations with their titles, whole images (alt is an attribute in
+    >     HTML), reference definitions, autolinks, HTML tags and the content of `code`/`kbd`/`samp`/`var`/`pre`…, and
+    >     bare URLs.
+    >   - An emphasis, code, link or tag marker (`*` `_` `~` `` ` `` `[` `<`) ends a run of text, as a tag does in the
+    >     hook's HTML: `CHANGELOG.fr.md` has `*… ?*` 7 times and `%*` once.
+    > - **Draft, outside the repo**: `release-pipeline/b27/typeset_draft.ts` (not in the worktree, so the red stays
+    >   honest).
+    > - **Parity with the hook**, Node 26 running the draft against `mkdocs_src/hooks/fr_typography.py`
+    >   (`release-pipeline/b27/parity.mts`, `parity_check.py`, `stress.mts`, `stress.md`; logs `runs/b27/`):
+    >   - `typesetFrench` = `typeset` on 617 of 617 prose runs of the real `CHANGELOG.fr.md`;
+    >   - `marked(typesetFrenchMarkdown(chapter))` = `typeset_html(marked(chapter))`, byte for byte, on the 4 French
+    >     chapters (197 NBSP, 178 NNBSP) and on a synthetic document covering every construct above;
+    >   - the source string is not changed.
+    > - **The red**: test-author `ab03ef25` was given the contract (the two exports; the hook's `typeset` cases ported
+    >   from `test_docs_fr_typography.py` as `it.each`; the Markdown protections; the behaviour through
+    >   `createLocalizedChangelog`: `fr`/`fr-FR`/`FR-ca` typeset, the English fallback and it/es untouched, the raw text
+    >   not changed, `peek` after `load`), plus three refinements (fences with any indent, whole images, a code span not
+    >   crossing into the next bullet).
+    >
+    > **At the stop**: test-author was still in its turn; my tools cannot interrupt it there. A STOP was sent at 18:27,
+    > and it finished the turn before reading it:
+    > - `changelog.test.ts` is complete, Prettier clean: 136 new tests in five `describe` blocks;
+    > - two runs of `front-utility core-unit` in M's lane (no server), at 18:31 and about 18:36. The second, with the
+    >   refinements: 136 failed and 3,766 passed out of 3,902. Every failure is a new M-23 test; the file's 53
+    >   existing tests pass. Logs `/tmp/libreFolio_m23_red.log` and `/tmp/libreFolio_m23_red2.log`.
+    >
+    > So **the red is shown**. Then it stopped, idle. Ports 6158, 6168 and 6042 free; no process of M's lane running.
+    >
+    > **After «riparti»** (19:24, base `0c8412745`, train 67):
+    > - **The cure.** The draft went into `changelog.ts`: the typesetting section and its two exports, the module
+    >   comment, and `TYPESETTERS` (`fr` → `typesetFrenchMarkdown`), applied in `load()` before `parseChangelog()`.
+    >   Prettier clean.
+    > - **Green.** `front-utility core-unit`: 121 files, 3,902 tests passed, the 136 for M-23 included (39 s,
+    >   log `runs/b27/b27_core_unit_green.log`). `dev.py front check` (svelte-check): 0 errors, 0 warnings.
+    > - **Parity, on the product code.** The probes ran again on the section extracted from `changelog.ts`, not on the
+    >   draft: 617 of 617 runs; the 4 chapters' HTML byte-identical to the hook's; the synthetic document identical.
+    > - **Docs.** docs-writer wrote the paragraph and a three-item list in `developer/docs/translation-pipeline.md`
+    >   §French Typography (the frontend test beside the hook's on the `Tests:` line), and one sentence in §The
+    >   CHANGELOG linking to it. It checked every claim against the code and named its choices:
+    >   - comments are listed among what stays;
+    >   - «inline images», since a reference-style image keeps no alt untouched;
+    >   - the frontend's ten opaque elements, not the hook's extra `iframe`/`noembed`/`noframes`/`xmp`/formulas, which a
+    >     changelog never holds.
+    > - **Backlog:** M-23 ✅ «nella 1.2, M».
+    > - **Gates on `a5653f9ef`** (train 68, T's CP1 of M-18 in; script `release-pipeline/scripts/b27_final_gates.sh`,
+    >   logs `runs/b27/b27_final_*`, load 33–52):
+    >   - `front-utility core-unit`: 124 files, 3,961 passed;
+    >   - `check-orphans` clean (109 e2e specs, 352 unit tests);
+    >   - `dev.py front check`: 0 errors, 0 warnings;
+    >   - Prettier clean on the two files;
+    >   - `translate-validate` 630 files 0/0; `translate-diff` 642 of 642 clean; dry-run «nothing to translate» (pages
+    >     and CHANGELOG);
+    >   - strict build 0 (all 3,012 relative asset URLs resolve); `check-links` 95 valid; `git diff --check` clean.
