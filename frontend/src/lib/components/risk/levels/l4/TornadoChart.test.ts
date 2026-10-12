@@ -37,6 +37,16 @@
  * one scale, its sign. Their lookups go from a row's own element to its bar, so they read the old
  * list and the new table alike. Every other case is red until the table lands.
  *
+ * **The interface locale (M-18 CP2).** Every figure is written in the interface language through
+ * one source, `uiLocale()`: the UI language, regionalised by the browser when the two agree. The
+ * table formatted in `$currentLanguage`, the bare language: it followed the UI language but dropped
+ * the browser's region, so an Italian UI on a Swiss Italian browser (`it-CH`, a decimal point:
+ * `-20.00%`) read bare Italian's `-20,00%`. The cases above run on jsdom's en-US browser, where the
+ * interface locale writes these figures as the bare language does (en-US as en, and bare `it` for
+ * an Italian UI, since an en-US browser lends Italian no region), so their expectations stay in
+ * `$currentLanguage`. The region case stubs `navigator.language` to it-CH for its own length, as
+ * uiLocale.test.ts does, then puts jsdom's browser back.
+ *
  * **Handles.** `data-testid` (the component's and DataTable's own `dt-header-*`), `data-row-key`,
  * `data-row-id`, `data-sign`, an icon's `src`, and a bar's declared width — read as a ratio, never
  * as a length, because jsdom lays nothing out. No class is read. A cell is found by its header's
@@ -74,6 +84,7 @@ import es from '$lib/i18n/es.json';
 import fr from '$lib/i18n/fr.json';
 import itCatalogue from '$lib/i18n/it.json';
 import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {ensureAssetsLoaded, mergeAssets, refreshAllAssets, resetAssetStore, type AssetInfo} from '$lib/stores/reference/assetStore';
 import TornadoChart from './TornadoChart.svelte';
 import {formatReplayShare, type TornadoRow} from './scenarioHelpers';
@@ -567,6 +578,38 @@ describe('TornadoChart — figures stay figures', () => {
                 expect(placed, `${row.key} must show exactly one ${column} figure`).toHaveLength(1);
                 expect(cellOf(root, row.key, column).contains(placed[0]), `the ${column} figure of ${row.key} is outside the ${column} column`).toBe(true);
             }
+        }
+    });
+});
+
+describe('TornadoChart — the figures in the interface locale, the browser’s region included (M-18)', () => {
+    it('writes the weight, the return and the contribution it-CH under an Italian UI on a Swiss Italian browser — a decimal point, not bare Italian’s comma', async () => {
+        // Premise: the region changes these very figures, so a table that formats in the bare UI
+        // language cannot pass for one that formats in the interface locale.
+        expect(signedPercent(-0.2, 'it-CH'), 'premise: it-CH writes a signed percent otherwise than bare it').not.toBe(signedPercent(-0.2, 'it'));
+        expect(share(0.4, 'it-CH'), 'premise: it-CH writes a share otherwise than bare it').not.toBe(share(0.4, 'it'));
+
+        await setupI18n('it');
+        // The browser before the language: whatever derives the interface locale from the language
+        // finds the region already in place.
+        vi.stubGlobal('navigator', {language: 'it-CH', languages: ['it-CH']});
+        currentLanguage.set('it');
+        try {
+            expect(uiLocale(), 'control: an Italian UI on an it-CH browser is written it-CH').toBe('it-CH');
+            const root = mount(WEIGHTED);
+            expectColumns(root, COLUMNS, 'barrier: the six columns');
+
+            const figures = (read: (row: Row, column: 'weight' | 'return' | 'contribution') => string) => Object.fromEntries(WEIGHTED.map((row) => [row.key, {weight: read(row, 'weight'), return: read(row, 'return'), contribution: read(row, 'contribution')}]));
+            const swiss = figures((row, column) => (column === 'weight' ? share(row.weight ?? Number.NaN, 'it-CH') : signedPercent((column === 'return' ? row.ownReturn : row.contribution) ?? Number.NaN, 'it-CH')));
+
+            expect(
+                figures((row, column) => figureOf(root, row.key, column)),
+                'the figures are not written it-CH: the table formats in the bare UI language, not in the interface locale',
+            ).toEqual(swiss);
+        } finally {
+            currentLanguage.set('en');
+            vi.unstubAllGlobals();
+            await setupI18n('en');
         }
     });
 });

@@ -112,6 +112,7 @@
     import {buildTransactionsFiltersUrl} from '../../transactions/filterState';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -3521,7 +3522,7 @@
                                     <span class="font-mono text-gray-500 dark:text-gray-400">{providerAssignment.identifier} ({providerAssignment.identifier_type})</span>
                                     {#if providerAssignment.last_fetch_at}
                                         <span class="text-xs text-gray-400 dark:text-gray-500">
-                                            {$t('assets.provider.lastFetch')}: {new Date(String(providerAssignment.last_fetch_at)).toLocaleDateString()}
+                                            {$t('assets.provider.lastFetch')}: {new Date(String(providerAssignment.last_fetch_at)).toLocaleDateString(uiLocale())}
                                         </span>
                                     {:else}
                                         <span class="text-xs text-gray-400 dark:text-gray-500">{$t('assets.provider.neverFetched')}</span>

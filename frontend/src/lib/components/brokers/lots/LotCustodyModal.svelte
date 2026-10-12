@@ -1,6 +1,5 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {schemas} from '$lib/api';
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
@@ -17,6 +16,7 @@
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import {compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, multiplyOrNull, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
     import {isUnknownOrNonZero} from './lotChartShared';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
@@ -65,7 +65,7 @@
         const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(value);
         if (Number.isNaN(date.getTime())) return value;
-        return date.toLocaleDateString($currentLanguage || undefined, kind === 'short' ? {day: '2-digit', month: '2-digit'} : {year: 'numeric', month: 'long', day: 'numeric'});
+        return date.toLocaleDateString(uiLocale(), kind === 'short' ? {day: '2-digit', month: '2-digit'} : {year: 'numeric', month: 'long', day: 'numeric'});
     }
 
     /** A lot quantity; masked under privacy (D5′), with the sign and the unit left outside. */

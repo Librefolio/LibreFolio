@@ -5,7 +5,6 @@
     import {z} from 'zod';
     import {schemas} from '$lib/api';
     import {_} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {buildDataZoom} from '$lib/components/charts/chartCoreHelpers';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
@@ -51,6 +50,7 @@
         sortDates,
         toPercentSeries,
     } from './lotWacPriceChartHelpers';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
@@ -284,14 +284,14 @@
     /** The chart's date labels are exactly the shared axis formatter's with-year
      *  long form; delegating keeps its ~8 call sites untouched. */
     function formatDate(value: number | string): string {
-        return formatAxisDate($currentLanguage, value, true);
+        return formatAxisDate(uiLocale(), value, true);
     }
 
     /** This chart's numbers are already percentages, hence scale 1 (the default). */
     const formatPercent = (value: number): string => sharedFormatPercent(value);
 
-    /** The chart uses the machine locale for numbers (not `$currentLanguage`), so
-     *  the shared formatter is called with no locale argument. */
+    /** Figures follow the interface locale (M-18): the shared formatter's default,
+     *  so it is called with no locale argument. */
     const formatAxisNumber = (value: number): string => sharedFormatAxisNumber(value);
 
     const lineSeriesDates = $derived.by(() => {
@@ -870,7 +870,7 @@
         const amount = parseNumber(event.amount);
         const rows = [
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerType')), escapeHtml(incomeEventTypeLabel(event.type)), incomeMarkerColor()),
-            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerDate')), escapeHtml(formatAxisDate($currentLanguage, event.date))),
+            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerDate')), escapeHtml(formatAxisDate(uiLocale(), event.date))),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerBroker')), escapeHtml(brokerName(event.broker_id))),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerAmount')), escapeHtml(amount == null ? '—' : formatCurrencyAmountPlain(amount, currency))),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerLotCount')), escapeHtml(String(event.lot_ids?.length ?? 0))),
@@ -1604,7 +1604,7 @@
                 },
                 axisLabel: {
                     color: gridColors.textColor,
-                    formatter: (value: number) => (displayMode === 'absolute' ? formatAxisNumber(value) : `${normalizeZero(value).toFixed(0)}%`),
+                    formatter: (value: number) => (displayMode === 'absolute' ? formatAxisNumber(value) : sharedFormatPercent(normalizeZero(value), {digits: 0, signed: false})),
                 },
             },
             series,
@@ -1620,7 +1620,7 @@
         return buildResponsiveXAxisPolicy({
             width: chartContainer?.clientWidth ?? 0,
             values: range ? [range.min, range.max] : [],
-            locale: $currentLanguage,
+            locale: uiLocale(),
             axisType: 'time',
             horizontalPadding: 42,
         });
@@ -1742,7 +1742,7 @@
 
     let prevRenderDeps: unknown[] = [];
     $effect(() => {
-        const renderDeps: unknown[] = [groupedChartData, displayMode, absYFromZero, currency, labels, $currentLanguage, brokers, xAxisRange, eventStateSnapshots, lotBubblePoints];
+        const renderDeps: unknown[] = [groupedChartData, displayMode, absYFromZero, currency, labels, uiLocale(), brokers, xAxisRange, eventStateSnapshots, lotBubblePoints];
         void selectedLotIds;
 
         // Selection-only re-renders leave every geometry input referentially identical (the $derived

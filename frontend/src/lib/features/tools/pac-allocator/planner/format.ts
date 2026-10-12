@@ -22,6 +22,7 @@ import {maskable, shouldMaskAmount, type AmountSensitivity} from '$lib/utils/pri
 import {canonicalDecimal, decimalEqualsRatio, decimalScale, roundDecimal, roundRatio} from './decimal';
 import {defaultAsOf} from './defaults';
 import type {PacExactMoney, PacExactNumber, PacExactPrice, PacObjectiveUnit} from './types';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 export type CurrencyDigits = (currencyCode: string) => number;
 
@@ -251,7 +252,7 @@ export function formatPlannerL2(value: PacExactNumber, currencyCode: string): st
     const shown = exactRoundedDisplay(value, SOLVER_COUNT_DIGITS);
     const canonical = canonicalDecimal(shown.text);
     if (canonical === null) return EMPTY;
-    const digits = maskable(Number(canonical).toLocaleString(undefined, {maximumFractionDigits: SOLVER_COUNT_DIGITS}), 'personal');
+    const digits = maskable(Number(canonical).toLocaleString(uiLocale(), {maximumFractionDigits: SOLVER_COUNT_DIGITS}), 'personal');
     return [(shown.approx ? '≈' : '') + digits, currencyCode + '²'].join(' ');
 }
 
@@ -278,19 +279,19 @@ export function formatSolverNumber(value: string | null | undefined, unit: PacOb
     return formatPlannerFxRate(rounded, {approx: rounded !== canonical});
 }
 
-/** A calendar date (`YYYY-MM-DD`) in the user's locale, with no timezone shift. Public. */
+/** A calendar date (`YYYY-MM-DD`) in the interface locale (`uiLocale()`, M-18), with no timezone shift. Public. */
 export function formatPlannerDate(value: string | null | undefined, locale?: string | null): string {
     if (!value) return EMPTY;
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
     if (!match) return value;
-    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString(locale ?? undefined, {year: 'numeric', month: '2-digit', day: '2-digit'});
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString(locale ?? uiLocale(), {year: 'numeric', month: '2-digit', day: '2-digit'});
 }
 
 /** When a fact was copied or entered. Public. */
 export function formatPlannerTimestamp(value: string | null | undefined, locale?: string | null): string {
     if (!value) return EMPTY;
     const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : formatDateTime(parsed, locale ?? undefined);
+    return Number.isNaN(parsed.getTime()) ? value : formatDateTime(parsed, locale ?? uiLocale());
 }
 
 /**
@@ -301,5 +302,5 @@ export function formatCopyStamp(asOf: string | null | undefined, capturedAt: str
     if (!asOf) return EMPTY;
     const captured = capturedAt ? new Date(capturedAt) : null;
     if (captured === null || Number.isNaN(captured.getTime()) || asOf < defaultAsOf(now)) return formatPlannerDate(asOf, locale);
-    return captured.toLocaleString(locale ?? undefined, {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'});
+    return captured.toLocaleString(locale ?? uiLocale(), {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'});
 }
