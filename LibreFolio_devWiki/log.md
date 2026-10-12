@@ -3154,3 +3154,9 @@ grepped the wiki before naming a gap. **Created**: [[sources/phase00-clean-audit
 [[problems/asset-events-lost-on-price-cache-hit]] (`b45f5afbb`; the journal cites, for the cause, a hash that does
 not resolve in this repository — `git log -S` points to `5b9dddb45`). **Updated**: [[concepts/test-isolation-classes]] (the
 first `test all` that could not pass). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H3 — 08_newCleanAndDocumentation_audit
+Base `61f7c970b`. Source: `phases/08_newCleanAndDocumentation_audit/` (`a9138140a`; never ingested), digested by an
+explore agent. **Created**: [[problems/base-currency-setting-silently-defaulted-eur]] (`08b99c3ac`; the helper and its
+callers checked in the code). **Updated**: [[sources/phase00-clean-audit-2026-08]] (the second audit), [[features/F-092]].
+Graph: not updated (P-6).

@@ -295,6 +295,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/base-currency-setting-silently-defaulted-eur]] | **Folder 08 (second clean audit), P0-1.** Swapped arguments and a non-existent key made every base-currency lookup fall back to EUR; `get_effective_base_currency()` (`08b99c3ac`) | resolved | backend, settings, currency |
 | [[problems/asset-events-lost-on-price-cache-hit]] | **Folder 05 (clean audit).** A price-cache hit returned early and skipped the request that also carried the events: «No data» on an asset with events; events-only fall-through (`b45f5afbb`) | resolved | frontend, assets, cache |
 | [[problems/spa-logout-cross-user-cache-leak]] | **Folder 01.** After an SPA logout stores kept the previous account's data; `ClientSessionState` resets them, scopes keys per user, drops stale responses (`5b9dddb45`) | resolved | frontend, auth, session |
 | [[problems/stale-version-file-shadows-git-describe]] | **Folder 09, R2.** A leftover `VERSION` is read before `git describe` and nothing removes it: the reported version freezes on a dev host; design defect, open | open | backend, version, docker |
@@ -610,6 +611,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Historical folder H3 — `08_newCleanAndDocumentation_audit`.** The second clean audit, added to the first one's source; its P0-1 kept as a problem | *(1 page — 1 problem; see log)* |
 | 2026-10-12 | **Historical folder H2 — `05_cleanAudit`.** The August audit summarised; one solved problem kept (events lost on a price-cache hit) | [[sources/phase00-clean-audit-2026-08]] *(2 pages — 1 source, 1 problem; see log)* |
 | 2026-10-12 | **Historical folder H1 — `01_signalMigration`.** Drift: four July rows re-baselined (path moved to `phases/`); gaps: indicator warm-up sizing, the SPA logout leak | *(2 pages — 1 decision, 1 problem; see log)* |
 | 2026-10-12 | **Folder 09, step F2 — the areas and the visual review; folder 09 covered.** No gap in the areas; R2 of the visual review filed as an open design defect | *(1 page — 1 problem; see log)* |
