@@ -2,7 +2,7 @@
 
 > Authoritative list of all LibreFolio features with permanent codes.
 > Codes are assigned at first mention and **never change** even if the feature is renamed/split/superseded.
-> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git); 2026-10-12 (step B5: F-105 guided onboarding)
+> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git); 2026-10-12 (step B5: F-105 guided onboarding; step B6a: F-106 Tool platform)
 >
 > **Macro-level navigation**: for product-level domain narratives (what each domain does, how features cluster, data-flow diagrams), see [`wiki/domains/`](../domains/) — 11 domain pages covering all features.
 
@@ -173,6 +173,7 @@
 | [[F-072]] | TimeSeriesStore Pattern (delta-fetching client cache) | frontend | `implemented` | [`dev/fe/state/index.md`](developer/frontend/state/index.md) |
 | [[F-073]] | Backup & Restore | fullstack | `implemented` | — |
 | [[F-074]] | E2E Test Gallery (auto-screenshots for docs) | infra | `implemented` | — |
+| [[F-106]] | Tool platform (atomic Tool plugins, an owned process per item, compiled renderers) | fullstack | `documented` | [`dev/arch/patterns/tool_plugins.en.md`](developer/architecture/patterns/tool_plugins.en.md) |
 
 ---
 
@@ -212,8 +213,8 @@
 
 > Recomputed from the rows above on 2026-10-09 (the previous table still counted 96 features and listed F-052/F-053
 > as planned), and again on 2026-10-12 after the lint (F-050, F-089, F-092 shipped; F-075 superseded) and after
-> step B5 (F-105 added). "PLANNED / IDEA" is the section where a feature was first registered, not its status:
-> eleven of its rows have shipped and one is superseded.
+> steps B5 and B6a (F-105, F-106 added). "PLANNED / IDEA" is the section where a feature was first registered, not
+> its status: eleven of its rows have shipped and one is superseded.
 
 | Domain | Total | implemented/documented | in-progress | planned | idea | superseded |
 |--------|-------|----------------------|-------------|---------|------|------------|
@@ -227,9 +228,9 @@
 | SCHEDULER | 2 | 2 | 0 | 0 | 0 | 0 |
 | DASHBOARD | 3 | 3 | 0 | 0 | 0 | 0 |
 | CALCULATIONS | 3 | 3 | 0 | 0 | 0 | 0 |
-| INFRASTRUCTURE | 16 | 16 | 0 | 0 | 0 | 0 |
+| INFRASTRUCTURE | 17 | 17 | 0 | 0 | 0 | 0 |
 | PLANNED/IDEA (first registered) | 25 | 11 | 0 | 10 | 3 | 1 |
-| **TOTAL** | **105** | **90** | **1** | **10** | **3** | **1** |
+| **TOTAL** | **106** | **91** | **1** | **10** | **3** | **1** |
 
 ## Key source files
 
