@@ -311,6 +311,20 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   spagnole, e una run nuova potrebbe rimetterle. Una regola nei prompt e un controllo che confronti «you/your»
   dell'inglese con le forme della traduzione. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
   sezione «7.4».
+- **M-12 · La riga «FX on cash» negli scatti della galleria** — basso; M, 12/10: la vista Performance della galleria
+  riproduce `frontend/e2e/dashboard-report.json`, una cattura reale normalizzata senza liquidità in valuta estera, quindi la
+  riga di F non compare. Serve una cattura nuova dai dati del developer (regola 12: `dev.py mkdocs
+  normalize-dashboard-fixture`), con un broker che tenga liquidità in un'altra valuta. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
+  sezione «9.3».
+- **M-13 · Le sonde della galleria che ignorano il timeout** — medio; M, 12/10: in Playwright 1.61
+  `locator.isVisible({timeout})` non aspetta, e `gallery.spec.ts` ne ha 76, 33 davanti a uno scatto. Se l'elemento non c'è
+  in quell'istante, lo scatto salta in silenzio e il test passa: nel lotto 18, 8 scatti su 2.824. La correzione è
+  `appears()` di `e2e/fixtures/probe.ts`, oggi mai usata, via test-author. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
+  sezione «9.3».
+- **M-14 · I numeri degli scatti nella lingua del browser** — basso; M, 12/10: gli importi seguono la locale del browser
+  (`toLocaleString(undefined, …)`), e la galleria gira in en-US, quindi gli scatti it/fr/es mostrano «1,188.58 €».
+  Basterebbe una `locale` di Playwright per lingua. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
+  sezione «9.3».
 
 ## Q · Documentazione e onboarding (21, 32)
 
