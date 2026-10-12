@@ -3092,3 +3092,11 @@ R5-tempo2), digested by an explore agent and checked here (quotes by grep; hashe
 [[problems/runner-catalog-merge-not-line-union]]. **Updated**: [[features/F-111]], [[features/F-112]],
 [[sources/phase00-risk-integration-2026-09]]. Overtaken in the journal, noted on the pages: the contract's table of
 `ASSET_SET` plugins. Next: R3b, the post-merge review R5 and the progress logs. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R3b — the post-merge review R5
+Base `e050cc142`. Source: `implementation_2/R5-post-merge-e-review.md` (`107098edf`), digested by an explore agent
+(sections around the «⚠️ Fuori pista» markers; the four big progress logs were not read — their history is covered by
+the review and the code). Quotes kept only where grep found them verbatim. **Created**:
+[[problems/risk-stress-buckets-hand-listed]], [[problems/replay-baseline-shortened-by-late-starter]],
+[[problems/echarts-stacked-band-null-base]]. **Updated**: [[concepts/echarts-chart-gotchas]], F-110, F-113, the folder
+source. Graph: not updated (P-6).

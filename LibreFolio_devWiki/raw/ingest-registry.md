@@ -570,3 +570,9 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/A-contratto-asset-set.md` | `daa03c0f2` | 2026-10-12 | [[decisions/asset-set-one-preparation-not-fan-out]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/S3-livello-3.md` | `ac929a78e` | 2026-10-12 | [[decisions/l3-reads-current-composition]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/REGISTRO.md` | `33d5a599b` | 2026-10-12 | [[problems/runner-catalog-merge-not-line-union]], [[decisions/l3-reads-current-composition]] |
+
+## 2026-10-12 — folder 02 (Risk), step R3b (base `e050cc142`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/R5-post-merge-e-review.md` | `107098edf` | 2026-10-12 | [[problems/risk-stress-buckets-hand-listed]], [[problems/replay-baseline-shortened-by-late-starter]], [[problems/echarts-stacked-band-null-base]] — partial: marker sections |

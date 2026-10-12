@@ -290,6 +290,9 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/echarts-stacked-band-null-base]] | **Folder 02, R5.** A stacked band's base null on weekends → ECharts stacks on the origin; bridge base and delta, out of the tooltip (`840bdbc0d`) | resolved | charts, echarts |
+| [[problems/replay-baseline-shortened-by-late-starter]] | **Folder 02, R5.** A late-starting asset moved the replay's joint baseline, halving everyone's crisis; auto-exclusion instead (`a766a9d5d`) | resolved | risk, replay |
+| [[problems/risk-stress-buckets-hand-listed]] | **Folder 02, R5.** The stress editor listed 9 of 17 asset types; a missing bucket got a silent 0 % shock; buckets from the enum (`a5f6776aa`) | resolved | risk, stress |
 | [[problems/runner-catalog-merge-not-line-union]] | **Folder 02, register R2-116.** A line-by-line union of a test-runner catalogue conflict would have dropped a new action; graft the additions and check `--help` | resolved | testing, git, merge |
 | [[problems/mathjax-fonts-missing-from-local-copy]] | **M, batch 25.** The vendored MathJax had no fonts: after M-19, formulas drew in the page's font; companions listed from the script's text and checked every run (`92fb9c83e`); M-22, Mermaid, still needs internet | resolved | docs, mathjax, vendoring |
 | [[problems/fast-forward-blocked-by-a-dirty-file]] | **M, batch 25.** Git refuses a fast-forward over a locally modified file the target also changes; save outside, reset the file to HEAD, fast-forward, `git merge-file -p` on copies | resolved | git, worktree, coordination |
@@ -594,6 +597,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Folder 02, step R3b — the post-merge review R5.** Stress buckets from the enum, replay auto-exclusion, the band chart's null base | *(3 pages — 3 problems; see log)* |
 | 2026-10-12 | **Folder 02, step R3a — `implementation_2/`, the contract and the levels.** One asset-set preparation, L3 on today's composition, a merge recipe for the runner's catalogue | *(3 pages — 2 decisions, 1 problem; see log)* |
 | 2026-10-12 | **Train 69 in the wiki — M-23 (M's batch 27).** The in-app changelog typesets French like the docs: M-23 resolved in 1.2 | *(none)* |
 | 2026-10-12 | **Folder 02, step R2 — the decisions that bind Risk.** The thesis as a decision page; the README's binding list in English as a concept page, linked from F-110…F-112 | *(2 pages — 1 decision, 1 concept; see log)* |
