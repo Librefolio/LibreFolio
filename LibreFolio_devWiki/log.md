@@ -3015,3 +3015,21 @@ open after train 64: V-2…V-4, V-8, V-11…V-20), [[features/F-054]] (status ro
 not ours to change); the reserved quotes TTD/JMD and GTQ/HNL; `describe('Saving')` serial; the About tab's
 `data-busy`; the disposable-account helpers in `fixtures/onboarding-accounts.ts`.
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 66 — V-16, M's batch 25, the ✨ changelog line
+Base `b91d6d902`. Sources: plan 46 §12.7 (V-16, `3aabf0916`); M's plan of batch 25,
+`27_releaseImages/plan-phase00ChangelogTranslation.prompt.md` (`81e221f4e`), with M's note for the devWiki (outside the
+repository); the ✨ line of `CHANGELOG.md` (`b91d6d902`). Every claim of the note checked on the code.
+
+**Created (3)**: [[decisions/changelog-translated-by-heading-pieces]] (`2aecd5a6f`, `e63cfb074`, `4325e03d4`; four
+chapter lines identical in the four files), [[problems/mathjax-fonts-missing-from-local-copy]] (`92fb9c83e`; 22 fonts as
+companions of the cached script; the M-19 spec, extended to the font faces, still waits outside the repository; M-22
+open), [[problems/fast-forward-blocked-by-a-dirty-file]] (the fast-forward to `0afac8e14` over M's backlog edit).
+
+**Updated**: [[problems/bcrypt-blocks-the-event-loop]] → resolved (`a9e0fe4d9`; the heartbeat tests of `0d6aee67c`, red
+first; `reset_password`, CLI only, unchanged), [[concepts/async-io-rule]], [[decisions/changelog-translated-by-chapter]]
+(**corrected**: it said no translated file existed — true at `35c4242f3`, false since `4325e03d4`; the gallery word is
+`Docker`, `416faf60d`), [[features/F-109]], [[features/F-070]], [[features/F-069]],
+[[problems/docs-mathjax-looked-in-the-page-folder]] (the follow-up), [[problems/e2e-writes-leaked-into-shared-state]]
+(A7's damage proved; IWR-009 passes in silence).
+Graph: not updated (P-6).
