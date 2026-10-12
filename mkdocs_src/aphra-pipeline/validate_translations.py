@@ -34,6 +34,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 # Sibling modules: dev.py and a standalone run both put this directory on sys.path.
+import changelog as cl
 from code_blocks import FencedBlock, code_indent_issues, code_line_mask
 from page_anchors import file_anchors, render_anchors  # MkDocs is imported only when a page renders
 
@@ -41,6 +42,8 @@ from page_anchors import file_anchors, render_anchors  # MkDocs is imported only
 from translate_docs import (
     DOCS_DIR,
     _detect_target_languages,
+    _load_hashes,
+    _needs_translation,
     get_translatable_files,
 )
 
@@ -1414,6 +1417,11 @@ def validate_file(
     """Run all checks on a single source/translation pair."""
     source = source_path.read_text(encoding="utf-8")
     translated = trans_path.read_text(encoding="utf-8")
+    return validate_text(source, translated, cache_key, lang)
+
+
+def validate_text(source: str, translated: str, cache_key: str, lang: str) -> list[Issue]:
+    """Run all checks on a source text and its translation (a page, or one chapter of the CHANGELOG)."""
     issues = []
 
     for check_name, check_fn, needs_source in ALL_CHECKS:
@@ -1436,8 +1444,16 @@ def run_validate(args) -> int:
     verbose = getattr(args, "verbose", False)
     hide_localized = getattr(args, "hide_localized", False)
 
-    # Get source files list
+    # CHANGELOG.md: with every page when there is no --file, or when --file names it
+    with_changelog = not file_filter or any(Path(f).name == cl.SOURCE.name for f in file_filter)
     if file_filter:
+        file_filter = [f for f in file_filter if Path(f).name != cl.SOURCE.name]
+        with_changelog = with_changelog and _changelog_source().exists()
+
+    # Get source files list
+    if file_filter == []:
+        sources = []  # only CHANGELOG.md was asked for
+    elif file_filter:
         # Resolve file paths (same logic as translate_docs)
         sources = []
         for f in file_filter:
@@ -1464,7 +1480,7 @@ def run_validate(args) -> int:
         nav_files = get_translatable_files()
         sources = [(rel, DOCS_DIR / rel) for rel in nav_files]
 
-    if not sources:
+    if not sources and not with_changelog:
         print("No translatable files found.")
         return 0
 
@@ -1515,6 +1531,9 @@ def run_validate(args) -> int:
                 if verbose:
                     print(f"  ✅ {cache_key} → {lang}: OK")
 
+    if with_changelog:
+        _validate_changelog(target_langs, result, hide_localized, verbose)
+
     # Summary
     print(f"\n{'=' * 60}")
     print("📊 Validation Summary:")
@@ -1555,6 +1574,106 @@ def run_validate(args) -> int:
         print("\n✅ All translations look good!")
 
     return 1 if result.errors else 0
+
+
+# ---------------------------------------------------------------------------
+# CHANGELOG (changelog.py): the chapters of CHANGELOG.<lang>.md
+# ---------------------------------------------------------------------------
+
+def _changelog_source() -> Path:
+    """CHANGELOG.md, two levels above DOCS_DIR (mkdocs_src/docs/): a run that points DOCS_DIR elsewhere sees no other."""
+    return DOCS_DIR.parent.parent / cl.SOURCE.name
+
+
+def _open(issue: Issue) -> Issue:
+    """The open chapter's finding: information only, until its tag exists."""
+    if issue.severity in (Severity.ERROR, Severity.WARN):
+        return Issue(Severity.INFO, issue.file, issue.lang, issue.check, f"{issue.message} (open chapter)", issue.line)
+    return issue
+
+
+def validate_changelog(lang: str, units: list, released: set[str], hashes: dict, source: Path) -> list[Issue] | None:
+    """The checks of one ``CHANGELOG.<lang>.md``; None when it does not exist and nothing in it has to.
+
+    Every chapter line must be an English one, once, in the English order. Each chapter present goes through the page
+    checks, and its pieces must be done for the current English (the cache). A released chapter (``changelog.released``)
+    that is missing, stale or wrong is an error; the open chapter's findings are information only."""
+    path = cl.translated_path(lang, source)
+    translated_units = [u for u in units if u.pieces]
+    by_name = {u.name: u for u in units}
+    issues: list[Issue] = []
+    if not path.exists():
+        for unit in translated_units:
+            issue = Issue(Severity.ERROR, f"{cl.KEY}#{unit.name}", lang, "changelog-missing",
+                          f"{path.name} does not exist")
+            issues.append(issue if unit.name in released else _open(issue))
+        return issues if any(i.severity == Severity.ERROR for i in issues) else None
+
+    translation = cl.parse_translation(cl.read_text(path))
+    english_order = [u.name for u in units if u.heading]
+    positions = []
+    for name in dict.fromkeys(translation.order):
+        heading = translation.chapters[name][0]
+        unit = by_name.get(name)
+        key = f"{cl.KEY}#{name}"
+        if unit is None or not unit.heading:
+            issues.append(Issue(Severity.ERROR, key, lang, "changelog-chapter", f"«{heading}» is not a chapter of {cl.KEY}"))
+            continue
+        positions.append(english_order.index(name))
+        if heading != unit.heading:
+            issue = Issue(Severity.ERROR, key, lang, "changelog-chapter",
+                          f"chapter line «{heading}» differs from the English «{unit.heading}»")
+            issues.append(issue if name in released else _open(issue))
+    for name in {n for n in translation.order if translation.order.count(n) > 1}:
+        issues.append(Issue(Severity.ERROR, f"{cl.KEY}#{name}", lang, "changelog-chapter", "chapter written more than once"))
+    if positions != sorted(positions):
+        issues.append(Issue(Severity.ERROR, cl.KEY, lang, "changelog-chapter", "chapters not in the English order"))
+
+    for unit in translated_units:
+        key = f"{cl.KEY}#{unit.name}"
+        body = cl.translated_body(unit, translation)
+        found: list[Issue] = []
+        if body is None:
+            found.append(Issue(Severity.ERROR, key, lang, "changelog-missing", "not translated yet"))
+        else:
+            found.extend(validate_text(unit.text(), unit.text(body), key, lang))
+            stale = [p.key.split("#", 1)[1] for p in unit.pieces if _needs_translation(hashes.get(p.key), p.md5, lang)]
+            if stale:
+                found.append(Issue(Severity.ERROR, key, lang, "changelog-stale",
+                                   f"{len(stale)} piece(s) changed since their translation: {', '.join(stale)}"))
+        issues.extend(found if unit.name in released else [_open(i) for i in found])
+    return issues
+
+
+def _validate_changelog(target_langs: list[str], result: ValidationResult, hide_localized: bool, verbose: bool) -> None:
+    source = _changelog_source()
+    units = cl.read_english(source)
+    if not units:
+        return
+    released = cl.released(units, source)
+    hashes = _load_hashes()
+    for lang in target_langs:
+        issues = validate_changelog(lang, units, released, hashes, source)
+        if issues is None:
+            result.files_missing += 1
+            if verbose:
+                print(f"  ⏭️  {cl.KEY} → {lang}: translation not found")
+            continue
+        result.files_checked += 1
+        result.issues.extend(issues)
+        visible = [i for i in issues if not (hide_localized and i.severity == Severity.LOCALIZED)]
+        if visible:
+            has_errors = any(i.severity == Severity.ERROR for i in visible)
+            has_warnings = any(i.severity == Severity.WARN for i in visible)
+            has_localized = any(i.severity == Severity.LOCALIZED for i in visible)
+            status = "❌" if has_errors else ("⚠️ " if has_warnings else ("🌐" if has_localized else "ℹ️ "))
+            print(f"  {status} {cl.KEY} → {lang}:")
+            for issue in visible:
+                print(f"    {issue}")
+        else:
+            result.files_ok += 1
+            if verbose:
+                print(f"  ✅ {cl.KEY} → {lang}: OK")
 
 
 # ---------------------------------------------------------------------------

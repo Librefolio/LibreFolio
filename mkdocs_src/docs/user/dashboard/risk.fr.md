@@ -109,7 +109,7 @@ Quel effet une crise passée, ou un choc que vous imaginez, aurait-il sur le por
 
 - **Ajoutez un outil** avec les boutons **Ajouter :** ; son **×** le ferme et supprime son résultat. Les outils que vous laissez ouverts réapparaîtront la prochaine fois, dans ce navigateur.
 - **Rejeu historique** : choisissez une crise dans **Préréglage**, ou votre propre **Période**, puis **Lancer le rejeu**. Les positions sans prix pour cette période sont exclues, et un bouton peut proposer une période durant laquelle elles ont toutes des prix.
-- **Choc hypothétique** : cliquez sur un scénario, comme *Krach boursier*, pour le lancer ; **Afficher le choc par compartiment** vous permet de modifier ses hypothèses.
+- **Choc hypothétique** : cliquez sur un scénario, comme *Krach boursier*, pour le lancer ; **Afficher le choc par catégorie** vous permet de modifier ses hypothèses.
 - **Simulation** : choisissez un mode — *Historique remélangé* est recommandé — et un horizon, puis **Simuler**. Lisez le cône comme un éventail de possibilités, pas comme une prévision.
 
 !!! note "La simulation est encore en bêta"

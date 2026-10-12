@@ -1,8 +1,9 @@
 # 📈 Price Resolver — the single valuation-mark source
 
-`backend/app/services/price_resolver.py` answers the one question every engine needs —
+`backend/app/services/financial_math/price_marks.py` answers the one question every engine needs —
 *what is the per-unit mark of asset X on day D?* — with a single coherent daily model, so
-charts, valuation (NAV) and metrics (MWRR/TWRR/ROI) all read from the **same** numbers.
+charts, valuation (NAV) and metrics (MWRR/TWRR/ROI) all read from the **same** numbers. The
+module belongs to the [financial math layer](../financial_math.md).
 
 Since the legacy valuation engine was removed (1.1 dev cycle), the resolver is **the only
 valuation path**: there is no market-only fallback cascade and no transition flag. If a value
@@ -57,7 +58,7 @@ The range enters through `build_asset_price_series(ohlc_by_date=…)`: an option
 argument, not a wider `price_rows` tuple, so the other caller (`lots_analysis_service.py`) keeps the
 `(date, close, currency)` shape; a day left out of the map has no range.
 
-Only `portfolio_engine.py` passes it, and only for a calculation run with `include_candles=True`,
+Only the portfolio engine (`financial_math/portfolio/engine.py`) passes it, and only for a calculation run with `include_candles=True`,
 which `POST /api/v1/portfolio/report` requests through `include_pnl_candles`. The Growth chart asks
 for it lazily — when the user switches to the P&L **Candles** submode and no candles are loaded yet —
 on the Dashboard and on a broker page (see the
@@ -78,7 +79,7 @@ composes one synthetic P&L candle per day:
   pre-normalized observations — no I/O, no DB, no async, no FX — so engines (themselves pure)
   can query it and trust it blindly. Data acquisition happens once per calculation in the async
   caller, which then feeds normalized observations via `build_asset_price_series()`. This
-  mirrors the `_FxRateResolver` load-once / query-sync shape.
+  mirrors the load-once / query-sync shape of `FxRateResolver` (`financial_math/lots/conversions.py`).
 - **Native currency, market ×`quote_base_quantity` scale — conversion belongs to the engine.**
   Every observation stays in its own native currency; each `ResolvedMark` carries that
   `currency` so the consuming engine converts to the reporting currency **at the valuation
@@ -86,7 +87,7 @@ composes one synthetic P&L candle per day:
   freezes a stale FX). Trade unit prices are lifted to the qbq axis (`× quote_base_quantity`)
   so a qbq=100 bond lands on its ~100 par axis alongside market quotes. The portfolio engine
   takes those rates from `fx_rate_map`, preloaded once per calculation by `_preload_fx_rates()`
-  with a single `convert_bulk()` call — see
+  (`financial_math/portfolio/engine.py`) with a single `convert_bulk()` call — see
   [FX Architecture](../fx/architecture.md#convert-bulk-window) for how that call loads only the
   rate window it can use.
 - **Never for realized / cost basis.** The mark is for *open-position valuation* and the price
@@ -101,11 +102,11 @@ composes one synthetic P&L candle per day:
 
 ## 🔌 Who consumes it
 
-Exactly two modules import the resolver today:
+Two consumers use the resolver today:
 
 | Consumer | What it uses it for |
 |----------|---------------------|
-| `portfolio_engine.py` | The daily valuation brain: one `AssetPriceSeries` per held asset feeds the daily portfolio states → NAV snapshots → ROI/TWRR/MWRR (via `roi_utils`) and the value/P&L history lines; on request, also the synthetic P&L candles (with `ohlc_by_date`) |
+| Portfolio engine (`financial_math/portfolio/`) | The daily valuation brain: `engine.py` builds one `AssetPriceSeries` per held asset, and `DailyStateBuilder` (`daily_state.py`) reads it to build the daily portfolio states → NAV snapshots → ROI/TWRR/MWRR (`financial_math/returns.py`) and the value/P&L history lines; on request, also the synthetic P&L candles (with `ohlc_by_date`) |
 | `lots_analysis_service.py` | qbq-aware lot valuations, `market_prices` / `estimated_market_prices` maps, performance NAV — see [Lots Analysis Service](lots_analysis_service.md) |
 
 Everything downstream (dashboard KPIs, portfolio/broker reports, AI Export valuation sections)

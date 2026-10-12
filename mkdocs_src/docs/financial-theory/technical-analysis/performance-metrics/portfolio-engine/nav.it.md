@@ -22,6 +22,14 @@ $$
 \cdot \mathrm{fx}(\mathrm{ccy}_{mark}, C^*, t)
 $$
 
+e la liquidità di ciascun broker, mantenuta nelle valute in cui è stata registrata e valutata al tasso di $t$:
+
+$$
+\mathrm{Cash}(t) = \sum_{b \in S} \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t)
+$$
+
+con $N_{b,c}(t)$ il saldo che il broker $b$ detiene nella valuta $c$ alla data $t$, in proporzione alla [quota di proprietà](../../../../user/brokers/sharing.md) del broker, e $\mathrm{fx}(c, C^*, t)$ l'ultimo tasso disponibile alla data $t$ o prima ($1$ per $c = C^*$). La liquidità detenuta in un'altra valuta muove quindi il NAV quando si muove il suo tasso di cambio.
+
 🔗 Vedi **[Portfolio Engine — §5 Aggregation](index.md#5-portfolio-aggregation)** per la derivazione completa.
 
 ---
@@ -35,7 +43,7 @@ La quotazione $\operatorname{mark}(a,t)$ proviene dal resolver unificato:
 3. **CARRIED** — ultima osservazione antecedente a $t$, riportata in avanti (LOCF).
 4. **MISSING** — nessuna osservazione il giorno $t$ o in precedenza.
 
-I mark restano in valuta nativa fino alla valutazione; la conversione FX avviene a $t$. Il PMC **non** viene mai utilizzato per la valutazione. Vedi [Risoluzione Prezzi](price-resolution.md).
+I mark restano in valuta nativa fino alla valutazione, e così i saldi di cassa, ciascuno nella valuta in cui è stato registrato; la conversione FX avviene a $t$. Il PMC **non** viene mai utilizzato per la valutazione. Vedi [Risoluzione Prezzi](price-resolution.md).
 
 ---
 

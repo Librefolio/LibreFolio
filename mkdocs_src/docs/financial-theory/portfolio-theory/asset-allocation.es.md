@@ -1,6 +1,6 @@
 # ⚖️ Asignación de Activos
 
-La asignación de activos es el proceso de decidir **cómo distribuir su cartera** entre diferentes clases de activos. Las investigaciones demuestran consistentemente que la asignación de activos explica la mayor parte de la variabilidad del rendimiento de la cartera, más que la selección de valores individuales o el *market timing*.
+La asignación de activos es el proceso de decidir **cómo distribuir tu cartera** entre diferentes clases de activos. Las investigaciones demuestran consistentemente que la asignación de activos explica la mayor parte de la variabilidad del rendimiento de la cartera, más que la selección de valores individuales o el *market timing*.
 
 ---
 
@@ -8,7 +8,7 @@ La asignación de activos es el proceso de decidir **cómo distribuir su cartera
 
 ### 🏗️ Asignación Estratégica de Activos (SAA)
 
-Un **objetivo a largo plazo** basado en su tolerancia al riesgo, horizonte temporal y metas:
+Un **objetivo a largo plazo** basado en tu tolerancia al riesgo, horizonte temporal y metas:
 
 | Perfil | Acciones | Bonos | Alternativos | Efectivo |
 |---------|----------|-------|---------------|----------|

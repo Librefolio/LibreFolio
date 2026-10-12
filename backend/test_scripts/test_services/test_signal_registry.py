@@ -665,7 +665,7 @@ def test_hidden_plugin_is_registered_and_executable_but_absent_from_public_catal
     plugin_class = SignalPluginRegistry.get_plugin(CALENDAR_SIGNAL_CODE)
 
     assert plugin_class is not None
-    assert plugin_class.__module__ == "backend.app.services.signal_plugins.calendar_rolling_return"
+    assert plugin_class.__module__ == "backend.app.services.signal_plugins.calendar_rolling_return.plugin"
     assert plugin_class.__name__ == "CalendarRollingReturnPlugin"
     assert plugin_class.catalog_visible is False
     assert CALENDAR_SIGNAL_CODE in SignalPluginRegistry.list_plugin_codes()

@@ -13,8 +13,12 @@
  * whose calls resolve to `undefined` leaves the table rendering with empty
  * reference caches — which is exactly the state under test: the badge depends
  * on `txScope`/`txCount` props alone.
+ *
+ * Also the names of the Δ columns — the fixed 1D one and the period ones —
+ * which come from the catalogues: read in a marker locale on the
+ * `dt-header-*` testids, never in a language.
  */
-import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
 vi.mock('$lib/api', () => ({
     zodiosApi: new Proxy(
@@ -27,7 +31,15 @@ vi.mock('$lib/api', () => ({
     ),
 }));
 
+import {get} from 'svelte/store';
+import {addMessages} from 'svelte-i18n';
 import {render, screen, setupI18n, waitFor} from '$test/component';
+import {_ as t} from '$lib/i18n';
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
+import {DELTA_PERIODS} from '$lib/utils/assetPriceDerived';
 import AssetCard from './AssetCard.svelte';
 import AssetTable, {type AssetRow} from './AssetTable.svelte';
 import {matchesAssetLifecycle, orderAssetsByLifecycle} from './assetLifecycle';
@@ -196,5 +208,100 @@ describe('AssetTable — F15 usage badge', () => {
         expect(badge).not.toBeNull();
         expect(badge!.className).toContain('bg-gray-100');
         expect(badge!.textContent?.trim()).toBe('0');
+    });
+});
+
+describe('AssetTable — the Δ period columns are labelled from the catalogues (T, duration labels)', () => {
+    // The Δ columns are headed with their period's key — `Δ 1D` for the fixed column, `Δ 3M` for the
+    // period ones: English unit letters in every language. The contract is the date picker's and the
+    // rolling window's, through the helper the asset and FX tables share (`deltaPeriodLabel`, beside
+    // DELTA_PERIODS): `Δ ` and then `datePicker.presets.days`, `.weeks`, `.months` or `.years` with the
+    // period's count as n.
+    //
+    // Observed without reading a language, in a marker locale: every key of the English catalogue reads
+    // as a marker of itself (`⟦common.name⟧`) and each count key as a marker of itself and its n
+    // (`⟦datePicker.presets.days n=1⟧`), so a header taken from the catalogue reads its marker and a
+    // literal written in the code reads as itself. The Name header is the control: it already comes from
+    // the catalogue. The marker locale registers the count keys itself, so whether the four catalogues
+    // carry them — `days` is new — is asked of the JSON files, in the first case.
+    //
+    // Red today: the columns are headed `Δ 1D`, `Δ 3M` and `Δ 2Y`.
+
+    /** A private-use language (BCP 47 reserves qaa–qtz): Intl accepts it, and it is none of the app's catalogues. */
+    const MARKER_LOCALE = 'qaa';
+    const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+    /** The count keys a Δ header reads, one per unit letter of a period key: D, W, M and Y. */
+    const UNIT_KEYS = ['datePicker.presets.days', 'datePicker.presets.weeks', 'datePicker.presets.months', 'datePicker.presets.years'];
+
+    /** How a label reads in the marker locale: `⟦key⟧`, or `⟦key n=3⟧` for a message given values. */
+    const marked = (key: string, values: Record<string, string | number> = {}): string => `⟦${[key, ...Object.entries(values).map(([name, value]) => `${name}=${value}`)].join(' ')}⟧`;
+
+    /** The value behind a dotted key of a catalogue, if any. */
+    const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+
+    /** Every dotted key of a catalogue that holds a string. */
+    function stringKeysOf(node: unknown, prefix = ''): string[] {
+        if (typeof node === 'string') return [prefix];
+        if (node === null || typeof node !== 'object') return [];
+        return Object.entries(node).flatMap(([part, child]) => stringKeysOf(child, prefix ? `${prefix}.${part}` : part));
+    }
+
+    /** Switch svelte-i18n to the marker locale: every key of the English catalogue reads as its marker, and each key of `counted` as its marker with the names of its values. */
+    async function useMarkerLocale(counted: Record<string, readonly string[]>): Promise<void> {
+        const messages: Record<string, string> = Object.fromEntries(stringKeysOf(en).map((key) => [key, marked(key)]));
+        for (const [key, names] of Object.entries(counted)) messages[key] = marked(key, Object.fromEntries(names.map((name) => [name, `{${name}}`])));
+        addMessages(MARKER_LOCALE, messages);
+        await setupI18n(MARKER_LOCALE);
+    }
+
+    /** The text of a column's header, found by the `dt-header-<column id>` testid DataTable publishes. */
+    const headerText = (columnId: string): string | undefined => screen.getByTestId(`dt-header-${columnId}`).textContent?.trim();
+
+    /** Mount the table with one row and `visiblePeriods`, in the marker locale, and check that the locale is live. */
+    async function mountMarked(visiblePeriods: ReadonlyArray<{key: string; days: number}> = []): Promise<void> {
+        render(AssetTable, {data: [row(41, 2, 'own')], visiblePeriods});
+        await waitFor(() => expect(document.querySelector('tbody tr[data-row-id="41"]')).not.toBeNull());
+        expect(headerText('name'), 'control: a header the table already takes from the catalogue reads its marker').toBe(marked('common.name'));
+    }
+
+    beforeEach(async () => {
+        await useMarkerLocale(Object.fromEntries(UNIT_KEYS.map((key) => [key, ['n']])));
+    });
+
+    afterEach(async () => {
+        await setupI18n('en');
+    });
+
+    it('the four catalogues have days, weeks, months and years, each showing its count through {n}', () => {
+        const gaps = UNIT_KEYS.flatMap((key) =>
+            Object.entries(CATALOGUES).flatMap(([lang, catalogue]) => {
+                const message = leafOf(catalogue, key);
+                return typeof message === 'string' && message.includes('{n}') ? [] : [`${lang}: ${key}`];
+            }),
+        );
+
+        expect(gaps, 'a count key missing from a catalogue, or without its {n}').toEqual([]);
+    });
+
+    it('heads the fixed 1D column Δ datePicker.presets.days n=1, with no period column visible', async () => {
+        expect(get(t)('datePicker.presets.days', {values: {n: 1}}), 'control: the marker locale reads a count message called as the contract says').toBe(marked('datePicker.presets.days', {n: 1}));
+        await mountMarked();
+
+        expect(headerText('delta_1D')).toBe(`Δ ${marked('datePicker.presets.days', {n: 1})}`);
+    });
+
+    it('heads the 3M and 2Y columns Δ datePicker.presets.months n=3 and Δ datePicker.presets.years n=2', async () => {
+        expect(get(t)('datePicker.presets.months', {values: {n: 3}}), 'control: the marker locale reads a count message called as the contract says').toBe(marked('datePicker.presets.months', {n: 3}));
+        const periods = DELTA_PERIODS.filter(({key}) => key === '3M' || key === '2Y');
+        expect(
+            periods.map(({key}) => key),
+            'premise: DELTA_PERIODS offers both periods',
+        ).toEqual(['3M', '2Y']);
+        await mountMarked(periods);
+
+        expect(Object.fromEntries(periods.map(({key}) => [key, headerText(`delta_${key}`)]))).toEqual({
+            '3M': `Δ ${marked('datePicker.presets.months', {n: 3})}`,
+            '2Y': `Δ ${marked('datePicker.presets.years', {n: 2})}`,
+        });
     });
 });

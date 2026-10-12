@@ -13,7 +13,7 @@ A **mutual fund** is a professionally managed investment vehicle that pools mone
 | **Currency** | Denominated in the fund's base currency |
 | **Dividends** | May distribute (income funds) or reinvest (growth funds) |
 | **Fees** | Management fee (TER), entry/exit loads |
-| **Typical providers** | Yahoo Finance, Manual |
+| **Typical providers** | Yahoo Finance, Borsa Italiana, or prices entered by hand in the [Data Editor](../../../user/assets/detail/data-editor.md) |
 
 ---
 

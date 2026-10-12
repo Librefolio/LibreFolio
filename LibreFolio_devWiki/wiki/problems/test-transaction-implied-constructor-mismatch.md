@@ -107,6 +107,9 @@ Resolved — see Solution above. The original "Low / no production risk" assessm
 (V(u)-wide last BUY price), not `TRANSACTION_IMPLIED` (WAC-as-price). The `TRANSACTION_IMPLIED` mechanism
 this test file exercised was intentionally removed in commit `39106380`, not merely renamed.
 
+Its root cause stayed out of sight while `os._exit()` in `pytest_sessionfinish` swallowed every FAILURES report:
+[[problems/pytest-exit-swallows-failures]].
+
 ## Recurrence 2026-10-07
 
 The structural pressure came back — this time handled inside the same change. Release 2 workstream P (issue #32,
@@ -129,7 +132,7 @@ default so that no construction can fall back to silent zero costs.
 
 | Role | Path |
 |------|------|
-| Constructor (current signature) | `backend/app/services/portfolio_engine.py` (`DailyStateBuilder.__init__`, `_market_value_for`) |
+| Constructor (current signature) | `backend/app/services/financial_math/portfolio/daily_state.py` (`DailyStateBuilder.__init__`, `_market_value_for`) |
 | Sibling test (fixed, same signature update) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_daily_state_builder.py` |
 | Replacement coverage (LAST_BUY_PRICE; `TestLastBuyPrice` until 2026-07-31, when commit `1c5082f81` made the unified price resolver the single valuation brain — now `TestResolverValuation`) | `backend/test_scripts/test_services/test_portfolio_engine_vnext.py` |
 | Shared `average_costs` helper for builder tests (2026-10-07) | `backend/test_scripts/test_services/_engine_average_costs.py` |

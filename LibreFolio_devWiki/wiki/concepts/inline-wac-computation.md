@@ -153,8 +153,9 @@ Since 2026-10-07: the engine makes two batched `convert_bulk` calls per run (the
 
 ## Where It Applies
 
-- `PortfolioCalculationEngine.calculate()` in `portfolio_engine.py` — builds the positions (`build_cost_positions()`) and makes the one `compute_average_costs()` call (since 2026-10-07)
-- `DailyStateBuilder` in `portfolio_engine.py` — per-tx unified loop; since 2026-10-07 it replays the precomputed steps (`_next_cost_step()`) instead of accumulating its own pools
+- `PortfolioCalculationEngine.calculate()` in `financial_math/portfolio/engine.py` — builds the positions (`build_cost_positions()`, `derived_views.py`) and makes the one `compute_average_costs()` call (since 2026-10-07)
+- `DailyStateBuilder` in `financial_math/portfolio/daily_state.py` — per-tx unified loop; since 2026-10-07 it replays the precomputed steps (`_next_cost_step()`) instead of accumulating its own pools
+- (Both were in `portfolio_engine.py` until 2026-10-12.)
 - Pre-frame loop: WAC computed for all historical transactions before t0
 - Frame loop [t0, t1]: WAC available at every day for cost basis and 3-pool updates
 
@@ -176,7 +177,7 @@ later purchases.
 
 | Role | Path |
 |------|------|
-| Engine implementation (positions, replay of the cost steps) | `backend/app/services/portfolio_engine.py` |
+| Engine implementation (positions, replay of the cost steps) | `backend/app/services/financial_math/portfolio/derived_views.py`, `backend/app/services/financial_math/portfolio/daily_state.py` |
 | Average-cost function (pool rules, conversions) — since 2026-10-07 | `backend/app/services/financial_math/average_cost.py` |
 | WAC facade (`compute_wac_iterative`) and realized P&L from `realized_sales` | `backend/app/services/portfolio_service.py` |
 | vNext unit tests (20 at creation, 40 test functions by 2026-10-07) | `backend/test_scripts/test_services/test_portfolio_engine_vnext.py` |

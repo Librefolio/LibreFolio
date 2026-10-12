@@ -48,7 +48,7 @@ The Risk tab holds the **Portfolio risk** panel, which answers four questions ab
 
 At the top right of the dashboard, you have several controls to customize your view:
 
-- **Time range** — presets from 1 week to All-Time (MAX), or a custom range via the date picker.
+- **Time range** — presets from **1W** to **All**, or a custom range via the date picker.
 - **Broker filter** — filters the metrics to one or more specific brokers; the Risk tab always covers every broker you own, and a subtitle says so when a filter is on.
 - **Target currency** — converts all assets and cash balances dynamically into a single selected currency for aggregate viewing. The list offers your default currency and the currencies of your configured FX pairs — both ends of each pair. A currency that a [chain route](../fx/add-pair.md) only passes through is not offered: syncing a chain stores only the rate of its own pair, so LibreFolio has no rates to convert into that currency. To make a currency available, give it a pair of its own: pick **Create forex…** at the bottom of the list, or tick **Also create intermediate pairs** when you add a pair through a chain route.
 - **AI Export** (:material-brain:) — opens a clipboard export. Choose **Data
@@ -96,7 +96,7 @@ The banner also warns you when an asset you hold has a price provider but its la
 
 It also lists the assets with a **missing purchase cost**: a transfer or an adjustment that brought units in without a cost basis. LibreFolio cannot know what those units cost, so it counts them at zero in your purchase cost and shows that position's average cost and unrealized P&L as unavailable (`—`). To fix it, find that transfer or adjustment among your [transactions](../transactions/index.md) and give it its cost basis.
 
-Exchange rates are checked for every transaction up to the end date — each purchase, sale and cash movement is converted at the rate of its own date — and, to value what you hold, on each day of the period on screen. When a configured FX pair with a provider has **no rate** for some of those dates, the banner lists it with the span of the missing dates. LibreFolio converts an amount with the latest rate on or before its date, however old, so these dates come *before* the pair's first stored rate — often well before the period on screen, because every past transaction counts towards totals such as your Total P&L and your purchase cost. Click **Sync rates** to fill them:
+Exchange rates are checked for every transaction up to the end date — each purchase, sale and cash movement is converted at the rate of its own date — and, to value what you hold, on each day of the period on screen: your securities, and also the cash you keep in another currency, valued every day at that day's rate. When a configured FX pair with a provider has **no rate** for some of those dates, the banner lists it with the span of the missing dates. LibreFolio converts an amount with the latest rate on or before its date, however old, so these dates come *before* the pair's first stored rate — often well before the period on screen, because every past transaction counts towards totals such as your Total P&L and your purchase cost. Click **Sync rates** to fill them:
 
 - LibreFolio downloads that span of dates with **one extra week on each side** (never beyond today), whatever period the dashboard is showing. The extra week covers weekends and bank holidays, when providers publish nothing: such a day at the edge of the span then takes the rate of the previous working day.
 - Once the download is over, the dashboard refreshes and a message reports the result for each pair.
@@ -106,7 +106,7 @@ Pairs with manual rates only (no provider) get a warning of their own: its **Vie
 
 !!! tip "Fill a pair's whole history at once"
 
-    Open the [FX page](../fx/index.md), choose the **All** (MAX) range and click [Sync All](../fx/sync.md): LibreFolio downloads everything the providers publish for your pairs, up to today. A pair you add with a provider does this by itself — see [Adding a Currency Pair](../fx/add-pair.md).
+    Open the [FX page](../fx/index.md), choose the **All** range and click [Sync All](../fx/sync.md): LibreFolio downloads everything the providers publish for your pairs, up to today. A pair you add with a provider does this by itself — see [Adding a Currency Pair](../fx/add-pair.md).
 
 ---
 

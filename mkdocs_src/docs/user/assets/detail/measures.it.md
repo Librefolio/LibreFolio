@@ -36,8 +36,8 @@ La riga di riepilogo della misura aggiunge il numero di giorni.
 
 I valori sono già rendimenti, quindi la tabella li confronta:
 
-- **Inizio**, **Fine** — il rendimento rolling su ciascuna delle due date.
-- **Δ pp** — Fine meno Inizio, in punti percentuali → [Rendimento rolling sui giorni di calendario](../../../financial-theory/fundamentals/returns.md#rolling-return-calendar)
+- **Inizio**, **Fine** — il rendimento mobile su ciascuna delle due date.
+- **Δ pp** — Fine meno Inizio, in punti percentuali → [Rendimento mobile sui giorni di calendario](../../../financial-theory/fundamentals/returns.md#rolling-return-calendar)
 - **Giorni** — i giorni di calendario tra i due punti.
 
 ---

@@ -108,8 +108,8 @@ El riesgo vale la pena solo si paga. Este bloque compara el rendimiento de tu ca
 **Cómo leerlo**
 
 - **Añade una herramienta** con los botones **Añadir:**; su **×** la cierra y descarta su resultado. Las herramientas que dejes abiertas vuelven la próxima vez, en este navegador.
-- **Repetición histórica**: elige una crisis en **Preajuste**, o tu propio **Período**, y luego **Ejecutar reproducción**. Las posiciones sin precios para ese período se excluyen, y un botón puede ofrecer un período en el que todas tengan precios.
-- **Choque hipotético**: haz clic en un escenario, como *Equity crash*, para ejecutarlo; **Mostrar el choque por bucket** te permite cambiar sus supuestos.
+- **Repetición histórica**: elige una crisis en **Preajuste**, o tu propio **Período**, y luego pulsa **Ejecutar repetición**. Las posiciones sin precios para ese período se excluyen, y un botón puede ofrecer un período en el que todas tengan precios.
+- **Choque hipotético**: haz clic en un escenario, como *Equity crash*, para ejecutarlo; **Mostrar el choque por grupo** te permite cambiar sus supuestos.
 - **Simulación**: elige un modo — *Historial remezclado* es el recomendado — y un horizonte, luego **Simular**. Lee el cono como un rango de posibilidades, no como un pronóstico.
 
 !!! note "La simulación sigue en beta"
@@ -128,7 +128,7 @@ Una cifra de riesgo es tan buena como los precios que la sustentan. Cuando falta
 
 **Herramientas mostradas**
 
-- **Calidad de datos** — precios y tasas faltantes u obsoletos, y las posiciones que quedan fuera → [Calidad de datos](../../financial-theory/technical-analysis/risk-metrics/data-quality.md)
+- **Calidad de datos** — precios y tipos de cambio faltantes u obsoletos, y las posiciones que quedan fuera → [Calidad de datos](../../financial-theory/technical-analysis/risk-metrics/data-quality.md)
 
 **Cómo leerlo**
 

@@ -19,7 +19,7 @@ Lo que copias es contexto factual, no asesoramiento de inversión.
 
 ## 🚀 Cómo abrirla
 
-Selecciona **Exportar IA** (:material-brain:) en la barra de herramientas de una de estas páginas:
+Selecciona **Exportación IA** (:material-brain:) en la barra de herramientas de una de estas páginas:
 
 | Página | Qué cubre la exportación | Guía |
 | :--- | :--- | :--- |

@@ -25,7 +25,7 @@ Basculez avec **Abs** / **%** dans le coin supérieur gauche du graphique ; la p
 | **Zoom** | Molette de la souris | Pincement |
 | **Déplacement** | Cliquer et glisser | Glisser avec deux doigts (un doigt fait défiler la page) |
 
-- **Période** : les préréglages **1W** à **2Y**, **YTD** et **Tout**, ou **Personnalisé** (un nombre
+- **Période** : les préréglages **1S** à **2A**, **YTD** et **Tout**, ou **Personnalisé** (un nombre
   de jours, de semaines, de mois ou d'années en arrière à partir d'aujourd'hui) ; cliquez sur les dates pour
   les choisir dans un calendrier. D'autres préréglages apparaissent lorsque la barre d'outils dispose
   de suffisamment de place. Les pages d'un même onglet de navigateur partagent la période.

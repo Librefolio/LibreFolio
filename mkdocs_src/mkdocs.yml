@@ -186,6 +186,7 @@ plugins:
             Advanced Docker: Docker Avanzato
             Host Installation: Installazione su Host
             Expose Securely: Esporre in Sicurezza
+            Check Connection Security: Verificare la Sicurezza della Connessione
             "📚 Financial Theory": "📚 Teoria Finanziaria"
             "🏷️ Asset Types": "🏷️ Tipi di Asset"
             "🔄 Transaction Types": "🔄 Tipi di Transazione"
@@ -429,6 +430,7 @@ plugins:
             Advanced Docker: Docker Avancé
             Host Installation: Installation sur l'Hôte
             Expose Securely: Exposer en Sécurité
+            Check Connection Security: Vérifier la Sécurité de la Connexion
             "📚 Financial Theory": "📚 Théorie Financière"
             "🏷️ Asset Types": "🏷️ Types d'Actifs"
             "🔄 Transaction Types": "🔄 Types de Transactions"
@@ -672,6 +674,7 @@ plugins:
             Advanced Docker: Docker Avanzado
             Host Installation: Instalación en Host
             Expose Securely: Exponer en Seguridad
+            Check Connection Security: Comprobar la Seguridad de la Conexión
             "📚 Financial Theory": "📚 Teoría Financiera"
             "🏷️ Asset Types": "🏷️ Tipos de Activos"
             "🔄 Transaction Types": "🔄 Tipos de Transacciones"
@@ -958,6 +961,7 @@ nav:
           - Host Installation: admin/host_installation.md
           - Advanced Docker: admin/docker_advanced.md
           - Expose Securely: admin/service_exposure.md
+          - Check Connection Security: admin/connection_checks.md
       - ⚙️ System Configuration:
           - Environment Variables: admin/configuration.md
           - Global Settings: admin/settings.md
@@ -1139,6 +1143,7 @@ nav:
                   - Generic CSV Provider: developer/backend/brim/generic_csv.md
                   - Danske Bank Importer: developer/backend/brim/danske_bank.md
                   - Crédit Agricole Importer: developer/backend/brim/credit_agricole.md
+                  - Scalable Capital Importers: developer/backend/brim/scalable.md
                   - Providers List: developer/backend/brim/providers_list.md
           - "📈 Assets (Pricing)":
               - Architecture: developer/backend/assets/architecture.md
@@ -1161,6 +1166,7 @@ nav:
                   - BOE Tech: developer/backend/fx/providers/boe.md
                   - SNB Tech: developer/backend/fx/providers/snb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
+          - "🧮 Financial Math Layer": developer/backend/financial_math.md
           - "📉 Risk Engine": developer/backend/risk/architecture.md
       - 🎨 Frontend Development:
           - Overview: developer/frontend/index.md

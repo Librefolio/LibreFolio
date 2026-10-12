@@ -28,7 +28,7 @@ Entrambi i lati usano lo stesso flusso NAV del motore di portafoglio e lo stesso
 
 ## 🔢 Esempi Numerici
 
-### 📈 1: Effetto Timing Positivo (Flussi Favorevoli)
+### 📈 Esempio 1: Effetto Timing Positivo (Flussi Favorevoli)
 * **TWRR Cumulativo (Rendimento Strategia):** $+20\%$
 * **MWRR Cumulativo (Rendimento Investitore):** $+28\%$
 
@@ -38,7 +38,7 @@ $$
 
 * **Interpretazione:** La strategia degli asset sottostanti ha generato un rendimento del $+20\%$. Tuttavia, poiché hai aggiunto una quota significativa di capitale al portafoglio prima che il mercato salisse, il tuo rendimento personale ponderato per il denaro è salito al $+28\%$. Il timing e la dimensione dei tuoi versamenti hanno contribuito positivamente per **$+8$ punti percentuali** di rendimento aggiuntivo.
 
-### 📉 2: Effetto Timing Negativo (Flussi Sfavorevoli)
+### 📉 Esempio 2: Effetto Timing Negativo (Flussi Sfavorevoli)
 * **TWRR Cumulativo (Rendimento Strategia):** $+20\%$
 * **MWRR Cumulativo (Rendimento Investitore):** $+12\%$
 
@@ -52,12 +52,12 @@ $$
 
 ## ⚖️ Cosa Cattura e Cosa Non Cattura
 
-### 🎯 Cattura
+### 🎯 Cosa Cattura
 - **Impatto del timing dei versamenti/prelievi:** Se hai aggiunto liquidità durante i minimi di mercato (acquistando a sconto) o i massimi (acquistando a caro prezzo).
 - **Impatto della dimensione dei flussi:** I flussi di cassa più grandi hanno un peso maggiore nel calcolo del MWRR, e l'Effetto Timing riflette questa dinamica.
 - **L'"Investor Gap":** la distanza tra il rendimento della strategia e il rendimento effettivamente ottenuto dall’investitore, dovuta al timing e alla dimensione dei flussi.
 
-### 🚫 Non Cattura
+### 🚫 Cosa Non Cattura
 - **Profitto monetario assoluto:** Un Effetto Timing positivo di $+5$ pp può esistere anche se il portafoglio è in perdita (ad esempio, se il TWRR è al $-20\%$ e il MWRR al $-15\%$). Per valutare il guadagno in valuta, consulta il [P&L del Periodo](period-pnl.md).
 - **Rischio e volatilità:** Non fornisce indicazioni sul profilo di rischio o sulla volatilità degli asset.
 - **Impatto disaggregato di imposte e costi:** l'Effetto Timing non scompone imposte e costi; eventuali costi e imposte possono essere mostrati separatamente nel P&L del periodo.

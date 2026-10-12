@@ -77,7 +77,7 @@ Commit: `a61b0dfa` (G-batch7, 2026-04-25).
 
 | Role | Path |
 |------|------|
-| Bug & fix | `backend/app/utils/currency_utils.py` (`normalize_currency`) |
-| Symbol map | `backend/app/utils/currency_utils.py` (`SYMBOL_TO_ISO`) |
+| Bug & fix | `backend/app/utils/fx/currency.py` (`normalize_currency`) |
+| Symbol map | `backend/app/utils/fx/currency.py` (`SYMBOL_TO_ISO`) |
 | Test that caught it | `backend/test_scripts/test_utilities/test_currency_utils.py::TestNormalizeCurrency` |
 

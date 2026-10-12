@@ -2,7 +2,7 @@
  * LibreFolio JS Library Loader with Fallback
  *
  * Strategy:
- * 1. Try loading from local vendor/ (populated at server startup)
+ * 1. Try loading from local vendor/ (cached by scripts/update_js_cache.py, copied by the docs build)
  * 2. Fallback to CDN if local not available
  *
  * This ensures documentation works both:
@@ -16,10 +16,17 @@
 (function () {
     'use strict';
 
+    // This file's own address. MkDocs links it with a path relative to each page
+    // (`../../javascripts/lib-loader.js`), so it always points under the site's root,
+    // whatever the page's depth, its language folder or the path the site is served at
+    // (`/mkdocs/` in LibreFolio). Read now: it is null once this script has run.
+    const SELF = document.currentScript ? new URL(document.currentScript.src, window.location.href) : null;
+    const SELF_PATH = '/javascripts/lib-loader.js';
+
     const LIBRARIES = [
         {
             name: 'mathjax',
-            // Local path - populated by backend/dev.sh at startup
+            // Local path, relative to the site's root
             local: 'javascripts/vendor/mathjax/tex-mml-chtml.js',
             cdn: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
             test: function () {
@@ -43,9 +50,19 @@
     }
 
     /**
-     * Get base path for documentation
+     * The site's root URL, where `javascripts/vendor/` lives.
+     *
+     * The page's own folder is right only for the pages at the root: on every nested page
+     * it pointed below the page, the local copy answered 404 and MathJax came from the CDN,
+     * so the formulas did not show offline.
      */
     function getBasePath() {
+        if (SELF) {
+            const at = SELF.pathname.lastIndexOf(SELF_PATH);
+            if (at !== -1) {
+                return SELF.origin + SELF.pathname.slice(0, at + 1);
+            }
+        }
         const baseEl = document.querySelector('base');
         if (baseEl && baseEl.href) {
             return baseEl.href;

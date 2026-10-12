@@ -44,8 +44,8 @@ except ImportError:
 
 from backend.app.config import get_data_dir
 from backend.app.schemas.uploads import UploadFileInfo
-from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.runtime.cache import get_ttl_cache
 
 logger = structlog.get_logger(__name__)
 

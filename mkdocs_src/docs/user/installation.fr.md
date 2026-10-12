@@ -211,7 +211,7 @@ Pour chaque option et la façon dont sa valeur est résolue, consultez le [Guide
 
 ## 💾 Sauvegarde des données {#data-backup}
 
-Toutes vos données (la base de données SQLite, les fichiers téléchargés, les rapports de courtier et les logs) se trouvent dans le dossier `./LibreFolio-data` à côté de `docker-compose.yml`. Sauvegardez ce dossier, en arrêtant d'abord le conteneur pour une copie cohérente.
+Toutes vos données (la base de données SQLite, les fichiers téléversés, les rapports de courtier et les logs) se trouvent dans le dossier `./LibreFolio-data` à côté de `docker-compose.yml`. Sauvegardez ce dossier, en arrêtant d'abord le conteneur pour une copie cohérente.
 
 Pour savoir quoi sauvegarder et comment, consultez la [section Sauvegarde du manuel d'administration](../admin/filesystem.md#backup).
 

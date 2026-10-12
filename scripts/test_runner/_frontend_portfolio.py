@@ -46,6 +46,30 @@ def front_portfolio_stale_price_banner(verbose: bool = False, ui: bool = False, 
     return _run_playwright("portfolio/stale-price-banner.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_data_quality_legacy(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the MISSING_COST_BASIS legacy-rows E2E test (release item 22) on the desktop project, the runner default."""
+    print_section("Frontend Portfolio Data Quality Legacy Rows Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/data-quality-legacy.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_portfolio_data_quality_real(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the data-quality E2E tests on real data (items 21-23 of release 1.2) on the desktop project, the runner default."""
+    print_section("Frontend Portfolio Data Quality Real-Data Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/data-quality-real.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_broker_filter_label(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the dashboard broker-filter label E2E test (K step 15, item b) on the desktop project, the runner default."""
     print_section("Frontend Portfolio Broker Filter Label Tests")
@@ -334,15 +358,31 @@ def populate_registry(registry: dict) -> None:
         "stale-price-banner",
         front_portfolio_stale_price_banner,
         name="Stale Price Banner Tests",
-        desc="STALE_PRICE (D8): a provider-priced holding last quoted 10 days ago raises the dashboard warning, and its sync CTA posts one item per affected asset over the dashboard range, stays busy while the sync runs, then reloads the report — on a disposable account, with the provider sync intercepted",
+        desc="STALE_PRICE (D8): a provider-priced holding last quoted 10 days ago raises the dashboard warning, and its sync CTA posts one item per affected asset over the dashboard range, stays busy while the sync runs, then reloads the report; V-1: the lots panel already open asks its analysis again by itself once that sync has answered, without a reload — on disposable accounts, with the provider sync intercepted",
         tests="portfolio/stale-price-banner.spec.ts",
+    )
+    add_test(
+        cat,
+        "data-quality-legacy",
+        front_portfolio_data_quality_legacy,
+        name="Data Quality Legacy Rows Tests",
+        desc="Item 22 (MISSING_COST_BASIS) with rows an older version left behind — a TRANSFER pair and an ADJUSTMENT adding quantity without cost basis, written into the lane's test DB by backend/test_scripts/test_db/legacy_cost_rows.py — reach the yellow dashboard banner with one link per affected asset, show — for P&L, P&L % and average cost on the units of unknown cost while the paid ones keep their figures, raise the same warning in the lots panel, and the asset link opens the asset page — on a disposable account",
+        tests="portfolio/data-quality-legacy.spec.ts",
+    )
+    add_test(
+        cat,
+        "data-quality-real",
+        front_portfolio_data_quality_real,
+        name="Data Quality Real-Data Tests",
+        desc="Items 21-23 on disposable accounts with real data: a missing FX rate is a banner row with its pair and dates, a dash in the P&L, P&L % and average-cost cells and an issue in the lots panel, until MOCKFX «Sync rates» stores the rate and clears it everywhere (the lots panel already open refreshes by itself); an acquisition without cost basis (P-10) is a banner row linking the asset, with dashes on the dashboard and the broker page, cleared by an explicit cost; the unrealized change tooltip splits the period by currency into the asset and the exchange-rate effect",
+        tests="portfolio/data-quality-real.spec.ts",
     )
     add_test(
         cat,
         "broker-filter-label",
         front_portfolio_broker_filter_label,
         name="Broker Filter Label Tests",
-        desc="Dashboard broker filter scoped to one long-named broker (owned by the test: created for the E2E user, deleted by id): at the 320 px layout (viewport 320 + the scrollbar gutter measured at load, a 254 px bar on every host) the trigger and the visible part of its label stay inside the bar card and the page does not scroll sideways, the label staying the whole name in the DOM and in the accessible name; at 2560 px (oneRow, room to spare) the whole name is shown unclipped, on arrival and after a trip to the 320 px layout — each absence with its positive control",
+        desc="Dashboard broker filter scoped to one long-named broker (on a disposable account that owns it and one plain broker, all deleted at the end — the shared E2E user is never touched): at the 320 px layout (viewport 320 + the scrollbar gutter measured at load, a 254 px bar on every host) the trigger and the visible part of its label stay inside the bar card and the page does not scroll sideways, the label staying the whole name in the DOM and in the accessible name; at 2560 px (oneRow, room to spare) the whole name is shown unclipped, on arrival and after a trip to the 320 px layout — each absence with its positive control",
         tests="portfolio/dashboard-broker-filter-label.spec.ts",
     )
     add_test(cat, "broker-icons", front_portfolio_broker_icons, name="Broker Icon Tests", desc="Dashboard positions broker fallback chain", tests="portfolio/broker-icons.spec.ts")

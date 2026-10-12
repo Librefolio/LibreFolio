@@ -1708,7 +1708,8 @@
     "pnlAxisWithYear": "{label} ''{year}",
     "unrealizedAssetEffect": "Assets in {currency}",
     "unrealizedFxEffect": "{from} → {to} rate",
-    "unrealizedUnsplit": "{currency}, not split"
+    "unrealizedUnsplit": "{currency}, not split",
+    "fxOnCash": "FX on cash"
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",
@@ -1787,6 +1788,7 @@
       "qtd": "QTD",
       "ytd": "YTD",
       "max": "All",
+      "days": "{n}D",
       "weeks": "{n}W",
       "months": "{n}M",
       "years": "{n}Y"
@@ -3880,7 +3882,8 @@
     "noStableRelease": "No stable release was found on GitHub.",
     "imagePending": "A newer stable release was detected, but its Docker image is not available yet.",
     "imageCheckFailed": "A newer stable release was detected, but its Docker image could not be verified. Try again.",
-    "adminLookupFailed": "Update available, but the administrator list could not be loaded."
+    "adminLookupFailed": "Update available, but the administrator list could not be loaded.",
+    "notTranslated": "Not translated yet"
   },
   "providerErrors": {
     "NO_DATA": "No data available for this instrument on the provider.",

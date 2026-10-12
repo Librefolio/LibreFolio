@@ -718,7 +718,7 @@ def cmd_info_api(args):
 
 def cmd_info_version(args):
     """Show application version from git tags."""
-    from backend.app.utils.version import get_version_info
+    from backend.app.utils.runtime.version import get_version_info
     version_info = get_version_info()
     print(f"{Colors.CYAN}LibreFolio {version_info['version']}{Colors.NC}")
     if version_info['is_dirty']:
@@ -1511,7 +1511,7 @@ def _get_docker_tag(override: str | None = None) -> str:
     if override:
         return override
 
-    from backend.app.utils.version import get_git_version
+    from backend.app.utils.runtime.version import get_git_version
     # Clear lru_cache so that asset-build artefacts don't produce a stale result
     get_git_version.cache_clear()
     version = get_git_version()  # e.g. "v0.5.0" or "v0.5.0-3-gabcdef-dirty"
@@ -1646,7 +1646,7 @@ def _docker_ensure_assets_built():
     # The image has no .git/, so get_git_version()'s `git describe` can't run at
     # container runtime. Freeze the version now (on the host, where .git/ exists)
     # into a plain file that gets COPYed into the image.
-    from backend.app.utils.version import get_git_version
+    from backend.app.utils.runtime.version import get_git_version
 
     # get_git_version() prefers an existing VERSION file over `git describe` (so
     # it works with no .git/ inside the container). Remove any stale VERSION file

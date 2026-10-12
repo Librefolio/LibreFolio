@@ -126,6 +126,8 @@ Full list: `knowledge_base/08_i18n_duplicates.md`
 ## Links
 
 - [[features/F-008]] — i18n System feature page
+- [[decisions/plugin-folders-and-split-i18n]] — planned (2026-10-12): the catalogues split into 17 subsystems plus a
+  `base`, plugin translations in their folders, no key renamed
 - Source: `LibreFolio_developer_journal/knowledge_base/08_i18n_duplicates.md`
 - Plan: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step6/plan-phase06Step6-i18n-dedup.prompt.md`
 

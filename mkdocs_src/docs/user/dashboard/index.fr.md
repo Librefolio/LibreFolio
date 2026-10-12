@@ -48,7 +48,7 @@ L'onglet Risque contient le panneau **Risque du portefeuille**, qui répond à q
 
 En haut à droite du tableau de bord, vous disposez de plusieurs contrôles pour personnaliser votre vue :
 
-- **Plage temporelle** — des préréglages d'une semaine à Tout l'historique (MAX), ou une plage personnalisée via le sélecteur de dates.
+- **Plage temporelle** — des préréglages de **1S** à **Tout**, ou une plage personnalisée via le sélecteur de dates.
 - **Filtre de courtiers** — filtre les métriques sur un ou plusieurs courtiers spécifiques ; l'onglet Risque couvre toujours chaque courtier que vous détenez, et un sous-titre l'indique lorsqu'un filtre est actif.
 - **Devise cible** — convertit dynamiquement tous les actifs et soldes de trésorerie dans une seule devise sélectionnée pour une vue agrégée. La liste propose votre devise par défaut et les devises de vos paires FX configurées — les deux extrémités de chaque paire. Une devise qu'une [route en chaîne](../fx/add-pair.md) traverse uniquement n'est pas proposée : la synchronisation d'une chaîne ne stocke que le taux de sa propre paire, LibreFolio n'a donc aucun taux pour convertir vers cette devise. Pour rendre une devise disponible, attribuez-lui sa propre paire : choisissez **Créer un forex…** en bas de la liste, ou cochez **Créer également les paires intermédiaires** lorsque vous ajoutez une paire via une route en chaîne.
 - **Export IA** (:material-brain:) — ouvre un export vers le presse-papiers. Choisissez **Capture de données**
@@ -96,7 +96,7 @@ La bannière vous avertit également lorsqu'un actif que vous détenez dispose d
 
 Elle liste aussi les actifs avec un **coût d'achat manquant** : un transfert ou un ajustement qui a apporté des unités sans coût de base. LibreFolio ne peut pas savoir combien ces unités ont coûté, il les compte donc à zéro dans votre coût d'achat et affiche le coût moyen et le P&L latent de cette position comme indisponibles (`—`). Pour corriger cela, trouvez ce transfert ou cet ajustement parmi vos [transactions](../transactions/index.md) et attribuez-lui son coût de base.
 
-Les taux de change sont vérifiés pour chaque transaction jusqu'à la date de fin — chaque achat, vente et mouvement de trésorerie est converti au taux de sa propre date — et, pour valoriser ce que vous détenez, à chaque jour de la période affichée. Lorsqu'une paire FX configurée avec un fournisseur n'a **aucun taux** pour certaines de ces dates, la bannière la liste avec l'intervalle des dates manquantes. LibreFolio convertit un montant avec le taux le plus récent à sa date ou antérieur, aussi ancien soit-il, donc ces dates se situent *avant* le premier taux stocké de la paire — souvent bien avant la période affichée, car chaque transaction passée compte dans les totaux tels que votre P&L total et votre coût d'achat. Cliquez sur **Synchroniser** pour les compléter :
+Les taux de change sont vérifiés pour chaque transaction jusqu'à la date de fin — chaque achat, vente et mouvement de trésorerie est converti au taux de sa propre date — et, pour valoriser ce que vous détenez, à chaque jour de la période affichée : vos titres, ainsi que les liquidités que vous détenez dans une autre devise, valorisées chaque jour au taux de ce jour. Lorsqu'une paire FX configurée avec un fournisseur n'a **aucun taux** pour certaines de ces dates, la bannière la liste avec l'intervalle des dates manquantes. LibreFolio convertit un montant avec le taux le plus récent à sa date ou antérieur, aussi ancien soit-il, donc ces dates se situent *avant* le premier taux stocké de la paire — souvent bien avant la période affichée, car chaque transaction passée compte dans les totaux tels que votre P&L total et votre coût d'achat. Cliquez sur **Synchroniser** pour les compléter :
 
 - LibreFolio télécharge cet intervalle de dates avec **une semaine supplémentaire de chaque côté** (jamais au-delà d'aujourd'hui), quelle que soit la période affichée par le tableau de bord. La semaine supplémentaire couvre les week-ends et jours fériés, lorsque les fournisseurs ne publient rien : un tel jour en bordure de l'intervalle prend alors le taux du jour ouvré précédent.
 - Une fois le téléchargement terminé, le tableau de bord s'actualise et un message rapporte le résultat pour chaque paire.
@@ -106,7 +106,7 @@ Les paires avec des taux manuels uniquement (sans fournisseur) reçoivent leur p
 
 !!! tip "Remplir tout l'historique d'une paire en une fois"
 
-    Ouvrez la [page FX](../fx/index.md), choisissez la plage **Tout** (MAX) et cliquez sur [Tout synchroniser](../fx/sync.md) : LibreFolio télécharge tout ce que les fournisseurs publient pour vos paires, jusqu'à aujourd'hui. Une paire que vous ajoutez avec un fournisseur effectue cela d'elle-même — voir [Ajouter une paire de devises](../fx/add-pair.md).
+    Ouvrez la [page FX](../fx/index.md), choisissez la plage **Tout** et cliquez sur [Tout synchroniser](../fx/sync.md) : LibreFolio télécharge tout ce que les fournisseurs publient pour vos paires, jusqu'à aujourd'hui. Une paire que vous ajoutez avec un fournisseur effectue cela d'elle-même — voir [Ajouter une paire de devises](../fx/add-pair.md).
 
 ---
 

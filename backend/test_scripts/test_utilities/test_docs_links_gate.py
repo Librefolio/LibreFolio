@@ -265,7 +265,11 @@ class TestFrontendDiscovery:
 
 
 class TestBackendDiscovery:
-    """Plugin families must be found by glob, not by a hand-written list."""
+    """Plugin families must be found by glob, not by a hand-written list.
+
+    A plugin is a folder, ``<family>/<name>/plugin.py`` (U-1): the declared path sits one level below the family, where a
+    flat ``*.py`` glob of the family never looked. The single-file form is kept beside it, still read.
+    """
 
     @pytest.fixture
     def services(self, tmp_path):
@@ -276,6 +280,10 @@ class TestBackendDiscovery:
             "tool_plugins/pac.py": 'ToolDocumentation(path="user/tools/pac-allocator/")\n',
             "fx_providers/ecb.py": 'DOCS = "/mkdocs/user/fx/providers/ecb/"\n',
             "not_a_plugin_dir/x.py": 'docs_path = "user/should/not/be/scanned/"\n',
+            "risk_plugins/historical_var/__init__.py": '"""Historical VaR: the code is in plugin.py."""\n',
+            "risk_plugins/historical_var/plugin.py": 'docs_path = "financial-theory/risk-metrics/historical-var/"\n',
+            "asset_source_providers/justetf/plugin.py": 'DOCS = "/mkdocs/user/assets/providers/justetf/"\n',
+            "not_a_plugin_dir/nested/plugin.py": 'docs_path = "user/should/not/be/scanned/either/"\n',
         }.items():
             path = root / pkg
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -289,6 +297,8 @@ class TestBackendDiscovery:
             "user/transactions/import/degiro",
             "user/tools/pac-allocator",
             "user/fx/providers/ecb",
+            "financial-theory/risk-metrics/historical-var",
+            "user/assets/providers/justetf",
         ],
     )
     def test_every_plugin_family_is_covered(self, services, expected):
@@ -296,9 +306,18 @@ class TestBackendDiscovery:
         # tool_plugins and brim_providers unchecked — fifty pages between them.
         assert expected in {link.path for link in collect_backend(services).links}
 
+    def test_a_folder_plugin_is_read_from_its_plugin_module(self, services):
+        origins = {link.path: link.origin for link in collect_backend(services).links}
+        assert origins["financial-theory/risk-metrics/historical-var"] == str(services / "risk_plugins" / "historical_var" / "plugin.py")
+        assert origins["user/assets/providers/justetf"] == str(services / "asset_source_providers" / "justetf" / "plugin.py")
+        # The single-file form beside it is still read, from the family root.
+        assert origins["financial-theory/indicators/adx"] == str(services / "signal_plugins" / "adx.py")
+
     def test_unrelated_packages_are_not_scanned(self, services):
         paths = {link.path for link in collect_backend(services).links}
         assert "user/should/not/be/scanned" not in paths
+        # Reading a family recursively does not widen the scan to a folder below an unrelated package.
+        assert "user/should/not/be/scanned/either" not in paths
 
     def test_a_missing_services_directory_is_not_an_error(self, tmp_path):
         assert collect_backend(tmp_path / "absent").links == []

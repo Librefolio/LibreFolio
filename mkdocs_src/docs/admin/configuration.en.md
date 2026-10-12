@@ -72,6 +72,9 @@ users start from the **Default Currency** in [Global Settings](settings.md).
     - **Any other proxy**: make it send the header or, if LibreFolio is reachable only through it,
       set `SESSION_COOKIE_SECURE=always`.
 
+    To check in your browser whether the session cookie is marked `Secure`, see
+    [Checking Connection Security](connection_checks.md#session-cookie).
+
 ??? info "🧮 Risk engine workers — advanced tuning"
 
     Risk simulations and portfolio optimizations run in separate worker processes, started on

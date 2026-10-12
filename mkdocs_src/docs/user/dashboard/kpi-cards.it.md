@@ -36,7 +36,7 @@ Quanto denaro hanno prodotto i tuoi investimenti nel periodo selezionato? La sch
 **Come leggerla**
 
 - **Verde è un guadagno, rosso una perdita** — e un deposito o un prelievo non è né l'uno né l'altra.
-- **Le quattro righe spiegano il numero grande.** Ciò che non riescono a vedere, come asset che si spostano tra due tuoi broker nel primo o nell'ultimo giorno, finisce nell'**Altro / residuo di riconciliazione** della [vista Performance](positions.md#performance).
+- **Le quattro righe spiegano il numero grande.** Ciò che non riescono a vedere finisce nella [vista Performance](positions.md#performance): l'effetto dei tassi di cambio sulla liquidità che detieni in un'altra valuta vi compare come **Effetto cambio sulla liquidità**, una riga per ogni broker la cui liquidità è stata mossa dai tassi, e il resto — come asset che si spostano tra due tuoi broker nel primo o nell'ultimo giorno — come **Altro / residuo di riconciliazione**.
 - **La barra più lunga** è la riga che ha mosso di più il tuo risultato.
 
 ??? info "📏 La riga sotto il numero grande — come viene calcolata"

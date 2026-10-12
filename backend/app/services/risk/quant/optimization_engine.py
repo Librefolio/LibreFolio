@@ -16,7 +16,7 @@ from backend.app.services.risk.quant.spawn_worker import (
 from backend.app.services.risk.quant.workers import (
     get_optimization_worker_pool,
 )
-from backend.app.utils.cache_utils import get_ttl_cache
+from backend.app.utils.runtime.cache import get_ttl_cache
 
 MAX_OPTIMIZATION_CELLS = 2_000_000
 

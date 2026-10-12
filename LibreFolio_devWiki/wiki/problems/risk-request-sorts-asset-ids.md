@@ -1,6 +1,7 @@
 ---
 title: "A risk request sorts asset_ids, so payload order is not render order"
 category: problem
+status: resolved
 date: 2026-09-18
 tags: [frontend, risk, testing, e2e, caching]
 ---

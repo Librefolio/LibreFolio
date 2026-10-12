@@ -47,7 +47,7 @@ vous cliquez sur **Appliquer** ; **Annuler** demande confirmation avant d'abando
 | **Couleurs de Référence** | Vert au-dessus, rouge en dessous du début de la période |
 | **Remplissage** | Dégradé sous la ligne |
 | **Lignes de grille** | Grille horizontale en pointillés |
-| **Dégradé Données Anciennes** | Estompe les jours sans nouvelle valeur, qui répètent une valeur antérieure |
+| **Dégradé données obsolètes** | Estompe les jours sans nouvelle valeur, qui répètent une valeur antérieure |
 
 ### 📏 Plages d'axes
 

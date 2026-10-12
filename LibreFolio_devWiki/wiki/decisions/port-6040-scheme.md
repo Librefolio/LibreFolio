@@ -1,7 +1,7 @@
 ---
 title: "Port 60/40 Scheme (6040/6041/6042)"
 category: decision
-status: Resolved
+status: resolved
 date: 2026-05-27
 tags: [infrastructure, ports, developer-ergonomics, mnemonic]
 related:

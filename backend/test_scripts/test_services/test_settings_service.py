@@ -566,7 +566,7 @@ class TestEngineBaseCurrencyBranch:
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test setup — imports after db config
         from backend.app.services import user_service  # noqa: PLC0415 — test setup — imports after db config
-        from backend.app.services.portfolio_engine import PortfolioCalculationEngine  # noqa: PLC0415
+        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
         from backend.app.services.settings_service import update_user_settings  # noqa: PLC0415
 
         unique_id = uuid.uuid4().hex[:8]

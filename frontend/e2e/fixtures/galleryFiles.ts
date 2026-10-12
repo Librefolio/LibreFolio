@@ -1,13 +1,14 @@
 /**
  * Gallery — the Files page (`/files`): its two tabs, the static grid, and the preview of one seeded file of each kind.
  *
- * ## One page load, every combination
+ * ## One page load per language
  *
- * A test loads the page once and switches language and theme through the header for each of the eight combinations. The
- * page follows a switch in place — every label it prints reads the dictionary as it renders — with one exception: the
- * static grid prints each card's size once, when the card mounts (FileGrid.svelte, `formatBytes`, which reads the
- * dictionary without subscribing to it). So the grid test enters the grid again in each combination: a fresh grid, in the
- * language of its shot, the way a user who opens the grid finds it.
+ * A test loads the page, then for each language switches it through the header and loads the page again: what a page has
+ * drawn keeps the browser locale it was drawn under (galleryLocale.ts), the tables' dates among it. The two themes are
+ * switched in place. The page follows a switch in place — every label it prints reads the dictionary as it renders — with
+ * one exception: the static grid prints each card's size once, when the card mounts (FileGrid.svelte, `formatBytes`, which
+ * reads the dictionary without subscribing to it). So the grid test enters the grid again in each combination: a fresh
+ * grid, in the language of its shot, the way a user who opens the grid finds it.
  *
  * ## The file by its name
  *

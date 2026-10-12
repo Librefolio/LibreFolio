@@ -3570,3 +3570,206 @@ describe('GrowthChart Income purchase value (S8: R11, D26)', {timeout: 30_000}, 
         expect(['dashboard.pnlAcqNewCapital', 'dashboard.pnlAcqReinvested'].map((key) => rowOf(html, subRowLabel(key)).row.style.color)).toEqual(barColours);
     });
 });
+
+// =============================================================================
+// C2 (plan 47) — the broker set changing under the P&L line
+// =============================================================================
+
+/**
+ * With two or more brokers in scope, the P&L line draws one line per broker after its three fixed
+ * slots, and its legend lists them. A new broker scope reaches GrowthChart as a new
+ * `brokerPnlHistory` while that view is on screen.
+ *
+ * WHAT BREAKS. A data change in the view on screen goes through the partial update. That update
+ * sends `{name, data}` for each slot, with `replaceMerge: ['dataZoom']` only. ECharts merges those
+ * series into the ones it holds, by name and then by index, and only the full rebuild writes the
+ * legend's `data`. So:
+ *   - a broker that left stays drawn and listed;
+ *   - a broker swapped for another takes over its slot, while the legend keeps the old name;
+ *   - a broker that joined is a new series with no type, which ECharts drops ("Unknown series
+ *     undefined").
+ *
+ * WHAT IS ASSERTED, on the latest call that carries series after the change:
+ *   - The mechanism. The call is a full rebuild: it carries the y axis and the tooltip, which only
+ *     a rebuild carries. It replaces the series. Its broker lines and its legend name the new set.
+ *   - The behaviour. Every call this mount made is replayed in order on a REAL ECharts. Afterwards
+ *     the new brokers, and only they, are drawn and listed. The recorder cannot judge a merge, and
+ *     the merge is where the defect is, so ECharts' own merge does. It runs server-side
+ *     (`ssr: true`: no DOM, no tooltip DOM, no animation loop) and is reached past this file's mock
+ *     through `vi.importActual`.
+ *
+ * WHY A CONTROL. The partial update is what keeps a data refresh's smooth transition (see
+ * `CHART_SERIES_UPDATE_OPTS`), so the same brokers with new amounts must stay on it.
+ *
+ * Broker names are values this file supplies, so they are compared raw, and as sets.
+ */
+// WHY the 30 s budget: a red `waitFor` must be able to exhaust its own timeout and rethrow the
+// case's assertion, instead of dying on the test timeout (as S7, S7b and S8 do).
+describe('GrowthChart broker set changes under the P&L line (plan 47, C2)', {timeout: 30_000}, () => {
+    /** Three brokers this describe owns. Their names are unique, so no other fixture's broker can pass for one of them. */
+    const SWAP_BROKER_NAMES = ['Swap Broker A', 'Swap Broker B', 'Swap Broker C'] as const;
+    type SwapBrokerName = (typeof SWAP_BROKER_NAMES)[number];
+    const [BROKER_A, BROKER_B, BROKER_C] = SWAP_BROKER_NAMES;
+
+    /** Added to every amount by the control: a refresh of the same brokers, recognisable in the update it causes. */
+    const REFRESH_OFFSET = 1_000;
+
+    /**
+     * A NEW history for one broker on every call, so a re-sent set is never the same array. It has
+     * the shape of `BROKER_PNL_HISTORY`: one point a day over `DATES`, and the brokers 150 apart on
+     * every day.
+     */
+    function brokerPnl(name: SwapBrokerName, offset = 0): PortfolioBrokerPnlHistory {
+        const brokerIndex = SWAP_BROKER_NAMES.indexOf(name);
+        return {
+            broker_id: 31 + brokerIndex,
+            broker_name: name,
+            points: DATES.map((date, index) => ({date, total_pnl: eur(300 + brokerIndex * 150 + index * 10 + offset)})),
+        };
+    }
+
+    /** The brokers named among `entries` (series, or legend entries: a name, or `{name}`), as a set: sorted. */
+    function swapBrokersIn(entries: readonly unknown[]): string[] {
+        return entries
+            .map((entry) => (entry != null && typeof entry === 'object' ? (entry as {name?: unknown}).name : entry))
+            .filter((name): name is string => typeof name === 'string' && (SWAP_BROKER_NAMES as readonly string[]).includes(name))
+            .sort();
+    }
+
+    /** A legend's `data`. GrowthChart hands ECharts one legend object, and `getOption()` returns an array of them. */
+    function legendDataOf(legend: unknown): readonly unknown[] {
+        const first = Array.isArray(legend) ? legend[0] : legend;
+        const data = first != null && typeof first === 'object' ? (first as {data?: unknown}).data : undefined;
+        return Array.isArray(data) ? data : [];
+    }
+
+    interface RecordedCall {
+        option: Record<string, unknown>;
+        opts: unknown;
+    }
+
+    /** The latest recorded call from `since` onwards that carries a series array: a full rebuild or a partial update. */
+    function latestSeriesCallSince(since: number): RecordedCall | undefined {
+        expect(chartInstances).toHaveLength(1);
+        const calls = chartInstances[0].setOptionCalls.slice(since).filter((call) => Array.isArray(call.option.series));
+        return calls[calls.length - 1];
+    }
+
+    /** How a call asks ECharts to draw: a rebuild or a patch, whether it replaces the series, and the brokers it names. */
+    function mechanismOf(call: RecordedCall) {
+        const replaceMerge = call.opts != null && typeof call.opts === 'object' ? (call.opts as {replaceMerge?: unknown}).replaceMerge : undefined;
+        return {
+            fullRebuild: call.option.yAxis != null && call.option.tooltip != null,
+            replacesSeries: Array.isArray(replaceMerge) && replaceMerge.includes('series'),
+            brokerSeries: swapBrokersIn(call.option.series as unknown[]),
+            legendBrokers: swapBrokersIn(legendDataOf(call.option.legend)),
+        };
+    }
+
+    /** The real module's types, named inline so this describe stays self-contained. `vi.mock('echarts')` replaces values, not types. */
+    type RealECharts = typeof import('echarts');
+    type RealOption = import('echarts').EChartsCoreOption;
+    type RealSetOptionOpts = import('echarts').SetOptionOpts;
+
+    /** The real ECharts module. GrowthChart keeps drawing on this file's recorder; only the replay below uses this one. */
+    let realECharts: RealECharts;
+
+    beforeAll(async () => {
+        realECharts = await vi.importActual<RealECharts>('echarts');
+        // jsdom has no canvas. zrender asks for one for every text it measures, and jsdom logs "Not implemented" each
+        // time. ECharts' own hook for a runtime without a canvas takes the measure instead. It reaches only this real
+        // instance: GrowthChart, and every other case in this file, draw on the recorder.
+        realECharts.setPlatformAPI({measureText: (text: string) => ({width: text.length * FAKE_TEXT_PX_PER_CHAR})});
+    });
+
+    /**
+     * Replays every `setOption` this mount made, in order, on a real ECharts, and reads back the
+     * brokers it then holds: the series it would draw, and the entries of its legend.
+     */
+    function drawnByRealECharts(): {series: string[]; legend: string[]} {
+        expect(chartInstances).toHaveLength(1);
+        const chart = realECharts.init(null, undefined, {renderer: 'svg', ssr: true, width: 800, height: 400});
+        try {
+            for (const {option, opts} of chartInstances[0].setOptionCalls) chart.setOption(option as RealOption, opts as RealSetOptionOpts | undefined);
+            const held = chart.getOption();
+            return {series: swapBrokersIn((held.series as unknown[] | undefined) ?? []), legend: swapBrokersIn(legendDataOf(held.legend))};
+        } finally {
+            chart.dispose();
+        }
+    }
+
+    /**
+     * Mounts GrowthChart with `names` in scope and opens the P&L line. Returns once the line's full
+     * rebuild draws exactly those brokers, with the line submode pressed.
+     */
+    async function openPnlLineWith(names: readonly SwapBrokerName[]) {
+        const {getByTestId, rerender} = render(GrowthChart, {props: {history: HISTORY, brokerPnlHistory: names.map((name) => brokerPnl(name)), baseCurrency: BASE_CURRENCY}});
+        await waitFor(() => expect(chartInstances).toHaveLength(1), {timeout: 5_000});
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await waitForPnlLineWithBrokers(names);
+        expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        return {rerender};
+    }
+
+    interface BrokerSetChange {
+        change: string;
+        initial: SwapBrokerName[];
+        next: SwapBrokerName[];
+    }
+
+    const BROKER_SET_CHANGES: BrokerSetChange[] = [
+        // The last slot goes. The partial update names the other two, and ECharts keeps the third as it was.
+        {change: 'one of three brokers leaves', initial: [BROKER_A, BROKER_B, BROKER_C], next: [BROKER_A, BROKER_B]},
+        // Same count. The partial update renames the second slot, and the legend, which only a rebuild writes, keeps the old name.
+        {change: 'a broker is swapped for another', initial: [BROKER_A, BROKER_B], next: [BROKER_A, BROKER_C]},
+        // A slot ECharts does not hold. The partial update gives it a name and data but no type, and ECharts drops it.
+        {change: 'a third broker joins', initial: [BROKER_A, BROKER_B], next: [BROKER_A, BROKER_B, BROKER_C]},
+    ];
+
+    it.each(BROKER_SET_CHANGES)('draws and lists exactly the brokers in scope once the set changes under the P&L line: $change (plan 47, C2)', async ({initial, next}) => {
+        const {rerender} = await openPnlLineWith(initial);
+
+        // Sampled BEFORE the change, so the call read below is one recorded after it.
+        const before = setOptionCount();
+        await rerender({brokerPnlHistory: next.map((name) => brokerPnl(name))});
+
+        // One assertion for the mechanism and the behaviour together, so a red case shows both.
+        const inScope = [...next].sort();
+        await waitFor(
+            () => {
+                const call = latestSeriesCallSince(before);
+                if (call == null) throw new Error('GrowthChart handed ECharts no series after the broker set changed');
+                expect({...mechanismOf(call), drawn: drawnByRealECharts()}).toEqual({
+                    fullRebuild: true,
+                    replacesSeries: true,
+                    brokerSeries: inScope,
+                    legendBrokers: inScope,
+                    drawn: {series: inScope, legend: inScope},
+                });
+            },
+            {timeout: 5_000, interval: 250, onTimeout: (error) => error},
+        );
+    });
+
+    it('keeps the partial update when the same brokers come back with new amounts: a refresh is not a rebuild (plan 47, C2 control)', async () => {
+        const {rerender} = await openPnlLineWith([BROKER_A, BROKER_B]);
+
+        const before = setOptionCount();
+        const refreshed = [BROKER_A, BROKER_B].map((name) => brokerPnl(name, REFRESH_OFFSET));
+        await rerender({brokerPnlHistory: refreshed});
+
+        // Presence barrier: broker A's refreshed first day reached ECharts. Only then can "no rebuild" mean anything.
+        const refreshedFirstDay = Number(refreshed[0].points[0].total_pnl.amount);
+        await waitFor(
+            () => {
+                const brokerA = (latestSeriesCallSince(before)?.option.series as SeriesUpdate[] | undefined)?.find((entry) => entry.name === BROKER_A);
+                expect(pointValue(brokerA?.data[0]), 'broker A on the first day, refreshed').toBe(refreshedFirstDay);
+            },
+            {timeout: 5_000},
+        );
+        expect(fullOptionsSince(before), 'no full rebuild for the same brokers').toHaveLength(0);
+        const call = latestSeriesCallSince(before);
+        if (call == null) throw new Error('the barrier passed without a series update');
+        expect(mechanismOf(call)).toMatchObject({fullRebuild: false, brokerSeries: [BROKER_A, BROKER_B]});
+    });
+});

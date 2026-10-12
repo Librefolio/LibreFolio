@@ -1500,12 +1500,11 @@
         const gridColors = buildGridColors(isDark);
         const series = attachIncomeMarkers(buildSeries());
         const rawXBounds = getXAxisBounds();
-        // Derive the multi-year flag from the *raw* bounds so the horizontal bubble padding below can't
-        // nudge an edge across a year boundary and spuriously flip the axis to the year-labelled format.
         const xAxisBounds = padXBoundsForBubbles(rawXBounds);
+        // Build the axis policy from the *raw* bounds, so the horizontal bubble padding can't nudge an
+        // edge across a year boundary and add the year to the edge labels.
         const xAxisPolicy = buildLotXAxisPolicy(rawXBounds);
         responsiveXAxisCompact = xAxisPolicy.compact;
-        const multiYearAxis = !!rawXBounds && new Date(rawXBounds.min).getFullYear() !== new Date(rawXBounds.max).getFullYear();
         const autoYBounds = computeAutoYAxisBounds(displayMode === 'absolute' ? 'absolute' : 'percent');
         const yAxisMin = displayMode === 'percentage' ? (autoYBounds ? Math.min(0, autoYBounds.min) : (value: {min: number}) => Math.min(0, value.min)) : absYFromZero ? 0 : ((autoYBounds?.min ?? null) as unknown as number);
         const yAxisMax = displayMode === 'percentage' ? (autoYBounds ? Math.max(0, autoYBounds.max) : (value: {max: number}) => Math.max(0, value.max)) : ((autoYBounds?.max ?? null) as unknown as number);
@@ -1584,7 +1583,7 @@
                 axisLabel: {
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis),
+                    formatter: xAxisPolicy.formatter,
                     ...(xAxisPolicy.axisLabel ?? {}),
                 },
             },

@@ -63,7 +63,7 @@ flowchart LR
 
     Cada regla de cruce que se aplica a MACD (la línea cruza la señal, el histograma cambia
     de signo) se aplica idénticamente a PPO — solo cambian las unidades, de precio a porcentaje.
-    Use PPO en lugar de MACD siempre que compare el impulso *entre* diferentes
+    Usa PPO en lugar de MACD siempre que compares el impulso *entre* diferentes
     instrumentos; use MACD cuando trabaje con un solo instrumento en sus unidades nativas.
 
 :material-link: [Oscilador de Porcentaje de Precio en StockCharts](https://school.stockcharts.com/doku.php?id=technical_indicators:price_oscillators_ppo){ target="_blank" }

@@ -62,7 +62,7 @@ import {
     writeSavingsStatement,
 } from './fixtures/galleryReportSets';
 import {selectBrokerFile} from './fixtures/import-wizard';
-import {optionsClosed} from './fixtures/probe';
+import {appears, becomesEnabled, optionsClosed} from './fixtures/probe';
 import {
     chooseLabYear,
     currentUserId,
@@ -126,6 +126,7 @@ import {
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
+import {expectDrawnUnder, setBrowserLocale, stampDocumentLocale} from './fixtures/galleryLocale';
 import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-accounts';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
@@ -264,6 +265,9 @@ async function waitForSplashGone(page: Page) {
 async function screenshot(page: Page, viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, category: string, name: string) {
     await waitForSplashGone(page);
     await waitForNetworkSettled(page);
+    // The page began under this language's browser locale: a forgotten switch point fails here, not as an en-US number in
+    // another language's shot (galleryLocale.ts).
+    await expectDrawnUnder(page, lang);
     const dir = getGalleryPath(viewport, lang, theme, category);
     ensureDir(dir);
     await page.screenshot({
@@ -278,12 +282,28 @@ async function screenshot(page: Page, viewport: 'desktop' | 'mobile', lang: Lang
 // Helper to run for all languages and themes
 async function forEachLanguageAndTheme(page: Page, callback: (lang: Language, theme: Theme) => Promise<void>) {
     for (const lang of SUPPORTED_LANGUAGES) {
+        await setBrowserLocale(page, lang);
         await setLanguage(page, lang);
         for (const theme of THEMES) {
             await setTheme(page, theme);
             await callback(lang, theme);
         }
     }
+}
+
+/**
+ * For a test whose page is set up first and then photographed in several combinations. forEachLanguageAndTheme switches on
+ * the page as it stands, and what a page has drawn keeps the browser locale it was drawn under (galleryLocale.ts): `draw`
+ * sets the page up again at the first combination of each language — after the header's switch, so the page it loads is
+ * drawn under that language's locale, in the language and theme just stored — and what it returns serves the language's
+ * two themes.
+ */
+function perLanguage<T>(draw: (lang: Language) => Promise<T>): (lang: Language) => Promise<T> {
+    let drawn: {lang: Language; value: T} | null = null;
+    return async (lang) => {
+        if (drawn?.lang !== lang) drawn = {lang, value: await draw(lang)};
+        return drawn.value;
+    };
 }
 
 // Determine viewport from project name
@@ -330,6 +350,9 @@ test.describe('Gallery Screenshots', () => {
     // result scroll to their target at once. svelte/motion's `tweened` ignores it, so the 1 s waits for the KPI count-up
     // stay. A nested `test.use({contextOptions})` would replace this object: spread it there.
     test.use({contextOptions: {reducedMotion: 'reduce'}});
+    // No locale on the context: @playwright/test would give it 'en-US', and Chromium would then refuse the locale each
+    // language sets at runtime (galleryLocale.ts). `locale: undefined` keeps that default; a fixture yielding undefined does not.
+    test.use({locale: async ({}, use) => use(undefined)});
 
     // Tests running in parallel create temporary brokers and files (group 3: disposable accounts, brokers
     // named `‹label› · ‹TOKEN›`). A session that cannot reach them still hears of them: every session caches
@@ -342,6 +365,9 @@ test.describe('Gallery Screenshots', () => {
     // import plugins' icons, FED's and SNB's — so the pages write those URLs with a query that keeps them loading: an
     // init script, in force from the next document, so before the first navigation (keepFaviconImagesLoading).
     test.beforeEach(async ({page}) => {
+        // Before any load: every document stamps the locale it began under, and the first begins under en-US (galleryLocale.ts).
+        await stampDocumentLocale(page);
+        await setBrowserLocale(page, 'en');
         await hideGalleryTempData(page);
         await guardGalleryOffline(page);
         await keepFaviconImagesLoading(page);
@@ -358,13 +384,25 @@ test.describe('Gallery Screenshots', () => {
     });
 
     test.describe('Auth Pages', () => {
-        test('login page - all languages and themes', async ({page}, testInfo) => {
-            const viewport = getViewport(testInfo);
+        /**
+         * The login page as a new document, its animations frozen again: the style tag goes with the old one. Given `lang`,
+         * it is the page of that language's shots (perLanguage): it must open in the language the header just stored.
+         */
+        async function openLoginPage(page: Page, lang?: Language): Promise<void> {
             await page.goto('/');
             await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            if (lang) await expect(page.locator('html'), 'the language survived the load').toHaveAttribute('lang', lang);
             await freezeAnimations(page);
+        }
+
+        test('login page - all languages and themes', async ({page}, testInfo) => {
+            const viewport = getViewport(testInfo);
+            // The page the first switch is made on; each language then loads its own.
+            await openLoginPage(page);
+            const loginPageIn = perLanguage((lang) => openLoginPage(page, lang));
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await loginPageIn(lang);
                 await page.waitForTimeout(100);
                 await screenshot(page, viewport, lang, theme, 'auth', '01-login');
             });
@@ -372,11 +410,12 @@ test.describe('Gallery Screenshots', () => {
 
         test('register modal - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
-            await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
-            await freezeAnimations(page);
+            // The page the first switch is made on; each language then loads its own.
+            await openLoginPage(page);
+            const loginPageIn = perLanguage((lang) => openLoginPage(page, lang));
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await loginPageIn(lang);
                 await expect(page.getByTestId('login-modal')).toBeVisible({timeout: 3000});
                 await page.getByTestId('goto-register').click();
                 await expect(page.getByTestId('register-modal')).toBeVisible({timeout: 3000});
@@ -391,11 +430,12 @@ test.describe('Gallery Screenshots', () => {
 
         test('register with password strength - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
-            await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
-            await freezeAnimations(page);
+            // The page the first switch is made on; each language then loads its own.
+            await openLoginPage(page);
+            const loginPageIn = perLanguage((lang) => openLoginPage(page, lang));
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await loginPageIn(lang);
                 await expect(page.getByTestId('login-modal')).toBeVisible({timeout: 3000});
                 await page.getByTestId('goto-register').click();
                 await expect(page.getByTestId('register-modal')).toBeVisible({timeout: 3000});
@@ -457,6 +497,7 @@ test.describe('Gallery Screenshots', () => {
             await expect.poll(() => imageStatusHits, {message: 'the admin update probe never asked the (mocked) container-image-status gate after login', timeout: 20_000}).toBeGreaterThan(0);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     // The modal backdrop blocks the header selectors, so language/theme are
                     // seeded into localStorage (read by i18n + theme boot) instead of clicked.
@@ -523,6 +564,7 @@ test.describe('Gallery Screenshots', () => {
             await expect(page, 'a new account signs in to the Welcome page').toHaveURL(/\/welcome(?:[/?#]|$)/, {timeout: 15_000});
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     // Pre-filled from the account's settings: its language is the combination's, its currency its own.
                     const defaults = await setAccountLanguage(page.request, lang);
@@ -565,6 +607,7 @@ test.describe('Gallery Screenshots', () => {
             await walkCoreTourToFx(page);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await seedLanguageAndTheme(page, lang, theme);
                     await navigateTo(page, '/dashboard');
@@ -603,6 +646,7 @@ test.describe('Gallery Screenshots', () => {
             await expectGuideStep(page, FX_PAGE_FILTERS_STEP);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await seedLanguageAndTheme(page, lang, theme);
                     await navigateTo(page, '/fx');
@@ -714,10 +758,10 @@ test.describe('Gallery Screenshots', () => {
 
     /**
      * The 1-year range, strictly: the dashboard shots' form of selectOneYearDateRange(), which
-     * the asset and broker shots keep as it is — it looks once and, on a preset bar not painted
-     * yet, clicks nothing. The range persists in the session. When the click changed it, the
-     * page is reloaded, so every chart draws once on the new range instead of being redrawn,
-     * by the report the click asked for, while a shot is taken.
+     * the asset and broker shots keep as it is — it waits half a second at most and, on a preset
+     * bar not painted by then, clicks nothing. The range persists in the session. When the click
+     * changed it, the page is reloaded, so every chart draws once on the new range instead of
+     * being redrawn, by the report the click asked for, while a shot is taken.
      */
     async function selectOneYearPreset(page: Page): Promise<void> {
         const oneYear = page.getByTestId('date-preset-1y');
@@ -906,9 +950,9 @@ test.describe('Gallery Screenshots', () => {
     async function selectMaxDateRange(page: Page) {
         const maxBtn = page.getByTestId('date-preset-max');
         const y2Btn = page.getByTestId('date-preset-2y');
-        if (await maxBtn.isVisible({timeout: 500}).catch(() => false)) {
+        if (await appears(maxBtn, 500)) {
             await maxBtn.click();
-        } else if (await y2Btn.isVisible({timeout: 500}).catch(() => false)) {
+        } else if (await appears(y2Btn, 500)) {
             await y2Btn.click();
         }
     }
@@ -918,7 +962,7 @@ test.describe('Gallery Screenshots', () => {
     // so the engine auto-centers on the lots' full lifecycle.
     async function selectOneYearDateRange(page: Page) {
         const y1Btn = page.getByTestId('date-preset-1y');
-        if (await y1Btn.isVisible({timeout: 500}).catch(() => false)) {
+        if (await appears(y1Btn, 500)) {
             await y1Btn.click();
         }
     }
@@ -1022,7 +1066,7 @@ test.describe('Gallery Screenshots', () => {
         }
 
         const comparisonReturnToggle = page.getByTestId('lot-comparison-mode-return');
-        if (await comparisonReturnToggle.isVisible({timeout: 2_000}).catch(() => false)) {
+        if (await appears(comparisonReturnToggle, 2_000)) {
             await comparisonReturnToggle.click();
             await page.waitForTimeout(300);
             await screenshot(page, viewport, lang, theme, category, 'fifo-lots-comparison-chart-return');
@@ -1221,6 +1265,7 @@ test.describe('Gallery Screenshots', () => {
 
             // Take screenshot for each language and theme
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     // Navigate fresh to dashboard for each combo (ensures clean state)
                     await page.goto('/dashboard');
@@ -1820,6 +1865,7 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/settings');
                     await setLanguage(page, lang);
@@ -1854,7 +1900,7 @@ test.describe('Gallery Screenshots', () => {
                     // Click the configure button to open SchedulerConfigModal
                     const configBtn = page.getByTestId('scheduler-config-btn');
                     await configBtn.scrollIntoViewIfNeeded();
-                    if (await configBtn.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(configBtn, 3_000)) {
                         await configBtn.click();
                         const configModal = page.getByTestId('scheduler-config-modal');
                         await expect(configModal).toBeVisible({timeout: 5_000});
@@ -1873,6 +1919,7 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/settings');
                     await setLanguage(page, lang);
@@ -1893,7 +1940,7 @@ test.describe('Gallery Screenshots', () => {
                     // Click the scheduler status row to open SchedulerLogModal
                     const statusRow = page.getByTestId('scheduler-status-row');
                     await statusRow.scrollIntoViewIfNeeded();
-                    if (await statusRow.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(statusRow, 3_000)) {
                         await statusRow.click();
                         const logModal = page.getByTestId('scheduler-log-modal');
                         await expect(logModal).toBeVisible({timeout: 5_000});
@@ -1907,12 +1954,16 @@ test.describe('Gallery Screenshots', () => {
             }
         });
 
+        // Must stay language-neutral: the modal searches the chapters in the UI's language, so the term is a proper name present in every translated chapter set (CHANGELOG.md, .it, .fr, .es) — an English word like 'Added' finds nothing in it/fr/es.
+        const CHANGELOG_SEARCH_TERM = 'Docker';
+
         test('changelog modal - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
             const isMobile = testInfo.project.name === 'mobile';
             await login(page, TEST_ADMIN);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/dashboard');
                     await setLanguage(page, lang);
@@ -1933,7 +1984,7 @@ test.describe('Gallery Screenshots', () => {
                     await screenshot(page, viewport, lang, theme, 'settings', 'changelog-modal');
 
                     // Second shot: search narrows the index, one fold opened by a hit
-                    await page.getByTestId('changelog-search').fill('Added');
+                    await page.getByTestId('changelog-search').fill(CHANGELOG_SEARCH_TERM);
                     const hits = page.getByTestId('changelog-search-results');
                     await expect(hits).toBeVisible({timeout: 5_000});
                     await hits.locator('[data-testid^="changelog-hit-"]').first().click();
@@ -1952,6 +2003,7 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/settings');
                     await setLanguage(page, lang);
@@ -1966,7 +2018,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Unlock as admin so the Clear actions are rendered too
                     const lockToggle = page.getByTestId('settings-lock-toggle');
-                    if (await lockToggle.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(lockToggle, 3_000)) {
                         const isLocked = await page
                             .getByTestId('scheduler-config-btn')
                             .isDisabled()
@@ -1979,7 +2031,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Narrow to the Memory category when the category sidebar is rendered (desktop)
                     const memoryCategory = page.getByTestId('global-settings-category-memory');
-                    if (await memoryCategory.isVisible({timeout: 1_000}).catch(() => false)) {
+                    if (await appears(memoryCategory, 1_000)) {
                         await memoryCategory.click();
                         await page.waitForTimeout(300);
                     }
@@ -2005,6 +2057,7 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/settings');
                     await setLanguage(page, lang);
@@ -2046,6 +2099,7 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/settings');
                     await setLanguage(page, lang);
@@ -2147,12 +2201,14 @@ test.describe('Gallery Screenshots', () => {
         });
 
         // PAC allocator — user/tools/pac-allocator/index.en.md: one placeholder per wizard step, three for the result.
-        // The planner's draft lives in the open page only and survives a language or theme picked from the header, so
-        // each test builds it once and every combination photographs the same draft. The planner only reads the database
-        // and the calculation runs in the local solver (galleryPac.ts says what the draft holds, and why). Two tests, so
-        // the wizard and the result run side by side.
+        // The planner's draft lives in the open page only: it survives a language or theme picked from the header, not a
+        // load. What a page has drawn keeps the browser locale it was drawn under (galleryLocale.ts), so each language opens
+        // the planner again after its switch and builds the same draft there, at its first combination (perLanguage); its
+        // two themes photograph that draft. The planner only reads the database and the calculation runs in the local
+        // solver (galleryPac.ts says what the draft holds, and why). Two tests, so the wizard and the result run side by side.
         test('PAC allocator steps - all languages and themes', async ({page}, testInfo) => {
-            // One draft (about forty interactions, a few database reads) and 48 shots: about 4 minutes on a quiet lane.
+            // A draft per language (about forty interactions and a few database reads each) and 48 shots. With a single draft
+            // the test took about 4 minutes on a quiet lane; the budget keeps room for three more.
             test.setTimeout(600_000);
             const viewport = getViewport(testInfo);
             const shoot = async (region: Locator, what: string, lang: Language, theme: Theme, name: string, tall?: Locator) => {
@@ -2166,12 +2222,17 @@ test.describe('Gallery Screenshots', () => {
             };
             await login(page, TEST_ADMIN);
             const ids = await resolvePacIds(page);
-            await openPacPlanner(page);
-            await freezeAnimations(page);
-            const draft = await buildPacDraft(page, ids);
-            await scrollBackToHeader(page);
+            const draftIn = perLanguage(async (lang) => {
+                await openPacPlanner(page);
+                await expect(page.locator('html'), 'the language survived the load').toHaveAttribute('lang', lang);
+                await freezeAnimations(page);
+                const draft = await buildPacDraft(page, ids);
+                await scrollBackToHeader(page);
+                return draft;
+            });
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
+                const draft = await draftIn(lang);
                 await shoot(await framePacLiquidity(page, draft), 'the Liquidity step', lang, theme, 'pac-step-liquidity', page.locator('[data-testid="pac-planner-cash"][data-origin="manual"]'));
                 // The editor works on a copy of the Broker: cancelled after the shot, the draft keeps what buildPacDraft applied.
                 await shoot(await framePacBrokerEditor(page, draft, waitForMotionSettled), 'the Broker editor', lang, theme, 'pac-step-brokers');
@@ -2188,8 +2249,9 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('PAC allocator result - all languages and themes', async ({page}, testInfo) => {
-            // One draft, one calculation by the local solver (milliseconds for this draft) and 24 shots: about 2 minutes on a
-            // quiet lane; on the desktop the proof shot also resizes the screen and back, every combination.
+            // A draft and its calculation per language (the local solver: milliseconds for this draft) and 24 shots; on the
+            // desktop the proof shot also resizes the screen and back, every combination. With a single draft the test took
+            // about 2 minutes on a quiet lane; the budget keeps room for three more.
             test.setTimeout(360_000);
             const viewport = getViewport(testInfo);
             const shoot = async (region: Locator, what: string, lang: Language, theme: Theme, name: string, tall?: Locator) => {
@@ -2202,16 +2264,21 @@ test.describe('Gallery Screenshots', () => {
             };
             await login(page, TEST_ADMIN);
             const ids = await resolvePacIds(page);
-            await openPacPlanner(page);
-            await freezeAnimations(page);
-            const draft = await buildPacDraft(page, ids);
-            await calculatePacPlan(page);
-            await scrollBackToHeader(page);
+            const draftIn = perLanguage(async (lang) => {
+                await openPacPlanner(page);
+                await expect(page.locator('html'), 'the language survived the load').toHaveAttribute('lang', lang);
+                await freezeAnimations(page);
+                const draft = await buildPacDraft(page, ids);
+                await calculatePacPlan(page);
+                await scrollBackToHeader(page);
+                return draft;
+            });
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
+                const draft = await draftIn(lang);
                 await shoot(await framePacResult(page), 'the PAC result', lang, theme, 'pac-result', page.locator('[data-testid="pac-planner-result-section"][data-section="allocation"]'));
                 await shoot(await framePacPlan(page, draft), 'the Operational plan', lang, theme, 'pac-result-plan', page.locator('[data-testid="pac-planner-result-section"][data-section="plan"]'));
-                // «Proof and timings» opens the section on the first combination; it stays open for the next ones.
+                // «Proof and timings» opens the section on a language's first combination; it stays open for the second.
                 const proof = await framePacProof(page);
                 // DESKTOP — coordinator's decision, provisional: the simulation shot's rule (see 'risk what-if simulation on the
                 // dashboard' and «Screens taller than the desktop's» in galleryRiskLab.ts). The page wants the whole Proof and
@@ -2259,6 +2326,7 @@ test.describe('Gallery Screenshots', () => {
             });
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     combo = {lang, theme};
                     // Signed out without the UI (the previous popup's backdrop sat over the header): without its
@@ -2313,6 +2381,7 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/settings');
                     await setLanguage(page, lang);
@@ -2358,11 +2427,12 @@ test.describe('Gallery Screenshots', () => {
             await login(page, TEST_ADMIN);
         });
 
-        // One page load per test, every combination switched in place, every shot waiting for its own subject: what the
-        // page publishes (galleryFiles.ts), never the network going idle or a fixed wait. CI triage b5: the preview test
-        // loaded the page 32 times with 2.4 s of fixed waits each and ran out of its 240 s on every attempt.
+        // One page load per language (after the one the first switch is made on), its two themes switched in place, every
+        // shot waiting for its own subject: what the page publishes (galleryFiles.ts), never the network going idle or a
+        // fixed wait. CI triage b5: the preview test loaded the page 32 times with 2.4 s of fixed waits each and ran out of
+        // its 240 s on every attempt.
 
-        /** Load the Files page at `url` — the only load of the test — with the gallery's CSS animations frozen. */
+        /** Load the Files page at `url` — before the first switch, then once per language — with the gallery's CSS animations frozen. */
         async function openFilesPage(page: Page, url: string): Promise<void> {
             await navigateTo(page, url);
             await expect.poll(() => page.evaluate(() => document.getElementById('app-splash') === null), {message: 'the splash screen never went away'}).toBe(true);
@@ -2370,13 +2440,19 @@ test.describe('Gallery Screenshots', () => {
         }
 
         /**
-         * The eight combinations, switched through the header on the page as it stands: forEachLanguageAndTheme, with the
-         * language menu closed again and the theme read back (chooseTheme) instead of waited for.
+         * The eight combinations. The language is switched through the header, its menu closed again, then the page at `url`
+         * is loaded again: what a page has drawn keeps the browser locale it was drawn under (galleryLocale.ts), the tables'
+         * dates among it, so each language gets a page drawn under its own, in the language just stored — settled before its
+         * themes are switched on it in place, read back (chooseTheme) instead of waited for.
          */
-        async function eachLanguageAndTheme(page: Page, callback: (lang: Language, theme: Theme) => Promise<void>): Promise<void> {
+        async function eachLanguageAndTheme(page: Page, url: string, callback: (lang: Language, theme: Theme) => Promise<void>): Promise<void> {
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 await setLanguage(page, lang);
                 await languageMenuClosed(page);
+                await openFilesPage(page, url);
+                await expect(page.locator('html'), 'the language survived the load').toHaveAttribute('lang', lang);
+                await waitForSettled(page.getByTestId('files-page'), 20_000);
                 for (const theme of THEMES) {
                     await chooseTheme(page, theme);
                     await callback(lang, theme);
@@ -2396,6 +2472,7 @@ test.describe('Gallery Screenshots', () => {
             await waitForMotionSettled(page.locator('body'), shot);
             await waitForStillness(subject, shot);
             await expectNoToast(page);
+            await expectDrawnUnder(page, lang);
             const dir = getGalleryPath(viewport, lang, theme, 'files');
             ensureDir(dir);
             await page.screenshot({path: path.join(dir, `${name}.png`), fullPage: false});
@@ -2403,16 +2480,17 @@ test.describe('Gallery Screenshots', () => {
         }
 
         /**
-         * The preview of one seeded static resource in every combination: the page loaded once, filtered to the file by its
-         * name, and the file opened from its own row; `ready` waits for what that kind of preview draws.
+         * The preview of one seeded static resource in every combination: the page loaded once per language, filtered to the
+         * file by its name, and the file opened from its own row; `ready` waits for what that kind of preview draws.
          */
         async function shootStaticPreview(page: Page, viewport: 'desktop' | 'mobile', kind: 'image' | 'pdf' | 'markdown' | 'text', ready: (modal: Locator, shot: string) => Promise<Locator>): Promise<void> {
             const name = FILES_SAMPLES[kind];
             const fileId = await staticFileId(page, name);
-            await openFilesPage(page, `/files?tab=static&filename=${encodeURIComponent(name)}`);
+            const url = `/files?tab=static&filename=${encodeURIComponent(name)}`;
+            await openFilesPage(page, url);
             const table = page.getByTestId('files-table-static');
 
-            await eachLanguageAndTheme(page, async (lang, theme) => {
+            await eachLanguageAndTheme(page, url, async (lang, theme) => {
                 const shot = `${viewport}/${lang}/${theme}/files/preview-modal-${kind}`;
                 await filesTableReady(page, table, shot);
                 const modal = await openPreview(page, table, fileId, shot);
@@ -2423,14 +2501,15 @@ test.describe('Gallery Screenshots', () => {
         }
 
         test('static resources tab - all languages and themes', async ({page}, testInfo) => {
-            // One load, then eight combinations, the desktop's on a screen grown to the table: 10–11 s (desktop), 4 s (mobile) on
-            // a quiet lane (b6); the rest is room for a loaded CI runner.
+            // One load per language, then its two combinations, the desktop's on a screen grown to the table: 10–11 s (desktop),
+            // 4 s (mobile) on a quiet lane with a single load (b6); the rest is room for a loaded CI runner.
             test.setTimeout(90_000);
             const viewport = getViewport(testInfo);
-            await openFilesPage(page, '/files?tab=static');
+            const url = '/files?tab=static';
+            await openFilesPage(page, url);
             const table = page.getByTestId('files-table-static');
 
-            await eachLanguageAndTheme(page, async (lang, theme) => {
+            await eachLanguageAndTheme(page, url, async (lang, theme) => {
                 await filesTableReady(page, table, `${viewport}/${lang}/${theme}/files/static-tab`);
                 // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
                 if (viewport === 'desktop') await extendScreenToBlock(page, table, `desktop/${lang}/${theme}/files/static-tab`);
@@ -2440,30 +2519,33 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('broker reports tab - all languages and themes', async ({page}, testInfo) => {
-            // One load, then eight combinations: 7–12 s (desktop), 5 s (mobile) on a quiet lane (b6), the brokers' logos included.
+            // One load per language, then its two combinations: 7–12 s (desktop), 5 s (mobile) on a quiet lane with a single load
+            // (b6), the brokers' logos included.
             test.setTimeout(90_000);
             const viewport = getViewport(testInfo);
-            await openFilesPage(page, '/files?tab=brim');
+            const url = '/files?tab=brim';
+            await openFilesPage(page, url);
             const table = page.getByTestId('files-table-brim');
 
-            await eachLanguageAndTheme(page, async (lang, theme) => {
+            await eachLanguageAndTheme(page, url, async (lang, theme) => {
                 await filesTableReady(page, table, `${viewport}/${lang}/${theme}/files/brim-tab`);
                 await shootFiles(page, viewport, lang, theme, 'brim-tab', table);
             });
         });
 
         test('static resources grid view - all languages and themes', async ({page}, testInfo) => {
-            // One load, then eight combinations, each entering the grid again (its thumbnails cached after the first): 4–6 s on a
-            // quiet lane (b6), both projects.
+            // One load per language, then its two combinations, each entering the grid again (its thumbnails cached after the
+            // first): 4–6 s on a quiet lane with a single load (b6), both projects.
             test.setTimeout(90_000);
             const viewport = getViewport(testInfo);
-            await openFilesPage(page, '/files?tab=static');
+            const url = '/files?tab=static';
+            await openFilesPage(page, url);
             const files = page.getByTestId('files-page');
             // The grid lists every file: the card of a seeded one tells it is drawn.
             const card = page.getByTestId(`file-grid-preview-${await staticFileId(page, FILES_SAMPLES.image)}`);
             const gridView = page.getByTestId('view-mode-grid');
 
-            await eachLanguageAndTheme(page, async (lang, theme) => {
+            await eachLanguageAndTheme(page, url, async (lang, theme) => {
                 const shot = `${viewport}/${lang}/${theme}/files/static-grid`;
                 await expect(files, `${shot}: the files never finished loading`).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
                 // A fresh grid for each combination: a card prints its size once, when it mounts (galleryFiles.ts).
@@ -2480,15 +2562,16 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('file preview modal (BRIM) - all languages and themes', async ({page}, testInfo) => {
-            // One load, then eight combinations — open the report from its row, wait for the grid's canvas, shoot, close: 7 s
-            // (desktop), 6 s (mobile) on a quiet lane (b6).
+            // One load per language, then its two combinations — open the report from its row, wait for the grid's canvas, shoot,
+            // close: 7 s (desktop), 6 s (mobile) on a quiet lane with a single load (b6).
             test.setTimeout(90_000);
             const viewport = getViewport(testInfo);
             const fileId = await brimFileId(page, FILES_SAMPLES.csv);
-            await openFilesPage(page, `/files?tab=brim&filename=${encodeURIComponent(FILES_SAMPLES.csv)}`);
+            const url = `/files?tab=brim&filename=${encodeURIComponent(FILES_SAMPLES.csv)}`;
+            await openFilesPage(page, url);
             const table = page.getByTestId('files-table-brim');
 
-            await eachLanguageAndTheme(page, async (lang, theme) => {
+            await eachLanguageAndTheme(page, url, async (lang, theme) => {
                 const shot = `${viewport}/${lang}/${theme}/files/preview-modal-csv`;
                 await filesTableReady(page, table, shot);
                 const modal = await openPreview(page, table, fileId, shot);
@@ -2499,29 +2582,30 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('file preview modal (image) - all languages and themes', async ({page}, testInfo) => {
-            // One load, then eight combinations — open the avatar from its row, wait for the picture, shoot, close: 5 s (desktop),
-            // 6 s (mobile) on a quiet lane (b6).
+            // One load per language, then its two combinations — open the avatar from its row, wait for the picture, shoot, close:
+            // 5 s (desktop), 6 s (mobile) on a quiet lane with a single load (b6).
             test.setTimeout(90_000);
             await shootStaticPreview(page, getViewport(testInfo), 'image', (modal, shot) => imagePreviewReady(modal, shot));
         });
 
         test('file preview modal (pdf) - all languages and themes', async ({page}, testInfo) => {
-            // One load, then eight combinations, each starting the viewer again (its engine, the tiles of two pages) and waiting
-            // out its page controls (4 s, EmbedPDF's timer, no machine shortens it): 52 s (desktop), 49 s (mobile) on a quiet lane (b6).
+            // One load per language, then its two combinations, each starting the viewer again (its engine, the tiles of two
+            // pages) and waiting out its page controls (4 s, EmbedPDF's timer, no machine shortens it): 52 s (desktop), 49 s
+            // (mobile) on a quiet lane with a single load (b6).
             test.setTimeout(180_000);
             await shootStaticPreview(page, getViewport(testInfo), 'pdf', (modal, shot) => pdfPreviewReady(modal, shot));
         });
 
         test('file preview modal (markdown) - all languages and themes', async ({page}, testInfo) => {
-            // One load, then eight combinations — open the sample from its row, wait for the rendered markdown and its fonts: 4–5 s
-            // on a quiet lane (b6), both projects.
+            // One load per language, then its two combinations — open the sample from its row, wait for the rendered markdown and
+            // its fonts: 4–5 s on a quiet lane with a single load (b6), both projects.
             test.setTimeout(90_000);
             await shootStaticPreview(page, getViewport(testInfo), 'markdown', (modal, shot) => markdownPreviewReady(page, modal, shot));
         });
 
         test('file preview modal (text) - all languages and themes', async ({page}, testInfo) => {
-            // One load, then eight combinations — open the sample from its row, wait for its lines, shoot, close: 4 s on a quiet
-            // lane (b6), both projects.
+            // One load per language, then its two combinations — open the sample from its row, wait for its lines, shoot, close:
+            // 4 s on a quiet lane with a single load (b6), both projects.
             test.setTimeout(90_000);
             await shootStaticPreview(page, getViewport(testInfo), 'text', (modal, shot) => textPreviewReady(modal, shot));
         });
@@ -2548,6 +2632,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
@@ -2600,12 +2685,12 @@ test.describe('Gallery Screenshots', () => {
          */
         async function selectTransactionType(page: Page, type: string) {
             const typeCombobox = page.locator('[data-testid="tx-form-type"] [role="combobox"]');
-            if (!(await typeCombobox.isVisible({timeout: 2_000}).catch(() => false))) return;
+            if (!(await appears(typeCombobox, 2_000))) return;
             const icon = typeCombobox.locator('img');
             const prevSrc = await icon.getAttribute('src').catch(() => null);
             await typeCombobox.click();
             const option = page.locator(`[data-testid="search-select-option-${type}"]`);
-            if (!(await option.isVisible({timeout: 2_000}).catch(() => false))) return;
+            if (!(await appears(option, 2_000))) return;
             await option.click();
             if (prevSrc != null) {
                 await expect(icon).not.toHaveAttribute('src', prevSrc, {timeout: 3_000});
@@ -2650,6 +2735,7 @@ test.describe('Gallery Screenshots', () => {
                 test(`transaction form modal variants - ${lang} - ${theme}`, async ({page}, testInfo) => {
                     const viewport = getViewport(testInfo);
 
+                    await setBrowserLocale(page, lang);
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
@@ -2685,6 +2771,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
@@ -2727,6 +2814,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
@@ -2746,11 +2834,11 @@ test.describe('Gallery Screenshots', () => {
                             .getByTestId('tx-table')
                             .getByTestId(/^row-actions-/)
                             .nth(i);
-                        if (!(await kebab.isVisible({timeout: 1_000}).catch(() => false))) continue;
+                        if (!(await appears(kebab, 1_000))) continue;
                         await kebab.scrollIntoViewIfNeeded();
                         await kebab.click();
                         const splitAction = page.getByTestId('context-menu-action-split');
-                        if (await splitAction.isVisible({timeout: 500}).catch(() => false)) {
+                        if (await appears(splitAction, 500)) {
                             await splitAction.click();
                             const actionModal = page.getByTestId('tx-action-modal');
                             await expect(actionModal).toBeVisible({timeout: 5_000});
@@ -2777,6 +2865,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
@@ -2796,7 +2885,7 @@ test.describe('Gallery Screenshots', () => {
                     // The pre-filled form auto-opens only for a single-row clone; cloning a
                     // paired row stages both legs instead (no form). Close it when present.
                     const formClose = page.getByTestId('tx-form-close');
-                    if (await formClose.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(formClose, 3_000)) {
                         await formClose.click();
                         await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 3_000});
                     }
@@ -2824,6 +2913,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions?types=WITHDRAWAL,DEPOSIT&page_size=50');
                     await setLanguage(page, lang);
@@ -2844,7 +2934,7 @@ test.describe('Gallery Screenshots', () => {
                         for (let j = i + 1; j < maxTry && !screenshotTaken; j++) {
                             // Clear any prior selection before EACH attempt
                             const clearBtn = page.locator('button.selected-count-btn').first();
-                            if (await clearBtn.isVisible({timeout: 300}).catch(() => false)) {
+                            if (await appears(clearBtn, 300)) {
                                 await clearBtn.click();
                                 await page.waitForTimeout(200);
                             }
@@ -2857,7 +2947,7 @@ test.describe('Gallery Screenshots', () => {
                             await page.waitForTimeout(800); // Wait for Svelte to re-derive promoteMatch
 
                             const promoteBtn = page.getByTestId('toolbar-action-promote');
-                            const promoteBtnVisible = await promoteBtn.isVisible({timeout: 5_000}).catch(() => false);
+                            const promoteBtnVisible = await appears(promoteBtn, 5_000);
                             if (promoteBtnVisible) {
                                 await promoteBtn.click();
                                 await page.waitForTimeout(500);
@@ -2867,10 +2957,10 @@ test.describe('Gallery Screenshots', () => {
                                 // which also has data-testid="promote-merge-modal"
                                 const mergeModal = page.locator('[data-testid="promote-merge-modal"][role="dialog"]');
                                 const confirmBtn = page.getByTestId('confirm-modal-confirm');
-                                if (await mergeModal.isVisible({timeout: 3_000}).catch(() => false)) {
+                                if (await appears(mergeModal, 3_000)) {
                                     await screenshot(page, viewport, lang, theme, 'transactions', 'promote-merge-modal');
                                     screenshotTaken = true;
-                                } else if (await confirmBtn.isVisible({timeout: 3_000}).catch(() => false)) {
+                                } else if (await appears(confirmBtn, 3_000)) {
                                     await screenshot(page, viewport, lang, theme, 'transactions', 'promote-merge-modal');
                                     screenshotTaken = true;
                                 }
@@ -2898,6 +2988,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
@@ -2971,6 +3062,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     // Navigate fresh each iteration to ensure clean state
                     await navigateTo(page, '/brokers');
@@ -2999,6 +3091,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     // Navigate fresh each iteration to ensure clean state
                     await navigateTo(page, '/brokers');
@@ -3035,6 +3128,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/brokers');
                     await setLanguage(page, lang);
@@ -3064,6 +3158,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/brokers');
                     await setLanguage(page, lang);
@@ -3092,6 +3187,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/brokers');
                     await setLanguage(page, lang);
@@ -3113,6 +3209,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/brokers');
                     await setLanguage(page, lang);
@@ -3144,6 +3241,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     // Navigate fresh each iteration
                     await navigateTo(page, '/brokers');
@@ -3187,6 +3285,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
@@ -3198,6 +3297,7 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('tx-import-button').click();
                     await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
                     await page.getByTestId('import-wizard-step1').waitFor({state: 'visible', timeout: 5_000});
+                    await waitForSettled(page.getByTestId('import-wizard-step1'));
                     await freezeAnimations(page);
                     await page.waitForTimeout(300);
                     await screenshot(page, viewport, lang, theme, 'brokers', 'import-wizard-step1');
@@ -3220,6 +3320,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
@@ -3260,6 +3361,7 @@ test.describe('Gallery Screenshots', () => {
             const GENERIC_SIMPLE = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
@@ -3271,14 +3373,15 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
 
                     // Skip step 1 (go to step 2 which shows files already in DB)
+                    await waitForSettled(page.getByTestId('import-wizard-step1'));
                     await page.getByTestId('import-wizard-next').click();
                     await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 8_000});
-                    await page.waitForTimeout(800);
+                    await waitForSettled(page.getByTestId('import-wizard-step2'), 30_000);
 
                     // Find and select the generic_simple.csv row
                     const step2 = page.getByTestId('import-wizard-step2');
                     const fileRow = step2.locator('tr[data-row-id]').filter({hasText: 'generic_simple.csv'}).first();
-                    if (await fileRow.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(fileRow, 3_000)) {
                         const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
                         await checkbox.scrollIntoViewIfNeeded();
                         await page.keyboard.press('Escape'); // dismiss any open dropdown
@@ -3287,7 +3390,7 @@ test.describe('Gallery Screenshots', () => {
 
                         // Parse (step 3)
                         const parseBtn = page.getByTestId('import-wizard-parse');
-                        if (await parseBtn.isEnabled({timeout: 3_000}).catch(() => false)) {
+                        if (await becomesEnabled(parseBtn, 3_000)) {
                             await parseBtn.click();
                             await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
                             await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
@@ -3331,6 +3434,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
@@ -3341,15 +3445,16 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
 
                     // Skip to step 2
+                    await waitForSettled(page.getByTestId('import-wizard-step1'));
                     await page.getByTestId('import-wizard-next').click();
                     await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 8_000});
-                    await page.waitForTimeout(800);
+                    await waitForSettled(page.getByTestId('import-wizard-step2'), 30_000);
 
                     // Select generic_simple.csv — has AAPL/MSFT rows + UNETF (unresolved)
                     // The AAPL rows match existing DB transactions → show as "likely duplicate"
                     const step2 = page.getByTestId('import-wizard-step2');
                     const fileRow = step2.locator('tr[data-row-id]').filter({hasText: 'generic_simple.csv'}).first();
-                    if (await fileRow.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(fileRow, 3_000)) {
                         const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
                         await checkbox.scrollIntoViewIfNeeded();
                         await page.keyboard.press('Escape');
@@ -3357,7 +3462,7 @@ test.describe('Gallery Screenshots', () => {
                         await checkbox.click();
 
                         const parseBtn = page.getByTestId('import-wizard-parse');
-                        if (await parseBtn.isEnabled({timeout: 3_000}).catch(() => false)) {
+                        if (await becomesEnabled(parseBtn, 3_000)) {
                             await parseBtn.click();
                             await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
                             await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
@@ -3374,7 +3479,7 @@ test.describe('Gallery Screenshots', () => {
                             // Scroll to the transaction table (below the resolve section) to show duplicate badges
                             const step4 = page.getByTestId('import-wizard-step4');
                             const txTable = step4.locator('table').first();
-                            if (await txTable.isVisible({timeout: 2_000}).catch(() => false)) {
+                            if (await appears(txTable, 2_000)) {
                                 await txTable.evaluate((el) => el.scrollIntoView({block: 'center'}));
                                 await page.waitForTimeout(300);
                             }
@@ -3404,6 +3509,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
@@ -3482,6 +3588,7 @@ test.describe('Gallery Screenshots', () => {
             };
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
@@ -3699,6 +3806,7 @@ test.describe('Gallery Screenshots', () => {
             } = await uploadSet(page.request, brokerId, [DANSKE_SAMPLES.custody, DANSKE_SAMPLES.cash]);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await onTransactions(page, lang, theme);
                     const card = await openSetCard(page, brokerId, batchId, 'complete');
@@ -3749,6 +3857,7 @@ test.describe('Gallery Screenshots', () => {
             expect(cash.compatible_plugins ?? [], 'premise: the generic CSV does not').not.toContain(GENERIC);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await onTransactions(page, lang, theme);
                     const card = await openSetCard(page, brokerId, batchId, 'complete');
@@ -3792,6 +3901,7 @@ test.describe('Gallery Screenshots', () => {
             expect(Boolean(missingCash?.start && missingCash?.end), `premise: the preview names the period the cash statement must cover (${JSON.stringify(missingCash)})`).toBe(true);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await onTransactions(page, lang, theme);
                     const card = await openSetCard(page, brokerId, batchId, 'incomplete');
@@ -3825,6 +3935,7 @@ test.describe('Gallery Screenshots', () => {
             const point = (gapFix: Locator, kind: string, asOf: string) => gapFix.locator(`[data-testid="gapfix-summary"][data-kind="${kind}"][data-as-of="${asOf}"]`);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await onTransactions(page, lang, theme);
                     await openWizardOnSelectFiles(page);
@@ -3918,6 +4029,7 @@ test.describe('Gallery Screenshots', () => {
             ).toEqual(listed.map((file) => file.file_id));
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/files?tab=brim');
                     await setLanguage(page, lang);
@@ -3967,6 +4079,7 @@ test.describe('Gallery Screenshots', () => {
             const target = SAVINGS_TODOS[SAVINGS_TODOS.length - 1];
             try {
                 for (const lang of SUPPORTED_LANGUAGES) {
+                    await setBrowserLocale(page, lang);
                     for (const theme of THEMES) {
                         await onTransactions(page, lang, theme);
                         await openWizardOnSelectFiles(page);
@@ -4035,6 +4148,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     // Navigate fresh each time to avoid leftover modal state
                     await navigateTo(page, '/files');
@@ -4087,6 +4201,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     // Navigate fresh each iteration to ensure clean state
                     await navigateTo(page, '/brokers');
@@ -4098,24 +4213,24 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForTimeout(500);
 
                     const card = page.locator('[data-testid^="broker-card-"]').first();
-                    if (await card.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(card, 2000)) {
                         await card.click();
                         await page.waitForLoadState('networkidle', {timeout: 20_000});
                         await page.waitForTimeout(500);
 
                         // Click edit button to open BrokerModal
                         const editBtn = page.getByTestId('broker-edit-button');
-                        if (await editBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                        if (await appears(editBtn, 2000)) {
                             await editBtn.click();
                             await expect(page.getByTestId('broker-modal')).toBeVisible({timeout: 3000});
                             await page.waitForTimeout(300);
 
                             // Click on broker icon to open AssetPickerModal
                             const iconTrigger = page.getByTestId('broker-icon-trigger');
-                            if (await iconTrigger.isVisible({timeout: 1000}).catch(() => false)) {
+                            if (await appears(iconTrigger, 1000)) {
                                 await iconTrigger.click();
                                 const pickerModal = page.getByTestId('asset-picker-modal');
-                                if (await pickerModal.isVisible({timeout: 3000}).catch(() => false)) {
+                                if (await appears(pickerModal, 3000)) {
                                     await waitForNetworkSettled(page);
                                     await page.waitForTimeout(1500); // Wait for file previews to load
                                     await screenshot(page, viewport, lang, theme, 'media', 'asset-picker-modal');
@@ -4137,6 +4252,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/files');
                     await page.waitForLoadState('networkidle', {timeout: 20_000});
@@ -4181,6 +4297,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToFxPage(page);
                     await setLanguage(page, lang);
@@ -4189,7 +4306,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Switch to table view
                     const tableBtn = page.getByTestId('view-mode-list');
-                    if (await tableBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(tableBtn, 2000)) {
                         await tableBtn.click();
                         await page.waitForTimeout(1000); // Wait for table to render
                     }
@@ -4202,6 +4319,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToFxPage(page);
                     await setLanguage(page, lang);
@@ -4210,11 +4328,11 @@ test.describe('Gallery Screenshots', () => {
 
                     // Apply currency filter (EUR)
                     const filterSelect = page.getByTestId('fx-currency-filter').first();
-                    if (await filterSelect.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(filterSelect, 2000)) {
                         await filterSelect.locator('[role="combobox"]').click();
                         await page.waitForTimeout(300);
                         const option = page.locator('[role="listbox"] button').filter({hasText: 'EUR'}).first();
-                        if (await option.isVisible({timeout: 1000}).catch(() => false)) {
+                        if (await appears(option, 1000)) {
                             await option.click();
                             await page.waitForTimeout(1500); // Wait for charts to re-render
                         }
@@ -4228,6 +4346,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToFxPage(page);
                     await setLanguage(page, lang);
@@ -4294,6 +4413,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToFxPage(page);
                     await setLanguage(page, lang);
@@ -4406,6 +4526,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToFxPage(page);
                     await setLanguage(page, lang);
@@ -4414,7 +4535,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Click sync all button
                     const syncBtn = page.getByTestId('fx-sync-all-button');
-                    if (await syncBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(syncBtn, 2000)) {
                         await syncBtn.click();
                         // Wait for sync modal to appear and show progress
                         await page.waitForTimeout(1500);
@@ -4446,6 +4567,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToFxDetailPage(page, 'EUR-USD');
                     await selectOneYearDateRange(page);
@@ -4460,12 +4582,12 @@ test.describe('Gallery Screenshots', () => {
 
                     // Toggle signals panel
                     const signalsToggle = page.getByTestId('fx-detail-signals-toggle');
-                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(signalsToggle, 2000)) {
                         await signalsToggle.click();
                         await page.waitForTimeout(500);
                         // Scroll down to make signals panel content visible
                         const signalsPanel = page.getByTestId('fx-detail-signals-panel');
-                        if (await signalsPanel.isVisible({timeout: 2000}).catch(() => false)) {
+                        if (await appears(signalsPanel, 2000)) {
                             await signalsPanel.scrollIntoViewIfNeeded();
                             await page.waitForTimeout(300);
                         }
@@ -4482,6 +4604,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToFxDetailPage(page, 'EUR-USD');
                     await selectOneYearDateRange(page);
@@ -4496,7 +4619,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Toggle measures panel
                     const measuresToggle = page.getByTestId('fx-detail-measures-toggle');
-                    if (await measuresToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(measuresToggle, 2000)) {
                         await measuresToggle.click();
                         await page.waitForTimeout(500);
                     }
@@ -4509,6 +4632,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToFxDetailPage(page, 'EUR-USD');
                     await setLanguage(page, lang);
@@ -4521,12 +4645,12 @@ test.describe('Gallery Screenshots', () => {
 
                     // Click edit button to open data editor
                     const editBtn = page.getByTestId('fx-detail-edit-btn');
-                    if (await editBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(editBtn, 2000)) {
                         await editBtn.click();
                         await page.waitForTimeout(500);
                         // Scroll to editor panel for full view
                         const editorPanel = page.getByTestId('fx-detail-editor-panel');
-                        if (await editorPanel.isVisible({timeout: 2000}).catch(() => false)) {
+                        if (await appears(editorPanel, 2000)) {
                             await editorPanel.scrollIntoViewIfNeeded();
                             await page.waitForTimeout(300);
                         }
@@ -4540,6 +4664,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToFxDetailPage(page, 'EUR-USD');
                     await setLanguage(page, lang);
@@ -4581,6 +4706,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToFxPage(page);
                     await setLanguage(page, lang);
@@ -4610,6 +4736,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToFxDetailPage(page, 'EUR-USD');
                     await setLanguage(page, lang);
@@ -4662,6 +4789,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     const polled = galleryOfflineGuard(page).pricedPolls;
                     await goToAssetsPage(page);
@@ -4672,7 +4800,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Switch to table view
                     const tableBtn = page.getByTestId('view-mode-list');
-                    if (await tableBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(tableBtn, 2000)) {
                         await tableBtn.click();
                         await page.waitForTimeout(1000); // Wait for table to render
                     }
@@ -4688,6 +4816,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     const polled = galleryOfflineGuard(page).pricedPolls;
                     await goToAssetsPage(page);
@@ -4699,7 +4828,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Type search text
                     const searchInput = page.getByTestId('assets-search-input');
-                    if (await searchInput.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(searchInput, 2000)) {
                         await searchInput.fill('ETF');
                         await page.waitForTimeout(1000);
                     }
@@ -4712,6 +4841,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
@@ -4732,7 +4862,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Screenshot 2: candlestick chart
                     const candlestickBtn = page.getByTestId('chart-type-candlestick');
-                    if (await candlestickBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(candlestickBtn, 2000)) {
                         await candlestickBtn.click();
                         await page.waitForTimeout(800); // Wait for candlestick to render
                         await freezeAnimations(page);
@@ -4787,6 +4917,7 @@ test.describe('Gallery Screenshots', () => {
             const peerId = await assetIdByName(page, ROLLING_RETURN_PEER);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await resetChartSettings(page); // no comparison and the default window: each step below is a real change
                     await goToAssetsPage(page);
@@ -4870,6 +5001,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
@@ -4882,7 +5014,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Toggle signals panel
                     const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
-                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(signalsToggle, 2000)) {
                         await signalsToggle.click();
                         await page.waitForTimeout(500);
                     }
@@ -4898,6 +5030,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await resetChartSettings(page); // each combo starts with no signals configured
                     await goToAssetsPage(page);
@@ -4933,6 +5066,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await resetChartSettings(page); // each combo starts with no signals configured
                     await goToAssetsPage(page);
@@ -4967,6 +5101,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await resetChartSettings(page); // each combo starts with no signals configured
                     await goToAssetsPage(page);
@@ -5001,6 +5136,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await resetChartSettings(page); // each combo starts with no signals configured
                     await goToAssetsPage(page);
@@ -5034,6 +5170,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await resetChartSettings(page); // each combo starts with no signals configured
                     await goToAssetsPage(page);
@@ -5075,6 +5212,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await resetChartSettings(page); // each combo starts with no signals configured
                     await goToAssetsPage(page);
@@ -5111,6 +5249,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
@@ -5190,9 +5329,9 @@ test.describe('Gallery Screenshots', () => {
 
             // The dividend sits ~120 days back, outside the 3-month session default, so the range
             // must really be «All». Strict local form of selectMaxDateRange() (still used by the FIFO
-            // shots): that one looks once, and on a preset bar not painted yet it clicks nothing,
-            // silently. Here the button is waited for, clicked only when not already active (the
-            // range persists in the session), and its active state asserted.
+            // shots): it waits half a second at most per preset, and on a preset bar not painted by
+            // then it clicks nothing, silently. Here the button is waited for, clicked only when not
+            // already active (the range persists in the session), and its active state asserted.
             const selectMaxPreset = async () => {
                 const maxPreset = page.getByTestId('date-preset-max');
                 await expect(maxPreset).toBeVisible({timeout: 10_000});
@@ -5232,6 +5371,7 @@ test.describe('Gallery Screenshots', () => {
                 }, showTip);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     const comboQueries = priceQueries.length; // this combo's slice of the route log starts here
                     await goToAssetsPage(page);
@@ -5307,6 +5447,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
@@ -5321,7 +5462,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Toggle measures panel — screenshot 1: panel open (empty)
                     const measuresToggle = page.getByTestId('asset-detail-measures-toggle');
-                    if (await measuresToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(measuresToggle, 2000)) {
                         await measuresToggle.click();
                         await page.waitForTimeout(500);
                     }
@@ -5331,7 +5472,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Screenshot 2: panel with a measurement added (full date range)
                     const addMeasureBtn = page.getByTestId('asset-detail-add-measure-btn');
-                    if (await addMeasureBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(addMeasureBtn, 2000)) {
                         await addMeasureBtn.click();
                         await page.waitForTimeout(800); // Wait for measurement to appear
                         await page.getByTestId('asset-detail-chart').scrollIntoViewIfNeeded();
@@ -5350,6 +5491,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
@@ -5360,13 +5502,13 @@ test.describe('Gallery Screenshots', () => {
 
                     // Toggle classification (metadata) panel
                     const metadataToggle = page.getByTestId('asset-detail-metadata-toggle');
-                    if (await metadataToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(metadataToggle, 2000)) {
                         await metadataToggle.click();
                         await page.waitForTimeout(1000); // Wait for pie charts and map to render
 
                         // Scroll to classification panel
                         const metadataPanel = page.getByTestId('asset-detail-metadata-panel');
-                        if (await metadataPanel.isVisible({timeout: 2000}).catch(() => false)) {
+                        if (await appears(metadataPanel, 2000)) {
                             await metadataPanel.scrollIntoViewIfNeeded();
                             await page.waitForTimeout(500);
                         }
@@ -5380,6 +5522,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
@@ -5390,12 +5533,12 @@ test.describe('Gallery Screenshots', () => {
 
                     // Click edit data button
                     const editDataBtn = page.getByTestId('asset-detail-editdata-btn');
-                    if (await editDataBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(editDataBtn, 2000)) {
                         await editDataBtn.click();
                         await page.waitForTimeout(500);
                         // Scroll to editor panel
                         const editorPanel = page.getByTestId('asset-detail-editor-panel');
-                        if (await editorPanel.isVisible({timeout: 2000}).catch(() => false)) {
+                        if (await appears(editorPanel, 2000)) {
                             await editorPanel.scrollIntoViewIfNeeded();
                             await page.waitForTimeout(300);
                         }
@@ -5409,6 +5552,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
@@ -5444,6 +5588,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
@@ -5495,6 +5640,7 @@ test.describe('Gallery Screenshots', () => {
             const mock = await mockProviderCompare(page);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
@@ -5530,6 +5676,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
@@ -5591,6 +5738,7 @@ test.describe('Gallery Screenshots', () => {
             const viewport = getViewport(testInfo);
 
             for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
                 for (const theme of THEMES) {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
@@ -5602,14 +5750,15 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
 
                     // Skip step 1, advance to step 2
+                    await waitForSettled(page.getByTestId('import-wizard-step1'));
                     await page.getByTestId('import-wizard-next').click();
                     await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 8_000});
-                    await page.waitForTimeout(800);
+                    await waitForSettled(page.getByTestId('import-wizard-step2'), 30_000);
 
                     // Select generic_simple.csv (has UNETF - unresolved asset)
                     const step2 = page.getByTestId('import-wizard-step2');
                     const fileRow = step2.locator('tr[data-row-id]').filter({hasText: 'generic_simple.csv'}).first();
-                    if (await fileRow.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(fileRow, 3_000)) {
                         const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
                         await checkbox.scrollIntoViewIfNeeded();
                         await page.keyboard.press('Escape');
@@ -5617,7 +5766,7 @@ test.describe('Gallery Screenshots', () => {
                         await checkbox.click();
 
                         const parseBtn = page.getByTestId('import-wizard-parse');
-                        if (await parseBtn.isEnabled({timeout: 3_000}).catch(() => false)) {
+                        if (await becomesEnabled(parseBtn, 3_000)) {
                             await parseBtn.click();
                             await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
                             await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
@@ -5629,16 +5778,16 @@ test.describe('Gallery Screenshots', () => {
                                 await page.waitForTimeout(300);
                             }
                             await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 10_000});
-                            await page.waitForTimeout(800);
+                            await waitForSettled(page.getByTestId('import-wizard-step4'), 30_000);
 
                             // The resolve section defaults to expanded when there are unresolved assets.
                             // Just find the AssetSelect directly — it's inside the resolve section.
                             // Use the [role="combobox"] inside the asset-select element.
                             const assetSelect = page.getByTestId('asset-select').first();
-                            if (await assetSelect.isVisible({timeout: 5_000}).catch(() => false)) {
+                            if (await appears(assetSelect, 5_000)) {
                                 // Open the search dropdown by clicking the combobox trigger
                                 const combobox = assetSelect.locator('[role="combobox"], input[type="text"]').first();
-                                if (await combobox.isVisible({timeout: 1_000}).catch(() => false)) {
+                                if (await appears(combobox, 1_000)) {
                                     await combobox.click();
                                 } else {
                                     await assetSelect.click();
@@ -5647,11 +5796,11 @@ test.describe('Gallery Screenshots', () => {
 
                                 // Click the "Create new" option in the dropdown
                                 const createNewBtn = page.getByTestId('search-select-create-new');
-                                if (await createNewBtn.isVisible({timeout: 2_000}).catch(() => false)) {
+                                if (await appears(createNewBtn, 2_000)) {
                                     await createNewBtn.click();
                                     // AssetModal opens pre-filled with extracted ticker/ISIN/name
                                     const assetModal = page.getByTestId('asset-modal-form');
-                                    if (await assetModal.isVisible({timeout: 5_000}).catch(() => false)) {
+                                    if (await appears(assetModal, 5_000)) {
                                         await waitForNetworkSettled(page);
                                         await page.waitForTimeout(500);
                                         await freezeAnimations(page);

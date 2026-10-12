@@ -36,7 +36,7 @@ lot, an asset-level orphan aggregate, or a portfolio-level bucket.
 ## Source files
 | File |
 |------|
-| `backend/app/services/fifo_lot_engine.py` |
-| `backend/app/services/portfolio_engine.py` |
+| `backend/app/services/financial_math/fifo/engine.py` |
+| `backend/app/services/financial_math/portfolio/daily_state.py` |
 | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/implementation-plan-v5.md` §3.2, Fase 4 |
 | `mkdocs_src/docs/financial-theory/instruments/transaction-types/fee.en.md` §"How LibreFolio attributes fees and taxes" |

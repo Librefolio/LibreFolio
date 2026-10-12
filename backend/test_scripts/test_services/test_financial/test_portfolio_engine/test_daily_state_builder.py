@@ -8,15 +8,11 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
-from backend.app.services.portfolio_engine import (
-    ClassificationResult,
-    ClassifiedTransaction,
-    DailyStateBuilder,
-    InTransitInterval,
-    ValuationSource,
-)
-from backend.app.services.price_resolver import build_asset_price_series
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.portfolio.models import ClassificationResult, ClassifiedTransaction, InTransitInterval, ValuationSource
+from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
+from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 
 # =============================================================================
 # HELPERS
@@ -86,8 +82,8 @@ def _builder(**overrides) -> DailyStateBuilder:
     """Create a DailyStateBuilder with sensible defaults, overriding any kwarg.
 
     Mirrors PortfolioCalculationEngine by building the per-asset resolver ``mark_series`` from the
-    given ``price_map`` + trades, and the ``average_costs`` from the transactions with the given
-    ``fx_rate_map``, unless the test supplies its own.
+    given ``price_map`` + trades, and the ``average_costs`` and ``native_cash`` from the transactions
+    with the given ``fx_rate_map``, unless the test supplies its own.
     """
     defaults = {
         "classified_txs": [],
@@ -119,6 +115,13 @@ def _builder(**overrides) -> DailyStateBuilder:
             target_currency=defaults["target_currency"],
             fx_rate_map=defaults["fx_rate_map"],
             split_linked_tx_ids=defaults.get("split_linked_tx_ids"),
+            date_to=defaults["date_to"],
+        )
+    if "native_cash" not in defaults:
+        defaults["native_cash"] = engine_native_cash(
+            defaults["classified_txs"],
+            target_currency=defaults["target_currency"],
+            fx_rate_map=defaults["fx_rate_map"],
             date_to=defaults["date_to"],
         )
     return DailyStateBuilder(**defaults)

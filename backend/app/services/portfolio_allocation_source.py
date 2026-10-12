@@ -38,8 +38,9 @@ from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceWacFxEvidence,
     PortfolioPlannerWacContext,
 )
+from backend.app.services.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
+from backend.app.utils.asset.sector import FinancialSector
 from backend.app.utils.datetime_utils import utcnow
-from backend.app.utils.sector_fin_utils import FinancialSector
 
 
 async def _load_holding_rows(
@@ -151,7 +152,7 @@ _ENGINE_PROVENANCE_ID = "source:portfolio-engine"
 _KNOWN_SECTORS = frozenset(sector.value for sector in FinancialSector)
 # The metadata writers store Pydantic JSON, where a Decimal weight is plain decimal text ("0.6000").
 _SAVED_WEIGHT_TEXT = re.compile(r"[0-9]+(?:\.[0-9]+)?")
-# The catch-all geographic key the writers keep as it is (geo_utils.normalize_country_keys).
+# The catch-all geographic key the writers keep as it is (utils.asset.geo.normalize_country_keys).
 _GEOGRAPHY_OTHER = "Other"
 
 
@@ -1315,9 +1316,9 @@ async def _build_planner_current_distribution(  # noqa: C901 — per-Asset valua
     The denominator is the scenario instead of every holding and cash stays out; a
     held Asset without a valuation withholds every weight instead of vanishing.
     """
-    # Lazy: portfolio_service imports this module at load time.
-    from backend.app.services.portfolio_engine import PortfolioCalculationEngine, ValuationSource  # noqa: PLC0415
-    from backend.app.services.portfolio_service import _QUANTITY_DUST_THRESHOLD  # noqa: PLC0415
+    # Lazy: read at call time, so a test can replace PortfolioCalculationEngine on its module.
+    from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
+    from backend.app.services.financial_math.portfolio.models import ValuationSource  # noqa: PLC0415
 
     engine_result = await PortfolioCalculationEngine(session).calculate(
         user_id=user_id,
@@ -1329,7 +1330,7 @@ async def _build_planner_current_distribution(  # noqa: C901 — per-Asset valua
     scenario = set(scenario_asset_ids)
     positions_by_asset: dict[int, list] = defaultdict(list)
     for position in engine_result.position_states_end:
-        if position.asset_id in scenario and position.quantity > _QUANTITY_DUST_THRESHOLD:
+        if position.asset_id in scenario and position.quantity > QUANTITY_DUST_THRESHOLD:
             positions_by_asset[position.asset_id].append(position)
 
     values: dict[int, Decimal] = {}

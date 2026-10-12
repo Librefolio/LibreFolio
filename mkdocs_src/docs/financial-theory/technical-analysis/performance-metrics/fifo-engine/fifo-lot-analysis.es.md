@@ -281,7 +281,7 @@ con $d_i$ desde la fecha de apertura hasta la fecha de cierre para lotes cerrado
     P&L Total Bruto $= 60 + 80 + 50 = 190$; P&L Total Neto $= 190 - 13 = 177$; sobre un valor de apertura de 1000, eso es un
     **19 %** bruto frente a un **17,7 %** neto de retorno total.
 
-Los costos con `asset_id = null` **no** forman parte de esta vista a nivel de lote — son a nivel de cartera y los gestiona el [Motor de Cartera](../portfolio-engine/roi.md). Consulte [Comisión e Impuesto](../../../instruments/transaction-types/fee.md) para la teoría a nivel de instrumento.
+Los costos con `asset_id = null` **no** forman parte de esta vista a nivel de lote — son a nivel de cartera y los gestiona el [Motor de Cartera](../portfolio-engine/roi.md). Consulta [Comisión e Impuesto](../../../instruments/transaction-types/fee.md) para la teoría a nivel de instrumento.
 
 ---
 

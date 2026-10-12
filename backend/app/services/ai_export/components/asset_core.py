@@ -80,7 +80,7 @@ from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
-from backend.app.utils.financial.valuation_utils import compute_holding_value
+from backend.app.services.financial_math.valuation import compute_holding_value
 
 # =============================================================================
 # Static methodology text for asset.provenance (never user/provider content)

@@ -32,9 +32,11 @@ As part of Phase 09 (Dashboard), LibreFolio introduces proper financial performa
      inputs — not an open bug. See [[decisions/mwrr-solver-newton-cap]].
    - The double-counting boundary bug (synthetic `t=0` flow duplicating deposits) was fixed 2026-06-30 — see
      [[decisions/mwrr-boundary-fix]].
+   - A period that starts on a data-less day once gave the MWRR a pole; the flows already embedded in the first
+     snapshot are now excluded — [[problems/mwrr-pole-dataless-period-start]].
 
 ## Source files
 | File |
 |------|
 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_financial_algorithms.md` |
-| `backend/app/utils/financial/roi_utils.py` |
+| `backend/app/services/financial_math/returns.py` |

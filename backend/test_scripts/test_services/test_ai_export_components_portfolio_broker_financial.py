@@ -50,7 +50,7 @@ from backend.app.schemas.portfolio import (
     YieldOnCostStatus,
 )
 from backend.app.services.ai_export.components import broker_financial, portfolio_financial
-from backend.app.services.ai_export.components.envelope import ComponentPayloadValidationError
+from backend.app.services.ai_export.components.envelope import ComponentPayloadValidationError, SectionEnvelope
 from backend.app.services.ai_export.components.payloads import portfolio_broker as shared_payloads
 from backend.app.services.ai_export.components.payloads.portfolio_broker import FifoLotRow
 from backend.app.services.ai_export.components.registry import ComponentRegistry
@@ -61,6 +61,7 @@ from backend.app.services.ai_export.dependencies import (
     RequiredComponentBuildError,
     build_bucket_plan_for_scope,
 )
+from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
 
@@ -749,10 +750,47 @@ class TestAllContributorsRetained:
 # =============================================================================
 
 
+# Each domain's reconciliation, resolved over its own scope: the broker component reads the very same engine fields
+# off a single-broker report.
+_RECONCILIATION_SCOPES = {
+    "portfolio": ({}, portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS),
+    "broker": ({"domain": Domain.BROKER, "broker_id": 7, "broker_scope": (7,)}, broker_financial.BROKER_FINANCIAL_COMPONENTS),
+}
+
+
+async def _resolve_reconciliation(monkeypatch: pytest.MonkeyPatch, domain: str, summary: PortfolioSummary) -> SectionEnvelope:
+    """The `{domain}.reconciliation` envelope built over a report whose summary is `summary`."""
+    scope_overrides, components = _RECONCILIATION_SCOPES[domain]
+    scope = _scope(**scope_overrides)
+    _patch_report(monkeypatch, _report(scope, summary=summary))
+    _patch_lots(monkeypatch, {})
+    _patch_metadata(monkeypatch)
+    context = _make_context(scope, _registry(components), _make_async_session())
+    return await context.resolve(f"{domain}.reconciliation", required=True)
+
+
+def _summary_with_residual(residual: Decimal) -> PortfolioSummary:
+    """Engine fields decomposing into exactly 100 (60 + 20 + 30 - 10 + 0) under a period P&L of 100 + `residual`."""
+    return _summary(
+        period_pnl=_money(Decimal("100") + residual),
+        period_unrealized_gain_loss_delta=_money(60),
+        period_realized_gain_loss=_money(20),
+        period_income=_money(30),
+        period_fees_taxes=_money(10),
+        period_other_result=_money(0),
+    )
+
+
 class TestEngineReconciliation:
+    """`reconciled` says whether the engine's period P&L decomposition closes: period_pnl == unrealized delta + realized
+    + income - fees/taxes + other result. The engine builds `period_other_result` as the closing term of that very
+    identity, so the residual is zero by construction up to Decimal rounding: a residual below CONVERSION_DUST is that
+    rounding and reconciles (C-53), one of CONVERSION_DUST or more does not, and `residual` always states the exact
+    difference, never zeroed. Portfolio and Broker read the same engine fields and share the rule."""
+
     @pytest.mark.asyncio
-    async def test_reconciled_true_when_engine_fields_sum_exactly(self, monkeypatch):
-        scope = _scope()
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    async def test_reconciled_true_when_engine_fields_sum_exactly(self, monkeypatch, domain):
         summary = _summary(
             period_pnl=_money(100),
             period_unrealized_gain_loss_delta=_money(60),
@@ -762,21 +800,14 @@ class TestEngineReconciliation:
             period_other_result=_money(0),
         )
         # period_pnl == unrealized_delta + realized + income - fees_taxes + other_result -> 60+20+30-10+0=100
-        report = _report(scope, summary=summary)
-        _patch_report(monkeypatch, report)
-        _patch_lots(monkeypatch, {})
-        _patch_metadata(monkeypatch)
-        registry = _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS)
-        context = _make_context(scope, registry, _make_async_session())
-
-        envelope = await context.resolve("portfolio.reconciliation", required=True)
+        envelope = await _resolve_reconciliation(monkeypatch, domain, summary)
 
         assert envelope.payload["reconciled"] is True
         assert Decimal(envelope.payload["residual"]["amount"]) == Decimal("0")
 
     @pytest.mark.asyncio
-    async def test_reconciled_false_and_residual_reported_when_engine_fields_do_not_sum(self, monkeypatch):
-        scope = _scope()
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    async def test_reconciled_false_and_residual_reported_when_engine_fields_do_not_sum(self, monkeypatch, domain):
         summary = _summary(
             period_pnl=_money(999),
             period_unrealized_gain_loss_delta=_money(60),
@@ -785,33 +816,94 @@ class TestEngineReconciliation:
             period_fees_taxes=_money(10),
             period_other_result=_money(0),
         )
-        report = _report(scope, summary=summary)
-        _patch_report(monkeypatch, report)
-        _patch_lots(monkeypatch, {})
-        _patch_metadata(monkeypatch)
-        registry = _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS)
-        context = _make_context(scope, registry, _make_async_session())
-
-        envelope = await context.resolve("portfolio.reconciliation", required=True)
+        envelope = await _resolve_reconciliation(monkeypatch, domain, summary)
 
         assert envelope.payload["reconciled"] is False
         assert Decimal(envelope.payload["residual"]["amount"]) == Decimal("899")
 
     @pytest.mark.asyncio
-    async def test_reconciliation_none_when_engine_fields_missing_not_fabricated(self, monkeypatch):
-        scope = _scope()
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    async def test_reconciliation_none_when_engine_fields_missing_not_fabricated(self, monkeypatch, domain):
         summary = _summary(period_pnl=None, period_unrealized_gain_loss_delta=None, period_realized_gain_loss=None, period_income=None, period_fees_taxes=None, period_other_result=None)
-        report = _report(scope, summary=summary)
-        _patch_report(monkeypatch, report)
-        _patch_lots(monkeypatch, {})
-        _patch_metadata(monkeypatch)
-        registry = _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS)
-        context = _make_context(scope, registry, _make_async_session())
-
-        envelope = await context.resolve("portfolio.reconciliation", required=True)
+        envelope = await _resolve_reconciliation(monkeypatch, domain, summary)
 
         assert envelope.payload["reconciled"] is None
         assert envelope.payload["residual"] is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    @pytest.mark.parametrize(
+        "residual",
+        [
+            pytest.param(Decimal("1E-24"), id="rounding-dust"),
+            pytest.param(Decimal("-1E-24"), id="negative-rounding-dust"),
+            pytest.param(CONVERSION_DUST - Decimal("1E-18"), id="just-below-conversion-dust"),
+        ],
+    )
+    async def test_residual_below_conversion_dust_is_reconciled_and_still_stated_exactly(self, monkeypatch, domain, residual):
+        """Rounding, not a reconciliation gap: reconciled. The residual is not zeroed: it is the exact difference."""
+        envelope = await _resolve_reconciliation(monkeypatch, domain, _summary_with_residual(residual))
+
+        assert (envelope.payload["reconciled"], Decimal(envelope.payload["residual"]["amount"])) == (True, residual)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    @pytest.mark.parametrize(
+        "residual",
+        [
+            pytest.param(CONVERSION_DUST, id="exactly-conversion-dust"),
+            pytest.param(-CONVERSION_DUST, id="negative-exactly-conversion-dust"),
+            pytest.param(Decimal("-99"), id="negative-material"),
+        ],
+    )
+    async def test_residual_of_conversion_dust_or_more_is_not_reconciled(self, monkeypatch, domain, residual):
+        """The tolerance is strict and two-sided: a residual as large as CONVERSION_DUST, of either sign, is a gap."""
+        envelope = await _resolve_reconciliation(monkeypatch, domain, _summary_with_residual(residual))
+
+        assert (envelope.payload["reconciled"], Decimal(envelope.payload["residual"]["amount"])) == (False, residual)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    async def test_engine_closing_term_reconciles_despite_decimal_rounding(self, monkeypatch, domain):
+        """The defect as real snapshots showed it: figures converted to the report currency carry Decimal's 28 digits,
+        and `period_other_result` is the engine's closing term of the identity the component re-adds (PortfolioService:
+        pnl - unrealized delta - realized - income + fees/taxes). Grouped differently, the re-addition rounds
+        differently and leaves 1E-24: reconciled, with the 1E-24 still stated."""
+        pnl, unrealized_delta, realized, income, fees_taxes = (Decimal(amount) / Decimal("1.09") for amount in ("2500", "1500", "700", "400", "150"))
+        summary = _summary(
+            period_pnl=_money(pnl),
+            period_unrealized_gain_loss_delta=_money(unrealized_delta),
+            period_realized_gain_loss=_money(realized),
+            period_income=_money(income),
+            period_fees_taxes=_money(fees_taxes),
+            period_other_result=_money(pnl - unrealized_delta - realized - income + fees_taxes),
+        )
+
+        envelope = await _resolve_reconciliation(monkeypatch, domain, summary)
+
+        assert (envelope.payload["reconciled"], Decimal(envelope.payload["residual"]["amount"])) == (True, Decimal("1E-24"))
+
+
+class TestReconciliationComponentVersion:
+    """C-53 made `reconciled` tolerate a residual below CONVERSION_DUST: each reconciliation component moved from
+    version 1 to 2, on the real spec and on the frozen catalog placeholder together. The payload shape is unchanged, so
+    the schema stays version 1. The catalog is imported in the test, as in `TestFifoComponentVersion`, so that a
+    parity failure on import reds these tests only."""
+
+    @pytest.mark.parametrize(
+        ("component_id", "components"),
+        [
+            pytest.param("portfolio.reconciliation", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, id="portfolio-reconciliation"),
+            pytest.param("broker.reconciliation", broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker-reconciliation"),
+        ],
+    )
+    def test_reconciliation_component_is_versioned_v2_in_registry_and_placeholder(self, component_id, components):
+        from backend.app.services.ai_export.components import catalog  # noqa: PLC0415 — test-local: a real/placeholder parity failure on import must red these tests only
+
+        real = next(spec for spec in components if spec.component_id == component_id)
+        placeholder = next(spec for spec in catalog.ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
+        assert (real.version, placeholder.version) == (2, 2)
+        assert real.schema_version == 1
 
 
 # =============================================================================

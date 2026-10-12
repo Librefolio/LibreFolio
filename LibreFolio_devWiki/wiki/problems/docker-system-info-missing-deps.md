@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-07-20
 tags: [docker, deployment, system-info, settings, pipfile]
-related: [decisions/single-docker-image]
+related: [decisions/single-docker-image, decisions/utils-leaf-functions-only]
 ---
 
 # Problem: System Info empty in Docker (App Version: unknown, 0 dependencies)
@@ -49,6 +49,18 @@ runs, then `COPY`ied in. This fix mirrors that same pattern.
   `PROJECT_ROOT / "VERSION"` first (stripped content) before falling back
   to the original `git describe` subprocess logic (local dev unaffected).
 
+> **Update 2026-10-12 (BU1).** The module is now `backend/app/utils/runtime/version.py`, and the
+> root is computed by `_project_root()` = `Path(__file__).resolve().parents[__name__.count(".")]`,
+> from the module's dotted name. The old root, four `.parent` written for `utils/version.py`, would
+> have pointed at `backend/` after the move: in development nothing shows (no `VERSION`, and
+> `git describe` finds the repository from a subfolder), but the image has no `.git`, so the app
+> would have looked for `/app/backend/VERSION` instead of `/app/VERSION` and reported `unknown`
+> again. The coordinator caught it before the commit, which no gate and none of the 12 409 backend
+> tests could see; two tests now pin it (`test_git_describe_runs_in_repository_root`,
+> `test_image_layout_reads_version_file_without_git`). Lesson: in a rename, search the paths a file
+> computes from its own location (`__file__`, `parents`), not only its imports —
+> [[decisions/utils-leaf-functions-only]].
+
 ### Gotcha: cache the VERSION file bypass would create
 Once `get_git_version()` prefers an existing `VERSION` file, a naive
 "regenerate" step would just re-read the stale file it's trying to
@@ -92,7 +104,7 @@ unrelated, still-open bug discovered while verifying this fix (blocks
 
 | Role | Path |
 |------|------|
-| Version resolution | `backend/app/utils/version.py` |
+| Version resolution | `backend/app/utils/runtime/version.py` |
 | System info endpoint | `backend/app/api/v1/system.py` |
 | VERSION file generation | `dev.py` (`_docker_ensure_assets_built()`) |
 | Docker image build | `Dockerfile` |

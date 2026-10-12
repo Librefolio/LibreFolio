@@ -4,12 +4,18 @@ Authentication API Tests
 Tests for login, logout, register, and session management endpoints.
 """
 
+import asyncio
+import contextlib
+import inspect
+import itertools
 import re
+import time
 import uuid
-from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from types import ModuleType
 from typing import Optional, Union
 
 import httpx
@@ -26,7 +32,7 @@ from backend.app.config import Settings, get_settings
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import GlobalSetting, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.auth import AuthLoginRequest, AuthLoginResponse, AuthRegisterRequest
+from backend.app.schemas.auth import AuthLoginRequest, AuthLoginResponse, AuthRegisterRequest, ChangePasswordRequest
 from backend.app.services import auth_service, user_service
 from backend.app.services.global_settings_service import is_registration_enabled
 from backend.test_scripts.test_server_helper import _TestingServerManager
@@ -1605,3 +1611,246 @@ class TestLoginAlwaysRunsBcrypt:
         assert len(checkpw_calls) == 2, f"One bcrypt check per verification: bcrypt.checkpw ran {len(checkpw_calls)} time(s) for two"
 
         print_success("✓ Real hash: True for the right password, False for a wrong one")
+
+
+# ============================================================================
+# PASSWORD WORK OFF THE EVENT LOOP (V-16, plan 46 §12.7)
+# ============================================================================
+#
+# bcrypt costs about a quarter of a second per call (BCRYPT_ROUNDS = 12), and login, register and
+# change-password are `async def` handlers: a bcrypt call made in them holds the worker's event loop,
+# which serves no other request meanwhile. The Async I/O Rule (copilot-instructions) wants the call
+# in `await asyncio.to_thread(...)`. These tests replace the password function a handler calls with
+# a stand-in that holds the thread calling it, as bcrypt does, and keep a heartbeat on the test's
+# event loop while the handler runs in-process on a private database. Called in the loop, the
+# stand-in leaves no heartbeat inside its run: the whole run is one stall, on any machine. Called in
+# a worker thread, it leaves the heartbeat beating. Nothing here measures bcrypt.
+
+#: How long each stand-in holds the thread that calls it: bcrypt's cost (~0.24 s), magnified so that a held loop cannot hide.
+_PASSWORD_WORK_SECONDS = 0.4
+#: The heartbeat's period on the test's event loop.
+_HEARTBEAT_SECONDS = 0.01
+#: The longest the event loop may go without a heartbeat while a stand-in runs: far above the period, well below the stand-in's run.
+_MAX_STALL_SECONDS = 0.15
+
+
+@dataclass
+class _BlockingStandIn:
+    """A password function's stand-in: it holds the thread calling it for _PASSWORD_WORK_SECONDS, as bcrypt does, then answers ``result``.
+
+    Every call is recorded with its arguments bound by name to the real function's signature, so a
+    positional and a keyword call read alike, and a call the real function would refuse fails here
+    too; and with its run, (start, end) in perf_counter seconds, the heartbeat's clock.
+    """
+
+    label: str
+    real: Callable[..., object]
+    result: object
+    calls: list[dict[str, object]] = field(default_factory=list)
+    runs: list[tuple[float, float]] = field(default_factory=list)
+
+    def __call__(self, *args: object, **kwargs: object) -> object:
+        arguments = inspect.signature(self.real).bind(*args, **kwargs).arguments
+        start = time.perf_counter()
+        time.sleep(_PASSWORD_WORK_SECONDS)  # the work itself, not a wait for anything: the thread is held as bcrypt holds it
+        self.runs.append((start, time.perf_counter()))
+        self.calls.append(arguments)
+        return self.result
+
+
+def _block(monkeypatch: pytest.MonkeyPatch, module: ModuleType, name: str, result: object) -> _BlockingStandIn:
+    """Replace ``module.name``, the name the handler calls, with a blocking stand-in answering ``result``; monkeypatch puts it back."""
+    stand_in = _BlockingStandIn(label=f"{module.__name__}.{name}", real=getattr(module, name), result=result)
+    monkeypatch.setattr(module, name, stand_in)
+    return stand_in
+
+
+@contextlib.asynccontextmanager
+async def _heartbeat() -> AsyncIterator[list[float]]:
+    """Beat on the running event loop every _HEARTBEAT_SECONDS while the body runs; the beats, in perf_counter seconds.
+
+    The first beat is taken before the body starts and the last after it ends. The heartbeat is a task
+    of the body's own loop: whatever holds the loop holds the heartbeat too.
+    """
+    ticks: list[float] = []
+    beating = asyncio.Event()
+    stop = asyncio.Event()
+
+    async def beat() -> None:
+        while True:
+            ticks.append(time.perf_counter())
+            beating.set()
+            if stop.is_set():
+                return
+            await asyncio.sleep(_HEARTBEAT_SECONDS)
+
+    task = asyncio.create_task(beat())
+    await beating.wait()
+    try:
+        yield ticks
+    finally:
+        stop.set()
+        await task
+
+
+def _stall(ticks: list[float], run: tuple[float, float]) -> tuple[float, int]:
+    """(the longest the event loop went without a beat during ``run``, the beats inside it).
+
+    Only the run counts: what the loop did before or after the password work (a first SQL compile, an
+    import) cannot make a stall here. A run held in the loop has no beat inside it: its stall is the
+    whole run.
+    """
+    start, end = run
+    inside = [tick for tick in ticks if start < tick < end]
+    return max(later - earlier for earlier, later in itertools.pairwise([start, *inside, end])), len(inside)
+
+
+def _assert_the_loop_kept_beating(handler: str, ticks: list[float], *stand_ins: _BlockingStandIn) -> str:
+    """Assert that during each stand-in's run, one each (the caller checked), the loop never went _MAX_STALL_SECONDS without a beat; return what was measured."""
+    measured = {stand_in.label: _stall(ticks, stand_in.runs[0]) for stand_in in stand_ins}
+    held = {label: stall for label, (stall, _) in measured.items() if stall >= _MAX_STALL_SECONDS}
+    assert not held, (
+        f"{handler} held the event loop: "
+        + "; ".join(f"{stall:.3f} s without a heartbeat while {label} ran" for label, stall in held.items())
+        + f" (limit {_MAX_STALL_SECONDS} s; the stand-in holds its thread {_PASSWORD_WORK_SECONDS} s, as bcrypt does for ~0.24 s). Meanwhile the worker serves no other request: the call belongs in await asyncio.to_thread(...)"
+    )
+    return "; ".join(f"{label}: {beats} beats, longest stall {stall:.3f} s" for label, (stall, beats) in measured.items())
+
+
+@dataclass(frozen=True)
+class _PrivateAccount:
+    """A database one test owns entirely, under its tmp_path, with one active account.
+
+    The stored hash is a marker, not a bcrypt hash: only the stand-ins receive it, and they never read it.
+    """
+
+    engine: AsyncEngine
+    username: str
+    password: str
+    hashed_password: str
+
+
+@pytest_asyncio.fixture
+async def private_account(tmp_path: Path) -> AsyncIterator[_PrivateAccount]:
+    """A fresh SQLite file under tmp_path with the whole ORM schema and one active account, written as a row: no bcrypt runs. Disposed at teardown."""
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'loop.db'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        account = _PrivateAccount(engine=engine, username="loop_user", password="LoopPass123!", hashed_password="marker-hash-of-loop_user")
+        async with AsyncSession(engine) as session:
+            session.add(User(username=account.username, email=f"{account.username}@example.com", hashed_password=account.hashed_password))
+            await session.commit()
+        yield account
+    finally:
+        await engine.dispose()
+
+
+async def _stored_hash(engine: AsyncEngine, username: str) -> Optional[str]:
+    """The hashed_password the private database holds for ``username``, read in a fresh session; None without such a user."""
+    async with AsyncSession(engine) as session:
+        return (await session.execute(select(User.hashed_password).where(User.username == username))).scalar_one_or_none()
+
+
+class TestPasswordWorkLeavesTheEventLoopFree:
+    """login, register and change-password in-process, their password functions replaced by blocking stand-ins (V-16).
+
+    Each test replaces the name its handler calls (monkeypatch), runs the handler on a private
+    database (private_account) under a heartbeat, and checks, in this order: the handler's outcome
+    (the stand-in's answer was used), the stand-in's calls (the handler did the work, once, with the
+    right arguments), then the heartbeat during the stand-in's run. The stand-in sleeps because it is
+    the work, not to wait for anything: a loop it holds gets no beat at all for the whole run, so the
+    red does not depend on the machine's speed.
+
+    Write-safe: everything a test writes is in its own tmp_path; monkeypatch puts the replaced names back.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_heartbeat_tells_a_free_event_loop_from_a_held_one(self):
+        """LOOP-000 — GUARD, green today and after: the instrument itself, both ways, in the same run.
+
+        A stand-in run in a worker thread leaves the heartbeat beating under the limit; the same
+        stand-in called in the loop gets no beat inside its run, a stall over the limit.
+        """
+        print_section("LOOP-000: the heartbeat tells a free event loop from a held one")
+        in_a_thread = _BlockingStandIn(label="a stand-in in a worker thread", real=auth_service.hash_password, result="hash")
+        in_the_loop = _BlockingStandIn(label="a stand-in in the event loop", real=auth_service.hash_password, result="hash")
+
+        async with _heartbeat() as ticks:
+            assert await asyncio.to_thread(in_a_thread, "password") == "hash", "The stand-in must answer its result from a worker thread"
+            assert in_the_loop("password") == "hash", "The stand-in must answer its result in the loop"
+
+        free = _assert_the_loop_kept_beating("asyncio.to_thread", ticks, in_a_thread)
+        stall, beats = _stall(ticks, in_the_loop.runs[0])
+        assert beats == 0 and stall >= _MAX_STALL_SECONDS, f"A stand-in called in the loop must hold it for its whole run: {beats} beats inside it, longest stall {stall:.3f} s (expected 0 beats, a stall of at least {_MAX_STALL_SECONDS} s)"
+
+        print_success(f"✓ In a worker thread: {free}. In the loop: 0 beats, one stall of {stall:.3f} s")
+
+    @pytest.mark.asyncio
+    async def test_login_checks_the_password_off_the_event_loop(self, private_account, monkeypatch):
+        """LOOP-001 — NEW, red today: POST /auth/login checks the password in a worker thread; the event loop keeps beating meanwhile.
+
+        verify_password_or_dummy answers False: the login must be refused with the generic 401, after
+        one check of the typed password against the account's stored hash. Today the check runs in the
+        loop (auth.py, login), and the heartbeat stops for the whole check.
+        """
+        print_section("LOOP-001: login checks the password off the event loop")
+        check = _block(monkeypatch, auth_api, "verify_password_or_dummy", result=False)
+
+        async with _heartbeat() as ticks:
+            outcome = await _login_in_process(private_account.engine, private_account.username, private_account.password)
+
+        assert _refusal(outcome) == (401, "Invalid credentials"), f"With the password check answering False, login must refuse with 401 «Invalid credentials»: got {outcome!r}"
+        assert check.calls == [{"plain_password": private_account.password, "hashed_password": private_account.hashed_password}], f"login must check the typed password against the account's stored hash, once: {check.calls}"
+        measured = _assert_the_loop_kept_beating("login", ticks, check)
+
+        print_success(f"✓ login: 401 after one password check, the loop kept beating ({measured})")
+
+    @pytest.mark.asyncio
+    async def test_register_hashes_the_password_off_the_event_loop(self, private_account, monkeypatch):
+        """LOOP-002 — NEW, red today: POST /auth/register hashes the password in a worker thread; the event loop keeps beating meanwhile.
+
+        The hash is computed by user_service.create_user, which register calls (the CLI too): the
+        stand-in replaces the name create_user calls, and the new user must be stored with the
+        stand-in's hash. Today the hash runs in the loop (user_service.py, create_user).
+        """
+        print_section("LOOP-002: register hashes the password off the event loop")
+        hashing = _block(monkeypatch, user_service, "hash_password", result="stand-in-hash-of-loop_newcomer")
+        username, password = "loop_newcomer", "NewcomerPass123!"
+
+        async with AsyncSession(private_account.engine, expire_on_commit=False) as session, _heartbeat() as ticks:
+            response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), session)
+
+        assert response.user.username == username, f"register must answer with the new user: got {response!r}"
+        assert hashing.calls == [{"password": password}], f"register must hash the chosen password, once: {hashing.calls}"
+        stored = await _stored_hash(private_account.engine, username)
+        assert stored == hashing.result, f"The new user must be stored with the hash create_user computed, {hashing.result!r}: got {stored!r}"
+        measured = _assert_the_loop_kept_beating("register", ticks, hashing)
+
+        print_success(f"✓ register: the user stored with the stand-in's hash, the loop kept beating ({measured})")
+
+    @pytest.mark.asyncio
+    async def test_change_password_checks_and_hashes_off_the_event_loop(self, private_account, monkeypatch):
+        """LOOP-003 — NEW, red today: POST /auth/change-password checks the current password and hashes the new one in worker threads; the event loop keeps beating through both.
+
+        verify_password answers True and hash_password a marker: the account must end up stored with
+        that marker. Today both run in the loop (auth.py, change_password), each a stall of its own.
+        """
+        print_section("LOOP-003: change-password checks and hashes off the event loop")
+        check = _block(monkeypatch, auth_api, "verify_password", result=True)
+        hashing = _block(monkeypatch, auth_api, "hash_password", result="stand-in-hash-of-the-new-password")
+        new_password = "ChangedPass123!"
+
+        async with AsyncSession(private_account.engine, expire_on_commit=False) as session:
+            user = await user_service.get_user_by_username(session, private_account.username)
+            assert user is not None, f"Setup: {private_account.username} must be in the private database"
+            async with _heartbeat() as ticks:
+                await auth_api.change_password(request=ChangePasswordRequest(current_password=private_account.password, new_password=new_password), current_user=user, session=session)
+
+        assert check.calls == [{"plain_password": private_account.password, "hashed_password": private_account.hashed_password}], f"change-password must check the current password against the stored hash, once: {check.calls}"
+        assert hashing.calls == [{"password": new_password}], f"change-password must hash the new password, once: {hashing.calls}"
+        stored = await _stored_hash(private_account.engine, private_account.username)
+        assert stored == hashing.result, f"The account must be stored with the new password's hash, {hashing.result!r}: got {stored!r}"
+        measured = _assert_the_loop_kept_beating("change_password", ticks, check, hashing)
+
+        print_success(f"✓ change-password: the new hash stored, the loop kept beating ({measured})")

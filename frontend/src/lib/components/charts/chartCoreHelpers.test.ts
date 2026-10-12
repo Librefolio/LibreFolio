@@ -8,7 +8,7 @@ import type {ConfigurableAxisDescriptor} from './chartCoreHelpers';
 import {exchangeRateAxisLabel, percentageAxisLabel, priceAxisLabel, secondaryAxisLabel, type AxisLabelTranslator} from './axisLabelHelpers';
 import {CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
 import {buildSignalReferencePrimitives} from './lineChartHelpers';
-import {buildResponsiveXAxisPolicy, formatCompactXAxisDate} from './responsiveXAxis';
+import {buildResponsiveXAxisPolicy, type ResponsiveXAxisFormatter} from './responsiveXAxis';
 import {buildOhlcQuad} from './candlestickChartHelpers';
 import {buildTooltipDivider} from './echartsTooltipHelpers';
 import {buildBucketInfos, buildZoomWindowForRange, computeBucketCounts, logicalRangeFromBuckets} from '../brokers/lots/lotComparisonChartHelpers';
@@ -301,7 +301,7 @@ describe('canonical overlay axis and reference helpers', () => {
             });
         });
 
-        it('leaves a caller-specific desktop axis exactly unchanged and emits no responsive-only keys', () => {
+        it('replaces only the label formatter on a caller-specific desktop axis and emits no responsive-only keys', () => {
             const desktopFormatter = vi.fn((value: number | string) => `growth:${value}`);
             const baseline = {
                 type: 'time' as const,
@@ -320,11 +320,15 @@ describe('canonical overlay axis and reference helpers', () => {
                 locale: 'en-US',
                 axisType: 'time',
             });
+            // Why (re-pin, plan 47 C3): a desktop policy carries a localized formatter too, so a
+            // wide chart stops showing ECharts' English defaults. The charts merge it as below: the
+            // caller's keys, then the policy's formatter, then the compact-only keys (none here).
             const applied = {
                 ...baseline,
                 ...(policy.compact ? {splitNumber: policy.splitNumber} : {}),
                 axisLabel: {
                     ...baseline.axisLabel,
+                    formatter: policy.formatter,
                     ...(policy.axisLabel ?? {}),
                 },
             };
@@ -332,10 +336,16 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(policy).toEqual({
                 compact: false,
                 maxLabels: GROWTH_TIME_AXIS_DATES.length,
+                formatter: expect.any(Function),
             });
             expect(policy).not.toHaveProperty('splitNumber');
             expect(policy).not.toHaveProperty('axisLabel');
-            expect(applied).toEqual(baseline);
+            expect(applied).toEqual({...baseline, axisLabel: {...baseline.axisLabel, formatter: policy.formatter}});
+            expect(applied.axisLabel.formatter).toBe(policy.formatter);
+            expect(applied.axisLabel.formatter).not.toBe(desktopFormatter);
+            // 1 September 2025, a month tick: the month alone, localized.
+            expect(applied.axisLabel.formatter(new Date(2025, 8, 1).getTime())).toBe(new Intl.DateTimeFormat('en-US', {month: 'short'}).format(new Date(2025, 8, 1)));
+            expect(desktopFormatter).not.toHaveBeenCalled();
             expect(applied).not.toHaveProperty('splitNumber');
             expect(applied.axisLabel).not.toHaveProperty('hideOverlap');
             expect(applied.axisLabel).not.toHaveProperty('showMinLabel');
@@ -528,10 +538,13 @@ describe('canonical overlay axis and reference helpers', () => {
         });
 
         it('formats compact dates through the requested locale', () => {
-            const value = '2026-02-03';
+            // Through the policy, the only way a chart reaches the formatter. The value is the
+            // middle day, neither end of the data nor the 1st of a month: a plain day tick.
+            const values = ['2026-02-01', '2026-02-03', '2026-02-05'] as const;
+            const value = values[1];
             const localDate = new Date(2026, 1, 3);
-            const english = formatCompactXAxisDate('en-US', value, 30);
-            const italian = formatCompactXAxisDate('it-IT', value, 30);
+            const english = responsiveAxisLabel(buildResponsiveXAxisPolicy({width: 320, values, locale: 'en-US', axisType: 'time'})).formatter(value);
+            const italian = responsiveAxisLabel(buildResponsiveXAxisPolicy({width: 320, values, locale: 'it-IT', axisType: 'time'})).formatter(value);
 
             expect(english).toBe(new Intl.DateTimeFormat('en-US', {day: 'numeric', month: 'short'}).format(localDate));
             expect(italian).toBe(new Intl.DateTimeFormat('it-IT', {day: 'numeric', month: 'short'}).format(localDate));
@@ -554,8 +567,9 @@ describe('canonical overlay axis and reference helpers', () => {
 
                 const compact = buildResponsiveXAxisPolicy({width: 320, values, locale: 'en-US', axisType: 'time'});
                 const desktop = buildResponsiveXAxisPolicy({width: 1000, values, locale: 'en-US', axisType: 'time'});
-                const expectedCompactFirst = new Intl.DateTimeFormat('en-US', {month: 'short', year: '2-digit'}).format(firstDate);
-                const expectedCompactLast = new Intl.DateTimeFormat('en-US', {month: 'short', year: '2-digit'}).format(lastDate);
+                // Both values are ends of the data, in two different years: each is named by its day, with the year (plan 47, C1).
+                const expectedCompactFirst = new Intl.DateTimeFormat('en-US', {day: 'numeric', month: 'short', year: '2-digit'}).format(firstDate);
+                const expectedCompactLast = new Intl.DateTimeFormat('en-US', {day: 'numeric', month: 'short', year: '2-digit'}).format(lastDate);
                 const compactAxisLabel = responsiveAxisLabel(compact);
 
                 expect(compact.compact).toBe(true);
@@ -563,9 +577,11 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(compactAxisLabel.formatter(values[1])).toBe(expectedCompactLast);
                 expect(compactAxisLabel.formatter(values[1])).not.toBe(compactAxisLabel.formatter(values[0]));
 
+                // Why (re-pin, plan 47 C3): a desktop policy carries its own localized formatter, still without any compact-only key.
                 expect(desktop).toEqual({
                     compact: false,
                     maxLabels: values.length,
+                    formatter: expect.any(Function),
                 });
                 expect(desktop).not.toHaveProperty('axisLabel');
             } finally {
@@ -580,28 +596,34 @@ describe('canonical overlay axis and reference helpers', () => {
             const localDate = new Date(2024, 0, 1);
             const compact = buildResponsiveXAxisPolicy({width: 320, values, locale: 'it-IT', axisType: 'time'});
             const desktop = buildResponsiveXAxisPolicy({width: 1000, values, locale: 'it-IT', axisType: 'time'});
-            const expectedCompact = new Intl.DateTimeFormat('it-IT', {month: 'short', year: '2-digit'}).format(localDate);
-            const expectedDesktop = new Intl.DateTimeFormat('it-IT', {year: 'numeric', month: 'short', day: 'numeric'}).format(localDate);
+            // The first end of data that crosses a year: its day, with the year (plan 47, C1).
+            const expectedCompact = new Intl.DateTimeFormat('it-IT', {day: 'numeric', month: 'short', year: '2-digit'}).format(localDate);
+            // Why (re-pin, plan 47 C3): the desktop label now comes from the policy, which has no
+            // end-of-data rule: 1 January is named by its year, as any 1 January tick.
+            const expectedDesktop = new Intl.DateTimeFormat('it-IT', {year: 'numeric'}).format(localDate);
             const desktopBaseline = {
                 color: '#475569',
                 fontSize: 14,
                 formatter: (axisValue: number | string) => new Intl.DateTimeFormat('it-IT', {year: 'numeric', month: 'short', day: 'numeric'}).format(new Date(`${axisValue}T00:00:00`)),
             };
             const compactPolicyAxisLabel = responsiveAxisLabel(compact);
-            const compactAxisLabel = {...desktopBaseline, ...compactPolicyAxisLabel};
-            const restoredDesktopAxisLabel = {...desktopBaseline, ...(desktop.axisLabel ?? {})};
+            // The charts' merge order: the caller's keys, the policy's formatter, then the compact-only keys.
+            const compactAxisLabel = {...desktopBaseline, formatter: compact.formatter, ...(compact.axisLabel ?? {})};
+            const restoredDesktopAxisLabel = {...desktopBaseline, formatter: desktop.formatter, ...(desktop.axisLabel ?? {})};
 
             expect(compact.compact).toBe(true);
             expect(desktop.compact).toBe(false);
+            expect(typeof desktop.formatter, 'a desktop policy carries its own label formatter (plan 47, C3)').toBe('function');
             expect(compactPolicyAxisLabel.formatter(value)).toBe(expectedCompact);
             expect(compactAxisLabel.formatter(value)).toBe(expectedCompact);
+            expect(restoredDesktopAxisLabel.formatter).toBe(desktop.formatter);
             expect(restoredDesktopAxisLabel.formatter(value)).toBe(expectedDesktop);
             expect(expectedDesktop).not.toBe(expectedCompact);
             expect(desktop).not.toHaveProperty('axisLabel');
-            expect(restoredDesktopAxisLabel).toEqual(desktopBaseline);
+            expect(restoredDesktopAxisLabel).toEqual({...desktopBaseline, formatter: desktop.formatter});
         });
 
-        it('lets a lot-chart desktop formatter remain caller-owned without changing compact labels', () => {
+        it('takes a lot-chart desktop formatter from the policy instead of the caller, without changing compact labels', () => {
             const values = ['2024-01-01', '2026-01-01'] as const;
             const value = values[1];
             const desktopFormatter = vi.fn((axisValue: number | string) => `lot:${axisValue}`);
@@ -613,14 +635,713 @@ describe('canonical overlay axis and reference helpers', () => {
             const compact = buildResponsiveXAxisPolicy({width: 320, values, locale: 'en-US', axisType: 'time'});
             const desktop = buildResponsiveXAxisPolicy({width: 1000, values, locale: 'en-US', axisType: 'time'});
             const compactPolicyAxisLabel = responsiveAxisLabel(compact);
-            const compactAxisLabel = {...baseline, ...compactPolicyAxisLabel};
-            const desktopAxisLabel = {...baseline, ...(desktop.axisLabel ?? {})};
+            // Why (re-pin, plan 47 C3): the lot charts no longer keep a desktop formatter of their
+            // own; both modes take it from the policy, merged after the caller's keys and before
+            // the compact-only ones.
+            const compactAxisLabel = {...baseline, formatter: compact.formatter, ...(compact.axisLabel ?? {})};
+            const desktopAxisLabel = {...baseline, formatter: desktop.formatter, ...(desktop.axisLabel ?? {})};
 
-            expect(compactPolicyAxisLabel.formatter(value)).toBe(new Intl.DateTimeFormat('en-US', {month: 'short', year: '2-digit'}).format(new Date(2026, 0, 1)));
+            expect(compact.compact).toBe(true);
+            expect(desktop.compact).toBe(false);
+            expect(typeof desktop.formatter, 'a desktop policy carries its own label formatter (plan 47, C3)').toBe('function');
+            // The last end of data that crosses a year: its day, with the year (plan 47, C1).
+            expect(compactPolicyAxisLabel.formatter(value)).toBe(new Intl.DateTimeFormat('en-US', {day: 'numeric', month: 'short', year: '2-digit'}).format(new Date(2026, 0, 1)));
             expect(compactAxisLabel.formatter).not.toBe(desktopFormatter);
-            expect(desktopAxisLabel).toEqual(baseline);
-            expect(desktopAxisLabel.formatter(value)).toBe(`lot:${value}`);
-            expect(desktopFormatter).toHaveBeenCalledOnce();
+            expect(compactAxisLabel.formatter(value)).toBe(new Intl.DateTimeFormat('en-US', {day: 'numeric', month: 'short', year: '2-digit'}).format(new Date(2026, 0, 1)));
+            // Desktop: no end-of-data rule, so 1 January is named by its year.
+            expect(desktopAxisLabel).toEqual({...baseline, formatter: desktop.formatter});
+            expect(desktopAxisLabel.formatter(value)).toBe(new Intl.DateTimeFormat('en-US', {year: 'numeric'}).format(new Date(2026, 0, 1)));
+            expect(desktopFormatter).not.toHaveBeenCalled();
+        });
+
+        // ── Plan 47 (C1): a compact date label names its day, so two neighbours never repeat a month ──
+        //
+        // WHY: the compact formatter chose ONE format for the whole axis from the span of the data
+        // (over 90 days: the month alone). ECharts ticks a three-month daily axis every week, so the
+        // developer's screenshot of the Growth chart (Abs, about 800 px) read "lug lug ago ago ago ago
+        // set set …". The approved rules name each label by what it is: an end of the data, a year, a
+        // month boundary among days, a month, a day. Every expected string comes from Intl in the same
+        // locale, never from a literal: the ICU data moves between Node versions.
+
+        const COMPACT_FORMATS: Record<'dm' | 'dmy' | 'm' | 'my' | 'y', Intl.DateTimeFormatOptions> = {
+            dm: {day: 'numeric', month: 'short'},
+            dmy: {day: 'numeric', month: 'short', year: '2-digit'},
+            m: {month: 'short'},
+            my: {month: 'short', year: '2-digit'},
+            y: {year: 'numeric'},
+        };
+
+        /** `isoDate` ('YYYY-MM-DD', a local calendar day) as the approved rules write it in `format`. */
+        function compactLabel(locale: string, format: keyof typeof COMPACT_FORMATS, isoDate: string): string {
+            const [year, month, day] = isoDate.split('-').map(Number);
+            return new Intl.DateTimeFormat(locale, COMPACT_FORMATS[format]).format(new Date(year, month - 1, day));
+        }
+
+        /** Every calendar day from `first` to `last`, both included, that `keep` accepts. Stepped in UTC, so a DST change neither drops nor doubles a day. */
+        function isoDays(first: string, last: string, keep: (isoDate: string) => boolean = () => true): string[] {
+            const days: string[] = [];
+            for (let ms = Date.parse(`${first}T00:00:00Z`); ms <= Date.parse(`${last}T00:00:00Z`); ms += 86_400_000) {
+                const isoDate = new Date(ms).toISOString().slice(0, 10);
+                if (keep(isoDate)) days.push(isoDate);
+            }
+            return days;
+        }
+
+        /** Monday to Friday: the days a category axis of market prices carries. */
+        const isWeekday = (isoDate: string) => ![0, 6].includes(new Date(`${isoDate}T00:00:00Z`).getUTCDay());
+
+        /** Runs `run` in Europe/Rome, where local midnight and the DST changes are those of the developer's machine, and restores the zone whatever happens. */
+        function withRomeTimeZone<T>(run: () => T): T {
+            const previousTimeZone = process.env.TZ;
+            process.env.TZ = 'Europe/Rome';
+            try {
+                return run();
+            } finally {
+                if (previousTimeZone === undefined) delete process.env.TZ;
+                else process.env.TZ = previousTimeZone;
+            }
+        }
+
+        /** The compact formatter as ECharts calls it: `(tick value, index, {level})` on a time axis, `(category value, index)` on a category axis. */
+        type CompactFormatter = (value: number | string, index?: number, extra?: {level?: number}) => string;
+
+        function compactFormatter(policy: ReturnType<typeof buildResponsiveXAxisPolicy>): CompactFormatter {
+            expect(policy.compact, 'a compact policy').toBe(true);
+            return responsiveAxisLabel(policy).formatter;
+        }
+
+        /** The stride of a compact category axis: label `i` is a regular one when `i % step === 0`. No interval means every label is. */
+        function regularStep(policy: ReturnType<typeof buildResponsiveXAxisPolicy>): number {
+            const interval = responsiveAxisLabel(policy).interval ?? 0;
+            if (interval === 'auto') throw new Error('A compact category policy sets a numeric interval');
+            return interval + 1;
+        }
+
+        /** Every pair of neighbouring labels that read the same, as `a | a`: the defect, named in the diff. */
+        function consecutiveDuplicates(labels: readonly string[]): string[] {
+            return labels.slice(1).flatMap((label, index) => (label === labels[index] ? [`${labels[index]} | ${label}`] : []));
+        }
+
+        /** Where zrender placed a `<text>`: its own `x`/`y` (0 when omitted) through its `transform`, a `translate(…)` or a `matrix(…)`. */
+        function svgTextPosition(attributes: string): {x: number; y: number} {
+            const attribute = (name: string) => Number(new RegExp(`\\b${name}="([^"]*)"`).exec(attributes)?.[1] ?? 0);
+            const localX = attribute('x');
+            const localY = attribute('y');
+            const transform = /\btransform="(translate|matrix)\(([^)]*)\)"/.exec(attributes);
+            if (!transform) return {x: localX, y: localY};
+            const parts = transform[2]
+                .trim()
+                .split(/[\s,]+/)
+                .map(Number);
+            const [a, b, c, d, e, f] = transform[1] === 'translate' ? [1, 0, 0, 1, parts[0], parts[1] ?? 0] : parts;
+            return {x: a * localX + c * localY + e, y: b * localX + d * localY + f};
+        }
+
+        const decodeSvgText = (text: string) =>
+            text
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'")
+                .replace(/&amp;/g, '&');
+
+        /**
+         * The x-axis labels a real ECharts draws for `option`, left to right: every `<text>` of the
+         * server-side SVG below the plot, empty ones dropped. A label `hideOverlap` hides is not
+         * emitted at all, so the list is what a user reads. WHY no `useUTC`: no production chart
+         * sets it, so ticks fall on local midnights, as on screen.
+         */
+        function renderedXAxisLabels(option: echarts.EChartsCoreOption, width: number, height: number): string[] {
+            type GridRectReader = {getModel(): {getComponent(componentType: 'grid', index: 0): {coordinateSystem?: {getRect(): {y: number; height: number}}} | undefined}};
+            const chart = echarts.init(null, undefined, {renderer: 'svg', ssr: true, width, height});
+            try {
+                chart.setOption(option);
+                const svg = chart.renderToSVGString();
+                const plot = (chart as unknown as GridRectReader).getModel().getComponent('grid', 0)?.coordinateSystem?.getRect();
+                if (!plot) throw new Error('The rendered chart has no laid-out grid');
+                const plotBottom = plot.y + plot.height;
+                return [...svg.matchAll(/<text\b([^>]*)>([^<]*)<\/text>/g)]
+                    .map(([, attributes, text]) => ({text: decodeSvgText(text).trim(), ...svgTextPosition(attributes)}))
+                    .filter(({text, y}) => text !== '' && y > plotBottom)
+                    .sort((left, right) => left.x - right.x)
+                    .map(({text}) => text);
+            } finally {
+                chart.dispose();
+            }
+        }
+
+        it('names the day on every compact time label of the Jul→Oct Growth screenshot, so no two neighbours repeat a month (plan 47, C1)', () => {
+            withRomeTimeZone(() => {
+                const dates = isoDays('2026-07-14', '2026-10-21');
+                const policy = buildResponsiveXAxisPolicy({width: 800, values: dates, locale: 'it-IT', axisType: 'time'});
+                const labels = renderedXAxisLabels(
+                    {
+                        animation: false,
+                        xAxis: {type: 'time', splitNumber: policy.splitNumber, axisLabel: {fontSize: 14, rotate: 0, ...policy.axisLabel}},
+                        yAxis: {type: 'value', scale: true, axisLabel: {show: false}},
+                        series: [{type: 'line', data: dates.map((date, index) => [date, 100 + index])}],
+                    },
+                    800,
+                    300,
+                );
+                const rendered = `rendered: ${labels.join(' | ')}`;
+
+                // Preconditions: the screenshot's density makes the policy compact, and the axis is labelled.
+                expect(policy.compact).toBe(true);
+                expect(labels.length, rendered).toBeGreaterThanOrEqual(8);
+
+                expect.soft(consecutiveDuplicates(labels), rendered).toEqual([]);
+                expect
+                    .soft(
+                        labels.filter((label) => !/\d/.test(label)),
+                        `${rendered} — every label names a day`,
+                    )
+                    .toEqual([]);
+                expect.soft(labels, rendered).toEqual(expect.arrayContaining(['2026-08-01', '2026-09-01', '2026-10-01'].map((date) => compactLabel('it-IT', 'dm', date))));
+                expect.soft([labels[0], labels.at(-1)], `${rendered} — the two ends of the data`).toEqual([compactLabel('it-IT', 'dm', '2026-07-14'), compactLabel('it-IT', 'dm', '2026-10-21')]);
+            });
+        });
+
+        it('formats a compact time tick by what it is: an end of the data, a month boundary among days, a month, a day, or no midnight at all (plan 47, C1)', () => {
+            withRomeTimeZone(() => {
+                const dates = isoDays('2026-07-14', '2026-10-21');
+                const formatter = compactFormatter(buildResponsiveXAxisPolicy({width: 800, values: dates, locale: 'it-IT', axisType: 'time'}));
+                const label = (format: keyof typeof COMPACT_FORMATS, isoDate: string) => compactLabel('it-IT', format, isoDate);
+
+                expect({
+                    firstDataDay: formatter(new Date(2026, 6, 14).getTime(), 0, {level: 0}),
+                    lastDataDay: formatter(new Date(2026, 9, 21).getTime(), 0, {level: 0}),
+                    monthBoundaryAmongDays: formatter(new Date(2026, 7, 1).getTime(), 0, {level: 1}),
+                    monthTick: formatter(new Date(2026, 7, 1).getTime(), 0, {level: 0}),
+                    monthTickWithoutExtra: formatter(new Date(2026, 7, 1).getTime()),
+                    dayTick: formatter(new Date(2026, 7, 15).getTime(), 0, {level: 0}),
+                    notAMidnight: formatter(new Date(2026, 7, 15, 12).getTime()),
+                    unparseable: formatter('not a date'),
+                }).toEqual({
+                    firstDataDay: label('dm', '2026-07-14'),
+                    lastDataDay: label('dm', '2026-10-21'),
+                    monthBoundaryAmongDays: label('dm', '2026-08-01'),
+                    monthTick: label('m', '2026-08-01'),
+                    monthTickWithoutExtra: label('m', '2026-08-01'),
+                    dayTick: label('dm', '2026-08-15'),
+                    notAMidnight: '',
+                    unparseable: 'not a date',
+                });
+            });
+        });
+
+        it('gives the two ends of a compact time axis that crosses a year their year, and names 1 January by its year (plan 47, C1)', () => {
+            withRomeTimeZone(() => {
+                const dates = isoDays('2025-11-03', '2026-02-20');
+                const formatter = compactFormatter(buildResponsiveXAxisPolicy({width: 800, values: dates, locale: 'it-IT', axisType: 'time'}));
+
+                expect({
+                    first: formatter(new Date(2025, 10, 3).getTime(), 0, {level: 0}),
+                    last: formatter(new Date(2026, 1, 20).getTime(), 0, {level: 0}),
+                    newYear: formatter(new Date(2026, 0, 1).getTime(), 0, {level: 2}),
+                }).toEqual({
+                    first: compactLabel('it-IT', 'dmy', '2025-11-03'),
+                    last: compactLabel('it-IT', 'dmy', '2026-02-20'),
+                    newYear: compactLabel('it-IT', 'y', '2026-01-01'),
+                });
+            });
+        });
+
+        it('names the last day of a lot-like range that ends mid-afternoon once, at its end, and leaves every tick that is not a midnight blank (plan 47, C1)', () => {
+            withRomeTimeZone(() => {
+                // Built inside the zone: a local midnight depends on it.
+                const first = new Date(2026, 9, 18).getTime();
+                const last = new Date(2026, 9, 21, 15, 30).getTime();
+                const formatter = compactFormatter(buildResponsiveXAxisPolicy({width: 400, values: [first, last], locale: 'it-IT', axisType: 'time'}));
+
+                expect({
+                    first: formatter(first),
+                    last: formatter(last),
+                    lastDayMidnight: formatter(new Date(2026, 9, 21).getTime()),
+                    dayBeforeLast: formatter(new Date(2026, 9, 20).getTime()),
+                    dayBeforeLastNoon: formatter(new Date(2026, 9, 20, 12).getTime()),
+                }).toEqual({
+                    first: compactLabel('it-IT', 'dm', '2026-10-18'),
+                    last: compactLabel('it-IT', 'dm', '2026-10-21'),
+                    lastDayMidnight: '',
+                    dayBeforeLast: compactLabel('it-IT', 'dm', '2026-10-20'),
+                    dayBeforeLastNoon: '',
+                });
+            });
+        });
+
+        it('names the day on the labels of a compact category axis whose stride is shorter than a month, in the formatter and on the rendered axis (plan 47, C1)', () => {
+            const dates = isoDays('2026-04-01', '2026-09-30', isWeekday);
+            const policy = buildResponsiveXAxisPolicy({width: 800, values: dates, locale: 'it-IT', axisType: 'category'});
+            const formatter = compactFormatter(policy);
+            const step = regularStep(policy);
+            const regularLabels = dates.flatMap((date, index) => (index % step === 0 ? [formatter(date, index)] : []));
+            const rendered = renderedXAxisLabels(
+                {
+                    animation: false,
+                    xAxis: {type: 'category', data: dates, boundaryGap: true, axisLabel: {fontSize: 14, ...policy.axisLabel}},
+                    yAxis: {type: 'value', scale: true, axisLabel: {show: false}},
+                    series: [{type: 'line', data: dates.map((_date, index) => 100 + index)}],
+                },
+                800,
+                300,
+            );
+
+            // Preconditions: a stride, so only every `step`-th label is drawn, and an axis that draws them.
+            expect(policy.axisLabel).toMatchObject({interval: expect.any(Number)});
+            expect(rendered.length, `rendered: ${rendered.join(' | ')}`).toBeGreaterThanOrEqual(8);
+
+            expect.soft(consecutiveDuplicates(regularLabels), `regular: ${regularLabels.join(' | ')}`).toEqual([]);
+            expect
+                .soft(
+                    regularLabels.filter((label) => !/\d/.test(label)),
+                    `regular: ${regularLabels.join(' | ')} — every label names a day`,
+                )
+                .toEqual([]);
+            expect.soft(consecutiveDuplicates(rendered), `rendered: ${rendered.join(' | ')}`).toEqual([]);
+        });
+
+        it('names the months of a compact category axis whose labels all fall in different months, with the year at both ends and where the year changes (plan 47, C1)', () => {
+            const dates = isoDays('2025-10-01', '2026-09-30', isWeekday);
+            const policy = buildResponsiveXAxisPolicy({width: 400, values: dates, locale: 'it-IT', axisType: 'category'});
+            const formatter = compactFormatter(policy);
+            const step = regularStep(policy);
+            const lastIndex = dates.length - 1;
+            const regular = dates.flatMap((date, index) => (index % step === 0 ? [{index, date, label: formatter(date, index)}] : []));
+            const regularText = `regular: ${regular.map(({label}) => label).join(' | ')}`;
+            /** A regular label that must carry a year: the first, the last, and one whose regular neighbour on the left is in another year. */
+            const bearsYear = (position: number) => position === 0 || regular[position].index === lastIndex || regular[position].date.slice(0, 4) !== regular[position - 1].date.slice(0, 4);
+            const firstOf2026 = regular.find(({date}) => date.startsWith('2026'));
+            if (!firstOf2026) throw new Error('No regular label falls in 2026');
+
+            // Precondition: month mode. Every two neighbouring regular labels fall in different months, so a month can name each.
+            expect(policy.axisLabel).toMatchObject({interval: expect.any(Number)});
+            expect(regular.slice(1).filter(({date}, position) => date.slice(0, 7) === regular[position].date.slice(0, 7))).toEqual([]);
+
+            expect.soft(consecutiveDuplicates(regular.map(({label}) => label)), regularText).toEqual([]);
+            expect
+                .soft(
+                    regular.filter((_entry, position) => !bearsYear(position) && /\d/.test(regular[position].label)).map(({label}) => label),
+                    `${regularText} — a month alone, away from the ends and the year change`,
+                )
+                .toEqual([]);
+            expect
+                .soft(
+                    {
+                        first: formatter(dates[0], 0),
+                        firstOf2026: firstOf2026.label,
+                        last: formatter(dates[lastIndex], lastIndex),
+                    },
+                    regularText,
+                )
+                .toEqual({
+                    first: compactLabel('it-IT', 'my', dates[0]),
+                    firstOf2026: compactLabel('it-IT', 'my', firstOf2026.date),
+                    // The last index is a regular label (a month) or an extra one ECharts adds at the end (a day).
+                    last: compactLabel('it-IT', lastIndex % step === 0 ? 'my' : 'dmy', dates[lastIndex]),
+                });
+        });
+
+        it('names a value outside the data of a compact category axis by its day, with the year on an axis that crosses one, and returns an unparseable value as it is (plan 47, C1)', () => {
+            const dates = isoDays('2025-10-01', '2026-09-30', isWeekday);
+            const formatter = compactFormatter(buildResponsiveXAxisPolicy({width: 400, values: dates, locale: 'it-IT', axisType: 'category'}));
+            const sunday = '2026-03-15';
+
+            // Precondition: a Sunday, so not one of the axis's weekdays.
+            expect(dates).not.toContain(sunday);
+
+            expect({outside: formatter(sunday), unparseable: formatter('not a date')}).toEqual({
+                outside: compactLabel('it-IT', 'dmy', sunday),
+                unparseable: 'not a date',
+            });
+        });
+
+        // ── Plan 47 (C3): the non-compact path names its labels too, in the user's language ──
+        //
+        // WHY: a policy that was not compact returned `{compact: false, maxLabels}` and nothing else,
+        // so a wide axis fell back to ECharts' own labels: English on a time axis ("Aug", "8"), the
+        // raw ISO date on a category axis ("2026-03-04"), while the three lot charts kept a formatter
+        // of their own that repeated the day on intraday ticks. The policy now carries a localized
+        // `formatter` in both modes and every chart applies it. A time label follows the compact
+        // rules without the end-of-data ones; a category label carries everything it needs, because
+        // ECharts picks which labels it draws. Expected strings come from Intl, never from literals.
+
+        /** The label formatter a policy carries in both modes since plan 47 (C3), after the preconditions that make a red explicit. */
+        function policyFormatter(policy: ReturnType<typeof buildResponsiveXAxisPolicy>, compact: boolean): ResponsiveXAxisFormatter {
+            expect(policy.compact, compact ? 'a compact policy' : 'a non-compact policy').toBe(compact);
+            expect(typeof policy.formatter, 'the policy carries its own label formatter in both modes (plan 47, C3)').toBe('function');
+            return policy.formatter;
+        }
+
+        /** The third argument ECharts passes to a time-axis formatter: the tick's level, under `time` and as the deprecated `level`. */
+        const tickLevel = (level: number) => ({time: {level}, level});
+
+        it('formats a non-compact time tick by what it is, with no end-of-data rule: a day, a month, a month boundary among days, or no midnight at all (plan 47, C3)', () => {
+            withRomeTimeZone(() => {
+                const dates = isoDays('2026-07-14', '2026-08-20');
+                const formatter = policyFormatter(buildResponsiveXAxisPolicy({width: 1200, values: dates, locale: 'it-IT', axisType: 'time'}), false);
+                const label = (format: keyof typeof COMPACT_FORMATS, isoDate: string) => compactLabel('it-IT', format, isoDate);
+                const augustFirst = new Date(2026, 7, 1).getTime();
+
+                expect({
+                    firstDataDay: formatter(new Date(2026, 6, 14).getTime(), 0, tickLevel(0)),
+                    lastDataDay: formatter(new Date(2026, 7, 20).getTime(), 0, tickLevel(0)),
+                    dayTick: formatter(new Date(2026, 6, 22).getTime(), 0, tickLevel(0)),
+                    monthTick: formatter(augustFirst, 0, tickLevel(0)),
+                    monthTickWithoutExtra: formatter(augustFirst),
+                    monthBoundaryAmongDays: formatter(augustFirst, 0, tickLevel(1)),
+                    monthBoundaryDeprecatedLevelOnly: formatter(augustFirst, 0, {level: 1}),
+                    monthBoundaryTimeLevelOnly: formatter(augustFirst, 0, {time: {level: 1}}),
+                    notAMidnight: formatter(new Date(2026, 7, 15, 12).getTime()),
+                    unparseable: formatter('not a date'),
+                }).toEqual({
+                    firstDataDay: label('dm', '2026-07-14'),
+                    lastDataDay: label('dm', '2026-08-20'),
+                    dayTick: label('dm', '2026-07-22'),
+                    monthTick: label('m', '2026-08-01'),
+                    monthTickWithoutExtra: label('m', '2026-08-01'),
+                    monthBoundaryAmongDays: label('dm', '2026-08-01'),
+                    monthBoundaryDeprecatedLevelOnly: label('dm', '2026-08-01'),
+                    monthBoundaryTimeLevelOnly: label('dm', '2026-08-01'),
+                    notAMidnight: '',
+                    unparseable: 'not a date',
+                });
+            });
+        });
+
+        it('names the two ends of a non-compact time axis that crosses a year like any other day, where the compact axis adds the year, and names 1 January by its year (plan 47, C3)', () => {
+            withRomeTimeZone(() => {
+                const dates = isoDays('2025-12-20', '2026-01-10');
+                const first = new Date(2025, 11, 20).getTime();
+                const last = new Date(2026, 0, 10).getTime();
+                const newYear = new Date(2026, 0, 1).getTime();
+                const desktop = policyFormatter(buildResponsiveXAxisPolicy({width: 1000, values: dates, locale: 'it-IT', axisType: 'time'}), false);
+                const compact = compactFormatter(buildResponsiveXAxisPolicy({width: 320, values: dates, locale: 'it-IT', axisType: 'time'}));
+
+                expect({
+                    first: desktop(first, 0, tickLevel(0)),
+                    last: desktop(last, 0, tickLevel(0)),
+                    firstAsData: desktop(dates[0]),
+                    lastAsData: desktop(dates[dates.length - 1]),
+                    newYear: desktop(newYear, 0, tickLevel(2)),
+                    newYearWithoutExtra: desktop(newYear),
+                }).toEqual({
+                    first: compactLabel('it-IT', 'dm', '2025-12-20'),
+                    last: compactLabel('it-IT', 'dm', '2026-01-10'),
+                    firstAsData: compactLabel('it-IT', 'dm', '2025-12-20'),
+                    lastAsData: compactLabel('it-IT', 'dm', '2026-01-10'),
+                    newYear: compactLabel('it-IT', 'y', '2026-01-01'),
+                    newYearWithoutExtra: compactLabel('it-IT', 'y', '2026-01-01'),
+                });
+                // The contrast: the compact axis keeps its end-of-data rule (plan 47, C1).
+                expect({first: compact(first, 0, {level: 0}), last: compact(last, 0, {level: 0})}).toEqual({
+                    first: compactLabel('it-IT', 'dmy', '2025-12-20'),
+                    last: compactLabel('it-IT', 'dmy', '2026-01-10'),
+                });
+            });
+        });
+
+        it('names the last-day midnight of a lot-like non-compact range by its day, where the compact axis leaves it blank, and leaves the intraday ends of the data blank (plan 47, C3)', () => {
+            withRomeTimeZone(() => {
+                // Built inside the zone: a local midnight depends on it.
+                const first = new Date(2026, 9, 20, 9).getTime();
+                const last = new Date(2026, 9, 21, 15, 30).getTime();
+                const lastDayMidnight = new Date(2026, 9, 21).getTime();
+                const desktop = policyFormatter(buildResponsiveXAxisPolicy({width: 1000, values: [first, last], locale: 'it-IT', axisType: 'time'}), false);
+                const compact = compactFormatter(buildResponsiveXAxisPolicy({width: 320, values: [first, last], locale: 'it-IT', axisType: 'time'}));
+
+                expect({
+                    lastDayMidnight: desktop(lastDayMidnight, 0, tickLevel(0)),
+                    first: desktop(first),
+                    last: desktop(last),
+                }).toEqual({
+                    lastDayMidnight: compactLabel('it-IT', 'dm', '2026-10-21'),
+                    first: '',
+                    last: '',
+                });
+                // The compact axis keeps its guard (plan 47, C1): there, that midnight would repeat the day its last end already names.
+                expect(compact(lastDayMidnight)).toBe('');
+            });
+        });
+
+        it('formats non-compact time labels through the requested locale (plan 47, C3)', () => {
+            withRomeTimeZone(() => {
+                const dates = isoDays('2026-07-14', '2026-08-20');
+                const english = policyFormatter(buildResponsiveXAxisPolicy({width: 1200, values: dates, locale: 'en-US', axisType: 'time'}), false);
+                const italian = policyFormatter(buildResponsiveXAxisPolicy({width: 1200, values: dates, locale: 'it-IT', axisType: 'time'}), false);
+                const day = new Date(2026, 6, 22).getTime();
+                const month = new Date(2026, 7, 1).getTime();
+
+                expect({englishDay: english(day), italianDay: italian(day), englishMonth: english(month), italianMonth: italian(month)}).toEqual({
+                    englishDay: compactLabel('en-US', 'dm', '2026-07-22'),
+                    italianDay: compactLabel('it-IT', 'dm', '2026-07-22'),
+                    englishMonth: compactLabel('en-US', 'm', '2026-08-01'),
+                    italianMonth: compactLabel('it-IT', 'm', '2026-08-01'),
+                });
+                expect(italian(day)).not.toBe(english(day));
+                expect(italian(month)).not.toBe(english(month));
+            });
+        });
+
+        it.each([
+            ['spring-forward', '2026-03-23', '2026-04-03', '2026-03-29', '2026-03-30', '2026-04-01'],
+            ['fall-back', '2026-10-19', '2026-11-03', '2026-10-25', '2026-10-26', '2026-11-01'],
+        ] as const)('names the local midnights of a non-compact time axis across the %s Europe/Rome DST change, and only them (plan 47, C3)', (_name, firstDate, lastDate, changeDate, dayAfterChange, monthStart) => {
+            withRomeTimeZone(() => {
+                const formatter = policyFormatter(buildResponsiveXAxisPolicy({width: 1200, values: isoDays(firstDate, lastDate), locale: 'it-IT', axisType: 'time'}), false);
+                /** `isoDate` at `hour`, local time. Built inside the zone: a local midnight depends on it. */
+                const localTime = (isoDate: string, hour = 0) => {
+                    const [year, month, day] = isoDate.split('-').map(Number);
+                    return new Date(year, month - 1, day, hour).getTime();
+                };
+
+                expect({
+                    changeDay: formatter(localTime(changeDate), 0, tickLevel(0)),
+                    dayAfterChange: formatter(localTime(dayAfterChange), 0, tickLevel(0)),
+                    changeDayAtThree: formatter(localTime(changeDate, 3)),
+                    monthStart: formatter(localTime(monthStart), 0, tickLevel(0)),
+                }).toEqual({
+                    changeDay: compactLabel('it-IT', 'dm', changeDate),
+                    dayAfterChange: compactLabel('it-IT', 'dm', dayAfterChange),
+                    changeDayAtThree: '',
+                    monthStart: compactLabel('it-IT', 'm', monthStart),
+                });
+            });
+        });
+
+        it('names every label of a non-compact daily category axis by its day, the 1st of a month included, and adds the year to every label when the data cross one (plan 47, C3)', () => {
+            const withinYear = isoDays('2026-03-20', '2026-04-10');
+            const acrossYears = isoDays('2025-12-20', '2026-01-10');
+            const withinYearFormatter = policyFormatter(buildResponsiveXAxisPolicy({width: 1000, values: withinYear, locale: 'it-IT', axisType: 'category'}), false);
+            const acrossYearsFormatter = policyFormatter(buildResponsiveXAxisPolicy({width: 1000, values: acrossYears, locale: 'it-IT', axisType: 'category'}), false);
+
+            // Preconditions: a 1st of a month among the days, and a 1 January among the days that cross a year.
+            expect(withinYear).toContain('2026-04-01');
+            expect(acrossYears).toContain('2026-01-01');
+
+            expect(withinYear.map((date, index) => withinYearFormatter(date, index))).toEqual(withinYear.map((date) => compactLabel('it-IT', 'dm', date)));
+            expect(acrossYears.map((date, index) => acrossYearsFormatter(date, index))).toEqual(acrossYears.map((date) => compactLabel('it-IT', 'dmy', date)));
+        });
+
+        it('names every label of a non-compact monthly category axis by its month, and adds the year to every label when the data cross one (plan 47, C3)', () => {
+            const firstHalf = ['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01', '2026-05-01', '2026-06-01'];
+            // One value a month, mid-month: the rule is about calendar months, not about the 1st.
+            const acrossYears = ['2025-10-15', '2025-11-15', '2025-12-15', '2026-01-15', '2026-02-15', '2026-03-15'];
+            const firstHalfFormatter = policyFormatter(buildResponsiveXAxisPolicy({width: 800, values: firstHalf, locale: 'it-IT', axisType: 'category'}), false);
+            const acrossYearsFormatter = policyFormatter(buildResponsiveXAxisPolicy({width: 800, values: acrossYears, locale: 'it-IT', axisType: 'category'}), false);
+
+            expect(firstHalf.map((date, index) => firstHalfFormatter(date, index))).toEqual(firstHalf.map((date) => compactLabel('it-IT', 'm', date)));
+            expect(acrossYears.map((date, index) => acrossYearsFormatter(date, index))).toEqual(acrossYears.map((date) => compactLabel('it-IT', 'my', date)));
+        });
+
+        it('keeps the day on every label of a non-compact category axis that is not one value a month: weekly, irregular, a single value, or data with an unparseable value (plan 47, C3)', () => {
+            const mondays = isoDays('2026-03-02', '2026-05-18', (isoDate) => new Date(`${isoDate}T00:00:00Z`).getUTCDay() === 1);
+            // Two values share March, so these are not monthly data, though most neighbours fall in different months.
+            const irregular = ['2026-01-15', '2026-02-15', '2026-03-01', '2026-03-31', '2026-04-15'];
+            const single = ['2026-04-01'];
+            const withUnparseable = ['2026-01-01', 'n/a', '2026-03-01'];
+            const formatterFor = (values: readonly string[], width: number) => policyFormatter(buildResponsiveXAxisPolicy({width, values, locale: 'it-IT', axisType: 'category'}), false);
+            const labelsOf = (values: readonly string[], width: number) => {
+                const formatter = formatterFor(values, width);
+                return values.map((value, index) => formatter(value, index));
+            };
+
+            // Precondition: weekly values, so neighbours share a month.
+            expect(mondays.slice(0, 2)).toEqual(['2026-03-02', '2026-03-09']);
+
+            expect({
+                weekly: labelsOf(mondays, 1000),
+                irregular: labelsOf(irregular, 800),
+                single: labelsOf(single, 800),
+                withUnparseable: labelsOf(withUnparseable, 800),
+            }).toEqual({
+                weekly: mondays.map((date) => compactLabel('it-IT', 'dm', date)),
+                irregular: irregular.map((date) => compactLabel('it-IT', 'dm', date)),
+                single: [compactLabel('it-IT', 'dm', '2026-04-01')],
+                withUnparseable: [compactLabel('it-IT', 'dm', '2026-01-01'), 'n/a', compactLabel('it-IT', 'dm', '2026-03-01')],
+            });
+        });
+
+        it('names a value outside the data of a non-compact category axis by the rule of its data, and returns an unparseable value as it is (plan 47, C3)', () => {
+            const formatterFor = (values: readonly string[], width: number) => policyFormatter(buildResponsiveXAxisPolicy({width, values, locale: 'it-IT', axisType: 'category'}), false);
+            const daily = formatterFor(isoDays('2026-03-20', '2026-04-10'), 1000);
+            const dailyAcrossYears = formatterFor(isoDays('2025-12-20', '2026-01-10'), 1000);
+            const monthly = formatterFor(['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01', '2026-05-01', '2026-06-01'], 800);
+            const monthlyAcrossYears = formatterFor(['2025-10-15', '2025-11-15', '2025-12-15', '2026-01-15', '2026-02-15', '2026-03-15'], 800);
+
+            // Each value lies past the end of its data.
+            expect({
+                daily: daily('2026-04-12'),
+                dailyAcrossYears: dailyAcrossYears('2026-01-11'),
+                monthly: monthly('2026-07-01'),
+                monthlyAcrossYears: monthlyAcrossYears('2026-04-15'),
+                unparseable: daily('not a date'),
+            }).toEqual({
+                daily: compactLabel('it-IT', 'dm', '2026-04-12'),
+                dailyAcrossYears: compactLabel('it-IT', 'dmy', '2026-01-11'),
+                monthly: compactLabel('it-IT', 'm', '2026-07-01'),
+                monthlyAcrossYears: compactLabel('it-IT', 'my', '2026-04-15'),
+                unparseable: 'not a date',
+            });
+        });
+
+        it('formats non-compact category labels through the requested locale (plan 47, C3)', () => {
+            const daily = isoDays('2026-03-20', '2026-04-10');
+            const monthly = ['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01', '2026-05-01', '2026-06-01'];
+            const formatterFor = (values: readonly string[], locale: string) => policyFormatter(buildResponsiveXAxisPolicy({width: 1000, values, locale, axisType: 'category'}), false);
+
+            const labels = {
+                englishDay: formatterFor(daily, 'en-US')('2026-03-24'),
+                italianDay: formatterFor(daily, 'it-IT')('2026-03-24'),
+                englishMonth: formatterFor(monthly, 'en-US')('2026-06-01'),
+                italianMonth: formatterFor(monthly, 'it-IT')('2026-06-01'),
+            };
+
+            expect(labels).toEqual({
+                englishDay: compactLabel('en-US', 'dm', '2026-03-24'),
+                italianDay: compactLabel('it-IT', 'dm', '2026-03-24'),
+                englishMonth: compactLabel('en-US', 'm', '2026-06-01'),
+                italianMonth: compactLabel('it-IT', 'm', '2026-06-01'),
+            });
+            expect(labels.italianDay).not.toBe(labels.englishDay);
+            expect(labels.italianMonth).not.toBe(labels.englishMonth);
+        });
+
+        it.each(['time', 'category'] as const)('gives a compact %s policy one label formatter, the same at its top level and in its axisLabel (plan 47, C3)', (axisType) => {
+            const policy = buildResponsiveXAxisPolicy({width: 320, values: JANUARY_X_AXIS_DATES, locale: 'en-US', axisType});
+            const formatter = policyFormatter(policy, true);
+
+            expect(policy).toEqual({
+                compact: true,
+                maxLabels: expect.any(Number),
+                ...(axisType === 'time' ? {splitNumber: expect.any(Number)} : {}),
+                formatter: expect.any(Function),
+                axisLabel: {
+                    hideOverlap: true,
+                    showMinLabel: true,
+                    showMaxLabel: true,
+                    rotate: 0,
+                    formatter: expect.any(Function),
+                    ...(axisType === 'category' ? {interval: expect.any(Number)} : {}),
+                },
+            });
+            expect(responsiveAxisLabel(policy).formatter).toBe(formatter);
+        });
+
+        it('renders localized day labels on a wide time axis across a month boundary, with no neighbour repeated (plan 47, C3)', () => {
+            withRomeTimeZone(() => {
+                const dates = isoDays('2026-07-20', '2026-08-18');
+                const policy = buildResponsiveXAxisPolicy({width: 1200, values: dates, locale: 'it-IT', axisType: 'time'});
+                // Preconditions first: without a formatter the axis would draw ECharts' own English labels.
+                policyFormatter(policy, false);
+                const labels = renderedXAxisLabels(
+                    {
+                        animation: false,
+                        xAxis: {type: 'time', axisLabel: {fontSize: 14, rotate: 0, formatter: policy.formatter, ...(policy.axisLabel ?? {})}},
+                        yAxis: {type: 'value', scale: true, axisLabel: {show: false}},
+                        series: [{type: 'line', data: dates.map((date, index) => [date, 100 + index])}],
+                    },
+                    1200,
+                    300,
+                );
+                const rendered = `rendered: ${labels.join(' | ')}`;
+                const dayLabels = new Set(dates.map((date) => compactLabel('it-IT', 'dm', date)));
+                const localizedLabels = new Set([...dayLabels, ...dates.flatMap((date) => [compactLabel('it-IT', 'm', date), compactLabel('it-IT', 'y', date)])]);
+
+                // Precondition: the axis is labelled.
+                expect(labels.length, rendered).toBeGreaterThanOrEqual(2);
+
+                expect
+                    .soft(
+                        labels.filter((label) => !localizedLabels.has(label)),
+                        `${rendered} — every label is a localized day, month or year of the data`,
+                    )
+                    .toEqual([]);
+                expect
+                    .soft(
+                        labels.some((label) => dayLabels.has(label)),
+                        `${rendered} — the days are named`,
+                    )
+                    .toBe(true);
+                expect.soft(consecutiveDuplicates(labels), rendered).toEqual([]);
+            });
+        });
+
+        it('renders the year at each 1 January and localized months in between on a wide multi-year monthly time axis (plan 47, C3)', () => {
+            withRomeTimeZone(() => {
+                const dates = Array.from({length: 36}, (_value, index) => `${2024 + Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}-01`);
+                const policy = buildResponsiveXAxisPolicy({width: 1200, values: dates, locale: 'it-IT', axisType: 'time'});
+                // Preconditions first: without a formatter the axis would draw ECharts' own English labels.
+                policyFormatter(policy, false);
+                const labels = renderedXAxisLabels(
+                    {
+                        animation: false,
+                        xAxis: {type: 'time', axisLabel: {fontSize: 14, rotate: 0, formatter: policy.formatter, ...(policy.axisLabel ?? {})}},
+                        yAxis: {type: 'value', scale: true, axisLabel: {show: false}},
+                        series: [{type: 'line', data: dates.map((date, index) => [date, 100 + index])}],
+                    },
+                    1200,
+                    300,
+                );
+                const rendered = `rendered: ${labels.join(' | ')}`;
+                const yearLabels = new Set(dates.map((date) => compactLabel('it-IT', 'y', date)));
+                // January is named by its year, so its month name is not an expected label.
+                const monthLabels = new Set(dates.filter((date) => date.slice(5, 7) !== '01').map((date) => compactLabel('it-IT', 'm', date)));
+
+                // Precondition: the axis is labelled.
+                expect(labels.length, rendered).toBeGreaterThanOrEqual(2);
+
+                expect.soft(labels, `${rendered} — each 1 January inside the data is named by its year`).toEqual(expect.arrayContaining([compactLabel('it-IT', 'y', '2025-01-01'), compactLabel('it-IT', 'y', '2026-01-01')]));
+                expect
+                    .soft(
+                        labels.filter((label) => !yearLabels.has(label) && !monthLabels.has(label)),
+                        `${rendered} — a localized year or month`,
+                    )
+                    .toEqual([]);
+                expect
+                    .soft(
+                        labels.some((label) => monthLabels.has(label)),
+                        `${rendered} — the months between the years are named`,
+                    )
+                    .toBe(true);
+                expect.soft(consecutiveDuplicates(labels), rendered).toEqual([]);
+            });
+        });
+
+        it('renders localized day labels with their year, never raw ISO dates, on a wide category axis of daily dates across a year (plan 47, C3)', () => {
+            const dates = isoDays('2025-12-15', '2026-01-08');
+            const policy = buildResponsiveXAxisPolicy({width: 1200, values: dates, locale: 'it-IT', axisType: 'category'});
+            // Preconditions first: without a formatter the axis would draw the raw ISO dates.
+            policyFormatter(policy, false);
+            const labels = renderedXAxisLabels(
+                {
+                    animation: false,
+                    xAxis: {type: 'category', data: dates, boundaryGap: true, axisLabel: {fontSize: 14, formatter: policy.formatter, ...(policy.axisLabel ?? {})}},
+                    yAxis: {type: 'value', scale: true, axisLabel: {show: false}},
+                    series: [{type: 'line', data: dates.map((_date, index) => 100 + index)}],
+                },
+                1200,
+                300,
+            );
+            const rendered = `rendered: ${labels.join(' | ')}`;
+            const dayYearLabels = new Set(dates.map((date) => compactLabel('it-IT', 'dmy', date)));
+
+            // Precondition: the axis is labelled.
+            expect(labels.length, rendered).toBeGreaterThanOrEqual(2);
+
+            expect
+                .soft(
+                    labels.filter((label) => /^\d{4}-\d{2}-\d{2}$/.test(label)),
+                    `${rendered} — no raw ISO date`,
+                )
+                .toEqual([]);
+            expect
+                .soft(
+                    labels.filter((label) => !dayYearLabels.has(label)),
+                    `${rendered} — every label is a localized day of the data, with its year`,
+                )
+                .toEqual([]);
+            expect.soft(consecutiveDuplicates(labels), rendered).toEqual([]);
         });
     });
 
@@ -1249,9 +1970,11 @@ describe('canonical overlay axis and reference helpers', () => {
 
                 try {
                     expect(compactPolicy.compact).toBe(true);
+                    // Why (re-pin, plan 47 C3): a desktop policy carries its own localized formatter.
                     expect(desktopPolicy).toEqual({
                         compact: false,
                         maxLabels: dates.length,
+                        formatter: expect.any(Function),
                     });
 
                     chart.setOption(
@@ -1315,10 +2038,12 @@ describe('canonical overlay axis and reference helpers', () => {
                             dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, ...rebuiltZoom}],
                             xAxis: {
                                 type: 'time',
+                                // GrowthChart's full time branch: the policy's formatter, then its compact-only keys (none on desktop).
                                 axisLabel: {
                                     color: '#475569',
                                     fontSize: 14,
                                     rotate: 0,
+                                    formatter: desktopPolicy.formatter,
                                     ...(desktopPolicy.axisLabel ?? {}),
                                 },
                                 axisLine: {lineStyle: {color: '#f1f5f9'}},
@@ -1341,7 +2066,8 @@ describe('canonical overlay axis and reference helpers', () => {
                     expect(chart.renderToSVGString()).toMatch(/^<svg\b/);
                     expect(storedGrowthZoom(chart)).toEqual(rebuiltZoom);
                     expect(storedGrowthZoom(chart)).not.toEqual(staleStoredZoom);
-                    expect(rebuiltAxisLabel?.formatter).toBeUndefined();
+                    // Why (re-pin, plan 47 C3): the compact formatter is replaced by the desktop policy's own, not dropped.
+                    expect(rebuiltAxisLabel?.formatter).toBe(desktopPolicy.formatter);
                     expect(rebuiltAxisLabel?.interval).toBeUndefined();
                     expect(rebuiltAxisLabel?.showMinLabel).toBe(false);
                     expect(rebuiltAxisLabel?.showMaxLabel).toBe(false);
@@ -1366,8 +2092,12 @@ describe('canonical overlay axis and reference helpers', () => {
             if (name === 'GrowthChart') {
                 expect(source).toMatch(/const xAxisPolicy = ladderActive\s*\?\s*null\s*:\s*buildResponsiveXAxisPolicy\(\{/);
                 expect(source).toContain('...(xAxisPolicy?.axisLabel ?? {})');
+                // Why (re-pin, plan 47 C3): the policy's formatter labels the axis in both modes,
+                // set right before the compact-only keys so a compact policy still overrides it.
+                expect(source).toMatch(/formatter: xAxisPolicy\?\.formatter,\s*\.\.\.\(xAxisPolicy\?\.axisLabel \?\? \{\}\)/);
             } else {
                 expect(source).toContain('...(xAxisPolicy.axisLabel ?? {})');
+                expect(source).toMatch(/formatter: xAxisPolicy\.formatter,\s*\.\.\.\(xAxisPolicy\.axisLabel \?\? \{\}\)/);
             }
         });
 
@@ -1403,13 +2133,17 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(updateChartData).toContain("dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],");
             // The ladder's category axis (Candles, Income) needs `data` refreshed on every
             // partial update (a rung change replaces the bucket dates) — the time-axis branch
-            // only needs a label/splitNumber refresh, gated behind `compact`.
+            // only needs a label refresh, with splitNumber and the compact-only label keys
+            // gated behind `compact`.
             // Why (re-pin, S7): the inline submode ternary is gone. Each branch assigns `xAxis`
             // (the ladder: its dates with the axis planned for this window), and that one value
             // rides the series update. The pins keep the claim above on both branches and
             // prove the computed axis is the one sent.
+            // Why (re-pin, plan 47 C3): the desktop side of the time branch no longer sends an
+            // empty axis. Its formatter is built from the entry's dates, so a data update sends
+            // the fresh one; splitNumber and the compact-only label keys stay compact-only.
             expect(updateChartData).toContain('xAxis = {data: entry.dates, ...ladderAxisOption(plan)};');
-            expect(updateChartData).toContain('xAxis = xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {};');
+            expect(updateChartData).toContain('xAxis = xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {axisLabel: {formatter: xAxisPolicy.formatter}};');
             expect(updateChartData).toMatch(/\bxAxis,\s*series,\s*\},\s*CHART_SERIES_UPDATE_OPTS,\s*\);/);
             expect(updateChartData).toMatch(/chartInstance\.setOption\([\s\S]*?CHART_SERIES_UPDATE_OPTS,\s*\);/);
             expect(source).toContain("const CHART_SERIES_UPDATE_OPTS = {notMerge: false, replaceMerge: ['dataZoom']};");
@@ -1478,9 +2212,11 @@ describe('canonical overlay axis and reference helpers', () => {
 
             try {
                 expect(compactPolicy.compact).toBe(true);
+                // Why (re-pin, plan 47 C3): a desktop policy carries its own localized formatter.
                 expect(desktopPolicy).toEqual({
                     compact: false,
                     maxLabels: replacementDates.length,
+                    formatter: expect.any(Function),
                 });
 
                 chart.setOption(
@@ -1554,10 +2290,12 @@ describe('canonical overlay axis and reference helpers', () => {
                         dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, ...rebuiltZoom}],
                         xAxis: {
                             type: 'time',
+                            // GrowthChart's full time branch: the policy's formatter, then its compact-only keys (none on desktop).
                             axisLabel: {
                                 color: '#475569',
                                 fontSize: 14,
                                 rotate: 0,
+                                formatter: desktopPolicy.formatter,
                                 ...(desktopPolicy.axisLabel ?? {}),
                             },
                             axisLine: {lineStyle: {color: '#f1f5f9'}},
@@ -1582,7 +2320,8 @@ describe('canonical overlay axis and reference helpers', () => {
                 const rebuiltXAxisLabel = rebuiltOption.xAxis?.at(0)?.axisLabel;
 
                 expect(chart.renderToSVGString()).toMatch(/^<svg\b/);
-                expect(rebuiltXAxisLabel?.formatter).toBeUndefined();
+                // Why (re-pin, plan 47 C3): the compact formatter is replaced by the desktop policy's own, not dropped.
+                expect(rebuiltXAxisLabel?.formatter).toBe(desktopPolicy.formatter);
                 expect(rebuiltXAxisLabel?.interval).toBeUndefined();
                 expect(rebuiltXAxisLabel?.showMinLabel).toBe(false);
                 expect(rebuiltXAxisLabel?.showMaxLabel).toBe(false);
@@ -1644,7 +2383,10 @@ describe('canonical overlay axis and reference helpers', () => {
             // merges it through `?.`. Leaving compact mode is a time-axis event (the resize
             // watcher skips the ladder), and its full path still replaces the whole xAxis,
             // labels merged from the desktop policy.
+            // Why (re-pin, plan 47 C3): the desktop policy now brings its own formatter, so the
+            // replaced xAxis drops the compact labels for the policy's desktop ones.
             expect(fullOption).toMatch(/xAxis: ladderAxis\s*\?\s*\{/);
+            expect(fullOption).toContain('formatter: xAxisPolicy?.formatter,');
             expect(fullOption).toContain('...(xAxisPolicy?.axisLabel ?? {}),');
             expect(fullOption).toContain('chartInstance.setOption(option, CHART_FULL_UPDATE_OPTS);');
         });
@@ -1688,11 +2430,16 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(restoration).toContain('end: savedZoom.end');
         });
 
-        it.each(LOT_RESPONSIVE_X_AXIS_CHARTS)('%s keeps its desktop formatter caller-owned and applies responsive labels only in compact mode', (_name, path) => {
+        it.each(LOT_RESPONSIVE_X_AXIS_CHARTS)('%s takes its labels from the shared policy in both modes and patches only compact labels on resize', (_name, path) => {
             const source = readFileSync(path, 'utf8');
             const resizeAxisUpdate = source.match(/const policy = buildLotXAxisPolicy\(\);[\s\S]*?if \(policy\.axisLabel\) \{[\s\S]*?setOption\(\{xAxis:\s*\{splitNumber:\s*policy\.splitNumber,\s*axisLabel:\s*policy\.axisLabel\}\},\s*\{lazyUpdate:\s*true\}\);/)?.[0];
 
-            expect(source).toContain('formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis)');
+            // Why (re-pin, plan 47 C3): the caller-owned desktop formatter (`formatAxisDate` with
+            // `multiYearAxis`) repeated the day on intraday ticks. The policy's formatter labels
+            // the axis in both modes; overlapping desktop labels are still hidden.
+            expect(source).toContain('formatter: xAxisPolicy.formatter,');
+            expect(source).not.toContain('multiYearAxis');
+            expect(source).toContain('hideOverlap: true');
             expect(source).toContain('...(xAxisPolicy.axisLabel ?? {})');
             expect(source).not.toContain('desktopFormatter:');
             expect(resizeAxisUpdate).toBeDefined();

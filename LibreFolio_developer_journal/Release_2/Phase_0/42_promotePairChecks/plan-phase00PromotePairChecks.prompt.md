@@ -706,3 +706,9 @@ dopo l'aggiornamento). Niente rossi, perché sono testi:
   - P-14: «broker» senza accento in altre 46 chiavi di `es.json`, nomi propri esclusi;
   - P-15: altre etichette inglesi scritte nel codice, cioè in `DataEditor` «Date», i contatori, un `aria-label` e
     «Reset layout», e in `BrokerSharingPanel` «max».
+
+> **Integrazione** (coordinatore, 2026-10-11): C-46…C-48 sono il commit `bdec709d2`, integrato nel treno 37 col merge
+> `b5a71de01` (`dev_release2` = `41ddc61cb`); il mini-lotto della §8 è il commit `0de730f3b`, integrato nel treno 38
+> col merge `d321f49dd` (`dev_release2` = `b578f4fec`). Nel 38 C-46…C-48 sono ✅; i residui di P stanno nella sezione P
+> di [`BACKLOG_POST_1.2.md`](../BACKLOG_POST_1.2.md), P-13…P-15 comprese. P ha finito; la chat è archiviata l'11/10, su
+> via del developer.

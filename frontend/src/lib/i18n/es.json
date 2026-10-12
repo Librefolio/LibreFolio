@@ -62,7 +62,7 @@
     "eventsInCurrency": "Eventos en {currency}",
     "addPricesManually": "Añadir manualmente",
     "openFxPair": "Abrir detalle del par FX",
-    "aiExport": "Exportar IA",
+    "aiExport": "Exportación IA",
     "browse": {
       "previous": "Activo anterior",
       "next": "Activo siguiente",
@@ -1052,13 +1052,13 @@
       "yourAccess": "Tu acceso",
       "leaveBroker": "Abandonar el bróker",
       "leaveConfirm": "¿Eliminar tu acceso a este bróker? Ya no lo verás en tus listas.",
-      "demoteToViewer": "Cambiar a visor",
-      "demoteConfirm": "¿Degradarte a visor? Ya no podrás editar los datos de este bróker. Un propietario puede promoverte de nuevo.",
+      "demoteToViewer": "Cambiar a lector",
+      "demoteConfirm": "¿Degradarte a lector? Ya no podrás editar los datos de este bróker. Un propietario puede promoverte de nuevo.",
       "leaveAndDelete": "Abandonar y eliminar el bróker",
       "leaveLastOwnerWarning": "Eres el único propietario: al abandonar eliminarás este bróker con todos sus informes y transacciones. Esta acción no se puede deshacer.",
       "leaveDone": "Has abandonado el bróker",
       "leaveDeletedBroker": "Bróker eliminado: eras el último propietario",
-      "selfDemoteDone": "Ahora eres visor",
+      "selfDemoteDone": "Ahora eres lector",
       "leaveLastOwnerHint": "Si no es lo que quieres, asigna primero a otro usuario como propietario y luego abandona."
     },
     "lots": {
@@ -1296,7 +1296,7 @@
     "areaFillDesc": "Degradado bajo la línea",
     "gridLines": "Líneas de Cuadrícula",
     "gridLinesDesc": "Cuadrícula horizontal punteada",
-    "staleGradient": "Degradado Datos Antiguos",
+    "staleGradient": "Degradado datos obsoletos",
     "staleGradientDesc": "Difuminar datos antiguos",
     "overlaySignals": "Señales Superpuestas",
     "noSignals": "Ninguna señal superpuesta configurada. Añade una a continuación.",
@@ -1546,7 +1546,7 @@
     "decimal": "decimal",
     "thousands": "miles",
     "placeholder": "Pega aquí los datos CSV o suelta un archivo arriba...",
-    "headerMismatch": "Las monedas del encabezado no coinciden",
+    "headerMismatch": "Las divisas del encabezado no coinciden",
     "errors": {
       "missingColumns": "Faltan columnas obligatorias: {columns}",
       "expectedHeader": "Encabezado esperado: {header}",
@@ -1564,7 +1564,7 @@
   "dashboard": {
     "netWorth": "Patrimonio Neto",
     "growth": "Crecimiento de la Cartera",
-    "allocation": "Asignación Patrimonial",
+    "allocation": "Asignación de activos",
     "now": "Actual",
     "history": "Histórico",
     "allBrokers": "Todos los brókers",
@@ -1639,7 +1639,7 @@
     "noPositions": "Sin posiciones disponibles",
     "noPeriodPnl": "Sin P&L en el período seleccionado",
     "seeAllPositions": "Ver todo →",
-    "aiExport": "Exportar IA",
+    "aiExport": "Exportación IA",
     "periodPnlTooltip": "Ganancia o pérdida total atribuible solo al período seleccionado (cambio no realizado + realizado + ingresos − comisiones). Puede diferir de la ganancia total de la posición.",
     "unrealizedPnlPercent": "P&L %",
     "pnlChange1d": "Δ1",
@@ -1708,7 +1708,8 @@
     "pnlAxisWithYear": "{label} {year}",
     "unrealizedAssetEffect": "Activos en {currency}",
     "unrealizedFxEffect": "Tipo de cambio {from} → {to}",
-    "unrealizedUnsplit": "{currency}, sin desglosar"
+    "unrealizedUnsplit": "{currency}, sin desglosar",
+    "fxOnCash": "Efecto del tipo de cambio sobre el efectivo"
   },
   "dataQuality": {
     "headerInfoOnly": "Nota de calidad de datos",
@@ -1787,6 +1788,7 @@
       "qtd": "QTD",
       "ytd": "YTD",
       "max": "Todo",
+      "days": "{n}D",
       "weeks": "{n}S",
       "months": "{n}M",
       "years": "{n}A"
@@ -1950,7 +1952,7 @@
     "noDataManual": "No hay datos disponibles — inserte las tasas manualmente",
     "insertManually": "Insertar manualmente",
     "syncDisabledManual": "Sync deshabilitado — ningún proveedor configurado. Agregue un proveedor o inserte las tasas manualmente.",
-    "aiExport": "Exportar IA",
+    "aiExport": "Exportación IA",
     "syncFailed": "Error de sincronización: {error}",
     "loadFailed": "No se pudieron cargar las tasas",
     "assetFallback": "Activo n.º {id}",
@@ -2126,7 +2128,7 @@
       "enable_registration": "Permitir que nuevos usuarios creen cuentas",
       "require_email_verification": "Requerir verificación de email para nuevas cuentas",
       "max_file_upload_mb": "Tamaño máximo de archivo permitido para subidas",
-      "default_currency": "Moneda predeterminada para nuevos usuarios",
+      "default_currency": "Divisa predeterminada para nuevos usuarios",
       "default_language": "Idioma predeterminado para nuevos usuarios",
       "default_theme": "Tema predeterminado para los nuevos usuarios",
       "scheduler_enabled": "Activar o desactivar el planificador automático de datos de mercado",
@@ -2146,7 +2148,7 @@
     "categoryDisplay": "Visualización",
     "categoryCurrency": "Moneda",
     "categoryAppearance": "Apariencia",
-    "defaultCurrency": "Moneda predeterminada",
+    "defaultCurrency": "Divisa predeterminada",
     "defaultCurrencyHint": "Moneda utilizada por defecto para nuevas transacciones y cálculos",
     "themeHint": "Elige tu tema preferido",
     "category": "Categoría",
@@ -2840,7 +2842,7 @@
       "loadError": "No se pudieron cargar los activos."
     },
     "riskDrawdown": {
-      "name": "Drawdown desde el máximo",
+      "name": "Caída desde el máximo",
       "description": "Mide la caída porcentual desde cada máximo progresivo del precio.",
       "output": "Drawdown",
       "outputDescription": "Caída del precio desde el máximo progresivo, sin flujos; nunca superior a cero.",
@@ -3460,7 +3462,7 @@
       "compare": "Comparar",
       "runScenario": "Ejecutar escenario",
       "simulate": "Simular",
-      "runReplay": "Ejecutar reproducción"
+      "runReplay": "Ejecutar repetición"
     },
     "stress": {
       "uniformShock": "Shock uniforme sobre los activos",
@@ -3593,18 +3595,18 @@
       "configureSignals": "Configurar señales avanzadas en Resumen"
     },
     "replay": {
-      "title": "Reproducción histórica",
+      "title": "Repetición histórica",
       "compositionNotice": "Aplica los rendimientos históricos observados a la composición actual; no reconstruye la propiedad pasada.",
       "preset": "Período predefinido",
       "start": "Fecha inicial",
       "end": "Fecha final",
       "proxy": "Proxy histórico manual",
-      "exclude": "Excluir este activo de la reproducción",
-      "results": "Resultados de la reproducción histórica",
+      "exclude": "Excluir este activo de la repetición",
+      "results": "Resultados de la repetición histórica",
       "proxyCount": "Proxies manuales usados",
       "excludedCount": "Activos excluidos",
       "treatment": {
-        "omitted_from_replay": "Omitido de la reproducción",
+        "omitted_from_replay": "Omitido de la repetición",
         "zero_return_residual": "Mantenido como residual de rendimiento cero"
       },
       "missingHistoryPolicy": "Política de historial ausente",
@@ -3794,8 +3796,8 @@
           "truncation": "Declarado sobre {declared} días, aplicado sobre {applied}: el cono responde a la pregunta más corta."
         },
         "replayTotal": "Esta composición habría cerrado el periodo en {percent} {amount}",
-        "shockShowDetail": "Mostrar el choque por bucket",
-        "shockHideDetail": "Ocultar el choque por bucket",
+        "shockShowDetail": "Mostrar el choque por grupo",
+        "shockHideDetail": "Ocultar el choque por grupo",
         "shockTotal": "Este escenario movería el ámbito un {percent} {amount}",
         "shockCoverage": "Solo se pudo clasificar el {percent} del ámbito: el total habla solo de esa parte.",
         "replayPeriod": "Periodo",
@@ -3880,7 +3882,8 @@
     "noStableRelease": "No se ha encontrado ninguna versión estable en GitHub.",
     "imagePending": "Se ha detectado una versión estable más reciente, pero su imagen Docker aún no está disponible.",
     "imageCheckFailed": "Se ha detectado una versión estable más reciente, pero no se ha podido verificar su imagen Docker. Inténtalo de nuevo.",
-    "adminLookupFailed": "Hay una actualización disponible, pero no se ha podido cargar la lista de administradores."
+    "adminLookupFailed": "Hay una actualización disponible, pero no se ha podido cargar la lista de administradores.",
+    "notTranslated": "Aún sin traducir"
   },
   "providerErrors": {
     "NO_DATA": "No hay datos disponibles para este instrumento en el proveedor.",

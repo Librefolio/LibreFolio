@@ -13,7 +13,7 @@ Una **acción** (o participación / capital) representa la propiedad parcial de 
 | **Moneda** | Denominada en la moneda local de la bolsa |
 | **Dividendos** | Muchas acciones pagan dividendos en efectivo periódicamente (trimestrales en EE. UU., semestrales en Europa) |
 | **Desdoblamientos** | Las empresas pueden dividir las acciones (ej. 4:1) para reducir el precio por acción |
-| **Proveedores típicos** | Yahoo Finance, CSS Scraper |
+| **Proveedores típicos** | Yahoo Finance, Borsa Italiana, CSS Scraper |
 
 ---
 

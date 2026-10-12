@@ -45,7 +45,7 @@ were read through their status headers, decisions and closing checks.
   ECharts axis formatters, so behaviour tests are the only guard there (residual I-05).
 - **D28** — the `#rolling-return` link stays; the red `check-links` result in IT/FR/ES is translation debt, not an
   exception to register.
-- F-084 (per-lot transaction gain chart with a FIFO/LIFO selector) was **not** built by this work.
+- [[F-084]] (per-lot transaction gain chart with a FIFO/LIFO selector) was **not** built by this work.
 
 ## Residuals (backlog 38)
 
@@ -75,8 +75,8 @@ I-11 limits of the events CSV round-trip · I-12 event delete not scoped to the 
 | Asset events editor | `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsBugfix-AssetEvents.prompt.md` |
 | Income colours, axis labels | `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md` |
 | Tooltip i18n escape | `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsBugfix-TooltipI18nEscape.prompt.md` |
-| Engine series | `backend/app/services/portfolio_engine.py` |
-| Rolling return plugin | `backend/app/services/signal_plugins/calendar_rolling_return.py` |
+| Engine series | `backend/app/services/financial_math/portfolio/daily_state.py`, `backend/app/services/financial_math/portfolio/derived_views.py` |
+| Rolling return plugin | `backend/app/services/signal_plugins/calendar_rolling_return/plugin.py` |
 | Growth chart | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
 | Tooltip HTML gate | `frontend/src/htmlInterpolation.gate.test.ts` |
 | Privacy money-site gate | `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` |

@@ -761,7 +761,7 @@
             xAxis: {
                 type: 'time',
                 ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
-                axisLabel: {color: textColor, fontSize: 14, rotate: 0, ...(xAxisPolicy.axisLabel ?? {})},
+                axisLabel: {color: textColor, fontSize: 14, rotate: 0, formatter: xAxisPolicy.formatter, ...(xAxisPolicy.axisLabel ?? {})},
                 axisLine: {lineStyle: {color: gridColor}},
                 splitLine: {show: false},
             },

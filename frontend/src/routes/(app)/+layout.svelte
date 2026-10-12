@@ -20,10 +20,10 @@
     import {checkForNewerRelease} from '$lib/features/update-check/updateCheck';
     import {zodiosApi} from '$lib/api';
     import {get, toStore} from 'svelte/store';
-    import OnboardingBootstrapBlock from '$lib/components/onboarding/OnboardingBootstrapBlock.svelte';
-    import OnboardingBootstrapBanner from '$lib/components/onboarding/OnboardingBootstrapBanner.svelte';
-    import OnboardingOverlayHost from '$lib/components/onboarding/OnboardingOverlayHost.svelte';
-    import DeferredAppPopups from '$lib/components/onboarding/DeferredAppPopups.svelte';
+    import OnboardingBootstrapBlock from '$lib/features/onboarding/components/OnboardingBootstrapBlock.svelte';
+    import OnboardingBootstrapBanner from '$lib/features/onboarding/components/OnboardingBootstrapBanner.svelte';
+    import OnboardingOverlayHost from '$lib/features/onboarding/components/OnboardingOverlayHost.svelte';
+    import DeferredAppPopups from '$lib/features/onboarding/components/DeferredAppPopups.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {loginUrl} from '$lib/utils/internalPath';
     import ServerUnreachable from '$lib/components/layout/ServerUnreachable.svelte';

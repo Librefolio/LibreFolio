@@ -20,13 +20,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from backend.app.db.models import FxConversionRoute, FxRate
+from backend.app.db.precision import truncate_fx_rate
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import Currency
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncLegDetail, FXSyncPairResult, SyncDateRangeModel, SyncStatus
 from backend.app.services.provider_registry import FXProviderRegistry
-from backend.app.utils.cache_utils import get_ttl_cache
-from backend.app.utils.decimal_utils import truncate_fx_rate
+from backend.app.utils.runtime.cache import clear_cache, get_ttl_cache
 
 logger = get_logger(__name__)
 
@@ -65,7 +65,7 @@ class FXRateProvider(ABC):
     1. Create a new class inheriting from FXRateProvider
     2. Implement all abstract methods
     3. Add @register_provider(FXProviderRegistry) decorator
-    4. Place in backend/app/services/fx_providers/ directory
+    4. Put it in backend/app/services/fx_providers/<name>/plugin.py, beside an __init__.py holding only its docstring
     5. Provider will be auto-discovered on startup
     6. See docs/fx/provider-development.md for details
     """
@@ -1215,8 +1215,6 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
         # Fresh FX rates change every converted valuation: portfolio reports and engine
         # blobs cached before this sync would keep showing the old data-quality banner
         # (and stale totals) for their whole TTL (30 min / 24 h).
-        from backend.app.utils.cache_utils import clear_cache  # noqa: PLC0415 — avoids a utils→services import cycle at module load
-
         clear_cache("portfolio_layer2")
         clear_cache("portfolio_blob")
 
@@ -1530,8 +1528,6 @@ async def upsert_rates_bulk(
 
     # Manual rates change valuations exactly like a provider sync — drop the cached
     # portfolio layers so the next report recomputes (same invalidation as sync_pairs_bulk).
-    from backend.app.utils.cache_utils import clear_cache  # noqa: PLC0415 — avoids a utils→services import cycle at module load
-
     clear_cache("portfolio_layer2")
     clear_cache("portfolio_blob")
     return results
@@ -1671,8 +1667,6 @@ async def delete_rates_bulk(  # noqa: C901 — flat batch delete: normalize, cou
     await session.commit()
 
     if deleted_count_total > 0:
-        from backend.app.utils.cache_utils import clear_cache  # noqa: PLC0415 — avoids a utils→services import cycle at module load
-
         clear_cache("portfolio_layer2")
         clear_cache("portfolio_blob")
 

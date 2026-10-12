@@ -30,12 +30,12 @@ Le graphique mémorise votre dernière vue, sous-vue P&L incluse, dans ce naviga
 | Élément | Couleur | Signification |
 |---------|-------|---------|
 | Aire — **Coût d'achat** | Bleu | Ce que les positions que vous détenez vous ont coûté (coût moyen × quantité) |
-| Aire — **Rendements** | Émeraude | Rendements détenus sous forme de liquidités (dividendes, intérêts, plus-values réalisées non encore réinvesties) |
+| Aire — **Rendements** | Émeraude | Rendements détenus sous forme de liquidités (dividendes, intérêts, plus-values réalisées non encore réinvesties, gains de change sur les liquidités que vous détenez dans une autre devise) |
 | Aire — **Capital** | Gris-vert | Dépôts non encore investis, détenus sous forme de liquidités |
 | Ligne — **[Valeur nette](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Vert foncé plein | Valeur totale du portefeuille aux prix de marché actuels |
 | Ligne — **[Capital versé](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Gris pointillé | Capital externe net apporté au fil du temps |
 
-**L'écart entre les deux lignes correspond à votre P&L total** : tous les gains accumulés (latents, réalisés, intérêts et dividendes) moins les frais et les impôts. L'infobulle affiche les deux lignes, le P&L total en vert ou en rouge, et la décomposition : **Coût des actifs** (l'aire bleue, actifs circulant entre vos courtiers inclus), **Rendements** et **Capital**.
+**L'écart entre les deux lignes correspond à votre P&L total** : tous les gains accumulés (latents, réalisés, intérêts, dividendes, et gains ou pertes de change sur les liquidités détenues dans une autre devise) moins les frais et les impôts. L'infobulle affiche les deux lignes, le P&L total en vert ou en rouge, et la décomposition : **Coût des actifs** (l'aire bleue, actifs circulant entre vos courtiers inclus), **Rendements** et **Capital**.
 
 **Les actifs valorisés à leur prix d'achat**, comme les prêts P2P sans prix live de marché, maintiennent la NAV proche du coût d'achat, si bien que l'écart peut être mince : lisez le **P&L total** dans l'infobulle.
 
@@ -92,8 +92,8 @@ Avec un seul courtier, ou sur la page d'un courtier, seul le total est tracé.
 Chaque période de la [largeur que vous choisissez](#pnl-width) devient une **bougie** constituée de valeurs de P&L, et non de prix. Sa **clôture** correspond exactement au P&L total que la vue **Ligne** affiche pour ce jour.
 
 <div class="lf-screenshot-carousel" style="margin: 1.5rem 0 2.5rem 0;">
-  <div class="lf-screenshot-carousel-item is-active chart-crop-container" alt="Le graphique Croissance du portefeuille en mode P&L, vue Bougies à 3D : les bougies P&L synthétiques, les boutons de largeur de 3D à 6M dans le coin supérieur droit du graphique, les étiquettes de période sur l'axe, et la légende Synthétique sous le graphique">
-     <img class="gallery-img" data-category="dashboard" data-name="growth-pnl-candles" alt="Le graphique Croissance du portefeuille en mode P&L, vue Bougies à 3D : les bougies P&L synthétiques, les boutons de largeur de 3D à 6M dans le coin supérieur droit du graphique, les étiquettes de période sur l'axe, et la légende Synthétique sous le graphique">
+  <div class="lf-screenshot-carousel-item is-active chart-crop-container" alt="Le graphique Croissance du portefeuille en mode P&L, vue Bougies à 3J : les bougies P&L synthétiques, les boutons de largeur de 3J à 6M dans le coin supérieur droit du graphique, les étiquettes de période sur l'axe, et la légende Synthétique sous le graphique">
+     <img class="gallery-img" data-category="dashboard" data-name="growth-pnl-candles" alt="Le graphique Croissance du portefeuille en mode P&L, vue Bougies à 3J : les bougies P&L synthétiques, les boutons de largeur de 3J à 6M dans le coin supérieur droit du graphique, les étiquettes de période sur l'axe, et la légende Synthétique sous le graphique">
   </div>
 </div>
 
@@ -115,7 +115,7 @@ L'infobulle donne la période, **Ouverture**, **Clôture**, **Plus haut** et **P
 
 | Colonne | Barres | Ce qu'elle représente |
 |--------|------|--------------------|
-| Revenus et coûts | **Dividende** · **Intérêt** au-dessus de zéro, **Frais et taxes** en dessous | Ce que le portefeuille vous a versé, et ce que l'activité vous a coûté |
+| Revenus et coûts | **Dividende** · **Intérêt** au-dessus de zéro, **Frais et impôts** en dessous | Ce que le portefeuille vous a versé, et ce que l'activité vous a coûté |
 | Dépôts | **Dépôt** | Argent frais que vous avez apporté (les retraits ne sont pas tracés) |
 | Achats | **Coût d'achat**, en deux zones : **Nouveau capital** en bas, **Réinvesti** au-dessus | Ce que vous avez dépensé pour vos achats, réparti selon l'origine de l'argent |
 
@@ -137,13 +137,13 @@ Comment le lire :
 
     Les barres sont un **flux** : ce que vous avez dépensé pour vos achats à chaque période. La ligne **Coût d'achat** de la [carte Valeur nette](kpi-cards.md#card-3-net-worth) est un **niveau** : ce que les positions que vous détenez encore vous ont coûté à la date de fin. Les ventes et les achats antérieurs comptent dans le KPI mais n'ont pas de barre.
 
-#### Largeur des bougies — de 1D à 1Y {: #pnl-width }
+#### Largeur des bougies — de 1J à 1A {: #pnl-width }
 
-Dans **Bougies** et **Revenus**, les boutons dans le coin supérieur droit du graphique, de **1D** à **1Y**, définissent la durée couverte par une bougie, ou un groupe de barres. Le graphique affiche toujours toute la plage, et le zoom ne modifie jamais la largeur.
+Dans **Bougies** et **Revenus**, les boutons dans le coin supérieur droit du graphique, de **1J** à **1A**, définissent la durée couverte par une bougie, ou un groupe de barres. Le graphique affiche toujours toute la plage, et le zoom ne modifie jamais la largeur.
 
-- **Périodes calendaires.** **1W** va du lundi au dimanche, **1M** est un mois calendaire, **3M** un trimestre, **6M** un semestre, **1Y** une année ; **3D** et **2W** sont des blocs de jours fixes.
+- **Périodes calendaires.** **1S** va du lundi au dimanche, **1M** est un mois calendaire, **3M** un trimestre, **6M** un semestre, **1A** une année ; **3J** et **2S** sont des blocs de jours fixes.
 - **Étiquettes de l'axe.** Chaque étiquette nomme le début de sa période, même si la plage ne la couvre que partiellement ; les mois et les années n'apparaissent que là où ils changent, et les étiquettes trop serrées s'inclinent ou s'espacent.
-- **Seules les largeurs qui tiennent dans le graphique et dans la plage** sont proposées ; **Revenus** démarre à **1W**.
+- **Seules les largeurs qui tiennent dans le graphique et dans la plage** sont proposées ; **Revenus** démarre à **1S**.
 - **Où cela commence.** **Bougies** prend la largeur la plus fine disponible ; **Revenus** s'ouvre sur **1M**, ou la largeur disponible la plus proche, chaque fois que vous y accédez. Le rechargement de la page réinitialise la largeur.
 - **Les périodes partielles sont atténuées.** Une période qui a déjà commencé lorsque la plage démarre, ou une dernière période écourtée par une plage se terminant dans le passé, est tracée en atténué, et son infobulle indique *Partiel : N jours sur M*. Sinon, la période en cours est tracée entièrement, avec *En cours : N jours sur M*.
 

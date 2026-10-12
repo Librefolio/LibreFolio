@@ -378,6 +378,8 @@
             if (!transportError) {
                 invalidateFxRoutes();
                 invalidate();
+                // The open lots and risk panels ask again too, as after «Aggiorna»: new rates change their figures.
+                refreshVersion += 1;
                 try {
                     await loadAll(true, true);
                     remaining = dataQualityIssues.find((candidate) => candidate.cta_action === 'sync_fx_pair' && coversRequestedPair(candidate));
@@ -452,6 +454,8 @@
                     toasts[toast.variant](toast.message);
                 }
                 invalidate();
+                // The open lots and risk panels ask again too, as after «Aggiorna»: new prices change their figures.
+                refreshVersion += 1;
                 await loadAll(true);
             } catch (e: any) {
                 toasts.error(`${$_('common.sync')} — ${e?.message || $_('prices.sync.failedDefault')}`);

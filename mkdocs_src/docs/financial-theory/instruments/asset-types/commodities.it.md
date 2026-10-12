@@ -13,7 +13,7 @@ Le **Materie Prime** (Commodities) sono asset fisici — materie prime o beni di
 | **Valuta** | Tipicamente quotate in USD (oro, petrolio) ma possono essere in qualsiasi valuta |
 | **Dividendi** | Nessuno — le materie prime non generano reddito |
 | **Stoccaggio** | Le materie prime fisiche possono comportare costi di stoccaggio/assicurazione |
-| **Provider tipici** | Yahoo Finance (es. `GC=F` per i futures sull'oro), Manuale |
+| **Provider tipici** | Yahoo Finance (es. `GC=F` per i futures sull'oro), o prezzi inseriti manualmente nell'[editor dati](../../../user/assets/detail/data-editor.md) |
 
 ---
 

@@ -132,6 +132,6 @@ future ingests.
 | M2 dashboard + engine plans | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/` |
 | Holdings/Performance refactor notes | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/lowDashboard/Low-dashboard_implementation_notes.md` |
 | Service (get_summary, get_positions_contribution) | `backend/app/services/portfolio_service.py` |
-| Engine | `backend/app/services/portfolio_engine.py` |
+| Engine | `backend/app/services/financial_math/portfolio/engine.py` |
 | Failing test (unrelated) | *deleted 2026-07-14* (test_transaction_implied.py, no successor) — [[problems/test-transaction-implied-constructor-mismatch]] |
 | DataTable component (unrelated bug) | `frontend/src/lib/components/table/DataTable.svelte` |

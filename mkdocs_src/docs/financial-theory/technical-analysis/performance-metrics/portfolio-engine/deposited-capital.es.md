@@ -36,6 +36,7 @@ Estas filas mueven valor sin efectivo: son capital, no ganancia ni pérdida.
 | AJUSTE con `cost_basis_override`, no vinculado a desdoblamiento | ✅ Sí, capital en especie a coste |
 | AJUSTE vinculado a desdoblamiento | ❌ No, solo reescalado de cantidad |
 | COMPRA, VENTA, DIVIDENDO, INTERÉS, COMISIÓN, IMPUESTO | ❌ No |
+| Movimiento del tipo de cambio sobre el efectivo mantenido en otra divisa (sin transacción) | ❌ No: un resultado, parte del P&L total; los flujos de capital (depósitos, retiros, patas de efectivo huérfanas) entraron en la base al tipo de cambio de sus propias fechas |
 
 ---
 
@@ -93,7 +94,7 @@ Con cuotas de propiedad iguales, $X$ es exactamente lo que la llegada añade a $
 
 Cuando las patas caen en días diferentes, el valor viaja desde el día de salida $t_{dep}$ hasta el día anterior a $t_{arr}$. Mientras tanto, forma parte de $\mathrm{InTransit}_A$, a la cuota $s_A$ del emisor, valorado cada día: el efectivo al tipo de cambio de ese día, los valores al precio de valoración de ese día (al coste registrado en la transferencia si el valor no tiene ningún precio). No ocurre ningún flujo mientras el valor viaja, así que sus movimientos de precio y tipo de cambio permanecen en la línea de $A$, incluido el propio movimiento del día de llegada; la línea de $B$ comienza desde el valor recibido.
 
-Por ejemplo, $A$ recibe un depósito de 1.000 USD el día 0 a 0,90 EUR por USD ($C_A = 900$) y envía los dólares el día 1; $B$ los recibe el día 4. Con el tipo a 0,90, 0,91, 0,92, 0,93 en los días 1–4, la línea de $A$ marca 0, +10, +20, +30 y la de $B$ se mantiene en 0. El día 4, $X = 930$ y $C_A = 900 - 930 = -30$.
+Por ejemplo, $A$ recibe un depósito de 1.000 USD el día 0 a 0,90 EUR por USD ($C_A = 900$) y envía los dólares el día 1; $B$ los recibe el día 4. Con el tipo a 0,90, 0,91, 0,92, 0,93 en los días 1–4, la línea de $A$ marca 0, +10, +20, +30 y la de $B$ se mantiene en 0. El día 4, $X = 930$ y $C_A = 900 - 930 = -30$. Una vez llegados, los dólares son efectivo de $B$, revalorizado cada día, así que desde el día 5 la línea de $B$ se mueve con el tipo: a 0,94, marca +10.
 
 ### 🧩 Casos especiales
 
@@ -185,6 +186,7 @@ $$
     - $\mathrm{CapitalBaseline}$ = suma histórica de flujos de efectivo y capital en especie. $\sum K_b$ = cuánto del efectivo actual es capital externo. Divergen después de COMPRA/VENTA.
     - Una COMPRA en el bróker $b_1$ solo consume $R_{b_1}$, nunca $R_{b_2}$.
     - Las transferencias de fondos entre brókeres mueven $R$ y $K$ desde el origen al destino sin tocar $W$.
+    - Un resultado de cambio sobre el efectivo que un bróker mantiene en otra divisa va a $R_b$; una pérdida mayor que $R_b$ sale de $K_b$, como hace una COMISIÓN. $\mathrm{CapitalBaseline}$ no se mueve ([Motor de cartera — §6](index.md#exchange-result-on-foreign-cash)).
 
 🔗 Reglas completas de actualización por bróker: **[Motor de cartera — §6 Modelo de tres fondos](index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)**
 
@@ -223,6 +225,19 @@ Después del paso 5: Efectivo=30, K=0, R=30 ✓ (rendimientos restaurados desde 
 
 El capital vuelve correctamente a $K$; solo €5 de ganancia a $R$. **No** los €1.005 completos a $R$.
 
+### 💱 D — Dólares mantenidos mientras el tipo se mueve
+
+Un solo bróker, divisa del informe EUR, tipos de cambio en EUR por USD; $\varepsilon$ es el [resultado de cambio sobre el efectivo](index.md#exchange-result-on-foreign-cash).
+
+| Paso | Evento | $\varepsilon$ | $K$ | $R$ | Efectivo | P&L total |
+|------|-------|---------------|-----|-----|------|----------|
+| 1 | DEPÓSITO 1.000 USD a 0,90 | — | 900 | 0 | 900 | 0 |
+| 2 | El tipo sube a 0,95 | +50 | 900 | 50 | 950 | +50 |
+| 3 | El tipo baja a 0,85 ($R$ = 50 − 100, $K$ absorbe −50) | −100 | 850 | 0 | 850 | −50 |
+| 4 | COMPRA por 1.000 USD a 0,85 (€850) | — | 0 | 0 | 0 | MV − 900 |
+
+La CapitalBaseline se mantiene en €900 durante todo el ejemplo: los resultados de cambio son ganancias y pérdidas, no capital. Tras el paso 4, el P&L total es el valor de mercado MV del título menos los €900 depositados — −50 el día de la compra si MV es igual a los €850 pagados.
+
 ---
 
 ## ⚙️ Implementación
@@ -231,6 +246,8 @@ El modelo de tres fondos se ejecuta en un **único bucle por transacción** (dir
 
 1. Toma la parte de la transacción correspondiente al fondo de coste medio de su posición, calculado antes de la reproducción —para una VENTA, el coste que elimina ($C$ = PMC previo a la venta × cantidad vendida, a tipos históricos)
 2. Actualiza K/R/W según las reglas del tipo de transacción, con ese $C$ para una VENTA
+
+Cada día en que cambia el tipo de cambio de una divisa extranjera mantenida como efectivo, el resultado de cambio de cada bróker sobre ese efectivo también se registra en sus fondos, después de los movimientos de efectivo del día y antes de las transacciones del día ([§6](index.md#exchange-result-on-foreign-cash)).
 
 La serie de entrada de ROI/TWRR/MWRR se deriva de los cambios día a día en `cumulative_external_cash_flow`, la base de capital. No se deriva del campo `external_cash_flow` que solo contiene efectivo.
 

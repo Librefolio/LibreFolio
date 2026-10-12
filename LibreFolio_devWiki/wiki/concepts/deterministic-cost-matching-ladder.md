@@ -52,6 +52,6 @@ dividend); `FEE` is trade-centric and never targets an income event.
 ## Source files
 | File |
 |------|
-| `backend/app/services/fifo_lot_engine.py` |
+| `backend/app/services/financial_math/fifo/engine.py` |
 | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/hig-level-analysis-v5.md` §13-16 |
 | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.en.md` §"Costs & Net Metrics" |

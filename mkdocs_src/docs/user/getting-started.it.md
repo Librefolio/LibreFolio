@@ -74,7 +74,7 @@ soltanto: non apre mai un modulo né crea dati.
 
 ??? warning "⚠️ La configurazione non si carica — cosa fare"
 
-    Se le tue impostazioni o i progressi delle guide non possono essere caricati, una pagina **Non siamo riusciti a caricare l'onboarding**
+    Se le tue impostazioni o i progressi delle guide non possono essere caricati, una pagina **Non siamo riusciti a caricare le guide**
     offre **Riprova** e **Disconnettiti**. Se la tua configurazione iniziale è già completata, potresti invece vedere la
     Dashboard, con un banner **Riprova** in alto.
 

@@ -31,7 +31,7 @@
 | K | `phases/25_taxonomySelect/` (step 23 e verifica d'archivio) | K-1 … K-26 |
 | P | `phases/30_wacUnification/`, `phases/39_autoCostNoPosition/` | P-1 … P-11 |
 | I | `phases/20_performanceCharts/`, `19_yieldOnCost/`, `24_privacyGlobal/` | I-01 … I-12 |
-| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-52 |
+| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-55 |
 
 In fondo: le voci del backlog del coordinatore **tracciate altrove** e quelle **chiuse alla verifica del 09/10**.
 
@@ -289,14 +289,19 @@ Origine: [30_wacUnification](../../phases/30_wacUnification/plan-phase00WacUnifi
 - **P-2 · Anteprima WAC: etichetta sbagliata per le righe di split e ramo `add_at_wac` morto** — basso.
   `WacPreviewSection.svelte:571-585` riconosce solo `add`, `reduce` e `add_at_wac`: una riga `split_rescale`
   (`portfolio_service.py:230-236`) mostra «Diluizione», e `add_at_wac` non esiste più dal #32.
-- **P-3 · Contributo per posizione: dividendi e costi senza cambio esclusi senza segnale** — basso.
+- ✅ **P-3 · Contributo per posizione: dividendi e costi senza cambio esclusi senza segnale** — chiusa il 12/10 da F
+  (B14 di I, `c04e44ff5`, treno 42): i flussi dei contributi e quelli del riepilogo vengono dalle stesse righe della
+  cassa nativa, e le coppie mancanti arrivano all'utente dal riepilogo, nel banner dei dati. Lo schema dei contributi
+  resta senza un canale suo. Era: basso.
   `portfolio_service.py:1794-1805` salta il movimento senza registrare la coppia, e `PositionsContribution`
   (`schemas/portfolio.py:443-450`) non ha un canale per dirlo.
 - **P-4 · Fuso orario: verificare il database IANA nell'immagine Docker** — basso. `_check_timezone`
   (`schemas/settings.py:426-432`) controlla il fuso solo se il server ha il database IANA, e `tzdata` non è nel
   `Pipfile` (`Dockerfile:72`, `:86-88`).
-- **P-5 · Layer `financial_math`: migrare `roi_utils` e `valuation_utils`** — basso, refactor. È la decisione D1 del
-  developer («poi in futuro fattorizziamo le altre»), scritta in `financial_math/__init__.py:8-10`.
+- ✅ **P-5 · Layer `financial_math`: migrare `roi_utils` e `valuation_utils`** — chiusa il 12/10 da T-1 (T,
+  `1cc9cd8f5`, treno 45): `roi_utils` è `financial_math/returns.py`, `valuation_utils` è `financial_math/valuation.py`,
+  senza shim, e con loro gli altri motori. Era: basso, refactor; la decisione D1 del developer («poi in futuro
+  fattorizziamo le altre»), scritta in `financial_math/__init__.py:8-10`.
 - **P-6 · Grafo del wiki: aggiornamento rinviato dal #32** — knowledge base; **rinviata a dopo la 1.2** dal developer il
   09/10: «Rimandare a dopo la 1.2: le pagine bastano, P-6 e C-29 restano nel backlog». Le pagine devWiki nuove di P12 vanno nel grafo, e con loro le 47 scritte dall'historian il 09/10: misura del
   09/10, 289 pagine della wiki da rielaborare (714 file con i sotto-corpus). Vedi anche C-29.
@@ -346,7 +351,9 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
     col client generato presente, quindi non dipende dalla worktree: sono proprio i `paths`. Nessun gate li vede,
     perché Playwright non controlla i tipi e `front check` non guarda `e2e/`. Con la cura, il controllo dei tipi
     degli E2E va fra i gate.
-- **I-08 · debito di traduzione MkDocs** — medio, giro Aphra: «quando arriva il momento lo faremo» (developer,
+- ✅ **I-08 · debito di traduzione MkDocs** — chiusa il 12/10: dopo i giri di traduzione di M (lotti 11–18, treni
+  29–44) `translate-validate` è a 0/0 e `translate-diff` pulito su 624 pagine; `yield-on-cost` ha it/fr/es (verifica del
+  coordinatore). Era: medio, giro Aphra: «quando arriva il momento lo faremo» (developer,
   09/10). Il conto esatto lo dà `./dev.py mkdocs translate-validate`. Le pagine note il 09/10:
   - di I: `yield-on-cost.en.md` senza it/fr/es; `user/dashboard/charts`, `user/dashboard/index`,
     `user/assets/detail/chart`;
@@ -597,14 +604,45 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   libera: nessun test ne soffre. Nessun endpoint SSE (gli `StreamingResponse` sono backup e download). Da capire chi
   trattiene lo shutdown di uvicorn (connessioni aperte del browser, lavori del lifespan) e se lo stesso succede con
   `docker stop`, che dopo 10 s manda SIGKILL e salta gli hook di chiusura.
-- **C-50 · L'AI Export di un Asset espone il nome interno `portfolio_weight_ratio`** — basso, da valutare per la 1.2
-  (T, sonda di B3b, 11/10). Nella tabella `portfolio_role.unavailable` di `asset.position_scope` (da `ea0558b3c`) il
+- ✅ **C-50 · L'AI Export di un Asset espone il nome interno `portfolio_weight_ratio`** — chiusa l'11/10 da T
+  (`dd0a8d497`, treno 39): il renderer passa `field` e `missing_fields` per i nomi pubblici; il payload resta canonico,
+  quindi nessuna versione nuova. Era: basso, da valutare per la 1.2 (T, sonda di B3b, 11/10). Nella tabella `portfolio_role.unavailable` di `asset.position_scope` (da `ea0558b3c`) il
   campo esce col nome interno invece di quello pubblico (`PUBLIC_RATIO_FIELD_NAMES` in `snapshotDataRenderer.ts`), e il
   controllo pubblico della sonda fallisce appena una gamba non ha valore corrente.
 - **C-51 · I dati sintetici scrivono la vecchia forma di `classification_params`** — basso (T, 11/10).
   `populate_mock_data.py:793-881`: l'AI Export degli Asset sintetici 4–8 risponde 503 su `asset.identity`. Tocca le
   sonde e gli scatti futuri dell'AI Export (C-41), non gli utenti.
 - **C-52 · La CLI della sonda dell'AI Export non sa scegliere l'Asset né l'utente sintetico** — minimo (T, 11/10).
+- ✅ **C-53 · L'AI Export dice «non riconciliato» per un residuo di rumore** — chiusa il 12/10 da T (`876d2b430`,
+  treno 47): `reconciled` è vero sotto `CONVERSION_DUST` in valore assoluto, e il residuo resta esatto; le due
+  riconciliazioni passano alla v2 (+1 rispetto alla 1.1, regola del developer). Era: basso, preesistente (I, F-4, 12/10).
+  `portfolio_financial.py:490` e `broker_financial.py:435` provano `residual_amount == Decimal("0")` su un residuo non
+  quantizzato: nel DB mock 5 snapshot su 33 danno `reconciled` falso, con un residuo massimo di 1e-24, prima e dopo F.
+  Proposta di I: la tolleranza `CONVERSION_DUST` (1e-9, `financial_math/native_cash.py`) e il bump di versione dei due
+  componenti, con `COMPACT_COMPONENT_VERSIONS` nello stesso cambio. Decisione del developer: nella 1.2 (consiglio del
+  coordinatore: a T dopo T-1) o dopo.
+- **C-54 · «Novità dalla tua ultima versione» al login** — medio, **dopo la 1.2** per decisione del developer (12/10).
+  Il disegno segue il popup delle donazioni (`donation_popup_service.py`, `show_donation_popup` nella risposta del
+  login, l'ordine di `DeferredAppPopups.svelte`):
+  - un campo `last_seen_version` sullo User, con una migrazione nuova;
+  - il login confronta la versione installata con l'ultima vista e dice da quale versione mostrare le novità;
+  - il modale del changelog si apre sui capitoli non visti, nella lingua dell'utente (il changelog tradotto arriva con
+    la 1.2);
+  - un utente nuovo non lo vede; le build di sviluppo (`vX.Y.Z-N-gSHA`) contano come la loro versione base.
+  Da decidere allora: chi non ha ancora una versione vista la prima volta vede le novità al primo login, oppure no.
+  Stima: 1–1,5 giornate.
+- ✅ **C-55 · L'AI Export di un broker senza posizioni non passa i controlli pubblici «invalid HHI points»** — chiusa
+  nella 1.2 (developer, 12/10: «Sì, nella 1.2»), T, treno 56. Sul broker senza posizioni dei dati sintetici la sonda
+  segnava fallite le verifiche pubbliche «invalid HHI points» di `broker.allocation_concentration` e
+  `broker.concentration_context`, con risposta HTTP 200.
+  - **Il difetto era nella sonda** (`ai_export_real_prompt_probe.py`), che contava ogni HHI nullo come violazione.
+  - **Il payload è corretto**: HHI e peso massimo sono `null` insieme, perché un HHI di 0 direbbe «diversificazione
+    perfetta», e il prompt legge `null` come «esplicitamente non disponibile».
+  - **La cura**: un `null` passa solo se anche `largest_position_weight_percent` è `null`, e si conta in
+    `hhi.unavailable`; tutti gli altri casi restano rossi.
+  - **La matrice reale**: 24 casi su 24, con i prompt identici. Niente bump e niente CHANGELOG. Il `reason_code`
+    impreciso è in T-U9.
+  - Dettagli: [piano della 43](../43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), «C-55 — analisi».
 
 ## Tracciate altrove
 

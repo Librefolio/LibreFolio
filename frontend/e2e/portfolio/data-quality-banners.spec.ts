@@ -117,6 +117,65 @@ async function injectDashboardIssues(page: import('@playwright/test').Page, issu
     });
 }
 
+/**
+ * Make `issues` the dashboard's *whole* data-quality list, in every report this page receives.
+ *
+ * `injectDashboardIssues` appends to what the backend reported; this replaces it. The grouped
+ * header counts every issue it is handed, the seed's included, so a test asserting on the header
+ * has to own the list end to end, otherwise the count on screen is a fact about the fixture.
+ * The banner keys its rows by `code + group_key`, so every issue needs its own `group_key`.
+ */
+async function serveDashboardIssues(page: Page, issues: Array<{code: string; group_key: string; [field: string]: unknown}>) {
+    expect(new Set(issues.map((issue) => `${issue.code}|${issue.group_key}`)).size, 'each served issue needs its own code + group_key').toBe(issues.length);
+    await page.route('**/api/v1/portfolio/report', async (route) => {
+        const response = await route.fetch();
+        const body = await response.json();
+        const summary = body?.summary;
+        if (summary) {
+            summary.data_quality = {...(summary.data_quality ?? {}), issues};
+        }
+        await route.fulfill({response, json: body});
+    });
+}
+
+/**
+ * The `n`-th issue of `severity` in a served list, under a group_key of its own. One code per
+ * severity, each with the params its message needs, so an expanded banner can render every row.
+ */
+function headerIssue(severity: 'error' | 'warning' | 'info', n: number) {
+    const kind = {
+        error: {code: 'MISSING_PRICE', message_i18n_key: 'dataQuality.missingPrice', message_params: {count: 1}, count: 1},
+        warning: {code: 'STALE_PRICE', message_i18n_key: 'dataQuality.stalePrice', message_params: {count: 1}, count: 1},
+        info: {code: 'NAV_INCOMPLETE', message_i18n_key: 'dataQuality.navIncomplete', message_params: {count: 3, date_from: '2019-03-04', date_to: '2019-03-06'}, count: 3},
+    }[severity];
+    return {domain: 'portfolio', severity, ...kind, group_key: `header-${severity}-${n}`};
+}
+
+/**
+ * The counts the grouped header names, in reading order: `['1', '2']` for "1 error(s), 2 warning(s)".
+ *
+ * Whole numbers, never words, so the check holds in every language: each of the four catalogues
+ * puts the count first or alone ("10 error(s)", "10 errore/i", "10 erreur(s)", "10 error(es)"),
+ * and the info-only note carries none. A substring check such as /0 error/ also matches
+ * "10 error(s)", which is why this one reads numbers.
+ */
+async function headerCounts(page: Page): Promise<string[]> {
+    const text = (await page.getByTestId('data-quality-toggle').textContent()) ?? '';
+    return text.match(/\d+/g) ?? [];
+}
+
+/**
+ * The header names exactly `expected`, in order, and never a zero count.
+ *
+ * Polled rather than read once: the banner is rendered again each time a report lands (see
+ * `expandDataQualityBannerStrict`), and the retry costs nothing when the first read is right.
+ */
+async function expectHeaderCounts(page: Page, expected: string[]) {
+    await expect(page.getByTestId('data-quality-toggle')).toBeVisible({timeout: 20_000});
+    await expect.poll(() => headerCounts(page), {message: 'the counts the header names', timeout: 10_000}).toEqual(expected);
+    expect(await headerCounts(page), 'the header names no zero count').not.toContain('0');
+}
+
 // ----------------------------------------------------------------------------
 // MISSING_FX_RATES «Sync rates» — what the dashboard CTA asks the provider for
 // ----------------------------------------------------------------------------
@@ -278,9 +337,12 @@ async function stubFxRoutes(page: import('@playwright/test').Page, items: Array<
 /**
  * Append an unconverted event in `currency` to every price-query result.
  *
- * `original_value` is deliberately absent: that is exactly how the backend reports "conversion
- * was requested and failed" (schemas/prices.py:326), which is what `hasFailedConversion`
- * (assets/[id]/+page.svelte:501) reads.
+ * `value` stays in `currency` and `original_value` is deliberately absent: that is exactly how the
+ * backend reports "conversion was requested and failed" (`FAAssetEventPointOut`, schemas/prices.py).
+ * The asset page reads it through `getComparisonEventFxDependency` (charts/loadComparisonData.ts):
+ * with no `original_value`, the source currency of the required pair is `value.code`, and `failed`
+ * is set because `value.code` is not the display currency. The page then reports FX_PAIR_MISSING
+ * when that pair has no configured route, FX_PAIR_NO_DATA when it has one.
  */
 async function injectForeignEvent(page: import('@playwright/test').Page, currency: string) {
     await page.route('**/api/v1/assets/prices/query*', async (route) => {
@@ -353,19 +415,39 @@ test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
         }
     });
 
-    test('header does not show "0 errors, 0 warnings" when only info issues present', async ({page}) => {
-        await goToDashboard(page);
-        const banner = page.getByTestId('data-quality-banner');
-        const hasBanner = await banner.isVisible({timeout: 3000}).catch(() => false);
+    // The grouped header counts errors and warnings and names only the non-zero ones; info issues
+    // are notes, outside the count. Each case serves the whole issue list it asserts on.
 
-        if (hasBanner) {
-            const headerText = await banner.locator('.font-medium').first().textContent();
-            // Must not say "0 error" or "0 warning"
-            expect(headerText ?? '').not.toMatch(/0 error/i);
-            expect(headerText ?? '').not.toMatch(/0 warning/i);
-        } else {
-            test.info().annotations.push({type: 'info', description: 'No banner to check — skipped header test'});
-        }
+    test('grouped header of info-only issues names no count at all', async ({page}) => {
+        await serveDashboardIssues(page, [headerIssue('info', 1)]);
+        await goToDashboard(page);
+
+        // "No number" is also what a header over somebody else's notes would say: first prove the
+        // note on screen is the one served here, by the dates it carries.
+        await expandDataQualityBannerStrict(page);
+        await expect(page.getByTestId('data-quality-info').getByTestId('data-quality-issue-NAV_INCOMPLETE')).toContainText('2019-03-04');
+
+        // The info-only note, not "0 error(s), 0 warning(s)": no count, so no zero either.
+        await expectHeaderCounts(page, []);
+    });
+
+    test('grouped header names ten errors as 10, not a zero count', async ({page}) => {
+        await serveDashboardIssues(
+            page,
+            Array.from({length: 10}, (_, i) => headerIssue('error', i + 1)),
+        );
+        await goToDashboard(page);
+
+        // The header the old /0 error/ check rejected: it reads "10 error(s)".
+        await expectHeaderCounts(page, ['10']);
+    });
+
+    test('grouped header names errors then warnings and leaves info notes uncounted', async ({page}) => {
+        // Served with a warning first: the header orders its counts by severity, not by the list.
+        await serveDashboardIssues(page, [headerIssue('warning', 1), headerIssue('info', 1), headerIssue('error', 1), headerIssue('warning', 2)]);
+        await goToDashboard(page);
+
+        await expectHeaderCounts(page, ['1', '2']);
     });
 
     test('NAV incomplete issue renders the date range it carries', async ({page}) => {
@@ -431,7 +513,8 @@ test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
         // navigate_asset issues render one "go to asset" link per affected asset — the count is
         // the assertion, because a single link for two assets was the original bug. It is taken
         // inside this row: every navigate_asset issue renders its links under the same test-id
-        // prefix, and other issues' links share the page (the seed's MISSING_COST_BASIS is one).
+        // prefix, and other issues' links share the page (the TRANSACTION_IMPLIED issue injected
+        // above is one, and this test owns it).
         const navLinks = row.getByTestId('data-quality-nav-assets-MISSING_PRICE').locator('[data-testid^="data-quality-nav-asset-"]');
         await expect(navLinks).toHaveCount(2);
         await expect(row.getByTestId('data-quality-nav-asset-901234')).toBeVisible();

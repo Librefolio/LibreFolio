@@ -65,7 +65,7 @@ Faites un clic droit sur un rapport pour **Aperçu**, **Télécharger** ou **Sup
 
 ### 🧩 Lots de rapports {: #report-sets }
 
-Certaines banques répartissent un compte sur plusieurs exports : [Danske Bank](../transactions/import/danske-bank.md), par exemple, nécessite un export d’opérations sur titres et un relevé du compte espèces. Les exports d’une telle banque que vous téléversez **ensemble** forment un **lot de rapports**, et LibreFolio les importe comme un seul lot, via un **fichier combiné** qu’il construit à partir de ceux-ci. La colonne **Lot de rapports** vous indique où en est chaque fichier (la même colonne apparaît dans les **Rapports Téléchargés** d’un courtier) :
+Certaines banques répartissent un compte sur plusieurs exports : [Danske Bank](../transactions/import/danske-bank.md), par exemple, nécessite un export d’opérations sur titres et un relevé du compte espèces. Les exports d’une telle banque que vous téléversez **ensemble** forment un **lot de rapports**, et LibreFolio les importe comme un seul lot, via un **fichier combiné** qu’il construit à partir de ceux-ci. La colonne **Lot de rapports** vous indique où en est chaque fichier (la même colonne apparaît dans les **Rapports téléversés** d’un courtier) :
 
 | Badge | Signification |
 |:--|:--|

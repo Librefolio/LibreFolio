@@ -27,7 +27,7 @@ setup_test_database()
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import backend.app.services.portfolio_engine as portfolio_engine_module
+import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
@@ -41,12 +41,13 @@ from backend.app.schemas.portfolio import (
     StalePriceAsset,
 )
 from backend.app.services.broker_service import BrokerService
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.portfolio_service import (
     PortfolioService,
     _portfolio_l2_cache,
 )
 from backend.app.utils.datetime_utils import utcnow
-from backend.app.utils.financial.valuation_utils import compute_holding_value
 
 # =============================================================================
 # FIXTURES
@@ -488,6 +489,65 @@ class TestPortfolioServiceGetSummary:
 
         problems = self._card_problems(in_transit, "2038-01-14 (in transit)", [("A (sender)", sender.id, "950", "150", "0.1875"), ("B (receiver)", receiver.id, "0", "0", "0")])
         problems += self._card_problems(arrived, "2038-01-20 (arrived)", [("A (sender)", sender.id, "600", "300", "1"), ("B (receiver)", receiver.id, "600", "100", "0.2")])
+        assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    async def test_summary_with_breakdown_foreign_cash_in_transit_headline_equals_sum_of_cards(self, session, test_user, broker_with_access):
+        """The headline of the summary is the sum of its broker cards, also while foreign cash
+        is in transit (T1c, lot 41 step F).
+
+        Same scenario as the test above: base EUR; 1 CNY is worth 0.8 EUR on 2038-01-01, 0.9 on
+        01-10, 0.95 on 01-14, 1.0 on 01-15 and 1.2 on 01-20; 1000 CNY deposited at A on 01-01
+        (capital 800); 500 CNY leave A on 01-10 and reach B on 01-15. Cash is valued at the
+        rate of the valuation day, at a broker or in transit alike. On 01-14 the headline is
+        A's card: net worth 950 (500 CNY of cash at 0.95, 475, plus the 500 in transit, 475),
+        gain 150, cash 475; B's card is all 0. On 01-20 the 1000 CNY are worth 1.2: net worth
+        1200, gain 400, cash 1200, i.e. A's card 600 / 300 / 600 plus B's 600 / 100 / 600.
+
+        Before F, the headline kept each cash movement at the rate of its own date while the
+        cards revalued their cash at the valuation date: on 01-14 the headline showed cash 350
+        (800 - 450), net worth 825 and P&L 25; on 01-20 cash 850 (350 + 500 at 1.0), net worth
+        850 and P&L 50."""
+        sender, _ = broker_with_access
+        receiver = await self._owned_receiver_broker(session, test_user)
+        session.add_all(
+            [
+                FxRate(date=date(2038, 1, 1), base="CNY", quote="EUR", rate=Decimal("0.8"), source="TEST"),
+                FxRate(date=date(2038, 1, 10), base="CNY", quote="EUR", rate=Decimal("0.9"), source="TEST"),
+                FxRate(date=date(2038, 1, 14), base="CNY", quote="EUR", rate=Decimal("0.95"), source="TEST"),
+                FxRate(date=date(2038, 1, 15), base="CNY", quote="EUR", rate=Decimal("1.0"), source="TEST"),
+                FxRate(date=date(2038, 1, 20), base="CNY", quote="EUR", rate=Decimal("1.2"), source="TEST"),
+            ]
+        )
+        session.add(Transaction(broker_id=sender.id, type=TransactionType.DEPOSIT, date=date(2038, 1, 1), amount=Decimal("1000"), currency="CNY"))
+        sent = Transaction(broker_id=sender.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=date(2038, 1, 10), quantity=Decimal("0"), amount=Decimal("-500"), currency="CNY")
+        received = Transaction(broker_id=receiver.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=date(2038, 1, 15), quantity=Decimal("0"), amount=Decimal("500"), currency="CNY")
+        session.add_all([sent, received])
+        await session.flush()
+        sent.related_transaction_id = received.id
+        received.related_transaction_id = sent.id
+        await session.flush()
+        service = PortfolioService(session)
+
+        in_transit = await service.get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2038, 1, 14))
+        arrived = await service.get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2038, 1, 20))
+
+        problems: list[str] = []
+        # (when, summary, expected headline net_worth / total_gain_loss / cash_total)
+        for when, summary, wanted in (("2038-01-14 (in transit)", in_transit, ("950", "150", "475")), ("2038-01-20 (arrived)", arrived, ("1200", "400", "1200"))):
+            headline = (summary.net_worth.amount, summary.total_gain_loss.amount, summary.cash_total.amount)
+            for field, got, want in zip(("net_worth", "total_gain_loss", "cash_total"), headline, wanted, strict=True):
+                if got != Decimal(want):
+                    problems.append(f"{when} headline: {field} expected {want}, got {got}")
+            if summary.by_broker is not None:  # a missing breakdown is reported by _card_problems below
+                card_sums = (sum((card.net_worth.amount for card in summary.by_broker), Decimal("0")), sum((card.gain_loss.amount for card in summary.by_broker), Decimal("0")), sum((card.cash_total.amount for card in summary.by_broker), Decimal("0")))
+                for field, got, card_sum in zip(("net_worth", "total_gain_loss", "cash_total"), headline, card_sums, strict=True):
+                    if got != card_sum:
+                        problems.append(f"{when} headline: {field} {got} != sum of the cards {card_sum}")
+        problems += self._card_problems(in_transit, "2038-01-14 (in transit)", [("A (sender)", sender.id, "950", "150", "0.1875"), ("B (receiver)", receiver.id, "0", "0", "0")])
+        problems += self._card_cash_problems(in_transit, "2038-01-14 (in transit)", [("A (sender)", sender.id, "475"), ("B (receiver)", receiver.id, "0")])
+        problems += self._card_problems(arrived, "2038-01-20 (arrived)", [("A (sender)", sender.id, "600", "300", "1"), ("B (receiver)", receiver.id, "600", "100", "0.2")])
+        problems += self._card_cash_problems(arrived, "2038-01-20 (arrived)", [("A (sender)", sender.id, "600"), ("B (receiver)", receiver.id, "600")])
         assert not problems, "\n".join(problems)
 
     # The horizon of the card (lot 41). Called directly without ``date_to`` (get_report always
@@ -955,7 +1015,7 @@ class TestAccessFingerprintCacheBust:
 
 class TestPortfolioFxCacheIdentity:
     """compute_portfolio_fx_cache_identity() is the shared FX fingerprint for both
-    portfolio cache layers (L1 blob in portfolio_engine.py, L2 report in
+    portfolio cache layers (L1 blob in financial_math/portfolio/engine.py, L2 report in
     portfolio_service.py). Its dependency set is deliberately BOUNDED: only
     currencies actually present in a scope's transactions/held-asset
     currencies/price history, paired with the target currency. A global,
@@ -1240,13 +1300,13 @@ class TestPortfolioBlobCacheFxSensitivity:
         portfolio_engine_module._portfolio_blob_cache.clear()
 
         build_calls = {"n": 0}
-        original_build = portfolio_engine_module.DailyStateBuilder.build
+        original_build = DailyStateBuilder.build
 
         def counting_build(builder_self):
             build_calls["n"] += 1
             return original_build(builder_self)
 
-        monkeypatch.setattr(portfolio_engine_module.DailyStateBuilder, "build", counting_build)
+        monkeypatch.setattr(DailyStateBuilder, "build", counting_build)
 
         engine = portfolio_engine_module.PortfolioCalculationEngine(session)
         date_to = date(2033, 1, 10)
@@ -1278,13 +1338,13 @@ class TestPortfolioBlobCacheFxSensitivity:
         request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
 
         build_calls = {"n": 0}
-        original_build = portfolio_engine_module.DailyStateBuilder.build
+        original_build = DailyStateBuilder.build
 
         def counting_build(builder_self):
             build_calls["n"] += 1
             return original_build(builder_self)
 
-        monkeypatch.setattr(portfolio_engine_module.DailyStateBuilder, "build", counting_build)
+        monkeypatch.setattr(DailyStateBuilder, "build", counting_build)
 
         engine = portfolio_engine_module.PortfolioCalculationEngine(session)
 
@@ -2932,7 +2992,7 @@ class TestPortfolioServiceGetReport:
     async def test_get_report_narrower_date_to_not_corrupted_by_wider_blob_cache(self, session, test_user, broker_with_access, test_asset):
         """Regression test for dashboard KPI cards showing 0-delta for a custom date range.
 
-        Root cause: the L1 portfolio "blob" cache (portfolio_engine.py) is keyed by
+        Root cause: the L1 portfolio "blob" cache (financial_math/portfolio/engine.py) is keyed by
         tx/price fingerprints, NOT by date range. Its old "contained" condition
         (blob_to >= actual_to) returned a wider cached blob unmodified whenever a
         narrower date_to was requested with an identical fingerprint — which happens

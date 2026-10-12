@@ -36,6 +36,7 @@ Queste righe spostano valore senza liquidità: sono capitale, non profitto o per
 | ADJUSTMENT con `cost_basis_override`, non collegato a split | ✅ Sì, capitale in natura al costo |
 | ADJUSTMENT collegato a SPLIT | ❌ No, solo ridimensionamento della quantità |
 | BUY, SELL, DIVIDEND, INTEREST, FEE, TAX | ❌ No |
+| Movimento del tasso di cambio sulla liquidità detenuta in un'altra valuta (nessuna transazione) | ❌ No: un risultato, parte del TotalPnL; i flussi di capitale (depositi, prelievi, gambe di liquidità orfane) sono entrati nella base al tasso delle proprie date |
 
 ---
 
@@ -93,7 +94,7 @@ Con quote uguali, $X$ è esattamente ciò che l'arrivo aggiunge a $\mathrm{NAV}_
 
 Quando le gambe cadono in giorni diversi, il valore viaggia dal giorno di partenza $t_{dep}$ al giorno prima di $t_{arr}$. Nel frattempo fa parte di $\mathrm{InTransit}_A$, alla quota $s_A$ del mittente, valutato ogni giorno: liquidità al tasso di cambio di quel giorno, titoli al prezzo di valutazione di quel giorno (al costo registrato sul trasferimento se il titolo non ha alcun prezzo). Nessun flusso avviene mentre il valore viaggia, quindi i suoi movimenti di prezzo e tasso di cambio restano nella linea di $A$, incluso il movimento del giorno di arrivo; la linea di $B$ parte dal valore ricevuto.
 
-Ad esempio, $A$ riceve un deposito di 1.000 USD il giorno 0 a 0,90 EUR per USD ($C_A = 900$) e invia i dollari il giorno 1; $B$ li riceve il giorno 4. Con il tasso a 0,90, 0,91, 0,92, 0,93 nei giorni 1–4, la linea di $A$ legge 0, +10, +20, +30 e quella di $B$ resta a 0. Il giorno 4, $X = 930$ e $C_A = 900 - 930 = -30$.
+Ad esempio, $A$ riceve un deposito di 1.000 USD il giorno 0 a 0,90 EUR per USD ($C_A = 900$) e invia i dollari il giorno 1; $B$ li riceve il giorno 4. Con il tasso a 0,90, 0,91, 0,92, 0,93 nei giorni 1–4, la linea di $A$ legge 0, +10, +20, +30 e quella di $B$ resta a 0. Il giorno 4, $X = 930$ e $C_A = 900 - 930 = -30$. Una volta arrivati, i dollari sono liquidità di $B$, rivalutata ogni giorno, quindi dal giorno 5 la linea di $B$ si muove con il tasso: a 0,94, legge +10.
 
 ### 🧩 Casi speciali
 
@@ -185,6 +186,7 @@ $$
     - $\mathrm{CapitalBaseline}$ = somma storica dei flussi di liquidità e capitale in natura. $\sum K_b$ = quanta liquidità corrente è capitale esterno. Divergono dopo BUY/SELL.
     - Un BUY sul broker $b_1$ consuma solo $R_{b_1}$, mai $R_{b_2}$.
     - I giroconti tra broker spostano $R$ e $K$ dall'origine alla destinazione senza toccare $W$.
+    - Un risultato di cambio sulla liquidità che un broker detiene in un'altra valuta va in $R_b$; una perdita maggiore di $R_b$ esce da $K_b$, come fa una FEE. $\mathrm{CapitalBaseline}$ non si muove ([Portfolio Engine — §6](index.md#exchange-result-on-foreign-cash)).
 
 🔗 Regole complete di aggiornamento per broker: **[Portfolio Engine — §6 Modello a tre pool](index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)**
 
@@ -223,6 +225,19 @@ Dopo il passo 5: Liquidità=30, K=0, R=30 ✓ (rendimenti ripristinati da W)
 
 Il capitale ritorna correttamente a $K$; solo €5 di guadagno a $R$. **Non** tutti i €1.005 a $R$.
 
+### 💱 D — Dollari detenuti mentre il tasso si muove
+
+Un solo broker, valuta di riferimento EUR, tassi in EUR per USD; $\varepsilon$ è il [risultato di cambio sulla liquidità](index.md#exchange-result-on-foreign-cash).
+
+| Passo | Evento | $\varepsilon$ | $K$ | $R$ | Liquidità | TotalPnL |
+|------|-------|---------------|-----|-----|------|----------|
+| 1 | DEPOSIT 1.000 USD a 0,90 | — | 900 | 0 | 900 | 0 |
+| 2 | Il tasso sale a 0,95 | +50 | 900 | 50 | 950 | +50 |
+| 3 | Il tasso scende a 0,85 ($R$ = 50 − 100, $K$ assorbe −50) | −100 | 850 | 0 | 850 | −50 |
+| 4 | BUY per 1.000 USD a 0,85 (€850) | — | 0 | 0 | 0 | MV − 900 |
+
+La CapitalBaseline resta a €900 per tutto l'esempio: i risultati di cambio sono profitti e perdite, non capitale. Dopo il passo 4, TotalPnL è il valore di mercato MV del titolo meno i €900 depositati — −50 il giorno dell'acquisto se MV è uguale al prezzo pagato di €850.
+
 ---
 
 ## ⚙️ Implementazione
@@ -231,6 +246,8 @@ Il modello a 3 pool viene eseguito in un **singolo ciclo per transazione** (even
 
 1. Prendi la quota della transazione dal pool del costo medio della sua posizione, calcolata prima del replay — per un SELL, il costo che rimuove ($C$ = PMC pre-vendita × quantità venduta, a tassi storici)
 2. Aggiorna K/R/W secondo le regole del tipo di transazione, con quel $C$ per un SELL
+
+In ogni giorno in cui cambia il tasso di cambio di una valuta estera detenuta come liquidità, anche il risultato di cambio di ciascun broker su quella liquidità viene registrato nei suoi pool, dopo i movimenti di cassa del giorno e prima delle transazioni del giorno ([§6](index.md#exchange-result-on-foreign-cash)).
 
 La serie di input per ROI/TWRR/MWRR deriva dalle variazioni giorno per giorno di `cumulative_external_cash_flow`, la base del capitale. Non deriva dal campo `external_cash_flow`, che considera solo la liquidità.
 

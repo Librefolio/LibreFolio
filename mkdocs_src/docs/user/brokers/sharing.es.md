@@ -70,7 +70,7 @@ La participación decide qué cuenta en tus cifras:
 No necesitas permiso de un Propietario para abandonar. En **Tu acceso** del panel de compartir, tras una confirmación:
 
 - **Abandonar el bróker** elimina tu acceso de inmediato, y el bróker desaparece de tus listas;
-- **Cambiar a visor** (solo Editores) renuncia a la edición; un Propietario puede volver a hacerte Editor.
+- **Cambiar a lector** (solo Editores) renuncia a la edición; un Propietario puede volver a hacerte Editor.
 
 !!! danger "Último Propietario: abandonar elimina el bróker"
 

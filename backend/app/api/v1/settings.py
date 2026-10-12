@@ -52,7 +52,7 @@ from backend.app.services.settings_service import (
     update_global_settings,
     update_user_settings,
 )
-from backend.app.utils.cache_utils import clear_all_caches, clear_cache, list_caches
+from backend.app.utils.runtime.cache import clear_all_caches, clear_cache, list_caches
 
 logger = structlog.get_logger(__name__)
 

@@ -28,15 +28,52 @@ $$
 | Realized | Suma de (importe de venta − coste histórico de las unidades vendidas) para SELLs del período; el importe se convierte en la fecha de venta |
 | Income | DIVIDEND + INTEREST en el período |
 | FeesTaxes | FEE + TAX en el período |
-| Other | Residuo que cierra la identidad |
+| Other | Lo que cierra la identidad: el resultado de cambio sobre el efectivo mantenido en otra divisa (Efecto del tipo de cambio sobre el efectivo) más un residuo |
 
-El residuo se calcula como:
+Other se calcula como:
 
 $$
 \mathrm{Other} = \mathrm{PnL}_{\text{período}} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Como el coste base conserva sus tipos de cambio históricos (véase [Valor contable](book-value.md)), el efecto de los tipos de cambio sobre los activos extranjeros forma parte de $\Delta\mathrm{UGL}$, no de Other. Lo que Other aún contiene es lo que los cuatro componentes no pueden ver, por ejemplo el valor de activos que viajan entre dos brókeres en un día límite, o una venta excluida de Realized porque su importe no pudo convertirse o el coste de su posición está incompleto.
+Como el coste base conserva sus tipos de cambio históricos (véase [Valor contable](book-value.md)), el efecto de los tipos de cambio sobre los activos extranjeros forma parte de $\Delta\mathrm{UGL}$, no de Other. El efectivo mantenido en otra divisa es distinto: el NAV y el Valor contable lo valoran ambos al tipo de cambio de cada día, por lo que su efecto cambiario se anula en el P&L no realizado y no está en $\Delta\mathrm{UGL}$. Es la primera parte de Other, el [Efecto del tipo de cambio sobre el efectivo](#fx-on-cash) de cada bróker $b$, que la vista Rendimiento muestra por bróker:
+
+$$
+\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
+$$
+
+El residuo contiene lo que ni los cuatro componentes ni el resultado de cambio sobre el efectivo pueden ver:
+
+- el movimiento del tipo de cambio del efectivo mientras viaja entre dos brókeres: en tránsito, no pertenece al saldo de ningún bróker;
+- el coste de un cambio de divisas, en un bróker o entre dos: −1.000 USD que valen €920 al tipo del día, cambiados por +€900, dan −€20, que no son ni una comisión ni una venta;
+- el valor de activos que viajan entre dos brókeres en un día límite;
+- una venta excluida de Realized porque su importe no pudo convertirse o el coste de su posición está incompleto.
+
+### 💵 Efecto del tipo de cambio sobre el efectivo {: #fx-on-cash }
+
+Para cada bróker $b$ que mantiene efectivo en una divisa distinta de $C^*$, durante el período $(t_0, t_1]$, siendo $t_0$ el estado de apertura:
+
+$$
+\mathrm{FXonCash}_b = \sum_{c \neq C^*} \Bigl[N_{b,c}(t_1)\,\mathrm{fx}(c, C^*, t_1) - N_{b,c}(t_0)\,\mathrm{fx}(c, C^*, t_0)\Bigr] - \sum_{\substack{m \in (t_0, t_1] \\ \mathrm{ccy}(m) \neq C^*}} s_m \cdot \mathrm{amount}_m \cdot \mathrm{fx}(\mathrm{ccy}(m), C^*, d_m)
+$$
+
+$N_{b,c}(t)$ es el saldo que $b$ mantiene en la divisa $c$ en la fecha $t$, en proporción a la cuota del bróker, y $\mathrm{fx}$ el último tipo de cambio en ese día o anterior. La segunda suma recorre los movimientos de $b$ en una divisa extranjera fechados en el período: cada importe, en proporción a la cuota $s_m$, al tipo de cambio de su propia fecha $d_m$. El primer término es el cambio de valor del efectivo en divisas, el segundo lo que los movimientos aportaron o retiraron: la diferencia es lo que los tipos de cambio hicieron con el efectivo que mantenía el bróker. Es igual a los resultados de cambio que el motor registra en los días del período en que cambia el tipo ([Motor de cartera — §6](index.md#exchange-result-on-foreign-cash)). El efectivo en $C^*$ no tiene ninguno.
+
+??? example "Ejemplo: dólares en un bróker con un panel en euros"
+
+    Un bróker mantiene 1.000 USD durante todo el período mientras el tipo pasa de 0,90 a 0,92 EUR por USD:
+
+    $$
+    \mathrm{FXonCash} = 1\,000 \times 0.92 - 1\,000 \times 0.90 = +20 \text{ EUR}
+    $$
+
+    Con un depósito de 500 USD a mitad del período a 0,91, y 0,92 al final:
+
+    $$
+    \mathrm{FXonCash} = 1\,500 \times 0.92 - 1\,000 \times 0.90 - 500 \times 0.91 = 1\,380 - 900 - 455 = +25 \text{ EUR}
+    $$
+
+    El depósito entró en el capital por €455; los +€25 son lo que los dólares ganaron frente al euro mientras el bróker los mantenía.
 
 ---
 

@@ -89,7 +89,7 @@ Il menu **Confronto dati** aggiunge:
 
 **Sincronizza** (🔄) su una scheda di Confronto asset scarica i prezzi di quell'asset per le date del grafico, insieme ai tassi di cambio che lo convertono, per le coppie esistenti. Quando la coppia manca, un ⚠️ ambra sulla scheda la crea; quando mancano i suoi tassi, un 🔄 ambra li sincronizza.
 
-Nella modalità [Rolling Return](chart.md#rolling-return) rimane solo Confronto asset: ogni asset confrontato diventa un rendimento rolling, con la stessa finestra mobile e la stessa valuta. Gli altri segnali vengono nascosti, non eliminati, e ricompaiono nella modalità **Prezzi**.
+Nella modalità [Rolling Return](chart.md#rolling-return) rimane solo Confronto asset: ogni asset confrontato diventa un rendimento mobile, con la stessa finestra mobile e la stessa valuta. Gli altri segnali vengono nascosti, non eliminati, e ricompaiono nella modalità **Prezzi**.
 
 ---
 

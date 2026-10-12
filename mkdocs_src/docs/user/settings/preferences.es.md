@@ -9,7 +9,7 @@ La pestaña **Preferencias** controla **cómo se ve y se comporta la aplicación
 | Ajuste | Categoría | Descripción |
 |---------|----------|-------------|
 | **Idioma** | 🌍 Visualización | Idioma de la interfaz — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Se aplica en cuanto lo guardas |
-| **Moneda predeterminada** | 💰 Divisa | Tu propia divisa base. El Panel, la página de Brókeres y la página de cada bróker, y la pestaña **Correlación** de la página de Activos se abren en ella, y la Exportación IA de un par de divisas también la usa; una divisa que elijas en el Panel se mantiene durante la sesión. También se propone cuando creas algo nuevo — un activo, el primer saldo de efectivo de un bróker nuevo, un plan PAC. Este menú enumera todas las divisas |
+| **Divisa predeterminada** | 💰 Divisa | Tu propia divisa base. El Panel, la página de Brókeres y la página de cada bróker, y la pestaña **Correlación** de la página de Activos se abren en ella, y la Exportación IA de un par de divisas también la usa; una divisa que elijas en el Panel se mantiene durante la sesión. También se propone cuando creas algo nuevo — un activo, el primer saldo de efectivo de un bróker nuevo, un plan PAC. Este menú enumera todas las divisas |
 | **Tema** | 🎨 Apariencia | ☀️ Claro / 🌙 Oscuro / 🖥️ Auto (sigue tu sistema operativo) |
 
 <style>
@@ -26,7 +26,7 @@ Elige una categoría en la barra lateral — en un teléfono, en el menú **Cate
 
 !!! tip "Menús de divisas en el Panel y en las páginas de activos"
 
-    Los menús de divisas del **Panel** y de una página de activo son más cortos que **Moneda predeterminada**: ofrecen solo las divisas de tus pares FX, y **Crear forex…** al final de la lista añade un par que falte. Consulta **[Panel](../dashboard/index.md)**.
+    Los menús de divisas del **Panel** y de una página de activo son más cortos que **Divisa predeterminada**: ofrecen solo las divisas de tus pares FX, y **Crear forex…** al final de la lista añade un par que falte. Consulta **[Panel](../dashboard/index.md)**.
 
 ## 💾 Guardar, deshacer, restablecer
 

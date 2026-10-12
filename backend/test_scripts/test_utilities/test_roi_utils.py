@@ -7,8 +7,8 @@ from decimal import Decimal
 
 import pytest
 
-import backend.app.utils.financial.roi_utils as roi_utils
-from backend.app.utils.financial.roi_utils import NAVSnapshot, annualized_to_cumulative, calculate_mwrr, calculate_mwrr_series
+import backend.app.services.financial_math.returns as roi_utils
+from backend.app.services.financial_math.returns import NAVSnapshot, annualized_to_cumulative, calculate_mwrr, calculate_mwrr_series
 
 
 def test_annualized_to_cumulative_negative_days_returns_zero():

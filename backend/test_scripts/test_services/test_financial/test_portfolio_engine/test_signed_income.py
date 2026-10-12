@@ -1,11 +1,10 @@
 """Regression tests for G1c — signed personal income history (engine layer).
 
 Covers the DailyStateBuilder DIVIDEND/INTEREST touch points (plan §4.4): both the
-pre-frame loop (accounting-only, line ~725) and the frame loop (full evaluation +
-period accumulators, line ~1021) now preserve the sign of the *original*
-``tx.amount`` instead of unconditionally converting through ``abs(tx.amount)``.
-A legacy negative DIVIDEND/INTEREST correction must reduce the returns pool
-``R[bid]`` (and, in the frame loop, ``per_income``/``unalloc_income``), never be
+pre-frame loop (accounting-only, line ~725) and the frame loop (full evaluation,
+line ~1021) now preserve the sign of the *original* ``tx.amount`` instead of
+unconditionally converting through ``abs(tx.amount)``. A legacy negative
+DIVIDEND/INTEREST correction must reduce the returns pool ``R[bid]``, never be
 added to it as if it were positive income.
 
 Two outputs matter here, and they are NOT interchangeable:
@@ -45,12 +44,11 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
-from backend.app.services.portfolio_engine import (
-    ClassifiedTransaction,
-    DailyStateBuilder,
-)
-from backend.app.services.price_resolver import build_asset_price_series
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
+from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
+from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 
 # =============================================================================
 # HELPERS — mirror the established conventions in this test directory
@@ -147,6 +145,13 @@ def _builder(txs, ecfs, *, date_from=date(2025, 1, 1), date_to=date(2025, 1, 1),
             split_linked_tx_ids=defaults.get("split_linked_tx_ids"),
             date_to=defaults["date_to"],
         )
+    if "native_cash" not in defaults:
+        defaults["native_cash"] = engine_native_cash(
+            defaults["classified_txs"],
+            target_currency=defaults["target_currency"],
+            fx_rate_map=defaults["fx_rate_map"],
+            date_to=defaults["date_to"],
+        )
     return DailyStateBuilder(**defaults)
 
 
@@ -207,10 +212,7 @@ class TestGoldenDepositThenNegativeInterest:
         assert day2.cumulative_external_cash_flow == Decimal("1000"), "capital_baseline must stay 1000 — INTEREST is not an external cash flow"
         assert day2.total_pnl == Decimal("-50"), f"total_pnl must be 950-1000=-50, got {day2.total_pnl}"
         _assert_decomposition_invariants(day2)
-
-        # Broker-level (asset_id=None): lands in unalloc_income, signed, never per_income.
-        assert result.unalloc_income == {10: Decimal("-50")}
-        assert result.per_income == {}
+        # The signed, unallocated INTEREST flow is asked of the native cash: test_native_cash.py::TestFlowsPortedFromTheEngine.
 
 
 # =============================================================================
@@ -246,15 +248,7 @@ class TestPurePositiveIncomeRegression:
         assert state.cumulative_external_cash_flow == Decimal("1000")
         assert state.total_pnl == Decimal("100")
         _assert_decomposition_invariants(state)
-
-        # Asset-linked DIVIDEND -> per_income keyed (asset_id, broker_id); note this
-        # is the ENGINE's own per_income (PortfolioCalculationResult field), keyed in
-        # the OPPOSITE tuple order from portfolio_service.py's local per_income /
-        # income_by_pos dicts (broker_id, asset_id) — the two are independent
-        # accumulators, never compared against each other, so the order mismatch is
-        # not a bug; it is called out here so nobody "fixes" one to match the other.
-        assert result.per_income == {(100, 10): Decimal("80")}
-        assert result.unalloc_income == {10: Decimal("20")}
+        # Income by position and unallocated income are asked of the native cash: test_native_cash.py::TestFlowsPortedFromTheEngine.
 
 
 # =============================================================================
@@ -368,17 +362,15 @@ class TestSameDayCorrectionBucketOrdering:
 
 
 # =============================================================================
-# PRE-FRAME LOOP — the sign fix applies there too (line ~725), and per_income /
-# unalloc_income are frame-only (pre-frame never populates them)
+# PRE-FRAME LOOP — the sign fix applies there too (line ~725)
 # =============================================================================
 
 
 class TestPreFrameSignedCorrection:
     """A DIVIDEND/INTEREST correction dated before frame_start is handled by the
     pre-frame (accounting-only) loop, not the frame loop — a structurally
-    different code path (line ~725, no per_income/unalloc_income side effect,
-    no per-day clamp of its own). This must still carry the *signed* value
-    forward into the first emitted frame day.
+    different code path (line ~725, no per-day clamp of its own). This must
+    still carry the *signed* value forward into the first emitted frame day.
     """
 
     def test_negative_correction_before_frame_start_carries_into_frame(self):
@@ -397,10 +389,7 @@ class TestPreFrameSignedCorrection:
         assert first_frame_day.cumulative_external_cash_flow == Decimal("1000")
         assert first_frame_day.total_pnl == Decimal("-30")
         _assert_decomposition_invariants(first_frame_day)
-
-        # Pre-frame processing never touches the frame-only period accumulators.
-        assert result.per_income == {}
-        assert result.unalloc_income == {}
+        # A correction before the frame is no flow of it, for the native cash either: test_native_cash.py::TestFlowsPortedFromTheEngine.
 
     def test_mirror_positive_correction_before_frame_start(self):
         """Same construction, genuinely positive +30 — proves the sign, not just

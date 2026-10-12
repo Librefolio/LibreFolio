@@ -56,6 +56,7 @@ reports partial portfolio results while a filtered asset is stale.
 - **K-24** (assigned): `developer/frontend/data-quality-banner.md` still says "All 5 codes can appear together"
   (`:234`); the user Dashboard page says manual assets are "valued at purchase cost", while the engine uses the last
   trade price.
+  *Closed on 2026-10-09 (workstream Q, S23, train 27): both sentences are corrected (lint 2026-10-12).*
 - The FX twin of this rule — rates carried forward without a bound — is not a Dashboard issue:
   [[problems/fx-backward-fill-unbounded-stale-rates]] (option C there).
 
@@ -64,12 +65,12 @@ reports partial portfolio results while a filtered asset is stale.
 | Role | Path |
 |------|------|
 | The D8 rule, `stale_prices_dto` | `backend/app/services/portfolio_service.py` |
-| `valuation_stale`, `STALE_PRICE` issue and CTA | `backend/app/services/portfolio_engine.py` |
+| `valuation_stale`, `STALE_PRICE` issue and CTA | `backend/app/services/financial_math/portfolio/daily_state.py`, `backend/app/services/financial_math/portfolio/data_quality.py` |
 | Threshold (7 days) | `backend/app/services/data_quality_thresholds.py` |
 | `StalePriceAsset`, `DataQualityStatus` derivation | `backend/app/schemas/portfolio.py` |
 | Risk: stale assets → partial results | `backend/app/services/risk/service.py` |
 | Current price write-back | `backend/app/services/asset_sources/price_query.py` |
-| Mock provider refusal | `backend/app/services/asset_source_providers/mockprov.py` |
+| Mock provider refusal | `backend/app/services/asset_source_providers/mockprov/plugin.py` |
 | Dashboard CTA branch | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | Banner (icon per CTA) | `frontend/src/lib/components/ui/feedback/DataQualityBanner.svelte` |
 | Lab action mapping | `frontend/src/lib/components/risk/syncTargets.ts` |

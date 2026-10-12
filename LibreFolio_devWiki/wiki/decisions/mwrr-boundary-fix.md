@@ -51,7 +51,8 @@ This is the standard XIRR/MWRR formula: initial investment (negative) + intermed
 ## Consequences
 
 - MWRR now shows a reasonable positive return (~+26% in the example vs −36.71% with bug)
-- The fix only touches `roi_utils.py::calculate_mwrr()` — no schema or API changes
+- The fix only touches `roi_utils.py::calculate_mwrr()` — no schema or API changes (the function lives in
+  `financial_math/returns.py` since 2026-10-12)
 - TWRR was not affected (different algorithm, no synthetic total)
 
 ## Links
@@ -64,6 +65,6 @@ This is the standard XIRR/MWRR formula: initial investment (negative) + intermed
 
 | Role | Path |
 |------|------|
-| ROI utilities | `backend/app/utils/financial/roi_utils.py` |
+| ROI utilities | `backend/app/services/financial_math/returns.py` |
 | Portfolio service | `backend/app/services/portfolio_service.py` |
 | MWRR analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md` |

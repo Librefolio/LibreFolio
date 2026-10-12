@@ -42,12 +42,8 @@ from sqlalchemy.types import Numeric
 from sqlmodel import select
 
 from backend.app.db import models
+from backend.app.db.precision import get_model_column_precision, truncate_fx_rate, truncate_to_db_precision
 from backend.app.db.session import get_async_engine
-from backend.app.utils.decimal_utils import (
-    get_model_column_precision,
-    truncate_fx_rate,
-    truncate_to_db_precision,
-)
 
 
 def discover_numeric_columns():

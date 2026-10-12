@@ -423,7 +423,7 @@ La boîte de dialogue de partage avec le message suggéré de la plateforme, les
 
 ### 📂 Ressources statiques
 
-Gérez vos fichiers téléchargés sur mobile.
+Gérez vos fichiers téléversés sur mobile.
 
 <div class="screenshot-container mobile">
     <img class="gallery-img" data-category="files" data-name="static-tab" alt="Onglet Fichiers statiques">

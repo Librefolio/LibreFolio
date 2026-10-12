@@ -87,44 +87,44 @@ from backend.app.services.risk.quant.optimization_engine import (
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
-from backend.app.services.risk_plugins import simulation as simulation_plugin_module
-from backend.app.services.risk_plugins.asset_risk_return import (
+from backend.app.services.risk_plugins.asset_risk_return.plugin import (
     AssetRiskReturnAnalytic,
     AssetRiskReturnParams,
 )
-from backend.app.services.risk_plugins.comparison import (
+from backend.app.services.risk_plugins.comparison.plugin import (
     ComparisonAnalytic,
     ComparisonParams,
 )
-from backend.app.services.risk_plugins.correlation import (
+from backend.app.services.risk_plugins.correlation.plugin import (
     CorrelationAnalytic,
     CorrelationParams,
 )
-from backend.app.services.risk_plugins.drawdown_summary import (
+from backend.app.services.risk_plugins.drawdown_summary.plugin import (
     DrawdownSummaryAnalytic,
     DrawdownSummaryParams,
 )
-from backend.app.services.risk_plugins.historical_kpi import (
+from backend.app.services.risk_plugins.historical_kpi.plugin import (
     HistoricalKpiAnalytic,
     HistoricalKpiParams,
 )
-from backend.app.services.risk_plugins.historical_var import (
+from backend.app.services.risk_plugins.historical_var.plugin import (
     HistoricalVarAnalytic,
     HistoricalVarParams,
 )
-from backend.app.services.risk_plugins.portfolio_optimization import (
+from backend.app.services.risk_plugins.portfolio_optimization.plugin import (
     PortfolioOptimizationAnalytic,
     PortfolioOptimizationParams,
 )
-from backend.app.services.risk_plugins.risk_contribution import (
+from backend.app.services.risk_plugins.risk_contribution.plugin import (
     RiskContributionAnalytic,
     RiskContributionParams,
 )
-from backend.app.services.risk_plugins.simulation import (
+from backend.app.services.risk_plugins.simulation import plugin as simulation_plugin_module
+from backend.app.services.risk_plugins.simulation.plugin import (
     SimulationAnalytic,
     SimulationParams,
 )
-from backend.app.services.risk_plugins.stress import StressAnalytic, StressParams
+from backend.app.services.risk_plugins.stress.plugin import StressAnalytic, StressParams
 
 
 def make_prepared_set(

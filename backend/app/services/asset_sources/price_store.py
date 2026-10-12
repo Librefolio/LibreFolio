@@ -21,6 +21,7 @@ from backend.app.db.models import (
     Transaction,
     User,
 )
+from backend.app.db.precision import truncate_priceHistory
 from backend.app.schemas import (
     FAAssetDelete,
     FABulkDeleteResponse,
@@ -38,7 +39,6 @@ from backend.app.services.asset_sources.core import (
 )
 from backend.app.services.fx import convert_bulk
 from backend.app.utils.datetime_utils import utcnow
-from backend.app.utils.decimal_utils import truncate_priceHistory
 
 logger = structlog.get_logger(__name__)
 

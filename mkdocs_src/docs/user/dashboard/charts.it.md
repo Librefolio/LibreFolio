@@ -30,12 +30,12 @@ Il grafico ricorda la tua ultima vista, inclusa la sotto-vista P&L, in questo br
 | Elemento | Colore | Significato |
 |---------|-------|---------|
 | Area — **Valore di acquisto** | Blu | Quanto ti sono costate le posizioni che detieni (costo medio × quantità) |
-| Area — **Rendimento** | Smeraldo | Rendimenti detenuti come liquidità (dividendi, interessi, plusvalenze realizzate non ancora reinvestite) |
+| Area — **Rendimento** | Smeraldo | Rendimenti detenuti come liquidità (dividendi, interessi, plusvalenze realizzate non ancora reinvestite, guadagni di cambio sulla liquidità che detieni in un'altra valuta) |
 | Area — **Capitale** | Grigio-verde | Depositi non ancora investiti, detenuti come liquidità |
 | Linea — **[Valore netto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Verde scuro pieno | Valore totale del portafoglio ai prezzi di mercato correnti |
 | Linea — **[Capitale versato](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Grigio tratteggiato | Capitale esterno netto conferito nel tempo |
 
-**Il divario tra le due linee è il tuo P&L Totale**: ogni guadagno mai ottenuto (non realizzato, realizzato, interessi e dividendi) meno commissioni e imposte. Il tooltip mostra entrambe le linee, il P&L Totale in verde o rosso e la ripartizione: **Costo degli asset** (l'area blu, inclusi gli asset che si spostano tra i tuoi broker), **Rendimento** e **Capitale**.
+**Il divario tra le due linee è il tuo P&L Totale**: ogni guadagno mai ottenuto (non realizzato, realizzato, interessi, dividendi e guadagni o perdite di cambio sulla liquidità detenuta in un'altra valuta) meno commissioni e imposte. Il tooltip mostra entrambe le linee, il P&L Totale in verde o rosso e la ripartizione: **Costo degli asset** (l'area blu, inclusi gli asset che si spostano tra i tuoi broker), **Rendimento** e **Capitale**.
 
 **Gli asset valutati al loro prezzo di acquisto**, come i prestiti P2P senza un prezzo live, mantengono il NAV vicino al Valore di acquisto, quindi il divario può essere sottile: leggi il **P&L Totale** nel tooltip.
 
@@ -92,8 +92,8 @@ Con un solo broker, o sulla pagina di un broker, viene disegnato solo il totale.
 Ogni periodo della [larghezza che scegli](#pnl-width) diventa una **candela** fatta di valori di P&L, non di prezzi. La sua **chiusura** è esattamente il Total P&L che la vista **Linea** mostra per quel giorno.
 
 <div class="lf-screenshot-carousel" style="margin: 1.5rem 0 2.5rem 0;">
-  <div class="lf-screenshot-carousel-item is-active chart-crop-container" alt="Il grafico della crescita del portafoglio in modalità P&L, vista Candele a 3D: le candele sintetiche di P&L, i pulsanti di larghezza da 3D a 6M nell'angolo in alto a destra del grafico, le etichette dei periodi sull'asse e la dicitura Synthetic sotto il grafico">
-     <img class="gallery-img" data-category="dashboard" data-name="growth-pnl-candles" alt="Il grafico della crescita del portafoglio in modalità P&L, vista Candele a 3D: le candele sintetiche di P&L, i pulsanti di larghezza da 3D a 6M nell'angolo in alto a destra del grafico, le etichette dei periodi sull'asse e la dicitura Synthetic sotto il grafico">
+  <div class="lf-screenshot-carousel-item is-active chart-crop-container" alt="Il grafico della crescita del portafoglio in modalità P&L, vista Candele a 3G: le candele sintetiche di P&L, i pulsanti di larghezza da 3G a 6M nell'angolo in alto a destra del grafico, le etichette dei periodi sull'asse e la dicitura Synthetic sotto il grafico">
+     <img class="gallery-img" data-category="dashboard" data-name="growth-pnl-candles" alt="Il grafico della crescita del portafoglio in modalità P&L, vista Candele a 3G: le candele sintetiche di P&L, i pulsanti di larghezza da 3G a 6M nell'angolo in alto a destra del grafico, le etichette dei periodi sull'asse e la dicitura Synthetic sotto il grafico">
   </div>
 </div>
 
@@ -137,13 +137,13 @@ Come leggerlo:
 
     Le barre sono un **flusso**: ciò che hai speso per gli acquisti in ciascun periodo. La riga **Valore di acquisto** della [scheda Patrimonio netto](kpi-cards.md#card-3-net-worth) è un **livello**: quanto ti sono costate le posizioni che detieni ancora alla data finale. Le vendite e gli acquisti precedenti contano nel KPI ma non hanno una barra.
 
-#### Larghezza delle candele — da 1D a 1Y {: #pnl-width }
+#### Larghezza delle candele — da 1G a 1A {: #pnl-width }
 
-In **Candele** e **Proventi**, i pulsanti nell'angolo in alto a destra del grafico, da **1D** a **1Y**, impostano quanto tempo copre una candela, o un gruppo di barre. Il grafico mostra comunque l'intero intervallo, e lo zoom non cambia mai la larghezza.
+In **Candele** e **Proventi**, i pulsanti nell'angolo in alto a destra del grafico, da **1G** a **1A**, impostano quanto tempo copre una candela, o un gruppo di barre. Il grafico mostra comunque l'intero intervallo, e lo zoom non cambia mai la larghezza.
 
-- **Periodi di calendario.** **1W** va da lunedì a domenica, **1M** è un mese di calendario, **3M** un trimestre, **6M** un semestre, **1Y** un anno; **3D** e **2W** sono blocchi fissi di giorni.
+- **Periodi di calendario.** **1S** va da lunedì a domenica, **1M** è un mese di calendario, **3M** un trimestre, **6M** un semestre, **1A** un anno; **3G** e **2S** sono blocchi fissi di giorni.
 - **Etichette dell'asse.** Ogni etichetta indica l'inizio del suo periodo, anche se l'intervallo lo copre solo in parte; mesi e anni compaiono solo dove cambiano, e le etichette affollate si inclinano o si diradano.
-- **Vengono offerte solo le larghezze** che si adattano al grafico e all'intervallo; **Proventi** parte da **1W**.
+- **Vengono offerte solo le larghezze** che si adattano al grafico e all'intervallo; **Proventi** parte da **1S**.
 - **Da dove inizia.** **Candele** prende la larghezza più fine disponibile; **Proventi** si apre su **1M**, o sulla larghezza più vicina disponibile, ogni volta che vi entri. Ricaricare la pagina reimposta la larghezza.
 - **I periodi parziali sono attenuati.** Un periodo in cui l'intervallo inizia a metà, o un ultimo periodo tagliato corto da un intervallo che termina nel passato, viene disegnato attenuato, e il suo tooltip dice *Partial: N of M days*. Altrimenti, il periodo in corso viene disegnato per intero, con *In progress: N of M days*.
 

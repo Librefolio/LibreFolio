@@ -18,7 +18,7 @@ from ._common import (
 def utils_decimal_precision(verbose: bool = False, test_names: list = None) -> bool:
     """Test decimal precision utilities."""
     print_section("Utils: Decimal Precision")
-    print_info("Testing: backend/app/utils/decimal_utils.py")
+    print_info("Testing: backend/app/db/precision.py, backend/app/utils/decimal_utils.py")
     print_info("Tests: Model precision extraction, Truncation, Edge cases")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_decimal_utils.py", test_names)
     return run_command(cmd, "Decimal precision tests", verbose=verbose)
@@ -36,7 +36,7 @@ def utils_datetime(verbose: bool = False, test_names: list = None) -> bool:
 def utils_day_count(verbose: bool = False, test_names: list = None) -> bool:
     """Test day count conventions."""
     print_section("Utils: Day Count Conventions")
-    print_info("Testing: backend/app/services/asset_source_providers/scheduled_investment.py (day count functions)")
+    print_info("Testing: backend/app/services/asset_source_providers/scheduled_investment/plugin.py (day count functions)")
     print_info("Tests: ACT/365, ACT/360, ACT/ACT, 30/360 conventions")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_day_count_conventions.py", test_names)
     return run_command(cmd, "Day count convention tests", verbose=verbose)
@@ -45,7 +45,7 @@ def utils_day_count(verbose: bool = False, test_names: list = None) -> bool:
 def utils_geo_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test geographic area normalization utilities."""
     print_section("Utils: Geographic Area Normalization")
-    print_info("Testing: backend/app/utils/geo_utils.py")
+    print_info("Testing: backend/app/utils/asset/geo.py")
     print_info("Tests: ISO-3166-A3 normalization, weight parsing, validation pipeline")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_geo_utils.py", test_names)
     return run_command(cmd, "Geographic area normalization tests", verbose=verbose)
@@ -54,7 +54,7 @@ def utils_geo_utils(verbose: bool = False, test_names: list = None) -> bool:
 def utils_version(verbose: bool = False, test_names: list = None) -> bool:
     """Test version utilities."""
     print_section("Utils: Version")
-    print_info("Testing: backend/app/utils/version.py")
+    print_info("Testing: backend/app/utils/runtime/version.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_version.py", test_names)
     return run_command(cmd, "Version utility tests", verbose=verbose)
 
@@ -82,7 +82,7 @@ def utils_coverage_js_adapter(verbose: bool = False, test_names: list = None) ->
 def utils_sector_normalization(verbose: bool = False, test_names: list = None) -> bool:
     """Test FinancialSector enum and sector normalization."""
     print_section("Utils: Sector Normalization")
-    print_info("Testing: backend/app/utils/sector_fin_utils.py")
+    print_info("Testing: backend/app/utils/asset/sector.py")
     print_info("Tests: FinancialSector enum, aliases, normalization, validation")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_sector_normalization.py", test_names)
     return run_command(cmd, "Sector normalization tests", verbose=verbose)
@@ -91,7 +91,7 @@ def utils_sector_normalization(verbose: bool = False, test_names: list = None) -
 def utils_currency_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test currency listing, flag mapping, and validation."""
     print_section("Utils: Currency Utils")
-    print_info("Testing: backend/app/utils/currency_utils.py")
+    print_info("Testing: backend/app/utils/fx/currency.py")
     print_info("Tests: list_currencies (pycountry), flag_emoji mapping, validation consistency")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_currency_utils.py", test_names)
     return run_command(cmd, "Currency utils tests", verbose=verbose)
@@ -100,7 +100,7 @@ def utils_currency_utils(verbose: bool = False, test_names: list = None) -> bool
 def utils_cache_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test NamedCache wrapper, TTL expiration, and global cache registry."""
     print_section("Utils: Cache Utils")
-    print_info("Testing: backend/app/utils/cache_utils.py")
+    print_info("Testing: backend/app/utils/runtime/cache.py")
     print_info("Tests: NamedCache set/get/delete/clear, TTL, registry, stats")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_cache_utils.py", test_names)
     return run_command(cmd, "Cache utils tests", verbose=verbose)
@@ -118,7 +118,7 @@ def utils_provider_core_cache(verbose: bool = False, test_names: list = None) ->
 def utils_roi_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test pure ROI helper functions (annualized_to_cumulative, calculate_mwrr*)."""
     print_section("Utils: ROI Helpers")
-    print_info("Testing: backend/app/utils/financial/roi_utils.py")
+    print_info("Testing: backend/app/services/financial_math/returns.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_roi_utils.py", test_names)
     return run_command(cmd, "ROI helper tests", verbose=verbose)
 
@@ -126,7 +126,7 @@ def utils_roi_utils(verbose: bool = False, test_names: list = None) -> bool:
 def utils_translation_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test translation/locale helper (get_babel_locale + English fallback)."""
     print_section("Utils: Translation Helpers")
-    print_info("Testing: backend/app/utils/translation_utils.py")
+    print_info("Testing: backend/app/utils/asset/translation.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_utils.py", test_names)
     return run_command(cmd, "Translation helper tests", verbose=verbose)
 
@@ -203,6 +203,15 @@ def utils_gate_i18n_usage(verbose: bool = False, test_names: list = None) -> boo
     print_info("Tests: typed-union expansion, producer vocabulary, ternary arguments, bare-root suppression")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_i18n_usage_gate.py", test_names)
     return run_command(cmd, "i18n three-verdict classifier tests", verbose=verbose)
+
+
+def utils_gate_plugin_layout(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plugin layout gate: every first-party plugin is a folder, reached through its plugin module."""
+    print_section("Utils: Plugin Layout Gate")
+    print_info("Testing: backend/app/services/{brim_providers,asset_source_providers,fx_providers,risk_plugins,signal_plugins,tool_plugins}/, imports and strings of backend/app, backend/test_scripts, scripts, dev.py")
+    print_info("Tests: <name>/__init__.py (docstring only) + <name>/plugin.py, no single-module plugin, no import or string reaching a plugin package instead of its plugin module")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_plugin_layout_gate.py", test_names)
+    return run_command(cmd, "Plugin layout gate tests", verbose=verbose)
 
 
 def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
@@ -425,6 +434,17 @@ Tests for utility modules and helper functions:
         utils_gate_i18n_usage,
         name="i18n Usage Gate",
         desc="Three verdicts where the audit had two: typed unions are expanded from the code that declares them, a bare namespace root no longer absolves everything beneath it, ternary arguments are seen, a key prefix chosen between two literals is expanded over both branches, and 'not verified' stays apart from 'dead' so neither absolution nor condemnation is a default",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-plugin-layout",
+        utils_gate_plugin_layout,
+        name="Plugin Layout Gate",
+        desc="Every first-party plugin is a folder <family>/<name>/ holding __init__.py (its docstring and nothing else) and plugin.py, in the six families the app's registries declare (brim, asset, FX, risk, signal, tool), plugin being the module discovery loads; no family keeps a plugin as a single module (signal_plugins/base.py aside) and none is empty; no import in backend/app, backend/test_scripts, scripts or dev.py reaches a plugin's package instead of its plugin module or a _helper beside it, relative and lazy imports included, and no string names one (patch targets, logger names, __module__)",
+        # ast and filesystem reads of the repository's sources, never imported; the control
+        # cases build their trees under tmp_path. No DB, no server, no network, no writes
+        # outside tmp_path.
         isolation="pure",
     )
     add_test(
