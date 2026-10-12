@@ -758,7 +758,9 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   - broker: `brokers/broker-create-feedback.spec.ts`, `brokers/broker-recovery.spec.ts`,
     `brokers/brokers-detail.spec.ts`;
   - fx: `fx/fx-flag-font.spec.ts`;
-  - utility: `files.spec.ts`, `files-destructive.spec.ts` (seriale; i broker vivono fino ad `afterAll`);
+  - utility: `files.spec.ts`, `files-destructive.spec.ts` (seriale; i broker vivono fino ad `afterAll`). Correzione del
+    12/10: in `files.spec.ts` il test di `:886` «opens table preview for BRIM files» è di classe A, perché lascia il suo
+    broker e il file BRIM; la cura è nel checkpoint delle lacune 2 e 1;
   - transaction: `tx-broker-icon-hydration`, `tx-bulk-diagnostics`, `tx-bulk-import-handoff`,
     `tx-bulk-promote-cost-basis`, `tx-bulk-row-order`, `tx-clone` (tranne il test di `:549`, che va nella cura A7),
     `tx-fx-completeness`, `tx-import-asset-inspector`, `tx-import-ca-contract`, `tx-import-degiro`,
@@ -892,6 +894,24 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     `operation="create", index=0`. La griglia lo mette sulla riga 1a (IB, modificabile) e non sulla 1b (DEGIRO).
 
   Dettagli: piano della 46, §12.8.
+
+- **V-24 · Nel bulk editor la cella del costo in Auto può mostrare per un attimo «💡 0.00» come `ready`** — basso, UX;
+  test-author di V (lacuna 5), 12/10, letto nel codice e non visto a schermo. Appena un TRANSFER in Auto passa dal form
+  all'editor, il form invia un importo 0 come segnaposto, che porta solo la valuta, e la cella tratta qualsiasi importo
+  come proposta pronta. Il valore si corregge appena torna la validazione dell'editor (150 nel test). Per un istante
+  l'utente vede il sintomo corretto nella 1.2 (costo 0), e `data-state="ready"` non vuol dire «calcolato». Dettagli:
+  piano della 46, §12.9.
+
+- **V-25 · `tx-delete` consuma righe del seed e lascia un broker di `TEST_USER`** — basso; gate di V, 12/10. Nel giro
+  consolidato `front-transaction all`:
+  - «A1-confirm» (`tx-delete.spec.ts:181`) cancella la FEE `[delete-safe] Platform fee for delete test`;
+  - «A2-confirm» cancella la coppia `delete-consume`;
+  - «A1-error» lascia di proposito il broker `T4-delref-<suffix>` (OWNER `e2e_test_user`) e il suo asset
+    (`:390-393`).
+
+  Il DB, quindi, a fine categoria non torna al seed. Le righe consumate sono monouso per costruzione, e ogni invocazione
+  ripopola. Il broker permanente, però, è della classe A7. Cura possibile: righe e broker creati dal test, come in A5
+  e A7. Dettagli: piano della 46, §12.9.
 
 ## 09 · Feedback e backlog strutturale
 
