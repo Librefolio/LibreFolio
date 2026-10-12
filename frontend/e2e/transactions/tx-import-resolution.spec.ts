@@ -48,7 +48,7 @@
 import {IntlMessageFormat} from 'intl-messageformat';
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
-import {waitForSettled} from '../fixtures/app-events';
+import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
 import {SUPPORTED_LANGUAGES, t as catalogueText} from '../fixtures/i18n-data';
 import {continueToReview, deleteOwnedReports, parseSelectedFile, selectBrokerFile, uploadOwnedReport, type OwnedReport, type ParseResponse} from '../fixtures/import-wizard';
 import {TEST_USER} from '../fixtures/test-users';
@@ -296,6 +296,49 @@ async function resolveFirstAssetManually(page: Page): Promise<boolean> {
     }
 
     return true;
+}
+
+/**
+ * IWR-009's way in: the transactions toolbar's Import button, whose import intent opens the wizard with no table row
+ * selected. Ends once step 1 has its broker list.
+ */
+async function openImportWizardFromToolbar(page: Page) {
+    await page.getByTestId('tx-import-button').click();
+    await expect(page.getByTestId('import-wizard-stepper')).toBeVisible({timeout: 8_000});
+    const step1 = page.getByTestId('import-wizard-step1');
+    await expect(step1).toBeVisible({timeout: 5_000});
+    await waitForSettled(step1, 15_000);
+    return step1;
+}
+
+/** A file for step 1's uploader. IWR-009 only needs it pending: the wizard keeps it in the browser until Next. */
+function pendingCsv(name: string): {name: string; mimeType: string; buffer: Buffer} {
+    return {name, mimeType: 'text/csv', buffer: Buffer.from('date,type,amount,currency,description\n2024-12-10,DEPOSIT,100.00,USD,IWR-009 pending file\n', 'utf8')};
+}
+
+/**
+ * Delete, by id, the broker IWR-009 created as TEST_USER under `name`, unique to the run. The id is looked up through
+ * the API, not carried over from the creation, so a red anywhere after the submit still finds the broker. A plain
+ * delete: the broker never held a transaction, and a refusal would say so. After a red the test keeps its own error
+ * and a failed cleanup is only logged; after a green the broker must be found and deleted, or the test goes red.
+ */
+async function deleteBrokerNamed(page: Page, name: string, passed: boolean): Promise<void> {
+    try {
+        const listed = await page.request.get('/api/v1/brokers');
+        expect(listed.ok(), `list the brokers: HTTP ${listed.status()}`).toBe(true);
+        const {items} = (await listed.json()) as {items: Array<{id: number; name: string}>};
+        const created = items.filter((broker) => broker.name === name);
+        if (passed) expect(created.length, `the broker "${name}" this test created is listed once`).toBe(1);
+        for (const {id} of created) {
+            const deleted = await page.request.delete('/api/v1/brokers', {params: {ids: id}});
+            expect(deleted.ok(), `delete broker ${id}: HTTP ${deleted.status()} ${await deleted.text()}`).toBe(true);
+            const result = ((await deleted.json()) as {results: Array<{id: number; success: boolean}>}).results.find((candidate) => candidate.id === id);
+            expect(result?.success, `broker ${id} ("${name}") deleted: ${JSON.stringify(result)}`).toBe(true);
+        }
+    } catch (error) {
+        if (passed) throw error;
+        console.warn(`[IWR-009] the cleanup after a red could not delete "${name}": ${String(error)}`);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -624,66 +667,65 @@ test.describe('Import Wizard — Asset Resolution', () => {
     // IWR-009: Broker creation reactivity — create broker from Step 1 shows in dropdown
     // -----------------------------------------------------------------------
     test('IWR-009: Creating a new broker from Step 1 makes it appear in the dropdown', async ({page}) => {
-        await openImportWizard(page);
+        const step1 = await openImportWizardFromToolbar(page);
 
-        // Step 1 is the upload step — it shows a BrokerSearchSelect when files are pending.
-        // However, the global broker selector is only shown when pendingFiles.length > 0.
-        // Navigate to Step 2 first to check if Step 1 has the broker selector visible.
-        // If pendingFiles is empty (no uploads), the broker selector is not shown.
-        // Alternative: directly check Step 1 content.
-        const step1 = page.getByTestId('import-wizard-step1');
-        await expect(step1).toBeVisible({timeout: 5_000});
-
+        // Step 1 shows its broker selector ("assign all") only while files are pending, and the wizard opens with
+        // none: the probe that looked for the selector skipped the whole test, in silence, on every run. So the
+        // precondition is made, then asserted: one file is dropped into the uploader. It never leaves the browser —
+        // step 1 uploads on Next, which this test does not press — so it has nothing to clean up.
+        await step1.getByTestId('file-input').setInputFiles(pendingCsv(`iwr-009-${uniqueSuffix()}.csv`));
         const brokerSelectWrapper = step1.getByTestId('import-wizard-step1-broker-select');
-        const brokerSelectVisible = await brokerSelectWrapper.isVisible({timeout: 2_000}).catch(() => false);
+        await expect(brokerSelectWrapper, 'precondition: a pending file shows the step-1 broker selector').toBeVisible({timeout: 5_000});
+        const brokerSelect = brokerSelectWrapper.getByRole('combobox');
 
-        if (!brokerSelectVisible) {
-            // No pending files → broker selector not shown — test is inapplicable
-            // Proceed to Step 2 to try the per-row broker selector instead
-            await page.getByTestId('import-wizard-next').click();
-            await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 5_000});
-            // Step 2 also has broker create via row inline editor — but that's more complex.
-            // Simply verify the wizard works without broker creation.
-            await expect(page.getByTestId('import-wizard-step2')).toBeVisible();
-            return;
+        // The broker is TEST_USER's: unique to the run, and deleted by id in finally.
+        const uniqueName = `E2E Test Broker ${uniqueSuffix()}`;
+        let passed = false;
+        try {
+            // Open the BrokerSearchSelect dropdown
+            await brokerSelect.click();
+            await optionListReady(page);
+
+            // Click "Create new" in the dropdown footer
+            const createNewBtn = page.getByTestId('search-select-create-new');
+            await expect(createNewBtn).toBeVisible({timeout: 3_000});
+            await createNewBtn.click();
+
+            // BrokerModal should open
+            const brokerModal = page.locator('[data-testid="broker-modal"]');
+            await expect(brokerModal).toBeVisible({timeout: 5_000});
+
+            // Fill in the broker name
+            const nameInput = page.getByTestId('broker-name-input');
+            await expect(nameInput).toBeVisible({timeout: 3_000});
+            await nameInput.fill(uniqueName);
+            await expect(nameInput).toHaveValue(uniqueName);
+
+            // Save
+            const since = await eventSeq(page);
+            await page.getByTestId('broker-form-submit').click();
+
+            // BrokerModal should close
+            await expect(brokerModal).not.toBeVisible({timeout: 5_000});
+            const created = await waitForEvent(page, 'broker.created', {since});
+            // Step 1 reloads its broker list after a creation, and stays busy until the list is in.
+            await waitForSettled(step1, 15_000);
+
+            // Open the BrokerSearchSelect dropdown again — new broker should appear
+            await brokerSelect.click();
+            await optionListReady(page);
+
+            // Verify the newly created broker appears in the options
+            const newBrokerOption = page.locator(`[data-testid^="search-select-option-"]`).filter({hasText: uniqueName});
+            await expect(newBrokerOption).toBeVisible({timeout: 5_000});
+            await expect(newBrokerOption, 'the option is the broker the creation reported').toHaveAttribute('data-testid', `search-select-option-${created.detail?.brokerId}`);
+
+            // Close dropdown
+            await page.keyboard.press('Escape');
+            passed = true;
+        } finally {
+            await deleteBrokerNamed(page, uniqueName, passed);
         }
-
-        // Open the BrokerSearchSelect dropdown
-        await brokerSelectWrapper.click();
-        await optionListReady(page);
-
-        // Click "Create new" in the dropdown footer
-        const createNewBtn = page.getByTestId('search-select-create-new');
-        await expect(createNewBtn).toBeVisible({timeout: 3_000});
-        await createNewBtn.click();
-
-        // BrokerModal should open
-        const brokerModal = page.locator('[data-testid="broker-modal"]');
-        await expect(brokerModal).toBeVisible({timeout: 5_000});
-
-        // Fill in the broker name
-        const nameInput = page.getByTestId('broker-name-input');
-        await expect(nameInput).toBeVisible({timeout: 3_000});
-        const uniqueName = `E2E Test Broker ${Date.now()}`;
-        await nameInput.fill(uniqueName);
-        await expect(nameInput).toHaveValue(uniqueName);
-
-        // Save
-        await page.getByTestId('broker-form-submit').click();
-
-        // BrokerModal should close
-        await expect(brokerModal).not.toBeVisible({timeout: 5_000});
-
-        // Open the BrokerSearchSelect dropdown again — new broker should appear
-        await brokerSelectWrapper.click();
-        await optionListReady(page);
-
-        // Verify the newly created broker appears in the options
-        const newBrokerOption = page.locator(`[data-testid^="search-select-option-"]`).filter({hasText: uniqueName});
-        await expect(newBrokerOption).toBeVisible({timeout: 5_000});
-
-        // Close dropdown
-        await page.keyboard.press('Escape');
     });
 
     // -----------------------------------------------------------------------
