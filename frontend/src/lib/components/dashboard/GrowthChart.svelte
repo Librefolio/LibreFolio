@@ -1803,7 +1803,7 @@
                 return;
             }
             responsiveXAxisCompact = xAxisPolicy.compact;
-            xAxis = xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {};
+            xAxis = xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {axisLabel: {formatter: xAxisPolicy.formatter}};
         }
 
         const series = seriesData.map((seriesEntry) => ({
@@ -2367,6 +2367,7 @@
                           color: textColor,
                           fontSize: 14,
                           rotate: 0,
+                          formatter: xAxisPolicy?.formatter,
                           ...(xAxisPolicy?.axisLabel ?? {}),
                       },
                       axisLine: {lineStyle: {color: gridColor}},

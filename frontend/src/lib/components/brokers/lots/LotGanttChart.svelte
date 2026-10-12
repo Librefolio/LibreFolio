@@ -1069,7 +1069,6 @@
         const maxMs = axisRangeMs?.maxMs ?? Date.now();
         const xAxisPolicy = buildLotXAxisPolicy({min: xAxisRange?.min ?? minMs, max: xAxisRange?.max ?? maxMs});
         responsiveXAxisCompact = xAxisPolicy.compact;
-        const multiYearAxis = new Date(xAxisRange?.min ?? minMs).getFullYear() !== new Date(xAxisRange?.max ?? maxMs).getFullYear();
         return {
             ...CHART_ANIMATION_CONFIG,
             grid: {
@@ -1090,7 +1089,7 @@
                 axisLabel: {
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis),
+                    formatter: xAxisPolicy.formatter,
                     ...(xAxisPolicy.axisLabel ?? {}),
                 },
             },
