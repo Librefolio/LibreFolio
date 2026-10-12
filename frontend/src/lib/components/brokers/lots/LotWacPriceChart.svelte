@@ -16,7 +16,7 @@
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {maskableQuantity} from '$lib/utils/privacy/maskable';
-    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {formatExactDecimal} from '$lib/utils/core/formatFixed';
     import {lotDisplayState, lotStateColor, lotStateSymbol, type LotDisplayState} from './lotStateVisual';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
@@ -486,7 +486,7 @@
 
     /** Every quantity this chart renders goes through here; masked under privacy (D5′). */
     function formatQuantityValue(value: number): string {
-        return maskableQuantity(formatDecimalForDisplay(Math.abs(value), {minFrac: 0, maxFrac: 8}));
+        return maskableQuantity(formatExactDecimal(Math.abs(value), {minFrac: 0, maxFrac: 8}));
     }
 
     function formatSignedQuantityValue(value: number): string {
@@ -1357,7 +1357,7 @@
 
     function splitRatioText(event: LotTimelineEventSchema): string | null {
         const ratio = parseNumber(event.ratio);
-        return ratio == null ? null : `${formatDecimalForDisplay(ratio, {minFrac: 0, maxFrac: 8})}:1`;
+        return ratio == null ? null : `${formatExactDecimal(ratio, {minFrac: 0, maxFrac: 8})}:1`;
     }
 
     function saleHeaderLabel(snapshot: EventStateSnapshot | null): string {
