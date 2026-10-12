@@ -40,6 +40,11 @@ Examples of sync-safe endpoints: `frontend_catchall()`, `mkdocs_static()` in `ma
 - Thread isolation (`F-060`) addresses this at the framework level — `_run_provider_in_thread()` wraps every provider call
 - Any future endpoint that calls external HTTP APIs
 
+## Known violation (2026-10-12)
+
+The auth handlers run bcrypt — CPU-bound, about 0.24 s per check — directly inside `async def` `login`,
+`register` and `change_password`: [[problems/bcrypt-blocks-the-event-loop]] (backlog V-16, open).
+
 ## Source
 `LibreFolio_developer_journal/knowledge_base/05_project_conventions.md` — "⚠️ Async I/O Rule" section
 
