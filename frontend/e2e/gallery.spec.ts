@@ -1954,6 +1954,9 @@ test.describe('Gallery Screenshots', () => {
             }
         });
 
+        // Must stay language-neutral: the modal searches the chapters in the UI's language, so the term is a proper name present in every translated chapter set (CHANGELOG.md, .it, .fr, .es) — an English word like 'Added' finds nothing in it/fr/es.
+        const CHANGELOG_SEARCH_TERM = 'Docker';
+
         test('changelog modal - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
             const isMobile = testInfo.project.name === 'mobile';
@@ -1981,7 +1984,7 @@ test.describe('Gallery Screenshots', () => {
                     await screenshot(page, viewport, lang, theme, 'settings', 'changelog-modal');
 
                     // Second shot: search narrows the index, one fold opened by a hit
-                    await page.getByTestId('changelog-search').fill('Added');
+                    await page.getByTestId('changelog-search').fill(CHANGELOG_SEARCH_TERM);
                     const hits = page.getByTestId('changelog-search-results');
                     await expect(hits).toBeVisible({timeout: 5_000});
                     await hits.locator('[data-testid^="changelog-hit-"]').first().click();

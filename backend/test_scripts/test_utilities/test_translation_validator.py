@@ -88,19 +88,46 @@ Against the first version of batch 14 (the current file with one change reverted
 red on the three paths that do not climb to the root, comments on the test that has them, and the old price rule on
 the day-3 formula.
 
+Batch 25 brought the CHANGELOG in: ``CHANGELOG.<lang>.md`` beside ``CHANGELOG.md`` (``changelog.py``;
+``validate_changelog`` here, ``_diff_changelog`` in ``translate_docs.py``), checked chapter by chapter against the
+English. Every chapter line must be an English one, once, in the English order; each chapter present goes through the
+page checks (``validate_text``), and its pieces must be done in the cache for the current English. What a finding
+weighs is the release policy's (``changelog.released``): every chapter but the newest is released, the newest once its
+tag ``v<version>`` (or ``<version>``, as the release workflow's tag guard allows) exists or is the CI run's ref
+(``GITHUB_REF``). A released chapter that is missing, stale or wrong is an error; the open chapter's findings are
+information. ``translate-diff`` counts the released chapters' anomalies and absences and only prints the open
+chapter's. Pinned through ``changelog.released`` (stubbed, then the real lookup: ``GITHUB_REF``, and a throwaway git
+repository created in ``tmp_path`` with the tag under test), ``validate_changelog``, ``run_validate`` and ``run_diff``,
+both commands with arguments parsed by their real parsers. Written against the new code, not red first; no test is
+red now. One was red on it and named a defect, fixed since: ``test_an_empty_newest_chapter_leaves_the_chapter_below_it_released``
+(``_diff_changelog`` applied the policy to the chapters that have a piece, so a newest chapter with nothing in it yet
+handed its open status down to the released chapter below it, which ``translate-validate`` counted).
+
 PURE: strings in memory and docs trees under ``tmp_path``. An autouse fixture points
 ``validate_translations.DOCS_DIR`` at an empty tree under ``tmp_path`` in every test, so no check resolves a link
 against ``mkdocs_src/docs``; the repository's docs and ``.translate-hashes.json`` are never opened (the Aphra pipeline
-may be rewriting them while this runs). ``page_anchors`` loads the site's configuration, ``mkdocs_src/mkdocs.yml``,
-once per process; no page of ``mkdocs_src/docs`` is read. ``TestFixtures`` renders every anchor fixture with it, to
-prove the expected anchors are the ones a build gives. No DB, no server, no network, no writes outside ``tmp_path``.
+may be rewriting them while this runs). The CHANGELOG tests put ``CHANGELOG.md``, its translations and the cache under
+``tmp_path`` (``_changelog_source`` of both modules, ``translate_docs.HASH_FILE``, which the validator's
+``_load_hashes`` reads, ``translate_docs.DOCS_DIR``; ``changelog.SOURCE`` at a folder that does not exist), and stub
+the tag lookup; the tests of the real lookup run git in ``tmp_path`` alone (``GIT_CEILING_DIRECTORIES``, no global or
+system configuration, a local identity), reading tags, or creating a throwaway repository there: never the project's.
+The repository's ``CHANGELOG*.md`` are never opened. ``page_anchors`` loads the
+site's configuration, ``mkdocs_src/mkdocs.yml``, once per process; no page of ``mkdocs_src/docs`` is read.
+``TestFixtures`` renders every anchor fixture with it, to prove the expected anchors are the ones a build gives. No DB,
+no server, no network, no writes outside ``tmp_path``.
 """
 
+import argparse
+import dataclasses
+import hashlib
 import importlib
+import json
 import os
 import posixpath
 import re
+import subprocess
 import textwrap
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 from urllib.parse import urlsplit
@@ -1027,3 +1054,461 @@ class TestFixtures:
         """Only the site's render gives ``buy-me-a-coffee`` (above): without pymdownx.emoji the shortcode is text, and
         its slug is the near miss. A validator rendering without the site's configuration fails the emoji case."""
         assert _bare_ids(EMOJI_PAGE) == {"supporto", "coffee-buy-me-a-coffee"}
+
+
+# ---------------------------------------------------------------------------
+# The CHANGELOG (R2 B25): released chapters, translate-validate, translate-diff
+# ---------------------------------------------------------------------------
+# Newest chapter first: [3.1.0] is open, longer than CL_THRESHOLD and so cut into four pieces; the preamble, [3.0.1] and
+# [3.0.0] are one piece each. The fake translation tags each prose line with its language and keeps every heading,
+# chapter line, rule and link: it passes every page check (TestValidateChangelog's first test proves it).
+
+CL_LANGS = ("it", "fr", "es")
+CL_THRESHOLD = 300  # changelog.PIECE_THRESHOLD in these tests, instead of writing 30,000 characters
+CL_RULE = "---"
+CL_ROADMAP = "[roadmap](https://example.org/roadmap)"
+CL_GUIDE = "[import guide](https://example.org/import)"
+CL_OPEN_BULLET = "- A Tools catalogue with isolated computations and read-only diagnostics."
+CL_PATCH_BULLET = "- Exchange rates older than a week are fetched again on the next sync."
+CL_PREAMBLE = "# Changelog\n\nAll notable changes to LibreFolio are documented in this file."
+CL_OPEN = "\n\n".join(
+    (
+        "## [3.1.0] - 2026-11-30",
+        f"**Preparing v3.1.0.** These changes are in preparation and not released yet: see the {CL_ROADMAP}.",
+        f"### ✨ Added\n\n- A support popup in the About page, with links to the project pages.\n{CL_OPEN_BULLET}",
+        "### 🐛 Fixed",
+        "#### 🔒 Security\n\n- Session cookies are rotated after every password change.",
+        "#### 📚 Documentation\n\n- The installation guide describes the Docker volumes again.",
+    )
+)
+CL_PATCH = "\n\n".join(("## [3.0.1] - 2026-07-21", "### 🐛 Fixed", f"- The import wizard keeps the broker selected after a page reload, as the {CL_GUIDE} says.\n{CL_PATCH_BULLET}"))
+CL_FIRST = "\n\n".join(("## [3.0.0] - 2026-07-20", "First public release.", "### ✨ Added", "- Portfolio dashboard, broker report imports and exchange rates."))
+CL_NEXT = "## [3.2.0] - 2027-01-15"  # a chapter just opened: nothing in it yet
+CL_INVENTED = "## [2.9.9] - 2026-01-01\n\nA chapter the English does not have."
+CL_EARLIER = "2020-01-01T00:00:00+00:00"
+# translate-diff's marks: ❌ counted missing, ⚠️ counted anomalies, ℹ️ information only (the open chapter)
+MISSING_MARK, ANOMALY_MARK, INFO_MARK = "\u274c", "\u26a0\ufe0f", "\u2139\ufe0f"
+OPEN_MISSING_NOTE = "not translated yet: open chapter, information only"
+
+
+def _cl_text(*blocks: str) -> str:
+    """A CHANGELOG as the repository writes it: the preamble, then the chapters newest first, a rule between two units."""
+    return f"\n\n{CL_RULE}\n\n".join(blocks) + "\n"
+
+
+def _cl_translated(english: str, lang: str) -> str:
+    """The fake translation of a CHANGELOG: each prose line tagged with the language; every heading (the chapter lines
+    with them), rule, link and blank line as in the English."""
+    return "\n".join(line if not line or line.startswith("#") or line == CL_RULE else f"{line} ({lang})" for line in english.split("\n"))
+
+
+CL_EN = _cl_text(CL_PREAMBLE, CL_OPEN, CL_PATCH, CL_FIRST)
+
+
+def _findings(vt: ModuleType, issues) -> dict[str, list[tuple[str, str]]]:
+    """(check, severity name) of each issue, by the unit it is about: ``CHANGELOG.md#<name>``, or ``CHANGELOG.md``."""
+    names = {getattr(vt.Severity, name): name for name in ("ERROR", "WARN", "INFO", "LOCALIZED")}
+    found: dict[str, list[tuple[str, str]]] = {}
+    for issue in issues:
+        found.setdefault(issue.file, []).append((issue.check, names[issue.severity]))
+    return {unit: sorted(kinds) for unit, kinds in found.items()}
+
+
+# translate-validate prints each issue as "<mark> <SEVERITY> [<check>] <file>[:<line>] (<lang>): <message>".
+_PRINTED_ISSUE = re.compile(r"(?P<severity>ERROR|WARN|INFO|LOCALIZED) \[(?P<check>[^\]]+)\] (?P<file>\S+?)(?::\d+)? \((?P<lang>[a-z]+)\): ")
+_FILES_CHECKED = re.compile(r"Files checked:\s+(?P<n>\d+)")
+# translate-diff prints a chapter as "  <mark>  CHANGELOG.md#<name> → <lang>  (<note>)", the note absent when clean.
+_DIFF_CHAPTER = re.compile(r"^  (?P<mark>\S+)\s+CHANGELOG\.md#(?P<unit>\S+) → (?P<lang>[a-z]+)(?:  \((?P<note>.*)\))?$", re.MULTILINE)
+_DIFF_MISSING = re.compile(r"Missing translations: (?P<n>\d+)")
+_DIFF_WITH_ISSUES = re.compile(r"With issues: (?P<n>\d+)")
+
+
+def _printed_issues(out: str) -> set[tuple[str, str, str, str]]:
+    """(severity, check, file, lang) of each issue translate-validate printed."""
+    return {(m["severity"], m["check"], m["file"], m["lang"]) for m in _PRINTED_ISSUE.finditer(out)}
+
+
+def _diff_report(out: str) -> dict:
+    """What translate-diff printed about the CHANGELOG: each chapter's mark and note by (chapter, lang), and its counts."""
+    missing, with_issues = _DIFF_MISSING.search(out), _DIFF_WITH_ISSUES.search(out)
+    return {
+        "chapters": {(m["unit"], m["lang"]): (m["mark"], m["note"]) for m in _DIFF_CHAPTER.finditer(out)},
+        "missing": int(missing["n"]) if missing else 0,
+        "with issues": int(with_issues["n"]) if with_issues else 0,
+    }
+
+
+@dataclasses.dataclass
+class ChangelogTree:
+    """``CHANGELOG.md`` under ``tmp_path``, its translations beside it and the cache, where both commands read them."""
+
+    vt: ModuleType
+    td: ModuleType
+    cl: ModuleType
+    source: Path
+    hash_file: Path
+    capsys: pytest.CaptureFixture
+    real_tag_exists: Callable[[str, Path], bool]
+    tagged: set[str] = dataclasses.field(default_factory=set)  # the versions whose tag the stub says exists
+    asked: list[tuple[str, Path]] = dataclasses.field(default_factory=list)  # the lookups the stub answered
+
+    def write(self, text: str, lang: str = "en") -> None:
+        path = self.source if lang == "en" else self.source.with_name(f"CHANGELOG.{lang}.md")
+        path.write_bytes(text.encode("utf-8"))
+
+    def read(self, lang: str) -> str:
+        return self.source.with_name(f"CHANGELOG.{lang}.md").read_bytes().decode("utf-8")
+
+    def translate_all(self, english: str = CL_EN) -> None:
+        """Every language's fake translation of ``english``, which may lack chapters of the current English."""
+        for lang in CL_LANGS:
+            self.write(_cl_translated(english, lang), lang)
+
+    def units(self) -> list:
+        return self.cl.read_english(self.source)
+
+    def released(self) -> set[str]:
+        return self.cl.released(self.units(), self.source)
+
+    def done(self, english: str = CL_EN) -> dict:
+        """The cache as runs that translated ``english`` into every language left it: each piece done, at its position."""
+        return {
+            piece.key: {
+                "md5": hashlib.md5(piece.text.encode("utf-8")).hexdigest(),
+                "langs_done": list(CL_LANGS),
+                "last_translated": CL_EARLIER,
+                "langs": {lang: {"translated_at": CL_EARLIER, "index": index} for lang in CL_LANGS},
+            }
+            for unit in self.cl.english(english)
+            for index, piece in enumerate(unit.pieces)
+        }
+
+    def save_cache(self, hashes: dict) -> None:
+        self.hash_file.write_text(json.dumps(hashes, indent=2), encoding="utf-8")
+
+    def validate(self, lang: str, hashes: dict) -> list:
+        """``validate_changelog`` for ``lang``, with the current English and the release policy."""
+        units = self.units()
+        return self.vt.validate_changelog(lang, units, self.cl.released(units, self.source), hashes, self.source)
+
+    def run_validate(self, *argv: str) -> tuple[int, str]:
+        """``translate-validate ARGV``, registered and parsed as dev.py does."""
+        parser = argparse.ArgumentParser()
+        self.vt.register_subparser(parser.add_subparsers(dest="command"))
+        args = parser.parse_args(["translate-validate", *argv])
+        self.capsys.readouterr()
+        rc = args.func(args)
+        return rc, self.capsys.readouterr().out
+
+    def run_diff(self, *argv: str) -> tuple[int, str]:
+        """``translate-diff ARGV``, parsed by the real parser."""
+        parser = argparse.ArgumentParser()
+        self.td._add_diff_arguments(parser)
+        args = parser.parse_args(list(argv))
+        self.capsys.readouterr()
+        rc = self.td.run_diff(args)
+        return rc, self.capsys.readouterr().out
+
+
+@pytest.fixture
+def changelog_tree(validate_translations, translate_docs, docs, tmp_path, monkeypatch, capsys) -> ChangelogTree:
+    """``CL_EN`` under ``tmp_path``, translated into no language yet, an empty cache, no tag: what both commands read,
+    and no tag lookup but the stub's."""
+    vt, td = validate_translations, translate_docs
+    cl = vt.cl
+    assert cl is td.cl, "barrier: validate_translations and translate_docs share one changelog module"
+    root = tmp_path.resolve()
+    tree = ChangelogTree(vt, td, cl, root / "CHANGELOG.md", root / ".translate-hashes.json", capsys, cl._tag_exists)
+
+    def tag_exists(version: str, repo: Path) -> bool:
+        tree.asked.append((version, repo))
+        return version in tree.tagged
+
+    monkeypatch.setattr(cl, "PIECE_THRESHOLD", CL_THRESHOLD)
+    monkeypatch.setattr(cl, "SOURCE", root / "not-the-repository" / "CHANGELOG.md")  # changelog.py's default, for a call that forgets its source
+    monkeypatch.setattr(cl, "_tag_exists", tag_exists)
+    monkeypatch.setattr(td, "HASH_FILE", tree.hash_file)  # read by translate_docs._load_hashes, which validate_translations imported
+    monkeypatch.setattr(td, "DOCS_DIR", docs)
+    for module in (vt, td):
+        monkeypatch.setattr(module, "_changelog_source", lambda: tree.source)
+        monkeypatch.setattr(module, "_detect_target_languages", lambda: list(CL_LANGS))
+        monkeypatch.setattr(module, "get_translatable_files", lambda: [])
+    tree.write(CL_EN)
+    assert vt._load_hashes() == {}, "barrier: the validator reads the cache under tmp_path, not the repository's"
+    assert [unit.name for unit in tree.units() if unit.split] == ["3.1.0"], "barrier: the threshold cuts the open chapter alone"
+    return tree
+
+
+def _hermetic_git(monkeypatch, tree: ChangelogTree) -> None:
+    """Git as the real tag lookup will see it, kept to ``tmp_path``: no repository above it, no user or system
+    configuration, no CI ref."""
+    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR", "GITHUB_REF"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tree.source.parent.parent))
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.setattr(tree.cl, "_tag_exists", tree.real_tag_exists)
+
+
+def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
+    """``git ARGS`` in ``repo``, a throwaway repository under ``tmp_path``: a local identity, no signing, no hooks."""
+    config = ("user.name=LibreFolio tests", "user.email=tests@example.org", "commit.gpgsign=false", "tag.gpgsign=false", f"core.hooksPath={os.devnull}")
+    return subprocess.run(["git", "-C", str(repo), *(arg for item in config for arg in ("-c", item)), *args], capture_output=True, text=True, check=True)
+
+
+class TestChangelogReleasePolicy:
+    def test_every_chapter_but_the_newest_is_released(self, changelog_tree):
+        tree = changelog_tree
+        assert tree.released() == {"preamble", "3.0.1", "3.0.0"}
+        assert tree.asked == [("3.1.0", tree.source.parent)], "the tag looked for is the newest chapter's, in the CHANGELOG's repository"
+
+    def test_the_newest_chapter_is_released_once_its_tag_exists(self, changelog_tree):
+        tree = changelog_tree
+        tree.tagged.add("3.1.0")
+        assert tree.released() == {"preamble", "3.1.0", "3.0.1", "3.0.0"}
+
+    @pytest.mark.parametrize(
+        ("ref", "released"),
+        [
+            pytest.param("refs/tags/v3.1.0", True, id="the-newest-chapters-tag"),
+            pytest.param("refs/tags/3.1.0", True, id="the-newest-chapters-tag-without-v"),
+            pytest.param("refs/tags/v3.1.0-rc.1", False, id="a-release-candidates-tag"),
+            pytest.param("refs/tags/v3.0.1", False, id="an-older-chapters-tag"),
+            pytest.param("refs/heads/dev", False, id="a-branch"),
+            pytest.param(None, False, id="no-ci-ref"),
+        ],
+    )
+    def test_the_ref_of_the_ci_run_releases_the_newest_chapter(self, changelog_tree, monkeypatch, ref, released):
+        """The real lookup. The CHANGELOG under ``tmp_path`` is in no repository (git may not climb above it), so only
+        ``GITHUB_REF`` can release the newest chapter: its own tag, with or without the ``v`` the release workflow's tag
+        guard allows, never a release candidate's, an older chapter's or a branch."""
+        tree = changelog_tree
+        _hermetic_git(monkeypatch, tree)
+        if ref is not None:
+            monkeypatch.setenv("GITHUB_REF", ref)
+        assert tree.released() == {"preamble", "3.0.1", "3.0.0"} | ({"3.1.0"} if released else set())
+
+    @pytest.mark.parametrize(
+        ("tag", "released"),
+        [
+            pytest.param("v3.1.0", True, id="the-newest-chapters-tag"),
+            pytest.param("3.1.0", True, id="the-newest-chapters-tag-without-v"),
+            pytest.param("v3.1.0-rc.1", False, id="a-release-candidates-tag"),
+            pytest.param("v3.0.1", False, id="an-older-chapters-tag"),
+        ],
+    )
+    def test_a_tag_in_the_changelogs_repository_releases_the_newest_chapter(self, changelog_tree, monkeypatch, tag, released):
+        """The real lookup in a real repository: a throwaway one, created in ``tmp_path`` around the CHANGELOG (never the
+        project's), holding one empty commit and the tag under test; no CI ref."""
+        tree = changelog_tree
+        _hermetic_git(monkeypatch, tree)
+        repo = tree.source.parent
+        _git(repo, "init", "-q")
+        assert Path(_git(repo, "rev-parse", "--show-toplevel").stdout.strip()).resolve() == repo.resolve(), "barrier: the commands below reach the throwaway repository"
+        _git(repo, "commit", "-q", "--allow-empty", "-m", "A throwaway commit to tag")
+        _git(repo, "tag", tag)
+        assert tree.released() == {"preamble", "3.0.1", "3.0.0"} | ({"3.1.0"} if released else set())
+
+
+class TestValidateChangelog:
+    def test_a_complete_translation_done_for_the_current_english_has_no_finding(self, changelog_tree):
+        """The fake translation passes every page check and the cache knows it done: what the other tests find, their
+        edits cause."""
+        tree = changelog_tree
+        tree.translate_all()
+        hashes = tree.done()
+        assert {lang: [str(issue) for issue in tree.validate(lang, hashes)] for lang in CL_LANGS} == {lang: [] for lang in CL_LANGS}
+
+    @pytest.mark.parametrize(
+        ("chapters", "tagged", "expected"),
+        [
+            pytest.param(None, False, {"preamble": "ERROR", "3.1.0": "INFO", "3.0.1": "ERROR", "3.0.0": "ERROR"}, id="no-translated-file"),
+            pytest.param(None, True, {"preamble": "ERROR", "3.1.0": "ERROR", "3.0.1": "ERROR", "3.0.0": "ERROR"}, id="no-translated-file-newest-tagged"),
+            pytest.param((CL_PREAMBLE, CL_FIRST), False, {"3.1.0": "INFO", "3.0.1": "ERROR"}, id="two-chapters-missing"),
+            pytest.param((CL_PREAMBLE, CL_FIRST), True, {"3.1.0": "ERROR", "3.0.1": "ERROR"}, id="two-chapters-missing-newest-tagged"),
+        ],
+    )
+    def test_a_missing_translation_is_an_error_when_released_and_information_when_open(self, changelog_tree, chapters, tagged, expected):
+        tree = changelog_tree
+        if chapters is not None:
+            tree.write(_cl_translated(_cl_text(*chapters), LANG), LANG)
+        if tagged:
+            tree.tagged.add("3.1.0")
+        issues = tree.validate(LANG, tree.done())
+        assert _findings(tree.vt, issues) == {f"CHANGELOG.md#{name}": [("changelog-missing", severity)] for name, severity in expected.items()}
+        assert [issue.message for issue in issues if issue.severity == tree.vt.Severity.INFO and not issue.message.endswith(" (open chapter)")] == []
+
+    @pytest.mark.parametrize(
+        ("chapter", "tagged", "severity"),
+        [
+            pytest.param("3.0.1", False, "ERROR", id="released"),
+            pytest.param("3.1.0", False, "INFO", id="open"),
+            pytest.param("3.1.0", True, "ERROR", id="newest-tagged"),
+        ],
+    )
+    def test_a_chapter_line_unlike_the_english_one_is_an_error_when_released_and_information_when_open(self, changelog_tree, chapter, tagged, severity):
+        """The app finds a chapter by its line: a translated date (``21/07/2026``) loses the chapter."""
+        tree = changelog_tree
+        line = next(line for line in CL_EN.split("\n") if line.startswith(f"## [{chapter}] - "))
+        year, month, day = line.rsplit(" - ", 1)[1].split("-")
+        tree.translate_all()
+        text = tree.read(LANG)
+        assert text.count(line) == 1, "barrier: the translation opens the chapter with the English line"
+        tree.write(text.replace(line, f"## [{chapter}] - {day}/{month}/{year}"), LANG)
+        if tagged:
+            tree.tagged.add("3.1.0")
+        assert _findings(tree.vt, tree.validate(LANG, tree.done())) == {f"CHANGELOG.md#{chapter}": [("changelog-chapter", severity)]}
+
+    @pytest.mark.parametrize(
+        ("chapters", "expected"),
+        [
+            pytest.param((CL_PREAMBLE, CL_OPEN, CL_PATCH, CL_INVENTED, CL_FIRST), {"CHANGELOG.md#2.9.9": [("changelog-chapter", "ERROR")]}, id="a-chapter-the-english-lacks"),
+            pytest.param((CL_PREAMBLE, CL_OPEN, CL_FIRST, CL_PATCH), {"CHANGELOG.md": [("changelog-chapter", "ERROR")]}, id="two-released-chapters-swapped"),
+            pytest.param((CL_PREAMBLE, CL_PATCH, CL_FIRST, CL_OPEN), {"CHANGELOG.md": [("changelog-chapter", "ERROR")]}, id="the-open-chapter-moved-last"),
+            pytest.param((CL_PREAMBLE, CL_OPEN, CL_PATCH, CL_FIRST, CL_FIRST), {"CHANGELOG.md#3.0.0": [("changelog-chapter", "ERROR")]}, id="a-chapter-written-twice"),
+        ],
+    )
+    def test_an_unknown_chapter_the_wrong_order_and_a_repeated_chapter_are_errors(self, changelog_tree, chapters, expected):
+        """Whatever the release: the app lists the chapters it finds, in the file's order."""
+        tree = changelog_tree
+        tree.write(_cl_translated(_cl_text(*chapters), LANG), LANG)
+        assert _findings(tree.vt, tree.validate(LANG, tree.done())) == expected
+
+    @pytest.mark.parametrize(
+        ("old", "new", "tagged", "chapter", "pieces", "severity"),
+        [
+            pytest.param("after a page reload", "after a browser reload", False, "3.0.1", "3.0.1", "ERROR", id="released"),
+            pytest.param("the Docker volumes", "the Docker volumes and networks", False, "3.1.0", "3.1.0/fixed/documentation", "INFO", id="open"),
+            pytest.param("the Docker volumes", "the Docker volumes and networks", True, "3.1.0", "3.1.0/fixed/documentation", "ERROR", id="newest-tagged"),
+        ],
+    )
+    def test_a_chapter_changed_since_its_translation_is_stale(self, changelog_tree, old, new, tagged, chapter, pieces, severity):
+        """The English is edited after the translation; the cache still records the pieces done for the old text."""
+        tree = changelog_tree
+        tree.translate_all()
+        hashes = tree.done()
+        assert CL_EN.count(old) == 1, "barrier: the edit touches one piece"
+        tree.write(CL_EN.replace(old, new))
+        if tagged:
+            tree.tagged.add("3.1.0")
+        issues = tree.validate(LANG, hashes)
+        assert _findings(tree.vt, issues) == {f"CHANGELOG.md#{chapter}": [("changelog-stale", severity)]}
+        assert [issue.message for issue in issues] == [f"1 piece(s) changed since their translation: {pieces}" + (" (open chapter)" if severity == "INFO" else "")]
+
+    @pytest.mark.parametrize(
+        ("link", "chapter", "tagged", "severities"),
+        [
+            pytest.param(CL_GUIDE, "3.0.1", False, ("WARN", "ERROR"), id="released"),
+            pytest.param(CL_ROADMAP, "3.1.0", False, ("INFO", "INFO"), id="open"),
+            pytest.param(CL_ROADMAP, "3.1.0", True, ("WARN", "ERROR"), id="newest-tagged"),
+        ],
+    )
+    def test_each_chapter_goes_through_the_page_checks(self, changelog_tree, link, chapter, tagged, severities):
+        """A translated chapter that drops a link: the page checks report it, weighed by the release."""
+        tree = changelog_tree
+        tree.translate_all()
+        text = tree.read(LANG)
+        assert text.count(link) == 1, "barrier: the translation keeps the link once"
+        tree.write(text.replace(link, link[1:].split("]")[0]), LANG)
+        if tagged:
+            tree.tagged.add("3.1.0")
+        assert _findings(tree.vt, tree.validate(LANG, tree.done())) == {f"CHANGELOG.md#{chapter}": [("link-count", severities[0]), ("link-missing", severities[1])]}
+
+
+class TestRunValidateChangelog:
+    @pytest.mark.parametrize(
+        ("argv", "rc", "checked", "page_reported"),
+        [
+            pytest.param(("--file", "CHANGELOG.md"), 0, 3, False, id="file-changelog-alone"),
+            pytest.param((), 1, 4, True, id="no-file-the-pages-and-the-changelog"),
+        ],
+    )
+    def test_the_changelog_is_validated_with_its_file_or_with_every_page(self, changelog_tree, docs, monkeypatch, argv, rc, checked, page_reported):
+        """A page whose Italian drops a link (an error) and a CHANGELOG whose open chapter is not translated yet
+        (information, in each language). ``--file CHANGELOG.md`` checks the three CHANGELOG translations and no page."""
+        tree = changelog_tree
+        _write(docs, CACHE_KEY, "# Guide\n\nSee the [manual](https://example.org/manual) first.\n")
+        _write(docs, "user/guide.it.md", "# Guida\n\nLeggi prima il manuale.\n")
+        monkeypatch.setattr(tree.vt, "get_translatable_files", lambda: [CACHE_KEY])
+        tree.translate_all(_cl_text(CL_PREAMBLE, CL_PATCH, CL_FIRST))
+        tree.save_cache(tree.done())
+        result, out = tree.run_validate(*argv)
+        printed = _printed_issues(out)
+        assert (result, int(_FILES_CHECKED.search(out)["n"])) == (rc, checked)
+        assert {issue for issue in printed if issue[2].startswith("CHANGELOG.md")} == {("INFO", "changelog-missing", "CHANGELOG.md#3.1.0", lang) for lang in CL_LANGS}
+        assert any(issue[2] == CACHE_KEY for issue in printed) is page_reported
+
+    @pytest.mark.parametrize(
+        ("chapters", "tagged", "rc"),
+        [
+            pytest.param((CL_PREAMBLE, CL_PATCH, CL_FIRST), False, 0, id="open-chapter-missing-exit-0"),
+            pytest.param((CL_PREAMBLE, CL_PATCH, CL_FIRST), True, 1, id="newest-chapter-tagged-and-missing-exit-1"),
+            pytest.param((CL_PREAMBLE, CL_OPEN, CL_FIRST), False, 1, id="released-chapter-missing-exit-1"),
+        ],
+    )
+    def test_the_exit_code_counts_the_released_chapters_alone(self, changelog_tree, chapters, tagged, rc):
+        """What CI reads: the open chapter's findings never fail the step, until its tag exists."""
+        tree = changelog_tree
+        tree.translate_all(_cl_text(*chapters))
+        tree.save_cache(tree.done())
+        if tagged:
+            tree.tagged.add("3.1.0")
+        assert tree.run_validate("--file", "CHANGELOG.md")[0] == rc
+
+
+def _without_the_open_chapter(text: str, lang: str) -> str:
+    return _cl_translated(_cl_text(CL_PREAMBLE, CL_PATCH, CL_FIRST), lang)
+
+
+def _italian_without_3_0_1(text: str, lang: str) -> str:
+    return _cl_translated(_cl_text(CL_PREAMBLE, CL_OPEN, CL_FIRST), lang) if lang == LANG else text
+
+
+def _italian_drops(bullet: str) -> Callable[[str, str], str]:
+    """The Italian translation loses ``bullet``: one structural anomaly (a list item fewer) in its chapter."""
+    return lambda text, lang: text.replace(f"\n{bullet} ({lang})", "", 1) if lang == LANG else text
+
+
+class TestTranslateDiffChangelog:
+    @pytest.mark.parametrize(
+        ("edit", "tagged", "chapters", "rc", "missing", "with_issues"),
+        [
+            pytest.param(_without_the_open_chapter, False, {("3.1.0", lang): (INFO_MARK, OPEN_MISSING_NOTE) for lang in CL_LANGS}, 0, 0, 0, id="open-chapter-missing"),
+            pytest.param(_without_the_open_chapter, True, {("3.1.0", lang): (MISSING_MARK, "missing translation") for lang in CL_LANGS}, 1, 3, 0, id="open-chapter-missing-newest-tagged"),
+            pytest.param(_italian_without_3_0_1, False, {("3.0.1", LANG): (MISSING_MARK, "missing translation")}, 1, 1, 0, id="released-chapter-missing"),
+            pytest.param(_italian_drops(CL_PATCH_BULLET), False, {("3.0.1", LANG): (ANOMALY_MARK, "1 issue")}, 1, 0, 1, id="released-chapter-anomaly"),
+            pytest.param(_italian_drops(CL_OPEN_BULLET), False, {("3.1.0", LANG): (INFO_MARK, "1 issue: open chapter, information only")}, 0, 0, 0, id="open-chapter-anomaly"),
+            pytest.param(_italian_drops(CL_OPEN_BULLET), True, {("3.1.0", LANG): (ANOMALY_MARK, "1 issue")}, 1, 0, 1, id="open-chapter-anomaly-newest-tagged"),
+        ],
+    )
+    def test_the_released_chapters_count_and_the_open_one_is_only_printed(self, changelog_tree, edit, tagged, chapters, rc, missing, with_issues):
+        """``translate-diff --issues-only`` (as CI runs it): a released chapter's absence or anomaly counts and fails the
+        command; the open chapter's are printed as information, until its tag exists."""
+        tree = changelog_tree
+        for lang in CL_LANGS:
+            tree.write(edit(_cl_translated(CL_EN, lang), lang), lang)
+        if tagged:
+            tree.tagged.add("3.1.0")
+        result, out = tree.run_diff("--issues-only", "--file", "CHANGELOG.md")
+        assert (result, _diff_report(out)) == (rc, {"chapters": chapters, "missing": missing, "with issues": with_issues})
+
+    @pytest.mark.parametrize("argv", [pytest.param((), id="no-file"), pytest.param(("--file", "CHANGELOG.md"), id="file-changelog")])
+    def test_translate_diff_takes_the_changelog_with_no_file_and_with_file_changelog(self, changelog_tree, argv):
+        tree = changelog_tree
+        for lang in CL_LANGS:
+            tree.write(_italian_without_3_0_1(_cl_translated(CL_EN, lang), lang), lang)
+        result, out = tree.run_diff("--issues-only", *argv)
+        assert (result, _diff_report(out)["chapters"]) == (1, {("3.0.1", LANG): (MISSING_MARK, "missing translation")})
+
+    def test_an_empty_newest_chapter_leaves_the_chapter_below_it_released(self, changelog_tree):
+        """[3.2.0] was just opened, with nothing in it yet, and [3.1.0] below it is not translated. The newest chapter is
+        [3.2.0], so [3.1.0] is released and its absence counts: for translate-diff as for translate-validate."""
+        tree = changelog_tree
+        english = _cl_text(CL_PREAMBLE, CL_NEXT, CL_OPEN, CL_PATCH, CL_FIRST)
+        tree.write(english)
+        tree.translate_all(_cl_text(CL_PREAMBLE, CL_PATCH, CL_FIRST))
+        tree.save_cache(tree.done(english))
+        assert "3.1.0" in tree.released(), "barrier: below the newest chapter, [3.1.0] is released"
+        assert tree.run_validate("--file", "CHANGELOG.md")[0] == 1, "barrier: translate-validate counts [3.1.0] missing"
+        result, out = tree.run_diff("--issues-only", "--file", "CHANGELOG.md")
+        assert (result, _diff_report(out)) == (1, {"chapters": {("3.1.0", lang): (MISSING_MARK, "missing translation") for lang in CL_LANGS}, "missing": 3, "with issues": 0})
