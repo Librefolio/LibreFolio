@@ -70,7 +70,7 @@ from backend.app.services.provider_registry import BRIMProviderRegistry
 # =============================================================================
 
 PLUGIN_CODE = "broker_degiro"
-PLUGIN_MODULE = "backend.app.services.brim_providers.broker_degiro"
+PLUGIN_MODULE = "backend.app.services.brim_providers.broker_degiro.plugin"
 PLUGIN_VERSION = "2.0.0"
 SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
 NL_SAMPLE = SAMPLE_DIR / "degiro-export.csv"

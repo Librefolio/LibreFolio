@@ -20,6 +20,7 @@ from backend.app.db.models import (
     AssetProviderAssignment,
     PriceHistory,
 )
+from backend.app.db.precision import truncate_priceHistory
 from backend.app.db.session import get_async_engine
 from backend.app.schemas import (
     CHANGED_POINTS_PAYLOAD_CAP,
@@ -38,7 +39,6 @@ from backend.app.services.asset_sources.core import (
 from backend.app.services.asset_sources.price_store import PriceStoreOperations
 from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
-from backend.app.utils.decimal_utils import truncate_priceHistory
 
 logger = structlog.get_logger(__name__)
 

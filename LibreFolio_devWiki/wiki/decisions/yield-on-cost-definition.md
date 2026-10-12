@@ -27,7 +27,7 @@ YOC(asset, broker, T) =  Σ gross income per eligible unit, over [T − 364, T]
   are excluded; `AssetEvent` rows are not an income source. Each payout is converted to the report currency **at its
   own date** and divided by the **eligible LONG quantity at the end of the day before payment (D-1)**, adjusted for
   later splits — the same D-1 rule as the FIFO income allocator, reused (`eligible_income_quantity` from
-  `fifo_lot_engine.py`), not re-implemented a third time.
+  `financial_math/fifo/eligibility.py`), not re-implemented a third time.
 - **Window**: the trailing 365 calendar days, both ends included (`as_of_date − 364 … as_of_date`).
 - **Denominator**: the residual average cost per unit at T, in the report currency. Since 2026-10-07 it is the
   engine's `position.wac`, which comes from the single average-cost function
@@ -52,7 +52,8 @@ YOC(asset, broker, T) =  Σ gross income per eligible unit, over [T − 364, T]
 
 - YOC is stable under re-imports, partial sales and transfers, and it says why when it cannot be computed.
 - It is cached with the report: `compute_yield_on_cost_dependency_identity()` hashes what the value depends on.
-- Theory page in English only (IT/FR/ES translation debt, backlog I-08).
+- Theory page in English only (IT/FR/ES translation debt, backlog I-08). *Translated since: `yield-on-cost.{it,fr,es}.md`
+  exist, and I-08 was closed on 2026-10-12 after M's translation rounds (lint 2026-10-12).*
 
 ## Links
 
@@ -64,8 +65,8 @@ YOC(asset, broker, T) =  Σ gross income per eligible unit, over [T − 364, T]
 
 | Role | Path |
 |------|------|
-| Calculation, dependency identity | `backend/app/services/yield_on_cost.py` |
-| D-1 eligible quantity (shared) | `backend/app/services/fifo_lot_engine.py` |
+| Calculation, dependency identity | `backend/app/services/financial_math/yield_on_cost.py` |
+| D-1 eligible quantity (shared) | `backend/app/services/financial_math/fifo/eligibility.py` |
 | `YieldOnCostResult`, reasons, `PortfolioHolding.yield_on_cost` | `backend/app/schemas/portfolio.py` |
 | Caller (holdings, cache identity) | `backend/app/services/portfolio_service.py` |
 | Tests | `backend/test_scripts/test_services/test_financial/test_yield_on_cost.py` |

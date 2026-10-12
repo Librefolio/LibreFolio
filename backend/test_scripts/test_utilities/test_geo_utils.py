@@ -10,7 +10,7 @@ from decimal import Decimal
 import pytest
 
 from backend.app.schemas import FAGeographicArea
-from backend.app.utils.geo_utils import iso2_to_flag_emoji, normalize_country_to_iso3
+from backend.app.utils.asset.geo import iso2_to_flag_emoji, normalize_country_to_iso3
 
 
 def test_normalize_country_to_iso3():

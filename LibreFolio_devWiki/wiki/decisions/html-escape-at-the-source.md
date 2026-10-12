@@ -34,7 +34,7 @@ computed-key rule.
    could close the attribute it sat in).
 2. **Sanitise only mixed markup.** Sinks fed with markup of mixed origin — toasts (`ToastContainer`), `Tooltip`,
    validation and result messages in the transaction form, bulk, import-wizard and parse-detail modals,
-   `TransactionResultBanner` (later also the PAC planner's `CurrencyCode`) — render `sanitizeHtml(…)` (new,
+   `TransactionResultBanner` (later also the PAC planner's `CurrencyCode`, [[features/F-107]]) — render `sanitizeHtml(…)` (new,
    `$lib/utils/core/sanitizeHtml.ts`, DOMPurify; browser only, the app runs with `ssr = false`).
 3. **Name what you hold**: variables that carry HTML end in `Html`/`Badge`; variables that carry URLs end in `Url`/
    `Src`.

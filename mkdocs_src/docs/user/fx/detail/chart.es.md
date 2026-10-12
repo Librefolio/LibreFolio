@@ -24,7 +24,7 @@ Cambia con **Abs** / **%** en la esquina superior izquierda del gráfico; la pá
 | **Zoom** | Rueda del ratón | Pellizcar |
 | **Desplazar** | Clic y arrastrar | Arrastrar con dos dedos (un dedo desplaza la página) |
 
-- **Periodo**: los preajustes **1W** a **2Y**, **YTD** y **Todo**, o **Personalizado** (un número de días, semanas, meses o años hacia atrás desde hoy); haz clic en las fechas para elegirlas en un calendario. Aparecen más preajustes cuando la barra de herramientas tiene espacio. Las páginas de la misma pestaña del navegador comparten el periodo.
+- **Periodo**: los preajustes **1S** a **2A**, **YTD** y **Todo**, o **Personalizado** (un número de días, semanas, meses o años hacia atrás desde hoy); haz clic en las fechas para elegirlas en un calendario. Aparecen más preajustes cuando la barra de herramientas tiene espacio. Las páginas de la misma pestaña del navegador comparten el periodo.
 - En un periodo largo, el gráfico agrupa las cotizaciones por semana o mes y muestra una insignia **Semanal** o **Mensual**: amplía para ver las cotizaciones diarias.
 - En una pantalla estrecha, el eje muestra menos fechas y estas más cortas; la primera y la última siempre permanecen.
 
@@ -48,7 +48,7 @@ Pasa el cursor sobre el gráfico, o tócalo en el móvil, para ver:
 ## 🧰 Botones del gráfico
 
 - 📏 **Medida** — consulta [Medidas](measures.md).
-- ✏️ **Editar tasas** — consulta [Editor de datos](data-editor.md).
+- ✏️ **Editar tipos de cambio** — consulta [Editor de datos](data-editor.md).
 - ⚙️ **Estética** — colores, relleno, cuadrícula y rangos de ejes, como en [Ajustes del gráfico](../chart-settings.md).
 - 📊 El panel **Señales** por encima del gráfico — consulta [Señales](signals.md).
 

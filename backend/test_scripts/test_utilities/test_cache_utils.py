@@ -14,7 +14,7 @@ from contextlib import suppress
 
 import pytest
 
-from backend.app.utils.cache_utils import (
+from backend.app.utils.runtime.cache import (
     NamedCache,
     _cache_registry,
     clear_all_caches,

@@ -12,7 +12,7 @@ El tipo de activo **Otros** es una categoría general para cualquier clase de ac
 | **Valoración** | Ingreso manual o cualquier proveedor compatible |
 | **Moneda** | Cualquier moneda ISO 4217 |
 | **Ingresos** | Depende del activo específico |
-| **Proveedores típicos** | Manual, CSS Scraper |
+| **Proveedores típicos** | CSS Scraper, o precios introducidos a mano en el [Editor de datos](../../../user/assets/detail/data-editor.md) |
 
 ---
 
@@ -33,9 +33,9 @@ El tipo de activo **Otros** es una categoría general para cualquier clase de ac
 
 Para activos sin un flujo de precios público:
 
-1. Use el proveedor **Manual** e ingrese los precios a través del [Editor de Datos](../../../user/assets/detail/data-editor.md)
+1. Marca **Sin Proveedor** para el activo e introduce los precios tú mismo en el [Editor de datos](../../../user/assets/detail/data-editor.md)
 2. O use el proveedor **CSS Scraper** para extraer precios de un sitio web
-3. Registre las transacciones de compra/venta como de costumbre a través de las importaciones del bróker
+3. Registra las transacciones de compra/venta como de costumbre a través de las importaciones del bróker
 
 ---
 

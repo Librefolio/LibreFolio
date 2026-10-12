@@ -20,6 +20,13 @@ A `ComponentSpec` is the smallest declarative runtime unit. It defines:
 - required component dependencies;
 - period behavior and optional temporal aggregator metadata.
 
+The version is the implementation's: it moves when the builder or payload changes (a
+field added or made nullable, a flag computed differently), not when new values reach
+an unchanged builder, and at most once (+1) per release. A bump updates together the
+`ComponentSpec`, its frozen placeholder in `components/catalog.py` (checked at import)
+and [`COMPACT_COMPONENT_VERSIONS`](#snapshot-data-tables), or the component silently
+falls back to YAML (devWiki: `decisions/ai-export-version-bump-once-per-release`).
+
 Dependencies are always required for the dependent component itself. Whether a
 top-level failure is fatal depends on whether the dataset requested that component
 as required or optional.
@@ -418,6 +425,22 @@ missing FX rate, or no market value), and so is `total_residual_cost_basis`. Onl
 market-value totals — open value, unrealized P&L, potential gain and loss — keep
 summing the open lots that have them, with their coverage stated in
 `value_coverage_status`, `valued_open_lot_count` and `unavailable_open_lot_count`.
+
+`portfolio.reconciliation` and `broker.reconciliation` state `residual`, the exact
+period P&L minus its components, and `reconciled`: `null` if a term is missing, true
+below `CONVERSION_DUST` (`1e-9`) in absolute value, since `period_other_result` closes
+the decomposition up to `Decimal` rounding. A residual under the currency's minor unit
+prints as `0` (`monetary_residuals_zeroed`), so `reconciled` true beside `0` is normal.
+
+The generic compact renderer prints ratio fields under public names:
+`PUBLIC_RATIO_FIELD_NAMES`, applied by `genericFieldName()` to SUMMARY rows and table
+columns, turns `portfolio_weight_ratio` into `portfolio_weight_percent`,
+`coverage_ratio` into `coverage_percent`, and so on. A value that references a payload
+field — a key in `FIELD_REFERENCE_KEYS`: a `field` leaf, as in `asset.position_scope`
+`portfolio_role.unavailable[].field`, or an item of `missing_fields`, as in
+`coverage.omitted[].missing_fields` — goes through the same map, so it names the
+column as the prompt shows it; free text such as `reason` is never rewritten, and the
+backend payload keeps the canonical codes.
 
 ## 📋 Manifests
 

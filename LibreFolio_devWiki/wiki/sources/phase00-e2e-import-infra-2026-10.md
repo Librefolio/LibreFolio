@@ -31,7 +31,8 @@ production, found two real defects that plan 34 then fixed: [[problems/account-d
   and `custom-uploads` alone (`backend/test_scripts/test_db/populate_mock_data.py`; test `test_populate_reset.py`).
   The runner's `db create` already reset the file store: a precedent nobody had noticed.
 - **Timing flakes**: helpers used `isVisible({timeout})`, which does not wait (the same trap as in
-  [[problems/compactcashcell-decimal-separator-feedback-loop]]), and picked files with `.first()`. Now one shared
+  [[problems/compactcashcell-decimal-separator-feedback-loop]] and, later, in the gallery:
+  [[problems/playwright-probes-ignore-timeout]]), and picked files with `.first()`. Now one shared
   fixture drives the wizard by reading the stepper (`[aria-current="step"][data-step-id]`), confirms warnings only when
   the parse response says there are some, and finds files by name, page by page
   (`frontend/e2e/fixtures/import-wizard.ts`: `uploadOwnedReport`, `deleteOwnedReports`, `selectBrokerFile`,

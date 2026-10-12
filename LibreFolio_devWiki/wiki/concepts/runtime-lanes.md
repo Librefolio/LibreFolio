@@ -44,6 +44,12 @@ the locked main venv with `PIPENV_CUSTOM_VENV_NAME` (documented in the `devpy` a
 Every parallel workstream of Release 2 ran in its own lane (e.g. "lane 6156/6166, `--data-dir /tmp/librefolio-r2-l`"
 in the plans' headers). Isolation *between tests of one run* is a different layer: [[concepts/test-isolation-classes]].
 
+## Worktrees and trains
+
+A lane isolates ports and data; the worktree still shares Git with the trains. A fast-forward by the coordinator is
+refused over a file the workstream has modified locally and the target also changes — the way past it without a Git
+write: [[problems/fast-forward-blocked-by-a-dirty-file]].
+
 ## Source files
 
 | Role | Path |

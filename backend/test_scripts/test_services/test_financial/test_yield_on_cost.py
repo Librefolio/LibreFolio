@@ -22,7 +22,7 @@ setup_test_database()
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import backend.app.services.yield_on_cost as yoc_module
+import backend.app.services.financial_math.yield_on_cost as yoc_module
 from backend.app.db.models import (
     Asset,
     AssetEvent,
@@ -47,7 +47,7 @@ from backend.app.schemas.portfolio import (
     YieldOnCostStatus,
     YieldOnCostUnavailableReason,
 )
-from backend.app.services.yield_on_cost import (
+from backend.app.services.financial_math.yield_on_cost import (
     YieldOnCostPositionInput,
     calculate_yield_on_cost_for_positions,
     compute_yield_on_cost_dependency_identity,

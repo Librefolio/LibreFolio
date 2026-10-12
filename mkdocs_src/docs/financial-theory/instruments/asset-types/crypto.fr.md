@@ -13,7 +13,7 @@ Les **cryptomonnaies** sont des actifs numériques qui utilisent la technologie 
 | **Devise de cotation** | Généralement cotées en USD, mais échangeables contre de nombreuses paires de devises fiduciaires et crypto |
 | **Dividendes** | Aucun pour la plupart (certains jetons DeFi offrent des récompenses de staking) |
 | **Volatilité** | Significativement plus élevée que celle des actifs traditionnels |
-| **Fournisseurs typiques** | Yahoo Finance (ex. : `BTC-USD`), Manuel |
+| **Fournisseurs typiques** | Yahoo Finance (ex. : `BTC-USD`), ou prix saisis manuellement dans l'[éditeur de données](../../../user/assets/detail/data-editor.md) |
 
 ---
 

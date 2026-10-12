@@ -899,6 +899,7 @@
                     axisLabel: {
                         color: isDark ? '#94a3b8' : '#6b7280',
                         fontSize: 14,
+                        formatter: xAxisPolicy.formatter,
                         ...(xAxisPolicy.axisLabel ?? {}),
                     },
                     splitLine: {show: false},

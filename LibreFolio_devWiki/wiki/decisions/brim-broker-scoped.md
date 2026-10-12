@@ -113,6 +113,6 @@ invent balancing rows.
 | File metadata and broker-specific storage | `backend/app/services/brim_provider.py` |
 | Upload/parse DTOs and fake-ID contract | `backend/app/schemas/brim.py` |
 | Multi-file broker assignment UI | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| Generic CSV parser | `backend/app/services/brim_providers/broker_generic_csv.py` |
+| Generic CSV parser | `backend/app/services/brim_providers/broker_generic_csv/plugin.py` |
 | Import wizard developer guide | `mkdocs_src/docs/developer/frontend/components/features/import-wizard.md` |
 | Generic CSV developer guide | `mkdocs_src/docs/developer/backend/brim/generic_csv.md` |

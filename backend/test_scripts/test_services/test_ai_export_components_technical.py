@@ -95,7 +95,7 @@ from backend.app.services.ai_export.temporal.policy import (
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.provider_registry import SignalPluginRegistry
-from backend.app.services.signal_plugins.drawdown import DrawdownParams, DrawdownPlugin
+from backend.app.services.signal_plugins.drawdown.plugin import DrawdownParams, DrawdownPlugin
 from backend.app.services.signal_service import SignalService
 
 #: Frozen 20-instance Asset technical universe.

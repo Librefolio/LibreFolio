@@ -4,6 +4,7 @@ User Service
 Business logic for user management, used by both API and CLI.
 """
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -165,7 +166,7 @@ async def create_user(
     user = User(
         username=username,
         email=email,
-        hashed_password=hash_password(password),
+        hashed_password=await asyncio.to_thread(hash_password, password),
         is_active=is_active,
         is_superuser=is_superuser,
     )

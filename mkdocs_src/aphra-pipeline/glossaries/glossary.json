@@ -329,6 +329,21 @@
       "fr": "P&L latent",
       "es": "P&L no realizado"
     },
+    "unrealized change": {
+      "it": "variazione non realizzata",
+      "fr": "variation non réalisée",
+      "es": "variación no realizada"
+    },
+    "FX on cash": {
+      "it": "effetto cambio sulla liquidità",
+      "fr": "effet de change sur les liquidités",
+      "es": "efecto del tipo de cambio sobre el efectivo"
+    },
+    "exchange result on cash": {
+      "it": "risultato di cambio sulla liquidità",
+      "fr": "résultat de change sur les liquidités",
+      "es": "resultado de cambio sobre el efectivo"
+    },
     "period P&L": {
       "it": "P&L periodo",
       "fr": "P&L période",
@@ -388,6 +403,11 @@
       "it": "coppia FX",
       "fr": "paire FX",
       "es": "par FX"
+    },
+    "FX Pair Analysis": {
+      "it": "Analisi della coppia FX",
+      "fr": "Analyse de la paire de devises",
+      "es": "Análisis del par de divisas"
     },
     "interest schedule": {
       "it": "piano interessi",

@@ -26,6 +26,9 @@
  * deletes the files and the broker afterwards. It checks that the files of one step-1
  * session reach the server with one shared `batch_id`.
  *
+ * The "step 1 waits for the broker list" block (E1) holds the wizard's import-plugin request so
+ * step 1 stays busy, checks Next stays disabled until that load lands, then moves on with zero files.
+ *
  * Entry point: the transactions toolbar "Import" button (`tx-import-button`) sets
  * bulkIntent={action:'import'}, and the BulkModal auto-opens the wizard on that intent —
  * a clean entry that never selects a table row by position.
@@ -218,6 +221,58 @@ test.describe('Import Wizard — upload step', () => {
         await page.getByTestId('import-wizard-close').click();
         await page.getByTestId('confirm-modal-confirm').click();
         await expect(page.getByTestId('import-wizard-stepper')).toHaveCount(0, {timeout: 5_000});
+    });
+});
+
+// ---------------------------------------------------------------------------
+// E1 — step 1 waits for the broker list (zero files: Next uploads nothing, no writes)
+// ---------------------------------------------------------------------------
+
+test.describe('Import Wizard — step 1 waits for the broker list', () => {
+    test('E1 keeps Next disabled while step 1 is still loading the broker list, then reaches step 2', async ({page}) => {
+        await login(page, TEST_USER);
+        await goToTransactions(page);
+
+        // On /transactions the broker list and the transaction types are already in their stores,
+        // so the wizard's open load waits on the one list nothing has fetched yet: the import
+        // plugins. Holding that request holds the whole broker load open, for as long as we want.
+        const held: string[] = [];
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        await page.route('**/api/v1/brokers/import/plugins*', async (route) => {
+            held.push(route.request().url());
+            await gate;
+            await route.fallback();
+        });
+
+        try {
+            await page.getByTestId('tx-import-button').click();
+            await expect(page.getByTestId('import-wizard-stepper')).toBeVisible({timeout: 8_000});
+            const step1 = page.getByTestId('import-wizard-step1');
+            await expect(step1).toBeVisible({timeout: 5_000});
+
+            // Preconditions: the load is really held and step 1 says it is busy. Without both,
+            // the assertion that follows would prove nothing, so they fail loudly instead.
+            await expect.poll(() => held.length, {message: 'the wizard requests the import plugins when it opens', timeout: 10_000}).toBeGreaterThan(0);
+            await expect(step1, 'step 1 publishes data-busy while its broker load is held').toHaveAttribute('data-busy', 'true');
+
+            const next = page.getByTestId('import-wizard-next');
+            await expect(next, 'E1: Next must stay disabled while step 1 is busy loading the broker list').toBeDisabled({timeout: 5_000});
+
+            release();
+            await expect(next).toBeEnabled({timeout: 10_000});
+            // Only after the release: while the request is held, data-busy can never read "false".
+            await waitForSettled(step1);
+            await next.click();
+            const step2 = page.getByTestId('import-wizard-step2');
+            await expect(step2).toBeVisible({timeout: 10_000});
+            await waitForSettled(step2);
+        } finally {
+            // A failing run must not leave the page waiting on a request nobody will answer.
+            release();
+        }
     });
 });
 

@@ -118,6 +118,9 @@ compared `dateStart === requestedStart`, so the request discarded its **own** an
 its own identity must carry its staleness token along* — otherwise the guard cannot tell "superseded" from "I moved".
 Plan: `plan-phase00PerformanceChartsBugfix-EventsOnCacheHit.prompt.md` (`phases/20_performanceCharts/`).
 
+On the risk panels, a complete answer was once rendered as «No results»:
+[[problems/discarded-risk-answer-read-as-empty]].
+
 ## How to spot the shape
 
 - an `$effect` or a guard that **resets state** on a signature change;

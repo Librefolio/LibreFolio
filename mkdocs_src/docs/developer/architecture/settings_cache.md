@@ -2,7 +2,7 @@
 
 Backend services cache provider responses and computed aggregates in **named TTL caches** built
 on [theine](https://github.com/Yiling-J/theine) (Rust-backed core). A small registry in
-`backend/app/utils/cache_utils.py` tracks every cache by name, and three endpoints under
+`backend/app/utils/runtime/cache.py` tracks every cache by name, and three endpoints under
 `/api/v1/settings/cache/*` expose that registry to the UI.
 
 ## 🧱 The named-cache registry
@@ -10,7 +10,7 @@ on [theine](https://github.com/Yiling-J/theine) (Rust-backed core). A small regi
 Services obtain a cache through the registry, never by constructing one ad hoc:
 
 ```python
-from backend.app.utils.cache_utils import get_ttl_cache
+from backend.app.utils.runtime.cache import get_ttl_cache
 
 _fx_fetch_cache = get_ttl_cache("fx_provider_responses", maxsize=200, ttl=300)
 ```
@@ -57,7 +57,7 @@ Caches register lazily at import time, so the list below is the full registry as
 | `asset_current_fetch` | 300 | 2 min | `asset_source` |
 | `asset_metadata_fetch` | 200 | 30 min | `asset_source` |
 | `fx_provider_responses` | 200 | 5 min | `fx` |
-| `portfolio_blob` | 30 | 24 h | `portfolio_engine` |
+| `portfolio_blob` | 30 | 24 h | `financial_math/portfolio/engine.py` |
 | `portfolio_layer2` | 20 | 30 min | `portfolio_service` |
 | `portfolio_wac` | 200 | 1 h | `portfolio_service` |
 | `upload_metadata` | 500 | 1 h | `static_uploads` |

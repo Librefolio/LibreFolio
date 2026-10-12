@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import bisect
 from collections import defaultdict
-from dataclasses import dataclass, field, replace
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -12,55 +10,35 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType
-from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
-    BrokerWACHistoryPoint,
-    CumulativeWACHistoryPoint,
     DataQualityIssue,
     DataQualityReport,
-    EconomicAllocationGroupSchema,
-    EconomicLotAllocationSchema,
     GanttSegmentSchema,
     IssueCode,
     IssueDomain,
     IssueSeverity,
     LotAnalysisStatus,
     LotAnalysisType,
-    LotIncomeEventKind,
-    LotIncomeEventSchema,
-    LotPriceHistoryPoint,
-    LotReturnHistoryPoint,
     LotsAnalysisMetadata,
     LotsAnalysisResponse,
     LotSummarySchema,
     LotTimelineEventKind,
     LotTimelineEventSchema,
-    LotValueHistoryPoint,
-    PerformanceHistoryPoint,
-    ReferencePriceSource,
-    TargetOperationAllocationSchema,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.fifo_lot_engine import (
-    EconomicAllocationGroup,
-    EconomicEvent,
-    FifoDataQualityIssue,
-    FifoEngineResult,
-    FifoEvent,
-    FifoInputTransaction,
-    FifoLot,
-    FragmentInterval,
-    LotClosure,
-    ReferencePriceResolution,
-    run_fifo_lot_engine,
-)
 from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
-from backend.app.services.fx import convert_bulk
-from backend.app.services.portfolio_engine import DerivedViewsBuilder, load_configured_fx_pair_sets
-from backend.app.services.price_resolver import build_asset_price_series
+from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
+from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, ReferencePriceResolution
+from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, build_broker_wac_history, build_cumulative_wac_history
+from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs, needs_market_series, unconvertible_ids
+from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics, build_cost_economic_events, build_engine_transactions, build_income_economic_events, extract_cost_outputs, extract_income_outputs, map_economic_groups, withheld_economics
+from backend.app.services.financial_math.lots.histories import PerformanceSourceContext, build_performance_history, build_price_history, build_return_history, build_value_history, fragment_active_on_date, group_closures, group_fragments, known_cumulative_proceeds, known_realized_pnl, trim_dates
+from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, opening_reference_price
+from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, load_configured_fx_pair_sets
+from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.app.services.financial_math.returns import cumulative_to_annualized
+from backend.app.services.financial_math.valuation import compute_holding_value, normalize_quote_base_quantity
 from backend.app.services.settings_service import get_effective_base_currency
-from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series, cumulative_to_annualized
-from backend.app.utils.financial.valuation_utils import compute_holding_value, normalize_quote_base_quantity
 
 _WARNING_ISSUE_CODES = {
     IssueCode.REFERENCE_PRICE_FALLBACK,
@@ -81,143 +59,6 @@ _CUSTODY_KINDS = {
     LotTimelineEventKind.TRANSFER_DEPART,
     LotTimelineEventKind.TRANSFER_ARRIVE,
 }
-
-
-@dataclass(frozen=True, slots=True)
-class _PricePoint:
-    price: Decimal
-    currency: str
-    resolved_date: date_type
-    source: ReferencePriceSource
-
-
-@dataclass(frozen=True, slots=True)
-class _PerformanceSourceContext:
-    transactions: Sequence[Transaction]
-    engine_result: FifoEngineResult
-    lots_by_id: dict[int, FifoLot]
-    fragments_by_lot: dict[int, list[FragmentInterval]]
-    closures_by_lot: dict[int, list[LotClosure]]
-    tx_by_id: dict[int, Transaction]
-
-
-@dataclass(frozen=True, slots=True)
-class _LotValueBasis:
-    """What a lot's value series needs, in the target currency."""
-
-    original_cost: Decimal
-    # A short's cumulative proceeds; 0 for a long, whose proceeds come from its closures.
-    short_proceeds: Decimal
-    last_date: date_type
-    proceeds_by_day: dict[date_type, Decimal]
-
-
-# FEE/TAX pools weighted by the controvalue of their trades: their split depends on the trades' rates.
-_TRADE_WEIGHTED_RULES = frozenset({"SAME_DAY_TRADES", "SAME_DAY_MIXED_TRADES", "PREVIOUS_DAY_TRADES"})
-_ECONOMIC_KIND = {"DIVIDEND": "income", "INTEREST": "income", "FEE": "fees", "TAX": "taxes"}
-
-
-@dataclass(frozen=True, slots=True)
-class _WithheldEconomics:
-    """The economic pools a missing rate leaves unknown, and what they withhold.
-
-    A pool is degraded by its amount (one of its events has no rate) or by its split (a pool weighted
-    by trades in different currencies, one of them without a rate). Every lot it reaches has that
-    income, fee or tax unknown from the pool's date; an orphan pool leaves the asset's orphan total
-    of its kind unknown. Pools are indexes into the engine's ``economic_allocation_groups``.
-    """
-
-    income_from: dict[int, date_type] = field(default_factory=dict)
-    fees_from: dict[int, date_type] = field(default_factory=dict)
-    taxes_from: dict[int, date_type] = field(default_factory=dict)
-    amount_degraded: frozenset[int] = frozenset()
-    split_degraded: frozenset[int] = frozenset()
-    unconvertible_event_ids: frozenset[int] = frozenset()
-    orphan_unknown: frozenset[str] = frozenset()
-
-    def reaches(self, lot_id: int) -> bool:
-        return lot_id in self.income_from or lot_id in self.fees_from or lot_id in self.taxes_from
-
-
-_NOTHING_WITHHELD = _WithheldEconomics()
-
-
-class _PriceHistoryLookup:
-    def __init__(self, prices: Sequence[PriceHistory]) -> None:
-        self._rows = sorted((row for row in prices if row.close is not None), key=lambda row: row.date)
-        self._dates = [row.date for row in self._rows]
-
-    def resolve(self, query_date: date_type) -> _PricePoint | None:
-        if not self._rows:
-            return None
-        idx = bisect.bisect_right(self._dates, query_date) - 1
-        if idx < 0:
-            return None
-        row = self._rows[idx]
-        return _PricePoint(
-            price=row.close if row.close is not None else Decimal("0"),
-            currency=row.currency,
-            resolved_date=row.date,
-            source="exact" if row.date == query_date else "fallback",
-        )
-
-    def latest(self) -> _PricePoint | None:
-        if not self._rows:
-            return None
-        last = self._rows[-1]
-        return _PricePoint(price=last.close if last.close is not None else Decimal("0"), currency=last.currency, resolved_date=last.date, source="exact")
-
-
-class _FxRateResolver:
-    def __init__(self, target_currency: str) -> None:
-        self.target_currency = target_currency
-        self._needs: list[tuple[str, date_type]] = []
-        self._seen: set[tuple[str, date_type]] = set()
-        self._loaded: set[tuple[str, date_type]] = set()
-        self._rates: dict[tuple[str, date_type], Decimal] = {}
-        self._missing: dict[str, set[date_type]] = defaultdict(set)
-
-    def need(self, currency: str | None, as_of_date: date_type) -> None:
-        if not currency or currency == self.target_currency:
-            return
-        key = (currency, as_of_date)
-        if key in self._seen:
-            return
-        self._seen.add(key)
-        self._needs.append(key)
-
-    async def load(self, session: AsyncSession) -> None:
-        pending = [key for key in self._needs if key not in self._loaded]
-        if not pending:
-            return
-        conversions = [(Currency(code=currency, amount=Decimal("1")), self.target_currency, as_of_date) for currency, as_of_date in pending]
-        results, _errors = await convert_bulk(session, conversions, raise_on_error=False)
-        for idx, key in enumerate(pending):
-            self._loaded.add(key)
-            result = results[idx] if idx < len(results) else None
-            if result is None:
-                continue
-            converted, _rate_date, _backfilled = result
-            self._rates[key] = converted.amount
-
-    def convert(self, amount: Decimal | None, currency: str | None, as_of_date: date_type) -> Decimal | None:
-        if amount is None:
-            return None
-        if not currency or currency == self.target_currency:
-            return amount
-        rate = self._rates.get((currency, as_of_date))
-        if rate is None:
-            self._missing[f"{currency}/{self.target_currency}"].add(as_of_date)
-            return None
-        return amount * rate
-
-    def missing_pairs(self) -> list[WACMissingPairInfo]:
-        """Every conversion asked for and not made, one entry per pair, as the data-quality report lists them."""
-        return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(self._missing.items())]
-
-
-# Key of the average-cost line that pools every broker in scope (the cumulative WAC line).
-_ALL_BROKERS = "__all__"
 
 
 class LotsAnalysisService:
@@ -283,7 +124,7 @@ class LotsAnalysisService:
             date_from=computed_from,
             date_to=actual_to,
         )
-        price_lookup = _PriceHistoryLookup(prices)
+        price_lookup = PriceHistoryLookup(prices)
         estimated_mode = price_lookup.latest() is None
         income_transactions = await self._load_income_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
         cost_transactions = await self._load_cost_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
@@ -301,7 +142,7 @@ class LotsAnalysisService:
         # target controvalue (FEE weights, §3.5). Eligibility (D-1 open quantity, broker-scoped,
         # transfer-aware) and matching are computed inside the engine from the replayed fragments.
         # Valuation FX is resolved after the run (below).
-        fx_resolver = _FxRateResolver(target_currency)
+        fx_resolver = FxRateResolver(target_currency)
         needs_income_alloc = any(analysis in normalized_analyses for analysis in (LotAnalysisType.LOT_SUMMARY, LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.INCOME_EVENTS))
         income_events_input: list[EconomicEvent] = []
         cost_events_input: list[EconomicEvent] = []
@@ -319,24 +160,24 @@ class LotsAnalysisService:
                         fx_resolver.need(tx.currency or asset.currency, tx.date)
             await fx_resolver.load(self.db)
             # An event or a trade weight without a rate still reaches the engine, which places it; every
-            # figure of the pools it touches is withheld below (``_withheld_economics``).
-            unconvertible_event_ids = self._unconvertible_ids([*income_transactions, *cost_transactions], fx_resolver, asset.currency)
+            # figure of the pools it touches is withheld below (``withheld_economics``).
+            unconvertible_event_ids = unconvertible_ids([*income_transactions, *cost_transactions], fx_resolver, asset.currency)
             if income_transactions:
-                income_events_input = self._build_income_economic_events(
+                income_events_input = build_income_economic_events(
                     income_transactions=income_transactions,
                     fx_resolver=fx_resolver,
                     asset_currency=asset.currency,
                     target_currency=target_currency,
                 )
             if cost_transactions:
-                cost_events_input = self._build_cost_economic_events(
+                cost_events_input = build_cost_economic_events(
                     cost_transactions=cost_transactions,
                     fx_resolver=fx_resolver,
                     asset_currency=asset.currency,
                     target_currency=target_currency,
                 )
-                engine_transactions = self._build_engine_transactions(transactions, fx_resolver, asset.currency, target_currency)
-                unconvertible_trade_ids = self._unconvertible_ids([tx for tx in transactions if tx.type in (TransactionType.BUY, TransactionType.SELL)], fx_resolver, asset.currency)
+                engine_transactions = build_engine_transactions(transactions, fx_resolver, asset.currency, target_currency)
+                unconvertible_trade_ids = unconvertible_ids([tx for tx in transactions if tx.type in (TransactionType.BUY, TransactionType.SELL)], fx_resolver, asset.currency)
 
         engine_result = run_fifo_lot_engine(
             transactions=engine_transactions,
@@ -349,10 +190,10 @@ class LotsAnalysisService:
 
         lots_by_id = {lot.lot_id: lot for lot in engine_result.lots}
         selected_ids = self._resolve_selected_lot_ids(selected_lot_ids, lots_by_id)
-        fragments_by_lot = self._group_fragments(engine_result.fragment_intervals)
-        closures_by_lot = self._group_closures(engine_result.closures)
+        fragments_by_lot = group_fragments(engine_result.fragment_intervals)
+        closures_by_lot = group_closures(engine_result.closures)
         tx_by_id = {tx.id: tx for tx in transactions if tx.id is not None}
-        withheld = self._withheld_economics(
+        withheld = withheld_economics(
             engine_result.economic_allocation_groups,
             unconvertible_event_ids=unconvertible_event_ids,
             unconvertible_trade_ids=unconvertible_trade_ids,
@@ -361,7 +202,7 @@ class LotsAnalysisService:
         display_from = date_from or computed_from
         history_dates = list(_date_range(computed_from, actual_to))
 
-        performance_context = _PerformanceSourceContext(
+        performance_context = PerformanceSourceContext(
             transactions=transactions,
             engine_result=engine_result,
             lots_by_id=lots_by_id,
@@ -382,16 +223,16 @@ class LotsAnalysisService:
                     reference_price_lookup=reference_price_lookup,
                 )
                 performance_lots_by_id = {lot.lot_id: lot for lot in performance_engine_result.lots}
-                performance_context = _PerformanceSourceContext(
+                performance_context = PerformanceSourceContext(
                     transactions=performance_transactions,
                     engine_result=performance_engine_result,
                     lots_by_id=performance_lots_by_id,
-                    fragments_by_lot=self._group_fragments(performance_engine_result.fragment_intervals),
-                    closures_by_lot=self._group_closures(performance_engine_result.closures),
+                    fragments_by_lot=group_fragments(performance_engine_result.fragment_intervals),
+                    closures_by_lot=group_closures(performance_engine_result.closures),
                     tx_by_id={tx.id: tx for tx in performance_transactions if tx.id is not None},
                 )
 
-        self._collect_fx_needs(
+        collect_fx_needs(
             fx_resolver=fx_resolver,
             analyses=normalized_analyses,
             lots_by_id=lots_by_id,
@@ -407,7 +248,7 @@ class LotsAnalysisService:
             computed_from=computed_from,
             asset_currency=asset.currency,
         )
-        self._collect_performance_fx_needs(
+        collect_performance_fx_needs(
             fx_resolver=fx_resolver,
             analyses=normalized_analyses,
             transactions=performance_context.transactions,
@@ -421,11 +262,11 @@ class LotsAnalysisService:
                 fx_resolver.need(lot.currency, lot.opening_date)
         await fx_resolver.load(self.db)
 
-        income_by_lot, income_prefix_by_lot, income_events_payload = self._extract_income_outputs(engine_result, income_events_input, withheld)
-        fees_by_lot, taxes_by_lot, fees_prefix_by_lot, taxes_prefix_by_lot = self._extract_cost_outputs(engine_result)
+        income_by_lot, income_prefix_by_lot, income_events_payload = extract_income_outputs(engine_result, income_events_input, withheld)
+        fees_by_lot, taxes_by_lot, fees_prefix_by_lot, taxes_prefix_by_lot = extract_cost_outputs(engine_result)
 
         data_quality = self._build_data_quality_report(engine_result.issues, engine_result.economic_allocation_groups, withheld)
-        if estimated_mode and self._needs_market_series(normalized_analyses):
+        if estimated_mode and needs_market_series(normalized_analyses):
             # estimated_mode == the asset has NO price points at all, so the whole analysis window
             # [computed_from, actual_to] is the range with no market price. Surface it in the message
             # so the user knows which period is uncovered (per user feedback on delisted/matured titles).
@@ -525,8 +366,8 @@ class LotsAnalysisService:
 
         value_history = None
         if LotAnalysisType.VALUE_HISTORY in normalized_analyses:
-            value_history = self._trim_dates(
-                self._build_value_history(
+            value_history = trim_dates(
+                build_value_history(
                     selected_ids=selected_ids,
                     lots_by_id=lots_by_id,
                     fragments_by_lot=fragments_by_lot,
@@ -547,8 +388,8 @@ class LotsAnalysisService:
 
         return_history = None
         if LotAnalysisType.RETURN_HISTORY in normalized_analyses:
-            return_history = self._trim_dates(
-                self._build_return_history(
+            return_history = trim_dates(
+                build_return_history(
                     selected_ids=selected_ids,
                     lots_by_id=lots_by_id,
                     fragments_by_lot=fragments_by_lot,
@@ -570,8 +411,8 @@ class LotsAnalysisService:
 
         price_history = None
         if LotAnalysisType.PRICE_HISTORY in normalized_analyses:
-            price_history = self._trim_dates(
-                self._build_price_history(
+            price_history = trim_dates(
+                build_price_history(
                     selected_ids=selected_ids,
                     lots_by_id=lots_by_id,
                     estimated_market_prices=estimated_market_prices,
@@ -585,24 +426,24 @@ class LotsAnalysisService:
 
         broker_wac_history = None
         if LotAnalysisType.BROKER_WAC_HISTORY in normalized_analyses:
-            broker_wac_history = self._trim_dates(
-                self._build_broker_wac_history(scope_broker_ids, average_cost_lines, history_dates),
+            broker_wac_history = trim_dates(
+                build_broker_wac_history(scope_broker_ids, average_cost_lines, history_dates),
                 display_from,
                 actual_to,
             )
 
         cumulative_wac_history = None
         if LotAnalysisType.CUMULATIVE_WAC_HISTORY in normalized_analyses:
-            cumulative_wac_history = self._trim_dates(
-                self._build_cumulative_wac_history(average_cost_lines, history_dates),
+            cumulative_wac_history = trim_dates(
+                build_cumulative_wac_history(average_cost_lines, history_dates),
                 display_from,
                 actual_to,
             )
 
         performance_history = None
         if LotAnalysisType.PERFORMANCE_HISTORY in normalized_analyses:
-            performance_history = self._trim_dates(
-                self._build_performance_history(
+            performance_history = trim_dates(
+                build_performance_history(
                     scope_broker_ids=scope_broker_ids,
                     history_dates=history_dates,
                     market_prices=market_prices,
@@ -623,7 +464,7 @@ class LotsAnalysisService:
 
         economic_allocation_groups = None
         if LotAnalysisType.LOT_SUMMARY in normalized_analyses and engine_result.economic_allocation_groups:
-            economic_allocation_groups = self._map_economic_groups(engine_result.economic_allocation_groups, withheld)
+            economic_allocation_groups = map_economic_groups(engine_result.economic_allocation_groups, withheld)
 
         # Every builder has converted what it needed: report, once, what could not be converted or costed.
         conversion_gaps = fx_resolver.missing_pairs()
@@ -684,7 +525,7 @@ class LotsAnalysisService:
         These are cash-only events (no quantity) so they never enter the FIFO engine load;
         they are attributed to open LONG lots as of ``transaction.date - 1`` (D-1 semantics), scoped
         to the paying broker and transfer-aware, by the engine economic stage (see
-        ``FifoLotEngine._allocate_income_pools`` and ``_build_income_economic_events``).
+        ``FifoLotEngine._allocate_income_pools`` and ``build_income_economic_events``).
         Income without ``asset_id`` is intentionally excluded here — it is handled broker-level
         by the Portfolio Engine ("Altri effetti del periodo").
         """
@@ -704,7 +545,7 @@ class LotsAnalysisService:
 
         Like income these are cash-only events (no quantity) and never enter the FIFO quantitative
         load; they are pooled and matched to trades/income/holdings by the engine economic stage
-        (see ``FifoLotEngine._allocate_cost_pools`` and ``_build_cost_economic_events``). FEE/TAX
+        (see ``FifoLotEngine._allocate_cost_pools`` and ``build_cost_economic_events``). FEE/TAX
         without ``asset_id`` are intentionally excluded — those are broker-level costs handled by the
         Portfolio Engine, not attributable to a specific lot.
         """
@@ -793,112 +634,6 @@ class LotsAnalysisService:
             raise ValueError(f"Unknown lot ids requested: {missing}")
         return list(dict.fromkeys(selected_lot_ids))
 
-    def _collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collection blocks, no decision tree
-        self,
-        *,
-        fx_resolver: _FxRateResolver,
-        analyses: Sequence[LotAnalysisType],
-        lots_by_id: dict[int, FifoLot],
-        selected_ids: Sequence[int],
-        transactions: Sequence[Transaction],
-        price_lookup: _PriceHistoryLookup,
-        prices: Sequence[PriceHistory],
-        fragments: Sequence[FragmentInterval],
-        events: Sequence[FifoEvent],
-        closures: Sequence[LotClosure],
-        split_ratios_by_tx_id: dict[int, Decimal],
-        actual_to: date_type,
-        computed_from: date_type,
-        asset_currency: str,
-    ) -> None:
-        tx_by_id = {tx.id: tx for tx in transactions if tx.id is not None}
-        if LotAnalysisType.LOT_SUMMARY in analyses or LotAnalysisType.RETURN_HISTORY in analyses:
-            for lot_id in selected_ids:
-                lot = lots_by_id[lot_id]
-                fx_resolver.need(lot.currency, lot.opening_date)
-                raw_reference_price, raw_reference_currency, reference_date, _reference_source = self._opening_reference_price(lot, price_lookup)
-                if raw_reference_price is not None and raw_reference_currency is not None:
-                    fx_resolver.need(raw_reference_currency, reference_date)
-                for closure in [c for c in closures if c.lot_id == lot_id]:
-                    fx_resolver.need(lot.currency, closure.close_date)
-
-        if LotAnalysisType.GANTT_TOPOLOGY in analyses:
-            for fragment in fragments:
-                if fragment.lot_id in selected_ids:
-                    lot = lots_by_id[fragment.lot_id]
-                    fx_resolver.need(lot.currency, fragment.start_date)
-
-        if LotAnalysisType.CUSTODY_HISTORY in analyses or LotAnalysisType.EVENT_HISTORY in analyses:
-            for event in events:
-                tx = tx_by_id.get(event.transaction_id)
-                if tx is not None:
-                    fx_resolver.need(tx.currency, event.date)
-            for closure in closures:
-                if closure.lot_id in selected_ids:
-                    lot = lots_by_id[closure.lot_id]
-                    fx_resolver.need(lot.currency, closure.close_date)
-
-        if self._needs_market_series(analyses):
-            current = computed_from
-            # The unified resolver marks each day from asset-system prices AND observed trades
-            # (BUY/SELL + priced ADJUSTMENT), each in its native currency; both the valuation and
-            # chart lines convert those marks to target at the *valuation* date. Register the fx
-            # needs for every price- and trade-currency across the whole window so a foreign mark
-            # carried forward still translates on the day it is read (mirrors build_asset_price_series).
-            currencies = {price.currency for price in prices}
-            for tx in transactions:
-                if tx.id in split_ratios_by_tx_id:
-                    continue
-                tx_type = str(getattr(tx.type, "value", tx.type))
-                if tx_type in ("BUY", "SELL") and tx.amount:
-                    currencies.add(tx.currency or asset_currency)
-                elif tx_type == "ADJUSTMENT" and tx.cost_basis_override not in (None, Decimal("0")):
-                    currencies.add(tx.cost_basis_currency or asset_currency)
-            currencies.discard(None)
-            while current <= actual_to:
-                for currency in currencies:
-                    fx_resolver.need(currency, current)
-                current += timedelta(days=1)
-
-    def _needs_market_series(self, analyses: Sequence[LotAnalysisType]) -> bool:
-        return any(
-            analysis in analyses
-            for analysis in (
-                LotAnalysisType.LOT_SUMMARY,
-                LotAnalysisType.VALUE_HISTORY,
-                LotAnalysisType.RETURN_HISTORY,
-                LotAnalysisType.PRICE_HISTORY,
-                LotAnalysisType.PERFORMANCE_HISTORY,
-            )
-        )
-
-    def _collect_performance_fx_needs(
-        self,
-        *,
-        fx_resolver: _FxRateResolver,
-        analyses: Sequence[LotAnalysisType],
-        transactions: Sequence[Transaction],
-        closures: Sequence[LotClosure],
-        lots_by_id: dict[int, FifoLot],
-        asset_currency: str,
-    ) -> None:
-        if LotAnalysisType.PERFORMANCE_HISTORY not in analyses:
-            return
-        for tx in transactions:
-            tx_type = str(getattr(tx.type, "value", tx.type))
-            if tx_type == "BUY":
-                fx_resolver.need(tx.currency or asset_currency, tx.date)
-                continue
-            if tx_type == "ADJUSTMENT" and tx.quantity > 0:
-                if tx.cost_basis_override not in (None, Decimal("0")):
-                    fx_resolver.need(tx.cost_basis_currency or asset_currency, tx.date)
-                elif tx.amount != Decimal("0"):
-                    fx_resolver.need(tx.currency or asset_currency, tx.date)
-        for closure in closures:
-            lot = lots_by_id.get(closure.lot_id)
-            if lot is not None and lot.direction == "LONG" and closure.close_reason == "SELL":
-                fx_resolver.need(lot.currency or asset_currency, closure.close_date)
-
     async def _compute_average_cost_lines(
         self,
         *,
@@ -922,7 +657,7 @@ class LotsAnalysisService:
             movements_by_broker[tx.broker_id].append(movement)
             all_movements.append(movement)
         positions = [CostPosition(key=broker_id, asset_currency=asset_currency, movements=tuple(movements)) for broker_id, movements in movements_by_broker.items()]
-        positions.append(CostPosition(key=_ALL_BROKERS, asset_currency=asset_currency, movements=tuple(all_movements)))
+        positions.append(CostPosition(key=ALL_BROKERS, asset_currency=asset_currency, movements=tuple(all_movements)))
         return await compute_average_costs(self.db, positions, report_currency=target_currency, asset_leg=False)
 
     async def _report_gaps(
@@ -951,7 +686,8 @@ class LotsAnalysisService:
             return
         missing_pairs = [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(dates_by_pair.items())]
         configured_pairs, real_provider_pairs = await load_configured_fx_pair_sets(self.db) if missing_pairs else (set(), set())
-        gap_report = DerivedViewsBuilder([], target_currency).build_data_quality_report(
+        gap_report = build_data_quality_report(
+            [],
             missing_fx_pairs_dto=missing_pairs or None,
             missing_cost_basis_assets=[(asset.id, asset.display_name)] if unknown_cost else None,
             configured_fx_pairs=configured_pairs,
@@ -960,397 +696,15 @@ class LotsAnalysisService:
         data_quality.issues.extend(gap_report.issues)
         data_quality.missing_fx_pairs.extend(missing_pairs)
 
-    def _build_broker_wac_history(
-        self,
-        broker_ids: Sequence[int],
-        lines: dict[int | str, AverageCost],
-        history_dates: Sequence[date_type],
-    ) -> list[BrokerWACHistoryPoint]:
-        points: list[BrokerWACHistoryPoint] = []
-        for broker_id in broker_ids:
-            line = lines.get(broker_id)
-            if line is None:
-                continue
-            points.extend(BrokerWACHistoryPoint(date=point_date, broker_id=broker_id, wac=wac_amount, pool_qty=pool_qty) for point_date, wac_amount, pool_qty in self._average_cost_points(line, history_dates))
-        return points
-
-    def _build_cumulative_wac_history(
-        self,
-        lines: dict[int | str, AverageCost],
-        history_dates: Sequence[date_type],
-    ) -> list[CumulativeWACHistoryPoint]:
-        line = lines.get(_ALL_BROKERS)
-        if line is None:
-            return []
-        return [CumulativeWACHistoryPoint(date=point_date, wac=wac_amount, pool_qty=pool_qty) for point_date, wac_amount, pool_qty in self._average_cost_points(line, history_dates)]
-
-    @staticmethod
-    def _average_cost_points(line: AverageCost, history_dates: Sequence[date_type]) -> list[tuple[date_type, Decimal, Decimal]]:
-        """(date, WAC, pool quantity) for each history date from the first movement on.
-
-        A date on which the pool lacks part of its cost (a missing conversion) has no point:
-        the gap is reported in the data quality instead of drawing a wrong average.
-        """
-        points: list[tuple[date_type, Decimal, Decimal]] = []
-        for current_date in history_dates:
-            state = line.state_at(current_date)
-            if state is None or not state.report_complete:
-                continue
-            points.append((current_date, state.unit_cost_report, state.quantity))
-        return points
-
-    def _build_performance_history(  # noqa: C901 — cash-flow collection loops with sequential guard filters
-        self,
-        *,
-        scope_broker_ids: Sequence[int],
-        history_dates: Sequence[date_type],
-        market_prices: dict[date_type, Decimal | None],
-        asset_currency: str,
-        fx_resolver: _FxRateResolver,
-        context: _PerformanceSourceContext,
-        quote_base_quantity: int,
-    ) -> list[PerformanceHistoryPoint]:
-        scope_set = set(scope_broker_ids)
-        scoped_fragments_by_lot = {lot_id: [fragment for fragment in fragments if self._fragment_in_scope(fragment, scope_set)] for lot_id, fragments in context.fragments_by_lot.items()}
-
-        nav_snapshots: list[NAVSnapshot] = []
-        for current_date in history_dates:
-            market_price = market_prices.get(current_date)
-            if market_price is None:
-                continue
-            nav_amount = Decimal("0")
-            for _lot_id, fragments in scoped_fragments_by_lot.items():
-                if not fragments:
-                    continue
-                nav_amount += self._open_value_on_date(fragments, market_price, current_date, quote_base_quantity)
-            nav_snapshots.append(NAVSnapshot(date=current_date, nav=nav_amount))
-
-        cash_flows: list[CashFlowInput] = []
-        invalid_external_flow_from: date_type | None = None
-
-        for tx in sorted(context.transactions, key=lambda row: (row.date, row.id or 0)):
-            if tx.broker_id not in scope_set:
-                continue
-            tx_type = str(getattr(tx.type, "value", tx.type))
-            if tx_type == "BUY":
-                buy_amount = fx_resolver.convert(abs(tx.amount), tx.currency or asset_currency, tx.date)
-                if buy_amount is None:
-                    invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)
-                else:
-                    cash_flows.append(CashFlowInput(date=tx.date, amount=-buy_amount))
-                continue
-            if tx_type == "ADJUSTMENT" and tx.quantity > 0 and self._adjustment_native_cost(tx, asset_currency) is not None:
-                adjustment_cost = self._adjustment_cash_flow_cost(tx=tx, asset_currency=asset_currency, fx_resolver=fx_resolver)
-                if adjustment_cost is None:
-                    invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)
-                elif adjustment_cost != Decimal("0"):
-                    cash_flows.append(CashFlowInput(date=tx.date, amount=-adjustment_cost))
-
-        for closure in sorted(context.engine_result.closures, key=lambda row: (row.close_date, row.transaction_id, row.lot_id)):
-            if closure.close_reason != "SELL":
-                continue
-            lot = context.lots_by_id.get(closure.lot_id)
-            tx = context.tx_by_id.get(closure.transaction_id)
-            if lot is None or tx is None or lot.direction != "LONG" or tx.broker_id not in scope_set:
-                continue
-            proceeds = fx_resolver.convert(closure.proceeds, lot.currency or asset_currency, closure.close_date)
-            if proceeds is None:
-                invalid_external_flow_from = closure.close_date if invalid_external_flow_from is None else min(invalid_external_flow_from, closure.close_date)
-                continue
-            cash_flows.append(CashFlowInput(date=closure.close_date, amount=proceeds))
-
-        seen_external_transfers: set[tuple[int, str]] = set()
-        for event in context.engine_result.classified_events:
-            if event.kind not in {"TRANSFER_DEPART", "TRANSFER_ARRIVE"}:
-                continue
-            pair_id = event.pair_id or event.transaction_id
-            dedupe_key = (pair_id, event.kind)
-            if dedupe_key in seen_external_transfers:
-                continue
-            seen_external_transfers.add(dedupe_key)
-            source_in_scope = event.source_broker_id in scope_set
-            destination_in_scope = event.destination_broker_id in scope_set
-            if source_in_scope == destination_in_scope:
-                continue
-            if source_in_scope and event.kind != "TRANSFER_DEPART":
-                continue
-            if destination_in_scope and event.kind != "TRANSFER_ARRIVE":
-                continue
-            market_price = market_prices.get(event.date)
-            if market_price is None:
-                invalid_external_flow_from = event.date if invalid_external_flow_from is None else min(invalid_external_flow_from, event.date)
-                continue
-            quantity = event.quantity or Decimal("0")
-            amount = compute_holding_value(quantity, market_price, quote_base_quantity)
-            cash_flows.append(CashFlowInput(date=event.date, amount=amount if source_in_scope else -amount))
-
-        if invalid_external_flow_from is not None:
-            nav_snapshots = [snapshot for snapshot in nav_snapshots if snapshot.date < invalid_external_flow_from]
-            cash_flows = [flow for flow in cash_flows if flow.date < invalid_external_flow_from]
-
-        if nav_snapshots:
-            first_nav_date = nav_snapshots[0].date
-            carried_cash_flow = sum((flow.amount for flow in cash_flows if flow.date < first_nav_date), Decimal("0"))
-            cash_flows = [flow for flow in cash_flows if flow.date >= first_nav_date]
-            if carried_cash_flow != Decimal("0"):
-                cash_flows.insert(0, CashFlowInput(date=first_nav_date, amount=carried_cash_flow))
-
-        first_cash_flow_date = min((flow.date for flow in cash_flows), default=None)
-        roi_map: dict[date_type, Decimal] = {}
-        twrr_map: dict[date_type, Decimal] = {}
-        if first_cash_flow_date is not None and nav_snapshots:
-            roi_map = {point.date: point.roi for point in calculate_simple_roi_series(nav_snapshots, cash_flows) if point.date >= first_cash_flow_date}
-            twrr_map = {point.date: point.twrr for point in calculate_twrr_series(nav_snapshots, cash_flows) if point.date >= first_cash_flow_date}
-
-        return [
-            PerformanceHistoryPoint(
-                date=current_date,
-                roi=None if invalid_external_flow_from is not None and current_date >= invalid_external_flow_from else roi_map.get(current_date),
-                twrr=None if invalid_external_flow_from is not None and current_date >= invalid_external_flow_from else twrr_map.get(current_date),
-            )
-            for current_date in history_dates
-        ]
-
-    def _build_income_economic_events(
-        self,
-        *,
-        income_transactions: Sequence[Transaction],
-        fx_resolver: _FxRateResolver,
-        asset_currency: str,
-        target_currency: str,
-    ) -> list[EconomicEvent]:
-        """Build target-value-aware DIVIDEND/INTEREST events for the engine economic stage.
-
-        FX is resolved here (the service owns FX I/O): each event carries the native amount and the
-        amount converted to ``target_currency`` at the transaction date. Eligibility, pooling and
-        pro-rata allocation are performed by the engine from the replayed fragments (D-1 semantics,
-        broker scoped, transfer aware).
-        """
-        events: list[EconomicEvent] = []
-        for tx in income_transactions:
-            if tx.id is None or tx.asset_id is None:
-                continue
-            native_currency = tx.currency or asset_currency
-            target_amount = self._engine_target_amount(tx.amount, native_currency, tx.date, fx_resolver)
-            events.append(
-                EconomicEvent(
-                    transaction_id=tx.id,
-                    broker_id=tx.broker_id,
-                    asset_id=tx.asset_id,
-                    date=tx.date,
-                    economic_type="DIVIDEND" if tx.type == TransactionType.DIVIDEND else "INTEREST",
-                    native_amount=tx.amount,
-                    native_currency=native_currency,
-                    target_amount=target_amount,
-                    target_currency=target_currency,
-                )
-            )
-        return events
-
-    def _build_cost_economic_events(
-        self,
-        *,
-        cost_transactions: Sequence[Transaction],
-        fx_resolver: _FxRateResolver,
-        asset_currency: str,
-        target_currency: str,
-    ) -> list[EconomicEvent]:
-        """Build target-value-aware FEE/TAX events for the engine economic stage.
-
-        FX is resolved here (the service owns FX I/O): each event carries the native (negative)
-        amount and the amount converted to ``target_currency`` at the transaction date. Pooling,
-        matching (same-day/previous-day trades or income, holdings fallback) and orphan detection are
-        performed by the engine.
-        """
-        events: list[EconomicEvent] = []
-        for tx in cost_transactions:
-            if tx.id is None or tx.asset_id is None or tx.amount is None:
-                continue
-            native_currency = tx.currency or asset_currency
-            target_amount = self._engine_target_amount(tx.amount, native_currency, tx.date, fx_resolver)
-            events.append(
-                EconomicEvent(
-                    transaction_id=tx.id,
-                    broker_id=tx.broker_id,
-                    asset_id=tx.asset_id,
-                    date=tx.date,
-                    economic_type="FEE" if tx.type == TransactionType.FEE else "TAX",
-                    native_amount=tx.amount,
-                    native_currency=native_currency,
-                    target_amount=target_amount,
-                    target_currency=target_currency,
-                )
-            )
-        return events
-
-    def _build_engine_transactions(
-        self,
-        transactions: Sequence[Transaction],
-        fx_resolver: _FxRateResolver,
-        asset_currency: str,
-        target_currency: str,
-    ) -> list[FifoInputTransaction]:
-        """Normalize transactions for the engine, attaching each trade's target controvalue.
-
-        Only BUY/SELL carry ``target_amount`` (the FEE/TAX pooling weight, §3.5); other kinds keep it
-        ``None``. The quantitative replay is unchanged — only the economic stage reads the target.
-        """
-        engine_transactions: list[FifoInputTransaction] = []
-        for tx in transactions:
-            base = FifoInputTransaction.from_transaction(tx)
-            if tx.type in (TransactionType.BUY, TransactionType.SELL) and tx.amount is not None:
-                native_currency = tx.currency or asset_currency
-                target_amount = self._engine_target_amount(tx.amount, native_currency, tx.date, fx_resolver)
-                base = replace(base, target_amount=target_amount, target_currency=target_currency)
-            engine_transactions.append(base)
-        return engine_transactions
-
-    def _extract_income_outputs(
-        self,
-        engine_result: FifoEngineResult,
-        income_events: Sequence[EconomicEvent],
-        withheld: _WithheldEconomics = _NOTHING_WITHHELD,
-    ) -> tuple[dict[int, Decimal], dict[int, dict[date_type, Decimal]], list[LotIncomeEventSchema]]:
-        """Derive the service-facing income views from the engine economic output.
-
-        Returns ``(income_by_lot, income_prefix_by_lot, income_events_payload)``: cumulative income
-        per lot (from the engine accumulators); a per-lot cumulative-by-date map for histories (from
-        the audit groups, same shape as ``_closure_proceeds_prefix``); and one
-        ``LotIncomeEventSchema`` per income transaction carrying the shared eligible lot ids (plan
-        v3 §11 chart markers), its amount None when it has no rate.
-        """
-        income_by_lot: dict[int, Decimal] = {lot_id: accumulator.gross_income for lot_id, accumulator in engine_result.economic_accumulators_by_lot.items() if accumulator.gross_income != Decimal("0")}
-
-        per_lot_dated: dict[int, list[tuple[date_type, Decimal]]] = defaultdict(list)
-        pool_lot_ids: dict[tuple[int, date_type, str, str | None, str], list[int]] = {}
-        for group in engine_result.economic_allocation_groups:
-            if group.economic_type not in ("DIVIDEND", "INTEREST"):
-                continue
-            eligible_ids: list[int] = []
-            for operation in group.operation_allocations:
-                for allocation in operation.lot_allocations:
-                    per_lot_dated[allocation.lot_id].append((group.date, allocation.target_amount))
-                    eligible_ids.append(allocation.lot_id)
-            pool_lot_ids[(group.broker_id, group.date, group.economic_type, group.native_currency, group.target_currency)] = eligible_ids
-
-        income_prefix_by_lot: dict[int, dict[date_type, Decimal]] = {}
-        for lot_id, dated in per_lot_dated.items():
-            running = Decimal("0")
-            prefix: dict[date_type, Decimal] = {}
-            for event_date, amount in sorted(dated, key=lambda item: item[0]):
-                running += amount
-                prefix[event_date] = running
-            income_prefix_by_lot[lot_id] = prefix
-
-        income_events_payload: list[LotIncomeEventSchema] = []
-        for event in sorted(income_events, key=lambda item: (item.date, item.transaction_id)):
-            eligible_ids = pool_lot_ids.get((event.broker_id, event.date, event.economic_type, event.native_currency, event.target_currency), [])
-            income_events_payload.append(
-                LotIncomeEventSchema(
-                    type=LotIncomeEventKind.DIVIDEND if event.economic_type == "DIVIDEND" else LotIncomeEventKind.INTEREST,
-                    date=event.date,
-                    broker_id=event.broker_id,
-                    transaction_id=event.transaction_id,
-                    amount=None if event.transaction_id in withheld.unconvertible_event_ids else event.target_amount,
-                    lot_ids=list(eligible_ids),
-                )
-            )
-        return income_by_lot, income_prefix_by_lot, income_events_payload
-
-    def _extract_cost_outputs(
-        self,
-        engine_result: FifoEngineResult,
-    ) -> tuple[dict[int, Decimal], dict[int, Decimal], dict[int, dict[date_type, Decimal]], dict[int, dict[date_type, Decimal]]]:
-        """Derive the service-facing FEE/TAX views from the engine economic output.
-
-        Returns ``(fees_by_lot, taxes_by_lot, fees_prefix_by_lot, taxes_prefix_by_lot)``: cumulative
-        allocated FEE/TAX per lot (from the engine accumulators, positive magnitude) plus per-lot
-        cumulative-by-date maps for the net history series (from the audit groups, same shape as
-        ``income_prefix_by_lot``).
-        """
-        fees_by_lot: dict[int, Decimal] = {lot_id: accumulator.allocated_fees for lot_id, accumulator in engine_result.economic_accumulators_by_lot.items() if accumulator.allocated_fees != Decimal("0")}
-        taxes_by_lot: dict[int, Decimal] = {lot_id: accumulator.allocated_taxes for lot_id, accumulator in engine_result.economic_accumulators_by_lot.items() if accumulator.allocated_taxes != Decimal("0")}
-
-        fees_dated: dict[int, list[tuple[date_type, Decimal]]] = defaultdict(list)
-        taxes_dated: dict[int, list[tuple[date_type, Decimal]]] = defaultdict(list)
-        for group in engine_result.economic_allocation_groups:
-            if group.economic_type == "FEE":
-                sink = fees_dated
-            elif group.economic_type == "TAX":
-                sink = taxes_dated
-            else:
-                continue
-            for operation in group.operation_allocations:
-                for allocation in operation.lot_allocations:
-                    sink[allocation.lot_id].append((group.date, allocation.target_amount))
-
-        def _prefix(dated: dict[int, list[tuple[date_type, Decimal]]]) -> dict[int, dict[date_type, Decimal]]:
-            out: dict[int, dict[date_type, Decimal]] = {}
-            for lot_id, entries in dated.items():
-                running = Decimal("0")
-                prefix: dict[date_type, Decimal] = {}
-                for event_date, amount in sorted(entries, key=lambda item: item[0]):
-                    running += amount
-                    prefix[event_date] = running
-                out[lot_id] = prefix
-            return out
-
-        return fees_by_lot, taxes_by_lot, _prefix(fees_dated), _prefix(taxes_dated)
-
-    def _map_economic_groups(self, groups: Sequence[EconomicAllocationGroup], withheld: _WithheldEconomics = _NOTHING_WITHHELD) -> list[EconomicAllocationGroupSchema]:
-        """Map engine economic audit dataclasses to their inline-response Pydantic mirrors.
-
-        A pool with an event without a rate has no target figure; a pool split by trades in different
-        currencies, one without a rate, has no operation weight and no per-lot amount. Native totals stay.
-        """
-        mapped: list[EconomicAllocationGroupSchema] = []
-        for index, group in enumerate(groups):
-            amount_unknown = index in withheld.amount_degraded
-            split_unknown = index in withheld.split_degraded
-            mapped.append(
-                EconomicAllocationGroupSchema(
-                    economic_type=group.economic_type,
-                    asset_id=group.asset_id,
-                    broker_id=group.broker_id,
-                    date=group.date,
-                    native_currency=group.native_currency,
-                    target_currency=group.target_currency,
-                    rule=group.rule,
-                    source_transaction_ids=list(group.source_transaction_ids),
-                    native_pool_total=group.native_pool_total,
-                    target_pool_total=None if amount_unknown else group.target_pool_total,
-                    native_orphan=group.native_orphan,
-                    target_orphan=None if amount_unknown else group.target_orphan,
-                    operation_allocations=[
-                        TargetOperationAllocationSchema(
-                            context=operation.context,
-                            operation_transaction_id=operation.operation_transaction_id,
-                            weight=None if split_unknown else operation.weight,
-                            lot_allocations=[
-                                EconomicLotAllocationSchema(
-                                    lot_id=allocation.lot_id,
-                                    weight=allocation.weight,
-                                    native_amount=None if split_unknown else allocation.native_amount,
-                                    target_amount=None if amount_unknown or split_unknown else allocation.target_amount,
-                                )
-                                for allocation in operation.lot_allocations
-                            ],
-                        )
-                        for operation in group.operation_allocations
-                    ],
-                )
-            )
-        return mapped
-
     def _build_lot_summaries(  # noqa: C901 — flat per-lot field packing, valuation-variant if/elif
         self,
         *,
         engine_result: FifoEngineResult,
         lots_by_id: dict[int, FifoLot],
         selected_ids: Sequence[int],
-        fx_resolver: _FxRateResolver,
+        fx_resolver: FxRateResolver,
         market_prices: dict[date_type, Decimal | None],
-        price_lookup: _PriceHistoryLookup,
+        price_lookup: PriceHistoryLookup,
         closures_by_lot: dict[int, list[LotClosure]],
         income_by_lot: dict[int, Decimal],
         fees_by_lot: dict[int, Decimal],
@@ -1358,7 +712,7 @@ class LotsAnalysisService:
         estimated_mode: bool,
         quote_base_quantity: int,
         analysis_end: date_type,
-        withheld: _WithheldEconomics = _NOTHING_WITHHELD,
+        withheld: WithheldEconomics = NOTHING_WITHHELD,
     ) -> list[LotSummarySchema]:
         latest_market_price = market_prices.get(max(market_prices)) if market_prices else None
         out: list[LotSummarySchema] = []
@@ -1372,12 +726,12 @@ class LotsAnalysisService:
                 }
                 for fragment in engine_result.active_fragments(lot_id=lot_id)
             ]
-            known_proceeds = self._known_cumulative_proceeds(lot, closures_by_lot.get(lot_id, []), fx_resolver)
+            known_proceeds = known_cumulative_proceeds(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date)
             opening_unit_price = fx_resolver.convert(lot.opening_unit_price, lot.currency, lot.opening_date)
-            raw_reference_price, raw_reference_currency, reference_date, reference_price_source = self._opening_reference_price(lot, price_lookup, quote_base_quantity)
+            raw_reference_price, raw_reference_currency, reference_date, reference_price_source = opening_reference_price(lot, price_lookup, quote_base_quantity)
             reference_unit_price = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
-            known_realized_pnl = self._known_realized_pnl(lot, closures_by_lot.get(lot_id, []), fx_resolver)
+            lot_realized_pnl = known_realized_pnl(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             # A lot reached by an economic pool without a rate has that income, fee or tax unknown.
             asset_income = None if lot_id in withheld.income_from else income_by_lot.get(lot_id, Decimal("0"))
             allocated_fees = None if lot_id in withheld.fees_from else fees_by_lot.get(lot_id, Decimal("0"))
@@ -1398,8 +752,8 @@ class LotsAnalysisService:
                     else:
                         total_value = known_proceeds - open_value
                         pnl = total_value
-                if pnl is not None and known_realized_pnl is not None:
-                    market_pnl = pnl - known_realized_pnl
+                if pnl is not None and lot_realized_pnl is not None:
+                    market_pnl = pnl - lot_realized_pnl
                 if reference_unit_price not in (None, Decimal("0")):
                     relative_return = (latest_market_price / reference_unit_price) - Decimal("1")
             elif estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0") and opening_value is not None:
@@ -1411,8 +765,8 @@ class LotsAnalysisService:
                     total_value = open_value + known_proceeds
                     pnl = total_value - opening_value
             total_pnl = None
-            if market_pnl is not None and known_realized_pnl is not None and asset_income is not None:
-                total_pnl = market_pnl + known_realized_pnl + asset_income
+            if market_pnl is not None and lot_realized_pnl is not None and asset_income is not None:
+                total_pnl = market_pnl + lot_realized_pnl + asset_income
             cash_yield = None
             total_return = None
             if opening_value is not None and opening_value > Decimal("0"):
@@ -1454,7 +808,7 @@ class LotsAnalysisService:
                     currency=lot.currency,
                     open_quantity=lot.open_quantity,
                     realized_quantity=lot.realized_quantity,
-                    realized_pnl=known_realized_pnl,
+                    realized_pnl=lot_realized_pnl,
                     cumulative_proceeds=known_proceeds,
                     reference_unit_price=reference_unit_price,
                     reference_price_source=reference_price_source,
@@ -1480,34 +834,12 @@ class LotsAnalysisService:
             )
         return out
 
-    def _known_realized_pnl(self, lot: FifoLot, closures: Sequence[LotClosure], fx_resolver: _FxRateResolver) -> Decimal | None:
-        """Realized P&L in the target currency; None when a closure has no rate."""
-        total = Decimal("0")
-        for closure in closures:
-            converted = fx_resolver.convert(closure.realized_pnl, lot.currency, closure.close_date)
-            if converted is None:
-                return None
-            total += converted
-        return total
-
-    def _known_cumulative_proceeds(self, lot: FifoLot, closures: Sequence[LotClosure], fx_resolver: _FxRateResolver) -> Decimal | None:
-        """Cumulative proceeds in the target currency; None when they, or one closure's, have no rate."""
-        if lot.direction == "SHORT":
-            return fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date)
-        total = Decimal("0")
-        for closure in closures:
-            converted = fx_resolver.convert(closure.proceeds, lot.currency, closure.close_date)
-            if converted is None:
-                return None
-            total += converted
-        return total
-
     def _build_gantt_segments(
         self,
         fragments: Sequence[FragmentInterval],
         selected_ids: Sequence[int],
         lots_by_id: dict[int, FifoLot],
-        fx_resolver: _FxRateResolver,
+        fx_resolver: FxRateResolver,
     ) -> list[GanttSegmentSchema]:
         out: list[GanttSegmentSchema] = []
         selected = set(selected_ids)
@@ -1539,7 +871,7 @@ class LotsAnalysisService:
         engine_result: FifoEngineResult,
         selected_ids: Sequence[int],
         tx_by_id: dict[int, Transaction],
-        fx_resolver: _FxRateResolver,
+        fx_resolver: FxRateResolver,
         lots_by_id: dict[int, FifoLot],
     ) -> list[LotTimelineEventSchema]:
         selected = set(selected_ids)
@@ -1554,7 +886,7 @@ class LotsAnalysisService:
         engine_result: FifoEngineResult,
         selected: set[int],
         tx_by_id: dict[int, Transaction],
-        fx_resolver: _FxRateResolver,
+        fx_resolver: FxRateResolver,
         lots_by_id: dict[int, FifoLot],
     ) -> list[LotTimelineEventSchema]:
         rows: list[LotTimelineEventSchema] = []
@@ -1616,7 +948,7 @@ class LotsAnalysisService:
         fragments: Sequence[FragmentInterval],
         selected: set[int],
         lots_by_id: dict[int, FifoLot],
-        fx_resolver: _FxRateResolver,
+        fx_resolver: FxRateResolver,
     ) -> list[LotTimelineEventSchema]:
         rows: list[LotTimelineEventSchema] = []
         earliest_by_fragment: dict[str, FragmentInterval] = {}
@@ -1700,7 +1032,7 @@ class LotsAnalysisService:
         closures: Sequence[LotClosure],
         selected: set[int],
         lots_by_id: dict[int, FifoLot],
-        fx_resolver: _FxRateResolver,
+        fx_resolver: FxRateResolver,
     ) -> list[LotTimelineEventSchema]:
         rows: list[LotTimelineEventSchema] = []
         for closure in closures:
@@ -1733,202 +1065,11 @@ class LotsAnalysisService:
             )
         return rows
 
-    def _build_value_history(
-        self,
-        *,
-        selected_ids: Sequence[int],
-        lots_by_id: dict[int, FifoLot],
-        fragments_by_lot: dict[int, list[FragmentInterval]],
-        closures_by_lot: dict[int, list[LotClosure]],
-        market_prices: dict[date_type, Decimal | None],
-        history_dates: Sequence[date_type],
-        fx_resolver: _FxRateResolver,
-        income_prefix_by_lot: dict[int, dict[date_type, Decimal]],
-        fees_prefix_by_lot: dict[int, dict[date_type, Decimal]],
-        taxes_prefix_by_lot: dict[int, dict[date_type, Decimal]],
-        estimated_mode: bool,
-        quote_base_quantity: int,
-        withheld: _WithheldEconomics = _NOTHING_WITHHELD,
-    ) -> list[LotValueHistoryPoint]:
-        points: list[LotValueHistoryPoint] = []
-        for lot_id in selected_ids:
-            lot = lots_by_id[lot_id]
-            basis = self._lot_value_basis(lot, closures_by_lot.get(lot_id, []), history_dates[-1], fx_resolver)
-            if basis is None:
-                continue
-            income_prefix = income_prefix_by_lot.get(lot_id, {})
-            fees_prefix = fees_prefix_by_lot.get(lot_id, {})
-            taxes_prefix = taxes_prefix_by_lot.get(lot_id, {})
-            fragments = fragments_by_lot.get(lot_id, [])
-            for current_date in history_dates:
-                if current_date < lot.opening_date or current_date > basis.last_date:
-                    continue
-                snapshot = self._lot_snapshot_on_date(
-                    lot=lot,
-                    fragments=fragments,
-                    basis=basis,
-                    market_price=market_prices.get(current_date),
-                    current_date=current_date,
-                    estimated_mode=estimated_mode,
-                    quote_base_quantity=quote_base_quantity,
-                )
-                if snapshot is None:
-                    continue
-                open_value, proceeds, total_value, pnl = snapshot
-                income, allocated_fees, allocated_taxes = self._economics_on_date(lot_id, current_date, income_prefix, fees_prefix, taxes_prefix, withheld)
-                points.append(
-                    LotValueHistoryPoint(
-                        lot_id=lot_id,
-                        date=current_date,
-                        open_value=open_value,
-                        proceeds=proceeds,
-                        total_value=total_value,
-                        original_cost=basis.original_cost,
-                        pnl=pnl,
-                        income=income,
-                        allocated_fees=allocated_fees,
-                        allocated_taxes=allocated_taxes,
-                        net_pnl=pnl - allocated_fees - allocated_taxes if allocated_fees is not None and allocated_taxes is not None else None,
-                    )
-                )
-        return points
-
-    def _build_return_history(
-        self,
-        *,
-        selected_ids: Sequence[int],
-        lots_by_id: dict[int, FifoLot],
-        fragments_by_lot: dict[int, list[FragmentInterval]],
-        market_prices: dict[date_type, Decimal | None],
-        price_lookup: _PriceHistoryLookup,
-        fx_resolver: _FxRateResolver,
-        history_dates: Sequence[date_type],
-        closures_by_lot: dict[int, list[LotClosure]],
-        income_prefix_by_lot: dict[int, dict[date_type, Decimal]],
-        fees_prefix_by_lot: dict[int, dict[date_type, Decimal]],
-        taxes_prefix_by_lot: dict[int, dict[date_type, Decimal]],
-        estimated_mode: bool,
-        quote_base_quantity: int,
-        withheld: _WithheldEconomics = _NOTHING_WITHHELD,
-    ) -> list[LotReturnHistoryPoint]:
-        points: list[LotReturnHistoryPoint] = []
-        for lot_id in selected_ids:
-            lot = lots_by_id[lot_id]
-            raw_reference_price, raw_reference_currency, reference_date, reference_price_source = self._opening_reference_price(lot, price_lookup, quote_base_quantity)
-            converted_reference = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
-            basis = self._lot_value_basis(lot, closures_by_lot.get(lot_id, []), history_dates[-1], fx_resolver)
-            if basis is None:
-                continue
-            income_prefix = income_prefix_by_lot.get(lot_id, {})
-            fees_prefix = fees_prefix_by_lot.get(lot_id, {})
-            taxes_prefix = taxes_prefix_by_lot.get(lot_id, {})
-            fragments = fragments_by_lot.get(lot_id, [])
-            for current_date in history_dates:
-                if current_date < lot.opening_date or current_date > basis.last_date:
-                    continue
-                market_price = market_prices.get(current_date)
-                snapshot = self._lot_snapshot_on_date(
-                    lot=lot,
-                    fragments=fragments,
-                    basis=basis,
-                    market_price=market_price,
-                    current_date=current_date,
-                    estimated_mode=estimated_mode,
-                    quote_base_quantity=quote_base_quantity,
-                )
-                if snapshot is None:
-                    continue
-                _open_value, _proceeds, total_value, _pnl = snapshot
-                relative_return = None
-                if market_price is not None and converted_reference not in (None, Decimal("0")):
-                    relative_return = (market_price / converted_reference) - Decimal("1")
-                income, allocated_fees, allocated_taxes = self._economics_on_date(lot_id, current_date, income_prefix, fees_prefix, taxes_prefix, withheld)
-                total_return, net_total_return = self._lot_returns(basis.original_cost, total_value, income, allocated_fees, allocated_taxes)
-                points.append(
-                    LotReturnHistoryPoint(
-                        lot_id=lot_id,
-                        date=current_date,
-                        total_return=total_return,
-                        relative_return=relative_return,
-                        reference_price_source=reference_price_source if relative_return is not None else None,
-                        income=income,
-                        net_total_return=net_total_return,
-                    )
-                )
-        return points
-
-    def _opening_reference_price(
-        self,
-        lot: FifoLot,
-        price_lookup: _PriceHistoryLookup,
-        quote_base_quantity: int = 1,
-    ) -> tuple[Decimal | None, str | None, date_type, ReferencePriceSource | None]:
-        if lot.reference_unit_price is not None:
-            resolved_reference = price_lookup.resolve(lot.opening_date)
-            if resolved_reference is None:
-                return None, None, lot.opening_date, lot.reference_price_source
-            return lot.reference_unit_price, resolved_reference.currency, resolved_reference.resolved_date, lot.reference_price_source
-        # No market quote at the opening date (e.g. a bond bought at emission, before it started
-        # trading) → fall back to the lot's own buy price. opening_unit_price is per-single-unit
-        # (cost / raw quantity), whereas market_price is quoted per quote_base_quantity units, so
-        # scale it up to keep relative_return (= market_price / reference − 1) on one axis; otherwise
-        # a qbq=100 bond reports ~9687% instead of ~−2%. No-op for qbq=1 (stocks). The resolved
-        # branches above already return a per-quote market reference, so they need no scaling.
-        scale = quote_base_quantity if quote_base_quantity > 0 else 1
-        return lot.opening_unit_price * scale, lot.currency, lot.opening_date, "exact"
-
-    def _value_snapshot_on_date(
-        self,
-        *,
-        lot: FifoLot,
-        fragments: Sequence[FragmentInterval],
-        proceeds_by_day: dict[date_type, Decimal],
-        market_price: Decimal,
-        current_date: date_type,
-        converted_original_cost: Decimal,
-        converted_short_proceeds: Decimal,
-        quote_base_quantity: int,
-    ) -> tuple[Decimal, Decimal, Decimal, Decimal]:
-        open_value = self._open_value_on_date(fragments, market_price, current_date, quote_base_quantity)
-        proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
-        if lot.direction == "LONG":
-            total_value = open_value + proceeds
-            pnl = total_value - converted_original_cost
-        else:
-            proceeds = converted_short_proceeds
-            total_value = proceeds - open_value
-            pnl = total_value
-        return open_value, proceeds, total_value, pnl
-
-    def _build_price_history(
-        self,
-        *,
-        selected_ids: Sequence[int],
-        lots_by_id: dict[int, FifoLot],
-        estimated_market_prices: dict[date_type, tuple[Decimal, bool]],
-        history_dates: Sequence[date_type],
-        target_currency: str,
-        closures_by_lot: dict[int, list[LotClosure]],
-    ) -> list[LotPriceHistoryPoint]:
-        points: list[LotPriceHistoryPoint] = []
-        for lot_id in selected_ids:
-            lot = lots_by_id[lot_id]
-            last_date = self._lot_history_end_date(lot, closures_by_lot.get(lot_id, []), history_dates[-1])
-            for current_date in history_dates:
-                if current_date < lot.opening_date or current_date > last_date:
-                    continue
-                entry = estimated_market_prices.get(current_date)
-                if entry is None:
-                    continue
-                market_price, is_estimated = entry
-                points.append(LotPriceHistoryPoint(lot_id=lot_id, date=current_date, market_price=market_price, currency=target_currency, estimated=is_estimated))
-        return points
-
     def _build_data_quality_report(
         self,
         issues: Sequence[FifoDataQualityIssue],
         groups: Sequence[EconomicAllocationGroup] = (),
-        withheld: _WithheldEconomics = _NOTHING_WITHHELD,
+        withheld: WithheldEconomics = NOTHING_WITHHELD,
     ) -> DataQualityReport:
         mapped = []
         for issue in issues:
@@ -1952,7 +1093,7 @@ class LotsAnalysisService:
         return DataQualityReport(issues=mapped)
 
     @staticmethod
-    def _orphan_issue_params(issue: FifoDataQualityIssue, groups: Sequence[EconomicAllocationGroup], withheld: _WithheldEconomics) -> Mapping[str, object]:
+    def _orphan_issue_params(issue: FifoDataQualityIssue, groups: Sequence[EconomicAllocationGroup], withheld: WithheldEconomics) -> Mapping[str, object]:
         """The params of an orphan issue, whose amount is never the native placeholder in the target currency.
 
         An orphan pool with an event without a rate has no target amount: the engine filled it with the native
@@ -1965,265 +1106,16 @@ class LotsAnalysisService:
                 return {**issue.params, "target_amount": group.native_pool_total, "target_currency": group.native_currency}
         return issue.params
 
-    def _group_fragments(self, fragments: Sequence[FragmentInterval]) -> dict[int, list[FragmentInterval]]:
-        grouped: dict[int, list[FragmentInterval]] = defaultdict(list)
-        for fragment in fragments:
-            grouped[fragment.lot_id].append(fragment)
-        return grouped
-
-    def _group_closures(self, closures: Sequence[LotClosure]) -> dict[int, list[LotClosure]]:
-        grouped: dict[int, list[LotClosure]] = defaultdict(list)
-        for closure in closures:
-            grouped[closure.lot_id].append(closure)
-        return grouped
-
     def _impacted_lot_ids_for_split(self, event: FifoEvent, fragments: Sequence[FragmentInterval]) -> set[int]:
         impacted: set[int] = set()
         for fragment in fragments:
-            if not _fragment_active_on_date(fragment, event.date):
+            if not fragment_active_on_date(fragment, event.date):
                 continue
             if fragment.custody_type == "BROKER" and fragment.broker_id == event.broker_id:
                 impacted.add(fragment.lot_id)
             elif fragment.custody_type == "IN_TRANSIT" and (fragment.source_broker_id == event.broker_id or fragment.destination_broker_id == event.broker_id):
                 impacted.add(fragment.lot_id)
         return impacted
-
-    def _lot_history_end_date(
-        self,
-        lot: FifoLot,
-        closures: Sequence[LotClosure],
-        fallback_end: date_type,
-        *,
-        extend_closed: bool = False,
-    ) -> date_type:
-        if extend_closed or lot.open_quantity > 0:
-            return fallback_end
-        if not closures:
-            return lot.opening_date
-        return max(closure.close_date for closure in closures)
-
-    def _lot_value_basis(self, lot: FifoLot, closures: Sequence[LotClosure], history_end: date_type, fx_resolver: _FxRateResolver) -> _LotValueBasis | None:
-        """The converted cost, proceeds and last date of a lot's value series; None when the cost has no rate.
-
-        Without its cost (or, for a short, its proceeds) in the target currency the lot gets no point: its P&L
-        would mix currencies. A long lot's series stops the day before the first closure whose proceeds have
-        no rate. Same rule as the average-cost lines: a point that cannot be computed is omitted.
-        """
-        original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date)
-        short_proceeds = fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date) if lot.direction == "SHORT" else Decimal("0")
-        if original_cost is None or short_proceeds is None:
-            return None
-        last_date = self._lot_history_end_date(lot, closures, history_end, extend_closed=True)
-        proceeds_by_day, proceeds_unknown_from = self._closure_proceeds_prefix(lot, closures, fx_resolver)
-        if lot.direction == "LONG" and proceeds_unknown_from is not None:
-            last_date = min(last_date, proceeds_unknown_from - timedelta(days=1))
-        return _LotValueBasis(original_cost=original_cost, short_proceeds=short_proceeds, last_date=last_date, proceeds_by_day=proceeds_by_day)
-
-    def _lot_snapshot_on_date(
-        self,
-        *,
-        lot: FifoLot,
-        fragments: Sequence[FragmentInterval],
-        basis: _LotValueBasis,
-        market_price: Decimal | None,
-        current_date: date_type,
-        estimated_mode: bool,
-        quote_base_quantity: int,
-    ) -> tuple[Decimal, Decimal, Decimal, Decimal] | None:
-        """(open value, proceeds, total value, P&L) of a lot on a day; None when that day cannot be valued.
-
-        With a market price, the open quantity at that price. Without one, a fully closed lot is worth its
-        proceeds and an asset with no price at all is estimated at cost; any other day is not valued.
-        """
-        if market_price is not None:
-            return self._value_snapshot_on_date(
-                lot=lot,
-                fragments=fragments,
-                proceeds_by_day=basis.proceeds_by_day,
-                market_price=market_price,
-                current_date=current_date,
-                converted_original_cost=basis.original_cost,
-                converted_short_proceeds=basis.short_proceeds,
-                quote_base_quantity=quote_base_quantity,
-            )
-        open_quantity = self._open_quantity_on_date(fragments, current_date)
-        if open_quantity == Decimal("0"):
-            open_value = Decimal("0")
-            if lot.direction == "LONG":
-                proceeds = self._prefix_value_on_date(basis.proceeds_by_day, current_date)
-                total_value = open_value + proceeds
-                return open_value, proceeds, total_value, total_value - basis.original_cost
-            total_value = basis.short_proceeds - open_value
-            return open_value, basis.short_proceeds, total_value, total_value
-        if estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0"):
-            open_value = open_quantity * (basis.original_cost / lot.original_quantity)
-            proceeds = self._prefix_value_on_date(basis.proceeds_by_day, current_date)
-            total_value = open_value + proceeds
-            return open_value, proceeds, total_value, total_value - basis.original_cost
-        return None
-
-    def _closure_proceeds_prefix(
-        self,
-        lot: FifoLot,
-        closures: Sequence[LotClosure],
-        fx_resolver: _FxRateResolver,
-    ) -> tuple[dict[date_type, Decimal], date_type | None]:
-        """Cumulative converted proceeds by close date, and the first close date whose proceeds have no rate.
-
-        From that date the lot's value is unknown: the prefix stops there instead of adding unconverted money.
-        """
-        running = Decimal("0")
-        out: dict[date_type, Decimal] = {}
-        for closure in sorted(closures, key=lambda item: (item.close_date, item.transaction_id, item.lot_id)):
-            converted = fx_resolver.convert(closure.proceeds, lot.currency, closure.close_date)
-            if converted is None:
-                return out, closure.close_date
-            running += converted
-            out[closure.close_date] = running
-        return out, None
-
-    def _prefix_value_on_date(self, values_by_date: dict[date_type, Decimal], query_date: date_type) -> Decimal:
-        if not values_by_date:
-            return Decimal("0")
-        eligible_dates = [current_date for current_date in values_by_date if current_date <= query_date]
-        if not eligible_dates:
-            return Decimal("0")
-        return values_by_date[max(eligible_dates)]
-
-    def _open_value_on_date(self, fragments: Sequence[FragmentInterval], market_price: Decimal, query_date: date_type, quote_base_quantity: int) -> Decimal:
-        return compute_holding_value(self._open_quantity_on_date(fragments, query_date), market_price, quote_base_quantity)
-
-    def _open_quantity_on_date(self, fragments: Sequence[FragmentInterval], query_date: date_type) -> Decimal:
-        return sum((fragment.quantity for fragment in fragments if _fragment_active_on_date(fragment, query_date)), Decimal("0"))
-
-    def _fragment_in_scope(self, fragment: FragmentInterval, scope_broker_ids: set[int]) -> bool:
-        if fragment.custody_type == "BROKER":
-            return fragment.broker_id in scope_broker_ids
-        return fragment.source_broker_id in scope_broker_ids and fragment.destination_broker_id in scope_broker_ids
-
-    def _engine_target_amount(
-        self,
-        amount: Decimal,
-        currency: str,
-        as_of_date: date_type,
-        fx_resolver: _FxRateResolver,
-    ) -> Decimal:
-        """The target amount handed to the FIFO engine for an economic event or a trade weight.
-
-        Without a rate the native amount is handed over only as a placeholder, so the engine can place
-        the event: every figure of the pools it reaches is withheld (``_withheld_economics``), and the
-        missing rate is recorded by the resolver and reported.
-        """
-        return fx_resolver.convert(amount, currency, as_of_date) or amount
-
-    def _unconvertible_ids(self, transactions: Sequence[Transaction], fx_resolver: _FxRateResolver, asset_currency: str) -> set[int]:
-        """Ids of the transactions whose amount has no rate to the target currency on their date."""
-        return {tx.id for tx in transactions if tx.id is not None and tx.amount is not None and fx_resolver.convert(tx.amount, tx.currency or asset_currency, tx.date) is None}
-
-    def _withheld_economics(
-        self,
-        groups: Sequence[EconomicAllocationGroup],
-        *,
-        unconvertible_event_ids: set[int],
-        unconvertible_trade_ids: set[int],
-        trade_currency_by_id: dict[int, str | None],
-    ) -> _WithheldEconomics:
-        """Find the pools a missing rate degrades, and the lots they leave unknown from their date."""
-        unknown_from: dict[str, dict[int, date_type]] = {"income": {}, "fees": {}, "taxes": {}}
-        amount_degraded: set[int] = set()
-        split_degraded: set[int] = set()
-        orphan_unknown: set[str] = set()
-        for index, group in enumerate(groups):
-            if unconvertible_event_ids.intersection(group.source_transaction_ids):
-                amount_degraded.add(index)
-            weighting_trades = {operation.operation_transaction_id for operation in group.operation_allocations if operation.operation_transaction_id is not None}
-            if group.rule in _TRADE_WEIGHTED_RULES and weighting_trades & unconvertible_trade_ids and len({trade_currency_by_id.get(trade_id) for trade_id in weighting_trades}) > 1:
-                split_degraded.add(index)
-            if index not in amount_degraded and index not in split_degraded:
-                continue
-            kind = _ECONOMIC_KIND[group.economic_type]
-            if not group.operation_allocations:
-                orphan_unknown.add(kind)
-            for operation in group.operation_allocations:
-                for allocation in operation.lot_allocations:
-                    previous = unknown_from[kind].get(allocation.lot_id)
-                    unknown_from[kind][allocation.lot_id] = group.date if previous is None else min(previous, group.date)
-        return _WithheldEconomics(
-            income_from=unknown_from["income"],
-            fees_from=unknown_from["fees"],
-            taxes_from=unknown_from["taxes"],
-            amount_degraded=frozenset(amount_degraded),
-            split_degraded=frozenset(split_degraded),
-            unconvertible_event_ids=frozenset(unconvertible_event_ids),
-            orphan_unknown=frozenset(orphan_unknown),
-        )
-
-    def _economics_on_date(
-        self,
-        lot_id: int,
-        current_date: date_type,
-        income_prefix: dict[date_type, Decimal],
-        fees_prefix: dict[date_type, Decimal],
-        taxes_prefix: dict[date_type, Decimal],
-        withheld: _WithheldEconomics,
-    ) -> tuple[Decimal | None, Decimal | None, Decimal | None]:
-        """Cumulative income, fees and taxes of a lot on a date; each None from the date its pool became unknown."""
-        return (
-            self._known_prefix_on_date(income_prefix, withheld.income_from.get(lot_id), current_date),
-            self._known_prefix_on_date(fees_prefix, withheld.fees_from.get(lot_id), current_date),
-            self._known_prefix_on_date(taxes_prefix, withheld.taxes_from.get(lot_id), current_date),
-        )
-
-    @staticmethod
-    def _lot_returns(
-        original_cost: Decimal,
-        total_value: Decimal,
-        income: Decimal | None,
-        allocated_fees: Decimal | None,
-        allocated_taxes: Decimal | None,
-    ) -> tuple[Decimal | None, Decimal | None]:
-        """Total return (income included) and net total return on the lot's cost; None when a part is unknown."""
-        if original_cost == Decimal("0") or income is None:
-            return None, None
-        total_return = ((total_value + income) / original_cost) - Decimal("1")
-        if allocated_fees is None or allocated_taxes is None:
-            return total_return, None
-        return total_return, ((total_value + income - allocated_fees - allocated_taxes) / original_cost) - Decimal("1")
-
-    def _known_prefix_on_date(self, values_by_date: dict[date_type, Decimal], unknown_from: date_type | None, query_date: date_type) -> Decimal | None:
-        """A cumulative income, fee or tax on a date; None from the date its pool became unknown."""
-        if unknown_from is not None and query_date >= unknown_from:
-            return None
-        return self._prefix_value_on_date(values_by_date, query_date)
-
-    def _adjustment_native_cost(self, tx: Transaction, asset_currency: str) -> tuple[Decimal, str] | None:
-        """The money an ADJUSTMENT-in brought from outside, in its own currency; None for a quantity-only correction."""
-        if tx.cost_basis_override not in (None, Decimal("0")):
-            return tx.quantity * tx.cost_basis_override, tx.cost_basis_currency or asset_currency
-        if tx.amount != Decimal("0"):
-            return abs(tx.amount), tx.currency or asset_currency
-        return None
-
-    def _adjustment_cash_flow_cost(
-        self,
-        *,
-        tx: Transaction,
-        asset_currency: str,
-        fx_resolver: _FxRateResolver,
-    ) -> Decimal | None:
-        """That money in the target currency.
-
-        None when there is no money, or when its rate is missing: callers tell the two apart with
-        ``_adjustment_native_cost``.
-        """
-        native_cost = self._adjustment_native_cost(tx, asset_currency)
-        if native_cost is None:
-            return None
-        amount, currency = native_cost
-        return fx_resolver.convert(amount, currency, tx.date)
-
-    def _trim_dates(self, rows: Sequence, start_date: date_type, end_date: date_type) -> list:
-        return [row for row in rows if start_date <= row.date <= end_date]
 
 
 async def get_lots_analysis(
@@ -2247,10 +1139,6 @@ async def get_lots_analysis(
         selected_lot_ids=selected_lot_ids,
         requested_analyses=requested_analyses,
     )
-
-
-def _fragment_active_on_date(fragment: FragmentInterval, query_date: date_type) -> bool:
-    return fragment.start_date <= query_date and (fragment.end_date is None or query_date < fragment.end_date)
 
 
 def _message_key_for_issue(code: IssueCode) -> str:

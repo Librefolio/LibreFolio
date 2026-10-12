@@ -421,6 +421,7 @@
             axisLabel: {
                 color: labelColor,
                 fontSize: 14,
+                formatter: xAxisPolicy.formatter,
                 ...(xAxisPolicy.axisLabel ?? {}),
             },
             splitLine: {show: false},

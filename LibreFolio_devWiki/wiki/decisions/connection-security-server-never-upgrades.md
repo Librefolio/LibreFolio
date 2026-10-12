@@ -44,6 +44,8 @@ behind a reverse proxy even that is a header anyone can forge.
 ## Links
 
 - [[features/F-102]] · [[features/F-065]] (cookie auth) · Source: [[sources/phase00-connection-security-2026-10]].
+- For whoever runs the server: the admin page «Checking Connection Security» (`admin/connection_checks`, 2026-10-12) explains
+  how to make a deployment show «Connection: secure», behind a reverse proxy included.
 
 ## Source files
 
@@ -54,9 +56,10 @@ behind a reverse proxy even that is a header anyone can forge.
 | Indicator (sidebar shield, admin cookie line) | `frontend/src/lib/components/layout/ConnectionSecurityIndicator.svelte` |
 | Endpoint `GET /system/connection` | `backend/app/api/v1/system.py` |
 | Response schema | `backend/app/schemas/system.py` |
-| Address classes (never returned) | `backend/app/utils/network_utils.py` |
+| Address classes (never returned) | `backend/app/utils/runtime/network.py` |
 | Cookie `Secure` decision | `backend/app/api/v1/auth.py` |
 | Cookie mode setting | `backend/app/config.py` |
 | E2E | `frontend/e2e/layout/connection-security.spec.ts` |
 | User doc | `mkdocs_src/docs/user/connection-security.en.md` |
+| Admin doc (checking a deployment, since 2026-10-12) | `mkdocs_src/docs/admin/connection_checks.en.md` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/36_connectionSecurity/plan-phase00ConnectionSecurity.prompt.md` |

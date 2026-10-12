@@ -124,7 +124,7 @@ Uses the `borsa-italiana-scraping` library (optional dependency). Follows the st
 ### Source files
 | Role | Path |
 |------|------|
-| Provider implementation | `backend/app/services/asset_source_providers/borsa_italiana.py` |
+| Provider implementation | `backend/app/services/asset_source_providers/borsa_italiana/plugin.py` |
 | Provider schema (enum) | `backend/app/schemas/provider.py` |
 | Service registry | `backend/app/services/asset_source.py` |
 | Frontend search integration | `frontend/src/lib/components/assets/AssetSearchAutocomplete.svelte` |
@@ -164,6 +164,6 @@ Fixed FX provider removal flow + added UX improvements to the FX detail page edi
 ## Cross-cutting observations
 
 1. **Provider pattern consistency**: Borsa Italiana follows the exact same `@register_provider` + `AssetSourceProvider` ABC pattern as yfinance, JustETF, CSS Scraper. The pattern is now proven across 5+ providers.
-2. **FX MANUAL sentinel reliability**: the removal fix confirms the sentinel auto-insert/remove logic (F-019) handles all edge cases including bulk-delete scenarios.
+2. **FX MANUAL sentinel reliability**: the removal fix confirms the sentinel auto-insert/remove logic ([[F-019]]) handles all edge cases including bulk-delete scenarios.
 3. **PWA as infrastructure**: PWA support is infrastructure (not a feature users "configure") — once installed, it's invisible. No backend changes needed.
 4. **Port mnemonic**: choosing domain-meaningful port numbers improves developer ergonomics with zero runtime cost.

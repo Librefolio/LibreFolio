@@ -48,7 +48,7 @@ La scheda Rischio contiene il pannello **Rischio portafoglio**, che risponde a q
 
 In alto a destra nella dashboard hai diversi controlli per personalizzare la tua vista:
 
-- **Intervallo temporale** — preset da 1 settimana a All-Time (MAX), oppure un intervallo personalizzato tramite il selettore di date.
+- **Intervallo temporale** — preset da **1S** a **Tutti**, oppure un intervallo personalizzato tramite il selettore di date.
 - **Filtro broker** — filtra le metriche su uno o più broker specifici; la scheda Rischio copre sempre ogni broker che possiedi, e un sottotitolo lo indica quando un filtro è attivo.
 - **Valuta target** — converte dinamicamente tutte le attività e i saldi di cassa in un'unica valuta selezionata per una vista aggregata. L'elenco offre la tua valuta predefinita e le valute delle tue coppie FX configurate — entrambi gli estremi di ciascuna coppia. Una valuta che una [rotta a catena](../fx/add-pair.md) attraversa soltanto non viene offerta: sincronizzare una catena memorizza solo il tasso della sua coppia, quindi LibreFolio non ha tassi per convertire in quella valuta. Per rendere disponibile una valuta, assegnale una coppia propria: scegli **Create forex…** in fondo all'elenco, oppure spunta **Also create intermediate pairs** quando aggiungi una coppia tramite una rotta a catena.
 - **AI Export** (:material-brain:) — apre un'esportazione negli appunti. Scegli **Data
@@ -96,7 +96,7 @@ Il banner ti avvisa anche quando un asset che detieni ha un provider di prezzi m
 
 Elenca inoltre gli asset con un **valore di acquisto mancante**: un trasferimento o una rettifica che ha portato unità senza un costo di carico. LibreFolio non può sapere quanto sono costate quelle unità, quindi le conta a zero nel tuo valore di acquisto e mostra il costo medio e il P&L latente di quella posizione come non disponibili (`—`). Per risolvere, trova quel trasferimento o quella rettifica tra le tue [transazioni](../transactions/index.md) e assegnagli il suo costo di carico.
 
-I tassi di cambio vengono controllati per ogni transazione fino alla data finale — ogni acquisto, vendita e movimento di cassa è convertito al tasso della propria data — e, per valutare ciò che detieni, in ogni giorno del periodo a schermo. Quando una coppia FX configurata con un provider non ha **alcun tasso** per alcune di quelle date, il banner la elenca con l'intervallo delle date mancanti. LibreFolio converte un importo con il tasso più recente disponibile alla data o prima, per quanto vecchio, quindi queste date cadono *prima* del primo tasso memorizzato della coppia — spesso ben prima del periodo a schermo, perché ogni transazione passata contribuisce ai totali come il tuo P&L totale e il tuo valore di acquisto. Fai clic su **Sincronizza** per riempirle:
+I tassi di cambio vengono controllati per ogni transazione fino alla data finale — ogni acquisto, vendita e movimento di cassa è convertito al tasso della propria data — e, per valutare ciò che detieni, in ogni giorno del periodo a schermo: i tuoi titoli, e anche la liquidità che tieni in un'altra valuta, valutata ogni giorno al tasso di quel giorno. Quando una coppia FX configurata con un provider non ha **alcun tasso** per alcune di quelle date, il banner la elenca con l'intervallo delle date mancanti. LibreFolio converte un importo con il tasso più recente disponibile alla data o prima, per quanto vecchio, quindi queste date cadono *prima* del primo tasso memorizzato della coppia — spesso ben prima del periodo a schermo, perché ogni transazione passata contribuisce ai totali come il tuo P&L totale e il tuo valore di acquisto. Fai clic su **Sincronizza** per riempirle:
 
 - LibreFolio scarica quell'intervallo di date con **una settimana extra su ciascun lato** (mai oltre oggi), qualunque periodo stia mostrando la dashboard. La settimana extra copre i fine settimana e i giorni festivi, quando i provider non pubblicano nulla: un giorno del genere al limite dell'intervallo assume quindi il tasso del giorno lavorativo precedente.
 - Una volta terminato il download, la dashboard si aggiorna e un messaggio riporta il risultato per ciascuna coppia.
@@ -106,7 +106,7 @@ Le coppie con soli tassi manuali (nessun provider) ricevono un avviso proprio: i
 
 !!! tip "Riempire in una volta l'intera storia di una coppia"
 
-    Apri la [pagina FX](../fx/index.md), scegli l'intervallo **Tutti** (MAX) e fai clic su [Sinc. Tutto](../fx/sync.md): LibreFolio scarica tutto ciò che i provider pubblicano per le tue coppie, fino a oggi. Una coppia che aggiungi con un provider lo fa da sola — vedi [Aggiungere una coppia di valute](../fx/add-pair.md).
+    Apri la [pagina FX](../fx/index.md), scegli l'intervallo **Tutti** e fai clic su [Sinc. Tutto](../fx/sync.md): LibreFolio scarica tutto ciò che i provider pubblicano per le tue coppie, fino a oggi. Una coppia che aggiungi con un provider lo fa da sola — vedi [Aggiungere una coppia di valute](../fx/add-pair.md).
 
 ---
 

@@ -1,18 +1,13 @@
-"""Unit tests for backend/app/services/fifo_lot_engine.py."""
+"""Unit tests for backend/app/services/financial_math/fifo/engine.py."""
 
 from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
 
-from backend.app.services.fifo_lot_engine import (
-    EconomicEvent,
-    FifoInputTransaction,
-    FragmentInterval,
-    ReferencePriceResolution,
-    eligible_income_quantity,
-    run_fifo_lot_engine,
-)
+from backend.app.services.financial_math.fifo.eligibility import eligible_income_quantity
+from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
+from backend.app.services.financial_math.fifo.models import EconomicEvent, FifoInputTransaction, FragmentInterval, ReferencePriceResolution
 
 ASSET_ID = 101
 

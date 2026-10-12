@@ -1,6 +1,7 @@
 ---
 title: "Babel Currency Symbol Returns Code Instead of Symbol in Non-English Locale"
 category: problem
+status: resolved
 tags: [backend, python, babel, currency, locale, i18n]
 severity: high
 resolved: true
@@ -30,7 +31,7 @@ Babel's `get_currency_symbol(currency, locale=user_locale)` uses the **CLDR data
 
 ## Fix
 
-In `backend/app/utils/currency_utils.py`, a hardcoded English `Babel Locale` object is used for symbol lookup only; the user's locale is still used for the currency name:
+In `backend/app/utils/fx/currency.py` (`utils/currency_utils.py` until 2026-10-12), a hardcoded English `Babel Locale` object is used for symbol lookup only; the user's locale is still used for the currency name:
 
 ```python
 def list_currencies(language: str = "en") -> list[CurrencyInfo]:
@@ -44,7 +45,7 @@ The key detail: `locale=en_locale` must receive a `babel.Locale` object (from `g
 
 ## Affected File
 
-- `backend/app/utils/currency_utils.py` (W77/C22, Round 1)
+- `backend/app/utils/currency_utils.py` (W77/C22, Round 1) — since 2026-10-12 `backend/app/utils/fx/currency.py`
 
 ## Source
 

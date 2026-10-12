@@ -6,8 +6,8 @@ import pytest
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType
-from backend.app.services.asset_source_providers import borsa_italiana
-from backend.app.services.asset_source_providers.borsa_italiana import BorsaItalianaProvider
+from backend.app.services.asset_source_providers.borsa_italiana import plugin as borsa_italiana
+from backend.app.services.asset_source_providers.borsa_italiana.plugin import BorsaItalianaProvider
 
 
 def _available(monkeypatch):

@@ -23,7 +23,7 @@ sa [page de détail](detail/index.md).
 - Le bouton de bascule d'affichage à côté de **Ajouter Paire** permet de passer entre les cartes et le tableau ; LibreFolio se souvient de votre
   choix.
 - Dans le tableau, les colonnes **Δ** affichent la variation sur le dernier jour, sur la période sélectionnée et, pour les périodes longues,
-  de 1 semaine à 5 ans. Le bouton **Colonnes** permet d'ajouter des colonnes masquées, telles que les **Fournisseurs** de chaque paire.
+  de 1S à 5A. Le bouton **Colonnes** permet d'ajouter des colonnes masquées, telles que les **Fournisseurs** de chaque paire.
 - Sélectionnez des lignes pour agir sur plusieurs paires à la fois, ou faites un clic droit sur une ligne.
 
 ### 🔍 Filtrer par devise
