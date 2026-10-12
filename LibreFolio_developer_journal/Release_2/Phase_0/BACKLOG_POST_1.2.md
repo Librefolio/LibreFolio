@@ -40,7 +40,7 @@
 | [Backlog 38](38_postReleaseBacklog/README.md) | I residui delle cartelle archiviate il 09/10 (gruppi N, O, L, K, P, I) e il backlog del coordinatore (C-1…C-55) | 138 voci |
 | [README della 02](02_riskfolioIntegration/README.md) | Rischio: lavoro aperto, buchi, difetti, domande aperte | A1–A6, B1–B3, B6–B8 aperti |
 | [README della 13](13_pacAllocator/implementation/README.md) | PAC: il backlog delle righe e la nota di ripartenza | riga 14, E2E del PAC, difetti 1, 2, 5, opzione (e) |
-| [Piano della 16](16_toolPlatform/plan-phase00ToolPlatform.prompt.md) | Piattaforma dei Tool: la definizione di fatto residua (§5) | da riverificare |
+| [Piano della 16](16_toolPlatform/plan-phase00ToolPlatform.prompt.md) | Piattaforma dei Tool: la definizione di fatto residua (§5) | riverificata da W il 12/10 (B6a): D-T1…D-T3 nella sezione D |
 | [Cartella 21](21_onboarding/plan-phase00Onboarding.prompt.md) | Onboarding: «Cosa resta aperto», voci 2–7 | 6 voci; la 1, la review manuale C7, chiusa l'11/10 |
 | [Piani della 27](27_releaseImages/) | Immagini di rilascio, galleria, pipeline delle traduzioni | vedi la sezione M |
 | [Piano della 32](32_docsEnglish12/plan-phase00DocsEnglish12.prompt.md) | Documentazione inglese della 1.2 | chiusa (S24); C-43 nel 38, 32-1…32-5 nella sezione Q |
@@ -81,6 +81,19 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
 - ✅ **C-55 · L'AI Export di un broker senza posizioni non passa i controlli pubblici «invalid HHI points»** — chiusa
   nella 1.2 da T, nel treno 56 (developer, 12/10). Il payload era corretto; sbagliava la sonda, che contava ogni HHI
   nullo come violazione. Dettagli: 38, C-55.
+- **C-56 · BrokerIcon: con le props vuote l'icona non legge lo store (H3)** — basso, latente; I, 12/10. La catena
+  delle icone nasce solo dalle props (`frontend/src/lib/components/brokers/BrokerIcon.svelte`). Oggi le superfici
+  passano le props piene, quindi non si vede; si vedrebbe con una superficie che passa solo l'id. `BrokerBadge` legge
+  già lo store. Va tenuto `settledIconFieldIds`, che impedisce il giro infinito. Dettagli: l'analisi di I del 12/10,
+  nel piano della 48 (rifinitura UI), §1.
+- **C-57 · La lista dei plugin per le icone non si ritenta dopo un errore (H2)** — basso, da verificare; I, 12/10. Se la
+  prima richiesta fallisce (`frontend/src/lib/utils/broker/brokerHelpers.ts`, `ensurePluginIconsLoaded`), le icone dei
+  plugin mancano fino al ricaricamento della pagina. Dettagli: come C-56.
+- **C-58 · Dettaglio broker: un test sfora i 30 s sotto carico** — basso; coordinatore, 12/10. Nel gate del treno 59,
+  con carico ~56, «the lot detail modal renders its three sections and the net breakdown»
+  (`frontend/e2e/brokers/brokers-detail.spec.ts:410`) è scaduto durante la navigazione, prima del pannello (40,1 s);
+  rilanciato con carico 30, è passato in 2,9 s. Nei 30 s stanno login, `ensureBrokerExists`, due navigazioni e il
+  pannello. Da valutare con `test-triage`: un budget esplicito o una navigazione in meno.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6).
 
 ## Risk · Rischio (02)
@@ -98,6 +111,18 @@ Dettagli: [README della 13](13_pacAllocator/implementation/README.md), «🧭 Ri
 
 - **Riga 14 · L'analisi del Rebalancer**, poi gli E2E del PAC insieme a quelli del Rebalancer.
 - **Difetti 1, 2, 5 e l'opzione (e)** del backlog della 13; **C-38**, l'intestazione Actions su mobile.
+- **D-T1 · La modalità di memoria dei Tool non si vede in nessuna schermata** — basso; W, 12/10, ricontrollato sul
+  codice (B6a). `capabilities.memory.mode` nella diagnostica e `resources.memory` per job stanno nell'API, ma
+  `ToolDiagnosticsPanel.svelte` e `ToolExecutionMetrics.svelte` non li mostrano. Il dossier dell'11/09 la chiamava «la
+  riga più importante». Dettagli: [F-106 nella devWiki](../../../LibreFolio_devWiki/wiki/features/F-106.md), «Still
+  open»; [piano della 16](16_toolPlatform/plan-phase00ToolPlatform.prompt.md), §5.
+- **D-T2 · Il client dei Tool aspetta il timeout della piattaforma, non quello dell'operazione** — minimo oggi; W, 12/10.
+  `frontend/src/lib/features/tools/contracts.ts:343` usa `client_timeout_ms` della politica (65 s). Il PAC dichiara lo
+  stesso valore, quindi oggi non cambia niente; conta col secondo Tool. Dettagli: come D-T1.
+- **D-T3 · La misura della memoria in modalità osservata** — da verificare; W, 12/10. La memoria residente sommata di un
+  albero di processi può contare due volte le pagine condivise, e un picco fra due campioni può passare inosservato. Il
+  percorso cgroup non è mai stato provato su un host delegato vero, e nessun benchmark è stato fatto. Dettagli: come
+  D-T1.
 
 ## I · P&L per broker (41)
 
@@ -300,6 +325,21 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
 - **T-P2.2 · I file grandi del backend, divisi per cuciture** — medio; T, 11/10. L'evaluator del PAC,
   `portfolio_service`, le transazioni, `broker_service`, `price_store`, i router, gli schemi. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «P2.2».
+- **T-SG · I file sciolti in cima a `backend/app/services/`, raggruppati per dominio** — medio; T, 11/10; **dopo la
+  1.2**, riconfermato dal developer il 12/10. Oggi sono 33 moduli.
+  - Nascono dai lotti di sopra: `signals/` (T-PL1), `fx/` (T-PL4), `brim/` (T-PL5), `assets/` (T-PL6), `transactions/`,
+    `portfolio/` e `brokers/` (T-P2.2).
+  - Restano da spostare a parte i servizi piccoli:
+    - `accounts/`: auth, utenti, impostazioni, impostazioni globali, onboarding, popup delle donazioni;
+    - `platform/`: registri dei provider e dei container, sentinella delle date, soglie della qualità dei dati, backup;
+    - `files/`: upload statici, anteprima dei file.
+  - Prima la rinomina, poi il taglio (§4.2 del piano).
+  - Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «P2.2»,
+    paragrafo «`services/` in cima ha 40 voci».
+- **T-DI · I campi data nativi restano nella lingua del browser** — minimo, limite noto; T, 12/10 (analisi di M-18). Con
+  M-18 numeri e date seguono la lingua della UI, ma un `<input type="date">` lo disegna il browser
+  (`frontend/src/lib/components/risk/RiskAnalysisPanel.svelte:902,906`). Serve un selettore di date dell'app. Dettagli:
+  [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «10», M-18.
 - ✅ **T-BU1+BU2 · `utils/` del backend: sottocartelle per tipo di utility** — chiusa nella 1.2 da T: BU1 nel treno 50
   (`346b7e292`), BU2 nel treno 53 (`8dae5cc6e`). `utils/` resta la casa delle funzioni foglia (D-P7), con le
   sottocartelle `asset/`, `fx/` e `runtime/`; la precisione del DB è in `db/precision.py`. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
