@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetRiskReturn": {
+        "name": "Riesgo y rentabilidad por activo",
+        "description": "Volatilidad y rentabilidad anualizada esperada de cada activo y de la cartera, sobre la composición actual."
+      }
+    }
+  }
+}

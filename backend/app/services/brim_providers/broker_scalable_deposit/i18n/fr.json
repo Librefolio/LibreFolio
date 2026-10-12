@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_scalable_deposit": {
+      "name": "Scalable Capital compte rémunéré",
+      "description": "Importe le compte rémunéré Scalable Capital (Tagesgeld) depuis le fichier de l’exportateur LibreFolio : intérêts avec l’impôt retenu, dépôts, retraits et transferts vers le compte-titres."
+    }
+  }
+}

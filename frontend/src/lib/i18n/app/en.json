@@ -1,0 +1,102 @@
+{
+  "help": {
+    "helpAndSupport": "Help & Support",
+    "faq": "FAQ",
+    "reportBug": "Report Bug",
+    "buyMeACoffee": "Buy Me a Coffee",
+    "installApp": "Install App",
+    "installAppIos": "Tap Share, then \"Add to Home Screen\"",
+    "installAppDesktop": "Look for the install icon (⊕) in your browser's address bar",
+    "installAppAndroid": "HTTPS required for install. Use Chrome menu ⋮ → \"Add to Home Screen\" as shortcut"
+  },
+  "donationPopup": {
+    "title": "LibreFolio grows thanks to users like you!",
+    "message": "If you enjoy the project and use it regularly, consider a small donation to support its development.",
+    "laterButton": "Maybe later",
+    "donationNote": "☕ Even the price of a coffee can make a difference."
+  },
+  "updateCheck": {
+    "title": "New version available",
+    "message": "LibreFolio {latest} has been released.",
+    "guideLink": "How to update",
+    "releaseLink": "Release notes on GitHub",
+    "laterButton": "Remind me later",
+    "skipVersion": "Skip this version"
+  },
+  "changelog": {
+    "title": "Changelog",
+    "viewRemote": "View on GitHub",
+    "empty": "No changelog is bundled with this build.",
+    "searchPlaceholder": "Search the changelog…",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
+    "checkNow": "Check for updates",
+    "upToDate": "You're up to date with the latest version!",
+    "askAdmin": "A newer version exists. Ask an administrator to update:",
+    "searchResults": "Matches:",
+    "copyEmail": "Copy email",
+    "askAdminTitle": "Update available — contact an administrator",
+    "emailCopied": "Email copied to clipboard",
+    "detectedRemoteVersion": "Version detected online: {version}",
+    "checkFailed": "Unable to complete the update check. Try again.",
+    "noStableRelease": "No stable release was found on GitHub.",
+    "imagePending": "A newer stable release was detected, but its Docker image is not available yet.",
+    "imageCheckFailed": "A newer stable release was detected, but its Docker image could not be verified. Try again.",
+    "adminLookupFailed": "Update available, but the administrator list could not be loaded.",
+    "notTranslated": "Not translated yet"
+  },
+  "support": {
+    "title": "Support LibreFolio",
+    "description": "Buy a coffee or help others discover the project.",
+    "shareDivider": "Or share",
+    "shareOn": "Share on",
+    "share": {
+      "titleLabel": "Suggested title",
+      "x": {
+        "message": "Hey! I'm using LibreFolio to track my investments and I'm loving it. Give it a try!",
+        "hint": "The project link is added to the copy and the post. X opens in a new tab."
+      },
+      "reddit": {
+        "title": "Trying LibreFolio, an open-source portfolio tracker",
+        "message": "I've been looking for a simpler way to follow my investments without handing all my portfolio data to an external service. Lately I've been trying LibreFolio, and I'm enjoying having everything in one place.\n\nIt's an open-source portfolio tracker to organize your holdings and explore their performance, while keeping your data under your control. If that sounds useful, take a look!",
+        "hint": "We open a text post with a separate title and body. If Reddit leaves the body empty, paste the text already copied."
+      },
+      "facebook": {
+        "message": "Lately I've been using LibreFolio to keep an eye on my investments, and I like having everything in one place without giving up control of my data.\n\nIf you're looking for an open-source portfolio tracker that keeps your data under your control, give it a look!",
+        "hint": "Facebook prepares only the link preview. After opening it, paste the copied text into the post's message field.",
+        "afterCopy": "Text and link copied. Paste the text into Facebook's post message."
+      },
+      "instagram": {
+        "message": "A little more order in my investments, without leaving my data elsewhere. I'm trying LibreFolio, an open-source portfolio tracker.",
+        "hint": "Instagram cannot prepare a post from this link. After opening it, choose Create (+), select a photo or video, then paste the copied caption.",
+        "afterCopy": "Caption and link copied. On Instagram: Create (+), choose your photo/video, then paste the caption."
+      },
+      "tiktok": {
+        "message": "My new sidekick for tracking my portfolio: LibreFolio. Open source, with my data under my control. If you like tinkering, check it out!",
+        "hint": "We open TikTok's upload page; sign in if asked. Select your video, then paste the copied caption. No video or caption is uploaded automatically.",
+        "afterCopy": "Caption and link copied. On TikTok's upload page, select your video and paste the caption."
+      }
+    },
+    "shareMessageLabel": "Suggested message",
+    "clipboardUnavailable": "Could not copy to the clipboard. Allow clipboard access and try again.",
+    "copyAndGo": "Copy and go",
+    "navigationFailed": "Text and link copied, but the social site could not be opened. Allow pop-ups and try again."
+  },
+  "connectionSecurity": {
+    "level": {
+      "secure": "Connection: secure",
+      "local": "Connection: local network",
+      "insecure": "Connection: not secure"
+    },
+    "reason": {
+      "https": "Encrypted with HTTPS: your browser considers this connection secure.",
+      "localhost": "You are on the server itself: the traffic does not leave this computer.",
+      "vpn": "Encrypted by the VPN (Tailscale) between your device and the server.",
+      "lan": "Local network without encryption: anyone on the same network, for example the Wi-Fi, can read the traffic. For the best security, use the HTTPS address at home too.",
+      "uncertain": "Unclear: the address you opened and the source the server sees disagree, for example a public name reached through split DNS or a local proxy. The traffic is not encrypted: use the HTTPS address.",
+      "internet": "Not encrypted over the Internet: passwords and data travel in clear text."
+    },
+    "cookieWarning": "Your browser uses HTTPS, but the session cookie is not marked Secure. Make the reverse proxy send X-Forwarded-Proto (Nginx: proxy_set_header X-Forwarded-Proto $scheme;), or set SESSION_COOKIE_SECURE back to auto if it is never.",
+    "learnMore": "How to connect securely"
+  }
+}

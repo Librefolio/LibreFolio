@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_investimental": {
+      "description": "Import final executed transactions from Investimental CSV order-update logs. Cancellations, rejected requests, and unexecuted orders are skipped.",
+      "name": "Investimental"
+    }
+  }
+}

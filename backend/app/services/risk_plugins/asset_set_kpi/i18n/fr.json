@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetKpi": {
+        "name": "Indicateurs de risque par actif",
+        "description": "Volatilité, pire repli et ratios ajustés du risque, mesurés pour chaque actif sélectionné sur une même fenêtre."
+      }
+    }
+  }
+}

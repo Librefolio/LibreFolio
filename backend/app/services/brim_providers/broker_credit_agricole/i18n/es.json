@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_credit_agricole": {
+      "description": "Importa las exportaciones de Crédit Agricole (CSV o XLSX): los movimientos de valores de la «Lista Movimenti Deposito Titoli» (cupones, compras, amortizaciones, vencimientos, transferencias por sucesión, equilibrados con contrapartidas de efectivo automáticas) y los movimientos de cuenta de la «Lista Movimenti Conto» (liquidez, comisiones, impuestos e ingresos como depósitos y retiradas). Los activos se identifican solo por su nombre (sin ISIN).",
+      "name": "Crédit Agricole"
+    }
+  }
+}

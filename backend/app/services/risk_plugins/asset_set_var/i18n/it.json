@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetVar": {
+        "name": "Rischio di coda per asset",
+        "description": "La perdita che ogni asset selezionato ha raggiunto nei suoi esiti peggiori, stimata sulla sua storia."
+      }
+    }
+  }
+}

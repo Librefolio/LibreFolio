@@ -1223,13 +1223,25 @@ def cmd_add(args) -> int:
     # Add to all languages, in the source that owns the key (or --into)
     success_row = [key] + [f"✓ {translations[lang]}" for lang in LANGUAGES]
     into = getattr(args, "into", None)
-    result = _write_and_build(lambda: _catalog.set_key(key, translations, into=into))
+    langs, sources = _catalog.load()
+    owners_before = _catalog.merge(langs, sources).owners
+    added = {}
+
+    def add():
+        added["target"] = _catalog.set_key(key, translations, into=into)
+        return added["target"]
+
+    result = _write_and_build(add)
     if result != 0:
         return result
 
     print(f"\n✅ Successfully added key '{key}':\n")
     headers = ["Key"] + [lang.upper() for lang in LANGUAGES]
     print(tabulate([success_row], headers=headers, tablefmt="simple"))
+    # An explicit --into is the author's choice: the notice is for a namespace base received by default.
+    notice = None if into else _catalog.base_namespace_notice(key, added["target"], owners_before)
+    if notice:
+        print(f"\n⚠️  {notice}")
     return 0
 
 
@@ -1449,7 +1461,7 @@ def cmd_search(args) -> int:
 
     print(f"\n🔍 Found {len(matching_keys)} key(s) matching '{args.query}' (in {mode_str}):\n")
     headers = ["Key"] + [lang.upper() for lang in LANGUAGES] + ["Source"]
-    print(tabulate(rows, headers=headers, tablefmt="simple", maxcolwidths=[40, 30, 30, 30, 30, 28]))
+    print(tabulate(rows, headers=headers, tablefmt="simple", maxcolwidths=[40, 30, 30, 30, 30, 40]))
 
     return 0
 

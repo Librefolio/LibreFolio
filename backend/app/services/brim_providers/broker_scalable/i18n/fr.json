@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_scalable": {
+      "name": "Scalable Capital compte-titres",
+      "description": "Importe le compte-titres Scalable Capital depuis l’export CSV de Scalable (PRIME) ou depuis le fichier courtier de l’exportateur LibreFolio : achats et ventes avec leurs frais et impôts, plans d’épargne, dividendes, intérêts, dépôts, retraits et transferts vers le compte rémunéré."
+    }
+  }
+}

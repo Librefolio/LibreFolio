@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetDrawdown": {
+        "name": "Per-asset drawdowns",
+        "description": "How far each selected asset fell from its peak, how long it took, and whether it has recovered."
+      }
+    }
+  }
+}

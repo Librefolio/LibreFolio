@@ -1,0 +1,10 @@
+{
+  "signals": {
+    "riskRollingVolatility": {
+      "name": "Volatilidad móvil",
+      "description": "Volatilidad muestral anualizada sobre una ventana móvil de rendimientos diarios solo del precio.",
+      "output": "Volatilidad",
+      "outputDescription": "Desviación estándar muestral anualizada, en puntos porcentuales."
+    }
+  }
+}

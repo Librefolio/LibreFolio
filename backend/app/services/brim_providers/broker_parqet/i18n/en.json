@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_parqet": {
+      "description": "Import transactions from Parqet CSV export. Parqet is an aggregator; underlying broker names are kept in transaction descriptions.",
+      "name": "Parqet"
+    }
+  }
+}

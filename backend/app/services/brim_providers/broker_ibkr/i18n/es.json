@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_ibkr": {
+      "description": "Importa las operaciones de la exportación CSV de Interactive Brokers. Admite acciones, ETF y operaciones de divisas, con sus comisiones.",
+      "name": "Interactive Brokers"
+    }
+  }
+}

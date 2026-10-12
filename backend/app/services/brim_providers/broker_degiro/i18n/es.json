@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_degiro": {
+      "description": "Importa el estado de cuenta de DEGIRO (CSV) en cualquier idioma: operaciones de compraventa, comisiones, dividendos, impuestos, intereses, depósitos, retiradas y conversiones de divisas, cada uno en su propia divisa.",
+      "name": "DEGIRO"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "portfolioOptimization": {
+        "name": "Portfolio allocation",
+        "description": "Builds a hypothetical asset composition from the selected sample, strategy, estimators and constraints."
+      }
+    }
+  }
+}

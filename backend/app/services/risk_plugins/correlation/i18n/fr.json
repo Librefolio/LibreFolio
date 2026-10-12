@@ -1,0 +1,11 @@
+{
+  "risk": {
+    "analytics": {
+      "correlation": {
+        "name": "Corrélation",
+        "description": "Matrice de corrélation de Pearson des rendements dans la devise cible.",
+        "help": "Ce panneau analyse les corrélations deux à deux de tous les actifs examinés, calculées sur la période choisie en tenant compte des éventuelles conversions de devises. Une valeur élevée, proche de +1, signifie que deux actifs évoluent ensemble et se diversifient peu ; proche de 0, qu’ils évoluent chacun de leur côté ; négative, que l’un amortit l’autre. Cliquez sur l’icône pour le guide."
+      }
+    }
+  }
+}

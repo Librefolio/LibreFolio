@@ -1,0 +1,11 @@
+{
+  "risk": {
+    "analytics": {
+      "correlation": {
+        "name": "Correlation",
+        "description": "Pearson correlation matrix on target-currency returns.",
+        "help": "This panel analyses the pairwise correlations of all the assets under review, computed over the chosen period and taking any currency conversions into account. A high value, close to +1, means two assets move together and diversify each other little; close to 0, that they move independently; negative, that one cushions the other. Click the icon for the guide."
+      }
+    }
+  }
+}
