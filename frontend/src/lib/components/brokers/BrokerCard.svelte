@@ -4,7 +4,7 @@
      */
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
+    import {uiLocaleStore} from '$lib/stores/app/uiLocale';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import CurrencyAmount from '$lib/components/ui/display/CurrencyAmount.svelte';
     import {Crown, ExternalLink, Eye, Pencil, Share2, Trash2, Wallet} from 'lucide-svelte';
@@ -156,7 +156,7 @@
                 <span class="font-medium {summary && toNumber(summary.gain_loss.amount) < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}">
                     {#if summary}
                         <CurrencyAmount amount={toNumber(summary.gain_loss.amount)} code={targetCurrency} options={{showSign: true}} />
-                        <span class="ml-1 text-xs">({formatPercent(toNumber(summary.gain_loss_percent), {scale: 100, signed: false, locale: $currentLanguage})})</span>
+                        <span class="ml-1 text-xs">({formatPercent(toNumber(summary.gain_loss_percent), {scale: 100, signed: false, locale: $uiLocaleStore})})</span>
                     {:else}
                         <span class="text-gray-800 dark:text-gray-100">—</span>
                     {/if}
