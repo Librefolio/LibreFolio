@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-10-07
 tags: [frontend, i18n, svelte-i18n, onboarding, e2e, under-load]
-related: [problems/svelte-i18n-formatter-cache-ignores-locale, problems/i18n-audit-false-dead-and-false-used]
+related: [problems/svelte-i18n-formatter-cache-ignores-locale, problems/i18n-audit-false-dead-and-false-used, features/F-105]
 ---
 
 # Problem: a slow language switch tore the whole app down
@@ -48,6 +48,8 @@ A gate on a *loading* flag must say which load it waits for. «Show a splash unt
 «tear the app down whenever any dictionary is in flight», and the cost (rebuilt pages, lost drafts) only
 appeared when the network or the machine was slow. To reproduce a load-only red, hold the resource at the
 network and wait on the state it causes; never rewrite a gzip-served chunk body in `route.fulfill`.
+
+The Welcome page and its language preview belong to the guided onboarding, [[features/F-105]].
 
 ## Source files
 
