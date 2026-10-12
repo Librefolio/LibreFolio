@@ -30,12 +30,12 @@ Le graphique mémorise votre dernière vue, sous-vue P&L incluse, dans ce naviga
 | Élément | Couleur | Signification |
 |---------|-------|---------|
 | Aire — **Coût d'achat** | Bleu | Ce que les positions que vous détenez vous ont coûté (coût moyen × quantité) |
-| Aire — **Rendements** | Émeraude | Rendements détenus sous forme de liquidités (dividendes, intérêts, plus-values réalisées non encore réinvesties) |
+| Aire — **Rendements** | Émeraude | Rendements détenus sous forme de liquidités (dividendes, intérêts, plus-values réalisées non encore réinvesties, gains de change sur les liquidités que vous détenez dans une autre devise) |
 | Aire — **Capital** | Gris-vert | Dépôts non encore investis, détenus sous forme de liquidités |
 | Ligne — **[Valeur nette](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Vert foncé plein | Valeur totale du portefeuille aux prix de marché actuels |
 | Ligne — **[Capital versé](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Gris pointillé | Capital externe net apporté au fil du temps |
 
-**L'écart entre les deux lignes correspond à votre P&L total** : tous les gains accumulés (latents, réalisés, intérêts et dividendes) moins les frais et les impôts. L'infobulle affiche les deux lignes, le P&L total en vert ou en rouge, et la décomposition : **Coût des actifs** (l'aire bleue, actifs circulant entre vos courtiers inclus), **Rendements** et **Capital**.
+**L'écart entre les deux lignes correspond à votre P&L total** : tous les gains accumulés (latents, réalisés, intérêts, dividendes, et gains ou pertes de change sur les liquidités détenues dans une autre devise) moins les frais et les impôts. L'infobulle affiche les deux lignes, le P&L total en vert ou en rouge, et la décomposition : **Coût des actifs** (l'aire bleue, actifs circulant entre vos courtiers inclus), **Rendements** et **Capital**.
 
 **Les actifs valorisés à leur prix d'achat**, comme les prêts P2P sans prix live de marché, maintiennent la NAV proche du coût d'achat, si bien que l'écart peut être mince : lisez le **P&L total** dans l'infobulle.
 

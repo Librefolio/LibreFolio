@@ -38,6 +38,7 @@ $$
 - `estimated=True` significa origen TRADE. Una cotización MARKET arrastrada obsoleta está obsoleta, no estimada.
 - Las valoraciones permanecen en moneda nativa; cada consumidor convierte a $C^*$ en la fecha de valoración $t$.
 - La conversión FX del coste base permanece fijada a la fecha de la transacción.
+- El efectivo permanece en la divisa en que se registró, bróker a bróker, y se valora al tipo de cambio de $t$ (§5); cada movimiento de efectivo sigue registrándose, y cada flujo de caja externo entra en el capital, al tipo de cambio de su propia fecha.
 - El PMC **nunca** se usa como precio de valoración.
 
 Consulta [Resolución de precios](price-resolution.md) para conocer el contrato del resolutor y la semántica de calidad de datos.
@@ -115,6 +116,14 @@ $$
 \mathrm{UGL}(t) = \mathrm{NAV}(t) - \mathrm{Book}(t)
 $$
 
+$\mathrm{Cash}(t)$ es el efectivo de cada bróker, mantenido en las divisas en que se registró y valorado al tipo de cambio de $t$:
+
+$$
+\mathrm{Cash}(t) = \sum_{b \in S} \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t)
+$$
+
+donde $N_{b,c}(t)$ es el saldo del bróker $b$ en la divisa $c$ tras sus movimientos con fecha igual o anterior a $t$, en proporción a la [cuota de propiedad](../../../../user/brokers/sharing.md) del bróker, y $\mathrm{fx}(c, C^*, t)$ es el último tipo de cambio en la fecha $t$ o anterior ($1$ para $c = C^*$). El mismo término está en el NAV y en el Book, por lo que el efecto cambiario sobre el efectivo se anula en el UGL: se registra como resultado de cambio (§6) y pertenece al P&L total.
+
 ---
 
 ## 📐 6. Modelo de efectivo de tres fondos — Por bróker $(K_b, R_b, W)$ {: #6-three-pool-cash-model-per-broker-k_b-r_b-w }
@@ -145,6 +154,22 @@ Tres fondos acumuladores rastrean la procedencia del efectivo. $K$ y $R$ se mant
 
 Si las fechas de salida y llegada difieren, la transferencia está en tránsito: se resta de $s$ el día de salida y se suma a $d$ el día de llegada. Entre esas fechas, $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$ por el monto en tránsito — gestionado mediante conciliación proporcional.
 
+### 💱 Resultado de cambio sobre el efectivo en divisas {: #exchange-result-on-foreign-cash }
+
+Cada movimiento de efectivo entra en el efectivo del bróker, y en sus fondos, al tipo de cambio de su propia fecha; el saldo mantenido después sigue el tipo de cambio (§5). Cada día $t$ en que cambia el tipo de una divisa extranjera mantenida como efectivo en $S$ — incluido su primer tipo conocido —, después de los movimientos de efectivo de ese día y antes de que las transacciones de ese día actualicen los fondos, cada bróker $b$ que mantiene efectivo en divisas se revaloriza:
+
+$$
+\varepsilon_b(t) = \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t) - \mathrm{Cash}^{\text{replay}}_b(t)
+$$
+
+$$
+\mathrm{Cash}^{\text{replay}}_b \mathrel{+}= \varepsilon_b, \qquad
+R_b \mathrel{+}= \varepsilon_b, \qquad
+\text{si } R_b < 0\text{: } K_b \mathrel{+}= R_b,\; R_b = 0
+$$
+
+$\mathrm{Cash}^{\text{replay}}_b(t)$ es el efectivo que la reproducción lleva para $b$: su valor en la revalorización anterior más cada movimiento posterior al tipo de cambio de su propia fecha. Una ganancia va a los rendimientos; una pérdida consume primero los rendimientos y luego el capital, exactamente como una COMISIÓN. La base de capital no se mueve: un resultado de cambio es un resultado, no una aportación, así que está en el NAV, el P&L total, el ROI, el TWRR y el MWRR, nunca en el capital depositado.
+
 ### 🧮 Agregación para la salida
 
 $$
@@ -161,7 +186,13 @@ $$
 \mathrm{Cash}_{\text{like}}(t) \approx \sum_{b \in S} K_b(t) + \sum_{b \in S} R_b(t)
 $$
 
-Se aplica un escalado proporcional por bróker si la desviación es $> 0.01$ (por redondeo de FX o temporización en tránsito).
+Primero ambos fondos se acotan a cero por bróker. Si los fondos no están vacíos y la desviación sigue superando $0.01$, los fondos **sumados** se escalan a $\mathrm{Cash}_{\text{like}}$, el efectivo más el efectivo en tránsito — un escalado agregado, no por bróker, con cada resultado acotado a cero:
+
+$$
+\mathrm{CashFromCapital}(t) = \sum_{b \in S} K_b(t)
+$$
+
+En caso contrario, $\mathrm{CashFromCapital}(t) = \min\bigl(\sum_b K_b(t),\, \mathrm{Cash}_{\text{like}}(t)\bigr)$ y $\mathrm{CashFromReturns}$ es el resto, acotado a cero. Los resultados de cambio sobre el efectivo en reposo se registran en los fondos (arriba), así que la desviación que queda viene de la temporización en tránsito: el efectivo en tránsito — y el movimiento de su tipo de cambio mientras viaja — no está en los fondos de ningún bróker.
 
 ---
 
@@ -190,7 +221,13 @@ $$
 \mathrm{PnL}_{period} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Las comisiones/ingresos no asignados sin `asset_id` se agrupan por bróker como otros efectos del período.
+Como el UGL no puede contener el resultado de cambio sobre el efectivo (§5), Other se divide en el resultado de cambio de cada bróker durante el período y lo que queda:
+
+$$
+\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
+$$
+
+Las comisiones/ingresos no asignados sin `asset_id` se agrupan por bróker como otros efectos del período, y también $\mathrm{FXonCash}_b$: una fila por cada bróker que mantiene efectivo en divisas, que se muestra cuando su resultado no es cero. Ver [P&L período — Efecto del tipo de cambio sobre el efectivo](period-pnl.md#fx-on-cash).
 
 ---
 
@@ -217,7 +254,7 @@ Donde $w_{\text{pre}}$ es el PMC en $C^*$ **antes** de la reducción del fondo (
 | Pre-marco | $[t_{\mathrm{first}},\ t_0)$ | Efectivo, cantidad, PMC, fondos — sin evaluación de mercado |
 | Marco | $[t_0,\ t_1]$ | Diario completo: precios, FX, estados de posición, estados de cartera |
 
-Las transacciones de pre-marco actualizan los acumuladores (libro mayor de efectivo, fondos PMC, K/R/W de 3 fondos) sin consumir datos de precios o FX. Esto permite un almacenamiento en caché eficiente basado en rangos.
+Las transacciones de pre-marco actualizan los acumuladores (libro mayor de efectivo, fondos PMC, K/R/W de 3 fondos) sin ninguna evaluación de mercado: no se lee ningún precio ni se valora ninguna posición. Cada movimiento se convierte al tipo de cambio de su propia fecha, como en el marco, y cada día en que cambia el tipo de una divisa extranjera mantenida, el efectivo se revaloriza al tipo de ese día y el resultado de cambio entra en los fondos (§6), de modo que los fondos son correctos en $t_0$. Esto permite un almacenamiento en caché eficiente basado en rangos.
 
 ---
 
