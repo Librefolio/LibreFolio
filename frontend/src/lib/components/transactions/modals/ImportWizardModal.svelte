@@ -667,6 +667,12 @@
     let step4TableRef = $state<DataTable<MergedTx> | undefined>(undefined);
     let brokers = $state<BrokerInfo[]>([]);
     let brokersLoading = $state(false);
+    /**
+     * Broker-list loads in flight; `brokersLoading` is the signal the template reads.
+     * A plain variable, never `$state`: the open effect starts a load, and a reactive counter
+     * read and written there would make the effect depend on it (see `importPluginsRequest`).
+     */
+    let brokerLoadsInFlight = 0;
     let confirmCloseOpen = $state(false);
     let showWarningConfirm = $state(false);
 
@@ -2608,11 +2614,29 @@ ${arrow}<span>${label}</span></span>`,
     // Broker Loading
     // =========================================================================
 
-    async function loadBrokers() {
+    /**
+     * Runs one load of the broker list. Step 1 stays busy, and its Next disabled, until every load
+     * in flight has finished: the open load and the refresh after a broker created from Step 1 can
+     * overlap, and Step 2 opens the panels of the brokers known when Next is pressed.
+     */
+    async function trackBrokerLoad(load: () => Promise<void>): Promise<void> {
+        brokerLoadsInFlight += 1;
         brokersLoading = true;
-        await Promise.all([ensureBrokersLoaded(), ensureTypesLoaded(), ensureImportPlugins()]);
-        brokers = getEditableBrokers();
-        brokersLoading = false;
+        try {
+            await load();
+        } finally {
+            brokerLoadsInFlight -= 1;
+            brokersLoading = brokerLoadsInFlight > 0;
+        }
+    }
+
+    function loadBrokers(): Promise<void> {
+        return trackBrokerLoad(async () => {
+            // allSettled: a failed list must neither release Next while the others are still in
+            // flight nor lock it once they have landed. Each loader logs its own failure.
+            await Promise.allSettled([ensureBrokersLoaded(), ensureTypesLoaded(), ensureImportPlugins()]);
+            brokers = getEditableBrokers();
+        });
     }
 
     // =========================================================================
@@ -3119,7 +3143,8 @@ ${arrow}<span>${label}</span></span>`,
     function goNext() {
         if (candidatesRefreshing || duplicateRecheckRunning) return;
         if (currentStepId === 'upload') {
-            if (step1Continuing) return;
+            // Next is disabled while the broker list loads; a click that lands anyway waits for it too.
+            if (step1Continuing || brokersLoading) return;
             const uploadIds = new Set(pendingFiles.filter((f) => f.status === 'pending' && f.brokerId !== null).map((f) => f.id));
             const uploadsNow = uploadIds.size > 0;
             step1Continuing = true;
@@ -5375,11 +5400,11 @@ ${arrow}<span>${label}</span></span>`,
                     type="button"
                     class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
                     onclick={goNext}
-                    disabled={!step1CanProceed || uploading || step1Continuing}
+                    disabled={!step1CanProceed || uploading || step1Continuing || brokersLoading}
                     data-testid="import-wizard-next"
                     use:guideAnchor={'import.action.upload'}
                 >
-                    {#if uploading || step1Continuing}
+                    {#if uploading || step1Continuing || brokersLoading}
                         <LoadingSpinner size="sm" />
                     {:else if step1ValidCount > 0}
                         {$t('importWizard.next')} ({step1ValidCount}) ▶
@@ -5927,7 +5952,8 @@ ${arrow}<span>${label}</span></span>`,
             pendingFiles = pendingFiles.map((f) => (f.id === createBrokerContext ? {...f, brokerId: d.id} : f));
         }
         // Force full refetch so user_role is included (mergeBrokers alone lacks role data).
-        refreshAllBrokers().then(() => {
+        void trackBrokerLoad(async () => {
+            await refreshAllBrokers();
             brokers = getEditableBrokers();
         });
         createBrokerOpen = false;
