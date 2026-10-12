@@ -602,6 +602,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Folder 02, step R6 — the archive G0–G6.** Drift only: archived on 2026-09-16, one alignment since; what still holds and what is superseded, on [[sources/phase00-risk-analysis-backend]]. Folder 02 covered (R0–R6) | *(none)* |
 | 2026-10-12 | **Folder 02, step R5 — the analysis documents.** The per-tool verdicts (and where today's code departs from them), the rule for library versus own maths | *(2 pages — 2 decisions; see log)* |
 | 2026-10-12 | **Folder 02, step R4 — the first round, `implementation/`.** The contracts K1–K9 and their homes, the histogram pinned on the VaR cut, the observed annualisation factor | *(3 pages — 1 concept, 1 decision, 1 problem; see log)* |
 | 2026-10-12 | **Folder 02, step R3b — the post-merge review R5.** Stress buckets from the enum, replay auto-exclusion, the band chart's null base | *(3 pages — 3 problems; see log)* |

@@ -18,6 +18,13 @@ related:
 
 # Source: Phase 0 — Risk Analysis backend G0-G5
 
+> **Archived (checked 2026-10-12, folder 02 step R6).** On 2026-09-16 (`245aabf97`) this plan moved to
+> `_archive-backendFirst-G0G6/` when Risk was replanned. Its README says what still holds — the mathematical contract,
+> the worker architecture, the benchmark evidence, the library versions, the simulation oracle — and what is
+> superseded: the G6 chain and its sequence of views, the priority among metrics, the four-tab information
+> architecture of Asset Global. Since then the archive changed once, the alignment with the code of 2026-10-09
+> (`33d5a599b`, 4 files, 11 lines added). Current planning and what shipped: [[sources/phase00-risk-integration-2026-09]].
+
 ## Summary
 
 The completed G0-G5 backend chain establishes canonical risk series and metadata,
