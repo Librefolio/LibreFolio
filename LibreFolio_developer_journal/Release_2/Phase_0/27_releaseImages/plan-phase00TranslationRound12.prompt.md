@@ -968,3 +968,48 @@ The kit was prepared at 21:00, outside the repo (`release-pipeline/i2/`, with a 
 > **⚠️ Fuori pista — the catalogue is generated now:** since U's split (train 71), `frontend/src/lib/i18n/<lang>.json`
 > exists only after a build. The label scan (M's tool, outside the repo) now reads the catalogue assembled in memory by
 > `scripts/i18n_catalog.py`'s `load_catalog`.
+
+### 20. ✅ Batch 31: I1, the wrong-broker modal's labels; the CHANGELOG's `169bd60f3`; the `galleryLocale.ts` docstring — 2026-10-12 22:10
+
+Base `32d27501c` (train 72: I's batch 48, V's 2b, the CHANGELOG commit `169bd60f3`).
+
+**20.1 ✅ I1**
+> **Note implementazione**: I's batch 48 changed two keys of the catalogue (read with `scripts/i18n_catalog.py`'s
+> `catalogs_at`, before and after the train):
+> - `importWizard.brokerMismatch.move`: «Move to {broker}» → **Move** (it «Sposta», fr «Déplacer», es «Mover»);
+> - `importWizard.brokerMismatch.remove`: «Remove the file» → **Remove** («Rimuovi», «Retirer», «Quitar»).
+>
+> The Move button still shows the chosen broker's icon (`ImportBrokerMismatchModal.svelte`).
+> - `user/transactions/import/how-to.{en,it,fr,es}.md` §«A file in the wrong broker»: «**Move**, with the icon of the
+>   broker chosen under **Move it to**» and «**Remove**», by hand in the four languages, with the catalogues' labels.
+> - `developer/frontend/components/features/import-wizard.md:162` likewise (EN only).
+> - The page is stamped. Before: ×3, ~52.6K tokens each.
+> - The label scan against the new catalogues: 2 more pairs checked per language, all matching; 0 new differing rows
+>   against batch 30.
+
+**20.2 ✅ The CHANGELOG, `169bd60f3`, by hand, then stamped**
+> **Note implementazione**: two edits in `CHANGELOG.{it,fr,es}.md`:
+> - **✨ «Connection security in the sidebar»** gains the clause on the details closing by themselves after 30 seconds
+>   unless the pointer or the focus is on them;
+> - **🐛 «Dialogs and menus»** gains M-20's bullet, «Copy buttons work over plain HTTP too», with the names the files
+>   and the security guide use: «HTTP in chiaro», «HTTP simple», «HTTP sin cifrar», and Settings › About as each file
+>   writes it.
+>
+> `translate-stamp --file CHANGELOG.md` stamped 6 pieces (`1.2.0/added` and `1.2.0/fixed/dialogs-and-menus`, ×3). Before,
+> the dry-run planned them at ~50.7K and ~5.5K tokens each.
+> Script: `release-pipeline/scripts/b31_changelog_port.py`.
+
+**20.3 ✅ `frontend/e2e/fixtures/galleryLocale.ts:4-7`**
+> **Note implementazione**: the docstring now describes the final behaviour: since M-18 the app writes every figure in
+> `uiLocale()` (the interface language, plus the browser's region only when the browser speaks that language). The
+> browser locale still decides the English shots (`Oct 12, 2026` against `12 Oct 2026`), and pinning it per language
+> keeps each shot independent of the machine. Prettier clean.
+> - **⚠️ Fuori pista, to check at I5:** further down, §«Before the page is drawn» says «A language switch redraws no
+>   number already on screen». Since M-18 the figures read `uiLocale()` tracked, so a switch of the interface language
+>   redraws them. The rule the section draws (set the browser locale before the load) and its stamp check still hold.
+>   The sentence was left as it is, outside the assigned lines.
+
+**20.4 ✅ Gates** (`release-pipeline/scripts/b31_final_gates.sh`, load 27–50)
+> - dry-run empty after the stamps;
+> - `translate-validate` 630 files 0/0; `translate-diff` 642 of 642 clean;
+> - strict build 0 (all 3,012 asset URLs resolve); `check-links` 95; `git diff --check` clean.
