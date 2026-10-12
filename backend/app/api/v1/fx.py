@@ -68,7 +68,7 @@ from backend.app.services.fx import (
     sync_pairs_bulk,
     upsert_rates_bulk,
 )
-from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
+from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
 from backend.app.services.provider_registry import (
     FXProviderRegistry,
     SignalPluginRegistry,

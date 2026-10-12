@@ -35,7 +35,7 @@ import {buildSimulationProvenance} from './simulationProvenance';
 /**
  * A real block-bootstrap run's output, field by field from its producer.
  *
- * Traced from `backend/app/services/risk_plugins/simulation.py:274-289`: the
+ * Traced from `backend/app/services/risk_plugins/simulation/plugin.py:274-289`: the
  * resampler reports `empirical_resampled` / `not_estimated_joint_resampling`
  * (it estimates neither drift nor covariance — it reorders the reader's own
  * returns), `sampling_method` is forced to `mc`, and `block_length_days` comes

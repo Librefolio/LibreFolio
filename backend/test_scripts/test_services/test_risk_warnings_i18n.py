@@ -9,19 +9,20 @@ and literal keys are also what the i18n audit reads.
 from __future__ import annotations
 
 import ast
-import json
 from pathlib import Path
 
 import pytest
 
 from backend.app.schemas.risk import RiskWarning
+from scripts.i18n_catalog import load_catalog
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCANNED_PACKAGES = (
     REPO_ROOT / "backend" / "app" / "services" / "risk",
     REPO_ROOT / "backend" / "app" / "services" / "risk_plugins",
 )
-CATALOGUES = {language: REPO_ROOT / "frontend" / "src" / "lib" / "i18n" / f"{language}.json" for language in ("en", "it", "fr", "es")}
+# The four UI catalogues, merged from their sources (scripts/i18n_catalog.py) without the English fallback.
+LANGUAGES = ("en", "it", "fr", "es")
 
 
 def _is_risk_warning(node: ast.AST) -> bool:
@@ -66,7 +67,7 @@ KEYS = sorted({key for _path, _line, call in CONSTRUCTIONS if (key := _literal_k
 def test_the_scan_reaches_the_warnings_of_both_packages():
     # Presence barrier: a scan that found nothing would make every check below vacuous.
     files = {path for path, _line, _call in CONSTRUCTIONS}
-    assert {"backend/app/services/risk/service.py", "backend/app/services/risk_plugins/stress.py", "backend/app/services/risk_plugins/correlation.py"} <= files
+    assert {"backend/app/services/risk/service.py", "backend/app/services/risk_plugins/stress/plugin.py", "backend/app/services/risk_plugins/correlation/plugin.py"} <= files
     assert {
         "risk.warnings.assets_excluded_missing_price",
         "risk.warnings.data_quality_stale_prices",
@@ -111,9 +112,9 @@ def test_the_no_price_source_sentence_is_written_out_where_the_audit_reads_it():
     assert "risk.warnings.assets_excluded_no_price_source" in KEYS
 
 
-@pytest.mark.parametrize("language", sorted(CATALOGUES))
+@pytest.mark.parametrize("language", sorted(LANGUAGES))
 def test_every_risk_warning_key_has_a_sentence_in_each_catalogue(language):
-    catalogue = json.loads(CATALOGUES[language].read_text(encoding="utf-8"))
+    catalogue = load_catalog(language, fallback=False)
 
     missing = [key for key in KEYS if not _has_sentence(catalogue, key)]
 

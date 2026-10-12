@@ -793,3 +793,361 @@ Le prove sono anche nelle voci di §11.3.
   >   più recente, e un trade di oggi batte la quotazione di ieri;
   > - V-12: il titolo `grouped` nomina solo la Dashboard, ma lo usano anche tre pannelli del Rischio;
   > - V-13: commenti del backend che dicono ancora «valued at cost».
+
+> Checkpoint del passo 1 committato dal coordinatore sul mio ramo: `8994100b4`, `973ca3961`, `f3608a385` (12/10).
+
+### 12.3 Passo 2: isolamento degli E2E, rapporto e mandato
+
+Il rapporto è stato mandato al coordinatore il 12/10.
+
+**Metodo:**
+- 5 audit in sola lettura su `frontend/e2e/**`, esclusa la galleria, che è di M;
+- verifica a campione delle P1, fatta da me.
+
+**Come si propagano i danni:**
+- **Dentro una categoria.** Il parallelo esiste solo lì (`fullyParallel`), quindi una scrittura temporanea su un utente
+  condiviso rompe i vicini della stessa categoria: è la classe di V-7.
+- **Fra categorie.** Le categorie girano in sequenza: ai-export, asset, broker, fx, portfolio, transaction, user,
+  utility. Il DB si popola una volta per invocazione (`_consolidate.py:315`), quindi un resto permanente arriva a tutte
+  le categorie successive.
+- **Le pulizie automatiche.** txHygiene (`fixtures/playwright.ts:126-127`) e `mock-restore` puliscono solo a 1
+  worker.
+
+**A, da curare** (decisione del coordinatore, 12/10: tutte, in due checkpoint):
+
+| # | Spec | Danno | Cura |
+|---|---|---|---|
+| A1 | `fx/fx-sync.spec.ts` T7 (`:52-73`) | Sync reale in rete dei provider su EUR-USD, senza mock e senza pulizia | Una coppia MOCKFX riservata, creata e tolta nel test; in alternativa `page.route` |
+| A2 | `settings.spec.ts`, «theme persists» e «language persists» (`:579-690`) | Possono salvare Dark e Italiano per `TEST_USER`, senza ripristino; sonde, CSS e testo | Account usa-e-getta e asserzioni via API |
+| A3 | `settings/scheduler.spec.ts` FSCH-006 e FSCH-006b (`:245-307`) | La frequenza globale `scheduler_current_price_frequency_minutes` resta a 15 o a 20. I due test, in parallelo, si scavalcano | Valore letto e ripristinato in `finally`; i due scrittori in sequenza |
+| A4 | `tx-commit-all-types`, `transactions-modals` T1, `tx-wac-formmodal` FM6, `tx-wac-unit-toggle` | Commit reali nei broker del seed di `TEST_USER`, mai cancellati a 4 worker | Id presi dalla risposta del commit, cancellati in `finally` |
+| A5 | `tx-split-promote` C3, `tx-paired-edit` | Dividono o modificano una coppia `delete-safe` del seed | Coppia creata dal test |
+| A6 | `tx-event-picker` (`:170-203`) | Un DIVIDEND permanente su un asset globale | Evento cancellato per id |
+| A7 | `brokers/brokers.spec.ts`, `brokers/multi-user.spec.ts` | Broker di `TEST_USER` che si accumulano | Account usa-e-getta |
+
+- **Ordine.**
+  - Checkpoint 2a: A1, A2, A3, che sporcano lo stato globale.
+  - Checkpoint 2b: A4-A7.
+  - Per ciascuno, il rosso o la prova del danno prima della cura, via test-author.
+- **Prova.** Ogni categoria toccata a 4 worker, più `front-portfolio all` a 4.
+- **B, la classe di V-7.** Circa 27 spec creano e cancellano broker di `TEST_USER`, con pulizia per id. Il rischio sta
+  solo nella propria categoria, e non c'è un rosso dimostrato: vanno nel backlog come V-15.
+- **C, note:**
+  - `tx-delete` consuma una coppia che il seed gli riserva;
+  - il test 2 di `asset-event-delete` conta su eventi Apple tutti collegati;
+  - l'header di `fx-sync-mock` dice «writes nothing», ma sincronizza le coppie MOCKFX del seed, in modo idempotente.
+- **Due casi nuovi della classe A7**, trovati il 12/10 nel censimento meccanico per V-15. Il censimento cerca con una
+  regex gli spec che creano broker e citano `TEST_USER`: 33 risultati, letti uno per uno. Li
+  propongo per la 2b:
+  - `transactions/tx-import-resolution.spec.ts` IWR-009 (`:626`) crea dalla UI il broker `E2E Test Broker <ts>` di
+    `TEST_USER` e non lo cancella. Ha anche un `return` condizionale quando il selettore non c'è;
+  - `transactions/tx-clone.spec.ts`, «clone inside the workspace (cloneRow)…» (`:549`), crea via API il broker
+    `T3-ws-<suffix>`, ma nel `finally` cancella solo la transazione.
+  - Scartati dopo la lettura: `image-crop` e `select-components` aprono il modale del broker ma non salvano;
+    `broker-sharing` registra utenti suoi.
+
+### 12.4 Passo 3: le lacune 1.2 e la scelta del developer
+
+La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di V, `gaps-1.2-draft.md`.
+
+**Le 8 lacune:**
+1. Rischio L1/L4 con un `/risk/query` vero fino allo schermo. Oggi tutti gli E2E sono su risposte finte.
+2. La riga «FX on cash» e la cassa estera rivalutata: solo backend.
+3. Il PAC allocator, in beta.
+4. YOC nelle posizioni.
+5. Il trasferimento in Auto, che porta il costo d'origine.
+6. La cancellazione dell'account.
+7. L'anteprima PDF senza CDN.
+8. Scalable con un export reale.
+
+**Lacune già coperte, scartate dopo la verifica:**
+- Rolling Return;
+- la diagnostica senza login;
+- CLI `user deactivate`;
+- le card dei broker col trasferimento;
+- la riga nuova del data editor;
+- il costo nel promote.
+
+**Scelta del developer** (12/10, via coordinatore): «Tutte e 7 nella 1.2 (circa 3 giorni dopo A1–A7)».
+- L'ordine: 2, 1, 6, 4, 7, 5, 3.
+- Un checkpoint ogni due o tre lacune.
+- Tutti i test via test-author, su account usa-e-getta, verdi a 1 e a 4 worker.
+- Un comportamento sbagliato → STOP e messaggio al coordinatore.
+- La lacuna 8 resta fuori finché manca il dato.
+- C-42 e B9 restano nel backlog.
+
+### 12.5 Passo 2a, avanzamento
+
+- ✅ **A2 e A3, prova del danno** (12/10). Test-author di V, con gli spec invariati, `--fresh-run --workers 1`. Dopo
+  ogni giro una lettura del DB della corsia in sola lettura (Python, `mode=ro`).
+
+  | Giro | Comando | DB dopo il giro |
+  |---|---|---|
+  | 1 | `front-utility settings "preferences persist after navigating away and back"` (innocuo) | `e2e_test_user` `en`/`light`, frequenza `10` |
+  | 2 | `front-utility settings "theme preference persists…" "language change persists…"` | `e2e_test_user`: **lingua `it`**, tema `light` |
+  | 3 | `front-utility scheduler "FSCH-001"` (innocuo) | Lo scheduler com'è nel seed: frequenza `10`, `06:00,23:00`, `mon…sat`, orizzonte `14`, `UTC` |
+  | 4 | `front-utility scheduler "FSCH-006"` (006 e 006b) | **Frequenza `20`**. Le cinque chiavi salvate dal modale hanno lo stesso `updated_at` e `updated_by_user_id` 1 |
+
+  Log: `/tmp/libreFolio_v_a2a3_s1-{a2-harmless,a2-damage,a3-harmless,a3-damage}.log`.
+  > **Note implementazione**:
+  > - A2: il test della lingua salva l'italiano per `TEST_USER` e non lo ripristina. Ogni sessione successiva di
+  >   `TEST_USER` lo vede in italiano, per esempio il controllo in inglese di `connection-security.spec.ts:116`;
+  > - il test del tema è vuoto: `[class*="dark"]` prende il contenitore della riga, per via della classe Tailwind
+  >   `dark:`, e non salva niente;
+  > - A3: un salvataggio del modale riscrive **cinque** chiavi globali (frequenza, `_history_sync_times`,
+  >   `_history_sync_days`, `_history_sync_horizon_days`, `scheduler_timezone`). Senza ripristino vince l'ultimo che
+  >   scrive.
+  >
+  > **⚠️ Fuori pista**: test-author ha notato che in questi giri il setup di Playwright ripopola il DB e ricrea gli
+  > utenti anche se il runner l'ha appena fatto, perché su questa strada `LF_SETUP_DONE` sembra mancare. Sono circa
+  > 20 s a giro. Solo nota.
+- ✅ **Attributi per A2** (12/10, applicati da me, solo attributi; le impostazioni non sono file di I, U, T o M):
+  - `frontend/src/lib/components/settings/SettingTheme.svelte`: sul `<button>` di ogni opzione,
+    `data-testid="setting-theme-option-{option.value}"` e
+    `aria-pressed={value === option.value ? 'true' : 'false'}`. È la convenzione di `SettingsLayout.svelte`;
+  - `frontend/src/lib/components/settings/SettingSelect.svelte`: su `SimpleSelect`,
+    ``optionTestId={(option) => `setting-select-option-${option.value}`}``. La prop esiste già, e le opzioni pubblicano già
+    `aria-selected`.
+  - Usati anche da `GlobalSettingsTab` (i default dell'admin) e da `WelcomeForm` (la lingua). Il conteggio
+    `[data-testid*="theme"]` di `WelcomeForm.test.ts:214` non cambia, perché `WelcomeForm` non usa `SettingTheme`.
+  - Prove: prettier pulito. `frontend/node_modules/.bin/vitest run` su SettingControls, GlobalSettingsTab,
+    PreferencesTab, WelcomeForm e WelcomePage → 5 file, 257 passed (`/tmp/libreFolio_v_attr_vitest.log`).
+- ✅ **A1, prova del danno** (12/10). Test-author di V, spec invariato, `--fresh-run --workers 1`. Letture del DB in sola
+  lettura.
+  - 1a: `front-fx fx-sync "can open Sync All modal"` (innocuo) → 1 passed. EUR-USD: 275 righe; nessuna riga scritta
+    dopo il seed.
+  - 1b: `front-fx fx-sync "sync from detail page triggers action"` (T7) → 1 passed. EUR-USD: **65 righe riscritte
+    durante il test**, tutti i giorni lavorativi della finestra di 3 mesi della pagina. Sono fixing ECB veri, a 4
+    decimali, presi dalla rete: 2026-07-14 passa da 1,11247… del seed a 1,1405. La somma dei tassi della finestra va
+    da 73,281088 a 75,778255.
+  - Il log del backend registra `"cache_name": "portfolio_layer2", "event": "Cache cleared"` subito dopo il sync. Nel
+    giro 1a non c'è.
+  - T7 aspetta solo `sync-modal-results`, che compare anche in caso di errore. Offline resterebbe verde senza provare
+    niente.
+
+  Log: `/tmp/libreFolio_v_a1_step1a.log`, `/tmp/libreFolio_v_a1_step1b.log`.
+  > **⚠️ Fuori pista**: test-author ha trovato un gemello di T7: `fx/fx-detail.spec.ts`, «sync single pair reports its
+  > outcome in the modal» (`:1623`). Stesso sync ECB reale di EUR-USD, stessa finestra, solo l'attesa dei risultati.
+  > L'ho incluso nella cura di A1 (A1b) perché è lo stesso danno, e lo segnalo al coordinatore. Non serve una seconda
+  > prova: flusso, coppia e finestra sono identici a T7.
+- ✅ **A1 e A1b, cura** (12/10). Test-author di V; ha toccato solo `fx/fx-sync.spec.ts` (T7) e `fx/fx-detail.spec.ts`
+  («sync single pair reports its outcome in the modal»). Gli altri test non sono cambiati.
+  - Ogni test ha la sua coppia, solo MOCKFX e niente rete. Per T7, EUR-TTD su desktop ed EUR-JMD su mobile; per il
+    gemello, EUR-GTQ ed EUR-HNL. Sono codici ISO veri, che si ordinano dopo EUR e che nella worktree non usa nessuno
+    (grep a parola intera, file ignorati compresi).
+  - La coppia si crea e si toglie nella fixture locale dello spec, con la pulizia nel `finally` della fixture: così
+    regge anche un timeout. Prima si tolgono gli avanzi e si verifica la coppia vuota.
+  - La pagina si apre su una finestra esplicita, i 10 giorni prima di oggi.
+  - Le asserzioni:
+    - la richiesta è esattamente `{pairs, start, end}`;
+    - la risposta, validata con lo schema generato: `ok`, MOCKFX, 10 scaricati, 10 cambiati;
+    - i conteggi del modale, letti dai `data-*` di `SyncModalBase`: 1/1/0/10/10;
+    - il grafico finisce a `1.2345`;
+    - la rilettura via API dà 10 giorni, tutti esattamente 1,2345, nessuno riportato da un altro giorno.
+  - Il timeout passa da 120 s a 60 s.
+  - Prove (`--fresh-run`):
+
+    | Comando | Esito | Log |
+    |---|---|---|
+    | `--workers 1 front-fx fx-sync` | 3/3 | `/tmp/libreFolio_v_a1_step3a.log` |
+    | `--workers 4 front-fx fx-sync` | 3/3 | `/tmp/libreFolio_v_a1_step3b.log` |
+    | `--workers 1 front-fx fx-detail` | 17/17 | `/tmp/libreFolio_v_a1_step3c.log` |
+    | `--workers 4 front-fx fx-detail` | 17/17 | `/tmp/libreFolio_v_a1_step3d.log` |
+
+  - Dopo ogni giro, il DB letto in sola lettura: niente su TTD, JMD, GTQ e HNL, nessuna riga EUR-USD scritta dopo il
+    seed (la somma dei tassi resta 300,374094 come nel giro innocuo), 24 rotte e 4125 tassi come nel seed. Il log del
+    backend ha un solo sync per giro, verso MOCKFX.
+  - Prettier pulito; tsc strict offline exit 0, con `--noUnusedLocals` pulito.
+  > **Note implementazione**: prima T7 restava verde anche offline, perché aspettava solo il riepilogo, che compare
+  > anche quando il sync fallisce. Ora dimostra che il sync è riuscito.
+  > **⚠️ Fuori pista**: altre note di test-author, lasciate intatte:
+  > - aprire un modale di sync chiama `GET /fx/providers`, e il backend scarica una volta per processo l'elenco valute
+  >   di SNB da data.snb.ch. È solo lettura, e offline l'errore è gestito;
+  > - `fx-sync-mock.spec.ts` lascia tassi MOCKFX sulle sue coppie del seed. Già nota C.
+- ✅ **A2 e A3, cura** (12/10). Test-author di V; ha toccato solo `frontend/e2e/settings.spec.ts` e
+  `frontend/e2e/settings/scheduler.spec.ts`.
+  - **A2**:
+    - i due test che scrivono girano su un account usa-e-getta. Le preferenze `en`/`light` sono impostate via API
+      prima del login, e l'account è cancellato in `finally`;
+    - la scelta passa per i testid nuovi, dentro le righe `preference-theme`/`preference-language`;
+    - si controllano il corpo della PUT, l'evento `settings.preferences.saved` e `GET /settings/user` (`dark`, `it`);
+    - dopo il reload o il `goto`: `<html class="dark">`, oppure `lang="it"` con `data-i18n-ready`; poi la tab
+      riaperta mostra l'opzione salvata (`aria-pressed`, `aria-selected`);
+    - niente più sonde, selettori di testo o `networkidle`;
+    - il test del tema prima non salvava niente: ora prova davvero.
+  - **A3**:
+    - ogni test che scrive legge prima le cinque chiavi dello scheduler, e in `finally` le ripristina con la PATCH
+      bulk come admin, poi le rilegge;
+    - il salvataggio aspetta la risposta della PATCH;
+    - FSCH-006 e 006b stanno in un `describe('Saving')` seriale annidato, con la ragione scritta;
+    - in FSCH-005…009, `settings-lock-toggle` e `scheduler-config-btn` sostituiscono i selettori in inglese.
+      Precondizione: «Configure» disabilitato; prova dello sblocco: abilitato;
+    - FSCH-005/007/008/009 non salvano niente.
+  - **About Tab**: il `beforeEach` aspetta `about-tab` con `data-busy="false"`. Attesa di stato, 20 s.
+  - **Prove** (`--fresh-run`):
+
+    | Comando | Esito | Log |
+    |---|---|---|
+    | `--workers 1 front-utility settings` | 45/45 | `/tmp/libreFolio_v_a2a3_v2-settings-w1.log` |
+    | `--workers 4 front-utility settings` | 45/45 | `/tmp/libreFolio_v_a2a3_v2-settings-w4.log` |
+    | `--workers 1 front-utility scheduler` | 17/17 | `/tmp/libreFolio_v_a2a3_v2-scheduler-w1.log` |
+    | `--workers 4 front-utility scheduler` | 17/17 | `/tmp/libreFolio_v_a2a3_v2-scheduler-w4.log` |
+
+  - Il log del backend mostra quattro scritture delle cinque chiavi per giro, a coppie che non si intrecciano.
+  - Dopo ogni giro il DB è pulito: `e2e_test_user` ancora `en`/`light`/`EUR` al timestamp del populate; le chiavi
+    dello scheduler con i valori del seed; nessun utente usa-e-getta rimasto.
+  - Prettier pulito, tsc exit 0.
+  > **⚠️ Fuori pista**:
+  > - il primo giro di `settings` a 4 worker ha dato 3 rossi fuori da A2 e A3. Due erano i test della About Tab
+  >   (`settings.spec.ts:540` e `:555`): dopo 3 s la tab caricava ancora le sue sette richieste, e non pubblicava uno
+  >   stato di pronto. La cura, approvata da me: `data-busy`/`aria-busy` sulla radice di `AboutTab.svelte` (solo
+  >   attributi, convenzione dei Tool), l'attesa nel `beforeEach`, Vitest AboutTab 36/36. I test nuovi di A2 sono più
+  >   pesanti (registrazione e login), e quel carico li aveva spinti oltre i 3 s;
+  > - il terzo rosso era `fx/fx-chart-settings.spec.ts:37`: la pagina FX non si era assestata in 20 s all'inizio del
+  >   giro. Non si è più riprodotto nei giri `settings` v2 e `front-fx all` a 4 worker. Resta senza spiegazione, perché
+  >   senza retry non c'è trace;
+  > - la chiave `settings` del runner raccoglie anche `fx/fx-chart-settings.spec.ts`, che fa 45 test e non 42 (V-17);
+  > - bcrypt gira dentro i gestori async di login e registrazione (V-16).
+- ✅ **Gate della 2a** (12/10, eseguiti da me, `--fresh-run`, uno alla volta nella corsia 6175):
+
+  | Comando | E2E | Vitest | Log |
+  |---|---|---|---|
+  | `--workers 4 front-fx all` | 103/103 | 138/138 | `/tmp/libreFolio_v_2a_gate_fx.log` |
+  | `--workers 4 front-utility all` | **218/224** | 6979/6979 | `/tmp/libreFolio_v_2a_gate_utility.log` |
+  | `--workers 4 front-portfolio all` | 177/177 (18 + 159) | 1218/1218 | `/tmp/libreFolio_v_2a_gate_portfolio.log` |
+
+  Altri controlli: svelte-check con 0 errori e 0 warning; prettier pulito sui 7 file; `git diff --check` pulito.
+  > **⚠️ Fuori pista: i 6 rossi di `front-utility all` a 4 worker, con il triage** (skill test-triage; log
+  > `/tmp/libreFolio_v_2a_triage_*.log`). Nessuno sta in un file toccato dalla 2a.
+  > - **`layout/toolbar-width-sweep.spec.ts:873`, `es`, dashboard e assetDetail → difetto.** In spagnolo il gruppo
+  >   «Exportación IA …» esce dalla barra in modo denseRow: +11,8 px a vw 1210 sull'asset, +11,0 px a vw 1310 sulla
+  >   dashboard. Ripetuto a 1 worker (`--workers 1 front-utility toolbar-width-sweep "es: 1700"`: 2 rossi, 3 verdi),
+  >   quindi deterministico e indipendente dal carico. Il delta della 2a non tocca né queste barre né i cataloghi.
+  >   Backlog V-19.
+  > - **`auth.spec.ts:379` e `:615` (Integrated onboarding 1 e 4) → assunzione sull'orologio, sotto carico.** Dopo
+  >   `login()`, `toHaveURL(/dashboard/)` usa i 3 s di default; il test accanto (`:370`) per la stessa attesa ne usa 15.
+  >   Al momento del rosso la pagina era ancora su `/`.
+  > - **`layout/app-start-auth.spec.ts:184` → assunzione sull'orologio, sotto carico.** Il poll di 3 s su `/auth/me`
+  >   dopo `goto('/assets')` è verde a 1 worker (3/3, `--workers 1 front-utility app-start-auth`) e rosso a 3 worker
+  >   anche da solo: con soli tre test i fratelli passano da 2,7 e 5 s a 15 e 18 s.
+  > - **`files.spec.ts:835` → carico.** Ha esaurito i 30 s nel giro pieno; da solo a 4 worker `files` è verde, 28/28.
+  > - Lanciato da solo, `front-utility auth` a 4 worker dà 6 rossi, tutti attese di 3 s sulla prima navigazione. Su
+  >   questa chiave il runner non popola, e il setup di Playwright ripopola con il backend già acceso: è **ambiente**,
+  >   V-17. Nel giro consolidato non succede: lì il runner popola e il setup salta.
+  > - Backlog V-20 per le attese di 3 s. Possibile concausa del rallentamento: bcrypt nell'event loop (V-16).
+
+> Checkpoint 2a committato dal coordinatore: `e6333930c`, `495fb9e86`, `6d62171e3`, `262515898`. Treno 64 integrato:
+> `dev_release2` = `0afac8e14`, e il mio ramo è stato portato lì in fast-forward (12/10). Nessuno dei 50 commit del
+> treno tocca i file della 2b, le fixture o `auth.py`.
+
+### 12.6 Passo 2b: mandato e avanzamento
+
+**Decisioni del coordinatore** (12/10):
+- **Gate di `front-utility` con i 6 rossi**: accettato per la 2a. V-19 va a I, nel lotto di rifinitura UI: nasce da
+  `7c66234a7`, «Exportar IA» → «Exportación IA», e il termine resta. V-20 lo faccio io, nella 2b, con attese su uno
+  stato pubblicato. V-17 resta nel backlog: `_frontend_utility.py` ora è di T.
+- **IWR-009 e `tx-clone:549`**: entrano nella 2b (A7b, A7c).
+- **V-16 (bcrypt nell'event loop)**: nella 1.2, da me dopo la 2b. `backend/app/api/v1/auth.py`, le tre chiamate
+  (`:105`, `:205`, `:253`), con `await asyncio.to_thread(...)`.
+  - Prima il rosso, via test-author.
+  - Poi i gate `api` di auth e un E2E di login.
+  - Altri punti dello stesso tipo: li segnalo senza toccarli.
+- **Ordine**: 2b (A4-A7, A7b, A7c, V-20), poi V-16, poi le 7 lacune.
+
+**Lavoro della 2b**, con quattro test-author su file distinti e la corsia 6175 data a turno:
+
+| Agente | Casi | File |
+|---|---|---|
+| `b-tx-commit` | A4 | `transactions/tx-commit-all-types.spec.ts`, `transactions-modals.spec.ts` (T1), `tx-wac-formmodal.spec.ts` (FM6), `tx-wac-unit-toggle.spec.ts` |
+| `b-tx-seed` | A5, A6 | `transactions/tx-split-promote.spec.ts` (C3), `tx-paired-edit.spec.ts`, `tx-event-picker.spec.ts` |
+| `b-brokers` | A7, A7b, A7c | `brokers/brokers.spec.ts`, `brokers/multi-user.spec.ts`, `transactions/tx-import-resolution.spec.ts` (IWR-009), `transactions/tx-clone.spec.ts` (`:549`) |
+| `b-v20` | V-20 | `auth.spec.ts` (`:379`, `:615`), `layout/app-start-auth.spec.ts` (`:184`), `files.spec.ts` (`:835`) |
+
+**Gate finali**, a 4 worker: `front-transaction all`, `front-broker all`, `front-user all`, `front-utility all`,
+`front-portfolio all`.
+- ⏸️ **Stop dell'ambiente** (12/10, 17:23, coordinatore). Il `brew upgrade` dello sviluppatore ha rotto `node`:
+  `dyld: Library not loaded: libsimdjson.33.dylib`. Nessun nuovo comando frontend (Playwright, prettier, tsc, vitest,
+  svelte-check, npm) finché il coordinatore non dice che `node` è tornato sano. I rossi prodotti da `node` che aborta
+  sono ambiente: niente triage, nessuna modifica al codice per loro. Ho avvisato i quattro test-author. Si può
+  continuare a scrivere codice, e le letture del DB in Python vanno bene.
+- ▶️ **`node` di nuovo sano** (12/10, 17:26, coordinatore): v26.11.1. Python è passato a 3.13.16, e il venv lo segue;
+  il coordinatore l'ha verificato. Nuovo ordine sulla 6175, una suite alla volta: V-16 lato backend, poi l'E2E di
+  login, poi la 2b. b-brokers aveva già ripreso le sue prove (P0-P4) e le finisce prima di V-16, che intanto sta
+  ancora scrivendo il rosso.
+
+### 12.7 V-16: bcrypt fuori dall'event loop (checkpoint a sé)
+
+- **Mandato** (coordinatore, 12/10). Anticipare adesso la parte backend: il rosso via test-author (pytest), la cura e i
+  gate `api` di auth. L'E2E di login quando `node` è sano. Checkpoint separato dalla 2b.
+- **File assegnati**:
+  - `backend/app/api/v1/auth.py`, le chiamate di login (`:123`) e del cambio password (`:253`, `:262`);
+  - `backend/app/services/user_service.py`, la riga di `create_user` (`:168`), con la firma invariata perché la usa
+    anche il CLI sotto `asyncio.run`.
+- **Restano come sono**, d'accordo col coordinatore:
+  - `user_service.reset_password` (`:204`), usata solo dal CLI;
+  - `_dummy_password_hash` (`auth_service.py:69-71`), coperta dalla cura del login.
+- **Cura prevista**:
+  - login: `password_ok = await asyncio.to_thread(verify_password_or_dummy, …)`;
+  - cambio password: `await asyncio.to_thread(verify_password, …)` e `await asyncio.to_thread(hash_password, …)`;
+  - `create_user`: `hashed_password=await asyncio.to_thread(hash_password, password)`.
+- **Gate**: `api auth`, `api profile`, `api account-deletion`; poi un E2E di login.
+- ✅ **A7, A7b, A7c: prova del danno** (12/10). b-brokers, spec invariati, `--fresh-run`. Dopo ogni giro il DB letto in
+  sola lettura; base del seed: 8 broker, 11 utenti, 76 transazioni.
+
+  | Giro | Comando | Esito | Resti nel DB |
+  |---|---|---|---|
+  | P0 | `front-broker list "can access brokers page"` (innocuo) | 1/1 | nessuno |
+  | P1 (A7) | `front-broker list "create broker with name\|full broker CRUD flow"` | 2/2 | `Test Broker <ts>`, OWNER `e2e_test_user` |
+  | P2 (A7) | `front-user multi-user` | 2/2 | `Private Broker <ts>` e `Unique Broker <ts>`, OWNER `e2e_test_user` |
+  | P3 (A7b) | `front-transaction tx-import-resolution "IWR-009"` | 1/1 in 3,2 s | **nessuno: passa in silenzio** |
+  | P4 (A7c) | `front-transaction tx-clone "clone inside the workspace"` | 1/1 | `T3-ws-<suffix>`, OWNER `e2e_test_user` |
+
+  Log: `/tmp/libreFolio_v_b_brokers_p{0_harmless,1_list,2_multiuser,3_iwr009,4_t3}.log`.
+  > **Note implementazione**: IWR-009 non crea mai il broker. Il selettore esiste solo con file in attesa
+  > (`ImportWizardModal.svelte:4549-4551`), il test non ne aggiunge, e quindi esce sempre dal `return` condizionale.
+  > La cura gli dà un CSV nel passo 1. Il file resta nel browser, perché senza Next non viene caricato. Il selettore
+  > diventa una precondizione asserita, e il broker creato si cancella per id.
+  > **⚠️ Fuori pista**: i primi due tentativi di P0 sono caduti per ambiente, durante il `brew upgrade`. Il primo ha
+  > avuto il backend uscito con codice 250 nella build automatica; il secondo, il backend oltre i 300 s per le
+  > ricostruzioni. Il terzo è verde.
+- ✅ **V-16, rosso** (12/10). Test-author di V. Una classe nuova in fondo a
+  `backend/test_scripts/test_api/test_auth_api.py`, `TestPasswordWorkLeavesTheEventLoopFree`.
+  - Ogni test chiama il gestore in-process, su un SQLite suo sotto `tmp_path`, con un account il cui hash è un marcatore
+    (nessun bcrypt vero, niente scritture nel DB della corsia).
+  - La funzione password che il gestore chiama è sostituita, via `monkeypatch`, da un sostituto che blocca il suo thread
+    per 0,4 s. Un heartbeat nello stesso loop batte ogni 10 ms, e si misura il buco più lungo **durante** il
+    sostituto, con limite 0,15 s.
+  - Si controllano anche gli esiti, quindi un test non diventa verde saltando il lavoro: 401 per il login, l'hash del
+    sostituto salvato, gli argomenti delle chiamate.
+  - I test: LOOP-000 controlla lo strumento di misura e deve passare sia prima sia dopo la cura; LOOP-001 login;
+    LOOP-002 register, che passa da `user_service.create_user`; LOOP-003 cambio password.
+  - `… api auth "event_loop"` → **3 failed, 1 passed**. Buchi misurati: login 0,412 s, register 0,404 s, cambio
+    password 0,402 s più 0,402 s; LOOP-000 verde (`/tmp/libreFolio_v_v16_red.log`).
+  - ruff e black puliti.
+- ✅ **V-16, cura** (12/10, applicata da me):
+  - `api/v1/auth.py:123`: `password_ok = await asyncio.to_thread(verify_password_or_dummy, …)`;
+  - `:254`: `await asyncio.to_thread(verify_password, …)`;
+  - `:263`: `await asyncio.to_thread(hash_password, …)`;
+  - `services/user_service.py`: `import asyncio`, e alla riga `:169`
+    `hashed_password=await asyncio.to_thread(hash_password, password)`. La firma non cambia, quindi il CLI continua a
+    funzionare.
+
+  ruff e black puliti.
+  - Prove sulla 6175, una alla volta:
+
+    | Comando | Esito | Log |
+    |---|---|---|
+    | `api auth "event_loop"` | 4/4 | `/tmp/libreFolio_v_v16_green.log` |
+    | `api auth` | 60/60 | `/tmp/libreFolio_v_v16_auth.log` |
+    | `api profile` | 12/12 | `/tmp/libreFolio_v_v16_profile.log` |
+    | `api account-deletion` | 6/6 | `/tmp/libreFolio_v_v16_accdel.log` |
+    | E2E di login: `--fresh-run --workers 1 front-utility settings "Preferences Persistence"` | 3/3 | `/tmp/libreFolio_v_v16_e2e_w1.log` |
+    | lo stesso con `--workers 4` | 3/3 | `/tmp/libreFolio_v_v16_e2e_w4.log` |
+
+  - Ho scelto per l'E2E «Preferences Persistence», già committato nella 2a e non toccato dalla 2b: registra un utente
+    via API (`create_user`) e fa il login dalla UI, con verifica della password. `auth.spec.ts` lo sta riscrivendo
+    b-v20, e non è ancora verificato.
+  > **Note implementazione**: test-author ha passato in rassegna tutti i gestori `async def` di `backend/app/api/v1`,
+  > cercando chiamate dirette a bcrypt, I/O su file, `shutil`, `subprocess` e `urlopen`. Ha trovato solo i tre punti di
+  > V-16; l'`open` di `uploads.serve_file` gira già in `asyncio.to_thread`. La rassegna non scende nei servizi.
+  > `user_service.reset_password` (`:205`, solo CLI) resta com'è.

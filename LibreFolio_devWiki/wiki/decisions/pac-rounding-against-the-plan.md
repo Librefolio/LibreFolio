@@ -4,12 +4,12 @@ category: decision
 status: resolved
 date: 2026-10-09
 tags: [backend, pac-allocator, tools, rounding, fx, scip, optimization, exact-arithmetic, invariant]
-related: [decisions/financial-math-single-average-cost, decisions/wac-target-currency-last-acquisition, concepts/backend-only-calculations, problems/fx-backward-fill-unbounded-stale-rates, concepts/premise-gate-keyed-by-content]
+related: [features/F-107, decisions/pac-scip-searches-exact-replay-certifies, decisions/pac-fx-one-rate-map-direct-conversions, problems/pac-foreign-funding-calculation-failed, decisions/financial-math-single-average-cost, decisions/wac-target-currency-last-acquisition, concepts/backend-only-calculations, problems/fx-backward-fill-unbounded-stale-rates, concepts/premise-gate-keyed-by-content]
 ---
 
 # Decision: the PAC allocator rounds every posting against the plan
 
-> The PAC allocator (Release 2 workstream D, a Tool in `backend/app/services/pac_allocator/`) plans which assets to
+> The PAC allocator ([[features/F-107]]; Release 2 workstream D, a Tool in `backend/app/services/pac_allocator/`) plans which assets to
 > buy with the available cash, across brokers and currencies, with SCIP as the search engine and a Decimal-exact
 > replay (`evaluate_exact_candidate`) as the only referee of feasibility and of every reported number. This page
 > records the rounding contract fixed on 2026-10-09 (plan *PacRoundingDirectionFix*, merged in `b81b92fd1`, train 26;

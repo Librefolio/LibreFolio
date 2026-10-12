@@ -101,10 +101,12 @@ ricaricalo per rileggerlo.
 
 ## 📜 Modale del changelog {: #changelog-modal }
 
-La **modale del changelog** in-app mostra il file `CHANGELOG.md` incluso. Puoi raggiungerla da due punti:
+La **modale del changelog** in-app mostra il changelog incluso in LibreFolio, nella lingua della tua interfaccia. Puoi raggiungerla da due punti:
 
 - il **numero di versione in fondo alla barra laterale** (qualsiasi pagina), e
 - l'**etichetta della versione subito sotto il titolo di questa pagina Informazioni** (Impostazioni → Informazioni).
+
+Ogni release è mostrata nella tua lingua quando la sua traduzione è disponibile; una release non ancora tradotta compare in inglese, segnata da una piccola etichetta **Non ancora tradotto**.
 
 - Un **pannello pieghevole per ogni release** — all'inizio è aperta solo la release più recente; anche le sezioni e le sotto-sezioni si piegano.
 - Un **indice delle versioni** a chip lungo la parte superiore: facendo clic su una versione la si espande e si scorre direttamente ad essa.

@@ -59,6 +59,8 @@
             {#each themeOptions as option}
                 <button
                     type="button"
+                    data-testid="setting-theme-option-{option.value}"
+                    aria-pressed={value === option.value ? 'true' : 'false'}
                     on:click={() => selectTheme(option.value)}
                     disabled={isLocked}
                     class="px-3 sm:px-4 py-2 text-sm border rounded-lg transition-all

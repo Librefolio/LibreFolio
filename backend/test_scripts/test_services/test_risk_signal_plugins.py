@@ -42,15 +42,15 @@ from backend.app.services.risk.metrics import (
     underwater_drawdown,
 )
 from backend.app.services.signal_plugins.base import SignalUnavailableError
-from backend.app.services.signal_plugins.calendar_rolling_return import (
+from backend.app.services.signal_plugins.calendar_rolling_return.plugin import (
     CalendarRollingReturnParams,
     CalendarRollingReturnPlugin,
 )
-from backend.app.services.signal_plugins.drawdown import (
+from backend.app.services.signal_plugins.drawdown.plugin import (
     DrawdownParams,
     DrawdownPlugin,
 )
-from backend.app.services.signal_plugins.rolling_return import (
+from backend.app.services.signal_plugins.rolling_return.plugin import (
     RollingReturnParams,
     RollingReturnPlugin,
 )

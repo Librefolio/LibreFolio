@@ -60,7 +60,7 @@ from backend.app.services.provider_registry import BRIMProviderRegistry
 # =============================================================================
 
 PLUGIN_CODE = "broker_danske_bank"
-PLUGIN_MODULE = "backend.app.services.brim_providers.broker_danske_bank"
+PLUGIN_MODULE = "backend.app.services.brim_providers.broker_danske_bank.plugin"
 SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
 BROKER_ID = 1
 # The deposit account of the custody samples. It is an account number: it never leaves the members.

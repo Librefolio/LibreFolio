@@ -55,7 +55,7 @@ from backend.app.services.risk.quant.spawn_worker import SpawnWorkerResult
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
-from backend.app.services.risk_plugins.simulation import (
+from backend.app.services.risk_plugins.simulation.plugin import (
     SimulationAnalytic,
     SimulationParams,
 )

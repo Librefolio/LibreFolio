@@ -197,15 +197,15 @@ const REGISTRY: Site[] = [
     },
     {
         file: 'lib/components/transactions/events/EventCreateMiniModal.svelte',
-        snippet: '`${amt.toFixed(2)} ${assetCurrency}`',
+        snippet: '`${formatFixed(amt, 2)} ${assetCurrency}`',
         status: 'public',
         why: "The success toast for a created asset event. Asset events are asset-level, not the user's (backend/app/db/models.py, class AssetEvent: «Events are NOT transactions — they describe what happens to the asset globally, not what happens in a user's portfolio»), so the amount is public under the 2026-09-22 rule. It was registered as unmasked until that rule existed.",
     },
     {
         file: 'lib/components/transactions/events/AssetEventPicker.svelte',
-        snippet: "`${diff >= 0 ? '+' : ''}${diff.toFixed(2)}${crossCurrency ? ' ≠' : ''}`",
+        snippet: "`${formatFixed(diff, 2, {signed: true})}${crossCurrency ? ' ≠' : ''}`",
         status: 'not-money',
-        why: 'A cash delta rendered with no currency marker, used to rank candidate matches. Judgement site in the class of MeasurePanel: catching it would mean chasing toFixed over arbitrary numbers, and a gate that fires on arbitrary numbers is a gate someone switches off.',
+        why: 'A cash delta rendered with no currency marker, used to rank candidate matches; it matches form B only through the crossCurrency flag, a boolean, beside the number. Judgement site in the class of MeasurePanel: catching it would mean chasing every decimal formatter (formatFixed, toFixed) over arbitrary numbers, and a gate that fires on arbitrary numbers is a gate someone switches off.',
     },
     {
         file: 'lib/features/tools/pac-allocator/planner/format.ts',

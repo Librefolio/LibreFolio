@@ -36,7 +36,7 @@ def utils_datetime(verbose: bool = False, test_names: list = None) -> bool:
 def utils_day_count(verbose: bool = False, test_names: list = None) -> bool:
     """Test day count conventions."""
     print_section("Utils: Day Count Conventions")
-    print_info("Testing: backend/app/services/asset_source_providers/scheduled_investment.py (day count functions)")
+    print_info("Testing: backend/app/services/asset_source_providers/scheduled_investment/plugin.py (day count functions)")
     print_info("Tests: ACT/365, ACT/360, ACT/ACT, 30/360 conventions")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_day_count_conventions.py", test_names)
     return run_command(cmd, "Day count convention tests", verbose=verbose)
@@ -203,6 +203,24 @@ def utils_gate_i18n_usage(verbose: bool = False, test_names: list = None) -> boo
     print_info("Tests: typed-union expansion, producer vocabulary, ternary arguments, bare-root suppression")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_i18n_usage_gate.py", test_names)
     return run_command(cmd, "i18n three-verdict classifier tests", verbose=verbose)
+
+
+def utils_gate_i18n_catalog(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the translation catalogue built from its sources, and the repository's own sources."""
+    print_section("Utils: i18n Catalogue Gate")
+    print_info("Testing: scripts/i18n_catalog.py; frontend/src/lib/i18n/base/, the subsystem folders and the plugins' i18n/ sources")
+    print_info("Tests: ownership, defects, English fallback, order and format, build stamp and hand-edit guard, route/set/move/split/remove, catalogs_at, check --against, three-way absorb, the repository's sources and ignore rules")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_i18n_catalog_gate.py", test_names)
+    return run_command(cmd, "i18n catalogue gate tests", verbose=verbose)
+
+
+def utils_gate_plugin_layout(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plugin layout gate: every first-party plugin is a folder, reached through its plugin module."""
+    print_section("Utils: Plugin Layout Gate")
+    print_info("Testing: backend/app/services/{brim_providers,asset_source_providers,fx_providers,risk_plugins,signal_plugins,tool_plugins}/, imports and strings of backend/app, backend/test_scripts, scripts, dev.py")
+    print_info("Tests: <name>/__init__.py (docstring only) + <name>/plugin.py, no single-module plugin, no import or string reaching a plugin package instead of its plugin module")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_plugin_layout_gate.py", test_names)
+    return run_command(cmd, "Plugin layout gate tests", verbose=verbose)
 
 
 def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
@@ -393,7 +411,7 @@ Tests for utility modules and helper functions:
         "js-cache-fail-loud",
         utils_js_cache_fail_loud,
         name="JS Cache Fail-Loud (I1)",
-        desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0; consumer-scoped narrowing (a docs-only asset does not fail a frontend build, an unknown attribution still does)",
+        desc="update_js_cache: undownloadable+uncached resource or partial font subsets → hard failure → exit 1; cached copy → exit 0; consumer-scoped narrowing (a docs-only asset does not fail a frontend build, an unknown attribution still does); js companions (MathJax fonts): names from the cached script, fetched beside the CDN URL even when the script is up to date, refreshed on script change, --force or a missing record; a missing file with no cached copy → hard failure; only pattern-matching stale files removed",
         # tmp_path + monkeypatched network only: no DB, no server, no repo writes.
         isolation="pure",
     )
@@ -425,6 +443,28 @@ Tests for utility modules and helper functions:
         utils_gate_i18n_usage,
         name="i18n Usage Gate",
         desc="Three verdicts where the audit had two: typed unions are expanded from the code that declares them, a bare namespace root no longer absolves everything beneath it, ternary arguments are seen, a key prefix chosen between two literals is expanded over both branches, and 'not verified' stays apart from 'dead' so neither absolution nor condemnation is a default",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-i18n-catalog",
+        utils_gate_i18n_catalog,
+        name="i18n Catalogue Gate",
+        desc="The catalogue the app loads is generated from its sources (frontend/src/lib/i18n/base/, a folder per subsystem with its prefixes.txt, each plugin's i18n/), every rule proven both ways on synthetic trees: a key belongs to the plugin holding it, else to the subsystem with the longest declared prefix, else to base; a key in two sources, a string against a branch, a key outside its prefix's folder, a prefix declared twice, a subsystem without prefixes, a source without English, a key English lacks, a value that is not a string, unreadable JSON and an unknown language are errors for merge, build and check, all reported at once; a missing translation is filled from English with a warning when building, an error when strict, and stays missing without fallback; each source keeps its key order (base, subsystems by name, plugins by path) and one source comes back byte for byte; build writes only what changed, read-only, with a sha256 stamp, and refuses a hand-edited file unless forced; route refuses a key only a plugin could own, a plugin target being exactly <*_providers|*_plugins>/<plugin> with its plugin.py; move, split, remove and set keep the catalogue and rewrite only their files; catalogs_at reads the legacy and the sources layouts, check --against compares without fallback, absorb merges three ways per key and language (every conflict reported and nothing written unless --prefer settles them, a removal conflict settled for the whole key, all or nothing); in the repository the sources merge strictly, base holds the four languages with the same keys in the generator's format, load_catalog reads the checkout without a build, git ignores the generated files and none of the sources, and the index never tracks them beside base/",
+        # Synthetic trees and throwaway git repositories under tmp_path; the repository's own
+        # sources are only read, and asked about with git check-ignore and git ls-files.
+        # No DB, no server, no network, no writes outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-plugin-layout",
+        utils_gate_plugin_layout,
+        name="Plugin Layout Gate",
+        desc="Every first-party plugin is a folder <family>/<name>/ holding __init__.py (its docstring and nothing else) and plugin.py, in the six families the app's registries declare (brim, asset, FX, risk, signal, tool), plugin being the module discovery loads; no family keeps a plugin as a single module (signal_plugins/base.py aside) and none is empty; no import in backend/app, backend/test_scripts, scripts or dev.py reaches a plugin's package instead of its plugin module or a _helper beside it, relative and lazy imports included, and no string names one (patch targets, logger names, __module__)",
+        # ast and filesystem reads of the repository's sources, never imported; the control
+        # cases build their trees under tmp_path. No DB, no server, no network, no writes
+        # outside tmp_path.
         isolation="pure",
     )
     add_test(
@@ -501,7 +541,7 @@ Tests for utility modules and helper functions:
         "translation-cache",
         utils_translation_cache,
         name="Translation Cache",
-        desc="A language counts as done only for the EN version it was translated or stamped from: after an EN edit, a language that fails (parallel and sequential paths), is left out by --lang or is cut short by an interruption is offered again by the next run, and its failure keeps the last translated_at; a failed --force retry of an unchanged page stays done; translate-stamp of a changed EN reopens the languages it does not stamp and clears the failure records of those it does; an EN edit saved while the analysis runs is offered again too, the md5 recorded being the one of the bytes translated (LF and CRLF)",
+        desc="A language counts as done only for the EN version it was translated or stamped from: after an EN edit, a language that fails (parallel and sequential paths), is left out by --lang or is cut short by an interruption is offered again by the next run, and its failure keeps the last translated_at; a failed --force retry of an unchanged page stays done; translate-stamp of a changed EN reopens the languages it does not stamp and clears the failure records of those it does; an EN edit saved while the analysis runs is offered again too, the md5 recorded being the one of the bytes translated (LF and CRLF); the CHANGELOG translates by pieces: the preamble and each chapter are units, a chapter over the threshold is cut at its ###/#### headings outside fenced code into pieces keyed by their heading words, and the English pieces assemble back byte for byte; a second run translates nothing, a changed or inserted section is translated alone and every other part kept byte for byte, a removed or moved one is rebuilt without the model, the parts being found again by their recorded index; a language that fails keeps its chapter as it was, or absent; a new translation that adds a section, drops its opening heading or breaks the chapter at a seam is refused and the chapter kept; --file CHANGELOG.md translates no page, no --file does the pages then the CHANGELOG; translate-stamp --file CHANGELOG.md records a hand port piece by piece, and without --file leaves the CHANGELOG alone",
         # run_translate and run_stamp on a docs tree and a cache under tmp_path, the
         # LLM seams faked: no DB, no server, no network, no repo writes.
         isolation="pure",
@@ -511,7 +551,7 @@ Tests for utility modules and helper functions:
         "translation-validator",
         utils_translation_validator,
         name="Translation Validator",
-        desc="translate-validate reads what a page renders: fenced blocks of any kind and inline code are stripped before the HTML checks, so inline code such as EUR<USD is never a tag while a real tag's class/src/data-* changes are still reported; alt, title, aria-label, data-title and Markdown image alts of three words or more copied from the source warn (text-untranslated); every inline code span of the source stays in the translation, digit grouping aside, named as the source writes it (inline-code-missing); a page.md#anchor link must land on an anchor of the translated target or its EN fallback, the anchors being the ids of the page's own MkDocs render with the site configuration (anchor-missing, page_anchors.py); a raw-HTML relative file path copied unchanged from the source is an error, since a translated page is built one folder deeper (html-asset-depth); inline math is counted as pymdownx.arithmatex reads it (smart dollar), so a price such as 500 $ is never a formula and a formula after a number is never dropped (latex-inline-count); the structural diff counts blocks, not lines, for LINE_COUNT",
+        desc="translate-validate reads what a page renders: fenced blocks of any kind and inline code are stripped before the HTML checks, so inline code such as EUR<USD is never a tag while a real tag's class/src/data-* changes are still reported; alt, title, aria-label, data-title and Markdown image alts of three words or more copied from the source warn (text-untranslated); every inline code span of the source stays in the translation, digit grouping aside, named as the source writes it (inline-code-missing); a page.md#anchor link must land on an anchor of the translated target or its EN fallback, the anchors being the ids of the page's own MkDocs render with the site configuration (anchor-missing, page_anchors.py); a raw-HTML relative file path copied unchanged from the source is an error, since a translated page is built one folder deeper (html-asset-depth); inline math is counted as pymdownx.arithmatex reads it (smart dollar), so a price such as 500 $ is never a formula and a formula after a number is never dropped (latex-inline-count); the structural diff counts blocks, not lines, for LINE_COUNT; the CHANGELOG is validated chapter by chapter through the page checks, its newest chapter open until its tag exists (vX.Y.Z or X.Y.Z, in the CHANGELOG's repository, or the CI run's ref): a missing translation or a chapter line unlike the English one is an error once released and information while open, an unknown, misplaced or repeated chapter is an error, a chapter changed since its translation is stale; translate-validate and translate-diff take the CHANGELOG with no --file or with --file CHANGELOG.md, their exit code counting the released chapters alone; an empty newest chapter leaves the one below it released",
         # Check functions on strings in memory and on a docs tree under tmp_path (DOCS_DIR
         # redirected in every test): no DB, no server, no network, never opens the repo's
         # docs or translation cache, no writes outside tmp_path. Reads mkdocs_src/mkdocs.yml

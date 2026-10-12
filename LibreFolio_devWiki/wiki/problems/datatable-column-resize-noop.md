@@ -3,8 +3,10 @@ title: "DataTable column-resize handle has no effect in some tables"
 category: problem
 status: open
 date: 2026-07-07
+updated: 2026-10-12
 tags: [frontend, datatable, svelte5, ui, low-priority, pre-existing]
 related:
+  - problems/datatable-actions-column-on-mobile
   - sources/phase09-m1-m2-archive-2026-07
 ---
 
@@ -48,6 +50,12 @@ column `offsetWidth` changed) to prevent regression, per this project's `e2e-dat
 
 Low — cosmetic/UX only, does not block any workflow. The resize icon being present but inert is mildly
 confusing to users but does not affect data correctness.
+
+## Re-check (2026-10-12)
+
+Partly disproved: dragging a column's resize handle does widen it in the Risk Lab's L1° table, pinned by an E2E
+(`frontend/e2e/portfolio/risk-lab.spec.ts`, the «value columns carry their help» test, added in `f55b2e42a`). No other
+DataTable is drag-tested, so «some tables» stays open, to re-test after release 1.2 (backlog C-62).
 
 ## Source files
 

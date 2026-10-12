@@ -67,11 +67,16 @@ pages** (13,992 ids). `check-links` gave the same 95 valid links before and afte
 - The checks cost a render per page (~6 s per corpus run); `translate-validate` takes ~7 s.
 - Tests: `./dev.py test utils translation-validator` (`page_anchors.py` included) and `utils gate-docs-links`
   (dev.py's verdict per language, dev.py without MkDocs).
+- An English-only page (the developer manual) links translated pages **without** an anchor: a translated build renders
+  the English page with its links resolved to the translated targets, so an anchor that exists only in English breaks
+  the strict build. Workstream Q met it on 2026-10-07, on the Tools pages, then untranslated
+  ([[sources/phase00-docs-english-12-2026-10]]).
 
 ## Links
 
 - [[concepts/mkdocs-suffix-i18n]] — the suffix structure and its anchors
 - [[problems/stamps-hide-stale-translations]] — the same round's other blind spot of the checks
+- [[decisions/user-docs-plain-dev-manual-technical]] — the rules of the English pages these checks guard
 - Commits: `3d86cc732` "fix(i18n): anchors from the page's MkDocs render" and `5b8e647db` "fix(dev): check-links
   reads rendered anchors"; batch 13, merged as `3a2e14514` (train 33)
 - Source: [[sources/phase00-translation-round12-2026-10]]
