@@ -57,6 +57,12 @@ withdrawn as non-defects, §1.7 kept its keys by the developer's decision, §2.7
 is open. Two solved defects worth keeping: [[problems/privacy-gate-blind-to-formatter-consumers]] and
 [[problems/missing-event-detail-read-as-consent]].
 
+## F2 — the areas and the visual review (step F2)
+
+The areas 01–05 and 07 went to lots the wiki already covers (the table above); no knowledge was missing. Of the visual
+review of 22/09, R1, R3 and R5–R21 are closed, R4 does not reproduce (onboarding, round 8), and R2 is open:
+[[problems/stale-version-file-shadows-git-describe]]. With F2, folder 09 is covered.
+
 ## Source files
 
 | Role | Path |
