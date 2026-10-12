@@ -48,7 +48,6 @@ import csv
 import importlib
 import inspect
 import io
-import json
 import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -64,6 +63,7 @@ from backend.app.schemas.brim import BRIMNotice, BRIMParseOutput, is_fake_asset_
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.provider_registry import BRIMProviderRegistry
+from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
 # CONSTANTS
@@ -75,7 +75,8 @@ PLUGIN_VERSION = "2.0.0"
 SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
 NL_SAMPLE = SAMPLE_DIR / "degiro-export.csv"
 EN_SAMPLE = SAMPLE_DIR / "degiro-account-en.csv"
-I18N_DIR = PROJECT_ROOT / "frontend" / "src" / "lib" / "i18n"
+# The languages of the UI translation catalogue, read from its sources (scripts/i18n_catalog.py), never from a build.
+UI_LANGUAGES = ("en", "it", "fr", "es")
 BROKER_ID = 1
 TAGS = ["import", "degiro"]
 
@@ -1659,9 +1660,9 @@ class TestLanguagesAndMessages:
 
     def test_no_i18n_key_overrides_the_language_of_the_file(self):
         """Guard: the wizard translates ``importWizard.brimNotice.<code>`` into the UI language when the key exists, and falls back to the plugin's message
-        otherwise (``resolveBrimNotice.ts``). A ``degiro_*`` key would replace the message in the file's language: none may exist."""
-        catalogues = sorted(I18N_DIR.glob("*.json"))
-        notices = {path.name: json.loads(path.read_text(encoding="utf-8")).get("importWizard", {}).get("brimNotice", {}) for path in catalogues}
+        otherwise (``resolveBrimNotice.ts``). A ``degiro_*`` key would replace the message in the file's language: none may exist. Every language is read
+        from the catalogue's sources without the English fallback, so each one shows the keys it really holds."""
+        notices = {f"{language}.json": load_catalog(language, fallback=False).get("importWizard", {}).get("brimNotice", {}) for language in UI_LANGUAGES}
         assert notices.get("en.json"), f"premise: en.json has the importWizard.brimNotice namespace the wizard reads: {sorted(notices)}"
 
         overriding = [f"{name}: importWizard.brimNotice.{key}" for name, keys in notices.items() for key in keys if key.startswith("degiro_")]

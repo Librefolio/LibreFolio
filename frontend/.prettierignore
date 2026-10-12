@@ -6,3 +6,4 @@ src/lib/api/openapi.json
 src/lib/api/generated-tools.ts
 src/lib/api/tool-contract-map.generated.ts
 src/lib/api/tool-contracts.openapi.json
+src/lib/i18n/*.json
