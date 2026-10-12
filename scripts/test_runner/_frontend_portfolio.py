@@ -358,7 +358,7 @@ def populate_registry(registry: dict) -> None:
         "stale-price-banner",
         front_portfolio_stale_price_banner,
         name="Stale Price Banner Tests",
-        desc="STALE_PRICE (D8): a provider-priced holding last quoted 10 days ago raises the dashboard warning, and its sync CTA posts one item per affected asset over the dashboard range, stays busy while the sync runs, then reloads the report — on a disposable account, with the provider sync intercepted",
+        desc="STALE_PRICE (D8): a provider-priced holding last quoted 10 days ago raises the dashboard warning, and its sync CTA posts one item per affected asset over the dashboard range, stays busy while the sync runs, then reloads the report; V-1: the lots panel already open asks its analysis again by itself once that sync has answered, without a reload — on disposable accounts, with the provider sync intercepted",
         tests="portfolio/stale-price-banner.spec.ts",
     )
     add_test(
@@ -382,7 +382,7 @@ def populate_registry(registry: dict) -> None:
         "broker-filter-label",
         front_portfolio_broker_filter_label,
         name="Broker Filter Label Tests",
-        desc="Dashboard broker filter scoped to one long-named broker (owned by the test: created for the E2E user, deleted by id): at the 320 px layout (viewport 320 + the scrollbar gutter measured at load, a 254 px bar on every host) the trigger and the visible part of its label stay inside the bar card and the page does not scroll sideways, the label staying the whole name in the DOM and in the accessible name; at 2560 px (oneRow, room to spare) the whole name is shown unclipped, on arrival and after a trip to the 320 px layout — each absence with its positive control",
+        desc="Dashboard broker filter scoped to one long-named broker (on a disposable account that owns it and one plain broker, all deleted at the end — the shared E2E user is never touched): at the 320 px layout (viewport 320 + the scrollbar gutter measured at load, a 254 px bar on every host) the trigger and the visible part of its label stay inside the bar card and the page does not scroll sideways, the label staying the whole name in the DOM and in the accessible name; at 2560 px (oneRow, room to spare) the whole name is shown unclipped, on arrival and after a trip to the 320 px layout — each absence with its positive control",
         tests="portfolio/dashboard-broker-filter-label.spec.ts",
     )
     add_test(cat, "broker-icons", front_portfolio_broker_icons, name="Broker Icon Tests", desc="Dashboard positions broker fallback chain", tests="portfolio/broker-icons.spec.ts")
