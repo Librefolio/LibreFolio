@@ -1,5 +1,5 @@
 ---
-title: "Each plugin a folder with its own translations; the i18n catalogues split by subsystem (U-1, U-2 and U-3 delivered; U-4 and U-5 to come)"
+title: "Each plugin a folder with its own translations; the i18n catalogues split by subsystem (U-1 to U-4 delivered; U-5 to come)"
 category: decision
 status: accepted
 date: 2026-10-12
@@ -78,6 +78,13 @@ related:
 >   generic vocabulary, no longer «the» catalogue.
 > - **Still to come**: U-4, the documentation (after T's CP3, which writes M-18's rule in the same page), and U-5,
 >   the final gates and the handoff.
+
+> **Update (train 78, 2026-10-13, at `1c710c7a8`): U-4 is in — the documentation.** `c120086d2` rewrote the developer
+> pages and the plugin skills around the plugin folders and the translation sources; `bb3772324` gave
+> `developer/frontend/i18n.md` the catalogue's sources, `where`, `add` and the two gates. Backlog: U-B7 — without
+> `--into`, `dev.py i18n add` puts a new plugin key in the subsystem that declares its prefix, silently, and only the
+> ownership gate notices; the guides say to pass `--into`. U-B5's devWiki part was done in step D (below). U-5, the
+> final gates and the handoff, remains.
 
 > **Planned, not in the code.** Decided on 2026-10-12; at `e7d698c4d` (train 56) nothing of it is implemented and
 > workstream U's plan (45) is not in the target yet. The decisions are quoted from the coordinator's diary, which is
