@@ -18,7 +18,7 @@ from ._common import (
 def utils_decimal_precision(verbose: bool = False, test_names: list = None) -> bool:
     """Test decimal precision utilities."""
     print_section("Utils: Decimal Precision")
-    print_info("Testing: backend/app/utils/decimal_utils.py")
+    print_info("Testing: backend/app/db/precision.py, backend/app/utils/decimal_utils.py")
     print_info("Tests: Model precision extraction, Truncation, Edge cases")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_decimal_utils.py", test_names)
     return run_command(cmd, "Decimal precision tests", verbose=verbose)
