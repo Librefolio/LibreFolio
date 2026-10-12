@@ -649,7 +649,7 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
   Cura, a poco a poco: un account usa-e-getta (`registerDisposableUser`, `createOwnedBroker` di
   `fixtures/onboarding-accounts.ts`), come in `dashboard-broker-filter-label`. Dettagli: piano della 46, §12.3.
-- **V-16 · Login, registrazione e cambio password fanno bcrypt dentro l'event loop** — medio, serve una decisione;
+- ✅ **V-16 · Login, registrazione e cambio password fanno bcrypt dentro l'event loop** — medio, serve una decisione;
   test-author di V, 12/10, verificato da me. Le chiamate sincrone stanno direttamente nei gestori `async def`:
   - `login` (`api/v1/auth.py:105`) chiama `verify_password_or_dummy`, cioè `bcrypt.checkpw`
     (`services/auth_service.py:62`);
@@ -661,6 +661,15 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   richiesta. È contro la regola «Async I/O» delle istruzioni del progetto. A 4 worker E2E erano circa 51 login in
   67 s. Non è dimostrato che abbia causato un rosso. Cura probabile: `await asyncio.to_thread(...)`. Dettagli: piano
   della 46, §12.5.
+
+  **Chiusa il 12/10**, checkpoint V-16 di V, deciso dal coordinatore.
+  - Prima il rosso: `TestPasswordWorkLeavesTheEventLoopFree` in `test_auth_api.py`, con un heartbeat nel loop e un
+    sostituto bloccante di 0,4 s. Buchi misurati di 0,40 s su login, register e cambio password.
+  - Poi la cura: `asyncio.to_thread` in `auth.py`, per login e cambio password, e in `user_service.create_user`.
+  - Verdi: `api auth` 60/60, `api profile` 12/12, `api account-deletion` 6/6, e un E2E di login a 1 e a 4 worker.
+  - `user_service.reset_password`, usata solo dal CLI, resta com'è.
+
+  Commit: checkpoint V-16 di V, indicato dal coordinatore. Dettagli: piano della 46, §12.7.
 - **V-17 · Il runner: la chiave `settings` prende anche `fx-chart-settings`, e il setup di Playwright ripopola** —
   basso; test-author di V, 12/10:
   - `_frontend_utility.py:373` passa `settings.spec.ts` a Playwright come pattern, e il pattern prende anche
