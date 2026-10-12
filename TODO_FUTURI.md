@@ -1339,6 +1339,17 @@ operativa su esempi sintetici multi-valuta e hedged.
 FX e criteri di esposizione. Eventuali colonne/tabelle nuove tramite migrazione Alembic
 incrementale generica. Nessuna modifica Asset o grafico di esposizione in questo hotfix.
 
+**Da non dimenticare: la variazione non realizzata** (developer, 12/10/2026, verifiche
+sul server, voce 23).
+- Oggi il tooltip della variazione non realizzata nei KPI della Dashboard
+  (`period_unrealized_breakdown`, `KpiSection.svelte`) separa, valuta per valuta,
+  l'effetto dell'asset da quello del cambio, ma ragiona solo sulla valuta di quotazione.
+- Quando l'asset avrà la sua valuta originale, la scomposizione dovrà usarla anche lei.
+  Con un cambio al contrario, dalla valuta di quotazione a quella originale, se la
+  coppia è configurata, si vedrà quanta parte del movimento del prezzo viene dal cambio
+  e quanta dall'asset.
+- Il come è da progettare insieme a questa voce.
+
 ## Espandere i provider aggiungendo extraetf.com e mettendo anche la distribuzione valutaria, potrebbe sposarsi con l'idea della valuta originaria del fondo, trasformandola di fatto in una distribuzione anche lei.
 Possibilità di integrare queste informazioni nella UI e nei calcoli backend, mantenendo la tracciabilità delle fonti e la coerenza con le regole di esposizione valutaria già definite.
 
