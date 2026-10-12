@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "rsi": {
+      "name": "RSI",
+      "description": "Buying and selling pressure",
+      "output": "RSI",
+      "oversold": "Oversold",
+      "overbought": "Overbought",
+      "oversoldRegion": "Oversold",
+      "neutralRegion": "Neutral",
+      "overboughtRegion": "Overbought"
+    }
+  }
+}

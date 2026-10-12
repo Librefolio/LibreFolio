@@ -1,0 +1,17 @@
+{
+  "signals": {
+    "stochRsi": {
+      "name": "Stochastic RSI",
+      "description": "RSI position within its range",
+      "k": "%K",
+      "kDescription": "Fast Stochastic RSI line.",
+      "d": "%D",
+      "dDescription": "Smoothed signal line derived from %K.",
+      "oversold": "Oversold",
+      "overbought": "Overbought",
+      "oversoldRegion": "Oversold",
+      "neutralRegion": "Neutral",
+      "overboughtRegion": "Overbought"
+    }
+  }
+}

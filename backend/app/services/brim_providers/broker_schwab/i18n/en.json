@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_schwab": {
+      "description": "Import transactions from Charles Schwab CSV export. Supports stocks, ETFs, dividends, and interest.",
+      "name": "Charles Schwab"
+    }
+  }
+}

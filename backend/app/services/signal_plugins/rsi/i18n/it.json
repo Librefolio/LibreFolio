@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "rsi": {
+      "name": "RSI",
+      "description": "Pressione di acquisto e vendita",
+      "output": "RSI",
+      "oversold": "Ipervenduto",
+      "overbought": "Ipercomprato",
+      "oversoldRegion": "Ipervenduto",
+      "neutralRegion": "Neutrale",
+      "overboughtRegion": "Ipercomprato"
+    }
+  }
+}

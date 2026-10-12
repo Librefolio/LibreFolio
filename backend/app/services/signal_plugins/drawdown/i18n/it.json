@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskDrawdown": {
+      "name": "Drawdown dal massimo",
+      "description": "Misura il calo percentuale da ciascun massimo progressivo del prezzo.",
+      "output": "Drawdown",
+      "outputDescription": "Calo del prezzo dal massimo progressivo, esclusi i flussi; mai superiore a zero.",
+      "referencePeak": "Massimo"
+    }
+  }
+}

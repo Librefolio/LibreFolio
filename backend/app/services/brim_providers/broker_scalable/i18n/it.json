@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_scalable": {
+      "name": "Scalable Capital conto broker",
+      "description": "Importa il conto broker di Scalable Capital dall’export CSV di Scalable (PRIME) o dal file broker dell’esportatore LibreFolio: compravendite con commissioni e imposte, piani di accumulo, dividendi, interessi, depositi, prelievi e trasferimenti verso il conto deposito."
+    }
+  }
+}

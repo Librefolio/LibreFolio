@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_ibkr": {
+      "description": "Importa le compravendite dall’export CSV di Interactive Brokers. Supporta azioni, ETF e operazioni in valuta, con le commissioni.",
+      "name": "Interactive Brokers"
+    }
+  }
+}
