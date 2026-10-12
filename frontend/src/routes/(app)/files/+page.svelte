@@ -47,6 +47,7 @@
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
     import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile} from '$lib/types';
     import type {ColumnDef, FilterValue} from '$lib/components/table/types';
+    import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
     type Tab = 'static' | 'brim';
     type PreviewTarget = {source: 'static'; file: UploadedFile} | {source: 'brim'; file: BrimFile};
@@ -913,7 +914,7 @@
                         >
                             <Pencil size={12} />
                         </button>
-                        <span class="file-size">({formatBytes(file.size)})</span>
+                        <span class="file-size">({formatBytes(file.size, $t, $uiLocaleStore)})</span>
                     </div>
                     <BrokerSearchSelect
                         {brokers}

@@ -79,6 +79,7 @@
     import {type FormModalItems, isInaccessible} from '../shared/resolveFormItems';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
 
     // =========================================================================
     // Types
@@ -1698,7 +1699,7 @@
                                 <Tooltip html={buildFxTooltipHtml(tooltipData, $t)} position="bottom">
                                     <span class="inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 cursor-help px-2 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20">
                                         <Info size={12} />
-                                        <span class="font-mono">{fxInfo.impliedRate.toFixed(4)}</span>
+                                        <span class="font-mono">{formatFixed(fxInfo.impliedRate, 4)}</span>
                                         {#if tooltipData.staleDays != null && tooltipData.staleDays > 0}
                                             <span class="text-amber-500">⚠️</span>
                                         {/if}

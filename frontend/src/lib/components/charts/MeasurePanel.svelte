@@ -25,6 +25,8 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {ColumnDef, HtmlCell} from '$lib/components/table/types';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     // =========================================================================
     // Props
@@ -293,19 +295,17 @@
     // =========================================================================
 
     function fmtValue(v: number): string {
-        if (measurementUnit === 'percentage-points') return `${v.toFixed(2)}%`;
-        if (Math.abs(v) >= 1) return v.toFixed(4);
-        return v.toFixed(6).replace(/\.?0+$/, '');
+        if (measurementUnit === 'percentage-points') return formatPercent(v, {signed: false});
+        if (Math.abs(v) >= 1) return formatFixed(v, 4);
+        return formatFixed(v, 6, {trim: true});
     }
 
     function fmtDelta(v: number): string {
-        const sign = v >= 0 ? '+' : '';
-        return measurementUnit === 'percentage-points' ? `${sign}${v.toFixed(2)} pp` : `${sign}${v.toFixed(4)}`;
+        return measurementUnit === 'percentage-points' ? formatPercent(v, {suffix: ' pp'}) : formatFixed(v, 4, {signed: true});
     }
 
     function fmtPct(v: number): string {
-        const sign = v >= 0 ? '+' : '';
-        return `${sign}${v.toFixed(2)}%`;
+        return formatPercent(v);
     }
 
     function compactDelta(result: MeasurementResult): {
@@ -527,7 +527,7 @@
     <!-- Pending indicator -->
     {#if measureActive && pendingStartDate}
         <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-1.5 border border-amber-200 dark:border-amber-800">
-            📍 {$t('measure.pending', {values: {startDate: pendingStartDate, startValue: pendingStartValue?.toFixed(4) ?? ''}})}
+            📍 {$t('measure.pending', {values: {startDate: pendingStartDate, startValue: pendingStartValue == null ? '' : formatFixed(pendingStartValue, 4)}})}
         </div>
     {/if}
 
