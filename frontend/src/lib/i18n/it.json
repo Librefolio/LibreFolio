@@ -275,7 +275,8 @@
     "probe": {
       "history": "Storico",
       "notTested": "Non testato",
-      "totalTime": "Totale"
+      "totalTime": "Totale",
+      "copyErrorDetail": "Copia il dettaglio dell'errore"
     },
     "identifiers": {
       "askProvider": "Chiedi al Provider",

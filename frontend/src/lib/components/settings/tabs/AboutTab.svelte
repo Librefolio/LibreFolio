@@ -18,6 +18,8 @@
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import ChangelogModal from '$lib/components/layout/ChangelogModal.svelte';
     import {brimPluginName} from '$lib/utils/brim/pluginText';
+    import {writeTextToClipboard} from '$lib/utils/clipboard';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
 
     let changelogOpen = false;
     let toolPanelOpen = false;
@@ -239,7 +241,12 @@ ${importPlugins.map((p) => `  - ${p.name}`).join('\n')}
 Generated: ${new Date().toISOString()}
 `;
 
-        await navigator.clipboard.writeText(info);
+        try {
+            await writeTextToClipboard(info);
+        } catch {
+            toasts.error($_('support.clipboardUnavailable'));
+            return;
+        }
         copied = true;
         setTimeout(() => (copied = false), 2000);
     }
