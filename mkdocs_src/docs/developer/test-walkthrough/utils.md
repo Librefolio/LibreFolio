@@ -25,7 +25,9 @@ PURE: no database, no server, no network.
 | `gate-plugin-i18n-ownership` | Each plugin's translations live in its own `i18n/` fragment, judged by the metadata its registry publishes. A plugin's space is `brimPlugins.<code>` (the code being its folder's name), `assets.providerParams.<provider_code>`, the parent of a signal's `display_name_key` or of a risk analytic's `name_i18n_key`, or exactly a Tool's `name_i18n_key` and `description_i18n_key`; FX plugins have none. R1: every fragment key lies in its plugin's space. R2: every key a plugin declares in its exclusive space lives in its fragment. R3: no fragment key lies in another plugin's space or is declared by another plugin. R4: every catalogue key under an exclusive space lives in that plugin's fragment, Tools aside. Each rule is proven both ways on synthetic trees, and a sentinel fails on a published key field the gate does not read ([The Ownership Gate](../architecture/patterns/registry_pattern.md#plugin-i18n-gate); `backend/test_scripts/test_utilities/test_plugin_i18n_ownership_gate.py`). |
 | `runtime-isolation` | The [runtime lane](index.md#isolated-runtime-lanes) contract: test-port and data-directory resolution with its production guards, propagation of the lane to child processes and nested Pipenv runs, the lane-identity readiness probe, and ownership of the shared test server, which never reuses or signals a process it did not start (`backend/test_scripts/test_utilities/test_runtime_isolation.py`). |
 
-List every unit of the category with `./dev.py test utils --list`.
+List every unit of the category, each with its description, with `./dev.py test utils --help`.
+`./dev.py test utils <unit> --list` lists the tests of one unit without running them, and
+`./dev.py test utils all --list` those of the whole category (see [Running Tests](index.md#running-tests)).
 
 ## 🚀 Running
 
