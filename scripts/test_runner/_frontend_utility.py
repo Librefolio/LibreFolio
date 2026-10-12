@@ -423,6 +423,16 @@ def front_document_title(verbose: bool = False, ui: bool = False, headed: bool =
     return _run_playwright("layout/document-title.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
 
 
+def front_changelog_locale(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the changelog modal's chapter languages in the Italian and English UI (lot CL, desktop)."""
+    print_section("Frontend Changelog Locale Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/changelog-locale.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_toolbar_width_sweep(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Sweep the five PageToolbar bars 1700 → 320 px in French, Italian and Spanish (K step 13, item 5)."""
     print_section("Frontend Toolbar Width Sweep Tests")
@@ -611,6 +621,15 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "support-copy-and-go", front_support_copy_and_go, name="Support Copy And Go Tests", desc="Icon-to-dialog, fixed public clipboard payload, native blank-tab reservation, safe navigation and denied-copy cleanup", tests="support-copy-and-go.spec.ts")
     add_test(cat, "header-scroll", front_header_scroll, name="Header Scroll Tests", desc="Desktop/mobile document-scroll geometry, retained layout, menu pins and reduced motion with synthetic APIs", tests="layout/header-scroll.spec.ts")
     add_test(cat, "document-title", front_document_title, name="Document Title Tests", desc="No page changes the tab title: direct landing on every main page and a tool page, sidebar hops in one runtime, a Files query change", prereq="Test users created", tests="layout/document-title.spec.ts")
+    add_test(
+        cat,
+        "changelog-locale",
+        front_changelog_locale,
+        name="Changelog Locale Tests",
+        desc="The changelog modal opened from the sidebar version: in the Italian UI each chapter is Italian when the repository's CHANGELOG.it.md translates it and English with the Italian not-translated pill otherwise; in the English UI every chapter is English with no pill (content-agnostic, desktop, lot CL)",
+        prereq="Test users created",
+        tests="layout/changelog-locale.spec.ts",
+    )
     add_test(
         cat,
         "toolbar-width-sweep",
