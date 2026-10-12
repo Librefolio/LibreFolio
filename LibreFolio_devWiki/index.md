@@ -90,6 +90,8 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/risk-library-versus-own-maths]] | **Folder 02, analysis 06.** A library only where our maths duplicates it badly (rolling, CVaR, matrices), our own where it composes; correctness decides; riskfolio-lib first as the oracle | 2026-09-16 | risk, metrics, riskfolio |
+| [[decisions/risk-tool-verdicts]] | **Folder 02, analysis 02.** Every tool judged by the four questions — core, fixed, cut (TE, IR), deferred (optimization); today's code partly reverses it | 2026-09-16 | risk, tools, verdicts |
 | [[decisions/histogram-grid-pinned-to-var-cut]] | **Folder 02, round 1 (A).** The histogram grid is shifted so one edge falls on the VaR cut — the red area is the declared percentage; an oracle pins the maths before vectorising (`f5fe80d44`) | 2026-09-18 | risk, var, histogram |
 | [[decisions/asset-set-one-preparation-not-fan-out]] | **Folder 02, round 2.** The Lab asks one `ASSET_SET` request (one preparation, one calendar), not one per asset: «Il fan-out non era caro: era sbagliato» (`d3afb92b6`) | 2026-09-21 | risk, lab, asset-set |
 | [[decisions/l3-reads-current-composition]] | **Folder 02, S3.** L3 measures today's composition replayed over the past, and every card names its mode; arithmetic annualisation (`afd480a89`) | 2026-09-18 | risk, l3, beta |
@@ -600,6 +602,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Folder 02, step R5 — the analysis documents.** The per-tool verdicts (and where today's code departs from them), the rule for library versus own maths | *(2 pages — 2 decisions; see log)* |
 | 2026-10-12 | **Folder 02, step R4 — the first round, `implementation/`.** The contracts K1–K9 and their homes, the histogram pinned on the VaR cut, the observed annualisation factor | *(3 pages — 1 concept, 1 decision, 1 problem; see log)* |
 | 2026-10-12 | **Folder 02, step R3b — the post-merge review R5.** Stress buckets from the enum, replay auto-exclusion, the band chart's null base | *(3 pages — 3 problems; see log)* |
 | 2026-10-12 | **Folder 02, step R3a — `implementation_2/`, the contract and the levels.** One asset-set preparation, L3 on today's composition, a merge recipe for the runner's catalogue | *(3 pages — 2 decisions, 1 problem; see log)* |

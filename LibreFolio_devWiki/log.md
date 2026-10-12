@@ -3107,3 +3107,10 @@ explore agent; quotes re-found by grep, hashes and paths verified. **Created**: 
 [[decisions/histogram-grid-pinned-to-var-cut]], [[problems/annualization-factor-not-coverage]] (no delivering commit
 isolated for the observed factor: cited by its code). **Updated**: [[features/F-110]], the folder source.
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R5 — the analysis documents
+Base `b4acfb250`. Sources: `00`, `02`, `03`, `05`, `06`, `07`, digested by an explore agent; quotes re-found by grep.
+**Created**: [[decisions/risk-tool-verdicts]] (with today's departures: TE and IR still in the contracts and on the
+legacy panel, optimization delivered as a plugin), [[decisions/risk-library-versus-own-maths]] (coherent CVaR and
+vectorised rolling checked in the code). The visual grammar of `05` and the plans `03`, `07` left in the journal: the
+levels pages and the features already carry what shipped. Graph: not updated (P-6).
