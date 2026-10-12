@@ -104,6 +104,9 @@ Asset creation and linking on a first import are intentionally explicit:
 
 This is the intended first-import workflow, not a generic-parser matching failure.
 
+With several files, the merge gives each file's fake asset ids a globally unique id (`importMerge.ts`), so two
+files cannot share one resolution — [[problems/import-wizard-fake-id-collision]].
+
 ## Full Asset Inspection and Nested Modals
 
 Opening an asset from the review step uses `loadAssetEditData()`, which combines the asset

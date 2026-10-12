@@ -56,6 +56,8 @@ Frontend uses server data **as-is** with zero mapping functions (all values lowe
 - Frontend `transactionTypeRules.ts`, `transactionTypes.ts`, `eventTypes.ts` deleted
 - Auto-sign negation improves UX (no negative number entry)
 - `pair_form_layout` enables dual-transaction form for FX/Transfer types
+- Shipping this constant metadata as static JSON at `./dev.py api sync` time was considered and deferred:
+  [[decisions/static-metadata-export]]
 
 ## Source files
 
