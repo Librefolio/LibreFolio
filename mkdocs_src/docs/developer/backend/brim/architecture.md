@@ -276,8 +276,9 @@ Plugins are auto-discovered once per process, the first time the registry is use
 
 ## 🗒️ Plugin notes {: #plugin-notes }
 
-What the user pages of the import plugins leave out. The two richest plugins have a page of their
-own: [Crédit Agricole](credit_agricole.md) and [Danske Bank](danske_bank.md).
+What the user pages of the import plugins leave out. The richest plugins have a page of their
+own: [Crédit Agricole](credit_agricole.md), [Danske Bank](danske_bank.md) and
+[Scalable Capital](scalable.md).
 
 ### 🇳🇱 DEGIRO {: #plugin-degiro }
 
