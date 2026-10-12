@@ -78,6 +78,6 @@ None — all major patterns already in wiki. This source consolidates component 
 | Asset components | `frontend/src/lib/components/assets/` |
 | FX components | `frontend/src/lib/components/fx/` |
 | API client | `frontend/src/lib/api/` |
-| i18n files | `frontend/src/lib/i18n/{en,it,fr,es}.json` |
+| i18n files | `frontend/src/lib/i18n/base/{en,it,fr,es}.json` |
 | Design system | `frontend/src/app.css` |
 | E2E tests | `frontend/e2e/` |

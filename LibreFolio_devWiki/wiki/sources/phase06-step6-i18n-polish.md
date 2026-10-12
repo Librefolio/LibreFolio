@@ -130,8 +130,8 @@ Final pass covered:
 | Polish plan | `plan-phase06Step6-Polish-Test-Docs.prompt.md` |
 | Coverage plan | `plan-phase06Step6-coverage-debt.prompt.md` |
 | i18n duplicates KB | `LibreFolio_developer_journal/knowledge_base/08_i18n_duplicates.md` (already ingested) |
-| EN translations | `frontend/src/lib/i18n/en.json` |
-| IT translations | `frontend/src/lib/i18n/it.json` |
-| FR translations | `frontend/src/lib/i18n/fr.json` |
-| ES translations | `frontend/src/lib/i18n/es.json` |
+| EN translations | `frontend/src/lib/i18n/base/en.json` |
+| IT translations | `frontend/src/lib/i18n/base/it.json` |
+| FR translations | `frontend/src/lib/i18n/base/fr.json` |
+| ES translations | `frontend/src/lib/i18n/base/es.json` |
 | i18n CLI | `dev.py` (i18n subcommand) |
