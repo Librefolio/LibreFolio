@@ -104,6 +104,6 @@ Updated: [[features/registry]], [[domains/calculations]], [[features/F-106]], [[
 | Bundle index and restart note | `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/README.md` |
 | Round 5 and the review rounds | `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacRound5PostMerge.prompt.md` |
 | Solver robustness | `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacSolverRobustness.prompt.md` |
-| Plugin | `backend/app/services/tool_plugins/pac_allocator.py` |
+| Plugin | `backend/app/services/tool_plugins/pac_allocator/plugin.py` |
 | Solver (the PySCIPOpt traps in its docstring) | `backend/app/services/pac_allocator/solver.py` |
 | Planner frontend | `frontend/src/lib/features/tools/pac-allocator/planner/PacPlannerTool.svelte` |

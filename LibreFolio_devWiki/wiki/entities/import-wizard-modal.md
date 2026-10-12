@@ -218,7 +218,7 @@ transaction payload; the wizard never commits directly.
 | BRIM routes and final duplicate endpoint | `backend/app/api/v1/brokers.py` |
 | BRIM DTOs and positive fake-ID range | `backend/app/schemas/brim.py` |
 | Local candidate matching | `backend/app/services/brim_provider.py` |
-| Generic CSV parser | `backend/app/services/brim_providers/broker_generic_csv.py` |
+| Generic CSV parser | `backend/app/services/brim_providers/broker_generic_csv/plugin.py` |
 | Bulk handoff, stable drafts, and display sorting | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | Bulk issue mapping and chronological comparator | `frontend/src/lib/utils/transactions/bulkDisplay.ts` |
 | Sorted visible-row navigation | `frontend/src/lib/components/table/DataTable.svelte` |

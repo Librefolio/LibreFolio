@@ -107,15 +107,15 @@ cancelled the first plan is unchanged.
 | Role | Path |
 |------|------|
 | Builds the scope; empty values for an asset set; one preparation per request; observation gate counts the prepared set for `asset_set_*` | `backend/app/services/risk/service.py` |
-| Supports ASSET_SET; consumes many series | `backend/app/services/risk_plugins/correlation.py` |
-| Supports ASSET_SET; returns no amount without weights | `backend/app/services/risk_plugins/stress.py` |
+| Supports ASSET_SET; consumes many series | `backend/app/services/risk_plugins/correlation/plugin.py` |
+| Supports ASSET_SET; returns no amount without weights | `backend/app/services/risk_plugins/stress/plugin.py` |
 | Scope and payload schemas; `RiskAssetSet*Output` | `backend/app/schemas/risk.py` |
-| Per-asset KPIs on one prepared set (21/09) | `backend/app/services/risk_plugins/asset_set_kpi.py` |
-| Per-asset VaR/CVaR | `backend/app/services/risk_plugins/asset_set_var.py` |
-| Per-asset drawdown | `backend/app/services/risk_plugins/asset_set_drawdown.py` |
-| Per-asset risk/return points, no aggregate | `backend/app/services/risk_plugins/asset_set_risk_return.py` |
-| Per-asset beta/correlation against one benchmark | `backend/app/services/risk_plugins/asset_set_comparison.py` |
-| Still `ASSET` + `PORTFOLIO` only | `backend/app/services/risk_plugins/historical_kpi.py` |
+| Per-asset KPIs on one prepared set (21/09) | `backend/app/services/risk_plugins/asset_set_kpi/plugin.py` |
+| Per-asset VaR/CVaR | `backend/app/services/risk_plugins/asset_set_var/plugin.py` |
+| Per-asset drawdown | `backend/app/services/risk_plugins/asset_set_drawdown/plugin.py` |
+| Per-asset risk/return points, no aggregate | `backend/app/services/risk_plugins/asset_set_risk_return/plugin.py` |
+| Per-asset beta/correlation against one benchmark | `backend/app/services/risk_plugins/asset_set_comparison/plugin.py` |
+| Still `ASSET` + `PORTFOLIO` only | `backend/app/services/risk_plugins/historical_kpi/plugin.py` |
 | Backend tests of the family | `backend/test_scripts/test_services/test_risk_asset_set.py` |
 | One request for L1° and L3° | `frontend/src/lib/components/risk/AssetSetComparisonLevels.svelte` |
 | Row assembly, no currency parameter | `frontend/src/lib/components/risk/assetSetLevels.ts` |

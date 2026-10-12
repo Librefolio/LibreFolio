@@ -117,7 +117,7 @@ not collect it.
 | E4, legacy rows | `frontend/e2e/portfolio/data-quality-legacy.spec.ts` |
 | Legacy-row helper (test database only) | `backend/test_scripts/test_db/legacy_cost_rows.py` |
 | B1 (S7) and L4 | `backend/test_scripts/test_services/test_financial/test_portfolio_cost_currency.py` |
-| MOCKFX provider | `backend/app/services/fx_providers/mockfx.py` |
+| MOCKFX provider | `backend/app/services/fx_providers/mockfx/plugin.py` |
 | Runner actions `data-quality-real`, `data-quality-legacy` | `scripts/test_runner/_frontend_portfolio.py` |
 | `data-column-id` (D3) | `frontend/src/lib/components/table/DataTable.svelte` |
 | `kpi-unrealized-delta` test id | `frontend/src/lib/components/dashboard/KpiSection.svelte` |
