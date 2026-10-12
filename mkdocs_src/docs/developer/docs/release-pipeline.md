@@ -73,7 +73,7 @@ How to publish:
 
 ## 🔄 Execution Flow Diagram
 
-The diagram follows the job's steps in order. Dashed boxes are `continue-on-error` on `dev` only; thick boxes run under `!cancelled()`, so after a failed step too.
+The diagram follows the job's steps in order. Dashed boxes are `continue-on-error` on `dev` only; thick boxes run under `!cancelled()`, so after a failed step too; hexagons are the warning-only [checkout checks](#checkout-checks).
 
 ```mermaid
 graph TD
@@ -86,16 +86,20 @@ graph TD
 
     C["Checkout, Python 3.13, Pipenv, Node.js 24"] --> D["Expose the runner image: ImageOS to RUNNER_IMAGE_OS"]
     D --> E["Restore caches: Pipenv venv, npm, Playwright browsers"]
-    E --> F["pipenv install --dev, then write VERSION"]
+    E --> F["pipenv install --dev, write VERSION, export LF_APP_VERSION"]
     F --> G["dev.py install"]
-    G --> H["dev.py front build"]
+    G --> G1{{"[CHECK] Checkout"}}
+    G1 --> H["dev.py front build"]
+    H --> H1{{"[CHECK] Checkout"}}
 
-    H --> I1["translate-diff --issues-only"]
+    H1 --> I1["translate-diff --issues-only"]
     I1 --> I2["translate-validate --hide-localized"]
     I2 --> I3["check-links"]
     I3 --> I4["mkdocs build"]
-    I4 --> I5["mkdocs gallery --workers 4"]
-    I5 --> J["front build: production rebuild"]
+    I4 --> I4C{{"[CHECK] Checkout"}}
+    I4C --> I5["mkdocs gallery --workers 4"]
+    I5 --> I5C{{"[CHECK] Checkout"}}
+    I5C --> J["front build: production rebuild"]
     J --> K["mkdocs build: rebuild with the screenshots"]
 
     K --> L{"Ref is dev?"}
@@ -173,12 +177,16 @@ The installation then runs:
 
 ```bash
 pipenv install --dev
-# «Generate VERSION file for Docker», see below
-pipenv run ./dev.py install        # root npm install, npm ci in frontend/, Playwright Chromium
+# «Generate VERSION file for Docker», «Freeze the app version for the frontend builds»
+pipenv run ./dev.py install        # pipenv install --dev again, npm ci at the root and in frontend/, Playwright Chromium
+# «[CHECK] Checkout after dev.py install» (warning only)
 pipenv run ./dev.py front build
+# «[CHECK] Checkout after the frontend build» (warning only)
 ```
 
-The VERSION step writes `VERSION` with the function the app itself uses, `get_git_version()` in `backend/app/utils/runtime/version.py` (`git describe --tags --always --dirty`). The image has no `.git/`, so the `Dockerfile` copies this file to report the version at runtime. The step runs before any step that could write tracked files, so `--dirty` cannot stamp the image version with a spurious `-dirty`.
+The two steps after `pipenv install --dev` freeze the version before any step that could write tracked files: the backend's in `VERSION`, the app's in `LF_APP_VERSION`. The `[CHECK]` steps never fail; they name a step that changed the checkout. [Version Stamps and a Clean Checkout](#version-stamps) describes both.
+
+`dev.py install` installs the root project's tools with `npm ci`, like the frontend's dependencies: `npm ci` installs `package-lock.json` exactly as committed, never rewrites it, and fails when it no longer matches `package.json`. Commit a change to the root `package.json` with its updated `package-lock.json`, as in `frontend/`.
 
 ### 🧪 2. Documentation Checks, Gallery and Rebuilds
 
@@ -189,18 +197,20 @@ pipenv run ./dev.py mkdocs translate-diff --issues-only
 pipenv run ./dev.py mkdocs translate-validate --hide-localized
 pipenv run ./dev.py mkdocs check-links
 pipenv run ./dev.py mkdocs build                # mkdocs build --strict
+# «[CHECK] Checkout after the docs build» (warning only)
 pipenv run ./dev.py mkdocs gallery --workers 4
+# «[CHECK] Checkout after the gallery» (warning only)
 pipenv run ./dev.py front build                 # production rebuild, for the images
 pipenv run ./dev.py mkdocs build                # rebuild, with the screenshots
 ```
 
 - **The site is built before the gallery.** The gallery's Playwright webServer, `dev.py server --test`, serves `/mkdocs` and builds the site at startup when `mkdocs_src/site/` is missing. With the site already built, the server starts in seconds; building it inside the webServer's startup window once made the gallery time out.
 - **The gallery always runs.** There is no screenshot cache, and no input to skip or force the step: every run regenerates the screenshots. `dev.py mkdocs gallery` populates the test database, runs `frontend/e2e/gallery.spec.ts` for the `desktop` and `mobile` Playwright projects, and writes the PNGs under `mkdocs_src/docs/gallery/`, where they are gitignored. `--workers 4` matches the 4 vCPUs of the `ubuntu-latest` runners for public repositories: 8 workers oversubscribed them, and the CPU contention made a different test time out on each run. The step's timeout is 120 minutes.
-- **The frontend is rebuilt for production.** The gallery's webServer rebuilds `frontend/build/` in debug mode (no minification, sourcemaps). The images copy `frontend/build/`, so `dev.py front build` runs again. The `Dockerfile`'s `frontend` stage refuses anything else: `scripts/docker/check_frontend_build.sh` fails the image build on a debug build, a coverage-instrumented build or any sourcemap.
+- **The frontend is rebuilt for production.** The gallery's webServer rebuilds `frontend/build/` in debug mode (no minification, sourcemaps). The images copy `frontend/build/`, so `dev.py front build` runs again. The `Dockerfile`'s `frontend` stage refuses anything else: `scripts/docker/check_frontend_build.sh` fails the image build on a debug build, a coverage-instrumented build or any sourcemap. Like the first build, both rebuilds take the app's version from `LF_APP_VERSION` (see [Version Stamps and a Clean Checkout](#version-stamps)).
 - **The site is rebuilt with the screenshots.** The first build had none. The full image ships the rebuilt `mkdocs_src/site/` as is; the light image's docs stage deletes the screenshots again.
 - **Each build checks its own output.** Once `mkdocs build --strict` succeeds, `dev.py` resolves every relative file URL of the built site (images, video and audio, links to files) from its page's folder, as a browser does, and exits 1 on a broken one, which fails the step. It catches, for example, a raw-HTML image path that a translation copied unchanged from the English: the translated page is built one folder deeper (`site/<lang>/...`), so the path is one `../` short; `translate-validate` reports such a copy earlier, as `html-asset-depth` (see [Validation Checks](translation-pipeline.md#validation-checks)).
 
-The ordering is pinned by `./dev.py test utils release-image-contract` (`backend/test_scripts/test_utilities/test_release_image_contract.py`): a production frontend build and a docs build between the gallery and both image builds, a nightly report that reads every soft-gated step, and a `Dockerfile` that takes `frontend/build/` only through the checked stage. The same test also pins the `RUNNER_IMAGE_OS` cache keys, the gallery's release gate and its failure-report upload, the release, nightly and manual-from-`main` tags of [Docker Images and Tags](#docker-images-and-tags), the prerelease rule (no `latest`, no deploy, no `:latest` line), the [release tag guard](#prereleases) (`-rc.N` for prereleases, plain `vX.Y.Z` for stable releases), the image-build guards, the light-before-full build order, and the tags the release notes pull, which it checks by running the step's script in bash with a stand-in `gh`.
+The ordering is pinned by `./dev.py test utils release-image-contract` (`backend/test_scripts/test_utilities/test_release_image_contract.py`): a production frontend build and a docs build between the gallery and both image builds, a nightly report that reads every soft-gated step, and a `Dockerfile` that takes `frontend/build/` only through the checked stage. The same test also pins the `RUNNER_IMAGE_OS` cache keys, the gallery's release gate and its failure-report upload, the release, nightly and manual-from-`main` tags of [Docker Images and Tags](#docker-images-and-tags), the prerelease rule (no `latest`, no deploy, no `:latest` line), the [release tag guard](#prereleases) (`-rc.N` for prereleases, plain `vX.Y.Z` for stable releases), the image-build guards, the light-before-full build order, and the tags the release notes pull, which it checks by running the step's script in bash with a stand-in `gh`. It also pins the [version stamps and the clean checkout](#version-stamps): the `LF_APP_VERSION` export right after `VERSION` and before every frontend build, `vite.config.ts` preferring it to `git describe` (run in node with a stand-in `git`), the four checkout checks and the outputs of their script, `npm ci` at the root of `dev.py install`, and the icon record — the generators redraw a set only when its source's hash or recipe changes, never because of the PNG bytes, and the committed record matches the committed logos.
 
 #### Release gate and nightly tolerance {: #release-gate-and-nightly-tolerance }
 
@@ -218,7 +228,54 @@ Six steps carry `continue-on-error: ${{ github.ref_name == 'dev' }}`:
 - **On `dev`**, the nightly continues past a failure. The step «Report soft-failed steps (nightly)», which runs on `dev` only and with `always()`, lists the failed steps in a "⚠️ Soft-failed steps" section of the job summary and raises a warning annotation. After a failed gallery, the nightly ships the screenshots that succeeded; the documentation loads the missing ones from the public site (`mkdocs_src/docs/javascripts/gallery-img-loader.js`).
 - **On any other run**, a published release included, a failure stops the pipeline: no image is pushed, the site is not deployed, and the release notes are not updated; only the [artifact steps](#artifacts) still run. On a release, `github.ref_name` is the tag (for example `v1.2.0`), so the expression is false. The reason: the full image bundles the gallery and a release deploys the documentation site, so a release must not ship missing or broken screenshots. The GitHub release itself is already published at that point, but the in-app update prompt stays silent, because the image tag never reaches GHCR (see [Release Tag Convention](#release-tag-convention)).
 
-### 🐳 3. Docker Images and Tags {: #docker-images-and-tags }
+### 🔢 3. Version Stamps and a Clean Checkout {: #version-stamps }
+
+The backend and the app each compute their version with `git describe --tags --always --dirty`, which appends `-dirty` as soon as a tracked file differs from the commit. The job freezes both right after `pipenv install --dev`, before any step that could write tracked files, and every later step reads the frozen value:
+
+| Version | Shown in | Frozen by | Read by |
+|---------|----------|-----------|---------|
+| Backend | `GET /api/v1/system/info` (`app_version`), Settings → About | «Generate VERSION file for Docker», which writes `VERSION` with `get_git_version()` (`backend/app/utils/runtime/version.py`) | `get_git_version()`, which prefers a non-empty `VERSION` to `git describe`. The image has no `.git/`, so the `Dockerfile` copies `VERSION` |
+| App | The sidebar, and the changelog modal it opens (`APP_VERSION`, `frontend/src/lib/version.ts`) | «Freeze the app version for the frontend builds», which runs `echo "LF_APP_VERSION=$(cat VERSION)" >> "$GITHUB_ENV"` | `getAppVersion()` in `frontend/vite.config.ts`, at every frontend build: `LF_APP_VERSION` when it is set and not blank, `git describe` otherwise |
+
+`VERSION` alone freezes only the backend's version. Vite compiles the app's version into the bundle, and the job builds the frontend three times, each after steps that may write tracked files: the first `dev.py front build`, the gallery webServer's debug rebuild, and the production rebuild for the images. Before `LF_APP_VERSION`, the published 1.1 gallery showed `v1.1.0-dirty` in the sidebar, and the nightly of 2026-10-12 `v1.1.0-1390-g85170bc1f-dirty`. Written to `$GITHUB_ENV`, `LF_APP_VERSION` reaches every later step of the job, the same job for nightlies, manual runs and releases:
+
+- **The gallery.** `dev.py mkdocs gallery` passes its environment to Playwright, which passes its own to its webServer, `dev.py server --test`: the debug rebuild, and so every screenshot, carries the frozen version.
+- **The images.** The `Dockerfile` builds no frontend: both variants copy the production `frontend/build/` that the job built with `LF_APP_VERSION` set.
+
+Locally `LF_APP_VERSION` is unset, and every build reads `git describe` as before. Set on a command, it gives that command's frontend builds a chosen version, for example to rehearse a release gallery the way the job builds it:
+
+```bash
+LF_APP_VERSION=v1.2.0 ./dev.py front build       # production build, as in the job
+LF_APP_VERSION=v1.2.0 ./dev.py mkdocs gallery    # its server rebuilds in debug mode, with the same version
+```
+
+- **It reaches only the builds the command runs.** The gallery's server rebuilds `frontend/build/` only when it is missing, older than its sources, or not a debug build, hence the production build first: a debug build already up to date would be reused, with the version it carries.
+- **It changes only the app's version.** Settings → About still shows the backend's, from `get_git_version()`.
+- **It leaves no file behind**, only the version compiled into `frontend/build/` until its next build. A `VERSION` file would stay: `get_git_version()` keeps preferring it until it is deleted, and the app's version never reads it.
+
+#### Checkout checks {: #checkout-checks }
+
+Four warning-only steps, «[CHECK] Checkout after dev.py install», «[CHECK] Checkout after the frontend build» (the first `front build`), «[CHECK] Checkout after the docs build» (the first `mkdocs build`) and «[CHECK] Checkout after the gallery», each run `sh scripts/ci/warn_if_tree_changed.sh "<step>"` right after the step they name. The script compares the checkout with its commit through `git status --porcelain`, and its log reads:
+
+- **`Checkout unchanged after <step>.`**: nothing changed, and no annotation.
+- **The `git status --porcelain` list, then a warning «Checkout changed after <step>»**, also shown as an annotation on the run's summary page. The warning counts tracked and untracked (`??`) paths apart. Tracked changes are the ones that make `git describe --dirty` read `-dirty`; untracked paths are files a step wrote that Git does not ignore, and do not change the version.
+- **A warning «Checkout check failed after <step>»**: `git status` itself failed, and the message carries its error.
+
+The script always exits 0: the checks diagnose, they do not gate, on nightlies and releases alike. Each compares the checkout with the commit, not with the previous check, so a change stays in every later warning: the first check that warns names the step that made it, and the lists of two consecutive checks show what the steps between them added. Before these checks, the logs of the v1.1.0 release run and of the nightly of 2026-10-12 already showed `dev.py install` leaving the checkout clean (the `git status --short` it prints after its npm installs is empty): the checkout changed later, and the known cause is the icons below.
+
+#### Generated icons {: #generated-icons }
+
+`dev.py` draws two icon sets with Pillow: `generate_favicon()` writes `frontend/static/favicon.png` from `logo.png`, and `generate_pwa_icons()` the five PWA icons of `frontend/static/icons/` from `logo_square.png` (see [PWA → Icon Generation](../frontend/pwa.md#icon-generation)). `dev.py front build` runs the first, and every docs build runs both through `copy_docs_assets()`, which then copies them into `mkdocs_src/docs/static/`. All these PNGs are tracked, and Pillow does not guarantee the same bytes for the same image on every platform: regenerated on the runner, unchanged icons became modified files.
+
+A set is therefore regenerated only when one of its outputs is missing, or when `frontend/generated-icons.json` does not record its current source and recipe. That file, committed with the icons, holds one entry per set, `favicon` and `pwa-icons`, with the source's path and sha256 and the recipe number, `FAVICON_RECIPE` or `PWA_ICONS_RECIPE` in `dev.py`. A regeneration rewrites the set's entry; otherwise the set is left untouched, and the log says so (`favicon.png is up to date (logo.png unchanged)`). The decision reads the source's hash, never the outputs' bytes, which can differ from one platform to another.
+
+| To | Do |
+|----|----|
+| Change a logo | Replace `frontend/static/logo.png` or `logo_square.png` and run `./dev.py mkdocs build`, which regenerates the set, rewrites its entry and copies the icons into `mkdocs_src/docs/static/`. Commit the changed files under both `static/` folders together with `frontend/generated-icons.json`: without the new entry, every other checkout, the runner's included, would regenerate the set again |
+| Change what a function draws | Bump its recipe number, `FAVICON_RECIPE` or `PWA_ICONS_RECIPE`: without the bump the record still matches, and the change never reaches the icons |
+| Force a regeneration | Delete the set's entry from `frontend/generated-icons.json` (or the whole file), or one of its outputs, then build again |
+
+### 🐳 4. Docker Images and Tags {: #docker-images-and-tags }
 
 `pipenv requirements > requirements.txt` generates the requirements the `Dockerfile` installs. The job then sets up QEMU and Buildx, and logs in to GHCR with the workflow's `GITHUB_TOKEN`. Two `docker/metadata-action` steps compute the tags, and two `docker/build-push-action` steps build `ghcr.io/librefolio/librefolio` from the repository root and push it, sharing the GitHub Actions layer cache (`type=gha`, `mode=max`). The light variant is built and pushed first:
 
@@ -270,7 +327,7 @@ tags: |
 
     Before this setting, both variants pushed `latest`, and the light one won only because it was pushed second. With `latest=false` on the full variant, `latest` no longer depends on the push order, which now puts the light variant first.
 
-### 🌍 4. Documentation Deployment
+### 🌍 5. Documentation Deployment
 
 ```yaml
 if: github.ref_name == 'main' || (github.event_name == 'release' && !github.event.release.prerelease)
@@ -279,7 +336,7 @@ run: pipenv run ./dev.py mkdocs deploy
 
 `dev.py mkdocs deploy` copies the documentation assets and runs `mkdocs gh-deploy --force -f mkdocs_src/mkdocs.yml`, which builds the site again and force-pushes it to the `gh-pages` branch as `github-actions[bot]` (configured by the «Setup Git User» step). The step comes after the image builds. Its condition keeps both `dev` changes and GitHub prereleases off the public site: only a stable release or a manual run from `main` deploys it. A manual run from `main` reaches the step after pushing only the light `latest` image, the full build being skipped.
 
-### 🗂️ 5. Artifacts {: #artifacts }
+### 🗂️ 6. Artifacts {: #artifacts }
 
 Two steps archive the gallery's output:
 
@@ -290,7 +347,7 @@ Two steps archive the gallery's output:
 
 Both steps run under `!cancelled()`, so a failed step earlier in the job does not skip them: the gallery fails a release, and a failed run is when the screenshots and the report are most useful. Both also set `if-no-files-found: ignore`. The report step adds `steps.gallery.outcome == 'failure'`, which also holds on `dev`, where `continue-on-error` keeps the job going. On CI, Playwright retries a failed test twice and records a trace and a video on the first retry, plus a screenshot on failure: the report carries them. No later run restores either artifact: they are for inspection.
 
-### 📝 6. Release Notes
+### 📝 7. Release Notes
 
 On a release (`github.event.release.tag_name` is set), the last step appends a "📦 Docker Installation" section to the release notes. `gh release edit` has no option to append, so the step reads the current notes and writes them back with the section added:
 
