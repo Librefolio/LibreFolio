@@ -49,7 +49,7 @@ None.
 | Role | Path |
 |------|------|
 | Plan | `LibreFolio_developer_journal/Release_2/phases/17_assetDataOperations/plan-phase00AssetDataOperations.prompt.md` |
-| Sector taxonomy (bonds) | `backend/app/utils/sector_fin_utils.py` |
+| Sector taxonomy (bonds) | `backend/app/utils/asset/sector.py` |
 | Distributions CSV import | `frontend/src/lib/components/assets/DistributionDataImportModal.svelte` |
 | Distribution editor | `frontend/src/lib/components/ui/input/DistributionEditor.svelte` |
 | Delete with counts | `backend/app/services/asset_sources/crud.py` |
