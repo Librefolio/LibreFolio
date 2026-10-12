@@ -41,7 +41,8 @@ from backend.app.schemas.portfolio import (
     TargetOperationAllocationSchema,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.fifo_lot_engine import (
+from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
+from backend.app.services.financial_math.fifo.engine import (
     EconomicAllocationGroup,
     EconomicEvent,
     FifoDataQualityIssue,
@@ -54,13 +55,12 @@ from backend.app.services.fifo_lot_engine import (
     ReferencePriceResolution,
     run_fifo_lot_engine,
 )
-from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
+from backend.app.services.financial_math.portfolio.engine import DerivedViewsBuilder, load_configured_fx_pair_sets
+from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series, cumulative_to_annualized
+from backend.app.services.financial_math.valuation import compute_holding_value, normalize_quote_base_quantity
 from backend.app.services.fx import convert_bulk
-from backend.app.services.portfolio_engine import DerivedViewsBuilder, load_configured_fx_pair_sets
-from backend.app.services.price_resolver import build_asset_price_series
 from backend.app.services.settings_service import get_effective_base_currency
-from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series, cumulative_to_annualized
-from backend.app.utils.financial.valuation_utils import compute_holding_value, normalize_quote_base_quantity
 
 _WARNING_ISSUE_CODES = {
     IssueCode.REFERENCE_PRICE_FALLBACK,

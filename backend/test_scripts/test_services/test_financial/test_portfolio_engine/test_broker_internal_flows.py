@@ -42,10 +42,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import backend.app.services.portfolio_engine as portfolio_engine_module
+import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.services.portfolio_engine import (
+from backend.app.services.financial_math.portfolio.engine import (
     ClassifiedTransaction,
     DailyPortfolioState,
     DailyStateBuilder,
@@ -53,7 +53,7 @@ from backend.app.services.portfolio_engine import (
     PortfolioCalculationEngine,
     ScopeAwareTransactionClassifier,
 )
-from backend.app.services.price_resolver import build_asset_price_series
+from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 

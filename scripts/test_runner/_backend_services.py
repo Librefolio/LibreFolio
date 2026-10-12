@@ -581,7 +581,7 @@ def services_financial_math(verbose: bool = False, test_names: list = None) -> b
 def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> bool:
     """Test ROI, FIFO, and PortfolioService pure-math utilities."""
     print_section("Services: ROI / FIFO / Portfolio Utils")
-    print_info("Testing: backend/app/utils/financial/ (roi_utils)")
+    print_info("Testing: backend/app/services/financial_math/returns.py")
     print_info("Testing: backend/app/services/portfolio_service.py (compute_wac_iterative, get_report)")
     print_info("Tests: TWRR/MWRR/SimpleROI + series, FIFO lots (FifoLotEngine), price resolver, WAC")
 
@@ -623,7 +623,7 @@ def services_asset_source_guards(verbose: bool = False, test_names: list = None)
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
     """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
     print_section("Services: Portfolio Engine vNext")
-    print_info("Testing: backend/app/services/portfolio_engine.py (DailyStateBuilder)")
+    print_info("Testing: backend/app/services/financial_math/portfolio/engine.py (DailyStateBuilder)")
     print_info("Tests: inline WAC, last_buy_price fallback, 3-pool K/R/W, position snapshots, period accumulators, pre-frame/frame")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_portfolio_engine_vnext.py", test_names)

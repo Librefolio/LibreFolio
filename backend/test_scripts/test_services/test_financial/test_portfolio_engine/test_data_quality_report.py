@@ -16,7 +16,7 @@ from backend.app.schemas.portfolio import (
     StalePriceAsset,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.portfolio_engine import DailyPortfolioState, DerivedViewsBuilder
+from backend.app.services.financial_math.portfolio.engine import DailyPortfolioState, DerivedViewsBuilder
 
 # =============================================================================
 # HELPERS

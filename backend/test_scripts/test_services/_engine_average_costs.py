@@ -21,7 +21,7 @@ from backend.app.services.financial_math.average_cost import (
     _fold_average_costs,
     _ResolvedConversion,
 )
-from backend.app.services.portfolio_engine import ClassifiedTransaction, build_cost_positions
+from backend.app.services.financial_math.portfolio.engine import ClassifiedTransaction, build_cost_positions
 
 FxRateMap = Mapping[tuple[str, str, date], Decimal]
 

@@ -38,15 +38,6 @@ class NAVSnapshot(NamedTuple):
 
 
 @dataclass(frozen=True)
-class ROIResult:
-    """Combined ROI result."""
-
-    simple_roi: Decimal
-    twrr: Decimal | None
-    mwrr: Decimal | None
-
-
-@dataclass(frozen=True)
 class SimpleROIPoint:
     """Single Simple ROI value at a date."""
 

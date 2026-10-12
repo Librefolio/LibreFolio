@@ -54,13 +54,13 @@ setup_test_database()
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import backend.app.services.portfolio_engine as portfolio_engine_module
+import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency as CurrencySchema
 from backend.app.schemas.portfolio import PnlCandleSeries, PortfolioReportQuery
-from backend.app.services.portfolio_engine import (
+from backend.app.services.financial_math.portfolio.engine import (
     ClassifiedTransaction,
     DailyPortfolioState,
     DailyStateBuilder,
@@ -68,8 +68,8 @@ from backend.app.services.portfolio_engine import (
     PortfolioCalculationResult,
     ValuationSource,
 )
+from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.price_resolver import build_asset_price_series
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash

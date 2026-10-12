@@ -1,4 +1,4 @@
-"""Unit tests for backend/app/services/price_resolver.py.
+"""Unit tests for backend/app/services/financial_math/price_marks.py.
 
 The pure calculator (:class:`AssetPriceSeries`) is tested in isolation with hand-built
 observations — no DB, no FX, no async. :func:`build_asset_price_series` is tested with
@@ -10,7 +10,7 @@ from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
-from backend.app.services.price_resolver import (
+from backend.app.services.financial_math.price_marks import (
     AssetPriceSeries,
     MarkSource,
     ObservationKind,

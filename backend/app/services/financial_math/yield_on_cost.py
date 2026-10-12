@@ -25,7 +25,7 @@ from backend.app.schemas.portfolio import (
     YieldOnCostUnavailableReason,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.fifo_lot_engine import (
+from backend.app.services.financial_math.fifo.engine import (
     FifoEngineResult,
     FifoEvent,
     FragmentInterval,

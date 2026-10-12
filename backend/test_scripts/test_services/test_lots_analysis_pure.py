@@ -29,13 +29,6 @@ from backend.app.db.models import PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, LotAnalysisType
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.fifo_lot_engine import (
-    FifoEngineResult,
-    FifoEvent,
-    FifoLot,
-    FragmentInterval,
-    LotClosure,
-)
 from backend.app.services.financial_math.average_cost import (
     AverageCost,
     CostMovement,
@@ -44,6 +37,13 @@ from backend.app.services.financial_math.average_cost import (
     _ConversionRequest,
     _fold_average_costs,
     _ResolvedConversion,
+)
+from backend.app.services.financial_math.fifo.engine import (
+    FifoEngineResult,
+    FifoEvent,
+    FifoLot,
+    FragmentInterval,
+    LotClosure,
 )
 from backend.app.services.lots_analysis_service import (
     LotsAnalysisService,
