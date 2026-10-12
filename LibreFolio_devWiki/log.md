@@ -3072,3 +3072,10 @@ authors on 2026-10-10). Re-checked on the code: A6, C-22 (D381 clamp; Sturges on
 after 1.2 — D382)»); F-113 already carried A2 and T-DI. No problem page: every item is paused by the developer's D382,
 and the README stays its single home. The post-integration review `08` is the first round's history: steps R3/R4.
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R2 — the decisions that bind
+Base `e3a55b85f`. Sources: the README's «Decisioni che vincolano il lavoro» (`107098edf`) and the thesis
+`01-tesi-e-quattro-domande.md` (`245aabf97`). **Created**: [[decisions/risk-answers-four-questions]],
+[[concepts/risk-binding-decisions]] (D374 and D380–D381 checked on the code). **Updated**: F-110…F-112 (a link). The
+full records of `04` (1,076 lines) stay in the journal; individual pages come only where a later step needs one.
+Graph: not updated (P-6).

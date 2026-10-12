@@ -549,3 +549,10 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | Source Path | Git Hash at Ingest | Date | Wiki Page |
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/README.md` | `107098edf` | 2026-10-12 | [[features/F-110]], [[features/F-111]], [[features/F-112]] — the open items (the R0 row was partial; now complete) |
+
+## 2026-10-12 — folder 02 (Risk), step R2 (base `e3a55b85f`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/01-tesi-e-quattro-domande.md` | `245aabf97` | 2026-10-12 | [[decisions/risk-answers-four-questions]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md` | `107098edf` | 2026-10-12 | [[concepts/risk-binding-decisions]] — partial: the binding list via the README |
