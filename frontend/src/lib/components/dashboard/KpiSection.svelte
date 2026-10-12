@@ -17,6 +17,7 @@
     import KpiMetricBar from '$lib/components/ui/display/KpiMetricBar.svelte';
     import KpiDivergingFlowBar from '$lib/components/ui/display/KpiDivergingFlowBar.svelte';
     import {safeString} from '$lib/types';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
 
     interface Props {
         summary: PortfolioSummary | null;
@@ -344,7 +345,7 @@
                     </div>
                 </Tooltip>
                 <span class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold tabular-nums transition-colors {timingEffectVal == null ? 'text-gray-400 dark:text-gray-500' : ''}" data-testid="kpi-timing-effect-value" style={timingColor(0.3, 0.7)}>
-                    {#if timingEffectVal == null}—{:else}<TweenedValue value={timingEffectVal} format={(v) => `${v >= 0 ? '+' : '-'}${Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${$_('dashboard.pp')}`} />{/if}
+                    {#if timingEffectVal == null}—{:else}<TweenedValue value={timingEffectVal} format={(v) => `${formatFixed(v, 2, {signed: true})} ${$_('dashboard.pp')}`} />{/if}
                 </span>
             </div>
             {#if pnlDeltaDayPct != null}

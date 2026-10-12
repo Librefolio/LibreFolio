@@ -15,7 +15,7 @@
 
 <script lang="ts">
     import {CircleAlert, CircleCheck, PiggyBank} from 'lucide-svelte';
-    import {locale, t} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {formatPlannerDate, formatPlannerFxRate, formatPlannerMoneyPlain, formatPlannerPlainDecimal, formatPlannerPricePlain, plannerPlainDecimalCount} from '../format';
     import {STEP_FALLBACKS, stepKey} from '../labels';
@@ -110,7 +110,7 @@
             <span class="text-gray-600 dark:text-gray-300">{$t(`${KEY}.origin.librefolio`, {default: 'LibreFolio'})}</span>
             {#if fact.stale && fact.referenceDate}
                 <Tooltip text={$t(`${KEY}.staleTitle`, {default: 'Not of today: the calculation uses the latest value LibreFolio has.'})} position="top" maxWidth="280px">
-                    <span class="text-amber-600 dark:text-amber-400" data-testid="pac-planner-review-fact-stale">{formatPlannerDate(fact.referenceDate, $locale)}</span>
+                    <span class="text-amber-600 dark:text-amber-400" data-testid="pac-planner-review-fact-stale">{formatPlannerDate(fact.referenceDate)}</span>
                 </Tooltip>
             {/if}
         {:else if originState === 'manual'}

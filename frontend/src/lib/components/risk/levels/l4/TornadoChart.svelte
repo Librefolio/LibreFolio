@@ -3,13 +3,13 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
     import {_ as t} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
 
     import {formatReplayShare, type TornadoRow} from './scenarioHelpers';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     /**
      * What each row did over the scenario, in a table with the bar beside the numbers (D376).
@@ -59,8 +59,8 @@
     let hasContribution = $derived(rows.some((row) => row.contribution !== null));
     let hasImpact = $derived(amount !== undefined && rows.some((row) => amount(row) !== ''));
 
-    function signedPercent(value: number, language: string): string {
-        return new Intl.NumberFormat(language, {style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'exceptZero'}).format(value);
+    function signedPercent(value: number, locale: string): string {
+        return new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'exceptZero'}).format(value);
     }
 
     function numberCell(testSuffix: string, text: string): {type: 'html'; html: string} {
@@ -94,7 +94,7 @@
 
     let columns = $derived.by((): ColumnDef<TornadoRow>[] => {
         void $assetStoreVersion;
-        const language = $currentLanguage;
+        const locale = uiLocale();
         const list: ColumnDef<TornadoRow>[] = [
             {
                 id: 'asset',
@@ -111,7 +111,7 @@
             },
         ];
         if (hasWeight) {
-            list.push({id: 'weight', header: () => $t('risk.levels.l4.table.weight'), type: 'number', width: 80, minWidth: 64, align: 'right', filterable: false, getValue: (row) => row.weight, cell: (row) => numberCell('weight', row.weight === null ? '' : formatReplayShare(row.weight, language))});
+            list.push({id: 'weight', header: () => $t('risk.levels.l4.table.weight'), type: 'number', width: 80, minWidth: 64, align: 'right', filterable: false, getValue: (row) => row.weight, cell: (row) => numberCell('weight', row.weight === null ? '' : formatReplayShare(row.weight, locale))});
         }
         if (hasReturn) {
             list.push({
@@ -123,7 +123,7 @@
                 align: 'right',
                 filterable: false,
                 getValue: (row) => row.ownReturn,
-                cell: (row) => numberCell('return', row.ownReturn === null ? '' : signedPercent(row.ownReturn, language)),
+                cell: (row) => numberCell('return', row.ownReturn === null ? '' : signedPercent(row.ownReturn, locale)),
             });
         }
         if (hasContribution) {
@@ -136,7 +136,7 @@
                 align: 'right',
                 filterable: false,
                 getValue: (row) => row.contribution,
-                cell: (row) => numberCell('contribution', row.contribution === null ? '' : signedPercent(row.contribution, language)),
+                cell: (row) => numberCell('contribution', row.contribution === null ? '' : signedPercent(row.contribution, locale)),
             });
         }
         if (hasImpact && amount) {
