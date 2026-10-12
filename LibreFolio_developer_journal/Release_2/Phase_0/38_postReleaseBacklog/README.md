@@ -298,8 +298,10 @@ Origine: [30_wacUnification](../../phases/30_wacUnification/plan-phase00WacUnifi
 - **P-4 · Fuso orario: verificare il database IANA nell'immagine Docker** — basso. `_check_timezone`
   (`schemas/settings.py:426-432`) controlla il fuso solo se il server ha il database IANA, e `tzdata` non è nel
   `Pipfile` (`Dockerfile:72`, `:86-88`).
-- **P-5 · Layer `financial_math`: migrare `roi_utils` e `valuation_utils`** — basso, refactor. È la decisione D1 del
-  developer («poi in futuro fattorizziamo le altre»), scritta in `financial_math/__init__.py:8-10`.
+- ✅ **P-5 · Layer `financial_math`: migrare `roi_utils` e `valuation_utils`** — chiusa il 12/10 da T-1 (T,
+  `1cc9cd8f5`, treno 45): `roi_utils` è `financial_math/returns.py`, `valuation_utils` è `financial_math/valuation.py`,
+  senza shim, e con loro gli altri motori. Era: basso, refactor; la decisione D1 del developer («poi in futuro
+  fattorizziamo le altre»), scritta in `financial_math/__init__.py:8-10`.
 - **P-6 · Grafo del wiki: aggiornamento rinviato dal #32** — knowledge base; **rinviata a dopo la 1.2** dal developer il
   09/10: «Rimandare a dopo la 1.2: le pagine bastano, P-6 e C-29 restano nel backlog». Le pagine devWiki nuove di P12 vanno nel grafo, e con loro le 47 scritte dall'historian il 09/10: misura del
   09/10, 289 pagine della wiki da rielaborare (714 file con i sotto-corpus). Vedi anche C-29.
