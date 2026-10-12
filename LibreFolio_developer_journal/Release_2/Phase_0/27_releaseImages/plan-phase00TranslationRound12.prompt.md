@@ -788,5 +788,70 @@
 1. devWiki: the coordinator hands the notes to the historian (his step 3): `release-pipeline/b12_devwiki_stamps_hide_stale_translations.md`, `b13_devwiki_anchors_from_render.md`, `b14_devwiki_raw_html_paths_in_translations.md`, `b15_devwiki_fr_typography_hook.md`.
 2. Full pipeline run (translations + gallery): never forced (it would undo the hand reviews of batches 11–18); nothing is pending today.
 3. The gallery's «FX on cash» shot: only after a new dashboard capture by the developer.
-4. M-19: done in batch 24 (step 15); the 🐛 CHANGELOG line is the coordinator's, M's proposal in the checkpoint.
-5. The CHANGELOG's translation: approved by the developer on 12/10 (verbatim: «si ma fai anche la traduzione delle cose non ancora rilasciate, tanto stiamo rifinendo, ci fossero piccole aggiunte, andremo in append»), after batch 23; its own plan. Coordinator 12/10, during batch 23: T (not I) writes the frontend; the modal falls back to English chapter by chapter, with a «not yet translated» pill; T adds one or two English sentences to `user/settings/about.en.md` (§Changelog Modal), whose it/fr/es are M's. And a gallery conflict to cure in that batch: `frontend/e2e/gallery.spec.ts:1984` searches `'Added'` in the changelog modal for the `changelog-modal-search` shot, which finds nothing once the chapters are translated: a word that stays the same in the four languages (a technical term or a proper name present in the chapters); the wait for the chapters (`:1978`, 8 s) holds T's lazy loading.
+4. M-19: done in batch 24 (step 15); the 🐛 CHANGELOG line is the coordinator's. In batch 25, the spec's author found
+   two more things, both proven in a browser:
+   - the local copy has no MathJax fonts, so the formulas drew in the page's font;
+   - `mathjax.js` threw a `TypeError` on every page.
+
+   Both are fixed in batch 25: the fonts are vendored by `scripts/update_js_cache.py`, and the `typesetPromise` call is
+   guarded. The coordinator widened the 🐛 line in English (`e9bc300f0`: every nested page called jsDelivr, with or
+   without formulas); M ports it into it/fr/es after the fast-forward. M-22 is filed: Mermaid only with internet.
+   Details: [plan-phase00ChangelogTranslation.prompt.md](plan-phase00ChangelogTranslation.prompt.md), steps 7–8.
+5. The CHANGELOG's translation: approved by the developer on 12/10 (verbatim: «si ma fai anche la traduzione delle cose non ancora rilasciate, tanto stiamo rifinendo, ci fossero piccole aggiunte, andremo in append»); batch 25, started 12/10 after batch 24, in its own plan: [plan-phase00ChangelogTranslation.prompt.md](plan-phase00ChangelogTranslation.prompt.md). Committed in train 66; the first append (train 66's localized-changelog line) was ported by hand and stamped in batch 26 (the plan's step 10).
+6. Coming with I's batch (coordinator 12/10, 16:3x): the button texts of the wrong-broker modal in `user/transactions/import/how-to` (four languages) and in `developer/frontend/components/features/import-wizard.md:162`; the security panel that closes after 30 s, paused while the pointer or the focus is inside it — in the gallery (`frontend/e2e/gallery.spec.ts:1666-1720`) the pointer stays on the button, so it should not close: check the shots once I's batch is in.
+7. M-19's e2e spec `frontend/e2e/layout/docs-offline-math.spec.ts`: written by test-author in batch 25, which added
+   checks on the fonts and on `typesetPromise`. It ran once in M's lane, unregistered: 2 passed, and a negative control
+   without the fonts went red on the font assertion. It is parked outside the repo (`release-pipeline/pending/`) because
+   an unregistered spec turns `check-orphans` red. **Registered in batch 28** (step 17), once T's CP1 of M-18 passed
+   `scripts/test_runner/_frontend_utility.py` to M: `front-utility docs-offline-math`.
+   Coordinator 12/10, during batch 23:
+   - T (not I) writes the frontend; the modal falls back to English chapter by chapter, with a «not yet translated»
+     pill.
+   - T adds one or two English sentences to `user/settings/about.en.md` (§Changelog Modal), whose it/fr/es are M's.
+   - A gallery conflict to cure in that batch: `frontend/e2e/gallery.spec.ts:1984` searches `'Added'` in the changelog
+     modal for the `changelog-modal-search` shot. Once the chapters are translated, that finds nothing. It needs a word
+     that stays the same in the four languages (a technical term or a proper name present in the chapters).
+   - The wait for the chapters (`:1978`, 8 s) holds T's lazy loading.
+
+   Batch 25 cured the conflict with `CHANGELOG_SEARCH_TERM = 'Docker'`.
+
+### 17. ✅ Batch 28: the M-19 spec registered, and the gallery's price guard after M-18 — 2026-10-12 20:00
+
+Base `d877a4e14` (train 69). The coordinator assigned M `scripts/test_runner/_frontend_utility.py` for this batch, after
+T's CP1 of M-18 (train 68); the file passes to I next, for its `clipboardSink` gate. Both tasks went to test-author.
+
+**17.1 ✅ `docs-offline-math` registered**
+> **Note implementazione**: the parked spec (`release-pipeline/pending/`, sha256 `0edbc5a4…`, 225 lines) is copied
+> byte for byte to `frontend/e2e/layout/docs-offline-math.spec.ts`. `front_docs_offline_math` and its
+> `add_test(cat, "docs-offline-math", …)` follow `connection-security` in `_frontend_utility.py`, with the `desc` and
+> `prereq` written in batch 25 (desktop only, the neighbours' `_ensure_*` guards).
+> - `front-utility docs-offline-math`: 2 passed (English and Italian);
+> - `check-orphans` clean (110 of 110 e2e specs registered and reachable from `all`);
+> - `dev.py lint` clean; ruff on the runner file shows no new finding against HEAD.
+
+**17.2 ✅ The gallery's price guard follows M-18 (proposal A, decided by the coordinator)**
+> **Note implementazione**: `expectOfflinePricesDrawn` (`frontend/e2e/fixtures/galleryReportSets.ts`) expected each
+> asset card to contain `toFixed(2)` of its fixture price. Since T's CP1, the card writes the price through
+> `formatFixed(value, 2)` (`AssetCard.svelte:225`): `toFixed(2)` first, then `toLocaleString(uiLocale())`.
+> - The guard now takes `lang` from its three callers in `gallery.spec.ts` («Asset list page», «table»,
+>   «filtered»). In the page, it computes `Intl.NumberFormat(GALLERY_LOCALES[lang], {2, 2})` of the price rounded by
+>   `toFixed(2)`, so the browser's own ICU writes it (French groups with U+202F), as `brokers-detail.spec.ts`
+>   (`frenchQuota`) does.
+> - **A control:** the expected text must end with the language's decimal mark and two digits (`.dd` in English,
+>   `,dd` in it/fr/es), so a browser without the locale's ICU data fails there, not as a wrong price.
+> - The guard runs only in `dev.py mkdocs gallery`: the runner excludes `gallery.spec.ts`.
+> - **Red before the change:** `dev.py mkdocs gallery --test-port 6158 --workers 2 -f "Asset list"` gave 6 failed
+>   (3 tests × desktop/mobile), all on `Gold Spot Price`, expected `4116.60`, received `4,116.60`.
+> - **⚠️ Fuori pista — the red came in English first**: English groups thousands too, and two fixture prices are
+>   over 1,000 (4,116.60 and 10,956.03), so the it/fr/es iterations were never reached. Proposal A covers English
+>   through `en-US`.
+> - **⚠️ Fuori pista — `Language` comes from `./test-users`**: `galleryLocale.ts` imports it but does not export it.
+> - **⚠️ Fuori pista — the first control was too loose**: `toContain(',')` (M's brief) also held for an `en-US`
+>   fallback on prices over 1,000 (test-author found it). Tightened to the decimal mark at the end.
+> - **Green:** the same command after the change gave 6 passed (3.2 min, 48 shots). With the tightened control, the
+>   first run gave 3 passed and 3 failed, all timeouts outside the guard: two `goToAssetsPage` waits over 20 s for
+>   `data-busy="false"`, and one `page.screenshot` waiting for fonts after the guard had passed. Load was about 90 on
+>   10 cores (another lane's coverage suite); no backend error, and the pages were fully drawn. Re-run once alone, as
+>   the coordinator asked: 6 passed (4.4 min), 48 of 48 shots, the guard green in the four languages, desktop and
+>   mobile. Verdict: environment.
+> - Prettier and a strict `tsc` on the two e2e files: clean.

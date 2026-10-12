@@ -57,7 +57,7 @@
 
         <!-- SimpleSelect dropdown - responsive width -->
         <div class="w-40 sm:w-48">
-            <SimpleSelect bind:value disabled={isLocked} {loading} onchange={handleChange} {options} placeholder={$_('common.select')} />
+            <SimpleSelect bind:value disabled={isLocked} {loading} onchange={handleChange} {options} optionTestId={(option) => `setting-select-option-${option.value}`} placeholder={$_('common.select')} />
         </div>
     </div>
 </div>

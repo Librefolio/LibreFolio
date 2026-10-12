@@ -63,5 +63,5 @@ responsibility with **no contract change**.
 | Price/event store | `backend/app/services/asset_sources/price_store.py` |
 | Refresh pipeline | `backend/app/services/asset_sources/refresh.py` |
 | Search | `backend/app/services/asset_sources/search.py` |
-| Yahoo provider | `backend/app/services/asset_source_providers/yahoo_finance.py` |
+| Yahoo provider | `backend/app/services/asset_source_providers/yahoo_finance/plugin.py` |
 | Developer doc | `mkdocs_src/docs/developer/backend/assets/architecture.md` |

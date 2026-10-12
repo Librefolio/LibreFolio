@@ -9,6 +9,8 @@
     import type {LevelMetadataRow} from './levelHelpers';
     import {translateErrorCode, translateOrRaw} from './levelHelpers';
     import {analyticNameKey} from './partialNotice';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     /**
      * The frame around one of the four levels.
@@ -246,13 +248,13 @@
                                 {#if row.coverage !== null}
                                     <div>
                                         <dt>{$t('risk.metadata.coverage')}</dt>
-                                        <dd class="font-mono text-gray-700 dark:text-gray-200">{(row.coverage * 100).toFixed(1)}%</dd>
+                                        <dd class="font-mono text-gray-700 dark:text-gray-200">{formatPercent(row.coverage, {scale: 100, signed: false, digits: 1})}</dd>
                                     </div>
                                 {/if}
                                 {#if row.annualizationFactor !== null}
                                     <div>
                                         <dt>{$t('risk.metadata.annualization')}</dt>
-                                        <dd class="font-mono text-gray-700 dark:text-gray-200">{row.annualizationFactor.toFixed(2)}</dd>
+                                        <dd class="font-mono text-gray-700 dark:text-gray-200">{formatFixed(row.annualizationFactor, 2)}</dd>
                                     </div>
                                 {/if}
                                 {#if row.returnBasis !== null}

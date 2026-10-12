@@ -40,6 +40,12 @@ Examples of sync-safe endpoints: `frontend_catchall()`, `mkdocs_static()` in `ma
 - Thread isolation (`F-060`) addresses this at the framework level — `_run_provider_in_thread()` wraps every provider call
 - Any future endpoint that calls external HTTP APIs
 
+## A violation found and fixed (2026-10-12)
+
+The auth handlers ran bcrypt — CPU-bound, about 0.24 s per check — directly inside `async def` `login`,
+`register` and `change_password`; since train 66 each call runs in `asyncio.to_thread`, proved by a heartbeat on the
+event loop: [[problems/bcrypt-blocks-the-event-loop]] (V-16).
+
 ## Source
 `LibreFolio_developer_journal/knowledge_base/05_project_conventions.md` — "⚠️ Async I/O Rule" section
 
@@ -49,5 +55,5 @@ Examples of sync-safe endpoints: `frontend_catchall()`, `mkdocs_static()` in `ma
 |------|------|
 | Thread isolation (provider calls) | `backend/app/services/asset_source.py` |
 | FX service (async patterns) | `backend/app/services/fx.py` |
-| Example: yfinance provider | `backend/app/services/asset_source_providers/yahoo_finance.py` |
+| Example: yfinance provider | `backend/app/services/asset_source_providers/yahoo_finance/plugin.py` |
 | FastAPI main (sync endpoints) | `backend/app/main.py` |

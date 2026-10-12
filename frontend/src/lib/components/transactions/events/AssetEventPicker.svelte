@@ -16,6 +16,7 @@
     import {zodiosApi} from '$lib/api';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {Plus} from 'lucide-svelte';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
 
     interface Props {
         assetId: number;
@@ -176,7 +177,7 @@
 
         return {
             value: diff,
-            label: `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}${crossCurrency ? ' ≠' : ''}`,
+            label: `${formatFixed(diff, 2, {signed: true})}${crossCurrency ? ' ≠' : ''}`,
             color: crossCurrency ? 'text-gray-400' : close ? 'text-green-600 dark:text-green-400' : 'text-amber-500 dark:text-amber-400',
             crossCurrency,
         };
