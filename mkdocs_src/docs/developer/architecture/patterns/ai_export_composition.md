@@ -20,6 +20,13 @@ A `ComponentSpec` is the smallest declarative runtime unit. It defines:
 - required component dependencies;
 - period behavior and optional temporal aggregator metadata.
 
+The version is the implementation's: it moves when the builder or payload changes (a
+field added or made nullable, a flag computed differently), not when new values reach
+an unchanged builder, and at most once (+1) per release. A bump updates together the
+`ComponentSpec`, its frozen placeholder in `components/catalog.py` (checked at import)
+and [`COMPACT_COMPONENT_VERSIONS`](#snapshot-data-tables), or the component silently
+falls back to YAML (devWiki: `decisions/ai-export-version-bump-once-per-release`).
+
 Dependencies are always required for the dependent component itself. Whether a
 top-level failure is fatal depends on whether the dataset requested that component
 as required or optional.
