@@ -61,6 +61,8 @@ only report sets.
 - The `compatible_plugins` it compares are the upload's detection — see
   [[problems/brim-compatible-plugins-frozen-at-upload]] for when that list was stale.
 - If a move fails, an error message stays and the file remains in the original broker.
+- The check reads the wizard's broker list. Until plan 44 (train 48) a quick «Next» could run it on an empty list;
+  step 1 now waits for every broker load — [[problems/import-wizard-next-before-brokers-loaded]].
 
 ## Links
 
