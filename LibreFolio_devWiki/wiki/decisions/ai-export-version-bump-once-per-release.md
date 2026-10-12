@@ -35,6 +35,8 @@ how many bumps can accumulate before the release, and what else must move with a
    - lot 41 step F-W added an «FX on cash» row to the broker effects and lowered the residual, through the same
      builder and the same payload shape — no bump of `broker.flows_income_costs` (coordinator, 2026-10-12);
    - C-50 renamed a field only in the renderer's output, the payload staying canonical — no bump (2026-10-11).
+   - C-55 changed only the diagnostic probe, which had rejected an empty broker's `null` HHI; the prompts stayed
+     byte-identical — no bump (2026-10-12, [[problems/ai-export-probe-rejected-unavailable-hhi]]).
 2. **At most one +1 over the last released version, until the release ships** (the developer's rule, 2026-10-12): a
    component already moved in the cycle does not move again. The released reference is `v1.1.0`.
 3. **A bump updates `COMPACT_COMPONENT_VERSIONS` in the same change**, or the section silently becomes YAML. This is the

@@ -31,6 +31,8 @@ The decorator is co-located with the class — you cannot create a provider with
 ## Related
 - [[F-059]] — Provider Registry Pattern (the feature implementing this decision)
 - [[F-015]] — FX Provider Registry (FX application of this pattern)
+- *Planned (2026-10-12)*: every plugin becomes a folder, `<plugin>/plugin.py` loaded by convention, with its own
+  translations — [[decisions/plugin-folders-and-split-i18n]]
 
 ## Source files
 

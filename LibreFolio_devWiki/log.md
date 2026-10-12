@@ -2619,3 +2619,34 @@ the developer's decisions); M-15 stays open after 1.2. The index row followed.
 Registry: plan 27 round 12 re-read at `63b3e5971` (§11); plan 44 (`Phase_0/44_importWizardBrokerGate/`) read at
 `8339b0a06`.
 Checks: `check_source_paths.py` on the reference set; 0 broken wikilinks in the added text; `git diff --check` clean.
+
+## [2026-10-12] ingest | Plan 46 (V) — data-quality warnings proved on real data
+Source: `Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` @ git:`b44b28f3d`, backlog section V,
+base `e7d698c4d` (train 56; code `15bfcf1e8`, tests `2f0b06346`). Checked on the code: the specs and their runner
+actions, the helper's guards (`setup_test_database`, `verify_test_database`, exits 2 and 3), the MOCKFX provider, the
+`refreshVersion += 1` in `syncMissingFxRates` and its two listeners (`LotsAnalysisPanel`, `RiskLevelsPanel`).
+Created: [[decisions/data-quality-proved-on-real-data]] (items 21–23, D1 «(c) Entrambe», MOCKFX, the legacy-row helper,
+V-1…V-7), [[problems/open-panels-stale-after-fx-sync]] (D2), [[sources/phase00-data-quality-e2e-2026-10]].
+Updated: [[features/F-054]] (status history).
+
+## [2026-10-12] file | C-55 — the probe rejected the unavailable HHI of an empty broker
+Sources: plan 43 «C-55 — analisi» to «Checkpoint C-55» @ git:`d5497e40a`, backlog 38 C-55 @ git:`17c50ab50`, commit
+`9e495c305` (train 56). The defect was the probe's, not the product's: HHI and largest weight are `null` together on an
+empty set, by contract. Created: [[problems/ai-export-probe-rejected-unavailable-hhi]]. Updated:
+[[decisions/ai-export-version-bump-once-per-release]] (a third no-bump case), [[entities/ai-export-snapshot-service]]
+(history).
+
+## [2026-10-12] file | U — plugins as folders, i18n catalogues split by subsystem (planned)
+Not in the code at `e7d698c4d`, and U's plan 45 is not in the target: the decisions D-1, D-4, D-A, D-B and D-C of
+2026-10-12 (D-1 taken by the coordinator on the developer's delegation), quoted verbatim by the coordinator from his
+diary (not in the repository), and the origin, item 28 of the developer's server checklist. Recorded as planned, as
+the D-P7 page was before BU1. Created:
+[[decisions/plugin-folders-and-split-i18n]]. Cross-links from [[decisions/provider-registry-decision]],
+[[decisions/signal-backend-plugin-architecture]], [[decisions/i18n-key-rationalization]]. When U lands, about 84
+plugin-path citations in 47 pages will need realigning (to be assigned).
+
+## [2026-10-12] update | The connection-security guide — cross-links only
+M rewrote the user guide and added the admin page «Checking Connection Security» (`3eee17616`, train 56). Rows and a
+status-history line in [[features/F-102]], a link and a row in [[decisions/connection-security-server-never-upgrades]].
+Checks for the four entries: `check_source_paths.py` on the reference set; 0 broken wikilinks in the added text; every
+new page has inbound links besides the index; `git diff --check` clean. Graph: not updated (P-6).
