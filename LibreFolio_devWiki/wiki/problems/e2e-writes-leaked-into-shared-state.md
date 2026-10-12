@@ -10,6 +10,7 @@ related:
   - decisions/e2e-gaps-of-1-2-before-release
   - problems/bcrypt-blocks-the-event-loop
   - sources/phase00-data-quality-e2e-2026-10
+  - problems/test-passed-only-on-leftovers-of-other-tests
 ---
 
 # Problem: tests that changed the world for their neighbours
@@ -70,12 +71,34 @@ found while counting V-15).
 Proved at one and four workers (`front-fx fx-sync` 3/3, `fx-detail` 17/17, `front-utility settings` 45/45,
 `scheduler` 17/17), with the database clean after each run.
 
-**Still open**: checkpoint 2b, A4–A7, with the two new A7 cases (`tx-import-resolution` IWR-009,
+**Then open** (done in train 72, below): checkpoint 2b, A4–A7, with the two new A7 cases (`tx-import-resolution` IWR-009,
 `tx-clone`'s «clone inside the workspace»). The damage of A7 was proved on the database in train 66's journal (§12.7):
 `Test Broker`, `Private Broker`, `Unique Broker` and `T3-ws-…` left on `TEST_USER`; IWR-009 instead passes in silence —
 its selector exists only with files pending, the test adds none, so it always leaves through its conditional `return`.
 After A1–A7, the developer wants the seven E2E gaps of 1.2 closed on the
 same rules — [[decisions/e2e-gaps-of-1-2-before-release]].
+
+**Checkpoint 2b, train 72**, each item with its damage proved first, then green at one and at four workers:
+
+- **A4** (`1b1e58fd0`): the four `tx-commit` specs left 26 transactions behind at every run; they now record their
+  writes and delete them by id after each test, and FM6 opens its own pair by id.
+- **A5, A6** (`7074fd7d1`): the seed-pair specs had altered the pairs 43↔44 and 45↔46 and added a DIVIDEND on Apple;
+  C3 and TODO-B now work on a disposable account with their own pair, A6 on its own manual asset.
+- **A7, A7b, A7c** (`ad16a4d3c`): the broker writes moved to disposable accounts; IWR-009 and `tx-clone` delete what
+  they create, by id.
+- **V-20** (`d60937c08`): the fixed 3 s waits of `auth`, `app-start-auth` and `files` became waits on the state the
+  page publishes.
+- **WB4, WB5** (`1ea16aace`): the cleanup unmasked a test that passed only on the leftovers of others —
+  [[problems/test-passed-only-on-leftovers-of-other-tests]].
+- The Playwright configuration's notes now match its parallel mode and its five serial blocks (`5139f4014`).
+
+The category gates at four workers were green but for V-19 (the Spanish toolbar, fixed in the same train by
+workstream I), one mobile case red only under load, and WB5; `front-transaction all` passed 327 of 327 on the
+re-run.
+
+**Still open** (after 2b): V-21, the probes and forbidden selectors left in the cleaned specs, and the File Preview
+tests, which never delete their upload; V-17's two runner points; V-18. With A1–A7 done, the seven E2E gaps of 1.2
+come next.
 
 ## Prevention
 

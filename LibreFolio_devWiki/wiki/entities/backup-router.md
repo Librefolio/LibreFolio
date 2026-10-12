@@ -21,7 +21,7 @@ snapshot **before** running a destructive operation (Policy D currency wipe,
 provider param change, manual delete, etc.). Designed as a generic
 "dump-this-table-as-CSV-or-JSON" surface, not a transactional backup tool.
 
-Introduced 2026-04-23 (commit `8fc018ab`) to support the
+Introduced 2026-04-24 (commit `c7cf528c4`) to support the
 [[decisions/policy-d-currency-wipe]] flow end-to-end. Replaces an earlier
 ad-hoc `GET /assets/{id}/prices/export` endpoint that lived directly on the
 assets router. This router is the per-series implementation of
@@ -93,7 +93,7 @@ const eventsBlob  = await api.get(`/backup/asset/${assetId}/events?format=csv`);
 
 ## History
 
-- **2026-04-23** (commit `8fc018ab`): router created. Three endpoints. Legacy
+- **2026-04-24** (commit `c7cf528c4`): router created. Three endpoints. Legacy
   `/assets/{id}/prices/export` redirected to `/backup/asset/{id}/prices`.
 - **2026-04-25** (G-batch6): full test coverage added — 8 tests in
   `test_backup_export_extras.py`. Both new endpoints went from 0% to ~95–100%

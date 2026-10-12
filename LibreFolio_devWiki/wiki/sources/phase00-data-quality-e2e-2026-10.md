@@ -61,6 +61,15 @@ The plan grew after this page was written (registered now at `262515898`):
 - **Open in section V** after train 64: V-2, V-3, V-4, V-8 (the Risk panel with a vanished broker: a 403 and no
   re-read; needs a decision), V-11…V-20; checkpoint 2b (A4–A7) to come.
 
+## Step 2b (train 72, added 2026-10-12)
+
+The E2E specs that wrote into shared state now clean up, each with its damage proved first: A4 to A7, V-20 and the
+notes of the Playwright configuration — [[problems/e2e-writes-leaked-into-shared-state]]. The cleanup unmasked WB5,
+which passed only on other tests' leftovers — [[problems/test-passed-only-on-leftovers-of-other-tests]]. The
+backlog gained V-21 (probes, forbidden selectors and undeleted uploads left in the specs), V-22 («+ New event» can
+change an existing event while saying it created one — a product question) and V-23 (the bulk editor hides the
+read-only broker and puts the access error on the wrong row); V-20 is closed.
+
 ## Wiki pages created or updated
 
 - Created: [[decisions/data-quality-proved-on-real-data]], [[problems/open-panels-stale-after-fx-sync]].
