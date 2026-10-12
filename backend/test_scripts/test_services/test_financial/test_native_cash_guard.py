@@ -63,13 +63,14 @@ setup_test_database()
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import backend.app.services.portfolio_engine as portfolio_engine_module
+import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery
-from backend.app.services.portfolio_engine import PortfolioCalculationEngine, PortfolioCalculationResult
+from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
+from backend.app.services.financial_math.portfolio.models import PortfolioCalculationResult
 from backend.app.services.portfolio_service import PortfolioService
 
 GOLDEN_PATH = Path(__file__).resolve().parents[2] / "fixtures" / "native_cash_guard" / "eur_only_golden.json"
@@ -256,7 +257,7 @@ _POSITION_KEYED_FIELDS = frozenset({"cumulative_qty", "wac_pool_qty", "wac_pool_
 _POSITION_TUPLE_FIELDS = frozenset({"key"})
 # Ids written into text (applied after the names, so a name never reaches them).
 _ID_PATTERNS = (
-    # ScopeAwareTransactionClassifier warnings (portfolio_engine.py): a linked pair with mismatched shares ...
+    # ScopeAwareTransactionClassifier warnings (financial_math/portfolio/classifier.py): a linked pair with mismatched shares ...
     (re.compile(r"Linked internal pair \((\d+), (\d+)\)"), ("tx", "tx")),
     (re.compile(r"broker (\d+)="), ("broker",)),
     # ... and a pair whose other leg is missing

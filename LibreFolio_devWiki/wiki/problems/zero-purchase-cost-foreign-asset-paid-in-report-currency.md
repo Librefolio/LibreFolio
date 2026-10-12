@@ -125,7 +125,7 @@ effect inside the unrealized change); they are listed in [[decisions/financial-m
 | Role | Path |
 |------|------|
 | Fix: the average-cost function | `backend/app/services/financial_math/average_cost.py` |
-| Engine (where `_buy_unit_cost` lived; now `build_cost_positions` + replay) | `backend/app/services/portfolio_engine.py` |
+| Engine (where `_buy_unit_cost` lived; now `build_cost_positions` + replay) | `backend/app/services/financial_math/portfolio/derived_views.py`, `backend/app/services/financial_math/portfolio/daily_state.py` |
 | Service (realized P&L, missing pairs, `MISSING_COST_BASIS` assets) | `backend/app/services/portfolio_service.py` |
 | `IssueCode.MISSING_COST_BASIS` | `backend/app/schemas/portfolio.py` |
 | Engine / service / lots regression tests | `backend/test_scripts/test_services/test_financial/test_portfolio_cost_currency.py` |

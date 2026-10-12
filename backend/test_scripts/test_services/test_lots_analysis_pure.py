@@ -1,9 +1,11 @@
-"""Pure-calculation tests for LotsAnalysisService's private builders.
+"""Pure-calculation tests for the lots analysis builders.
 
-Isolation: PURE. Every helper exercised here is a *synchronous* method that
-receives all of its inputs as arguments and never touches ``self.db``. The
-service is therefore instantiated with ``db=None``: no session, no server, no
-shared row is read or written, so this unit can run beside anything.
+Isolation: PURE. The pure builders of the lots analysis live as plain functions
+in ``backend/app/services/financial_math/lots/`` and are called directly. The
+sync DTO builders that remain on ``LotsAnalysisService`` receive all of their
+inputs as arguments and never touch ``self.db``, so they are still called on a
+session-less ``LotsAnalysisService(db=None)``: no session, no server, no shared
+row is read or written, so this unit can run beside anything.
 
 Why these tests exist. The public entry point ``get_lots_analysis`` is covered
 by the API/e2e suites, but only over the mock dataset, which contains a single
@@ -24,18 +26,11 @@ from decimal import Decimal
 
 import pytest
 
-import backend.app.services.lots_analysis_service as module
+import backend.app.services.financial_math.lots.conversions as conversions_module
 from backend.app.db.models import PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import BrokerWACHistoryPoint, CumulativeWACHistoryPoint, LotAnalysisType
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.fifo_lot_engine import (
-    FifoEngineResult,
-    FifoEvent,
-    FifoLot,
-    FragmentInterval,
-    LotClosure,
-)
 from backend.app.services.financial_math.average_cost import (
     AverageCost,
     CostMovement,
@@ -45,13 +40,22 @@ from backend.app.services.financial_math.average_cost import (
     _fold_average_costs,
     _ResolvedConversion,
 )
-from backend.app.services.lots_analysis_service import (
-    LotsAnalysisService,
-    _FxRateResolver,
-    _parse_transfer_pair_id,
-    _PerformanceSourceContext,
-    _PriceHistoryLookup,
+from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoLot, FragmentInterval, LotClosure
+from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, average_cost_points, build_broker_wac_history, build_cumulative_wac_history
+from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs
+from backend.app.services.financial_math.lots.economic_events import build_cost_economic_events, build_engine_transactions, build_income_economic_events
+from backend.app.services.financial_math.lots.histories import (
+    PerformanceSourceContext,
+    adjustment_cash_flow_cost,
+    build_performance_history,
+    build_price_history,
+    build_return_history,
+    build_value_history,
+    known_cumulative_proceeds,
+    lot_history_end_date,
 )
+from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, opening_reference_price
+from backend.app.services.lots_analysis_service import LotsAnalysisService, _parse_transfer_pair_id
 
 # --------------------------------------------------------------------------- #
 # Builders
@@ -65,14 +69,14 @@ def _svc() -> LotsAnalysisService:
     return LotsAnalysisService(db=None)
 
 
-def _resolver(target: str = "EUR", rates: dict | None = None) -> _FxRateResolver:
-    """An _FxRateResolver with its rate table already populated.
+def _resolver(target: str = "EUR", rates: dict | None = None) -> FxRateResolver:
+    """An FxRateResolver with its rate table already populated.
 
     ``load()`` is the only async part of the resolver and the only part that
     needs a session; it merely fills ``_rates`` with one converted unit per
     (currency, date). Filling that table directly is what keeps this unit PURE.
     """
-    resolver = _FxRateResolver(target)
+    resolver = FxRateResolver(target)
     for key, rate in (rates or {}).items():
         resolver._rates[key] = rate
     return resolver
@@ -217,9 +221,9 @@ def _perf_context(
     fragments_by_lot: dict[int, list[FragmentInterval]] | None = None,
     closures_by_lot: dict[int, list[LotClosure]] | None = None,
     tx_by_id: dict[int, Transaction] | None = None,
-) -> _PerformanceSourceContext:
+) -> PerformanceSourceContext:
     txs = transactions if transactions is not None else []
-    return _PerformanceSourceContext(
+    return PerformanceSourceContext(
         transactions=txs,
         engine_result=engine_result or _engine_result(),
         lots_by_id=lots_by_id or {},
@@ -234,42 +238,42 @@ def _days(start: date, count: int) -> list[date]:
 
 
 # --------------------------------------------------------------------------- #
-# _PriceHistoryLookup
+# PriceHistoryLookup
 # --------------------------------------------------------------------------- #
 
 
 class TestPriceHistoryLookup:
     def test_resolve_returns_none_when_asset_has_no_usable_prices(self):
         """An unlisted asset: no PriceHistory row was ever stored for it."""
-        assert _PriceHistoryLookup([]).resolve(date(2024, 3, 1)) is None
+        assert PriceHistoryLookup([]).resolve(date(2024, 3, 1)) is None
 
     def test_resolve_returns_none_before_the_first_known_price(self):
         """A lot opened before the asset started being quoted has nothing to fall back to."""
-        lookup = _PriceHistoryLookup([_price(date(2024, 5, 1))])
+        lookup = PriceHistoryLookup([_price(date(2024, 5, 1))])
         assert lookup.resolve(date(2024, 4, 30)) is None
 
     def test_resolve_uses_the_latest_price_at_or_before_the_query_date(self):
-        lookup = _PriceHistoryLookup([_price(date(2024, 5, 1), D("10")), _price(date(2024, 5, 6), D("12"))])
+        lookup = PriceHistoryLookup([_price(date(2024, 5, 1), D("10")), _price(date(2024, 5, 6), D("12"))])
         resolved = lookup.resolve(date(2024, 5, 4))
         assert (resolved.price, resolved.resolved_date, resolved.source) == (D("10"), date(2024, 5, 1), "fallback")
 
     def test_resolve_marks_an_exact_date_hit_as_exact(self):
-        lookup = _PriceHistoryLookup([_price(date(2024, 5, 1), D("10"))])
-        assert _PriceHistoryLookup([_price(date(2024, 5, 1), D("10"))]).resolve(date(2024, 5, 1)).source == "exact"
+        lookup = PriceHistoryLookup([_price(date(2024, 5, 1), D("10"))])
+        assert PriceHistoryLookup([_price(date(2024, 5, 1), D("10"))]).resolve(date(2024, 5, 1)).source == "exact"
         assert lookup.latest().resolved_date == date(2024, 5, 1)
 
     def test_latest_returns_none_when_there_are_no_rows(self):
         """This is exactly what puts the whole analysis into estimated_mode."""
-        assert _PriceHistoryLookup([]).latest() is None
+        assert PriceHistoryLookup([]).latest() is None
 
     def test_rows_with_a_null_close_are_ignored(self):
         """A PriceHistory row can carry only volume/open; it is not a usable quote."""
-        lookup = _PriceHistoryLookup([_price(date(2024, 5, 1), None)])
+        lookup = PriceHistoryLookup([_price(date(2024, 5, 1), None)])
         assert lookup.latest() is None
 
 
 # --------------------------------------------------------------------------- #
-# _FxRateResolver
+# FxRateResolver
 # --------------------------------------------------------------------------- #
 
 
@@ -363,7 +367,7 @@ class TestResolveSelectedLotIds:
 
 
 # --------------------------------------------------------------------------- #
-# _collect_fx_needs
+# collect_fx_needs
 # --------------------------------------------------------------------------- #
 
 
@@ -375,7 +379,7 @@ class TestCollectFxNeeds:
             "lots_by_id": {},
             "selected_ids": [],
             "transactions": [],
-            "price_lookup": _PriceHistoryLookup([]),
+            "price_lookup": PriceHistoryLookup([]),
             "prices": [],
             "fragments": [],
             "events": [],
@@ -386,7 +390,7 @@ class TestCollectFxNeeds:
             "asset_currency": "EUR",
         }
         kwargs.update(overrides)
-        _svc()._collect_fx_needs(**kwargs)
+        collect_fx_needs(**kwargs)
 
     def test_wac_analyses_ask_the_lots_resolver_for_no_rate(self):
         """The WAC lines convert through financial_math.average_cost, each acquisition at its own date.
@@ -424,7 +428,7 @@ class TestCollectFxNeeds:
             analyses=[LotAnalysisType.LOT_SUMMARY],
             lots_by_id={1: lot},
             selected_ids=[1],
-            price_lookup=_PriceHistoryLookup([]),
+            price_lookup=PriceHistoryLookup([]),
         )
         assert resolver._needs == []
 
@@ -471,7 +475,7 @@ class TestCollectFxNeeds:
 
 
 # --------------------------------------------------------------------------- #
-# _collect_performance_fx_needs
+# collect_performance_fx_needs
 # --------------------------------------------------------------------------- #
 
 
@@ -486,7 +490,7 @@ class TestCollectPerformanceFxNeeds:
             "asset_currency": "EUR",
         }
         kwargs.update(overrides)
-        _svc()._collect_performance_fx_needs(**kwargs)
+        collect_performance_fx_needs(**kwargs)
 
     def test_does_nothing_when_performance_history_was_not_requested(self):
         resolver = _resolver("EUR")
@@ -570,14 +574,14 @@ class TestCollectPerformanceFxNeeds:
 
 
 # --------------------------------------------------------------------------- #
-# _adjustment_cash_flow_cost
+# adjustment_cash_flow_cost
 # --------------------------------------------------------------------------- #
 
 
 class TestAdjustmentCashFlowCost:
     def test_prefers_the_cost_basis_override_times_the_quantity(self):
         """The declared unit cost of an ADJUSTMENT-in is the external money that went in."""
-        cost = _svc()._adjustment_cash_flow_cost(
+        cost = adjustment_cash_flow_cost(
             tx=_tx(1, tx_type=TransactionType.ADJUSTMENT, quantity=D("10"), amount=D("-999"), cost_basis_override=D("7"), cost_basis_currency="EUR"),
             asset_currency="EUR",
             fx_resolver=_resolver("EUR"),
@@ -585,7 +589,7 @@ class TestAdjustmentCashFlowCost:
         assert cost == D("70")
 
     def test_converts_the_override_into_the_target_currency(self):
-        cost = _svc()._adjustment_cash_flow_cost(
+        cost = adjustment_cash_flow_cost(
             tx=_tx(1, tx_type=TransactionType.ADJUSTMENT, quantity=D("10"), amount=D("0"), cost_basis_override=D("7"), cost_basis_currency="USD"),
             asset_currency="EUR",
             fx_resolver=_resolver("EUR", {("USD", date(2024, 1, 10)): D("0.5")}),
@@ -593,7 +597,7 @@ class TestAdjustmentCashFlowCost:
         assert cost == D("35.0")
 
     def test_falls_back_to_the_transaction_amount_when_no_override_is_set(self):
-        cost = _svc()._adjustment_cash_flow_cost(
+        cost = adjustment_cash_flow_cost(
             tx=_tx(1, tx_type=TransactionType.ADJUSTMENT, quantity=D("10"), amount=D("-250"), currency="EUR"),
             asset_currency="EUR",
             fx_resolver=_resolver("EUR"),
@@ -602,7 +606,7 @@ class TestAdjustmentCashFlowCost:
 
     def test_returns_none_when_the_adjustment_carries_no_money_at_all(self):
         """A quantity-only correction must not inject a phantom cash flow."""
-        cost = _svc()._adjustment_cash_flow_cost(
+        cost = adjustment_cash_flow_cost(
             tx=_tx(1, tx_type=TransactionType.ADJUSTMENT, quantity=D("10"), amount=D("0"), currency="EUR"),
             asset_currency="EUR",
             fx_resolver=_resolver("EUR"),
@@ -615,7 +619,7 @@ class TestAdjustmentCashFlowCost:
 # --------------------------------------------------------------------------- #
 #
 # The WAC lines are financial_math.average_cost lines: one per broker and one for every broker
-# together (keyed module._ALL_BROKERS), built by _compute_average_cost_lines with a single
+# together (keyed ALL_BROKERS), built by _compute_average_cost_lines with a single
 # compute_average_costs call. Here the lines come from the same pure fold, _fold_average_costs,
 # with the conversions it would have received already resolved -- which keeps this unit PURE.
 
@@ -639,17 +643,17 @@ def _line(key, *movements: CostMovement, resolved: dict | None = None) -> Averag
 
 
 class TestAverageCostPoints:
-    """``_average_cost_points``: (date, WAC, pool quantity) for each history date, read off one line."""
+    """``average_cost_points``: (date, WAC, pool quantity) for each history date, read off one line."""
 
     def test_a_line_without_movements_has_no_point(self):
         """A broker in scope that never traded this asset must not emit flat-zero points."""
-        assert LotsAnalysisService._average_cost_points(_line(1), _days(date(2024, 1, 1), 3)) == []
+        assert average_cost_points(_line(1), _days(date(2024, 1, 1), 3)) == []
 
     def test_dates_before_the_first_movement_have_no_point(self):
         """The pool does not exist yet, so there is no average cost to report."""
         line = _line(1, _acquired(date(2024, 1, 3), "10", "50"))
 
-        points = LotsAnalysisService._average_cost_points(line, _days(date(2024, 1, 1), 4))
+        points = average_cost_points(line, _days(date(2024, 1, 1), 4))
 
         assert points == [(date(2024, 1, 3), D("5"), D("10")), (date(2024, 1, 4), D("5"), D("10"))]
 
@@ -657,7 +661,7 @@ class TestAverageCostPoints:
         """10 for 50, then on one day 10 for 150 and a sale of 5 (purchase first): 5 → 10 per unit, 10 → 15 units."""
         line = _line(1, _acquired(date(2024, 1, 1), "10", "50"), _sold(date(2024, 1, 3), "-5"), _acquired(date(2024, 1, 3), "10", "150"))
 
-        points = LotsAnalysisService._average_cost_points(line, _days(date(2024, 1, 1), 4))
+        points = average_cost_points(line, _days(date(2024, 1, 1), 4))
 
         assert points == [
             (date(2024, 1, 1), D("5"), D("10")),
@@ -672,7 +676,7 @@ class TestAverageCostPoints:
         resolved = {_ConversionRequest("USD", "EUR", date(2024, 1, 2), D("100")): _ResolvedConversion(amount=D("90"), rate_date=date(2024, 1, 2))}
         line = _line(1, _acquired(date(2024, 1, 1), "10", "110"), paid_in_usd, resolved=resolved)
 
-        points = LotsAnalysisService._average_cost_points(line, _days(date(2024, 1, 1), 2))
+        points = average_cost_points(line, _days(date(2024, 1, 1), 2))
 
         assert points == [(date(2024, 1, 1), D("11"), D("10")), (date(2024, 1, 2), D("10"), D("20"))]
 
@@ -687,7 +691,7 @@ class TestAverageCostPoints:
         )
         assert line.has_missing_report_fx, "precondition: the fold reports the MGA purchase as unconverted"
 
-        points = LotsAnalysisService._average_cost_points(line, _days(date(2024, 1, 1), 8))
+        points = average_cost_points(line, _days(date(2024, 1, 1), 8))
 
         assert points == [
             (date(2024, 1, 1), D("10"), D("10")),
@@ -700,7 +704,7 @@ class TestAverageCostPoints:
 
 
 # --------------------------------------------------------------------------- #
-# _build_performance_history
+# build_performance_history
 # --------------------------------------------------------------------------- #
 
 
@@ -716,7 +720,7 @@ class TestBuildPerformanceHistory:
             "quote_base_quantity": 1,
         }
         kwargs.update(overrides)
-        return _svc()._build_performance_history(**kwargs)
+        return build_performance_history(**kwargs)
 
     def test_a_day_without_a_market_price_produces_no_nav_snapshot(self):
         """A market holiday inside the window: NAV is unknown, not carried forward."""
@@ -1047,7 +1051,7 @@ class TestBuildLotSummaries:
             "selected_ids": [1],
             "fx_resolver": _resolver("EUR"),
             "market_prices": {date(2024, 2, 1): D("12")},
-            "price_lookup": _PriceHistoryLookup([_price(date(2024, 1, 10), D("10"))]),
+            "price_lookup": PriceHistoryLookup([_price(date(2024, 1, 10), D("10"))]),
             "closures_by_lot": {},
             "income_by_lot": {},
             "fees_by_lot": {},
@@ -1203,7 +1207,7 @@ class TestBuildLotSummaries:
 
 
 # --------------------------------------------------------------------------- #
-# _build_value_history / _build_return_history
+# build_value_history / build_return_history
 # --------------------------------------------------------------------------- #
 
 
@@ -1227,7 +1231,7 @@ class TestBuildValueAndReturnHistory:
             "quote_base_quantity": 1,
         }
         kwargs.update(overrides)
-        return _svc()._build_value_history(**kwargs)
+        return build_value_history(**kwargs)
 
     def _returns(self, **overrides):
         lot = overrides.pop("lot", _lot(1))
@@ -1236,7 +1240,7 @@ class TestBuildValueAndReturnHistory:
             "lots_by_id": {1: lot},
             "fragments_by_lot": {1: [_fragment(1)]},
             "market_prices": {},
-            "price_lookup": _PriceHistoryLookup([_price(date(2024, 1, 10), D("10"))]),
+            "price_lookup": PriceHistoryLookup([_price(date(2024, 1, 10), D("10"))]),
             "fx_resolver": _resolver("EUR"),
             "history_dates": _days(date(2024, 1, 10), 3),
             "closures_by_lot": {},
@@ -1247,7 +1251,7 @@ class TestBuildValueAndReturnHistory:
             "quote_base_quantity": 1,
         }
         kwargs.update(overrides)
-        return _svc()._build_return_history(**kwargs)
+        return build_return_history(**kwargs)
 
     # -- market price missing, position already closed ----------------------- #
 
@@ -1331,7 +1335,7 @@ class TestBuildValueAndReturnHistory:
         """The asset had no quote at the opening date and the lot was booked at zero."""
         points = self._returns(
             lot=_lot(1, opening_unit_price=D("0"), original_cost=D("1000")),
-            price_lookup=_PriceHistoryLookup([]),
+            price_lookup=PriceHistoryLookup([]),
             market_prices={date(2024, 1, 11): D("12")},
         )
         assert next(p for p in points if p.date == date(2024, 1, 11)).relative_return is None
@@ -1413,17 +1417,17 @@ class TestSmallBuilders:
     def test_known_cumulative_proceeds_of_a_short_lot_uses_the_lot_total(self):
         """A short's proceeds arrived at opening, not at each closure."""
         lot = _lot(1, direction="SHORT", cumulative_proceeds=D("1500"), currency="USD")
-        value = _svc()._known_cumulative_proceeds(lot, [], _resolver("EUR", {("USD", date(2024, 1, 10)): D("0.5")}))
+        value = known_cumulative_proceeds(lot, [], _resolver("EUR", {("USD", date(2024, 1, 10)): D("0.5")}))
         assert value == D("750.0")
 
     def test_known_cumulative_proceeds_of_a_short_lot_without_a_rate_are_unknown(self):
         """B3b: no rate at the opening date leaves them unknown, never the native 1500 USD read as euros."""
         lot = _lot(1, direction="SHORT", cumulative_proceeds=D("1500"), currency="USD")
-        assert _svc()._known_cumulative_proceeds(lot, [], _resolver("EUR")) is None
+        assert known_cumulative_proceeds(lot, [], _resolver("EUR")) is None
 
     def test_known_cumulative_proceeds_of_a_long_lot_sums_its_closures(self):
         lot = _lot(1)
-        value = _svc()._known_cumulative_proceeds(lot, [_closure(1, proceeds=D("300")), _closure(1, proceeds=D("200"))], _resolver("EUR"))
+        value = known_cumulative_proceeds(lot, [_closure(1, proceeds=D("300")), _closure(1, proceeds=D("200"))], _resolver("EUR"))
         assert value == D("500")
 
     def test_gantt_ignores_fragments_of_unselected_lots(self):
@@ -1456,7 +1460,7 @@ class TestSmallBuilders:
 
     def test_income_events_skip_a_transaction_with_no_asset(self):
         """A broker-level dividend not attributed to an asset cannot be allocated to a lot."""
-        events = _svc()._build_income_economic_events(
+        events = build_income_economic_events(
             income_transactions=[
                 _tx(1, tx_type=TransactionType.DIVIDEND, asset_id=None, amount=D("50")),
                 _tx(2, tx_type=TransactionType.DIVIDEND, amount=D("50")),
@@ -1469,7 +1473,7 @@ class TestSmallBuilders:
 
     def test_cost_events_skip_a_transaction_with_no_amount(self):
         """A FEE row with a null amount carries nothing to allocate."""
-        events = _svc()._build_cost_economic_events(
+        events = build_cost_economic_events(
             cost_transactions=[
                 _tx(1, tx_type=TransactionType.FEE, amount=None),
                 _tx(2, tx_type=TransactionType.FEE, amount=D("-10")),
@@ -1482,7 +1486,7 @@ class TestSmallBuilders:
 
     def test_engine_transactions_leave_a_non_trade_unconverted(self):
         """Only BUY/SELL carry a controvalue the engine needs pre-converted."""
-        rows = _svc()._build_engine_transactions(
+        rows = build_engine_transactions(
             [_tx(1, tx_type=TransactionType.ADJUSTMENT, quantity=D("10"), amount=D("-100"), currency="USD")],
             _resolver("EUR", {("USD", date(2024, 1, 10)): D("0.5")}),
             "EUR",
@@ -1492,7 +1496,7 @@ class TestSmallBuilders:
 
     def test_engine_transactions_convert_a_trade_controvalue(self):
         """The sign of the controvalue is preserved: a BUY stays negative."""
-        rows = _svc()._build_engine_transactions(
+        rows = build_engine_transactions(
             [_tx(1, amount=D("-1000"), currency="USD")],
             _resolver("EUR", {("USD", date(2024, 1, 10)): D("0.5")}),
             "EUR",
@@ -1503,22 +1507,22 @@ class TestSmallBuilders:
     def test_opening_reference_price_returns_nothing_when_no_quote_exists(self):
         """The lot knows its reference price but the quote series is empty."""
         lot = _lot(1, reference_unit_price=D("9"), reference_price_source="fallback")
-        price, currency, resolved_date, source = _svc()._opening_reference_price(lot, _PriceHistoryLookup([]))
+        price, currency, resolved_date, source = opening_reference_price(lot, PriceHistoryLookup([]))
         assert (price, currency, resolved_date, source) == (None, None, lot.opening_date, "fallback")
 
     def test_opening_reference_price_uses_the_resolved_quote_currency(self):
         lot = _lot(1, reference_unit_price=D("9"))
-        lookup = _PriceHistoryLookup([_price(date(2024, 1, 8), D("9"), "USD")])
-        price, currency, resolved_date, _source = _svc()._opening_reference_price(lot, lookup)
+        lookup = PriceHistoryLookup([_price(date(2024, 1, 8), D("9"), "USD")])
+        price, currency, resolved_date, _source = opening_reference_price(lot, lookup)
         assert (price, currency, resolved_date) == (D("9"), "USD", date(2024, 1, 8))
 
     def test_opening_reference_price_scales_the_buy_price_by_the_quote_base(self):
         """A bond quoted per 100 units: the entry price must land on the same axis."""
-        price, _currency, _resolved, source = _svc()._opening_reference_price(_lot(1, opening_unit_price=D("0.98")), _PriceHistoryLookup([]), 100)
+        price, _currency, _resolved, source = opening_reference_price(_lot(1, opening_unit_price=D("0.98")), PriceHistoryLookup([]), 100)
         assert (price, source) == (D("98.00"), "exact")
 
     def test_price_history_skips_days_with_no_estimated_price(self):
-        points = _svc()._build_price_history(
+        points = build_price_history(
             selected_ids=[1],
             lots_by_id={1: _lot(1)},
             estimated_market_prices={date(2024, 1, 11): (D("12"), True)},
@@ -1547,17 +1551,17 @@ class TestSmallBuilders:
         assert _svc()._impacted_lot_ids_for_split(event, [_fragment(5, broker_id=99)]) == set()
 
     def test_a_closed_lot_with_no_closures_ends_on_its_opening_date(self):
-        assert _svc()._lot_history_end_date(_lot(1, open_quantity=D("0")), [], date(2024, 6, 1)) == date(2024, 1, 10)
+        assert lot_history_end_date(_lot(1, open_quantity=D("0")), [], date(2024, 6, 1)) == date(2024, 1, 10)
 
     def test_a_closed_lot_ends_on_its_last_closure(self):
-        end = _svc()._lot_history_end_date(_lot(1, open_quantity=D("0")), [_closure(1, close_date=date(2024, 2, 5))], date(2024, 6, 1))
+        end = lot_history_end_date(_lot(1, open_quantity=D("0")), [_closure(1, close_date=date(2024, 2, 5))], date(2024, 6, 1))
         assert end == date(2024, 2, 5)
 
     def test_an_open_lot_runs_to_the_end_of_the_window(self):
-        assert _svc()._lot_history_end_date(_lot(1), [], date(2024, 6, 1)) == date(2024, 6, 1)
+        assert lot_history_end_date(_lot(1), [], date(2024, 6, 1)) == date(2024, 6, 1)
 
     def test_extend_closed_runs_a_closed_lot_to_the_end_of_the_window(self):
-        end = _svc()._lot_history_end_date(_lot(1, open_quantity=D("0")), [_closure(1)], date(2024, 6, 1), extend_closed=True)
+        end = lot_history_end_date(_lot(1, open_quantity=D("0")), [_closure(1)], date(2024, 6, 1), extend_closed=True)
         assert end == date(2024, 6, 1)
 
 
@@ -1568,7 +1572,7 @@ class TestWacHistoryBuilders:
         """Broker 2 is in the analysis scope but never traded this asset: it has no line, so no series at all."""
         lines = {1: _line(1, _acquired(date(2024, 1, 10), "10", "50"))}
 
-        points = _svc()._build_broker_wac_history([1, 2], lines, _days(date(2024, 1, 10), 2))
+        points = build_broker_wac_history([1, 2], lines, _days(date(2024, 1, 10), 2))
 
         assert points == [
             BrokerWACHistoryPoint(date=date(2024, 1, 10), broker_id=1, wac=D("5"), pool_qty=D("10")),
@@ -1580,10 +1584,10 @@ class TestWacHistoryBuilders:
         lines = {
             1: _line(1, _acquired(date(2024, 1, 10), "10", "50")),
             2: _line(2, _acquired(date(2024, 1, 11), "5", "100")),
-            module._ALL_BROKERS: _line(module._ALL_BROKERS, _acquired(date(2024, 1, 10), "10", "50"), _acquired(date(2024, 1, 11), "5", "100")),
+            ALL_BROKERS: _line(ALL_BROKERS, _acquired(date(2024, 1, 10), "10", "50"), _acquired(date(2024, 1, 11), "5", "100")),
         }
 
-        points = _svc()._build_broker_wac_history([2, 1], lines, _days(date(2024, 1, 10), 2))
+        points = build_broker_wac_history([2, 1], lines, _days(date(2024, 1, 10), 2))
 
         assert [(point.broker_id, point.date, point.wac, point.pool_qty) for point in points] == [
             (2, date(2024, 1, 11), D("20"), D("5")),
@@ -1596,10 +1600,10 @@ class TestWacHistoryBuilders:
         lines = {
             1: _line(1, _acquired(date(2024, 1, 10), "10", "50")),
             2: _line(2, _acquired(date(2024, 1, 11), "5", "100")),
-            module._ALL_BROKERS: _line(module._ALL_BROKERS, _acquired(date(2024, 1, 10), "10", "50"), _acquired(date(2024, 1, 11), "5", "100")),
+            ALL_BROKERS: _line(ALL_BROKERS, _acquired(date(2024, 1, 10), "10", "50"), _acquired(date(2024, 1, 11), "5", "100")),
         }
 
-        points = _svc()._build_cumulative_wac_history(lines, _days(date(2024, 1, 10), 2))
+        points = build_cumulative_wac_history(lines, _days(date(2024, 1, 10), 2))
 
         assert points == [
             CumulativeWACHistoryPoint(date=date(2024, 1, 10), wac=D("5"), pool_qty=D("10")),
@@ -1607,8 +1611,8 @@ class TestWacHistoryBuilders:
         ]
 
     def test_an_asset_without_an_all_brokers_line_has_no_cumulative_history(self):
-        assert _svc()._build_cumulative_wac_history({}, _days(date(2024, 1, 10), 2)) == []
-        assert _svc()._build_cumulative_wac_history({1: _line(1, _acquired(date(2024, 1, 10), "10", "50"))}, _days(date(2024, 1, 10), 2)) == []
+        assert build_cumulative_wac_history({}, _days(date(2024, 1, 10), 2)) == []
+        assert build_cumulative_wac_history({1: _line(1, _acquired(date(2024, 1, 10), "10", "50"))}, _days(date(2024, 1, 10), 2)) == []
 
 
 class TestEmptyResponse:
@@ -1648,7 +1652,7 @@ class TestGetLotsAnalysisArgumentGuard:
 
 
 class TestFxRateResolverLoad:
-    """``load`` is the resolver's only async step; convert_bulk is stubbed, so no session."""
+    """``load`` is the resolver's only async step; convert_bulk is stubbed where ``conversions`` reads it, so no session."""
 
     @pytest.mark.asyncio
     async def test_a_day_with_no_published_rate_is_left_unresolved(self, monkeypatch):
@@ -1657,8 +1661,8 @@ class TestFxRateResolverLoad:
         async def fake_convert_bulk(_session, conversions, raise_on_error=False):
             return [None] * len(conversions), []
 
-        monkeypatch.setattr(module, "convert_bulk", fake_convert_bulk)
-        resolver = _FxRateResolver("EUR")
+        monkeypatch.setattr(conversions_module, "convert_bulk", fake_convert_bulk)
+        resolver = FxRateResolver("EUR")
         resolver.need("USD", date(2024, 1, 10))
         await resolver.load(None)
         assert resolver.convert(D("100"), "USD", date(2024, 1, 10)) is None
@@ -1671,8 +1675,8 @@ class TestFxRateResolverLoad:
             calls.append(len(conversions))
             return [(Currency(code="EUR", amount=D("0.9")), date(2024, 1, 10), False)], []
 
-        monkeypatch.setattr(module, "convert_bulk", fake_convert_bulk)
-        resolver = _FxRateResolver("EUR")
+        monkeypatch.setattr(conversions_module, "convert_bulk", fake_convert_bulk)
+        resolver = FxRateResolver("EUR")
         resolver.need("USD", date(2024, 1, 10))
         await resolver.load(None)
         await resolver.load(None)  # nothing pending the second time

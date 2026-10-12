@@ -71,7 +71,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.native_cash as native_cash_module
-import backend.app.services.portfolio_engine as portfolio_engine_module
+import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Broker, BrokerUserAccess, FxRate, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine

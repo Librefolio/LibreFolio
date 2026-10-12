@@ -111,7 +111,7 @@ repairs it.
 | Role | Path |
 |------|------|
 | `convert_bulk()` — unlimited backward-fill, flag and debug log | `backend/app/services/fx.py` |
-| Engine FX preload — discards date and flag | `backend/app/services/portfolio_engine.py` |
+| Engine FX preload — discards date and flag | `backend/app/services/financial_math/portfolio/engine.py` |
 | Carried-forward FX count for Risk and Signals | `backend/app/services/series_preparation.py` |
 | Staleness threshold (7 days) | `backend/app/services/data_quality_thresholds.py` |
 | `DataQualityReport.carried_forward_fx_*`, `MISSING_FX_RATES` | `backend/app/schemas/portfolio.py` |

@@ -86,7 +86,7 @@ previously pointed at `transaction_service.py`, which is stale (see History belo
 
 | Role | Path |
 |------|------|
-| Engine | `backend/app/services/fifo_lot_engine.py` |
+| Engine | `backend/app/services/financial_math/fifo/engine.py` |
 | Orchestration service (calls the engine) | `backend/app/services/lots_analysis_service.py` |
 | Public DTO | `backend/app/schemas/portfolio.py` |
 | Engine-level tests | `backend/test_scripts/test_services/test_financial/test_fifo_lot_engine.py` |

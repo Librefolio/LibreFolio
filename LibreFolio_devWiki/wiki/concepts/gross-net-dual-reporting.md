@@ -43,7 +43,7 @@ See [[decisions/fifo-v4-gross-net-status-model]] for the full decision record, i
 ## Source files
 | File |
 |------|
-| `backend/app/services/fifo_lot_engine.py` |
+| `backend/app/services/financial_math/fifo/models.py`, `backend/app/services/financial_math/fifo/engine.py` |
 | `backend/app/schemas/portfolio.py` |
 | `frontend/src/lib/components/brokers/lots/UnifiedLotsTable.svelte` |
 | `frontend/src/lib/components/brokers/lots/LotCustodyModal.svelte` |

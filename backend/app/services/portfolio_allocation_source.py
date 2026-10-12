@@ -38,6 +38,7 @@ from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceWacFxEvidence,
     PortfolioPlannerWacContext,
 )
+from backend.app.services.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.sector_fin_utils import FinancialSector
 
@@ -1315,9 +1316,9 @@ async def _build_planner_current_distribution(  # noqa: C901 — per-Asset valua
     The denominator is the scenario instead of every holding and cash stays out; a
     held Asset without a valuation withholds every weight instead of vanishing.
     """
-    # Lazy: portfolio_service imports this module at load time.
-    from backend.app.services.portfolio_engine import PortfolioCalculationEngine, ValuationSource  # noqa: PLC0415
-    from backend.app.services.portfolio_service import _QUANTITY_DUST_THRESHOLD  # noqa: PLC0415
+    # Lazy: read at call time, so a test can replace PortfolioCalculationEngine on its module.
+    from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
+    from backend.app.services.financial_math.portfolio.models import ValuationSource  # noqa: PLC0415
 
     engine_result = await PortfolioCalculationEngine(session).calculate(
         user_id=user_id,
@@ -1329,7 +1330,7 @@ async def _build_planner_current_distribution(  # noqa: C901 — per-Asset valua
     scenario = set(scenario_asset_ids)
     positions_by_asset: dict[int, list] = defaultdict(list)
     for position in engine_result.position_states_end:
-        if position.asset_id in scenario and position.quantity > _QUANTITY_DUST_THRESHOLD:
+        if position.asset_id in scenario and position.quantity > QUANTITY_DUST_THRESHOLD:
             positions_by_asset[position.asset_id].append(position)
 
     values: dict[int, Decimal] = {}

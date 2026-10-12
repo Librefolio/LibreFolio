@@ -72,7 +72,7 @@ obvious implementation that gives a wrong answer.
 
 | Role | Path |
 |------|------|
-| Daily replay, `build_broker_pnl_history`, `build_pnl_candles` | `backend/app/services/portfolio_engine.py` |
+| Daily replay, `build_broker_pnl_history`, `build_pnl_candles` | `backend/app/services/financial_math/portfolio/daily_state.py`, `backend/app/services/financial_math/portfolio/derived_views.py` |
 | `get_broker_pnl_history`, report assembly | `backend/app/services/portfolio_service.py` |
 | Report flags (`include_*`) and series schemas | `backend/app/schemas/portfolio.py` |
 | Growth chart (P&L mode, sub-modes, candles, income) | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |

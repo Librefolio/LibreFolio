@@ -8,7 +8,7 @@ Contains:
 
 PortfolioService uses:
 - the portfolio engine for valuation, cost basis (financial_math.average_cost) and realized sales
-- ROI utils for TWRR/MWRR/Simple ROI
+- financial_math.returns for TWRR/MWRR/Simple ROI
 - FX service for currency conversion
 - Transaction, Broker, Asset, PriceHistory DB models
 """
@@ -84,15 +84,7 @@ from backend.app.services.financial_math.average_cost import (
     determine_target_currency,
 )
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST, NativeCash, cash_movement_from_transaction, compute_native_cash, effective_share
-from backend.app.services.fx import convert_bulk
-from backend.app.services.settings_service import get_effective_base_currency
-from backend.app.services.yield_on_cost import (
-    YieldOnCostPositionInput,
-    calculate_yield_on_cost_for_positions,
-    compute_yield_on_cost_dependency_identity,
-)
-from backend.app.utils.cache_utils import get_ttl_cache
-from backend.app.utils.financial.roi_utils import (
+from backend.app.services.financial_math.returns import (
     CashFlowInput,
     NAVSnapshot,
     annualized_to_cumulative,
@@ -104,7 +96,15 @@ from backend.app.utils.financial.roi_utils import (
     calculate_twrr_series,
     cumulative_to_annualized,
 )
-from backend.app.utils.financial.valuation_utils import compute_holding_value
+from backend.app.services.financial_math.valuation import compute_holding_value
+from backend.app.services.financial_math.yield_on_cost import (
+    YieldOnCostPositionInput,
+    calculate_yield_on_cost_for_positions,
+    compute_yield_on_cost_dependency_identity,
+)
+from backend.app.services.fx import convert_bulk
+from backend.app.services.settings_service import get_effective_base_currency
+from backend.app.utils.cache_utils import get_ttl_cache
 
 _logger = structlog.get_logger(__name__)
 
@@ -576,21 +576,8 @@ class PortfolioService:
             merged[item.pair].update(item.dates)
         return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(merged.items())]
 
-    @staticmethod
-    def _normalize_fx_pair_slug(base_or_pair: str, quote: str | None = None) -> str:
-        if quote is None:
-            parts = [p.strip().upper() for p in base_or_pair.replace("/", "-").split("-") if p.strip()]
-            if len(parts) < 2:
-                return base_or_pair.strip().upper()
-            base, quote = parts[:2]
-        else:
-            base = base_or_pair.strip().upper()
-            quote = quote.strip().upper()
-        first, second = sorted((base, quote))
-        return f"{first}-{second}"
-
     async def _get_configured_fx_pair_sets(self) -> tuple[set[str], set[str]]:
-        from backend.app.services.portfolio_engine import load_configured_fx_pair_sets  # noqa: PLC0415 — same lazy engine import as the methods below
+        from backend.app.services.financial_math.portfolio.data_quality import load_configured_fx_pair_sets  # noqa: PLC0415 — same lazy engine import as the methods below
 
         return await load_configured_fx_pair_sets(self.db)
 
@@ -688,11 +675,9 @@ class PortfolioService:
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
         """
         from backend.app.services.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS  # noqa: PLC0415
-        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
-            DerivedViewsBuilder,
-            PortfolioCalculationEngine,
-            ValuationSource,
-        )
+        from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
+        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
+        from backend.app.services.financial_math.portfolio.models import ValuationSource  # noqa: PLC0415
 
         today = date_type.today()
         valuation_date = date_to or today
@@ -1229,10 +1214,8 @@ class PortfolioService:
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
         _mwrr_use_warm_start: if False, use cold-start for MWRR series (no warm-start).
         """
-        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
-            DerivedViewsBuilder,
-            PortfolioCalculationEngine,
-        )
+        from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
+        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
 
         base_currency = target_currency_override or await self._get_base_currency(user_id)
         if _precomputed_engine_result is not None:
@@ -1381,10 +1364,8 @@ class PortfolioService:
 
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
         """
-        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
-            DerivedViewsBuilder,
-            PortfolioCalculationEngine,
-        )
+        from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
+        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
 
         base_currency = target_currency_override or await self._get_base_currency(user_id)
         if _precomputed_engine_result is not None:
@@ -1432,10 +1413,8 @@ class PortfolioService:
         candle (silently empty, not wrong — the L1/L2 cache keys both include the flag so a
         cache hit can never silently return the wrong shape here).
         """
-        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
-            DerivedViewsBuilder,
-            PortfolioCalculationEngine,
-        )
+        from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
+        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
 
         base_currency = target_currency_override or await self._get_base_currency(user_id)
         if _precomputed_engine_result is not None:
@@ -1603,10 +1582,8 @@ class PortfolioService:
         _precomputed_engine_result/standalone dual-mode, same "flag must be set on
         the shared engine run or every day comes back empty" caveat).
         """
-        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
-            DerivedViewsBuilder,
-            PortfolioCalculationEngine,
-        )
+        from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
+        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
 
         base_currency = target_currency_override or await self._get_base_currency(user_id)
         if _precomputed_engine_result is not None:
@@ -1671,7 +1648,7 @@ class PortfolioService:
 
         engine_result = _precomputed_engine_result
         if engine_result is None:
-            from backend.app.services.portfolio_engine import PortfolioCalculationEngine  # noqa: PLC0415
+            from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
 
             engine = PortfolioCalculationEngine(self.db)
             engine_result = await engine.calculate(
@@ -2041,12 +2018,8 @@ class PortfolioService:
 
         Uses Layer 2 cache: keyed by (user, scope, date_range, query_features, data_fingerprint).
         """
-        from backend.app.services.portfolio_engine import (  # noqa: PLC0415
-            DerivedViewsBuilder,
-            PortfolioCalculationEngine,
-            _compute_tx_fingerprint,
-            compute_portfolio_fx_cache_identity,
-        )
+        from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
+        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine, _compute_tx_fingerprint, compute_portfolio_fx_cache_identity  # noqa: PLC0415
 
         today = date_type.today()
         base_currency = query.target_currency or await self._get_base_currency(user_id)

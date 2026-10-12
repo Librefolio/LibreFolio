@@ -130,7 +130,7 @@ The pre-frame cannot be skipped because the engine requires:
 
 | Role | Path |
 |------|------|
-| Engine implementation | `backend/app/services/portfolio_engine.py` |
+| Engine implementation | `backend/app/services/financial_math/portfolio/daily_state.py` |
 | Average-cost steps the replay follows (since 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | Math spec §3, §7 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
 | Blob cache spec §12 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |

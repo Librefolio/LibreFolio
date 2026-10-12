@@ -69,6 +69,6 @@ API test files.
 | Plan (settings bulk validation) | `LibreFolio_developer_journal/Release_2/phases/30_wacUnification/plan-phase00SettingsBulkValidation.prompt.md` |
 | `compute_average_costs()` | `backend/app/services/financial_math/average_cost.py` |
 | Layer rule (D1) | `backend/app/services/financial_math/__init__.py` |
-| `MISSING_COST_BASIS` issue with `navigate_asset` | `backend/app/services/portfolio_engine.py` |
+| `MISSING_COST_BASIS` issue with `navigate_asset` | `backend/app/services/financial_math/portfolio/data_quality.py` |
 | Settings validation | `backend/app/schemas/settings.py` |
 | Developer doc (WAC) | `mkdocs_src/docs/developer/backend/transactions/wac.md` |

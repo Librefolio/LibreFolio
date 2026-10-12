@@ -38,7 +38,7 @@ Note (library ≥ 0.3.2): the scheda parser no longer takes the denomination row
 
 ### 💰 Current Value (`get_current_value`)
 
-- **Funds** (when `provider_params.codice_fondo` is set): returns the fund NAV **only if the published NAV is dated today**. A fund NAV is published once per day with a lag, so exposing a stale NAV as the "current" value would misstate the portfolio. When the NAV date ≠ today, the provider raises `NO_DATA`: no price is stored for today, and valuation carries the latest observation forward through the unified price resolver (`backend/app/services/price_resolver.py`) — the last NAV point, or a more recent trade-derived mark (`LAST_TRADE_PRICE`). There is no separate last-buy fallback.
+- **Funds** (when `provider_params.codice_fondo` is set): returns the fund NAV **only if the published NAV is dated today**. A fund NAV is published once per day with a lag, so exposing a stale NAV as the "current" value would misstate the portfolio. When the NAV date ≠ today, the provider raises `NO_DATA`: no price is stored for today, and valuation carries the latest observation forward through the unified price resolver (`backend/app/services/financial_math/price_marks.py`) — the last NAV point, or a more recent trade-derived mark (`LAST_TRADE_PRICE`). There is no separate last-buy fallback.
 - **Listed instruments**: uses `ottieni_prezzo_corrente(isin, mic=…, platform=…)` from the scraping library. If it raises `StrumentoNonRisolto` / `StrumentoNonTrovato` and a `mic` is stored, it retries once with `exchange=mic` (EuroTLX answers under its own exchange code, equal to the MIC).
 - Returns `FACurrentValue` with price, date, currency, and source (`"Borsa Italiana"`).
 

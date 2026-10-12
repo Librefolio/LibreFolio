@@ -125,7 +125,7 @@ Phase 09 M1/M2 archive (2026-07-07, [[sources/phase09-m1-m2-archive-2026-07]]):
 | Role | Path |
 |------|------|
 | Service | `backend/app/services/portfolio_service.py` |
-| Engine (called by service) | `backend/app/services/portfolio_engine.py` |
+| Engine (called by service) | `backend/app/services/financial_math/portfolio/engine.py` |
 | API (calls service) | `backend/app/api/v1/portfolio_api.py` |
 | Average cost behind the facade and the engine (since 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | Facade output schemas | `backend/app/schemas/wac.py` |

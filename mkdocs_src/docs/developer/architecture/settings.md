@@ -144,7 +144,7 @@ explicit user choice always wins afterwards.
     It replaced a **phantom `base_currency` global key** that was never registered anywhere:
     every reader silently fell back to `EUR` regardless of the configured default. Any new code
     that needs "the user's base currency" must call this helper — the three current consumers
-    are `portfolio_engine.py`, `portfolio_service.py`, and `lots_analysis_service.py`.
+    are `financial_math/portfolio/engine.py`, `portfolio_service.py`, and `lots_analysis_service.py`.
 
 ## 🧹 Related: cache administration
 

@@ -28,16 +28,11 @@ from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency as CurrencySchema
-from backend.app.services.portfolio_engine import (
-    BrokerDailyContribution,
-    ClassifiedTransaction,
-    DailyPortfolioState,
-    DailyStateBuilder,
-    DerivedViewsBuilder,
-    PortfolioCalculationResult,
-    ScopeAwareTransactionClassifier,
-)
-from backend.app.services.price_resolver import build_asset_price_series
+from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
+from backend.app.services.financial_math.portfolio.models import BrokerDailyContribution, ClassifiedTransaction, DailyPortfolioState, PortfolioCalculationResult
+from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 

@@ -38,10 +38,11 @@ flowchart LR
 
 !!! info "What it replaced"
 
-    `backend/app/utils/financial/wac_utils.py` (`compute_wac_from_txlist()`), the
-    portfolio engine's own WAC pools (`_buy_unit_cost()`, `_apply_split_rescale()`,
+    The former WAC helper `compute_wac_from_txlist()`, the portfolio engine's own WAC
+    pools (`_buy_unit_cost()`, `_apply_split_rescale()`,
     `_compute_open_cost_basis_inline()`) and `TransactionService.get_cost_basis()`
-    no longer exist. The engine used to keep each pool in the asset currency and
+    no longer exist: `compute_average_costs()` in `financial_math/average_cost.py`
+    replaced them all. The engine used to keep each pool in the asset currency and
     convert it at the valuation date, the lots analysis fell back to the unconverted
     cost when a rate was missing, and the broker summary summed BUY amounts. They now
     share the rules below.
@@ -50,19 +51,10 @@ flowchart LR
 
 ## 🧱 The Financial Math Layer {: #financial-math-layer }
 
-`backend/app/services/financial_math/` is the home of LibreFolio's financial
-calculations. Its package docstring (`__init__.py`) sets the rule:
-
-- **A calculation owns its whole problem.** It takes the plain data of the problem
-  — movements, currencies, dates — and calls the services it needs to complete it,
-  such as the FX service for conversions, instead of receiving values its caller
-  prepared.
-- **Callers depend on the layer, not the reverse.** Engines, services and API
-  handlers call it; it does not depend on them. Callers import each function from
-  the module that defines it: the package re-exports nothing.
-- **New financial calculations are born here.** The existing pure helpers in
-  `backend/app/utils/financial/` (`roi_utils.py`, `valuation_utils.py`) will move
-  into this layer in a later refactor, not as part of the work that created it.
+`compute_average_costs()` and `compute_native_cash()` live in
+`backend/app/services/financial_math/`, the one home of LibreFolio's financial
+calculations. The layer's rules, its package map and its guards are on their own
+page: [Financial Math Layer](../financial_math.md).
 
 | Module | Calculation |
 |--------|-------------|
@@ -72,9 +64,10 @@ calculations. Its package docstring (`__init__.py`) sets the rule:
 Each module has one entry point: [`compute_average_costs()`](#compute-average-costs)
 and [`compute_native_cash()`](#compute-native-cash).
 
-The layer's tests are pure — no database, no server, every test replaces
-`convert_bulk` with a double — and live in
-`backend/test_scripts/test_services/test_financial_math/`:
+Their tests are pure — no database, no server, `convert_bulk` replaced on the
+module with a double — and live in
+`backend/test_scripts/test_services/test_financial_math/` (`test_average_cost.py`,
+`test_native_cash.py`), next to the layer's guard:
 
 ```bash
 ./dev.py test services financial-math
@@ -298,8 +291,8 @@ result leaves out anything smaller.
 
 | Caller | Use |
 |--------|-----|
-| `PortfolioCalculationEngine.calculate()` (`portfolio_engine.py`, step 10c) | Builds it once per run from the classified transactions dated up to the run's end, each at its broker's `effective_share()`, with `rates_until` = the run's end; hands it to `DailyStateBuilder(native_cash=...)` and exposes it as `PortfolioCalculationResult.native_cash` |
-| `DailyStateBuilder._revalue_foreign_cash()` | On every `rate_change_days()` day, pre-frame included, after the day's cash movements and before its transactions: books `value_at(day)` minus the replayed cash of each `foreign_cash_broker_ids` broker into that broker's cash and `R_b` (a negative `R_b` drains into `K_b`, like a FEE), never into the capital baseline → [Portfolio Engine — §6 Three-Pool Cash Model](../../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w) |
+| `PortfolioCalculationEngine.calculate()` (`financial_math/portfolio/engine.py`, step 10c) | Builds it once per run from the classified transactions dated up to the run's end, each at its broker's `effective_share()`, with `rates_until` = the run's end; hands it to `DailyStateBuilder(native_cash=...)` and exposes it as `PortfolioCalculationResult.native_cash` |
+| `DailyStateBuilder._revalue_foreign_cash()` (`financial_math/portfolio/daily_state.py`) | On every `rate_change_days()` day, pre-frame included, after the day's cash movements and before its transactions: books `value_at(day)` minus the replayed cash of each `foreign_cash_broker_ids` broker into that broker's cash and `R_b` (a negative `R_b` drains into `K_b`, like a FEE), never into the capital baseline → [Portfolio Engine — §6 Three-Pool Cash Model](../../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w) |
 | `PortfolioService.get_summary()` | Reads the engine's: broker card cash = `value_at(end)`, per-currency chips = `balances(end)`, summed over the cards for the headline chips; period and lifetime deposits, withdrawals, income, fees and taxes = `flows()`; missing pairs = `missing_conversions(None, end)`. The headline cash is the engine's, revalued on the same days, so it matches the sum of the cards |
 | `PortfolioService._signed_transaction_sums_by_date()`, behind `get_income_history()`, `get_cost_history()` and `get_deposit_history()` | `sums_by_date()` and `missing_conversions()`; the report passes the engine's native cash, a standalone call builds its own with `rates_until` = `date_to`, or today |
 | `PortfolioService.get_positions_contribution()` | Reads the engine's: period income and costs by position and broker = `flows()`. When the period's Other can be computed, one **FX on cash** row per broker = `exchange_results(date_from, end)`, in broker access order, and the reconciliation residual drops by the same amount. With foreign cash in scope, neither a row nor the residual is shown below `CONVERSION_DUST`; a scope with cash only in T shows any non-zero residual |
@@ -318,14 +311,15 @@ with the layer's command:
 
 | Caller | Positions | `report_currency` | `asset_leg` |
 |--------|-----------|-------------------|-------------|
-| `PortfolioCalculationEngine.calculate()` (`portfolio_engine.py`) | `build_cost_positions()`: one per `(asset_id, broker_id)` | The report's target currency | `True` |
+| `PortfolioCalculationEngine.calculate()` (`financial_math/portfolio/engine.py`) | `build_cost_positions()`: one per `(asset_id, broker_id)` | The report's target currency | `True` |
 | `compute_wac_iterative()` (`portfolio_service.py`) | The one `(broker, asset)` asked for | The override, or `determine_target_currency()` | `False` |
 | `LotsAnalysisService` (`lots_analysis_service.py`) | One per broker, plus `"__all__"` pooling every broker in scope | The analysis `target_currency` | `False` |
 | `BrokerService.get_summary()` (`broker_service.py`) | One per asset held at the broker | The asset's own currency, one call per currency | `False` |
 
-### ⚙️ Portfolio engine
+### ⚙️ Portfolio engine {: #portfolio-engine }
 
 1. `build_cost_positions(classified_txs, asset_currencies, target_currency, split_linked_tx_ids, date_to)`
+   (`financial_math/portfolio/derived_views.py`)
    turns the classified transactions into one `CostPosition` per
    `(asset_id, broker_id)`: quantity and cost scaled by the owner's share, in
    classification order (date, then id) — the order the replay visits them —
@@ -333,11 +327,12 @@ with the layer's command:
 2. `PortfolioCalculationEngine.calculate()` makes **one** `compute_average_costs()`
    call for the whole scope before the daily replay and hands the result to
    `DailyStateBuilder(average_costs=...)`.
-3. `DailyStateBuilder` replays each position's steps through `_next_cost_step()`.
+3. `DailyStateBuilder` (`financial_math/portfolio/daily_state.py`) replays each
+   position's steps through `_next_cost_step()`.
    The step must belong to the transaction being replayed (same movement id and
    date): a mismatch is a bug, never data, and raises `RuntimeError`. No cost is
-   converted in the daily loop, and `_preload_fx_rates()` no longer asks for
-   acquisition-date rates.
+   converted in the daily loop, and `_preload_fx_rates()` (`financial_math/portfolio/engine.py`)
+   no longer asks for acquisition-date rates.
 
 What the replay takes from the steps:
 
@@ -403,7 +398,8 @@ page explains how both reach the Dashboard.
   (`None` while incomplete). It is also the Yield on Cost denominator, which
   therefore needs no conversion at the end date.
 - **Data quality.** `_engine_missing_fx_pairs()` and `_missing_cost_basis_assets()`
-  feed `build_data_quality_report()`: missing pairs and `MISSING_COST_BASIS`.
+  feed `build_data_quality_report()` (`financial_math/portfolio/data_quality.py`):
+  missing pairs and `MISSING_COST_BASIS`.
 
 ### 🔬 Lots analysis
 

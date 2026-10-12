@@ -257,11 +257,11 @@ S    = broker_ids selected by the dashboard filter (S ⊆ V(u))
 
 | Role | Path |
 |------|------|
-| Engine | `backend/app/services/portfolio_engine.py` |
+| Engine | `backend/app/services/financial_math/portfolio/engine.py` |
 | Average cost (since 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
-| Unified price resolver (valuation) | `backend/app/services/price_resolver.py` |
-| ROI utilities | `backend/app/utils/financial/roi_utils.py` |
-| Valuation utilities | `backend/app/utils/financial/valuation_utils.py` |
+| Unified price resolver (valuation) | `backend/app/services/financial_math/price_marks.py` |
+| ROI utilities | `backend/app/services/financial_math/returns.py` |
+| Valuation utilities | `backend/app/services/financial_math/valuation.py` |
 | Service layer | `backend/app/services/portfolio_service.py` |
 | API layer | `backend/app/api/v1/portfolio_api.py` |
 | vNext unit tests (20 at creation) | `backend/test_scripts/test_services/test_portfolio_engine_vnext.py` |
