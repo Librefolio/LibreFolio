@@ -31,7 +31,7 @@
 | K | `phases/25_taxonomySelect/` (step 23 e verifica d'archivio) | K-1 … K-26 |
 | P | `phases/30_wacUnification/`, `phases/39_autoCostNoPosition/` | P-1 … P-11 |
 | I | `phases/20_performanceCharts/`, `19_yieldOnCost/`, `24_privacyGlobal/` | I-01 … I-12 |
-| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-53 |
+| C | backlog del coordinatore, riverificato il 09/10 | C-1 … C-55 |
 
 In fondo: le voci del backlog del coordinatore **tracciate altrove** e quelle **chiuse alla verifica del 09/10**.
 
@@ -611,12 +611,29 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   `populate_mock_data.py:793-881`: l'AI Export degli Asset sintetici 4–8 risponde 503 su `asset.identity`. Tocca le
   sonde e gli scatti futuri dell'AI Export (C-41), non gli utenti.
 - **C-52 · La CLI della sonda dell'AI Export non sa scegliere l'Asset né l'utente sintetico** — minimo (T, 11/10).
-- **C-53 · L'AI Export dice «non riconciliato» per un residuo di rumore** — basso, preesistente (I, F-4, 12/10).
+- ✅ **C-53 · L'AI Export dice «non riconciliato» per un residuo di rumore** — chiusa il 12/10 da T (`876d2b430`,
+  treno 47): `reconciled` è vero sotto `CONVERSION_DUST` in valore assoluto, e il residuo resta esatto; le due
+  riconciliazioni passano alla v2 (+1 rispetto alla 1.1, regola del developer). Era: basso, preesistente (I, F-4, 12/10).
   `portfolio_financial.py:490` e `broker_financial.py:435` provano `residual_amount == Decimal("0")` su un residuo non
   quantizzato: nel DB mock 5 snapshot su 33 danno `reconciled` falso, con un residuo massimo di 1e-24, prima e dopo F.
   Proposta di I: la tolleranza `CONVERSION_DUST` (1e-9, `financial_math/native_cash.py`) e il bump di versione dei due
   componenti, con `COMPACT_COMPONENT_VERSIONS` nello stesso cambio. Decisione del developer: nella 1.2 (consiglio del
   coordinatore: a T dopo T-1) o dopo.
+- **C-54 · «Novità dalla tua ultima versione» al login** — medio, **dopo la 1.2** per decisione del developer (12/10).
+  Il disegno segue il popup delle donazioni (`donation_popup_service.py`, `show_donation_popup` nella risposta del
+  login, l'ordine di `DeferredAppPopups.svelte`):
+  - un campo `last_seen_version` sullo User, con una migrazione nuova;
+  - il login confronta la versione installata con l'ultima vista e dice da quale versione mostrare le novità;
+  - il modale del changelog si apre sui capitoli non visti, nella lingua dell'utente (il changelog tradotto arriva con
+    la 1.2);
+  - un utente nuovo non lo vede; le build di sviluppo (`vX.Y.Z-N-gSHA`) contano come la loro versione base.
+  Da decidere allora: chi non ha ancora una versione vista la prima volta vede le novità al primo login, oppure no.
+  Stima: 1–1,5 giornate.
+- **C-55 · L'AI Export di un broker senza posizioni non passa i controlli pubblici «invalid HHI points»** — basso,
+  **da verificare** (T, sonda di C-53, 12/10). Sul broker senza posizioni dei dati sintetici la sonda segna fallite le
+  verifiche pubbliche «invalid HHI points» di `broker.allocation_concentration` e `broker.concentration_context`,
+  con risposta HTTP 200. Preesistente. Da capire se è il controllo della sonda a non prevedere un insieme vuoto, o il
+  payload a esporre punti HHI non validi; poi la cura.
 
 ## Tracciate altrove
 

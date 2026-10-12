@@ -37,7 +37,7 @@
 
 | Fonte | Cosa contiene | Stato all'apertura |
 | --- | --- | --- |
-| [Backlog 38](38_postReleaseBacklog/README.md) | I residui delle cartelle archiviate il 09/10 (gruppi N, O, L, K, P, I) e il backlog del coordinatore (C-1…C-53) | 138 voci |
+| [Backlog 38](38_postReleaseBacklog/README.md) | I residui delle cartelle archiviate il 09/10 (gruppi N, O, L, K, P, I) e il backlog del coordinatore (C-1…C-55) | 138 voci |
 | [README della 02](02_riskfolioIntegration/README.md) | Rischio: lavoro aperto, buchi, difetti, domande aperte | A1–A6, B1–B3, B6–B8 aperti |
 | [README della 13](13_pacAllocator/implementation/README.md) | PAC: il backlog delle righe e la nota di ripartenza | riga 14, E2E del PAC, difetti 1, 2, 5, opzione (e) |
 | [Piano della 16](16_toolPlatform/plan-phase00ToolPlatform.prompt.md) | Piattaforma dei Tool: la definizione di fatto residua (§5) | da riverificare |
@@ -69,8 +69,13 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   (`dd0a8d497`). Dettagli: 38, C-50.
 - **C-51 · I dati sintetici scrivono la vecchia forma di `classification_params`** — basso. Dettagli: 38, C-51.
 - **C-52 · La CLI della sonda dell'AI Export non sa scegliere l'Asset né l'utente sintetico** — minimo. Dettagli: 38, C-52.
-- **C-53 · L'AI Export dice «non riconciliato» per un residuo di rumore** — basso, preesistente. Decisione del
-  developer in sospeso: nella 1.2 (consiglio: a T dopo T-1) o dopo. Dettagli: 38, C-53.
+- ✅ **C-53 · L'AI Export dice «non riconciliato» per un residuo di rumore** — chiusa nella 1.2 da T, treno 47
+  (`876d2b430`). Dettagli: 38, C-53.
+- **C-54 · «Novità dalla tua ultima versione» al login** — medio; **dopo la 1.2**, per decisione del developer (12/10).
+  Al login, una versione più nuova dell'ultima vista apre il modale del changelog sui capitoli non visti, nella
+  lingua dell'utente. Dettagli: 38, C-54.
+- **C-55 · L'AI Export di un broker senza posizioni non passa i controlli pubblici «invalid HHI points»** — basso,
+  da verificare (T, sonda di C-53, 12/10). Dettagli: 38, C-55.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6).
 
 ## Risk · Rischio (02)
