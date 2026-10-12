@@ -819,3 +819,10 @@ plugin.
 - **U-B5 · I vecchi percorsi `<famiglia>/<nome>.py` fuori da U** — basso; U, 12/10. Sono 84 citazioni in 47 pagine del
   devWiki, per l'historian, come T-W1, e `financial-theory/fundamentals/day-count.{en,it,fr,es}.md:10`, per M. Dettagli:
   piano della 45, sezione «3».
+- **U-B6 · Il server di sviluppo non segue le sorgenti del catalogo** — basso; U, 12/10.
+  - Oggi: `npm run dev` genera il catalogo all'avvio (`predev`), e i comandi `dev.py i18n` lo rigenerano da soli.
+  - Il limite: una modifica a mano di una sorgente (`base/`, un sottosistema, un frammento di plugin) arriva al server di
+    sviluppo solo dopo `dev.py i18n build` o `npm run i18n:build`.
+  - La soluzione: un plugin Vite che osserva le sorgenti e rilancia la build.
+
+  Dettagli: piano della 45, sezione «10», U-2.

@@ -47,6 +47,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 os.chdir(PROJECT_ROOT)
 
 import scripts.docs_links as docs_links
+import scripts.i18n_catalog as i18n_catalog
 from scripts.cli_base import (
     Colors,
     check_server_running,
@@ -621,6 +622,12 @@ def cmd_fe_build(args):
     if sync_result != 0:
         print_error("API sync failed - aborting build")
         return sync_result
+
+    # The translation catalogue the app loads (src/lib/i18n/<lang>.json) is generated from its sources;
+    # svelte-check below reads it before npm's own prebuild hook would run.
+    if i18n_catalog.build(quiet=True) != 0:
+        print_error("Translation catalogue could not be generated - aborting build")
+        return 1
 
     # Generate favicon from logo before build
     generate_favicon()
@@ -1947,7 +1954,7 @@ def cmd_dead_code(args):
         if not (frontend_dir / "node_modules" / "knip").exists():
             print_warning("  knip not installed — run './dev.py install' or 'npm install' in frontend/")
         else:
-            failed = _run_knip(frontend_dir, exclude) or failed
+            failed = _run_knip_on_generated_catalogue(frontend_dir, exclude) or failed
 
     return 1 if failed else 0
 
@@ -1978,6 +1985,14 @@ def _extract_json(text):
             except json.JSONDecodeError:
                 continue
     return None
+
+
+def _run_knip_on_generated_catalogue(frontend_dir, exclude):
+    """knip resolves the imports of the generated src/lib/i18n/<lang>.json: write them first, or it reports false findings."""
+    if i18n_catalog.build(quiet=True) != 0:
+        print_error("  translation catalogue could not be generated - knip skipped")
+        return True
+    return _run_knip(frontend_dir, exclude)
 
 
 def _run_knip(frontend_dir, exclude):
