@@ -90,6 +90,7 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/signal-indicator-warmup-sizing]] | **Folder 01 (signals migration).** Each plugin's warm-up measured across periods 2–200 against the reference (1e-6): KAMA `max(30, period + 1)`, ADX 18 × period (`5b9dddb45`) | 2026-07-23 | signals, indicators, warm-up |
 | [[decisions/risk-library-versus-own-maths]] | **Folder 02, analysis 06.** A library only where our maths duplicates it badly (rolling, CVaR, matrices), our own where it composes; correctness decides; riskfolio-lib first as the oracle | 2026-09-16 | risk, metrics, riskfolio |
 | [[decisions/risk-tool-verdicts]] | **Folder 02, analysis 02.** Every tool judged by the four questions — core, fixed, cut (TE, IR), deferred (optimization); today's code partly reverses it | 2026-09-16 | risk, tools, verdicts |
 | [[decisions/histogram-grid-pinned-to-var-cut]] | **Folder 02, round 1 (A).** The histogram grid is shifted so one edge falls on the VaR cut — the red area is the declared percentage; an oracle pins the maths before vectorising (`f5fe80d44`) | 2026-09-18 | risk, var, histogram |
@@ -294,6 +295,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/spa-logout-cross-user-cache-leak]] | **Folder 01.** After an SPA logout stores kept the previous account's data; `ClientSessionState` resets them, scopes keys per user, drops stale responses (`5b9dddb45`) | resolved | frontend, auth, session |
 | [[problems/stale-version-file-shadows-git-describe]] | **Folder 09, R2.** A leftover `VERSION` is read before `git describe` and nothing removes it: the reported version freezes on a dev host; design defect, open | open | backend, version, docker |
 | [[problems/privacy-gate-blind-to-formatter-consumers]] | **Folder 09, P4-11.** The money-render gate missed a formatter's consumers: the Growth chart showed amounts in privacy mode; mask at the formatter (`804bc9903`) | resolved | privacy, charts, gate |
 | [[problems/missing-event-detail-read-as-consent]] | **Folder 09, §2.5.** `{accepted: true}` as a default read a missing sync detail as consent; now an omission means cancel (`ff9038487`) | resolved | frontend, events, defaults |
@@ -606,6 +608,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Historical folder H1 — `01_signalMigration`.** Drift: four July rows re-baselined (path moved to `phases/`); gaps: indicator warm-up sizing, the SPA logout leak | *(2 pages — 1 decision, 1 problem; see log)* |
 | 2026-10-12 | **Folder 09, step F2 — the areas and the visual review; folder 09 covered.** No gap in the areas; R2 of the visual review filed as an open design defect | *(1 page — 1 problem; see log)* |
 | 2026-10-12 | **Folder 09, step F1 — the structural backlog and the static analysis.** Statuses checked on the code; two solved defects kept as problems | *(2 pages — 2 problems; see log)* |
 | 2026-10-12 | **Folder 09, step F0 — the feedback jobs.** The September backlog and its sprints, each area mapped to the lot and the wiki source that cover it | [[sources/phase00-feedback-jobs-2026-09]] *(1 page — 1 source)* |
