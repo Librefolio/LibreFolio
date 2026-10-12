@@ -623,6 +623,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-13 | **Train 79 — T-EN1 and T-EN2.** The what-if signals' labels, a price-chart tooltip and a probe count in the interface language; the first keys added after U-3; T-ISO and T-FB for after 1.2 | *(none)* |
 | 2026-10-13 | **Trains 77 and 78 — I's lot 49, M's batch 33, U-4.** The request-counter race, the gallery's security shot and M-24, the developer docs of the split catalogue; a dirty version in the release shots, open | [[problems/request-counter-read-before-the-handler-counted]] *(2 pages — 2 problems; see log)* |
 | 2026-10-13 | **Trains 75 and 76 — M-18 closed, the seven E2E gaps of 1.2.** T's CP2 and CP3: amounts, dates, axes and exact decimals in the interface language; V's E2E on real data for seven 1.2 features | *(none)* |
 | 2026-10-12 | **Train 74 — U-3 and M's batches 30–32.** The catalogue split by subsystem and plugin, with an ownership gate; M's figures in it/fr/es after M-18, the gallery locale's header, I5 prepared; the backlog closures of train 72 and the M-18 CHANGELOG lines | *(none)* |

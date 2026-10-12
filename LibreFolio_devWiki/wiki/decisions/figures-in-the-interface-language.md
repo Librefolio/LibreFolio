@@ -56,8 +56,13 @@ rischio sulla 1.2».
 - Chart formatters run outside Svelte's tracking: the effect that builds the options must read the locale itself —
   done in CP2 (with the axes of [[problems/line-chart-axes-lost-the-day]]).
 - Known limit, backlog T-DI: native `<input type="date">` stays in the browser's language.
-- Left for after 1.2 (backlog): T-ST, T-ICU, T-EN1, T-EN2, T-COL, T-DEAD — plurals of stale days, ICU figures of a
-  language without region, a few English texts, collation, dead code.
+- T-EN1 and T-EN2, closed in 1.2 (`f31bd6cfd`, train 79): the what-if signals' labels and units, the price chart's
+  tooltip for a converted event and the provider check's count of points now follow the language; `ChartSignal` reads
+  the catalogue through a formatter tracked like `uiLocale()`. The CHANGELOG lists them as a fix (`4e11c2f83`): the
+  English texts were already in 1.1.
+- Left for after 1.2 (backlog): T-ST, T-ICU, T-COL, T-DEAD — plurals of stale days, ICU figures of a language without
+  region, collation, dead code — and two found with T-EN: T-ISO (observation dates still ISO in the price chart's
+  tooltips and in the probe) and T-FB (the English fallbacks of the comparison signals).
 - The developer guide explains the rule: `developer/frontend/i18n.md`, «Numbers, amounts and dates» (`133259913`).
 - A test that pins a figure as `toFixed` writes it breaks under the rule: the gallery's price guard went red in English
   on prices over 1,000, and since M's batch 28 (`e8d5a5668`, train 70) it expects the figure as the shot's locale
@@ -72,5 +77,6 @@ rischio sulla 1.2».
 | Amounts | `frontend/src/lib/utils/currency/currencyFormat.ts` |
 | Dates | `frontend/src/lib/utils/core/formatDateTime.ts` |
 | The en-GB rule, tested | `frontend/src/lib/stores/app/uiLocale.test.ts` |
+| The what-if signals' tracked catalogue (T-EN2) | `frontend/src/lib/charts/signals/ChartSignal.ts` |
 | Developer guide | `mkdocs_src/docs/developer/frontend/i18n.md` |
 | Journal (M-18) | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` |
