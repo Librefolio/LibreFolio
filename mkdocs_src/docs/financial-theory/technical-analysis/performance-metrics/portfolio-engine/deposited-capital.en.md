@@ -36,6 +36,7 @@ These rows move value without cash: they are capital, not profit or loss.
 | ADJUSTMENT with `cost_basis_override`, not split-linked | ✅ Yes, in-kind capital at cost |
 | SPLIT-linked ADJUSTMENT | ❌ No, quantity rescale only |
 | BUY, SELL, DIVIDEND, INTEREST, FEE, TAX | ❌ No |
+| Exchange-rate move on cash held in another currency (no transaction) | ❌ No: a result, part of TotalPnL; the capital flows (deposits, withdrawals, orphan cash legs) entered the baseline at the rate of their own dates |
 
 ---
 
@@ -93,7 +94,7 @@ With equal shares, $X$ is exactly what the arrival adds to $\mathrm{NAV}_B$, so 
 
 When the legs fall on different days, the value travels from the departure day $t_{dep}$ to the day before $t_{arr}$. Meanwhile it is part of $\mathrm{InTransit}_A$, at the sender's share $s_A$, valued every day: cash at that day's exchange rate, securities at that day's valuation price (at the cost recorded on the transfer if the security has no price at all). No flow happens while the value travels, so its price and exchange-rate moves stay in $A$'s line, the arrival day's own move included; $B$'s line starts from the value received.
 
-For example, $A$ receives a deposit of 1,000 USD on day 0 at 0.90 EUR per USD ($C_A = 900$) and sends the dollars on day 1; $B$ receives them on day 4. With the rate at 0.90, 0.91, 0.92, 0.93 on days 1–4, $A$'s line reads 0, +10, +20, +30 and $B$'s stays at 0. On day 4, $X = 930$ and $C_A = 900 - 930 = -30$.
+For example, $A$ receives a deposit of 1,000 USD on day 0 at 0.90 EUR per USD ($C_A = 900$) and sends the dollars on day 1; $B$ receives them on day 4. With the rate at 0.90, 0.91, 0.92, 0.93 on days 1–4, $A$'s line reads 0, +10, +20, +30 and $B$'s stays at 0. On day 4, $X = 930$ and $C_A = 900 - 930 = -30$. Once arrived, the dollars are $B$'s cash, revalued every day, so from day 5 $B$'s line moves with the rate: at 0.94, it reads +10.
 
 ### 🧩 Special Cases
 
@@ -185,6 +186,7 @@ $$
     - $\mathrm{CapitalBaseline}$ = historical sum of cash and in-kind capital flows. $\sum K_b$ = how much current cash is external capital. They diverge after BUY/SELL.
     - A BUY on broker $b_1$ only consumes $R_{b_1}$, never $R_{b_2}$.
     - Cash transfers between brokers move $R$ and $K$ from source to destination without touching $W$.
+    - An exchange result on cash a broker holds in another currency goes to $R_b$; a loss larger than $R_b$ comes out of $K_b$, as a FEE does. $\mathrm{CapitalBaseline}$ does not move ([Portfolio Engine — §6](index.md#exchange-result-on-foreign-cash)).
 
 🔗 Full per-broker update rules: **[Portfolio Engine — §6 Three-Pool Model](index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)**
 
@@ -223,6 +225,19 @@ After step 5: Cash=30, K=0, R=30 ✓ (returns restored from W)
 
 Capital correctly returns to $K$; only €5 gain to $R$. **Not** all €1,005 to $R$.
 
+### 💱 D — Dollars Held While the Rate Moves
+
+One broker, report currency EUR, rates in EUR per USD; $\varepsilon$ is the [exchange result on cash](index.md#exchange-result-on-foreign-cash).
+
+| Step | Event | $\varepsilon$ | $K$ | $R$ | Cash | TotalPnL |
+|------|-------|---------------|-----|-----|------|----------|
+| 1 | DEPOSIT 1,000 USD at 0.90 | — | 900 | 0 | 900 | 0 |
+| 2 | Rate rises to 0.95 | +50 | 900 | 50 | 950 | +50 |
+| 3 | Rate falls to 0.85 ($R$ = 50 − 100, $K$ absorbs −50) | −100 | 850 | 0 | 850 | −50 |
+| 4 | BUY for 1,000 USD at 0.85 (€850) | — | 0 | 0 | 0 | MV − 900 |
+
+The CapitalBaseline stays €900 throughout: the exchange results are profit and loss, not capital. After step 4, TotalPnL is the security's market value MV less the €900 deposited — −50 on the purchase day if MV equals the €850 paid.
+
 ---
 
 ## ⚙️ Implementation
@@ -231,6 +246,8 @@ The 3-pool model runs in a **single per-transaction loop** (event-driven, not da
 
 1. Take the transaction's step of its position's average-cost pool, computed before the replay — for a SELL, the cost it removes ($C$ = pre-sale WAC × quantity sold, at historical rates)
 2. Update K/R/W per transaction type rules, with that $C$ for a SELL
+
+On each day the exchange rate of a foreign currency held as cash changes, each broker's exchange result on that cash is also booked into its pools, after the day's cash movements and before the day's transactions ([§6](index.md#exchange-result-on-foreign-cash)).
 
 The ROI/TWRR/MWRR input series is derived from day-over-day changes in `cumulative_external_cash_flow`, the capital baseline. It is not derived from the cash-only `external_cash_flow` field.
 
