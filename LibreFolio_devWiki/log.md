@@ -3295,3 +3295,14 @@ M-17 resolved; what is left for after 1.2), [[features/F-008]] (its rows of 2026
 the seven specs and their figures), [[problems/e2e-writes-leaked-into-shared-state]] (the files spec cleans up; V-25
 open), [[sources/phase00-data-quality-e2e-2026-10]]. The M-18 lines of the CHANGELOG (`e7bfa342f`), noted in train 74
 as ahead of the code, now describe it. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Trains 77 and 78 — I's lot 49, M's batch 33, U-4; a dirty version in the release shots
+Base `1c710c7a8` (fast-forward). Sources: plan 49, M's journal of round 12 (batch 33, M-24), plan 45 (U-4), the backlog,
+and the coordinator's report on the release shots; every claim checked on the code. **Created**
+[[problems/request-counter-read-before-the-handler-counted]] (`waitForRequest` resolves before the route handler
+counts; `waitForCountedRequest`, `6a1d95d85`) and [[problems/release-shots-show-dirty-version]] (open: Vite's
+`git describe --dirty` after the workflow writes tracked files; cure in M's lot 34). **Updated**
+[[decisions/plugin-folders-and-split-i18n]] (U-4 delivered, U-B7, U-5 left), [[features/F-008]],
+[[decisions/security-details-close-after-30-seconds]] (I5 applied, `2d0ca1660`), [[problems/playwright-probes-ignore-timeout]]
+(M-24), [[sources/phase00-ui-polish-2026-10]], [[sources/phase00-translation-round12-2026-10]]. U-B5's devWiki part
+was done in step D. Graph: not updated (P-6).
