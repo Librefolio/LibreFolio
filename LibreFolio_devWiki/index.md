@@ -16,7 +16,7 @@
 | [[domains/fx]] | FX (Foreign Exchange) | F-015–F-023 | stable |
 | [[domains/assets]] | ASSETS | F-024–F-036 | stable |
 | [[domains/signals]] | TECHNICAL ANALYSIS (Signals) | F-037–F-045 | stable |
-| [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | in-progress |
+| [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | implemented (F-048 recognised as shipped, C-64, 2026-10-12) |
 | [[domains/scheduler]] | SCHEDULER | F-052–F-053 | implemented (registry corrected 2026-10-09) |
 | [[domains/dashboard]] | DASHBOARD | F-054–F-055, F-100, F-111–F-113 | implemented |
 | [[domains/calculations]] | CALCULATIONS | F-056–F-058, F-107, F-110 | stable |
@@ -614,6 +614,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **C-64, part 1 — the status of the unfinished features.** The `planned`, `in-progress` and `idea` rows checked against the code: F-048 had shipped in 1.0.0 (now `documented`); the other thirteen are not in 1.2 | *(none)* |
 | 2026-10-12 | **Train 70 — M's batch 28.** The M-19 spec registered (`front-utility docs-offline-math`); the gallery's price guard follows M-18 | [[problems/gallery-price-guard-expected-tofixed-text]] *(1 page — 1 problem)* |
 | 2026-10-12 | **Lint follow-up (read-only check).** Two old open problems re-checked against today's E2E: the BulkModal toolbar not covered (C-61), the DataTable resize proved on one table only (C-62) | *(none)* |
 | 2026-10-12 | **Historical folder H6 — `06_betaTestingReportAndFixing`.** Drift only: the folder moved to `phases/`, four rows re-based; eleven never-ingested plans listed on [[sources/beta-testing-2026-08-05]] | *(none)* |
