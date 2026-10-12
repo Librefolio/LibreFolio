@@ -436,10 +436,14 @@ describe('ProviderAssignmentSection — the probe figures in the interface langu
     /*
      * Four figures, each written through `formatFixed` in the interface locale, `uiLocale()`: the current
      * price that opens its result's detail (two decimals), the history's point count that opens its own
-     * (no decimals, grouped the interface's way — the word after it stays English, backlog, and is not
-     * read), each result's time and the total (seconds, two decimals). On jsdom's en-US browser the
-     * interface locale is `en-US` for the English UI and bare `it` for the Italian one: an en-US browser
-     * lends Italian no region.
+     * (no decimals, grouped the interface's way), each result's time and the total (seconds, two decimals).
+     * On jsdom's en-US browser the interface locale is `en-US` for the English UI and bare `it` for the
+     * Italian one: an en-US browser lends Italian no region.
+     *
+     * The word after the count (T-EN1): the count and its word are one catalogue message,
+     * `assets.probe.points`, a plural on `count` with the figure as `n` — `12.345 punti`, `1 point` — before
+     * the currency in brackets and the date range, which do not move. The last cases read it; the M-18 cases
+     * read only the figure.
      *
      * Handles. The rows are `provider-test-result` and nothing finer is published, so the rest is
      * structure: a row is its label, its detail and its time — three spans, in that order — and the
@@ -619,6 +623,64 @@ describe('ProviderAssignmentSection — the probe figures in the interface langu
 
         expect({price: written.price, times: written.times, total: written.total}, 'guard: below 1,000 the English figures read as they always did').toEqual({price: english.price, times: english.times, total: english.total});
         expect(written.count, 'new contract: the history count is grouped the interface’s way, 12,345 points in en-US').toBe(english.count);
+    });
+
+    /** The history result's detail as the section wrote it, its row found by its label (read through the catalogue). */
+    function historyDetail(): string {
+        const history = screen
+            .getAllByTestId('provider-test-result')
+            .map((row) => partsOf(row))
+            .find((parts) => parts.label === `${word('assets.probe.history')}:`);
+        if (!history) throw new Error('No result row is labelled as the history');
+        expect(history.detail, 'barrier: the history succeeded, and its detail still ends on its date range').toMatch(/ — 2020-01-01\.\.2024-01-01$/);
+        return history.detail;
+    }
+
+    /** What a history detail says before the currency in brackets: the count and the word that names it. */
+    function countPhrase(detail: string): string {
+        const currency = detail.indexOf(' (');
+        return currency < 0 ? detail : detail.slice(0, currency);
+    }
+
+    /** The count and its word as the catalogue words them in the interface language — `assets.probe.points`, the figure as Intl writes it in `locale`. */
+    function pointsPhrase(count: number, locale: string): string {
+        return normalize(get(_)('assets.probe.points', {values: {count, n: fixed(count, 0, locale)}}));
+    }
+
+    it('Italian UI: a history of 12345 points is counted in the catalogue’s words — assets.probe.points, its plural, the figure in Italian notation (T-EN1)', async () => {
+        await setupI18n('it');
+        currentLanguage.set('it');
+        expect(uiLocale(), 'control: an Italian UI on jsdom’s en-US browser writes bare Italian').toBe('it');
+
+        await probeWith({price: '123.456', count: 12345, resultMs: 1234, totalMs: 2468});
+
+        expect(countPhrase(historyDetail()), 'the history count is not worded by the catalogue: the section writes «points» in English after the figure').toBe(pointsPhrase(12345, 'it'));
+    });
+
+    it('English UI: a history of one point is counted in the singular — the catalogue’s «one» branch of assets.probe.points (T-EN1)', async () => {
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser writes en-US').toBe('en-US');
+
+        await probeWith({price: '123.456', count: 1, resultMs: 1234, totalMs: 2468});
+
+        expect(countPhrase(historyDetail()), 'one point is counted in the plural: the section writes «points» whatever the count').toBe(pointsPhrase(1, 'en-US'));
+    });
+
+    it('French UI: a history of one point is counted in the singular too (T-EN1)', async () => {
+        await setupI18n('fr');
+        currentLanguage.set('fr');
+        expect(uiLocale(), 'control: a French UI on jsdom’s en-US browser writes bare French').toBe('fr');
+
+        await probeWith({price: '123.456', count: 1, resultMs: 1234, totalMs: 2468});
+
+        expect(countPhrase(historyDetail()), 'one point is not counted in the French catalogue’s words: the section writes «points» in English whatever the count').toBe(pointsPhrase(1, 'fr'));
+    });
+
+    it('English UI: a history of 12345 points reads as it does today — the English catalogue’s plural around the en-US figure (guard, T-EN1)', async () => {
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser writes en-US').toBe('en-US');
+
+        await probeWith({price: '123.456', count: 12345, resultMs: 1234, totalMs: 2468});
+
+        expect(countPhrase(historyDetail()), 'the English plural moved').toBe(pointsPhrase(12345, 'en-US'));
     });
 });
 
