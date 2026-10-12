@@ -92,9 +92,15 @@ vi.mock('$lib/charts/signals/catalogMapper', () => ({mapBackendSignalDefinition:
 
 // ChangelogModal pulls the bundled CHANGELOG.md via a `?raw` import that the
 // test environment denies. Mocking the feature module (as ChangelogModal's own
-// tests do) keeps the real modal component loadable without the raw file.
+// tests do) keeps the real modal component loadable without the raw file. The
+// stub answers every export the modal imports — `baseLanguage`,
+// `localizedChangelog`, `CHANGELOG_REMOTE_URL` — because a vitest mock throws on
+// any export it lacks; English and an empty changelog are enough here, where no
+// test opens the modal.
 vi.mock('$lib/features/changelog/changelog', () => ({
     changelogChapters: [],
+    baseLanguage: () => 'en',
+    localizedChangelog: {peek: () => [], load: () => Promise.resolve([])},
     CHANGELOG_REMOTE_URL: 'https://example.invalid/CHANGELOG.md',
 }));
 
