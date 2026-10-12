@@ -3134,3 +3134,9 @@ Base `7ff48ac9b`. Sources: `00_backlog_strutturale_P4.md` and `09_reperti_analis
 digested by an explore agent; hashes verified, the two fixes re-read in the code. **Created**:
 [[problems/privacy-gate-blind-to-formatter-consumers]], [[problems/missing-event-detail-read-as-consent]]. **Updated**:
 [[sources/phase00-feedback-jobs-2026-09]] (the F1 statuses). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 09, step F2 — the areas and the visual review; folder 09 covered
+Base `5c82d9bd4`. Sources: `01`–`05`, `07`, `08` of `09_feedbackJobs/` (`d614daed9`), digested by an explore agent
+that grepped the wiki for each topic; only R2 was missing. **Created**: [[problems/stale-version-file-shadows-git-describe]]
+(open; the mechanism checked in `utils/runtime/version.py` and `dev.py`). **Updated**: [[sources/phase00-feedback-jobs-2026-09]],
+[[features/F-062]]. Folder 09 covered by F0–F2. Next: the historical folders H1–H5. Graph: not updated (P-6).
