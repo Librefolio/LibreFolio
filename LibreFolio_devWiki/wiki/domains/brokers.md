@@ -47,8 +47,8 @@ graph TD
     User -->|POST /brokers/:id/files/upload| FileStore[(UploadedFile)]
     FileStore -->|POST /brokers/import/files/:id/parse| BRIMFw[BRIM Framework<br/>brim_provider.py]
     BRIMFw -->|auto-detect| PluginRegistry[BRIMProviderRegistry<br/>11 plugins]
-    PluginRegistry --> IBKR[broker_ibkr.py]
-    PluginRegistry --> Degiro[broker_degiro.py]
+    PluginRegistry --> IBKR[broker_ibkr/plugin.py]
+    PluginRegistry --> Degiro[broker_degiro/plugin.py]
     PluginRegistry --> Other[9 other parsers]
     IBKR -->|parse_file| ParseResult[transactions + warnings<br/>+ extracted_assets]
     Degiro --> ParseResult
@@ -76,6 +76,7 @@ Pending gaps (Phase 7, see [[connections/transactions-connections]]):
 ## What comes next
 
 - [[F-048]] Staging Modal — manual `create-many`/`edit-many` modes done (Phase 7 Part 4); BRIM `create-brim` mode arriving in Part 5.
+  *Delivered: the import wizard hands its rows to the bulk workspace, in 1.0.0 (C-64, 2026-10-12).*
 - [[F-049]] BRIM Import UI — the asset matching wizard (in-progress in Phase 7).
 - [[F-050]] File Preview System — inline preview panel for uploaded broker report files. *Delivered on 2026-06-04 (lint 2026-10-12).*
 - [[F-083]] Multi-File Multi-Broker Import — batch-import multiple files from multiple brokers in one workflow.

@@ -6,6 +6,10 @@ related:
   - decisions/single-docker-image
   - problems/ghcr-browser-cors-auth-flow
   - sources/ci-release-pipeline-2026-06
+  - decisions/release-image-tags-latest-light
+  - decisions/gallery-is-a-release-gate-with-real-data
+  - problems/release-images-shipped-debug-frontend
+  - sources/phase00-release-images-and-gallery-2026-10
 ---
 
 # Concept: CI/CD Release Pipeline
@@ -39,7 +43,7 @@ There is no `push: main` trigger and no `force_gallery` input (both appear in ol
 4. Docs checks: translate-diff --issues-only, translate-validate --hide-localized, check-links
 5. mkdocs build (before the gallery: the test server starts fast with site/ present)
 6. Gallery: dev.py mkdocs gallery --workers 4 (always runs; no screenshot cache)
-7. Production frontend rebuild (the gallery's server --test leaves a debug build)
+7. Production frontend rebuild (the gallery's server --test leaves a debug build — [[problems/release-images-shipped-debug-frontend]])
 8. mkdocs build again, now with the screenshots
 9. Nightly report of soft-failed steps (dev only)
 10. Docker metadata → build+push LIGHT first, then FULL (each only if it has tags)
@@ -58,6 +62,7 @@ There is no `push: main` trigger and no `force_gallery` input (both appear in ol
 - Evidence survives a failure: the screenshot artifact runs under `!cancelled()`, and a
   dedicated artifact keeps `frontend/playwright-report/` + `frontend/test-results/` for 3
   days whenever the gallery failed (dev included).
+- What the gallery may show, and how it runs offline: [[decisions/gallery-is-a-release-gate-with-real-data]].
 
 ### Docker tags (user guide "Image Variants" is the spec)
 - `latest` = **light**; a release publishes the full variant only as `X.Y.Z` and the light
@@ -70,6 +75,10 @@ There is no `push: main` trigger and no `force_gallery` input (both appear in ol
   a push without a tag fails, which used to break manual runs from `main` and other branches.
 - Local `dev.py docker build` tags differ on purpose: they come from `git describe` and keep
   the `v` (`librefolio:v1.2.3-light`, aliases `librefolio:latest[-light]`).
+- Prereleases (2026-10-07): a prerelease must be tagged `vX.Y.Z-rc.N` and a stable release a
+  plain `vX.Y.Z` — the first job step, «Release tag must match the release kind», checks both
+  ways; a prerelease never moves `latest` and never deploys the docs. The developer's words and
+  the rejected options: [[decisions/release-image-tags-latest-light]].
 
 ### Push order serves the update prompt
 The in-app prompt's image gate probes the plain `X.Y.Z` tag, i.e. the **full** variant

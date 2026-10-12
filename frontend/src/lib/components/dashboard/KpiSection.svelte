@@ -135,7 +135,7 @@
         if (!summary) return null;
         const roi = parseFloat(summary.total_gain_loss_percent);
         if (!Number.isFinite(roi)) return null;
-        return (roi * 100).toFixed(2);
+        return roi * 100;
     });
     const nwBarMax = $derived(Math.max(navHeroAmt, marketValueStartAmt, marketValueAmt, purchaseCostAmt, purchaseCostStartAmt, cashAmt, cashStartAmt, totalDepositedAmt, totalWithdrawnAmt) || 1);
     const marketBarPct = $derived((marketValueAmt / nwBarMax) * 100);
@@ -249,10 +249,10 @@
         const alpha = base + timingIntensity * span;
         return timingEffectVal >= 0 ? `color: rgba(22, 163, 74, ${alpha})` : `color: rgba(220, 38, 38, ${alpha})`;
     }
-    const roiPct = $derived(summary ? `${roiVal.toFixed(2)}%` : '—');
-    const twrrCumPct = $derived(twrrCumVal != null ? `${twrrCumVal.toFixed(2)}%` : '—');
-    const mwrrCumPct = $derived(mwrrCumVal != null ? `${mwrrCumVal.toFixed(2)}%` : '—');
-    const mwrrAnnPct = $derived(mwrrAnnVal != null ? `${mwrrAnnVal.toFixed(2)}%` : '—');
+    const roiPct = $derived(summary ? formatPercent(roiVal, {signed: false}) : '—');
+    const twrrCumPct = $derived(twrrCumVal != null ? formatPercent(twrrCumVal, {signed: false}) : '—');
+    const mwrrCumPct = $derived(mwrrCumVal != null ? formatPercent(mwrrCumVal, {signed: false}) : '—');
+    const mwrrAnnPct = $derived(mwrrAnnVal != null ? formatPercent(mwrrAnnVal, {signed: false}) : '—');
     const roiIsPositive = $derived(summary ? parseFloat(summary.simple_roi_percent) >= 0 : undefined);
 
     const retBarMax = $derived(Math.max(Math.abs(roiVal), Math.abs(twrrCumVal ?? 0), Math.abs(mwrrCumVal ?? 0), Math.abs(mwrrAnnVal ?? 0)) || 1);
@@ -265,7 +265,7 @@
 
     const fmtMoney = (v: number) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true});
     const fmtMoneyUnsigned = (v: number) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: false});
-    const fmtPct = (v: number) => `${v.toFixed(2)}%`;
+    const fmtPct = (v: number) => formatPercent(v, {signed: false});
 </script>
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="kpi-row">
@@ -379,7 +379,7 @@
                 <p class="text-xs text-right tabular-nums transition-colors duration-300 {totalPnlAmt >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-total-pnl-delta">
                     <TweenedValue value={totalPnlAmt} format={fmtMoney} />
                     {#if absRoiPct != null}
-                        <span> ({parseFloat(absRoiPct) >= 0 ? '+' : ''}{absRoiPct}%)</span>
+                        <span> ({formatPercent(absRoiPct)})</span>
                     {/if}
                 </p>
             {/if}

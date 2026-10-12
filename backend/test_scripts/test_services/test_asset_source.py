@@ -70,18 +70,18 @@ from backend.app.services.asset_source import (
     AssetSourceManager,
     AssetSourceProvider,
 )
-from backend.app.services.asset_source_providers import borsa_italiana as borsa_provider_module
-from backend.app.services.asset_source_providers import yahoo_finance as yahoo_provider_module
-from backend.app.services.asset_source_providers.scheduled_investment import (
+from backend.app.services.asset_source_providers.borsa_italiana import plugin as borsa_provider_module
+from backend.app.services.asset_source_providers.scheduled_investment.plugin import (
     calculate_day_count_fraction,
 )
+from backend.app.services.asset_source_providers.yahoo_finance import plugin as yahoo_provider_module
 from backend.app.services.asset_sources import core as asset_source_core
 from backend.app.services.asset_sources import price_query as price_query_module
 from backend.app.services.asset_sources import price_store as price_store_module
 from backend.app.services.asset_sources import refresh as refresh_module
 from backend.app.services.asset_sources import search as search_module
 from backend.app.services.asset_sources.provider_management import AssetProviderRegistry
-from backend.app.services.fx_providers.mockfx import MOCKFX_FIXED_RATE, MockFXProvider
+from backend.app.services.fx_providers.mockfx.plugin import MOCKFX_FIXED_RATE, MockFXProvider
 from backend.test_scripts.test_utils import (
     print_info,
     print_section,

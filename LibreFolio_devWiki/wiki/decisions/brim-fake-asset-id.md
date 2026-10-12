@@ -52,7 +52,7 @@ link, or explicitly create assets before any transaction is committed.
 |------|------|
 | Fake-ID constant and backend detector | `backend/app/schemas/brim.py` |
 | Frontend detector | `frontend/src/lib/utils/brim/isFakeAssetId.ts` |
-| Per-file fake-ID allocation example | `backend/app/services/brim_providers/broker_generic_csv.py` |
+| Per-file fake-ID allocation example | `backend/app/services/brim_providers/broker_generic_csv/plugin.py` |
 | Multi-file global remapping | `frontend/src/lib/utils/transactions/importMerge.ts` |
 | Resolution and final substitution | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
 | mkdocs | `mkdocs_src/docs/developer/backend/brim/architecture.md` |

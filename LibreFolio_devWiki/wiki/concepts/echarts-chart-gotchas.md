@@ -2,7 +2,7 @@
 title: "ECharts gotchas met by the Dashboard charts"
 category: concept
 tags: [frontend, charts, echarts, privacy, i18n, axis, legend, gotcha]
-related: [problems/echarts-canvas-mismeasures-emoji-labels, concepts/chart-resolution-semantic-zoom, entities/time-series-aggregation, decisions/portfolio-pnl-series-contracts, decisions/privacy-mask-at-the-formatter, sources/phase00-performance-charts-2026-09, decisions/html-escape-at-the-source]
+related: [problems/pnl-lines-kept-removed-brokers, problems/line-chart-axes-lost-the-day, problems/echarts-canvas-mismeasures-emoji-labels, concepts/chart-resolution-semantic-zoom, entities/time-series-aggregation, decisions/portfolio-pnl-series-contracts, decisions/privacy-mask-at-the-formatter, sources/phase00-performance-charts-2026-09, decisions/html-escape-at-the-source]
 ---
 
 # Concept: ECharts behaviours that look like bugs in our code
@@ -23,6 +23,9 @@ September–October 2026) mistook for defects of its own, with the rule each one
 | Tooltip HTML is **HTML** — translations are interpolated raw | a `<` or `&` in a translation would break a tooltip (latent) | the catalogues themselves are checked: every value must render as itself (`translationMarkup` / `catalogMarkupFindings` in `htmlInterpolation.gate.test.ts`); escaping ~109 call sites was rejected; function formatters are outside both XSS gates (residual K-15, [[decisions/html-escape-at-the-source]]) |
 | The canvas under-measures emoji | axis names overflow | [[problems/echarts-canvas-mismeasures-emoji-labels]] |
 | A tooltip **does not scroll** and is not bounded by the chart | on a 360–390 px phone the price tooltip (362–386 px) pushed the value off-screen (K step 16) | cap it at `getWidth() − 32` (`fitTooltipToWidth`) and build rows with `buildFittedTooltipRow` — the label shrinks with an ellipsis, the value never does (`echartsTooltipHelpers.ts`; both helpers are on the XSS gate's HTML-first-argument list) |
+| A **partial update** (`notMerge: false`) merges series **by position** and never touches the legend's `data` | the P&L lines kept brokers removed from the filter, a new broker was not drawn, a swapped one sat under the old legend entry ([[problems/pnl-lines-kept-removed-brokers]]) | when the names of the series change (`seriesKey`), take the full rebuild (`e72b0b56e`) |
+| Default **axis labels** never receive the app's language | English months on time axes, ISO dates on category axes; compact axes printed the month on every tick ([[problems/line-chart-axes-lost-the-day]]) | every axis gets the policy's formatter, in the app's language, which reads ECharts 6's `{level}` (`4c05c1d85`, `8682f0bbd`) |
+| A **stacked** series with a null base stacks on the axis origin; `connectNulls` skips only the top points | a band fell to zero on every weekend ([[problems/echarts-stacked-band-null-base]]) | bridge the base and delta series between sessions, and keep them out of the tooltip (`840bdbc0d`) |
 
 Two non-ECharts rules from the same rounds:
 

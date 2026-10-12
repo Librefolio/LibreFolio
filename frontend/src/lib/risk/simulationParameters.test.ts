@@ -10,7 +10,7 @@ import {buildSimulationParameters, type SimulationEditorState} from './riskReque
  * enforced rather than tolerated.
  *
  * `SimulationParams` is `extra="forbid"`, and on top of that
- * `validate_engine_contract` (`backend/app/services/risk_plugins/simulation.py:141-169`)
+ * `validate_engine_contract` (`backend/app/services/risk_plugins/simulation/plugin.py:141-169`)
  * rules:
  *
  *   |                     | block_bootstrap | gbm                       |
