@@ -3160,3 +3160,10 @@ Base `61f7c970b`. Source: `phases/08_newCleanAndDocumentation_audit/` (`a9138140
 explore agent. **Created**: [[problems/base-currency-setting-silently-defaulted-eur]] (`08b99c3ac`; the helper and its
 callers checked in the code). **Updated**: [[sources/phase00-clean-audit-2026-08]] (the second audit), [[features/F-092]].
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folders H4 — 03_brokerImportRecovery and 04_webSearchEngine
+Base `63121ee78`. Sources: both folders (never ingested), digested by an explore agent. 03 (the Intesa and Crédit
+Agricole recovery, `0e07359b4`) is already covered by [[decisions/credit-agricole-securities-only-cash-neutral-brim]]
+and the BRIM pages; its ISIN auto-binding note was too thin for a page of its own. **Created**
+[[decisions/web-link-finder-ddgs]] (`ae417b9ab`; the engine settings checked in `web_link_finder.py`). **Updated**
+[[features/F-028]]. Graph: not updated (P-6).
