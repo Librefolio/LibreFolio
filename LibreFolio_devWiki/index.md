@@ -294,6 +294,8 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/privacy-gate-blind-to-formatter-consumers]] | **Folder 09, P4-11.** The money-render gate missed a formatter's consumers: the Growth chart showed amounts in privacy mode; mask at the formatter (`804bc9903`) | resolved | privacy, charts, gate |
+| [[problems/missing-event-detail-read-as-consent]] | **Folder 09, §2.5.** `{accepted: true}` as a default read a missing sync detail as consent; now an omission means cancel (`ff9038487`) | resolved | frontend, events, defaults |
 | [[problems/annualization-factor-not-coverage]] | **Folder 02, round 1 (A).** A fixed factor of 252 overstated Sharpe; «coverage» would have looked fine; `f` now observed from the data, used for volatility and the risk-free rate | resolved | risk, annualization |
 | [[problems/echarts-stacked-band-null-base]] | **Folder 02, R5.** A stacked band's base null on weekends → ECharts stacks on the origin; bridge base and delta, out of the tooltip (`840bdbc0d`) | resolved | charts, echarts |
 | [[problems/replay-baseline-shortened-by-late-starter]] | **Folder 02, R5.** A late-starting asset moved the replay's joint baseline, halving everyone's crisis; auto-exclusion instead (`a766a9d5d`) | resolved | risk, replay |
@@ -603,6 +605,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Folder 09, step F1 — the structural backlog and the static analysis.** Statuses checked on the code; two solved defects kept as problems | *(2 pages — 2 problems; see log)* |
 | 2026-10-12 | **Folder 09, step F0 — the feedback jobs.** The September backlog and its sprints, each area mapped to the lot and the wiki source that cover it | [[sources/phase00-feedback-jobs-2026-09]] *(1 page — 1 source)* |
 | 2026-10-12 | **Folder 02, step R6 — the archive G0–G6.** Drift only: archived on 2026-09-16, one alignment since; what still holds and what is superseded, on [[sources/phase00-risk-analysis-backend]]. Folder 02 covered (R0–R6) | *(none)* |
 | 2026-10-12 | **Folder 02, step R5 — the analysis documents.** The per-tool verdicts (and where today's code departs from them), the rule for library versus own maths | *(2 pages — 2 decisions; see log)* |

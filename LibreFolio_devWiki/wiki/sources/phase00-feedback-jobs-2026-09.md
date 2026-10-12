@@ -48,6 +48,15 @@ the production visual review of 22/09 (R1–R21) and the static-analysis finding
 - **SP14**: the Rebalancer, D's next work ([[features/F-108]]).
 - **SP15**: `SensitiveValue`, suspended since 21/09.
 
+## F1 — the structural backlog and the static analysis (step F1)
+
+Checked at `7ff48ac9b`: P4-1 (`asset_source.py` split into `services/asset_sources/`), P4-2 (`execute_batch` in
+stages), P4-3, P4-4, P4-5 and P4-6 (`514582a47`), P4-11 (`804bc9903`) are delivered; P4-7, P4-9 and P4-10 are open
+(above). Of the static analysis, §1.1, §1.4, §1.6, §2.1–§2.3, §2.5 and §2.6 are closed, §1.2, §1.3 and §1.5 were
+withdrawn as non-defects, §1.7 kept its keys by the developer's decision, §2.7 keeps the history as written, and §2.4
+is open. Two solved defects worth keeping: [[problems/privacy-gate-blind-to-formatter-consumers]] and
+[[problems/missing-event-detail-read-as-consent]].
+
 ## Source files
 
 | Role | Path |

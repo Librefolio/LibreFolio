@@ -3128,3 +3128,9 @@ Base `dc00cbe9f`. Plan approved by the coordinator: F0 → F2, then H1 → H5 (`
 explore agent; the hashes verified as ancestors, the README's open items rewritten with today's paths (BU1, U-1).
 **Created**: [[sources/phase00-feedback-jobs-2026-09]]. **Updated**: [[sources/phase00-feedback-import-urgent-2026-09]]
 (a link). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 09, step F1 — the structural backlog P4 and the static analysis
+Base `7ff48ac9b`. Sources: `00_backlog_strutturale_P4.md` and `09_reperti_analisi_statica_20260922.md` (`d614daed9`),
+digested by an explore agent; hashes verified, the two fixes re-read in the code. **Created**:
+[[problems/privacy-gate-blind-to-formatter-consumers]], [[problems/missing-event-detail-read-as-consent]]. **Updated**:
+[[sources/phase00-feedback-jobs-2026-09]] (the F1 statuses). Graph: not updated (P-6).
