@@ -41,6 +41,9 @@ basis → balance replay → response*.
 - Since plan 40 (2026-10-09, train 28) the WAC stage averages a TRANSFER's receiving side on its partner's broker as
   the units left ([[decisions/transfer-auto-cost-from-sending-broker]]), and the cost-basis stage checks the receiving
   side of a promote too ([[problems/promote-skipped-cost-basis-check]]).
+- Since lot 42 (train 34) `apply_promotes` validates the two rows in their promoted state with the business rules of
+  creates and updates (`_promoted_state_issues`) — [[decisions/promote-respects-asset-event-link]] — and `_validate_linked_pair`
+  checks a TRANSFER pair's asset and quantities — [[decisions/transfer-pair-same-asset-opposite-quantity]].
 
 ## History
 - 2026-04-29: unified validate/commit pipeline ([[decisions/unified-batch-pipeline]]).

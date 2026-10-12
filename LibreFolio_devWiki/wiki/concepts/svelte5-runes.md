@@ -37,6 +37,8 @@ $: console.log('count changed:', count);
   bumps its version on every merge this became a request loop: [[problems/broker-icon-fields-request-loop]].
 - A teardown reads `$state` as it was before its last write, so timer handles belong in plain variables:
   [[problems/svelte5-teardown-reads-stale-state-timers]].
+- In a legacy component, a store read inside a helper called from the template compiles into `$.untrack`, so the text
+  does not follow the store: [[problems/legacy-component-language-untracked]].
 
 ## Tailwind v4 parallel convention
 Tailwind CSS 4 config lives in `app.css` via `@theme {}` — **not** `tailwind.config.ts`:
