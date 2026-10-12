@@ -557,3 +557,306 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   - 170 aggiunti: 168 file dei plugin, il gate e questo piano.
 - ✅ **Backlog**: la sezione U in `BACKLOG_POST_1.2.md`, con U-B1, U-B3, U-B4 e U-B5.
 - ✅ U-1 chiuso il 12/10. Checkpoint mandato al coordinatore; stato FROZEN.
+
+### U-2 — Il catalogo costruito dalle sorgenti (chiuso il 12/10, checkpoint inviato)
+
+- ✅ **Base**: HEAD `bd8ee8e4d`, il treno 61, che contiene U-1 (`2eed3d26c`, `170d16333`), la modifica di T a
+  `cli_base.py` e il CHANGELOG localizzato. Il via è del coordinatore, il 12/10.
+- ✅ **Vincolo di sequenza**, chiesto dal coordinatore: lo spostamento dei 4 cataloghi in `base/` è una **rinomina pura**,
+  nello stesso commit e senza altre modifiche, così le modifiche di I e T sui file di oggi seguono la rinomina al merge.
+  - Verificato su `bd8ee8e4d`: i 4 file sono già `json.dumps(indent=2, ensure_ascii=False)` più un a capo, quindi il
+    file generato coincide con la sorgente byte per byte.
+  - sha256 della base: en `47e03ab0…`, it `9e1fb276…`, fr `36dde70e…`, es `8c5d07e7…`.
+- ✅ **File in più assegnati** (12/10): `frontend/.prettierignore`, il nuovo `frontend/scripts/i18n-catalog-build.mjs`,
+  `frontend/.gitignore`, e `backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py` per una riga in
+  `FrontendBridge.__enter__`.
+- ✅ **Basi del frontend su `bd8ee8e4d`** (`/tmp/libreFolio_u2_baseline.sh`; log nella sessione, `u2_base_logs/`):
+  - `front build` di produzione, chunk di lingua: en `Dnh_D_O3.js` `5fa1863d…`, it `D-aHihPl.js` `e6c71af9…`,
+    fr `iHe4svMs.js` `4bb36828…`, es `BbCwz7lE.js` `8f997afd…`;
+  - `front check`: 0 errori, 0 avvisi;
+  - `i18n audit`: 4 350 chiavi, 0 mancanti, 0 morte, 3 non verificate, 1 famiglia backend;
+  - Vitest: le 19 azioni verdi, 10 858 test;
+  - `lint --dead-code`: exit 1, 121 righe, come prima.
+- ⏳ **Base `all-backend`** su `bd8ee8e4d`, sulla 6174. Il coordinatore non ha i conteggi del treno 61.
+- ✅ **test-author, fase A** (12/10): `backend/test_scripts/test_utilities/test_i18n_catalog_gate.py`, PURE, 49 funzioni
+  e 106 casi, non ancora registrato. Eseguito in-process: 96 verdi e 10 rossi. Cinque rossi sono i controlli sull'albero
+  reale, che passano solo con `base/`. Gli altri cinque sono difetti della libreria.
+- ✅ **Libreria corretta** (12/10), `scripts/i18n_catalog.py`:
+  - **D1**: un testo in una sorgente contro un ramo in un'altra faceva sollevare `set_nested` dentro `_merge_language`,
+    perdendo gli altri problemi. Inoltre il controllo per vicini ordinati non vedeva chiavi con caratteri minori di `.`.
+    Ora `_owners` controlla ogni antenato di ogni chiave, e `_merge_language` salta la voce in conflitto (`_settable`).
+  - **D2**: `--into` accettava qualunque cartella dei servizi con `plugin.py`, comprese quelle che la scoperta non legge;
+    `move` perdeva le chiavi. Ora vuole esattamente `<famiglia>/<plugin>`, con la famiglia `*_providers` o `*_plugins`.
+  - **D3**: un prefisso ripetuto nello stesso `prefixes.txt` ora dice «declared twice in 'X'».
+  - **D4**: una revisione sconosciuta ora dà `CatalogError` invece di un traceback (`git rev-parse --verify`).
+  - **Ripiego opzionale**: `merge(fill=…)` e `load_catalog(lang, fallback=…)`. I 6 lettori useranno `fallback=False`,
+    così i loro controlli «tradotto in ogni lingua» possono ancora fallire. `catalogs_at` e `check --against`
+    confrontano senza ripiego.
+  - **`route`**: la regola «unico plugin sotto l'antenato» mandava `assets.providerParams.<nuovo>` a `borsa_italiana`.
+    Ora va al plugin solo se l'antenato sta dentro il ramo del plugin (`plugin_namespace`, il prefisso comune dei
+    genitori delle sue chiavi); altrimenti chiede `--into`.
+  - **`absorb` a tre vie**, per chiave e lingua: base, nostro, loro. Un conflitto c'è quando il nostro valore differisce
+    da entrambi. Senza `--prefer` li elenca tutti e non scrive niente; con `--prefer ours|theirs` li risolve.
+    I conteggi sono per chiave.
+  - Prova: `files/scripts/u2_git_rehearsal.sh`, con il Python 3.9 di Apple, su un repository usa e getta:
+    - `split` più le 71 mosse danno contenuto identico;
+    - `check --against` è identico su A e su B;
+    - `absorb` A..B: 1 aggiunta, 2 modifiche, 1 rimozione;
+    - la guardia del file generato tiene;
+    - il ripiego in build funziona e il `check` severo fallisce;
+    - `route` dà 2 plugin e 4 rifiuti attesi;
+    - il conflitto viene rifiutato senza scrivere niente; `prefer ours` e `prefer theirs` funzionano;
+    - una revisione sconosciuta viene rifiutata; `--into` dà 4 rifiuti e 2 accettazioni.
+
+    ruff e black sono puliti; il file si analizza come Python 3.9.
+- ✅ **test-author, adattamento del gate** (12/10, 18:00): 137 verdi su 142. I 5 rossi sono i controlli sull'albero
+  reale, che aspettano `base/`. Sulla copia del repo con `base/` passano, e la build è identica byte per byte. Il gate
+  diventa rosso su 46 mutanti della libreria su 46. Ha trovato:
+  - **A1, difetto**: `--prefer` non poteva risolvere una chiave rimossa da una parte mentre l'altra ne cambiava una
+    traduzione. Il conflitto stava in una lingua sola, mentre l'inglese seguiva la rimozione: ne usciva una chiave senza
+    inglese, rifiutata dalla fusione finale con un messaggio che non nominava il conflitto.
+    - **Corretto**: un conflitto di questo tipo vale per la chiave intera, ed è `_removal_conflicts`, che gira prima
+      del giro per lingua.
+    - Senza `--prefer` lo segnala con le lingue e i valori. `ours` lascia le sorgenti come sono. `theirs` rimuove la
+      chiave ovunque, oppure la riporta con le lingue che ha loro.
+    - Una parte che ha solo tolto traduzioni non è in conflitto con la rimozione.
+  - **A3, latente**: `_shown()` cadeva su un valore che non è una stringa, e un `null` valeva come chiave assente.
+    Corretto così:
+    - `ABSENT` è un sentinella;
+    - `_shown()` regge qualsiasi valore;
+    - la fusione rifiuta ogni foglia che non sia una stringa: «value(s) not a string».
+  - **Il messaggio di `route` dentro `absorb`** ripeteva la chiave e usciva una volta per lingua. Ora esce una volta sola,
+    con il suggerimento di creare la chiave con `add --into` e poi rilanciare `absorb`.
+  - **A2, nessun cambio**: un plugin con chiavi in due rami non ha uno spazio dei nomi, quindi `route` chiede `--into`.
+    È la risposta prudente, e in U-3 il gate di proprietà la rende impossibile: tiene ogni frammento nello spazio dichiarato
+    dal plugin.
+
+  Dopo le correzioni, in-process: ruff e black puliti, sintassi 3.9 valida. Restano rossi solo i 5 controlli sull'albero
+  reale e i 2 test che fissavano i messaggi vecchi, da aggiornare a cura di test-author.
+- ✅ **Preparato in `files/scripts/u2_apply.py`**:
+  - la rinomina dei 4 cataloghi in `base/`;
+  - le copie in `frontend/`;
+  - 3 modifiche in `dev.py`: l'import, `cmd_fe_build` prima di svelte-check e `cmd_dead_code` prima di knip;
+  - 2 in `cli_base.py`: l'import, più la libreria e i frammenti dei plugin fra gli input di staleness;
+  - 2 nel probe: l'import e `build()` prima di `Popen`.
+
+  Le precondizioni sono verificate senza scrivere niente. Va lanciato solo a corsia ferma.
+- ✅ **Docker**: l'immagine copia `scripts/` e `backend/`, quindi la libreria e i frammenti ci sono. Il container avvia
+  `uvicorn` direttamente, senza `dev.py server`, quindi nessuna build automatica. `dev.py docker build` usa la staleness
+  dell'host, che ora vede i frammenti.
+- > **⚠️ Fuori pista** (12/10): il `brew upgrade` dello sviluppatore ha rotto `node` (`libsimdjson.33.dylib`). Su ordine
+  > del coordinatore niente comandi frontend (npm, vite, vitest, svelte-check, il wrapper `.mjs`) finché non lo dice lui.
+  > `all-backend` in Python continua. I rossi che ne derivano sono di ambiente e non vanno triagiati.
+- > **⚠️ Fuori pista** (12/10, 17:27): `node` è tornato (v26.11.1), ma brew ha portato anche Python da 3.13.15 a 3.13.16.
+  > La base `all-backend`, partita alle 16:53, ha attraversato il cambio, quindi non vale come confronto. L'ho fermata
+  > alle 17:28, dopo 3 invocazioni verdi; la porta 6174 è libera. Log tenuti come
+  > `/tmp/libreFolio_u2_base_all_backend_INVALID_py-switch.*`.
+- ✅ **Build di base rifatta con `node` 26.11.1** (17:29–17:34, `/tmp/libreFolio_u2_base2/`): i 4 chunk di lingua hanno gli
+  stessi nomi e gli stessi sha256 della base presa con `node` 26.8.2, quindi la toolchain nuova non cambia il bundle.
+- ✅ **Base `all-backend` rifatta** su `bd8ee8e4d` con Python 3.13.16 (17:34–18:13, 39 min): 7 categorie su 7, EXIT 0,
+  **12 497 passati e 28 saltati** in 23 invocazioni. Conteggi per invocazione in `files/u2_base_all_backend_counts.txt`,
+  log in `files/u2_base_logs/all_backend_bd8ee8e4d_py31316.console`. La porta 6174 è libera.
+- ✅ **U-2 applicato** (18:14, `files/scripts/u2_apply.py`):
+  - i 4 cataloghi spostati in `base/`, hash invariati;
+  - 6 file copiati in `frontend/`;
+  - 11 modifiche in 4 file: `dev.py`, `cli_base.py`, `_backend_utils.py` e il probe.
+- ✅ **Gate locali** (`u2_gates.sh local`):
+  - la build con Python 3.14 riscrive le 4 lingue; quella con il 3.9 di Apple non riscrive niente;
+  - il `check` severo con il 3.9 dà 4 350 chiavi e 1 sorgente;
+  - i file generati e `base/` hanno gli **sha256 della base**;
+  - i file generati sono in sola lettura (0444), lo stamp no;
+  - le regole di `.gitignore` coprono i 4 JSON e `.generated` (verifica con `--no-index`), mentre `base/` non è ignorata.
+- > **Nota**: i 4 JSON generati restano tracciati nel mio indice finché il coordinatore non lancia il `git rm --cached`
+  > al checkpoint. Per questo `git status` li vede invariati e `git check-ignore` senza `--no-index` non li dà per
+  > ignorati. Il test di test-author usa già `--no-index`.
+- ✅ **Gate frontend, primi risultati** (`u2_gates.sh frontend`):
+  - `front check`: 0 errori e 0 avvisi; l'hook `precheck` gira;
+  - `front build` di produzione: l'hook `prebuild` gira, e i **4 chunk di lingua hanno nomi e sha256 della base**;
+  - `i18n audit`: identico alla base (4 350 chiavi, 0 morte, 3 non verificate, 0 chiavi backend mancanti). Cambiano solo
+    le righe delle sorgenti («Source problems: 0») e la data.
+- ✅ **Lint dei file toccati, confrontato con HEAD** (`dev.py`, `cli_base.py` e `i18n-audit.py` falliscono black e ruff
+  già nella base):
+  - `dev.py`: stesse segnalazioni di ruff e stesse 340 righe per black. Spostare la build del catalogo in
+    `_run_knip_on_generated_catalogue` evita il +1 di complessità su `cmd_dead_code`.
+  - `cli_base.py`: invariato.
+  - `i18n-audit.py`: ruff dà 32 segnalazioni contro 34; black resta a 205 righe. Il controllo delle sorgenti sta in
+    `_check_sources`, il nome del proprietario in `_owner_names`, e la `CatalogError` di caricamento si gestisce in
+    `run_from_args`, così `run_audit` e `cmd_search` non salgono di complessità.
+  - I sottocomandi `add`, `remove`, `update`, `search` e `tree` passano da `_guarded`: una sorgente illeggibile dà un
+    messaggio, non un traceback.
+  - `i18n_catalog.py`, `_backend_utils.py` e il probe sono puliti. `git diff --check` è pulito.
+- ✅ **Backlog**: U-B6, il server di sviluppo che non segue le sorgenti modificate a mano.
+- ✅ **Vitest** (`u2_gates.sh frontend`, 18:18–18:26): **18 azioni su 19 verdi, ognuna con i conteggi della base**.
+  `front-utility onboarding-component-unit` è stata interrotta dallo STOP e il dead-code non è partito.
+- > **⏸ STOP del developer** (12/10, 18:26, relayato dal coordinatore): tutto fermo, stato FROZEN fino a «riparti».
+  > - **Fermato**: lo script dei gate frontend, alla 19ª azione Vitest. Nessun processo rimasto, porta 6174 libera, nessun
+  >   server. La base `all-backend` era già finita, verde, alle 18:13.
+  > - **test-author** era a metà turno: adattava il gate per A1 e A3, con il via alla fase B. Non si può interrompere da
+  >   strumento, quindi lo STOP gli è stato accodato e lo leggerà a fine turno.
+  >   - Alle 18:27 non aveva ancora toccato `_backend_utils.py` (nessuna registrazione) né i 6 lettori.
+  >   - Il suo resoconto dirà quali file ha cambiato e se qualcuno è a metà.
+  > - **Worktree**: 18 file sporchi (11 modificati, 7 nuovi), tutti di U-2. Fra i nuovi ci sono il gate di test-author e i
+  >   4 file di `base/`. I 4 JSON generati sono identici a HEAD, quindi git non li vede.
+  > - **18:3x, test-author si è fermato**: prima di leggere lo STOP aveva **completato** il suo turno, e nessun file è a
+  >   metà. Ha registrato `gate-i18n-catalog` in `_backend_utils.py`, con una sostituzione unica che lascia byte per byte
+  >   le mie 3 descrizioni, e ha portato i 6 lettori su `load_catalog(lang, fallback=False)` con import al livello del
+  >   modulo. ruff e black sono puliti.
+  >   - I suoi conteggi in-process: gate 160 su 160, compresi i 5 controlli sull'albero reale; test del catalogo nei
+  >     lettori 9 + 2 + 1 + 1 + 8 + 12, tutti verdi.
+  >   - **Worktree ora: 24 file sporchi** (17 modificati, 7 nuovi). Porta 6174 libera.
+
+  **Fatto in U-2:**
+  - la libreria, con D1–D4, A1 e A3, il ripiego opzionale, `route` e `absorb` a tre vie;
+  - il CLI `dev.py i18n`;
+  - gli inneschi: npm, Vitest, `front build`, dead-code, il probe;
+  - la staleness;
+  - le 3 descrizioni chieste da M;
+  - la base `all-backend`;
+  - l'applicazione;
+  - i gate `local`;
+  - `front check`, `front build` con i chunk, `i18n audit` e 18 Vitest su 19;
+  - il lint;
+  - la voce U-B6 nel backlog.
+
+  **A metà:** nessuna modifica. Restano solo i gate da finire (sotto). La fase B di test-author è completa ma non
+  ancora verificata nella corsia.
+
+  **Alla ripartenza, nell'ordine:**
+  1. rileggere il diff della fase B di test-author (`_backend_utils.py` e i 6 lettori);
+  2. rilanciare `i18n audit`, perché `i18n-audit.py` è cambiato dopo il gate: errori di caricamento, `_guarded`,
+     `_owner_names`;
+  3. la Vitest `front-utility onboarding-component-unit`;
+  4. `lint --dead-code`;
+  5. `u2_gates.sh targeted fresh cli`;
+  6. `u2_gates.sh backend` (`all-backend`), da confrontare per invocazione con la base, 12 497 passati e 28 saltati;
+  7. il manifest (`files/scripts/u2_manifest.sh`), poi il checkpoint U-2 e FROZEN.
+- ✅ **Ripartenza** (12/10, 19:24, «riparti» del coordinatore). HEAD è ancora `bd8ee8e4d`, con Python 3.13.16 e `node`
+  26.11.1; la porta è libera. La base `all-backend` di oggi resta valida, dato lo stesso interprete.
+- ✅ **Fase B di test-author riletta**:
+  - `gate-i18n-catalog` è registrato, con `isolation="pure"`, accanto a `gate-i18n-usage`. Le mie 3 descrizioni sono
+    intatte.
+  - I 6 lettori leggono con `load_catalog(lang, fallback=False)`, con import al livello del modulo. Sono circa 30
+    chiamate in tutto, quindi il costo è trascurabile anche in U-3.
+  - Il gate controlla anche l'indice: segnala un problema solo se `base/en.json` e i JSON generati sono tracciati
+    insieme. Oggi quindi passa, e diventa rosso se al checkpoint si dimentica il `git rm --cached`.
+- ✅ **Gate mirati** (`u2_gates.sh targeted`, 19:25–19:28), tutti verdi:
+
+  | Selettore | Esito |
+  |---|---|
+  | `utils gate-i18n-catalog` | 160 passati |
+  | `utils gate-i18n-usage` | 195 |
+  | `utils dev-cli-image` | 31 |
+  | `utils gate-plugin-layout` | 33 |
+  | `utils ai-export-probe-helpers` | 73 |
+  | `external brim-providers` | 705 + 1 saltato, come nella base |
+  | `external brim-degiro` | 169, come nella base |
+  | `external brim-scalable` | 145, come nella base |
+  | `schemas risk` | 69 |
+  | `services risk-all` | 896 |
+  | `services signal-plugin-matrix` | 92 |
+  | `check-orphans` | tutti raggiungibili da un `all` (261 file backend, 347 Vitest, 109 E2E) |
+- ✅ **Checkout pulito** (`fresh`), tutto verde:
+  - cancellati i file generati e lo stamp, li riscrivono a turno una Vitest (`front-utility core-unit`), `front check`
+    e `dev.py i18n build`, ogni volta con gli **hash della base**;
+  - `check_frontend_needs_build()` risponde «needs build: True» quando mancano;
+  - la guardia rifiuta un `it.json` modificato a mano; `--force` lo riscrive e gli hash tornano quelli della base.
+- ✅ **CLI** (`cli`), tutto verde:
+  - `where`;
+  - `add common.zzU2Probe`, che scrive in `base/` e lo dice;
+  - `where` sulla chiave nuova;
+  - `search`, con la colonna «Source»;
+  - `update`, `remove`;
+  - dopo il giro **`base/` e i file generati tornano agli hash della base**;
+  - `check`, `tree`.
+- ✅ **Ripresa** (`resume`, 19:31–19:33):
+  - `i18n audit` rilanciato con l'`i18n-audit.py` finale: identico alla base;
+  - Vitest `front-utility onboarding-component-unit`: 434, come la base. **Le 19 azioni Vitest hanno quindi tutte i
+    conteggi della base**;
+  - `lint --dead-code`: output identico alla base (exit 1, 132 righe), e knip non segnala né il `.mjs` né il
+    `globalSetup`.
+- > **⚠️ Fuori pista** (19:25): ho modificato `u2_gates.sh` (aggiungendo `part_resume`) nella stessa batch di chiamate
+  > parallele che lo lanciava.
+  > - Cosa è successo: bash aveva già letto la versione vecchia, quindi `resume` è risultato «command not found» e la
+  >   catena è proseguita con `targeted`, `fresh` e `cli`, le cui definizioni non erano cambiate. A fine loop bash ha
+  >   ripreso a leggere dal vecchio offset nel file modificato: ha trovato un frammento («ead_code: command not found»),
+  >   poi un errore di sintassi, e si è fermato con EXIT 2 senza eseguire niente. Worktree e porta sono intatti.
+  > - Rimedio: `resume` rilanciato da solo, in un processo nuovo.
+  > - Regola per me: mai modificare uno script nella stessa batch che lo lancia, né mentre gira.
+- ❌ **`all-backend` di U-2, prima prova** (19:33–19:53, fermata da me dopo 3 invocazioni):
+  - servizi: 6 436 + 1 saltato, uguale alla base;
+  - utils: **3 falliti** e 1 892 passati, contro 1 735 nella base: i 160 in più sono il gate nuovo;
+  - la terza invocazione: 1 705, uguale alla base.
+- > **⚠️ Fuori pista, difetto mio**: i 3 rossi sono `test_runtime_isolation.py::TestFrontendBuildStaleness`:
+  > `test_a_frontend_source_newer_than_the_build_needs_a_rebuild` e
+  > `test_a_root_changelog_newer_than_the_build_needs_a_rebuild[inline-english|lazy-translation]`.
+  > - **Causa**: il loro fixture `frontend_project` costruisce un progetto senza sorgenti i18n. Il mio nuovo controllo
+  >   in `check_frontend_needs_build()` chiamava `generated_catalogs()`, che senza `base/en.json` sollevava
+  >   `CatalogError`. L'`except Exception` della staleness la ingoiava e rispondeva «nessuna build serve».
+  > - **Perché i miei gate non l'hanno visto**: `fresh_staleness` gira sull'albero vero, che `base/` ce l'ha, e
+  >   `runtime-isolation` non era fra i selettori mirati.
+  > - **Correzione**: `generated_catalogs()` restituisce `[]` dove non c'è un `base/` da cui generare. Poi
+  >   `utils runtime-isolation` **158/158**.
+  > - **Run fermata** perché da rifare comunque dopo la correzione: le invocazioni rimaste non avrebbero aggiunto niente.
+  > - **Test nuovi chiesti a test-author** (20:0x), per le aggiunte alla staleness e per `generated_catalogs`:
+  >   - un catalogo generato mancante → serve la build;
+  >   - un frammento di plugin più recente della build → serve la build;
+  >   - `scripts/i18n_catalog.py` più recente → serve la build;
+  >   - senza `base/` il controllo risponde sugli altri input.
+- ✅ **Test nuovi di test-author** (12/10, sera):
+  - in `test_runtime_isolation.py::TestFrontendBuildStaleness` il fixture fratello `frontend_catalogue` aggiunge `base/`,
+    i 4 file generati, il frammento di un plugin e la libreria, tutti più vecchi della build. Casi nuovi:
+    - `test_without_catalogue_sources_the_other_inputs_still_decide`;
+    - `test_a_catalogue_older_than_the_build_leaves_it_up_to_date`;
+    - `test_a_missing_generated_catalogue_needs_a_rebuild_though_the_bundle_is_fresh`, uno per lingua;
+    - `test_a_catalogue_input_newer_than_the_build_needs_a_rebuild`, per sorgente base, frammento e libreria.
+
+    Il file passa da 158 a 167 test.
+  - nel gate:
+    - `test_generated_catalogs_are_none_without_an_english_base`;
+    - `test_generated_catalogs_follow_the_languages_of_base_english_first`.
+
+    Il file passa da 160 a 163 test.
+  - 4 mutanti della staleness danno 4 rossi, compreso il mio `generated_catalogs` vecchio che sollevava.
+  - ruff e black sono puliti; nella corsia `utils runtime-isolation` dà **167** e `utils gate-i18n-catalog` **163**.
+- ✅ **`all-backend` finale** (19:59–20:47, 47 min 43 s, con il carico della run con coverage del coordinatore):
+  - 7 categorie su 7, EXIT 0: **12 669 passati, 28 saltati, 0 falliti**;
+  - **22 invocazioni su 23 identiche alla base**. Diversa solo utils, da 1 735 a 1 907: i 172 in più sono 163 del gate
+    nuovo e 9 della staleness, esattamente l'atteso;
+  - conteggi in `files/u2_all_backend_counts.txt`; porta 6174 libera.
+- ✅ **Manifest** (`files/u2_manifest.txt`): 18 modificati, 7 nuovi, 4 percorsi da togliere dall'indice. Le 4 rinomine
+  `<lang>.json → base/<lang>.json` hanno blob identici. I file generati hanno i blob di HEAD e sono ignorati per regola.
+  `git diff --check` è pulito.
+- ✅ **Commit proposti**: `/tmp/libreFolio_commit_u2.txt` («feat(i18n): build the catalogue from its sources») e
+  `/tmp/libreFolio_commit_u2_docs.txt` per piano e backlog.
+- ✅ **U-2 chiuso il 12/10.** Checkpoint mandato al coordinatore con lo staging esplicito: prima `git rm --cached` dei 4
+  vecchi percorsi, poi `git add` di `base/` e del resto. Stato FROZEN. Il prossimo passo, U-3, aspetta il via del
+  coordinatore dopo le chiavi di I.
+- ✅ **Staleness della build** (preparato in `u2_apply.py`): `check_frontend_needs_build()` risponde «sì» anche quando
+  manca un file generato con il bundle fresco. Gli E2E leggono il catalogo generato e passano da `auto_build_frontend`,
+  quindi una pulizia dei file ignorati non li lascia senza. Per questo la libreria espone `generated_catalogs()`.
+- ✅ **Verificato chi legge il catalogo generato senza hook**:
+  - la CI passa sempre da `dev.py` (`front build`, `test all`, `mkdocs gallery`);
+  - il runner lancia Vitest con `vitest.config.ts`, dove c'è il `globalSetup`;
+  - `dev-cli-image` copia `scripts/`, che è un pacchetto, quindi gli import nuovi reggono anche nell'immagine;
+  - Docker non costruisce il frontend.
+- ✅ **Prettier**: il catalogo contiene solo stringhe, e prettier con `tabWidth: 2` scrive come il generatore. Le sorgenti
+  restano quindi sotto prettier; `.prettierignore` esclude solo i file generati.
+- ✅ **Script dei gate U-2** pronto: `files/scripts/u2_gates.sh`, a parti separate.
+  - `local`: build con Python 3.14 e 3.9, `check` severo, hash, permessi, ignore, stato git.
+  - `targeted`: 11 selettori e `check-orphans`.
+  - `frontend`: `front check`, la build con il confronto dei chunk, `i18n audit`, le 19 Vitest, il dead-code.
+  - `fresh`: i file generati vengono cancellati e poi riscritti da Vitest, da `front check` e dal CLI; la staleness; la
+    guardia sulle modifiche a mano.
+  - `cli`: un giro `add`/`update`/`remove` del CLI, dopo il quale `base/` e i file generati devono tornare identici byte
+    per byte.
+  - `backend`: `all-backend`.
+- ✅ **Descrizioni di tre unità in `_backend_utils.py`**, chieste da M tramite il coordinatore (12/10, 17:56). Cambia solo
+  il testo di `desc`, nessun selettore. Sono preparate in `u2_apply.py`:
+  - `js-cache-fail-loud`: il testo di M, aggiunto in coda (le dipendenze della libreria JS, cioè i font di MathJax);
+  - `translation-cache` e `translation-validator`: il CHANGELOG tradotto per pezzi e validato capitolo per capitolo.
+    Testo mio, ricavato dai test di `e63cfb074`. M l'ha confrontato affermazione per affermazione con i test e col
+    codice (12/10, 17:59): corrisponde.
+
+  I test descritti entrano col treno 66 (`2aecd5a6f`, `e63cfb074`, `92fb9c83e`) e non sono nella mia base. Fra
+  `bd8ee8e4d` e `dev_release2` (`b91d6d902`) nessun file di U-2 è cambiato, compresi i 4 cataloghi, quindi il merge è
+  pulito.
