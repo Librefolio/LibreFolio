@@ -27,8 +27,8 @@ from backend.app.schemas.assets import (
 from backend.app.schemas.common import Currency as CurrencyAmount
 from backend.app.services.asset_source import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
-from backend.app.utils.cache_utils import get_ttl_cache
-from backend.app.utils.sector_fin_utils import validate_sector
+from backend.app.utils.asset.sector import validate_sector
+from backend.app.utils.runtime.cache import get_ttl_cache
 
 try:
     import justetf_scraping
@@ -142,7 +142,7 @@ def _country_name_to_iso3(country_name: str) -> Optional[str]:  # pragma: no cov
         return "Other"
 
     try:
-        from backend.app.utils.geo_utils import normalize_country_to_iso3  # noqa: PLC0415 — lazy import / avoid circular
+        from backend.app.utils.asset.geo import normalize_country_to_iso3  # noqa: PLC0415 — lazy import / avoid circular
 
         return normalize_country_to_iso3(country_name)
     except (ValueError, ImportError) as e:
