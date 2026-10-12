@@ -275,6 +275,10 @@
     /** Privacy state the axis labels were last drawn with. ECharts caches axis labels, so a
      *  toggle needs a full rebuild; the tooltip formatter reads the state on every hover. */
     let lastRenderedMasked: boolean | null = null;
+    /** Names of the series last drawn, in order. A broker that joins, leaves or is swapped
+     *  under the P&L line changes this list, which the partial path cannot express: it sends
+     *  `{name, data}` only, and ECharts would keep the old series and legend entries. */
+    let lastRenderedSeriesKey: string | null = null;
     let lastHistoryRef: PortfolioHistoryPoint[] | null = null;
     /**
      * First|last day of the data currently on screen.
@@ -1799,7 +1803,7 @@
                 return;
             }
             responsiveXAxisCompact = xAxisPolicy.compact;
-            xAxis = xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {};
+            xAxis = xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {axisLabel: {formatter: xAxisPolicy.formatter}};
         }
 
         const series = seriesData.map((seriesEntry) => ({
@@ -2007,6 +2011,7 @@
             lastRenderedMode = null;
             lastRenderedDark = null;
             lastRenderedMasked = null;
+            lastRenderedSeriesKey = null;
             lastLadderPlanKey = null;
         }
 
@@ -2057,8 +2062,9 @@
         // Determine if this is a data-only update (same mode+submode, same dark) or full re-init
         const renderedModeKey = viewMode === 'pnl' ? `pnl:${pnlSubmode}` : viewMode;
         const masked = shouldMaskAmount();
-        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark || lastRenderedMasked !== masked;
         const seriesData = buildChartUpdateSeries(isDark, activeData, logicalRange.startDate);
+        const seriesKey = seriesData.map((series) => series.name).join('\u0000');
+        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark || lastRenderedMasked !== masked || lastRenderedSeriesKey !== seriesKey;
 
         if (needsFullInit) {
             applyFullOption(isDark, buildFullSeries(isDark, seriesData), zoomWindow);
@@ -2069,6 +2075,7 @@
         lastRenderedMode = renderedModeKey;
         lastRenderedDark = isDark;
         lastRenderedMasked = masked;
+        lastRenderedSeriesKey = seriesKey;
     }
 
     function applyFullOption(isDark: boolean, series: echarts.SeriesOption[], zoomWindow: {start: number; end: number}) {
@@ -2360,6 +2367,7 @@
                           color: textColor,
                           fontSize: 14,
                           rotate: 0,
+                          formatter: xAxisPolicy?.formatter,
                           ...(xAxisPolicy?.axisLabel ?? {}),
                       },
                       axisLine: {lineStyle: {color: gridColor}},
