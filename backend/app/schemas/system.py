@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import Field, RootModel, model_validator
 
 from backend.app.schemas.common import StrictModel
-from backend.app.utils.network_utils import ClientClass
+from backend.app.utils.runtime.network import ClientClass
 
 
 class DependencyInfo(StrictModel):

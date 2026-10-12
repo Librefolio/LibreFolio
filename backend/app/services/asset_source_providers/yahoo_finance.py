@@ -17,7 +17,7 @@ from typing import Dict
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
 from backend.app.logging_config import get_logger
-from backend.app.utils.cache_utils import get_ttl_cache
+from backend.app.utils.runtime.cache import get_ttl_cache
 
 try:
     import pandas as pd
@@ -45,7 +45,7 @@ from backend.app.schemas.common import Currency as CurrencyAmount
 from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
-from backend.app.utils.sector_fin_utils import validate_sector
+from backend.app.utils.asset.sector import validate_sector
 
 logger = get_logger(__name__)
 

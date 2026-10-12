@@ -60,8 +60,8 @@ from backend.app.services.signal_runtime import validate_signal_runtime
 from backend.app.services.static_uploads import seed_default_avatars
 from backend.app.services.tools.executor import shutdown_tool_executor
 from backend.app.services.tools.registry import ToolPluginRegistry
-from backend.app.utils.cache_utils import close_all_caches
-from backend.app.utils.version import get_git_version
+from backend.app.utils.runtime.cache import close_all_caches
+from backend.app.utils.runtime.version import get_git_version
 
 # Check for test mode via environment variable ONLY
 # NOTE: Do NOT check sys.argv here - it causes issues when this module is imported

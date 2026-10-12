@@ -61,7 +61,7 @@ from backend.app.schemas.prices import FAAssetEventPoint
 from backend.app.schemas.provider import FAProviderKind
 from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
-from backend.app.utils.cache_utils import get_ttl_cache
+from backend.app.utils.runtime.cache import get_ttl_cache
 
 # ============================================================================
 # FINANCIAL MATH — Day count conventions & simple interest

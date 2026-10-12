@@ -16,7 +16,7 @@ from backend.app.services.risk.quant.spawn_worker import (
 from backend.app.services.risk.quant.workers import (
     get_simulation_worker_pool,
 )
-from backend.app.utils.cache_utils import get_ttl_cache
+from backend.app.utils.runtime.cache import get_ttl_cache
 
 MAX_PORTFOLIO_CELLS = 20_000_000
 MAX_STOCHASTIC_CELLS = 200_000_000

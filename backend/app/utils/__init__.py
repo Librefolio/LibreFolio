@@ -1,13 +1,16 @@
-"""
-Utility functions for LibreFolio.
+"""Leaf helpers for LibreFolio.
 
-This package contains:
-- number: Number formatting and precision handling
-- cache_utils: TTL cache (theine timer wheel)
-- datetime_utils: UTC datetime helpers
-- geo_utils: Geographic area normalization
-- sector_fin_utils: Sector normalization
+A module here is a leaf: it never imports services. Anything that needs FX rates, assets or
+other services belongs to a service layer; financial calculations live in
+``backend.app.services.financial_math`` (developer decision D-P7, 2026-10-12). Packages
+re-export nothing: import a name from the module that defines it.
 
-Note: Financial math (day count conventions, interest) is in
-backend.app.services.asset_source_providers.scheduled_investment
+Layout:
+
+* ``datetime_utils`` — UTC datetime helpers.
+* ``json_utils`` — JSON-safety checks for payloads.
+* ``decimal_utils`` — decimal parsing, and the truncation to the database precision.
+* ``asset/`` — sectors, geographic areas, identifiers, and the locale of their display names.
+* ``fx/`` — currencies: ISO codes, display names, symbols and flags.
+* ``runtime/`` — the instance's version, the client's network address, and in-memory TTL caches.
 """

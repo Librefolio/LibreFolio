@@ -45,7 +45,7 @@ def utils_day_count(verbose: bool = False, test_names: list = None) -> bool:
 def utils_geo_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test geographic area normalization utilities."""
     print_section("Utils: Geographic Area Normalization")
-    print_info("Testing: backend/app/utils/geo_utils.py")
+    print_info("Testing: backend/app/utils/asset/geo.py")
     print_info("Tests: ISO-3166-A3 normalization, weight parsing, validation pipeline")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_geo_utils.py", test_names)
     return run_command(cmd, "Geographic area normalization tests", verbose=verbose)
@@ -54,7 +54,7 @@ def utils_geo_utils(verbose: bool = False, test_names: list = None) -> bool:
 def utils_version(verbose: bool = False, test_names: list = None) -> bool:
     """Test version utilities."""
     print_section("Utils: Version")
-    print_info("Testing: backend/app/utils/version.py")
+    print_info("Testing: backend/app/utils/runtime/version.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_version.py", test_names)
     return run_command(cmd, "Version utility tests", verbose=verbose)
 
@@ -82,7 +82,7 @@ def utils_coverage_js_adapter(verbose: bool = False, test_names: list = None) ->
 def utils_sector_normalization(verbose: bool = False, test_names: list = None) -> bool:
     """Test FinancialSector enum and sector normalization."""
     print_section("Utils: Sector Normalization")
-    print_info("Testing: backend/app/utils/sector_fin_utils.py")
+    print_info("Testing: backend/app/utils/asset/sector.py")
     print_info("Tests: FinancialSector enum, aliases, normalization, validation")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_sector_normalization.py", test_names)
     return run_command(cmd, "Sector normalization tests", verbose=verbose)
@@ -91,7 +91,7 @@ def utils_sector_normalization(verbose: bool = False, test_names: list = None) -
 def utils_currency_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test currency listing, flag mapping, and validation."""
     print_section("Utils: Currency Utils")
-    print_info("Testing: backend/app/utils/currency_utils.py")
+    print_info("Testing: backend/app/utils/fx/currency.py")
     print_info("Tests: list_currencies (pycountry), flag_emoji mapping, validation consistency")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_currency_utils.py", test_names)
     return run_command(cmd, "Currency utils tests", verbose=verbose)
@@ -100,7 +100,7 @@ def utils_currency_utils(verbose: bool = False, test_names: list = None) -> bool
 def utils_cache_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test NamedCache wrapper, TTL expiration, and global cache registry."""
     print_section("Utils: Cache Utils")
-    print_info("Testing: backend/app/utils/cache_utils.py")
+    print_info("Testing: backend/app/utils/runtime/cache.py")
     print_info("Tests: NamedCache set/get/delete/clear, TTL, registry, stats")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_cache_utils.py", test_names)
     return run_command(cmd, "Cache utils tests", verbose=verbose)
@@ -126,7 +126,7 @@ def utils_roi_utils(verbose: bool = False, test_names: list = None) -> bool:
 def utils_translation_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test translation/locale helper (get_babel_locale + English fallback)."""
     print_section("Utils: Translation Helpers")
-    print_info("Testing: backend/app/utils/translation_utils.py")
+    print_info("Testing: backend/app/utils/asset/translation.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_translation_utils.py", test_names)
     return run_command(cmd, "Translation helper tests", verbose=verbose)
 

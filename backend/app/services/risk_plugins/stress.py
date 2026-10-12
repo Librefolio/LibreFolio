@@ -50,8 +50,8 @@ from backend.app.services.risk.metrics import (
     current_buy_and_hold_returns,
     hypothetical_stress_return,
 )
-from backend.app.utils.geo_utils import normalize_country_to_iso3
-from backend.app.utils.sector_fin_utils import FinancialSector
+from backend.app.utils.asset.geo import normalize_country_to_iso3
+from backend.app.utils.asset.sector import FinancialSector
 
 _GROUP_BUCKET_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
 _SECTOR_BUCKETS = {sector.value.casefold(): sector.value for sector in FinancialSector}

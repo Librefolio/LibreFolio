@@ -83,7 +83,10 @@ cost, valuation — from `financial_math/`. The frontend computes none of these 
 decision 1).
 
 `utils/` holds leaf functions only: they never import services; anything that needs FX, assets or other services
-belongs to a service layer, such as `financial_math/` (developer decision D-P7, 2026-10-12).
+belongs to a service layer, such as `financial_math/` (developer decision D-P7, 2026-10-12). Its folders group them by
+type: `utils/asset/` (sectors, geographic areas, identifiers, display-name locale), `utils/fx/` (currencies),
+`utils/runtime/` (version, client network address, TTL caches); `datetime_utils`, `json_utils` and `decimal_utils` stay
+at the root.
 
 ## Where to Find Things
 

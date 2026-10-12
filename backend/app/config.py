@@ -318,7 +318,7 @@ def get_version() -> str:
     Get application version from git tags.
     Same logic as ./dev.py info version and frontend APP_VERSION.
     """
-    from backend.app.utils.version import get_git_version  # noqa: PLC0415 — lazy import / avoid circular
+    from backend.app.utils.runtime.version import get_git_version  # noqa: PLC0415 — lazy import / avoid circular
 
     return get_git_version()
 
