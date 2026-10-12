@@ -67,6 +67,7 @@
     import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -479,7 +480,7 @@
                             data-testid="broker-quota-badge"
                         >
                             {#if broker.user_share_percentage != null}
-                                <span class="text-xs font-medium">{formatSharePercentage(broker.user_share_percentage, $currentLanguage)}</span>
+                                <span class="text-xs font-medium">{formatSharePercentage(broker.user_share_percentage, $uiLocaleStore)}</span>
                             {/if}
                             {#if role === 'OWNER'}<Crown size={13} />{:else if role === 'EDITOR'}<Pencil size={13} />{:else}<Eye size={13} />{/if}
                         </span>

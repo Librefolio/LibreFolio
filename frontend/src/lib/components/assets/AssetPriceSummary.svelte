@@ -22,6 +22,8 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     interface Props {
         /** Last (closing) price */
@@ -93,7 +95,7 @@
                         data-testid="asset-detail-live-price"
                         data-live-price-direction={livePriceDirection}
                     >
-                        {lastPrice.toFixed(2)}
+                        {formatFixed(lastPrice, 2)}
                     </span>
                 {/key}
                 <span class="text-xs text-gray-400 dark:text-gray-500">{livePriceConversionFailed ? assetCurrency : displayCurrency}</span>
@@ -106,7 +108,7 @@
                 {/if}
                 {#if deltaAbs !== null}
                     <span class="text-xs text-gray-400 dark:text-gray-500">
-                        ({deltaAbs >= 0 ? '+' : ''}{deltaAbs.toFixed(2)})
+                        ({formatFixed(deltaAbs, 2, {signed: true})})
                     </span>
                 {/if}
             </div>
@@ -114,7 +116,7 @@
             {#if deltaPercent !== null}
                 <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
                     {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
-                    {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
+                    {formatPercent(deltaPercent)}
                 </span>
             {/if}
         </div>

@@ -15,6 +15,7 @@
     import {buildSimulationProvenance} from '../simulationProvenance';
     import {buildDriftUncertainty} from './driftUncertainty';
     import {DEFAULT_SIMULATION_MODE, SIMULATION_MODES, simulationModeSpec, type SimulationMode} from './simulationModes';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     /**
      * L4 rung 3 — simulation: a probabilistic model, on the model's assumptions.
@@ -140,7 +141,7 @@
 
     function signedPercent(value: number | null | undefined): string {
         if (value == null || !Number.isFinite(value)) return '—';
-        return `${value < 0 ? '−' : '+'}${(Math.abs(value) * 100).toFixed(2)}%`;
+        return `${value < 0 ? '−' : '+'}${formatPercent(Math.abs(value), {scale: 100, signed: false})}`;
     }
 </script>
 
@@ -215,7 +216,7 @@
     {#if output}
         <div class="flex flex-wrap gap-4 text-sm" data-testid="risk-simulation-terminal">
             <span class="text-gray-700 dark:text-gray-200">{$t('risk.metrics.terminalMean')}: <strong class="tabular-nums">{signedPercent(output.terminal_mean_return)}</strong></span>
-            <span class="text-gray-700 dark:text-gray-200">{$t('risk.metrics.probabilityOfLoss')}: <strong class="tabular-nums">{(output.probability_of_loss * 100).toFixed(1)}%</strong></span>
+            <span class="text-gray-700 dark:text-gray-200">{$t('risk.metrics.probabilityOfLoss')}: <strong class="tabular-nums">{formatPercent(output.probability_of_loss, {scale: 100, signed: false, digits: 1})}</strong></span>
             {#if terminal}
                 <!-- The band, not just its middle: a median alone reads as a
                      prediction, and the whole point of a cone is that it is not one. -->
