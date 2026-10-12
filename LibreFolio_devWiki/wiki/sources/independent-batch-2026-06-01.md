@@ -18,7 +18,7 @@ Five self-contained plans executed in parallel on 2026-06-01, each addressing a 
 
 | Plan | Commit | Area |
 |------|--------|------|
-| `plan-independent-BackendLogAudit.prompt.md` | `b5a0bf9` | Backend: TRACE level + log policy + full audit |
+| `plan-independent-BackendLogAudit.prompt.md` | `82c9224d5` | Backend: TRACE level + log policy + full audit |
 | `plan-independent-CandlestickChart.prompt.md` | `92c0516` | Frontend: CandlestickChart.svelte + volume bars |
 | `plan-independent-FxRangeHelper.prompt.md` | `f5aadec` | Frontend: ensureFxRangeLoaded DRY refactor |
 | `plan-independent-LazyImageCache.prompt.md` | `ce2bc92` | Frontend: client-side image preview cache |

@@ -621,6 +621,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **C-64, part 2 — dates and hashes in conflict.** No event, commit or decision dated two ways; a history rewrite left pre-rewrite hashes: six remapped by subject and date (17 citations), 23 listed for the coordinator | *(none)* |
 | 2026-10-12 | **Train 72 — I's plan 48 and V's step 2b.** The broker icon's late `<img>` event, the copy helper and its gate, the security details' 30 s, the Spanish toolbar and the scrollbar gutter; the E2E cleanup and the test it unmasked | [[sources/phase00-ui-polish-2026-10]] *(6 pages — 1 source, 2 decisions, 3 problems; see log)* |
 | 2026-10-12 | **Train 71 — U-2 and M's batch 29.** The i18n catalogue generated from its sources (U-2); 28 + 5 citations of the old catalogue paths realigned to `base/`; `day-count`'s plugin path; a merge that died on a locked index | [[problems/git-merge-stash-failed-on-locked-index]] *(1 page — 1 problem)* |
 | 2026-10-12 | **C-64, part 1 — the coordinator's decisions.** F-090 and F-094 stay `planned`, and their pages now say what is built (the rest is C-65 and C-66); three page defects fixed | *(none)* |
