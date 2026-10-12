@@ -6300,7 +6300,7 @@
     }
   },
   "admin/host_installation.en.md": {
-    "md5": "9e159417021b5a06b8da5bae3b8d4819",
+    "md5": "cb0c4eba4469be3036216d94cd065555",
     "langs_done": [
       "es",
       "fr",
@@ -6317,7 +6317,9 @@
         "critique": "<translation_critique>\n<improvements>\n- Nessuna violazione bloccante delle mappature obbligatorie del glossario: termini come `broker`, `transazioni` e `impostazioni` sono resi correttamente. Anche la struttura Markdown (heading, admonitions `??? info/tip/warning`, blocchi codice, tabella, link e anchor `{: #database-reset }`) è preservata.\n- In \"Node.js compila l'interfaccia web\" e \"Il primo avvio compila l'interfaccia web e la documentazione\", `compila` traduce `builds` in modo troppo restrittivo. Meglio usare `genera` o `costruisce`: es. \"Node.js genera l'interfaccia web\"; \"Il primo avvio genera l'interfaccia web e la documentazione\".\n- Per coerenza interna con `uploaded files` reso più avanti come \"file caricati\", nella tabella conviene evitare \"gli upload\": \"Directory in cui sono archiviati il database, i file caricati e i log\".\n- \"Se solo questo download fallisce\" è ambiguo in italiano, perché `se solo` può avere valore di desiderio. Correggere in: \"Se fallisce solo questo download, l'installazione si completa comunque.\"\n- In \"il comando rifiuta di essere eseguito mentre è attivo\", il riferimento di `attivo` è poco chiaro. Meglio esplicitare il soggetto: \"il comando rifiuta di essere eseguito mentre il server è in esecuzione\".\n- \"Avvia il server: creerà un database nuovo\" è accettabile, ma più naturale e più vicino al presente inglese sarebbe: \"Avvia il server: ne crea uno nuovo\" oppure \"Avvia il server: crea un nuovo database\".\n- \"Installazione del Manuale Utente\" per `User Manual Installation` può risultare ambiguo, perché sembra \"installazione del manuale\" invece di \"pagina di installazione nel manuale utente\". Se il link punta alla sezione Installation del User Manual, meglio \"Installazione (Manuale Utente)\" o \"Installazione nel Manuale Utente\".\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 168.5
+        "elapsed_s": 168.5,
+        "stamped_at": "2026-10-12T23:07:43.870420+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:02:59.547149+00:00",
@@ -6328,7 +6330,9 @@
         "critique": "<translation_critique>\n<improvements>\nOverall, the translation is accurate, well-structured, and preserves all Markdown elements (headings, admonitions `???`/`!!!`, code blocks, table, anchor `{: #database-reset }`, links, emoji). The issues below are mostly terminology and phrasing refinements.\n\n1. **Terminology — \"rapports de courtiers\" (glossary deviation)**\n   The glossary mandates `broker report → rapport de courtier`. The text has: *\"les rapports de courtiers et les journaux\"*. Correct to: **\"les rapports de courtier et les journaux\"** (singular \"courtier\" as in the glossary compound).\n\n2. **\"dernier paquet de version\" (awkward, literal)**\n   *\"Ou téléchargez le dernier paquet de version depuis [GitHub Releases]...\"* — \"paquet de version\" is a literal calque. Prefer: **\"Ou téléchargez le paquet de la dernière version depuis [GitHub Releases]...\"**.\n\n3. **\"Vous pouvez aussi y entrer une fois avec `pipenv shell`\" (awkward syntax)**\n   \"y entrer une fois\" reads oddly in French. Prefer: **\"Vous pouvez aussi l'activer une fois avec `pipenv shell`\"** or **\"Vous pouvez aussi entrer une fois dans cet environnement avec `pipenv shell`\"**.\n\n4. **\"chemins binaires de votre base utilisateur\" (unclear calque of \"user-base binary paths\")**\n   The source means Python's user-base binary directory. Suggest: **\"les chemins d'accès aux binaires de votre base utilisateur (par ex. `~/.local/bin`...)\"** for clarity.\n\n5. **\"Node.js compile l'interface web\"** and **\"Le premier démarrage compile l'interface web et la documentation\"**\n   \"builds\" → \"compile\" is acceptable but slightly off; \"construit\" or \"génère\" is more idiomatic French for a build step. Suggested: **\"Node.js construit l'interface web\"** and **\"Le premier démarrage construit l'interface web et la documentation\"**. (Consistency with the doc build toolchain matters more than the exact verb; the current choice is acceptable but less idiomatic.)\n\n6. **\"Les valeurs par défaut fonctionnent telles quelles\"**\n   Grammatically correct but slightly stiff. Consider **\"Les valeurs par défaut fonctionnent en l'état\"** or **\"Les valeurs par défaut conviennent telles quelles\"**.\n\n7. **Minor wording — \"les téléversements\"**\n   Correct and consistent with \"téléversés\" used later, but you may prefer the more standard \"téléchargements (uploads)\" only if the UI uses that. Given the doc elsewhere uses \"téléversés\", keep as-is for internal consistency.\n\n8. **\"S'inscrire ici\" for the UI label \"Register here\"**\n   Consistent with the glossary's treatment of UI strings (e.g., `Hide amounts → Masquer les montants`), so this is fine — just confirm it matches the label actually displayed in the French UI, otherwise revert to the literal English label.\n\nNo structural defects detected: all headings, admonition titles, list numbering, table rows, code fences, inline code, URLs, and the `{: #database-reset }` anchor are preserved correctly.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 166.0
+        "elapsed_s": 166.0,
+        "stamped_at": "2026-10-12T23:07:43.870420+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:02:59.547258+00:00",
@@ -6339,7 +6343,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Glossary term “settings” not honored.** In the warning block, `usuarios, brókers, transacciones y ajustes` should be `usuarios, brókers, transacciones y configuración`, because the mandatory mapping is `settings → configuración`.\n\n2. **Glossary term “broker report” not honored.** In the final paragraph, `los informes de brókers` should be `los informes del bróker`, per the mandatory mapping `broker report → informe del bróker`.\n\n3. **Inconsistent heading style for step 6.** `### 👤 6. Crea tu cuenta` uses an imperative, while the other step headings use infinitives: `Descargar`, `Crear`, `Instalar`, `Configurar`, `Iniciar`. Change it to `### 👤 6. Crear tu cuenta` for consistency.\n\n4. **Awkward literal translation of “user-base binary paths”.** `rutas binarias de tu base de usuario` is unclear in Spanish. A better rendering would be `rutas de binarios del directorio base del usuario (p. ej., ...)` or `rutas de los binarios de la base del usuario`.\n\n5. **Semantic ambiguity in the link text “User Manual Installation”.** `Instalación del Manual de Usuario` can be read as “installation of the user manual.” Depending on the destination page title, consider `Instalación (Manual de usuario)` or `Instalación en el Manual de usuario`.\n\n6. **“Server bind port” can be more natural.** `Puerto de enlace del servidor` is understandable, but in networking Spanish, `Puerto de escucha del servidor` or `Puerto de vinculación del servidor` is usually clearer.\n\n7. **“Para workers” is telegraphic/partially untranslated.** If “workers” is not a literal CLI option, write `Para los workers` at minimum, or preferably `Para los procesos worker/trabajadores`. The current `Para workers, otro puerto...` is unnatural.\n\n8. **Minor consistency issue with “builds”.** `Node.js construye la interfaz web` and later `El primer inicio compila...` use different verbs for the same software-build concept. Consider `Node.js compila/genera la interfaz web` for consistency.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 207.3
+        "elapsed_s": 207.3,
+        "stamped_at": "2026-10-12T23:07:43.870420+00:00",
+        "stamped_by": "translate-stamp"
       }
     },
     "analysis": "[{\"name\": \"LibreFolio\", \"keywords\": [\"LibreFolio open-source financial portfolio tracker self-hosted\"]}, {\"name\": \"Pipenv\", \"keywords\": [\"Pipenv Python virtual environment dependency manager\"]}, {\"name\": \"Docker\", \"keywords\": [\"Docker container platform installation\"]}, {\"name\": \"backend\", \"keywords\": [\"backend server-side application architecture\"]}, {\"name\": \"frontend\", \"keywords\": [\"frontend web interface npm folder\"]}, {\"name\": \"virtual environment\", \"keywords\": [\"Python virtual environment venv pipenv\"]}, {\"name\": \"Python 3.13\", \"keywords\": [\"Python 3.13 release version\"]}, {\"name\": \"Node.js 24+\", \"keywords\": [\"Node.js 24 LTS version JavaScript runtime\"]}, {\"name\": \"nvm\", \"keywords\": [\"nvm Node Version Manager install\"]}, {\"name\": \"nvm-windows\", \"keywords\": [\"nvm-windows Node Version Manager Windows\"]}, {\"name\": \"Homebrew\", \"keywords\": [\"Homebrew macOS package manager\"]}, {\"name\": \"Pipfile\", \"keywords\": [\"Pipfile Pipenv Python dependencies\"]}, {\"name\": \"PATH variable\", \"keywords\": [\"PATH environment variable shell\"]}, {\"name\": \"user-base binary paths\", \"keywords\": [\"pip install --user binary path PATH\"]}, {\"name\": \"shell\", \"keywords\": [\"shell command line interpreter PATH\"]}, {\"name\": \"git clone\", \"keywords\": [\"git clone repository command\"]}, {\"name\": \"GitHub Releases\", \"keywords\": [\"GitHub Releases download source code\"]}, {\"name\": \"unzip\", \"keywords\": [\"unzip archive extraction command\"]}, {\"name\": \"pipenv install --dev\", \"keywords\": [\"pipenv install --dev development dependencies\"]}, {\"name\": \"pipenv run\", \"keywords\": [\"pipenv run command virtual environment\"]}, {\"name\": \"pipenv shell\", \"keywords\": [\"pipenv shell activate virtual environment\"]}, {\"name\": \"pip install --user pipenv\", \"keywords\": [\"pip install --user pipenv command\"]}, {\"name\": \"ModuleNotFoundError\", \"keywords\": [\"ModuleNotFoundError Python import error\"]}, {\"name\": \"npm install\", \"keywords\": [\"npm install package dependencies\"]}, {\"name\": \"npm ci\", \"keywords\": [\"npm ci clean install package-lock\"]}, {\"name\": \"Playwright\", \"keywords\": [\"Playwright end-to-end testing browser automation\"]}, {\"name\": \"Chromium\", \"keywords\": [\"Chromium browser Playwright\"]}, {\"name\": \"end-to-end tests\", \"keywords\": [\"end-to-end tests E2E software testing\"]}, {\"name\": \"documentation screenshots\", \"keywords\": [\"documentation screenshots automated tests\"]}, {\"name\": \"environment variables\", \"keywords\": [\"environment variables configuration .env\"]}, {\"name\": \"PORT\", \"keywords\": [\"PORT environment variable server bind port\"]}, {\"name\": \"LIBREFOLIO_DATA_DIR\", \"keywords\": [\"LIBREFOLIO_DATA_DIR data directory environment variable\"]}, {\"name\": \"LOG_LEVEL\", \"keywords\": [\"LOG_LEVEL logging verbosity environment variable\"]}, {\"name\": \"logging verbosity\", \"keywords\": [\"logging verbosity log level INFO DEBUG\"]}, {\"name\": \"Server bind port\", \"keywords\": [\"server bind port networking\"]}, {\"name\": \"workers\", \"keywords\": [\"server workers processes concurrency uvicorn gunicorn\"]}, {\"name\": \"migration\", \"keywords\": [\"database migration schema pending migration\"]}, {\"name\": \"pending migration\", \"keywords\": [\"pending migration database schema\"]}, {\"name\": \"SQLite\", \"keywords\": [\"SQLite database engine\"]}, {\"name\": \"SQLite database file\", \"keywords\": [\"SQLite database file app.db\"]}, {\"name\": \"app.db\", \"keywords\": [\"app.db SQLite database file\"]}, {\"name\": \"data directory\", \"keywords\": [\"data directory database uploads logs\"]}, {\"name\": \"logs\", \"keywords\": [\"logs application logs data directory\"]}, {\"name\": \"uploads\", \"keywords\": [\"uploads uploaded files data directory\"]}, {\"name\": \"backup\", \"keywords\": [\"backup data directory database\"]}, {\"name\": \"Back it up first\", \"keywords\": [\"back it up first backup warning idiom\"]}, {\"name\": \"administrator\", \"keywords\": [\"administrator user role first account\"]}, {\"name\": \"Register here\", \"keywords\": [\"Register here login form UI\"]}, {\"name\": \"login form\", \"keywords\": [\"login form registration UI\"]}, {\"name\": \"broker\", \"keywords\": [\"broker financial intermediary portfolio tracker\"]}, {\"name\": \"transactions\", \"keywords\": [\"transactions financial records portfolio\"]}, {\"name\": \"broker reports\", \"keywords\": [\"broker reports financial statements import\"]}, {\"name\": \"settings\", \"keywords\": [\"settings configuration UI\"]}, {\"name\": \"users\", \"keywords\": [\"users accounts management\"]}, {\"name\": \"terminal\", \"keywords\": [\"terminal command line user management\"]}, {\"name\": \"low-resource machines\", \"keywords\": [\"low-resource machines hardware requirements\"]}, {\"name\": \"development environment\", \"keywords\": [\"development environment software setup\"]}, {\"name\": \"defaults work as they are\", \"keywords\": [\"defaults work as they are idiom translation\"]}, {\"name\": \"by hand\", \"keywords\": [\"by hand manually idiom\"]}, {\"name\": \"for good\", \"keywords\": [\"for good permanently idiom\"]}, {\"name\": \"while it is up\", \"keywords\": [\"while it is up server running idiom\"]}, {\"name\": \"fresh database\", \"keywords\": [\"fresh database new empty database\"]}, {\"name\": \"empty database\", \"keywords\": [\"empty database reset\"]}, {\"name\": \"whole data directory\", \"keywords\": [\"whole data directory entire data folder\"]}, {\"name\": \"create-clean\", \"keywords\": [\"dev.py db create-clean database reset\"]}, {\"name\": \"refuses to run\", \"keywords\": [\"command refuses to run server up\"]}]",
@@ -10787,7 +10793,7 @@
     }
   },
   "CHANGELOG.md#1.2.0/fixed/sign-in-language-app-icons-and-small-screens": {
-    "md5": "d46a1fd9416717ad2e7bfca0c626eb47",
+    "md5": "1685c312b202749aa7a9b15f6f7d9798",
     "langs_done": [
       "es",
       "fr",
@@ -10808,7 +10814,7 @@
         "structural_issues": 0,
         "elapsed_s": 169.9,
         "index": 12,
-        "stamped_at": "2026-10-12T20:48:53.689541+00:00",
+        "stamped_at": "2026-10-12T23:49:20.744065+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -10822,7 +10828,7 @@
         "structural_issues": 0,
         "elapsed_s": 144.1,
         "index": 12,
-        "stamped_at": "2026-10-12T20:48:53.689541+00:00",
+        "stamped_at": "2026-10-12T23:49:20.744065+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -10836,7 +10842,7 @@
         "structural_issues": 0,
         "elapsed_s": 148.3,
         "index": 12,
-        "stamped_at": "2026-10-12T20:48:53.689541+00:00",
+        "stamped_at": "2026-10-12T23:49:20.744065+00:00",
         "stamped_by": "translate-stamp"
       }
     }
