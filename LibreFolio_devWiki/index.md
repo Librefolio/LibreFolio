@@ -11,7 +11,7 @@
 | Page | Domain | Features | Status |
 |------|--------|----------|--------|
 | [[domains/auth]] | AUTH | F-001–F-003, F-102 | stable |
-| [[domains/layout-settings]] | LAYOUT & SETTINGS | F-004–F-008, F-101, F-104, F-105 | stable |
+| [[domains/layout-settings]] | LAYOUT & SETTINGS | F-004–F-008, F-101, F-104, F-105, F-109 | stable |
 | [[domains/brokers]] | BROKERS | F-009–F-014, F-103 | stable |
 | [[domains/fx]] | FX (Foreign Exchange) | F-015–F-023 | stable |
 | [[domains/assets]] | ASSETS | F-024–F-036 | stable |
@@ -28,7 +28,7 @@
 
 | Page | Description |
 |------|-------------|
-| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (108 features across 12 domains, 2026-10-12) |
+| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (109 features across 12 domains, 2026-10-12) |
 
 ## Individual Feature Pages
 
@@ -43,6 +43,7 @@
 
 | Page | Title | Domain | Status |
 |------|-------|--------|--------|
+| [[features/F-109]] | In-app changelog — the bundled CHANGELOG in a modal; each release in the UI language when translated, English with a label otherwise | Layout & Settings | documented |
 | [[features/F-107]] | PAC allocator — a purchase planner in broker increments: SCIP searches, an exact Decimal replay certifies, a fixed-reference L2 first | Calculations | documented |
 | [[features/F-108]] | Portfolio Rebalancer — the PAC engine with existing positions, sales and a tax reserve; designed, contract without a service | Planned | planned |
 | [[features/F-106]] | Tool platform — atomic Tool plugins with an explicit scenario, an owned process per item, generated codecs and compiled renderers | Infrastructure | documented |
@@ -85,6 +86,7 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/changelog-translated-by-chapter]] | **T, CL.** The English CHANGELOG decides which releases exist; `CHANGELOG.<xx>.md` load lazily per language, a translated chapter with content replaces its twin, the rest stays English with «Not translated yet»; one DOMPurify path | 2026-10-12 | changelog, i18n, lazy-loading |
 | [[decisions/user-docs-plain-dev-manual-technical]] | **Q, docs 1.2.** User pages plain, technical detail in the developer manual («è un muro di testo… vale per tutto»); `docs-writer`, English only, no stamps, strict build at every batch, named placeholders instead of invented screenshots | 2026-10-08 | docs, mkdocs, user-docs, placeholders |
 | [[decisions/pdf-preview-viewer-only-local-assets]] | **M, batch 7.** The PDF preview serves its engine and fonts itself (CDN as fallback), is a viewer only (no editing, no document menu), keeps a protected PDF's password in the browser, closes when the viewer is left empty; a v1.1.0 fallback loop fixed on the way | 2026-10-09 | files, pdf, preview, offline |
 | [[decisions/gallery-is-a-release-gate-with-real-data]] | **M, R12.** The gallery blocks releases (tolerant on `dev`); no invented fixture (D1), retries kept, no runner pin; disposable accounts, no network, reduced motion, screens as tall as their subject | 2026-10-07 | ci, gallery, playwright, fixtures |
@@ -277,6 +279,11 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/copy-buttons-without-http-fallback]] | **M-20.** Five copy buttons call `navigator.clipboard` directly, bypassing `writeTextToClipboard()`: over plain HTTP outside `localhost` they copy nothing; assigned to I | open | clipboard, http, secure-context |
+| [[problems/docs-mathjax-looked-in-the-page-folder]] | **M-19.** Nested docs pages looked for the local MathJax in their own folder: jsDelivr online, no formulas offline, since 1.0; `document.currentScript` (`8d47c28c0`); M-21 open | resolved | docs, mathjax, offline |
+| [[problems/mkdocs-material-tables-resist-styling]] | **M, batch 23.** Images leave a column's minimum width, `vertical-align` loses to Material's rule, the table is as wide as its content; wrapper classes in `extra.css` | resolved | docs, css, material |
+| [[problems/pnl-lines-kept-removed-brokers]] | **I, plan 47.** A partial ECharts update merged the P&L broker series by position and left the legend; full rebuild when `seriesKey` changes (`e72b0b56e`) | resolved | charts, echarts, legend |
+| [[problems/line-chart-axes-lost-the-day]] | **I, plan 47.** Compact x-axes printed only the month on every tick, the others English or ISO dates; one localized formatter per axis (`4c05c1d85`, `8682f0bbd`) | resolved | charts, x-axis, i18n |
 | [[problems/docs-claimed-what-the-code-did-not-do]] | **Q, docs 1.2.** Rewriting from the code found pages promising what the code did not do: Generic CSV mapping, the IBKR export, SNB, the scheduler leader, sessions, migrations in Docker, the ECB count, the Sharpe/Sortino rate | resolved | docs, drift, mkdocs |
 | [[problems/playwright-favicon-aborted-by-routes]] | **M, gallery.** Playwright 1.61 aborts every image ending in `/favicon.ico` once any route is registered: broker and provider logos drew their fallback; an init script adds `?lf-gallery` | resolved | playwright, gallery, favicon |
 | [[problems/translation-cleanup-flattened-code-indent]] | **M, Aphra.** One regex on the whole translated document flattened code blocks (a broken YAML compose); clean-up spares code, `restore_code_indent()`, ERROR `code-block-indent`, 80 tests | resolved | translation, aphra, code-blocks |
@@ -437,6 +444,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/phase00-chart-axis-day-labels-2026-10]] | `Release_2/Phase_0/47_chartAxisDayLabels/` — workstream I: the day back on line-chart x-axes, localized labels, the stale P&L lines | 2026-10-12 | phase0, charts, echarts, workstream-i |
 | [[sources/phase00-docs-english-12-2026-10]] | `Release_2/Phase_0/32_docsEnglish12/` — workstream Q: the English docs aligned with 1.2 (Q1, Q2, S1–S23), the developer's reviews, the drifts found in the code | 2026-10-12 | phase0, docs, mkdocs, workstream-q |
 | [[sources/phase00-release-images-and-gallery-2026-10]] | `Release_2/Phase_0/27_releaseImages/` (three plans) — workstream M: release images and gzip, translated code blocks, the release pipeline and its gallery (R12, batches 5–12) | 2026-10-12 | phase0, release, docker, gallery, workstream-m |
 | [[sources/phase00-pac-implementation-2026-10]] | `Release_2/Phase_0/13_pacAllocator/implementation/` — workstream D: Steps 1–6 with the 05/10 mapping notes, Round 5 and its review rounds, rows 7–16 | 2026-10-12 | phase0, pac, scip, contract, review |
@@ -569,6 +577,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Step B8 — M's batches 23–24, T's CL, I's plan 47, the backlog of 12/10.** The Scalable page and the security guide reviewed live; MathJax offline on nested pages (M-19); five copy buttons over HTTP (M-20); the changelog in the UI language, registered as F-109; the day back on the x-axis and the stale P&L lines; a translation that expired the toolbar calibration (V-19); backlog ids in F-106 and the broker-icon page | [[sources/phase00-chart-axis-day-labels-2026-10]] *(8 pages — 1 feature, 1 decision, 5 problems, 1 source; see log)* |
 | 2026-10-12 | **Step B7 — release images, gallery and the English docs (M, folder 27; Q, folder 32).** A production frontend and real full/light images, `latest` = light with the prerelease rules, gzip in the app, the gallery as a release gate on real data and offline, the favicon trap, the viewer-only PDF preview, the flattened translated code; the 1.2 English pages plain for the user and checked on the code | [[sources/phase00-release-images-and-gallery-2026-10]], [[sources/phase00-docs-english-12-2026-10]] *(11 pages — 5 decisions, 4 problems, 2 sources; see log)* |
 | 2026-10-12 | **Steps D and C (base `145502a39`, train 62).** D: U-1 moved the 84 plugins to `<family>/<name>/plugin.py`; 112 citations in 54 pages realigned (8 left as history), U-1 recorded on [[decisions/plugin-folders-and-split-i18n]] and [[features/F-059]]. C: [[features/F-078]] was delivered in another form on 2026-09-09 (an uploader column filter for every user); its never-created `admin.py` row replaced — `check_source_paths` on main at 0 | — |
 | 2026-10-12 | **Step B6b — the PAC allocator (D, folder 13, 40 files).** F-107 registered and the Rebalancer as F-108 `planned`: SCIP searches and an exact replay certifies, a fixed-reference L2, one rate map, copies of owned data, a compact 1.0.0 contract, P1 deleted; seven problems, from the solver budget to the DataTable on a phone | [[sources/phase00-pac-implementation-2026-10]] *(17 pages — 2 features, 6 decisions, 7 problems, 2 sources; see log)* |

@@ -1,7 +1,7 @@
 ---
 title: "Domain: LAYOUT & SETTINGS"
 category: domain
-features: [F-004, F-005, F-006, F-007, F-008, F-101, F-104, F-105]
+features: [F-004, F-005, F-006, F-007, F-008, F-101, F-104, F-105, F-109]
 status: stable
 mkdocs: "developer/frontend/styling.md"
 ---
@@ -30,6 +30,7 @@ Global settings are a distinct concept from user settings: they are admin-manage
 | [[F-101]] | Global Privacy Mode (hide values) | frontend | support — masks amounts at the formatter, device-scoped | documented |
 | [[F-104]] | Recommend LibreFolio (social share) | frontend | support — share card in About and in the donation popup | documented |
 | [[F-105]] | Guided onboarding (Welcome, intro tour, contextual guides) | fullstack | core — first-run setup and guides; the layout gate redirects to Welcome | documented |
+| [[F-109]] | In-app changelog (localized by chapter) | frontend | support — the bundled CHANGELOG in a modal, from the sidebar's version and the About tab | documented |
 
 ## Architecture at a glance
 
