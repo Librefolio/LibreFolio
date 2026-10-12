@@ -90,6 +90,7 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/risk-answers-four-questions]] | **Folder 02, the thesis.** Risk answers «is my portfolio what I think it is?»: four questions, one per level (L1 hurt, L2 diversification, L3 paid for risk, L4 what if) | 2026-09-16 | risk, levels, thesis |
 | [[decisions/figures-in-the-interface-language]] | **T, M-18.** «Lingua della UI per tutto»: one reactive source, `uiLocale()`, the browser's region only when it speaks the UI language, en-GB for English; CP1 delivered (percentages, decimals, bytes, durations), CP2 to come | 2026-10-12 | i18n, locale, numbers |
 | [[decisions/changelog-translated-by-heading-pieces]] | **M, batch 25.** The CHANGELOG translated by pieces keyed by their headings (`changelog.py`, 30,000-character units); version lines copied; a translation that changes the structure refused; the open chapter informational until its tag | 2026-10-12 | translation, aphra, changelog |
 | [[decisions/e2e-gaps-of-1-2-before-release]] | **V, plan 46 §12.4.** Eight E2E gaps of 1.2 (real Risk query, FX on cash, account deletion, YoC, the PDF preview offline, the transfer in Auto, PAC; Scalable later): «Tutte e 7 nella 1.2», order 2-1-6-4-7-5-3 — planned | 2026-10-12 | testing, e2e, release-1.2 |
@@ -216,6 +217,7 @@
 
 | Page | Summary | Tags |
 |------|---------|------|
+| [[concepts/risk-binding-decisions]] | **Folder 02.** The decisions that bind Risk work (D8…D384, the thesis, the 1.2 CHANGELOG rules), in English, with where each lives | — | risk, decisions |
 | [[concepts/marker-locale-for-catalogue-labels]] | Prove a label is not hardcoded: mount in the marker locale `qaa`, where every key shows as `⟦key⟧`; a literal shows itself; plus a test that the keys exist in the four catalogues | testing, i18n, frontend |
 | [[concepts/brim-texts-translated-by-code]] | Plugin names and descriptions, notices, evidence captions and refusals are translated through keys built from stable codes (`brimPlugins.*`, `importWizard.brimNotice.*`, `brimEvidence.*`, `parseRefusal.*`), English as the fallback; guarded by backend tests | brim, i18n, plugins |
 | [[concepts/stale-while-revalidate-page-cache]] | A write marks portfolio answers stale and keeps them; pages show the old figures and refresh in background (E1); a sync is a write only if it wrote; phase 2 outside the portfolio is backlog N-1 | frontend, stores, cache, portfolio, ux |
@@ -589,6 +591,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Folder 02, step R2 — the decisions that bind Risk.** The thesis as a decision page; the README's binding list in English as a concept page, linked from F-110…F-112 | *(2 pages — 1 decision, 1 concept; see log)* |
 | 2026-10-12 | **Folder 02, step R1 — what is open in Risk.** The README's open items, re-checked where possible on the code, as «Still open (paused, after 1.2 — D382)» on [[features/F-110]], [[features/F-111]], [[features/F-112]] | *(none)* |
 | 2026-10-12 | **Train 68 in the wiki — M-18 CP1 (T).** Figures in the interface language through `uiLocale()`; the rest of the rule (amounts, dates, axes, M-17) in CP2 | *(1 page — 1 decision; see log)* |
 | 2026-10-12 | **Folder 02, step R0 — the Risk features.** The Risk subsystem had no feature code: engine F-110, the four-level Risk tab F-111, the Lab F-112, the legacy Asset Detail tab F-113; the folder's source page from its README | [[sources/phase00-risk-integration-2026-09]] *(5 pages — 4 features, 1 source; see log)* |
