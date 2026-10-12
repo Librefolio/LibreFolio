@@ -28,15 +28,52 @@ $$
 | Realized | Somma di (ricavato di vendita − costo storico delle unità vendute) per le operazioni SELL nel periodo; il ricavato è convertito alla data di vendita |
 | Income | DIVIDEND + INTEREST nel periodo |
 | FeesTaxes | FEE + TAX nel periodo |
-| Other | Residuo che chiude l'identità |
+| Other | Ciò che chiude l'identità: il risultato di cambio sulla liquidità detenuta in un'altra valuta (Effetto cambio sulla liquidità) più un residuo |
 
-Il residuo è calcolato come:
+Other è calcolato come:
 
 $$
 \mathrm{Other} = \mathrm{PnL}_{\text{period}} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Poiché il costo di carico mantiene i suoi tassi di cambio storici (vedi [Valore contabile](book-value.md)), l'effetto dei tassi di cambio sugli asset esteri fa parte di $\Delta\mathrm{UGL}$, non di Other. Ciò che Other contiene ancora è ciò che i quattro componenti non riescono a vedere, per esempio il valore di asset che passano tra due broker in un giorno di confine, o una vendita esclusa da Realized perché il suo ricavato non ha potuto essere convertito o il costo della sua posizione è incompleto.
+Poiché il costo di carico mantiene i suoi tassi di cambio storici (vedi [Valore contabile](book-value.md)), l'effetto dei tassi di cambio sugli asset esteri fa parte di $\Delta\mathrm{UGL}$, non di Other. La liquidità detenuta in un'altra valuta è diversa: il NAV e il valore contabile la valutano entrambi al tasso di ogni giorno, quindi il suo effetto di cambio si annulla nel P&L latente e non è in $\Delta\mathrm{UGL}$. È la prima parte di Other, l'[Effetto cambio sulla liquidità](#fx-on-cash) di ciascun broker $b$, che la vista Performance mostra per broker:
+
+$$
+\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
+$$
+
+Il residuo contiene ciò che né i quattro componenti né il risultato di cambio sulla liquidità riescono a vedere:
+
+- il movimento del tasso di cambio sulla liquidità mentre viaggia tra due broker: in transito, non appartiene al saldo di alcun broker;
+- il costo di un cambio di valuta, presso un broker o tra due: −1.000 USD che valgono €920 al tasso del giorno, cambiati in +€900, danno −€20, che non è né una commissione né una vendita;
+- il valore di asset che passano tra due broker in un giorno di confine;
+- una vendita esclusa da Realized perché il suo ricavato non ha potuto essere convertito o il costo della sua posizione è incompleto.
+
+### 💵 Effetto cambio sulla liquidità {: #fx-on-cash }
+
+Per ciascun broker $b$ che detiene liquidità in una valuta diversa da $C^*$, sul periodo $(t_0, t_1]$, dove $t_0$ è lo stato di apertura:
+
+$$
+\mathrm{FXonCash}_b = \sum_{c \neq C^*} \Bigl[N_{b,c}(t_1)\,\mathrm{fx}(c, C^*, t_1) - N_{b,c}(t_0)\,\mathrm{fx}(c, C^*, t_0)\Bigr] - \sum_{\substack{m \in (t_0, t_1] \\ \mathrm{ccy}(m) \neq C^*}} s_m \cdot \mathrm{amount}_m \cdot \mathrm{fx}(\mathrm{ccy}(m), C^*, d_m)
+$$
+
+$N_{b,c}(t)$ è il saldo che $b$ detiene nella valuta $c$ alla data $t$, in proporzione alla quota del broker, e $\mathrm{fx}$ l'ultimo tasso disponibile in quel giorno o prima. La seconda somma scorre i movimenti di $b$ in una valuta estera datati nel periodo: ogni importo, in proporzione alla quota $s_m$, al tasso della propria data $d_m$. Il primo termine è la variazione di valore della liquidità in valuta estera, il secondo ciò che i movimenti hanno portato dentro o fuori: la differenza è l'effetto dei tassi di cambio sulla liquidità che il broker deteneva. È pari ai risultati di cambio che il motore registra nei giorni del periodo in cui il tasso cambia ([Portfolio Engine — §6](index.md#exchange-result-on-foreign-cash)). La liquidità in $C^*$ non ne ha.
+
+??? example "Esempio: dollari presso un broker su una dashboard in euro"
+
+    Un broker detiene 1.000 USD per tutto il periodo mentre il tasso passa da 0,90 a 0,92 EUR per USD:
+
+    $$
+    \mathrm{FXonCash} = 1\,000 \times 0.92 - 1\,000 \times 0.90 = +20 \text{ EUR}
+    $$
+
+    Con un deposito di 500 USD a metà periodo a 0,91, e 0,92 alla fine:
+
+    $$
+    \mathrm{FXonCash} = 1\,500 \times 0.92 - 1\,000 \times 0.90 - 500 \times 0.91 = 1\,380 - 900 - 455 = +25 \text{ EUR}
+    $$
+
+    Il deposito è entrato nel capitale per €455; i +€25 sono quanto i dollari hanno guadagnato sull'euro mentre il broker li deteneva.
 
 ---
 
