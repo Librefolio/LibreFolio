@@ -610,3 +610,9 @@ are each file's last commit at the base. Paths are relative to the repository ro
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md` | `d614daed9` | 2026-10-12 | [[sources/phase00-feedback-jobs-2026-09]], [[problems/privacy-gate-blind-to-formatter-consumers]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/09_reperti_analisi_statica_20260922.md` | `d614daed9` | 2026-10-12 | [[sources/phase00-feedback-jobs-2026-09]], [[problems/missing-event-detail-read-as-consent]] |
+
+## 2026-10-12 — folder 09, step F2 (base `5c82d9bd4`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/08_review_visiva_20260922.md` | `d614daed9` | 2026-10-12 | [[problems/stale-version-file-shadows-git-describe]], [[sources/phase00-feedback-jobs-2026-09]] |

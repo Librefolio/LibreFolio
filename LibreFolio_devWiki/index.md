@@ -294,6 +294,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/stale-version-file-shadows-git-describe]] | **Folder 09, R2.** A leftover `VERSION` is read before `git describe` and nothing removes it: the reported version freezes on a dev host; design defect, open | open | backend, version, docker |
 | [[problems/privacy-gate-blind-to-formatter-consumers]] | **Folder 09, P4-11.** The money-render gate missed a formatter's consumers: the Growth chart showed amounts in privacy mode; mask at the formatter (`804bc9903`) | resolved | privacy, charts, gate |
 | [[problems/missing-event-detail-read-as-consent]] | **Folder 09, §2.5.** `{accepted: true}` as a default read a missing sync detail as consent; now an omission means cancel (`ff9038487`) | resolved | frontend, events, defaults |
 | [[problems/annualization-factor-not-coverage]] | **Folder 02, round 1 (A).** A fixed factor of 252 overstated Sharpe; «coverage» would have looked fine; `f` now observed from the data, used for volatility and the risk-free rate | resolved | risk, annualization |
@@ -605,6 +606,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Folder 09, step F2 — the areas and the visual review; folder 09 covered.** No gap in the areas; R2 of the visual review filed as an open design defect | *(1 page — 1 problem; see log)* |
 | 2026-10-12 | **Folder 09, step F1 — the structural backlog and the static analysis.** Statuses checked on the code; two solved defects kept as problems | *(2 pages — 2 problems; see log)* |
 | 2026-10-12 | **Folder 09, step F0 — the feedback jobs.** The September backlog and its sprints, each area mapped to the lot and the wiki source that cover it | [[sources/phase00-feedback-jobs-2026-09]] *(1 page — 1 source)* |
 | 2026-10-12 | **Folder 02, step R6 — the archive G0–G6.** Drift only: archived on 2026-09-16, one alignment since; what still holds and what is superseded, on [[sources/phase00-risk-analysis-backend]]. Folder 02 covered (R0–R6) | *(none)* |
