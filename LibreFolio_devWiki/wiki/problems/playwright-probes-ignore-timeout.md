@@ -113,7 +113,9 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853
   picker formats with `'en'`, and «Last updated:» in the global settings.
 - **M-18**, found by M-14 — the developer's decision of 2026-10-12, after the UI refinement: numbers built with
   `toFixed(n)` never meet a locale and keep the dot in every language — percentages (about 50 lines in some 30 files),
-  file sizes, durations — so a shot reads «+4788,01 €» next to «14.07%». A known limit stays after it (T's analysis,
+  file sizes, durations — so a shot reads «+4788,01 €» next to «14.07%». *Update (train 68)*: moved to T, with the
+  developer's rule «Lingua della UI per tutto» — CP1 delivered (`5b2aad5c4`), CP2 to come:
+  [[decisions/figures-in-the-interface-language]]. A known limit stays after it (T's analysis,
   backlog T-DI): a native `<input type="date">` is drawn by the browser in the browser's language
   (`RiskAnalysisPanel.svelte`); only a date picker of the app's own would follow the UI.
 
