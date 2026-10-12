@@ -269,6 +269,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/dashboard/GrowthChart.tooltip.test.ts",
             "src/lib/components/dashboard/ContributionTable.test.ts",
             "src/lib/components/dashboard/PerformanceChart.test.ts",
+            "src/lib/components/dashboard/OtherPeriodEffectsTable.test.ts",
             "src/lib/components/dashboard/AllocationPanel.test.ts",
             "src/lib/components/table/DataTableHeaderTooltip.test.ts",
             "src/lib/components/transactions/import/FixFlaggedStep.test.ts",
@@ -388,6 +389,16 @@ def front_files(verbose: bool = False, ui: bool = False, headed: bool = False, d
     return _run_playwright("files.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_files_pdf_offline(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the PDF preview with every origin but the lane's refused (1.2 gap 7)."""
+    print_section("Frontend Files PDF Offline Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("files-pdf-offline.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_files_uploader(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run uploader URL, list/grid and avatar regressions with synthetic APIs."""
     print_section("Frontend Files Uploader Tests")
@@ -426,6 +437,18 @@ def front_document_title(verbose: bool = False, ui: bool = False, headed: bool =
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/document-title.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
+def front_pac_allocator_real(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the PAC allocator (beta) end to end on real data (1.2 gap 3) on the desktop project, the runner default."""
+    print_section("Frontend PAC Allocator Real-Data Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("pac-allocator-real.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_changelog_locale(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -634,10 +657,28 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
     add_test(cat, "files", front_files, name="Files Tests", desc="Files page, tabs, URL filters", prereq="Login working", tests="files.spec.ts")
+    add_test(
+        cat,
+        "files-pdf-offline",
+        front_files_pdf_offline,
+        name="Files PDF Offline Tests",
+        desc="The PDF preview without internet (1.2 gap 7): every origin but the lane's refused and every browser request recorded from before the first navigation; signed in through the API as an ordinary member, a one-page Latin PDF (Helvetica, not embedded) uploaded and previewed from the Files list reaches file-preview-pdf data-state=ready with not one request to another origin; positive controls: the engine's worker fetched /_app/immutable/assets/pdfium.<hash>.wasm from the lane (GET, 200), every viewer fallback font asked for is a 200 from the lane, a jsDelivr probe from the page is refused and recorded",
+        prereq="Test users created (TEST_USER an ordinary member)",
+        tests="files-pdf-offline.spec.ts",
+    )
     add_test(cat, "files-uploader", front_files_uploader, name="Files Uploader Tests", desc="Uploader URL/list-grid/reload parity, unknown/null identities and avatar geometry with synthetic APIs", tests="files-uploader.spec.ts")
     add_test(cat, "support-copy-and-go", front_support_copy_and_go, name="Support Copy And Go Tests", desc="Icon-to-dialog, fixed public clipboard payload, native blank-tab reservation, safe navigation and denied-copy cleanup", tests="support-copy-and-go.spec.ts")
     add_test(cat, "header-scroll", front_header_scroll, name="Header Scroll Tests", desc="Desktop/mobile document-scroll geometry, retained layout, menu pins and reduced motion with synthetic APIs", tests="layout/header-scroll.spec.ts")
     add_test(cat, "document-title", front_document_title, name="Document Title Tests", desc="No page changes the tab title: direct landing on every main page and a tool page, sidebar hops in one runtime, a Files query change", prereq="Test users created", tests="layout/document-title.spec.ts")
+    add_test(
+        cat,
+        "pac-allocator-real",
+        front_pac_allocator_real,
+        name="PAC Allocator Real-Data Tests",
+        desc="The PAC allocator (beta) end to end on real data (1.2 gap 3): a disposable account holds two priced positions and cash in its own broker; the Tools hub opens the planner (tool code read from the catalogue), «copy from LibreFolio» brings the broker's cash, the positions with their stored prices and their current distribution as the targets, a budget is typed and «Calculate plan» runs the real engine; the tool's own request carries the copied facts, its answer is a proven optimum, and the screen prints it — run state, result state and proof the answer's, per Asset the value after the plan, the ideal value and the signed gap, per order the amount and the fee, on sign and digits at the currency's minor unit — within the budget",
+        prereq="Populated DB + test users (registration enabled)",
+        tests="pac-allocator-real.spec.ts",
+    )
     add_test(
         cat,
         "changelog-locale",
