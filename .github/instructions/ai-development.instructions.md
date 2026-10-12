@@ -50,6 +50,13 @@ Prompts must:
   reason, and necessity;
 - keep technical context proportional to the task.
 
+## Versions
+
+A component's version is its implementation's: bump it when its builder or payload changes, never for new values
+through an unchanged builder. Bump at most once (+1) over the last released version until the release ships, and move
+the catalog placeholder and `COMPACT_COMPONENT_VERSIONS` in the same change (devWiki:
+`decisions/ai-export-version-bump-once-per-release`).
+
 ## Divergences
 
 If MkDocs disagrees with code, tests, the runtime catalog, or observed behavior,
