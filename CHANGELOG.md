@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **What could not be measured is said once.** A single notice says what is partial and why. A section that failed, or whose answer was discarded, says so and offers a retry, and every panel links to its page of the manual.
 - **Allocation by type groups subtypes in their family**, with the same families as the type picker. The donut draws each subtype inside its family's ring, with shades spread so a large family's members stay distinct, and the allocation history draws one area per family in its base colour, with the members listed under the family's total in the tooltip.
 - **Connection security in the sidebar.** A line above the version tells whether this browser talks to LibreFolio securely (HTTPS, the same computer or a Tailscale address), over a local network without encryption, or unencrypted over the Internet; a click shows the reason and a link to the new *Connection Security* guide, and on a phone a red dot on the menu button flags an insecure connection. Administrators are told when the browser is on HTTPS but the session cookie is not marked Secure.
+- **The changelog speaks your language.** The changelog that opens from the version in the sidebar shows each release in Italian, French or Spanish when the app is in that language; a release not translated yet stays in English, marked “Not translated yet”.
 
 ### 🐛 Fixed
 
