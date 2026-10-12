@@ -596,3 +596,10 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | Source Path | Git Hash at Ingest | Date | Wiki Page |
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/README.md` | `33d5a599b` | 2026-10-12 | [[sources/phase00-risk-analysis-backend]] — drift only |
+
+## 2026-10-12 — folder 09, step F0 (base `dc00cbe9f`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/README.md` | `d614daed9` | 2026-10-12 | [[sources/phase00-feedback-jobs-2026-09]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/06_piano_sprint.md` | `d614daed9` | 2026-10-12 | [[sources/phase00-feedback-jobs-2026-09]] |
