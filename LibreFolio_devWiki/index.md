@@ -18,8 +18,8 @@
 | [[domains/signals]] | TECHNICAL ANALYSIS (Signals) | F-037–F-045 | stable |
 | [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | in-progress |
 | [[domains/scheduler]] | SCHEDULER | F-052–F-053 | implemented (registry corrected 2026-10-09) |
-| [[domains/dashboard]] | DASHBOARD | F-054–F-055, F-100 | implemented |
-| [[domains/calculations]] | CALCULATIONS | F-056–F-058, F-107 | stable |
+| [[domains/dashboard]] | DASHBOARD | F-054–F-055, F-100, F-111–F-113 | implemented |
+| [[domains/calculations]] | CALCULATIONS | F-056–F-058, F-107, F-110 | stable |
 | [[domains/infrastructure]] | INFRASTRUCTURE | F-059–F-074, F-106 | stable |
 
 ---
@@ -28,7 +28,7 @@
 
 | Page | Description |
 |------|-------------|
-| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (109 features across 12 domains, 2026-10-12) |
+| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (113 features across 12 domains, 2026-10-12) |
 
 ## Individual Feature Pages
 
@@ -43,6 +43,10 @@
 
 | Page | Title | Domain | Status |
 |------|-------|--------|--------|
+| [[features/F-110]] | Risk engine — risk analytics as plugins over prepared return series, the quant libraries in spawned processes | Calculations | documented |
+| [[features/F-111]] | Risk tab of the Dashboard and broker pages — four progressive levels; only the simulation rung stays beta | Dashboard | documented |
+| [[features/F-112]] | Risk Lab of Asset Global — correlation, losses, risk–return against a benchmark, replay | Dashboard | documented |
+| [[features/F-113]] | Risk tab of Asset Detail — the legacy panel, still beta, to be rebuilt after 1.2 | Dashboard | implemented |
 | [[features/F-109]] | In-app changelog — the bundled CHANGELOG in a modal; each release in the UI language when translated, English with a label otherwise | Layout & Settings | documented |
 | [[features/F-107]] | PAC allocator — a purchase planner in broker increments: SCIP searches, an exact Decimal replay certifies, a fixed-reference L2 first | Calculations | documented |
 | [[features/F-108]] | Portfolio Rebalancer — the PAC engine with existing positions, sales and a tax reserve; designed, contract without a service | Planned | planned |
@@ -450,6 +454,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/phase00-risk-integration-2026-09]] | `Release_2/Phase_0/02_riskfolioIntegration/` — Risk Analysis replanned and rebuilt (two rounds), paused until after 1.2 (D382); README ingested in step R0, the rest in R1–R6 | 2026-10-12 | phase0, risk, levels, lab |
 | [[sources/phase00-chart-axis-day-labels-2026-10]] | `Release_2/Phase_0/47_chartAxisDayLabels/` — workstream I: the day back on line-chart x-axes, localized labels, the stale P&L lines | 2026-10-12 | phase0, charts, echarts, workstream-i |
 | [[sources/phase00-docs-english-12-2026-10]] | `Release_2/Phase_0/32_docsEnglish12/` — workstream Q: the English docs aligned with 1.2 (Q1, Q2, S1–S23), the developer's reviews, the drifts found in the code | 2026-10-12 | phase0, docs, mkdocs, workstream-q |
 | [[sources/phase00-release-images-and-gallery-2026-10]] | `Release_2/Phase_0/27_releaseImages/` (three plans) — workstream M: release images and gzip, translated code blocks, the release pipeline and its gallery (R12, batches 5–12) | 2026-10-12 | phase0, release, docker, gallery, workstream-m |
@@ -583,6 +588,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Folder 02, step R0 — the Risk features.** The Risk subsystem had no feature code: engine F-110, the four-level Risk tab F-111, the Lab F-112, the legacy Asset Detail tab F-113; the folder's source page from its README | [[sources/phase00-risk-integration-2026-09]] *(5 pages — 4 features, 1 source; see log)* |
 | 2026-10-12 | **Train 67 in the wiki — M's batch 26.** The first append to the translated CHANGELOG, ported by hand and stamped; M-23 (French spacing in the app's changelog) recorded as open, planned in 1.2 | *(none)* |
 | 2026-10-12 | **Train 66 in the wiki.** V-16 resolved (bcrypt off the event loop); M's batch 25: the CHANGELOG translated by pieces, the MathJax fonts, a fast-forward over a dirty file; the ✨ line «The changelog speaks your language»; the changelog decision corrected | *(3 pages — 1 decision, 2 problems; see log)* |
 | 2026-10-12 | **Trains 58 and 64 in the wiki — V's batch 2 and work 3 (plan 46 §11–§12).** V-1 closed (the price sync refreshes open panels), V-5…V-7, V-9, V-10; the E2E isolation audit and cures A1–A3; bcrypt in the event loop (V-16); the developer's «Tutte e 7 nella 1.2» for the E2E gaps | *(3 pages — 1 decision, 2 problems; see log)* |
