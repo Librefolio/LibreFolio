@@ -79,7 +79,7 @@ pipenv run ./dev.py install
 En orden, instala:
 
 1. los paquetes de Python de nuevo, con `pipenv install --dev`;
-2. las herramientas del proyecto, con `npm install`;
+2. las herramientas del proyecto, con `npm ci`;
 3. las dependencias de la interfaz web, con `npm ci` en `frontend/`;
 4. el navegador Chromium de Playwright, usado por las pruebas de extremo a extremo y las capturas de pantalla de la documentación. Si solo falla esta descarga, la instalación se completa igualmente.
 
