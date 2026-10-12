@@ -3273,3 +3273,15 @@ router) is dated 2026-04-24, its commit's date, in [[decisions/policy-d-currency
 (twice) and [[sources/phase07-part3-closure]] — all four sentences describe the commit itself; [[features/F-099]]'s
 status row goes to 2026-05-30, the date of `9b9fcbb65`. In the ingest registry, the knowledge-base overview's row
 linked a page that never existed: it now names the two concepts that draw on that source. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 74 — U-3 (the catalogue split), M's batches 30–32
+Base `bcd502912` (fast-forward). Sources: plan 45 §10 (U-3), checked on the code (18 folders under
+`frontend/src/lib/i18n/`, 71 plugin fragments, the new gate); M's journal of round 12, §19–§21; the backlog. **Updated**
+[[decisions/plugin-folders-and-split-i18n]] (U-3 delivered: `base/` 288 keys, 17 subsystems with 3 844, 71 fragments
+with 219, the merged catalogue identical; the coordinator's D-U3-1 and D-U3-2; gate `utils gate-plugin-i18n-ownership`,
+R1–R4; U-4 and U-5 to come), [[features/F-008]], [[sources/phase00-translation-round12-2026-10]] (batches 30–32),
+[[problems/gallery-price-guard-expected-tofixed-text]] (the header of `galleryLocale.ts` rewritten, `172211a89`),
+[[decisions/security-details-close-after-30-seconds]] (I5 prepared), [[decisions/figures-in-the-interface-language]]
+(the CHANGELOG announces the whole rule ahead of CP2 and CP3), [[decisions/clipboard-through-one-helper-with-a-gate]]
+and [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]] (C-63, M-20, V-19 closed, `2166eeb90`). No path
+broke: `base/` stays. Graph: not updated (P-6).
