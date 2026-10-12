@@ -55,6 +55,10 @@ GET /transactions      # loads ALL
 
 Also removed: `limit/offset` parameters from API, `FilterMap.broker_id`, `FilterMap.asset_id`, `FilterMap.date_from`, `FilterMap.date_to` from frontend state.
 
+## Links
+
+- [[problems/transactions-without-asset-filter-nan-loop]] — the «without asset» filter once caused a NaN URL loop
+
 ## Source
 
 W28 decision documented in:

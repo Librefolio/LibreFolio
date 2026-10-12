@@ -34,6 +34,8 @@ Phase 1 needed a robust API client strategy. The frontend must communicate with 
 
 ## Links
 - Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-01-foundation.md`
+- [[problems/generated-client-widens-nullable-scalar]] — the generated TypeScript type can be wider than its Zod
+  validator; consumers narrow explicitly
 
 ## Source files
 

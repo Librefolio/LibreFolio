@@ -1,7 +1,7 @@
 ---
 title: "WAC Inline in Validate/Commit — No Standalone WAC Endpoint in Editing Flow"
 category: Decision
-status: Resolved
+status: resolved
 date: 2026-05-28
 tags: [backend, frontend, transactions, wac, architecture, api]
 related_features: [F-097, F-048]

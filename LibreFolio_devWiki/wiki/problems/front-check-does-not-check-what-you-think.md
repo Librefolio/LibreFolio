@@ -5,7 +5,7 @@ status: resolved
 date: 2026-09-05
 tags: [frontend, tooling, svelte-check, typescript, e2e, api-client, gates, false-green, false-red]
 related:
-  - concepts/api-client-generation
+  - decisions/zodios-api-client
   - problems/datatable-filter-options-disappear
 ---
 
