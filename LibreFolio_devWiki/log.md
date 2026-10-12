@@ -3100,3 +3100,10 @@ the review and the code). Quotes kept only where grep found them verbatim. **Cre
 [[problems/risk-stress-buckets-hand-listed]], [[problems/replay-baseline-shortened-by-late-starter]],
 [[problems/echarts-stacked-band-null-base]]. **Updated**: [[concepts/echarts-chart-gotchas]], F-110, F-113, the folder
 source. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R4 — the first round, implementation/
+Base `97eecde84`. Sources: `implementation/` (README, contracts K1–K9, streams, the A progress log), digested by an
+explore agent; quotes re-found by grep, hashes and paths verified. **Created**: [[concepts/risk-contracts-k1-k9]],
+[[decisions/histogram-grid-pinned-to-var-cut]], [[problems/annualization-factor-not-coverage]] (no delivering commit
+isolated for the observed factor: cited by its code). **Updated**: [[features/F-110]], the folder source.
+Graph: not updated (P-6).
