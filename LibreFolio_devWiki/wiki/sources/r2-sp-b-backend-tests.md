@@ -15,7 +15,7 @@ related:
 # Source: R2 SP-B — Backend Tests WAC + Mock Data
 
 ## Summary
-Test coverage plan (✅ completed, commit `473d2611`) for the WAC feature. Creates `test_transactions_wac.py` with 13 API tests (WAC-1→WAC-13) covering the new Currency schema, auto-calc WAC, FX cross-currency, recalc-wac endpoint, and validation error cases. Self-contained tests — each creates its own user+broker+asset via API.
+Test coverage plan (✅ completed, commit `fb6d28606`) for the WAC feature. Creates `test_transactions_wac.py` with 13 API tests (WAC-1→WAC-13) covering the new Currency schema, auto-calc WAC, FX cross-currency, recalc-wac endpoint, and validation error cases. Self-contained tests — each creates its own user+broker+asset via API.
 
 ## Key Takeaways
 
