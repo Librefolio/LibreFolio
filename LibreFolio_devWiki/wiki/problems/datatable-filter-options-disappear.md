@@ -1,6 +1,7 @@
 ---
 title: "DataTable Enum Filter Options Disappear When Count Reaches Zero"
 category: problem
+status: resolved
 tags: [frontend, datatable, filter, enum, svelte5]
 severity: medium
 resolved: true

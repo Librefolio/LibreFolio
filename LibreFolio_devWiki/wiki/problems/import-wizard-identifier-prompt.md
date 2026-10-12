@@ -1,8 +1,9 @@
 ---
 title: "Import Wizard: identifier prompt skipped on asset create"
 category: problem
-status: open
+status: resolved
 date: 2026-06-25
+updated: 2026-10-12
 tags: [frontend, import-wizard, brim, identifier-prompt, asset-modal, svelte5]
 related:
   - sources/phase-final-bugs-2026-06-25
@@ -39,6 +40,13 @@ oncreated={(assetId) => {
 
 1. In `oncreated` callback, after `resolveAsset()`, replicate `resolveAssetManual()` logic: check if the asset lacks the extracted identifier and open `identifierPromptOpen` if so.
 2. Pass `initialNoProvider={true}` (or equivalent) when opening `AssetModal` from the import wizard context.
+
+## Resolution (verified on the code, 2026-10-12)
+
+Fixed the same day, in commit `7bae73b74` (2026-06-25), though the page stayed `open`: the wizard's `oncreated` callback
+resolves the asset and then calls `checkAndPromptIdentifier(fakeId, assetId, res, {clearOnCancel: false})`, so the
+prompt opens for the new asset and cancelling it does not unbind the asset just created; the wizard opens
+`AssetModal` with `initialNoProvider={true}`. The line numbers in Root Cause are those of June.
 
 ## Prevention
 

@@ -1,8 +1,9 @@
 ---
 title: "Docker entrypoint chown fails on macOS: GID 20 collides with Debian's dialout"
 category: problem
-status: open
+status: resolved
 date: 2026-07-20
+updated: 2026-10-12
 tags: [docker, deployment, macos, entrypoint, gid, permissions]
 related: [decisions/single-docker-image]
 ---
@@ -63,6 +64,13 @@ named `librefolio` that shares GID 20 with `dialout` — `chown
 librefolio:librefolio` then resolves the name correctly. Single-line
 change.
 
+## Resolution (verified on the code, 2026-10-12)
+Fixed another way, in commit `f32e460ca` (2026-09-01): the container no longer needs the group's *name*.
+`entrypoint.sh` works off the numeric ids — `TARGET_IDS="${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}"`, then
+`chown -R "$TARGET_IDS"` and `gosu "$TARGET_IDS"` — and the `Dockerfile` keeps the named `groupadd`/`useradd` only
+as a best-effort convenience, with a comment on the collision. A GID that the base image already uses can no longer
+stop the container. The `-o` change above was not applied.
+
 ## Workaround used for verification only (not shipped)
 ```bash
 docker run -d -p 6043:6040 --entrypoint sh librefolio:latest \
@@ -83,6 +91,6 @@ change into that PR.
 
 | Role | Path |
 |------|------|
-| Group/user creation (bug) | `Dockerfile` (`groupadd -g ${GID} librefolio`, ~line 65) |
-| Runtime chown (failure site) | `entrypoint.sh` (`chown -R "$TARGET_USER:$TARGET_USER" "$DATA_DIR"`) |
+| Group/user creation (best-effort since `f32e460ca`) | `Dockerfile` (`groupadd -g ${GID} librefolio`) |
+| Runtime chown (numeric ids since `f32e460ca`) | `entrypoint.sh` (`chown -R "$TARGET_IDS" "$DATA_DIR"`) |
 | UID/GID build args source | `dev.py` (`docker build`/`docker rebuild` commands), `docker-compose.yml` (`build.args`) |

@@ -64,6 +64,7 @@ measured repeatable concurrent speedups at an approximately linear memory cost.
   analytics, never as the quantitative execution boundary.
 - API contracts contain serializable DTOs only; no QuantLib, pandas, CVXPY, or
   Riskfolio object crosses the process boundary.
+- The application contracts of the risk UI built on this boundary: [[decisions/risk-g6-application-contracts]].
 
 ## Source files
 

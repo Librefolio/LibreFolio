@@ -60,7 +60,7 @@
 | [[features/F-047]] | Transaction List Page (DataTable, always-pair-adjacent, client-side filters) | Transactions | implemented |
 | [[features/F-048]] | Transaction Modals (Form / Bulk / Delete / Promote / Split — mode-less, Round 6 Plan D done) | Transactions | in-progress |
 | [[features/F-054]] | Dashboard KPI & Overview (unified `/portfolio/report`) | Dashboard | implemented |
-| [[features/F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | Dashboard | implemented |
+| [[features/F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | Dashboard | documented |
 | [[features/F-058]] | ROI Calculations (TWRR + MWRR) | Calculations | implemented |
 | [[features/F-059]] | Provider Registry Pattern | Infrastructure | implemented |
 | [[features/F-060]] | Thread Isolation for Providers | Infrastructure | implemented |
@@ -315,7 +315,7 @@
 | [[problems/flag-emoji-windows]] | Flags on Windows: one global 'LF Flags' face, flags-only unicode-range (Apple local, Noto subset elsewhere) | resolved (2026-09-29) | frontend, emoji, windows, fonts |
 | [[problems/justetf-websocket-disconnect]] | JustETF WebSocket silently freezes — reconnect backoff workaround | workaround | backend, providers, websocket |
 | [[problems/asset-currency-mismatch]] | Asset price currency may differ from Asset.currency — per-row currency column | resolved | backend, db, currency, prices |
-| [[problems/tanstack-svelte5-incompatibility]] | TanStack Table v8 official adapter is incompatible with Svelte 5 runes | workaround | frontend, svelte5, tanstack |
+| [[problems/tanstack-svelte5-incompatibility]] | TanStack Table v8 official adapter is incompatible with Svelte 5 runes; resolved by removal — TanStack left the frontend on 2026-08-05 (`52c8d0d70`), [[F-075]] superseded | resolved | frontend, svelte5, tanstack |
 | [[problems/sync-functions-dead-code]] | Sync wrappers for async settings functions accumulated as dead code and were removed | resolved | backend, settings, dead-code |
 | [[problems/asset-sync-transaction-closed]] | Bulk asset sync failed with "This transaction is closed" due to concurrent commits on shared session | resolved | backend, async, database, sqlalchemy |
 | [[problems/asset-list-500-provider-input-type]] | list_assets returned 500 when asset had ProviderInputType.AUTO_GENERATED — wrong enum used in FAinfoResponse | resolved | backend, assets, providers, api, enum |
@@ -332,8 +332,8 @@
 | [[problems/zero-purchase-cost-foreign-asset-paid-in-report-currency]] | Issue #32: a USD asset bought with EUR cost 0 on an EUR Dashboard. The engine's pool in the asset currency needed the identity key `(T, T, d)` that `_preload_fx_rates` never loads, and the `None` silently became "add at the current average" (0 for an empty pool). Twins: a cost basis in T (total P&L inflated) or in a third currency. Fixed by the single average-cost function, with every gap reported | resolved | backend, portfolio-engine, wac, fx, cost-basis, silent-failure, issue-32 |
 | [[problems/clone-link-uuid-duplication]] | Clone paired rows from DB didn't generate link_uuid — fixed via type-rule check | resolved | frontend, clone, link-uuid, paired |
 | [[problems/fx-multi-route-no-fallback]] | FX sync_pairs_bulk used only primary route with no fallback — alternative routes (ECB/FED/SNB) ignored on failure | resolved | backend, fx, providers, sync, fallback |
-| [[problems/broker-icon-race-condition]] | ensurePluginIconsLoaded race condition — broker icons show only dot in /files, tx filter, dashboard filter | open | frontend, broker-icon, race-condition, async |
-| [[problems/import-wizard-identifier-prompt]] | oncreated path skips resolveAssetManual() → identifier prompt never opens for newly created assets | open | frontend, import-wizard, brim, identifier-prompt |
+| [[problems/broker-icon-race-condition]] | ensurePluginIconsLoaded race condition — broker icons show only dot in /files, tx filter, dashboard filter; forms A and B fixed where they were seen in June (`7bae73b74`, `ddffb5273`); seen again on 2026-10-12 on the broker page and in the Dashboard's selector (`BrokerIcon`'s chain reads only its props) — assigned to I | open | frontend, broker-icon, race-condition, async |
+| [[problems/import-wizard-identifier-prompt]] | oncreated path skips resolveAssetManual() → identifier prompt never opens for newly created assets; fixed in `7bae73b74` (June), status corrected 2026-10-12 | resolved | frontend, import-wizard, brim, identifier-prompt |
 | [[problems/bulk-modal-sticky-z-index]] | After BRIM import row-selector toolbar clipped by overflow-y:auto container in BulkModal | open | frontend, bulk-modal, z-index, overflow, sticky |
 | [[problems/openapi-zod-discriminator-type-erasure]] | openapi-zod-client erased ZodObject discriminator options under --export-types; fixed by singleton enums + targeted post-process | resolved | frontend, openapi, zodios, pydantic, codegen |
 | [[problems/test-transaction-implied-constructor-mismatch]] | `test_transaction_implied.py` (6 tests) failed with TypeError — its local `_builder()` used the pre-refactor `DailyStateBuilder.__init__` signature (stale `wac_series` kwarg, missing `asset_currencies`); file deleted 2026-07-13, the WAC-as-price fallback it tested being gone. Recurrence 2026-10-07: required `average_costs` parameter — 13 constructions adapted through `_engine_average_costs.py`, one outside the engine selectors (`test_brim_providers.py`) | resolved | backend, testing, portfolio, pre-existing, unrelated, test-helpers |
@@ -341,7 +341,7 @@
 | [[problems/portfolio-asset-history-regression-restored]] | `GET /portfolio/asset-history` accidentally removed in a legacy-endpoint cleanup (commit `3184a969`), restored (commit `1a734008`) | resolved | backend, api, portfolio, regression |
 | [[problems/ai-export-name-not-ticker]] | AI export used ticker/ISIN as the primary asset label instead of `name` in several renderer/builder call sites | resolved | frontend, ai-export, naming |
 | [[problems/docker-system-info-missing-deps]] | System Info showed `App Version: unknown` + 0 deps in Docker — `.git/`/`Pipfile`/`package.json` never copied into image | resolved | docker, deployment, system-info, pipfile |
-| [[problems/docker-entrypoint-gid20-collision]] | `entrypoint.sh` chown fails on macOS — host GID 20 collides with Debian's pre-existing `dialout` group | open | docker, macos, entrypoint, gid, permissions |
+| [[problems/docker-entrypoint-gid20-collision]] | `entrypoint.sh` chown fails on macOS — host GID 20 collides with Debian's pre-existing `dialout` group; fixed with numeric ids in `f32e460ca` (2026-09-01) | resolved | docker, macos, entrypoint, gid, permissions |
 | [[problems/pytest-exit-swallows-failures]] | `conftest.py` called `os._exit()` in `pytest_sessionfinish`, killing the process before pytest printed FAILURES — every red run looked clean | resolved | backend, testing, pytest, infra |
 | [[problems/resume-mode-stale-import]] | `--resume` never skipped an already-passed sub-suite: `_RESUME_MODE` was imported by value at module load, so the flag set later was never seen | resolved | testing, test-runner, python, infra |
 | [[problems/coverage-mode-stale-import]] | The same bug on the same day for `--coverage`: it never reached the Playwright runs | resolved | testing, test-runner, coverage, python, infra |
@@ -507,6 +507,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Lint, step A (`37304d716`, train 57).** Stale statuses corrected against the code: two problems fixed in June and September but still `open`, the TanStack workaround gone, the broker-icon race fixed where it was seen in June but still open elsewhere (assigned to I), [[F-050]]/[[F-089]]/[[F-092]] documented and [[F-075]] superseded; I-08 and K-24 closures in the prose; one inbound link for each of the 24 pages that only the index linked; registry statistics recomputed | *(no new pages; see log)* |
 | 2026-10-12 | **Train 56 in the wiki (`e7d698c4d`).** Plan 46 of V (data quality on real data, the refresh after the sync); C-55 (the probe and the unavailable HHI); U's decisions on plugin folders and split catalogues, recorded as planned; the connection-security guide linked from [[features/F-102]] | *(5 pages — 2 decisions, 2 problems, 1 source; see log)* |
 | 2026-10-12 | **BU2 in the wiki (train 53, `f0f3de0d9`).** The DB precision truncation moved to `db/precision.py`: one present-tense mention ([[features/F-017]]) and the rows of [[decisions/utils-leaf-functions-only]] repointed, BU2 recorded as delivered; the AI Export version rule, now written in the instructions and the composition doc (`4388db8df`), added to [[decisions/ai-export-version-bump-once-per-release]] | *(none)* |
 | 2026-10-12 | **BU1 in the wiki (train 50, `bdc078efc`).** The `utils/` modules moved into typed folders: 11 «Source files» rows in 10 pages and 6 present-tense mentions in 5 pages repointed; [[decisions/utils-leaf-functions-only]] records BU1 as delivered, with the `version.py` root near-miss | *(none)* |

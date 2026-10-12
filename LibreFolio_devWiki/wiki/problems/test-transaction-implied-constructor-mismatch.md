@@ -107,6 +107,9 @@ Resolved — see Solution above. The original "Low / no production risk" assessm
 (V(u)-wide last BUY price), not `TRANSACTION_IMPLIED` (WAC-as-price). The `TRANSACTION_IMPLIED` mechanism
 this test file exercised was intentionally removed in commit `39106380`, not merely renamed.
 
+Its root cause stayed out of sight while `os._exit()` in `pytest_sessionfinish` swallowed every FAILURES report:
+[[problems/pytest-exit-swallows-failures]].
+
 ## Recurrence 2026-10-07
 
 The structural pressure came back — this time handled inside the same change. Release 2 workstream P (issue #32,

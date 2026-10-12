@@ -6,7 +6,7 @@ date: 2026-09-05
 tags: [frontend, api-client, openapi, zodios, typescript, risk, correlation, generated-code]
 related:
   - problems/front-check-does-not-check-what-you-think
-  - concepts/api-client-generation
+  - decisions/zodios-api-client
 ---
 
 # Problem: generated client widens a nullable scalar into a scalar-or-array union

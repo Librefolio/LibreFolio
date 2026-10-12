@@ -2650,3 +2650,48 @@ M rewrote the user guide and added the admin page «Checking Connection Security
 status-history line in [[features/F-102]], a link and a row in [[decisions/connection-security-server-never-upgrades]].
 Checks for the four entries: `check_source_paths.py` on the reference set; 0 broken wikilinks in the added text; every
 new page has inbound links besides the index; `git diff --check` clean. Graph: not updated (P-6).
+
+## [2026-10-12] lint | Health check, step A (base `37304d716`, train 57)
+Graph: not consulted (P-6, after 1.2). File-based checks only; every status below was checked on the code or in git.
+Issues found: 11 high (8 statuses checked — 7 corrected, 1 kept `open` — and 3 stale claims), 4 medium groups (24 pages without a link from another page,
+4 dead targets, 7 missing statuses, 16 drifted table cells), 4 low groups; 8 judgments reported. The full report went to
+the coordinator.
+- 🔴 H1 stale statuses → corrected, history kept:
+  - [[problems/import-wizard-identifier-prompt]] was fixed in `7bae73b74` on the day it was filed;
+  - [[problems/broker-icon-race-condition]] stays `open`: forms A and B were fixed where they were seen in June
+    (`7bae73b74`, `ddffb5273`), but the developer saw the symptom again on 2026-10-12 — the large icon on a broker's
+    page, the Dashboard's selector — because `BrokerIcon`'s chain reads only its props (the coordinator's correction
+    and diagnosis); assigned to I;
+  - [[problems/docker-entrypoint-gid20-collision]] was fixed another way, with numeric ids, in `f32e460ca`;
+  - [[problems/tanstack-svelte5-incompatibility]] was resolved by removal in `52c8d0d70`;
+  - [[F-050]] (`5b887dd3a`), [[F-089]] (`d30c35966`) and [[F-092]] (`2a8e5bf1c`) → documented, and [[F-075]] →
+    superseded. The registry rows and statistics were recomputed (89 / 1 / 10 / 3 / 1 of 104), and notes added to the
+    domain pages that listed them as planned.
+- 🔴 H2 stale prose: [[decisions/yield-on-cost-definition]] and [[F-088]] (I-08 closed on 2026-10-12),
+  [[problems/stale-price-banner-never-emitted]] (K-24 closed on 2026-10-09).
+- 🟡 M1 24 pages that only the index or the log linked to → one inbound link each, from the page they declared in
+  `related:` or the one that cites the same code. Source pages linked only from the index stay, by convention (59).
+- 🟡 M2 4 dead `related:` targets, pages never written → repointed: [[decisions/zodios-api-client]],
+  [[entities/test-runner]], and [[sources/phase07-part4-round6-planc2-bugfix-pair-validation]] for the A4 race.
+- 🟡 M3 7 problems without `status`, verified fixed in the code → `status: resolved`.
+- 🟡 M4 table drift: [[F-055]] in the index; 15 cells of the domain tables aligned to [[features/registry]].
+- 🟢 L1 `Resolved` → `resolved` (2). L2 5 plain feature codes linked. L3 5 broken links in historical rows of
+  `log.md` and the registry: left as history. L4 7 pages without frontmatter: left.
+Reported, not changed — left for a lint after 1.2 (coordinator, 2026-10-12):
+- `domains/signals` says `in-progress`, the index `stable`;
+- `domains/transactions` and [[F-048]] are `in-progress` since April; the brokers and transactions domain pages are
+  stuck in the Phase 7 era;
+- [[F-094]] is half delivered: the dialog exists, the overwrite warning does not;
+- [[decisions/broker-last-owner-guard]] went another way in the code (`987df6805`, `3e3f9c41f`);
+- [[problems/generated-client-widens-nullable-scalar]]: `open` or `workaround`?
+- the `accepted`/`active`/`open` vocabulary against the SCHEMA;
+- [[problems/datatable-column-resize-noop]] and [[problems/bulk-modal-sticky-z-index]] cannot be verified without the
+  app;
+- two dated source pages say «planned» or «in progress».
+
+Checks after the repairs:
+- `check_source_paths.py`: the reference set, 11 / 17 / 12;
+- wikilinks: 0 broken in pages and in the index, 0 dead frontmatter targets, 0 non-source pages without an inbound
+  link, 0 plain feature codes;
+- the registry agrees with every page;
+- privacy clean; `git diff --check` clean.

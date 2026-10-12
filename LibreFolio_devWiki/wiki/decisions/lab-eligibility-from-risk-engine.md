@@ -65,3 +65,5 @@ redesign) arrived in the lab's branch with the Risk → F merge `2c02ff070`.
 ## Links
 - [[decisions/asset-global-page-shows-no-money]]
 - Source: `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/F-laboratorio-postmerge.md`
+- [[problems/popover-pointerdown-swallows-click]] — in the lab's «+» picker, a popover that closed on pointerdown
+  swallowed the next click

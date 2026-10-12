@@ -38,6 +38,10 @@ Two independent causes, both inside ECharts 6:
 ## Impact
 One review round of the redesign (F-3b V5-A). No data impact.
 
+## Links
+
+- [[decisions/heatmap-emphasis-is-hue-free]] — the same correlation heatmap marks the chosen cell without a hue
+
 ## Source files
 | Role | Path |
 |------|------|

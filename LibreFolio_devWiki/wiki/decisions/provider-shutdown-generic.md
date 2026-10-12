@@ -53,6 +53,7 @@ BRIMProviderRegistry.shutdown_all_providers()
 ## Consequences
 - Any future provider needing cleanup only needs to override `shutdown()`
 - Zero changes to `main.py` for new providers
+- The JustETF live-quote WebSocket also disconnects silently: [[problems/justetf-websocket-disconnect]]
 
 ## Resolved
 ✅ Completed 2026-04-10 — `changelog_2026-04-10_live-ticker-and-provider-lifecycle.md`
