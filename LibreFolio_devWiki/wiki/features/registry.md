@@ -224,7 +224,8 @@
 > registered, not its status: twelve of its rows have shipped (F-078 recognised in step C) and one is superseded.
 > **C-64, the status check of 2026-10-12**: F-048 had shipped in 1.0.0 and is `documented`. The ten `planned` rows and
 > the three `idea` rows were checked against the code and stay as they are: none is in 1.2 (F-108 has its contract
-> only; F-090 has parts built under F-051, its provider-change modal and reverse lookup are not).
+> only; F-090 has parts built under F-051, its provider-change modal and reverse lookup are not — C-65; F-094's sync
+> dialogs exist, the warning on existing data is C-66).
 
 | Domain | Total | implemented/documented | in-progress | planned | idea | superseded |
 |--------|-------|----------------------|-------------|---------|------|------------|

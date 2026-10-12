@@ -67,7 +67,7 @@
 | [[features/F-039]] | RSI Signal | Signals | implemented |
 | [[features/F-042]] | FX Pair Comparison Signal | Signals | implemented |
 | [[features/F-047]] | Transaction List Page (DataTable, always-pair-adjacent, client-side filters) | Transactions | implemented |
-| [[features/F-048]] | Transaction Modals (Form / Bulk / Delete / Promote / Split — mode-less, Round 6 Plan D done) | Transactions | in-progress |
+| [[features/F-048]] | Transaction Modals (Form / Bulk / Delete / Promote / Split — mode-less, Round 6 Plan D done) | Transactions | documented |
 | [[features/F-054]] | Dashboard KPI & Overview (unified `/portfolio/report`) | Dashboard | implemented |
 | [[features/F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | Dashboard | documented |
 | [[features/F-058]] | ROI Calculations (TWRR + MWRR) | Calculations | implemented |
@@ -614,6 +614,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **C-64, part 1 — the coordinator's decisions.** F-090 and F-094 stay `planned`, and their pages now say what is built (the rest is C-65 and C-66); three page defects fixed | *(none)* |
 | 2026-10-12 | **C-64, part 1 — the status of the unfinished features.** The `planned`, `in-progress` and `idea` rows checked against the code: F-048 had shipped in 1.0.0 (now `documented`); the other thirteen are not in 1.2 | *(none)* |
 | 2026-10-12 | **Train 70 — M's batch 28.** The M-19 spec registered (`front-utility docs-offline-math`); the gallery's price guard follows M-18 | [[problems/gallery-price-guard-expected-tofixed-text]] *(1 page — 1 problem)* |
 | 2026-10-12 | **Lint follow-up (read-only check).** Two old open problems re-checked against today's E2E: the BulkModal toolbar not covered (C-61), the DataTable resize proved on one table only (C-62) | *(none)* |
