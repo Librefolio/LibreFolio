@@ -3,14 +3,16 @@ title: "AI Export Runtime Service and Snapshot Platform"
 category: entity
 type: service
 date: 2026-07-26
-updated: 2026-08-05
+updated: 2026-10-12
 mkdocs: "developer/architecture/patterns/ai_export_snapshot.md"
-tags: [backend, frontend, ai-export, snapshot, service, components, datasets, analyses, mcp, security]
+tags: [backend, frontend, ai-export, snapshot, service, components, datasets, analyses, mcp, security, versioning]
 related:
   - sources/phase00-ai-export-backend-snapshot
   - decisions/ai-export-versioned-snapshot-boundary
+  - decisions/ai-export-version-bump-once-per-release
   - decisions/ai-export-contextual-ui-memory
   - problems/ai-export-cash-fx-valuation-basis-mismatch
+  - problems/ai-export-reconciled-false-on-rounding-dust
   - problems/ai-export-drawdown-selected-history-fallback
   - problems/ai-export-clipboard-fallback-unreachable
   - decisions/signal-backend-plugin-architecture
@@ -144,6 +146,7 @@ The service does not return prompt text, labels, translations, or user notes. `f
 | 2026-08-04 | A 49/49 catalog explanation documented the 32-dataset/17-analysis/65-component composition model, confirmed per-position/per-Asset facts in PAC and Rebalancing, clarified price and `all_data` semantics, and recorded two potential gaps. Real Portfolio probe `20260804T085052.052297Z` passed 5/5 with unchanged databases and a passed secret scan. |
 | 2026-08-05 | Final V3 closure reduced the public catalog to 8 datasets/11 analyses over 67 components and 40 internal datasets, removed the entire profile/assembler runtime and proved 114/114 prompt equivalence in candidate `20260804T224056.073291Z`. |
 | 2026-08-05 | Before first release, public snapshot/catalog/selection/instruction/response versions were reset to V1. Probe helper tests stayed in the runner under an explicit helper-only action; real prompt and Task Adequacy runs remained separate. |
+| 2026-10-12 | Release 1.2 cycle: nine components moved one version over `v1.1.0` (provenances, FIFO summaries and lots, `asset.lot_detail`, reconciliations), each in `COMPACT_COMPONENT_VERSIONS`; the developer's rule allows one step per component until the release ships, and none for a change of values only — [[decisions/ai-export-version-bump-once-per-release]]. C-53: `reconciled` true below `CONVERSION_DUST` — [[problems/ai-export-reconciled-false-on-rounding-dust]]. |
 
 ## Source files
 
