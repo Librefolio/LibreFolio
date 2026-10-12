@@ -724,6 +724,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
   Cura, a poco a poco: un account usa-e-getta (`registerDisposableUser`, `createOwnedBroker` di
   `fixtures/onboarding-accounts.ts`), come in `dashboard-broker-filter-label`. Dettagli: piano della 46, §12.3.
+  Nella 2b (12/10) è stato sistemato anche `tx-wac-bulk`: WB5 dipendeva dagli avanzi degli altri spec, e ora costruisce
+  la sua coppia; WB4 cancella ciò che committa. Dettagli: piano della 46, §12.8.
 - ✅ **V-16 · Login, registrazione e cambio password fanno bcrypt dentro l'event loop** — medio, serve una decisione;
   test-author di V, 12/10, verificato da me. Le chiamate sincrone stanno direttamente nei gestori `async def`:
   - `login` (`api/v1/auth.py:105`) chiama `verify_password_or_dummy`, cioè `bcrypt.checkpw`
@@ -755,6 +757,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     giro, con il backend condiviso già avviato;
   - il catalogo delle eccezioni seriali in `playwright.config.ts` non elenca il blocco seriale nuovo di
     `settings/scheduler.spec.ts` («Saving»), e mancava già di `fx-destructive` e `files-destructive`.
+    **Questo punto è chiuso il 12/10**, nella 2b di V: il catalogo elenca i cinque blocchi seriali veri, e
+    `asset-event-delete` è uscito dall'elenco.
   Dettagli: piano della 46, §12.5.
 - **V-18 · Selettori CSS e in inglese rimasti nei test delle impostazioni** — basso; test-author di V, 12/10:
   - in `SchedulerConfigModal.svelte` i chip degli orari non hanno testid: FSCH-008/009 usano `span.rounded-full`. Il
@@ -773,8 +777,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
   È deterministico: rosso anche a 1 worker. Lo spec suggerisce di alzare la soglia sopra la barra più larga, oppure di
   accorciare le etichette. La 2a di V non tocca né le barre né i cataloghi. Dettagli: piano della 46, §12.5.
-- **V-20 · Attese di 3 s sulla prima navigazione, rosse sotto carico** — basso; gate di V, 12/10. Sono verdi da sole
-  o a 1 worker, rosse con la concorrenza:
+- ✅ **V-20 · Attese di 3 s sulla prima navigazione, rosse sotto carico** — basso; gate di V, 12/10. Sono verdi da
+  sole o a 1 worker, rosse con la concorrenza:
   - `auth.spec.ts:379` e `:615` (Integrated onboarding 1 e 4): dopo `login()`, `toHaveURL(/dashboard/)` usa i 3 s di
     default; il test accanto (`:370`) ne usa 15;
   - `layout/app-start-auth.spec.ts:184`: poll di 3 s su `/auth/me` dopo `goto('/assets')`. Con tre test concorrenti i
@@ -783,6 +787,67 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
   Cura: aspettare la condizione con un limite di stato adeguato, non i 3 s di default. Il rallentamento stesso merita
   una voce sua; V-16 è una concausa possibile. Dettagli: piano della 46, §12.5.
+
+  **Chiusa il 12/10**, nella 2b di V, con attese su stati pubblicati e limiti espliciti:
+  - `openLoginPage`, `expectLandedOnDashboard` (path, poi `dashboard-page`) ed `expectLandedOnWelcome` in
+    `auth.spec.ts`, che copre anche il resto del flusso;
+  - lo stato del layout prima del gate in `app-start-auth:190`;
+  - `files-page` `data-busy` e la pulizia in `afterEach` in `files:854`.
+
+  Verdi `auth` 29/29, `app-start-auth` 3/3 e `files` 28/28, a 1 e a 4 worker, sotto carico alto. Commit: checkpoint 2b
+  di V, indicato dal coordinatore. Dettagli: piano della 46, §12.8.
+- **V-21 · Sonde e selettori vietati rimasti negli spec curati dalla 2b** — basso; test-author di V, 12/10. La 2b ha
+  curato i test che scrivevano sullo stato condiviso, non tutto il resto degli stessi file:
+  - `transactions-modals`:
+    - **T10 non prova niente**: il delete della toolbar ora apre il workspace bulk, quindi la sua sonda su
+      `confirm-modal-confirm` risponde sempre falso. In più legge un contatore globale;
+    - **T1 non mostra mai un commit riuscito**: sceglie Charles Schwab, senza cassa, e va in rollback. È una
+      decisione, perché cambiare broker cambia ciò che il test asserisce;
+    - `.first()` senza filtro in T3/T9/T11, e sonde `isVisible().catch`;
+  - `tx-wac-unit-toggle`: classi CSS (`bg-gray-200`, `bg-libre-green`) e sonde;
+  - `tx-wac-formmodal`: FM10 usa `.nth(count-1)` e la classe `font-medium`; FM7 ha una sonda;
+  - `tx-commit-all-types`:
+    - `.checkbox-btn` e `tr.row-deleted`;
+    - il test FX_CONVERSION accetta ancora «nessun commit»;
+    - `expectTransactionGone` dice che gli id vengono riusati, ma `AUTOINCREMENT` c'è dal piano 34;
+  - `tx-split-promote` e `tx-paired-edit`:
+    - sonde e classi CSS in Bug 6, Bug 14, NR-1 e Guard;
+    - gli helper della coppia sono copiati nei due spec;
+    - il commento di `selectRow` («a paired row selects both halves») è sbagliato;
+  - `tx-event-picker`: `pickAssetByName`, se la sonda manca, clicca il primo asset della lista;
+  - `tx-import-resolution`:
+    - `openImportWizard` usa un `.first()` senza filtro;
+    - IWR-007 e IWR-010 hanno `return` condizionali;
+    - IWR-006b ripiega su un controllo più debole;
+  - `tx-clone`: righe scelte per posizione, classi CSS, `text=new`; il test «view-only» esce presto;
+  - `files.spec.ts`:
+    - gli altri test di File Preview: i PDF puliscono in `finally` con 30 s, mentre markdown, immagine, dettaglio, zoom
+      e commenti non cancellano mai il loro upload (la lista `ownedStaticFiles` ora c'è);
+    - il modo griglia/lista si legge dalla classe `active`: servirebbe `aria-pressed` su `view-mode-grid` e
+      `view-mode-list` in `files/+page.svelte` (~`:704/707`);
+  - la fixture `logout()` (`auth-helpers.ts`) usa ancora i 3 s di default.
+
+  Dettagli: piano della 46, §12.8.
+- **V-22 · «+ New event» può modificare un evento esistente dicendo di averlo creato** — da decidere; letto da
+  test-author di V e verificato nel codice da me, 12/10. Nessun test lo dimostra ancora:
+  - `EventCreateMiniModal.svelte:133-145` manda un upsert senza id (`upsert_events_bulk`);
+  - il backend applica un upsert senza id all'evento con la stessa data e lo stesso tipo, e lo aggiorna sul posto, anche
+    se è collegato (`test_upsert_without_id_keeps_the_event_id`,
+    `test_upsert_without_id_updates_a_linked_event_in_place`);
+  - il modale rilegge quell'evento, mostra un toast di successo e lo passa al form come appena creato.
+
+  Un dividendo «nuovo» nello stesso giorno di uno esistente, magari del provider, ne sovrascrive importo e note. Da
+  decidere se è voluto. Se non lo è, il rosso va scritto prima della cura. Dettagli: piano della 46, §12.8.
+- **V-23 · Il bulk editor nasconde il broker di sola lettura e attacca l'errore d'accesso alla riga sbagliata** — basso,
+  UX; test-author di V (triage di WB5), 12/10:
+  - un TRANSFER verso un broker di sola lettura mostra il ricevente come «To: —». `renderBrokerHtml`
+    (`TransactionBulkModal.svelte` ~`:1608`) cerca il broker solo nella lista dei broker modificabili
+    (`getEditableBrokers()`, ~`:593`). L'utente non vede quale broker causa l'errore, e il banner lo chiama solo
+    «Broker #2»;
+  - `_append_access_issues` (`transaction_batch_stages.py` ~`:158-178`) riporta ogni errore d'accesso come
+    `operation="create", index=0`. La griglia lo mette sulla riga 1a (IB, modificabile) e non sulla 1b (DEGIRO).
+
+  Dettagli: piano della 46, §12.8.
 
 ## 09 · Feedback e backlog strutturale
 

@@ -43,6 +43,12 @@ const AUTH_ME = '**/api/v1/auth/me';
 const PANEL_TIMEOUT_MS = 20_000;
 const PAGE_TIMEOUT_MS = 30_000;
 const LOGIN_URL_TIMEOUT_MS = 10_000;
+/**
+ * From the layout's first render to its GET /auth/me reaching the gate. The request leaves in the layout's onMount, but
+ * every request of these pages is first held at Playwright's routes until the worker answers (keepOffline routes by
+ * predicate, so by every URL): a queue on a loaded machine. A condition, not a sleep.
+ */
+const GATE_TIMEOUT_MS = 10_000;
 /** Two query parameters: the `&` must survive the trip through `redirect`, which only an encoded value lets it do. */
 const REQUESTED_WITH_QUERY = '/assets?view=table&probe=app-start-auth';
 /** Where a sign-out takes an app page: the root login, then the signed-in user's default page. */
@@ -189,7 +195,12 @@ test.describe('App start: only a 401 signs out, and the login keeps the page (K 
         const trail = recordMainFrame(page);
         try {
             await page.goto('/assets');
-            await expect.poll(gate.held, {message: "precondition: the layout's GET /auth/me reached the gate, which holds it"}).toBeGreaterThan(0);
+            // `goto` resolves on the document's load event; the app boots after it, and under load seconds after it.
+            // The (app) layout publishes its own check: `app-auth-checking` from its first render — the request leaves
+            // in its onMount — until AUTH_SLOW_MS, then `server-unreachable`. Either one says the layout is up and
+            // waiting on /auth/me; only then is the gate asked.
+            await withTrail(page, trail, () => expect(page.getByTestId('app-auth-checking').or(page.getByTestId('server-unreachable')), 'the (app) layout is up and checking the session').toBeVisible({timeout: PAGE_TIMEOUT_MS}));
+            await expect.poll(gate.held, {message: "precondition: the layout's GET /auth/me reached the gate, which holds it", timeout: GATE_TIMEOUT_MS}).toBeGreaterThan(0);
 
             const panel = page.getByTestId('server-unreachable');
             const heldNote = (): string => `GET /auth/me requests held by the gate: ${gate.held()} (1 is the layout's own; a 2nd is the root page asking again after a redirect)`;
