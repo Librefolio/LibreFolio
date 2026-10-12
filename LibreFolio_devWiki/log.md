@@ -2501,3 +2501,70 @@ Graph: not updated (deferred).
   checks on a 404 from endpoints that exist (latent false green, [[problems/fixture-skip-hid-api-test]]); the mkdocs
   data-quality page still says "All 5 codes" (K-24, assigned).
 - Graph debt grows by the 11 new pages; P-6 and C-29 stay in the backlog by the developer's decision.
+
+## [2026-10-12] ingest | Lot 41 — F (native cash), the broker lines at transfers, the cards (H)
+Source: `Release_2/Phase_0/41_brokerPnlFlows/plan-phase00BrokerPnlFlows.prompt.md` @ git:`f10fcd04a` (§0–§4, §13–§17),
+backlog section I, base `5d0585595`. Step 3 of the historian, decided by the developer on 2026-10-12 («Adesso, in
+parallelo»). Every claim checked on the code: `native_cash.py` (`compute_native_cash`, `NativeCash`,
+`exchange_results`, `CONVERSION_DUST`), `_revalue_foreign_cash` (R first, then K), step 10c, the rate-change days in
+pre-frame and frame, `_internal_transfer_flows` / `_transfer_leg_capital`, the cards in `get_summary`, the «FX on
+cash» row; the lot's commits placed on the history (trains 32, 35, 42). Not in the journal, recorded as «developer,
+2026-10-12, via the coordinator»: F-AI (b) after 1.2 with a typed code (section I still lists it as open), and the
+Scalable confirmation («come me lo aspettavo»). The plan's §13 G1a text, addressed to the historian on 2026-10-10 and
+never applied, is now in [[decisions/portfolio-pnl-series-contracts]].
+Drift found on the way: [[concepts/3-pool-cash-model]] described a `reconciliation_delta` flag that the code never had
+— the display values rescale the summed pools since 2026-06-25 (`7aa1f7772`); also documented the per-broker pools,
+the internal-leg approximation (B3) and the pre-frame SELL approximation.
+Created: [[decisions/native-cash-daily-revaluation]], [[entities/native-cash]], [[problems/foreign-cash-never-revalued]],
+[[problems/dirty-days-ignore-fx-only-moves]], [[sources/phase00-broker-pnl-flows-2026-10]].
+Updated: [[concepts/3-pool-cash-model]], [[entities/portfolio-engine]], [[concepts/pre-frame-frame-separation]],
+[[entities/portfolio-service]], [[decisions/portfolio-pnl-series-contracts]],
+[[decisions/broker-card-aggregation-no-n-plus-one]] (also its first «Source files» table),
+[[problems/ai-export-cash-fx-valuation-basis-mismatch]], [[features/F-054]], [[features/F-055]], [[domains/calculations]].
+
+## [2026-10-12] ingest | T-1 — one home for financial math, D-P7 on utils/, the AI Export version rule, C-53
+Source: `Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` @ git:`25e358eb0` (§1, §3, §4,
+§8, §10 from «T-1» to «BU1 e BU2»), backlog sections C and T, backlog 38 C-53. T-1's two commits checked on the
+history: the rename `1cc9cd8f5` keeps `git log --follow` of `financial_math/portfolio/engine.py` back to 2026-06-19
+(39 commits); the modules cut by `a57a43fbd` start there. The version rule («+1 rispetto alla 1.1») checked on the
+catalogue: the nine components moved in the cycle are each exactly +1 over `v1.1.0`. BU1 and BU2 written as planned,
+not delivered; the BU1 folder is `utils/runtime/` (the developer's choice, via the coordinator; `platform/` in the plan
+was the earlier proposal).
+Drift: the «Known limits» of [[decisions/financial-math-single-average-cost]] — the lots' native fallback was closed on
+2026-10-11 (`82c1d3ab9`, `59a7c3e2f`), `roi_utils`/`valuation_utils` moved by T-1.
+Created: [[decisions/financial-math-one-home]], [[decisions/utils-leaf-functions-only]],
+[[decisions/ai-export-version-bump-once-per-release]], [[problems/ai-export-reconciled-false-on-rounding-dust]],
+[[sources/phase00-financial-math-home-2026-10]].
+Updated: [[decisions/financial-math-single-average-cost]], [[entities/fifo-lot-engine]],
+[[entities/lots-analysis-service]], [[entities/ai-export-snapshot-service]].
+
+## [2026-10-12] ingest | M — notes b12–b15 (translations) and batch 19 (gallery probes, M-13)
+Sources: M's four devWiki notes, kept outside the repository with M's release-pipeline files (untracked), and
+`Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` @ git:`62526ede4` (§9.3, §10, §11).
+The notes were filed nearly as written; every path, symbol and number was checked against the code and the journal,
+and the two notes without a «Source files» table got one. Commits placed on the history rather than taken from the
+journal: the French typography hook (`a965956ab`) was built on train 37 but reached `dev_release2` with train 38
+(`9245ffb6f`). M-14 (the gallery's browser locale) is in progress: only its diagnosis is written.
+Created: [[problems/stamps-hide-stale-translations]], [[decisions/docs-anchors-from-the-render]],
+[[problems/raw-html-paths-in-translations]], [[decisions/fr-typography-at-build-time]],
+[[problems/playwright-probes-ignore-timeout]], [[sources/phase00-translation-round12-2026-10]].
+Updated: [[concepts/mkdocs-suffix-i18n]] — its two wrong «Conventions» lines (never edit translations by hand; the
+cache stores every language's MD5) corrected as note b12 asked. Cross-links to the probes page from the two pages that
+already named the trap: [[problems/compactcashcell-decimal-separator-feedback-loop]],
+[[sources/phase00-e2e-import-infra-2026-10]].
+
+## [2026-10-12] update | T-W1 — old module paths in the prose, after T-1
+Backlog T-W1: T-1 repointed only the 58 «Source files» rows (`09c089147`). A scan of the prose (outside those tables)
+found 57 mentions of the pre-T-1 homes in 27 files with this ingest's filter (T counted 50 in 28 with another). Rule
+agreed with the coordinator: a present-tense claim moves to the new module; dated history stays as written, with a
+«since 2026-10-12» pointer only where a reader would be stranded; line numbers become symbol names. About 27 mentions
+in 18 pages changed — among them the «Location» of [[entities/portfolio-engine]] and [[entities/fifo-lot-engine]],
+[[features/F-054]], [[features/F-056]], [[features/F-058]], [[features/F-100]], [[decisions/mwrr-solver-newton-cap]],
+[[decisions/yield-on-cost-definition]], [[problems/fx-backward-fill-unbounded-stale-rates]] (line numbers → symbols)
+and [[domains/calculations]], whose diagram and «Source files» placed the FIFO engine in `transaction_service.py`.
+Left on purpose: dated history (status-history rows, «as it was before 2026-10-07», the `wac_utils.py` deletion,
+source summaries) and contract identifiers such as `"valuation_source": "portfolio_engine"`.
+Checks: `check_source_paths.py` — the same 11 missing paths before and after in the worktree (`admin.py` of
+[[features/F-078]] plus 10 generated artifacts a fresh worktree does not have; on the main checkout, per the
+coordinator, only `admin.py`); 2 931 paths cited, 163 more than before, all present; 0 broken wikilinks in the added
+text; every new page has at least three inbound links besides the index. Graph: not updated (P-6, after release 1.2).

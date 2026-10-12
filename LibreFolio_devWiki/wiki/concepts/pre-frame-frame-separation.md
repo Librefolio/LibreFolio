@@ -1,13 +1,16 @@
 ---
 title: "Pre-Frame / Frame Separation"
 category: concept
-updated: 2026-10-07
-tags: [backend, portfolio, engine, performance, pre-frame, daily-state, computation-window]
+updated: 2026-10-12
+tags: [backend, portfolio, engine, performance, pre-frame, daily-state, computation-window, native-cash, fx]
 related:
   - entities/portfolio-engine
+  - entities/native-cash
   - concepts/inline-wac-computation
   - concepts/3-pool-cash-model
   - decisions/financial-math-single-average-cost
+  - decisions/native-cash-daily-revaluation
+  - problems/dirty-days-ignore-fx-only-moves
   - features/F-054
   - features/F-055
 ---
@@ -57,6 +60,13 @@ acquisition's date. The pool arithmetic is the same — see [[concepts/inline-wa
 - Evaluate FX rates for valuation
 - Build `DailyPortfolioState` or `DailyPositionState` objects
 - Emit any chart data points
+
+*Since 2026-10-11 (lot 41, F), one exception to the third point:* the pre-frame also replays every day on which the
+rate of a foreign currency held as **cash** changes (`NativeCash.rate_change_days(None, t0 − 1)`), and revalues that
+cash to its native balances at the day's rate — after the day's cash, before its pool rules
+([[decisions/native-cash-daily-revaluation]]). Securities are still not valued. In the frame the same days become dirty
+days; a day on which only the rate of a currency held as a security moves is still skipped
+([[problems/dirty-days-ignore-fx-only-moves]]). In production the pre-frame is empty (`date_from=None`).
 
 ## Frame Computation [t0, t1]
 
@@ -132,6 +142,8 @@ The pre-frame cannot be skipped because the engine requires:
 |------|------|
 | Engine implementation | `backend/app/services/financial_math/portfolio/daily_state.py` |
 | Average-cost steps the replay follows (since 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
+| Rate-change days of held foreign cash (since 2026-10-11) | `backend/app/services/financial_math/native_cash.py` |
+| Pre-frame window tests (B3w, B10) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_foreign_cash_revaluation.py` |
 | Math spec §3, §7 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
 | Blob cache spec §12 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
 | Architecture overview | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md` |
