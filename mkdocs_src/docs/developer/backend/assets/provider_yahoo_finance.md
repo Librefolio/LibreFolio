@@ -2,7 +2,7 @@
 
 The Yahoo Finance provider fetches stock, ETF, crypto, and index prices using the [yfinance](https://github.com/ranaroussi/yfinance) library. It is the primary market data provider for LibreFolio.
 
-**Implementation**: `backend/app/services/asset_source_providers/yahoo_finance.py`
+**Implementation**: `backend/app/services/asset_source_providers/yahoo_finance/plugin.py`
 
 📖 **User Guide**: [Yahoo Finance — User Manual](../../../user/assets/providers/yahoo-finance.md)
 
