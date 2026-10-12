@@ -12,6 +12,7 @@
     import {BarChart3, Copy, ExternalLink, Eye} from 'lucide-svelte';
     import type {z} from 'zod';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {writeTextToClipboard} from '$lib/utils/clipboard';
     import {safeDecimal, safeNumber} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import {filterStates, findBroker, formatLotQuantityCell, formatLotQuantityMasked, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumCompleteOrNull, sumNumeric, weightedAverageCompleteOrNull} from './unifiedLotsTableHelpers';
@@ -388,7 +389,12 @@
             icon: Copy,
             label: () => label('brokers.lots.copyLotIdentifier', 'Copy lot identifier'),
             onClick: async (row) => {
-                await navigator.clipboard.writeText(String(row.lotId));
+                try {
+                    await writeTextToClipboard(String(row.lotId));
+                } catch {
+                    toasts.error($_('support.clipboardUnavailable'));
+                    return;
+                }
                 toasts.success(`${label('brokers.lots.lotIdentifierCopied', 'Lot identifier copied')}: ${row.lotId}. ${label('brokers.lots.lotIdentifierHelp', 'Stable technical identifier derived from the opening transaction, used for audit, support and API correlation.')}`);
             },
         },

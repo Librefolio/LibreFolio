@@ -23,6 +23,7 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled, waitForValidateRun} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
+import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
 
 test.setTimeout(60_000);
 
@@ -38,8 +39,8 @@ const ASSET_NAME = 'Apple';
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function goToTransactions(page: Page) {
-    await navigateTo(page, '/transactions?page_size=200');
+async function goToTransactions(page: Page, query = '?page_size=200') {
+    await navigateTo(page, `/transactions${query}`);
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
     await waitForSettled(page.getByTestId('transactions-page'), 20_000);
 }
@@ -171,7 +172,8 @@ async function dblClickBulkRow(page: Page, marker: string) {
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
 }
 
-async function commitBulkModal(page: Page) {
+/** Commit the open BulkModal; returns the ids of the rows the commit created. */
+async function commitBulkModal(page: Page): Promise<number[]> {
     const commitBtn = page.getByTestId('tx-bulk-commit');
     await expect(commitBtn).toBeEnabled({timeout: 8_000});
 
@@ -182,6 +184,24 @@ async function commitBulkModal(page: Page) {
     expect(body.committed).toBe(true);
 
     await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 10_000});
+    const results = (body.results ?? []) as Array<{operation: string; ids?: number[]; status?: string}>;
+    return results.filter((r) => r.operation === 'create' && r.status === 'success').flatMap((r) => r.ids ?? []);
+}
+
+/**
+ * The TRANSFER pair among the rows a commit created, read back from the backend.
+ * The giver is the leg leaving the source broker — negative quantity, the same
+ * rule the table uses to put it first.
+ */
+async function committedTransferPair(page: Page, createdIds: number[]): Promise<{giverId: number; receiverId: number}> {
+    const res = await page.request.get(`/api/v1/transactions?${createdIds.map((id) => `ids=${id}`).join('&')}`);
+    expect(res.ok(), `GET /transactions?ids=… answered ${res.status()}`).toBe(true);
+    const rows = (await res.json()) as Array<{id: number; type: string; quantity: string | number; related_transaction_id?: number | null}>;
+    const giver = rows.find((t) => t.type === 'TRANSFER' && Number(t.quantity) < 0);
+    expect(giver, `the commit must have created a TRANSFER giver (created ids: ${createdIds.join(', ')})`).toBeTruthy();
+    const receiverId = giver!.related_transaction_id;
+    expect(receiverId != null && createdIds.includes(receiverId), `the giver's partner ${receiverId} must be a row this commit created`).toBe(true);
+    return {giverId: giver!.id, receiverId: receiverId!};
 }
 
 /** Intercept the next validate request and return the parsed JSON body. */
@@ -205,9 +225,26 @@ async function captureValidateResponse(page: Page, action: () => Promise<void>):
 // ---------------------------------------------------------------------------
 
 test.describe('FormModal WAC Payload Tests', () => {
+    // Whoever commits, cleans up. FM6 commits a real BUY and a TRANSFER pair into
+    // TEST_USER's seeded brokers, and `Transaction` is global: left there, they
+    // shift the NAV, positions, counts and pages of every later test, and the
+    // txHygiene net that used to hide them exists only at one worker. The tracker
+    // records the rows this page's commits create and deletes exactly those, at any
+    // worker count. It starts after login (it reads through `page.request`, which
+    // needs the session cookie) and so before any commit; `afterEach` runs for a
+    // red test too.
+    let txWrites: TransactionWriteTracker | undefined;
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
+        txWrites = await trackTransactionWrites(page);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async () => {
+        const tracker = txWrites;
+        txWrites = undefined;
+        await tracker?.cleanup();
     });
 
     test('FM1 — BUY via FormModal → cost_basis_mode ABSENT', async ({page}) => {
@@ -360,30 +397,21 @@ test.describe('FormModal WAC Payload Tests', () => {
         await applyFormModal(page);
         await waitForWacResolved(page);
 
-        // Commit to DB
-        await commitBulkModal(page);
+        // Commit to DB — the answer names the rows this test now owns.
+        const createdIds = await commitBulkModal(page);
 
-        // Reload and find the committed paired row (newest rows at top, search by ASSET_NAME)
-        await goToTransactions(page);
-        const allRows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
-        const count = await allRows.count();
-        let giverRowId: string | null = null;
-
-        for (let i = 0; i < count - 1; i++) {
-            const nextCls = (await allRows.nth(i + 1).getAttribute('class')) ?? '';
-            if (nextCls.includes('tx-row-receiver')) {
-                const text = (await allRows.nth(i).textContent()) ?? '';
-                if (text.includes(ASSET_NAME) && (text.includes(BROKER_FROM) || text.includes(BROKER_TO))) {
-                    giverRowId = await allRows.nth(i).getAttribute('data-row-id');
-                    break;
-                }
-            }
-        }
-        expect(giverRowId, 'Must find the committed paired row from today').toBeTruthy();
+        // Open the committed pair by those ids. Scanning the table for "the first
+        // Apple pair from today" took whichever pair sorted first: a neighbour's
+        // under concurrency — one its owner may delete while this test reads it — or
+        // a seeded one, and then the manual cell asserted below was somebody else's.
+        const {giverId, receiverId} = await committedTransferPair(page, createdIds);
+        await goToTransactions(page, `?id_min=${Math.min(giverId, receiverId)}&id_max=${Math.max(giverId, receiverId)}`);
 
         // Select and open in BulkModal (Edit)
-        const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${giverRowId}"]`);
-        await row.locator('.checkbox-btn').first().click();
+        const giverCheckbox = page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${giverId}`);
+        await expect(giverCheckbox, 'the committed giver row must be on screen').toBeVisible({timeout: 10_000});
+        await giverCheckbox.click();
+        await expect(giverCheckbox).toHaveAttribute('data-state', 'checked');
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeVisible({timeout: 2_000});
         await editBtn.click();

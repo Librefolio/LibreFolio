@@ -8,6 +8,7 @@
     import {Check, Copy, Mail} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {writeTextToClipboard} from '$lib/utils/clipboard';
 
     interface AdminEntry {
         username: string;
@@ -27,7 +28,7 @@
     async function copyEmail(admin: AdminEntry) {
         if (!admin.email) return;
         try {
-            await navigator.clipboard.writeText(admin.email);
+            await writeTextToClipboard(admin.email);
             toasts.success($_('changelog.emailCopied'));
             copiedUsername = admin.username;
             setTimeout(() => (copiedUsername = null), 1500);

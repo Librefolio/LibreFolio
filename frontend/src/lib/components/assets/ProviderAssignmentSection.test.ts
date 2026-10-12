@@ -20,7 +20,7 @@
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
-import {writable} from 'svelte/store';
+import {get, writable} from 'svelte/store';
 import type {z} from 'zod';
 import type {schemas} from '$lib/api/generated';
 import type {ProviderConfiguration} from './providerProbeState.svelte';
@@ -84,6 +84,8 @@ vi.mock('$lib/stores/app/language', () => ({currentLanguage: writable('en')}));
 
 import ProviderAssignmentSection from './ProviderAssignmentSection.svelte';
 import {zodiosApi} from '$lib/api';
+import {_} from '$lib/i18n';
+import {toasts} from '$lib/stores/app/toastStore.svelte';
 
 // --- Provider fixtures --------------------------------------------------
 // mockprov must be filtered out of the options; yahoo has an icon + help url +
@@ -128,6 +130,47 @@ beforeEach(async () => {
     await setupI18n();
     vi.clearAllMocks();
     listFn().mockResolvedValue(PROVIDERS as never);
+});
+
+/**
+ * The clipboard surface, stubbed per test and put back after it. jsdom has none of
+ * `navigator.clipboard`, `window.isSecureContext`, `document.execCommand`: each stub
+ * is an own property, and `restoreStubs()` (in `afterEach`) deletes it again — or
+ * restores what was there — newest first.
+ */
+const stubbed: {target: object; key: string; before: PropertyDescriptor | undefined}[] = [];
+
+function stubProperty(target: object, key: string, value: unknown) {
+    stubbed.push({target, key, before: Object.getOwnPropertyDescriptor(target, key)});
+    Object.defineProperty(target, key, {value, configurable: true, writable: true});
+}
+
+function restoreStubs() {
+    for (const {target, key, before} of stubbed.splice(0).reverse()) {
+        if (before) Object.defineProperty(target, key, before);
+        else Reflect.deleteProperty(target, key);
+    }
+}
+
+/**
+ * Plain HTTP as Chromium presents it: not a secure context, and no
+ * `navigator.clipboard` at all. The legacy `execCommand('copy')` succeeds and
+ * records what the hidden textarea held at that moment.
+ */
+function onPlainHttp() {
+    const captured: (string | undefined)[] = [];
+    const execCommand = vi.fn((_command: string) => {
+        captured.push(document.querySelector('textarea')?.value);
+        return true;
+    });
+    stubProperty(window, 'isSecureContext', false);
+    stubProperty(navigator, 'clipboard', undefined);
+    stubProperty(document, 'execCommand', execCommand);
+    return {execCommand, captured};
+}
+
+afterEach(() => {
+    restoreStubs();
 });
 
 // =========================================================================
@@ -320,7 +363,33 @@ describe('ProviderAssignmentSection — Test Configuration probe', () => {
         await fireEvent.click(testBtn());
         await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'failed'));
         // A real error row exposes the copy-to-clipboard control.
-        expect(document.querySelector('button[title="Copy error detail"]')).not.toBeNull();
+        expect(screen.getByTestId('provider-test-result-copy')).toBeInTheDocument();
+    });
+
+    it('copies the error detail on plain HTTP through the legacy path, and confirms it once', async () => {
+        probeFn().mockResolvedValue({
+            current_price: {success: false, error: 'HTTP 500 upstream', error_code: 'HTTP_ERROR', execution_time_ms: 40},
+        } as never);
+        // HTTP_ERROR has no catalogue entry, so the row's detail is the backend's own error text.
+        expect(get(_)('providerErrors.HTTP_ERROR')).toBe('providerErrors.HTTP_ERROR');
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+        await fireEvent.click(testBtn());
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'failed'));
+        // No textarea on the page before the click: the one the stub reads can only be the copy's.
+        expect(document.querySelector('textarea')).toBeNull();
+        // And no toast yet: whatever is counted below, the copy click produced it.
+        expect(toasts.info).not.toHaveBeenCalled();
+        const http = onPlainHttp();
+
+        await fireEvent.click(screen.getByTestId('provider-test-result-copy'));
+
+        await waitFor(() => expect(http.execCommand).toHaveBeenCalledTimes(1));
+        expect(http.execCommand).toHaveBeenCalledWith('copy');
+        expect(http.captured).toEqual(['HTTP 500 upstream']);
+        await waitFor(() => expect(toasts.info).toHaveBeenCalledTimes(1));
+        expect(toasts.error).not.toHaveBeenCalled();
+        expect(document.querySelector('textarea')).toBeNull();
     });
 
     it('keeps the probe passed when every failure is a soft (warning) failure', async () => {

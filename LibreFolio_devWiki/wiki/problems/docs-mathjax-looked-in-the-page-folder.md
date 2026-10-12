@@ -44,12 +44,17 @@ carries the fix under «Formulas show in the documentation without internet».
 
 - A page-relative path in the docs' JavaScript is wrong on every nested page: derive it from the script's own
   address, which MkDocs always links from the site's root.
-- **No test pins it yet.** The e2e specs that open the documentation check only the address a guide link opens. M
-  proposed `frontend/e2e/layout/docs-offline-math.spec.ts` — a nested page with formulas, in English and Italian, every
-  other host refused, `mjx-container` drawn — for test-author, once the shared runner file is assigned.
+- **A test pins it since train 70.** When the fix landed, none did: the e2e specs that open the documentation checked
+  only the address a guide link opens. M proposed `frontend/e2e/layout/docs-offline-math.spec.ts` — a nested page with
+  formulas, in English and Italian, every other host refused, `mjx-container` drawn — for test-author, once the shared
+  runner file was assigned.
 - **Follow-up (batch 25)**: writing that spec found the local copy had no fonts, so formulas drew in the page's font —
-  [[problems/mathjax-fonts-missing-from-local-copy]]. The spec, extended to the font faces, still waits outside the
+  [[problems/mathjax-fonts-missing-from-local-copy]]. The spec, extended to the font faces, waited outside the
   repository for the runner file.
+- *Update (train 70)*: the spec is registered, copied byte for byte, as `front-utility docs-offline-math`
+  (`0fe5195e8`, M's batch 28), once the coordinator had assigned M the runner file after T's CP1 of M-18. M's run:
+  2 passed (English and Italian), and `check-orphans` clean, 110 of 110 e2e specs registered. A red names the place:
+  a 404 under the page's own folder is M-19 back, a 404 at the root is a copy the site does not have.
 
 ## Still open — M-21
 
@@ -64,6 +69,8 @@ builds the site from scratch, so published images are not affected; a local serv
 | Role | Path |
 |------|------|
 | Loader (`getBasePath`, `document.currentScript`) | `mkdocs_src/docs/javascripts/lib-loader.js` |
+| Regression spec (`front-utility docs-offline-math`) | `frontend/e2e/layout/docs-offline-math.spec.ts` |
+| Its registration in the runner | `scripts/test_runner/_frontend_utility.py` |
 | Docs rebuild check (`auto_build_mkdocs`) | `dev.py` |
 | How the backend serves the docs | `backend/app/main.py` |
 | Journal (§14.6, §15) | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` |
