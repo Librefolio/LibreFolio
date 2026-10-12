@@ -1133,6 +1133,37 @@ Base `1bb4abe68`: the target with `e7bfa342f`; T's CP2 and CP3 are not in it yet
 > - **Evidence:** `release-pipeline/i5/` and `release-pipeline/runs/i5/`.
 > - **For the full gallery:** the sidebar's version reads `v1.1.0-1489-g104ba23d0-dirty`, because the build ran on an
 >   uncommitted tree. Build from a clean tree first.
+> - **→ Batch 34** ([ReleaseGallery plan](plan-phase00ReleaseGallery.prompt.md), step 30): asked how 1.1 did it, M
+>   found that the release screenshots are CI's, and `-dirty` there too (the published 1.1 gallery, the nightlies).
+>   The app version is now frozen as `LF_APP_VERSION`, which also lets a local build show a chosen version for one
+>   command.
 
 **23.3 ✅ M-24 in the backlog**
 > **Note implementazione**: the guard on `navigator.language`, as the coordinator decided (`BACKLOG_POST_1.2.md` §M).
+
+### 24. ✅ Batch 34 (I4): T-EN's changelog line, by hand, then stamped — on `b1a17b49b` (train 79), 2026-10-13 01:50
+
+Base `b1a17b49b`, fast-forwarded from `e501b9615` for this line. The rest of batch 34 is the frozen app version
+([ReleaseGallery plan](plan-phase00ReleaseGallery.prompt.md), step 30).
+
+**24.1 ✅ The line, by hand**
+> **Note implementazione**: `4e11c2f83` adds a 🐛 line in «Sign-in, language, app icons and small screens», right
+> after M-18's «The last English dates and dotted decimals are gone.». It is ported to `CHANGELOG.{it,fr,es}.md` at
+> the same place.
+>
+> Names from the catalogues (`b1a17b49b`):
+> - the what-if signals are the UI's group «Benchmark Sintetici / Benchmarks Synthétiques / Benchmarks Sintéticos»
+>   (`chartSettings.categories.benchmark`). That keeps them apart from the risk section «E se…? / Et si… ? / ¿Qué
+>   pasaría si…?»;
+> - the three labels are «Lineare, Composta, Sinusoide» / «Linéaire, Composée, Sinusoïde» / «Lineal, Compuesto,
+>   Sinusoide»;
+> - the price chart, the tooltip and the provider check use the files' own words (batch 31).
+>
+> The title follows its neighbours («… seguono la tua lingua» / «… suivent votre langue» / «… siguen tu idioma»).
+>
+> Before the port, the dry-run planned 1 piece ×3 (`1.2.0/fixed/sign-in-language-app-icons-and-small-screens`,
+> ~17.1K tokens each). `translate-stamp --file CHANGELOG.md` stamped those 3, and then the dry-run was empty.
+> Script: `release-pipeline/scripts/b34_changelog_port.py`.
+
+**24.2 ✅ Gates** — the combined-revision gates of batch 34 (ReleaseGallery plan, step 30): CHANGELOG alone 3 files
+OK, 0 localized; `translate-validate` 630 files 0/0; strict build 0; `check-links` 95.
