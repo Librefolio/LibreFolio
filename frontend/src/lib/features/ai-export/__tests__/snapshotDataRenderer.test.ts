@@ -1154,6 +1154,127 @@ describe('AI Export compact Snapshot Data renderer', () => {
         });
     });
 
+    /**
+     * C-53: `reconciled` now tolerates a residual below CONVERSION_DUST — the Decimal rounding of the engine's
+     * own closing term, not a reconciliation gap — so `portfolio.reconciliation`/`broker.reconciliation` move
+     * 1 → 2 with an unchanged payload shape (schema 1). v2 renders compactly, as the very same text as its v1,
+     * while versions the renderer does not know keep falling back to YAML. No prompt wording is frozen: cells
+     * are read by field name.
+     */
+    describe('reconciliation dust (C-53)', () => {
+        type ReconciliationId = 'portfolio.reconciliation' | 'broker.reconciliation';
+        const directory = {
+            assets: [],
+            brokers: [{broker_id: 5, display_name: 'Named Broker'}],
+            fx_pairs: [],
+        };
+        // A target-currency amount, keys in the order the backend `Currency` serializes them.
+        const eur = (amount: string) => ({code: 'EUR', amount});
+
+        // A reconciliation payload as the backend serializes it. Every amount was converted to EUR at 1.09, and
+        // `period_other_result` is the engine's closing term of the decomposition: re-adding the terms rounds
+        // differently and leaves 1E-24 — rounding, which v2 reports as reconciled, its residual still exact.
+        function reconciliationSection(componentId: ReconciliationId, componentVersion: number, schemaVersion = 1) {
+            return {
+                component_id: componentId,
+                component_version: componentVersion,
+                schema_id: componentId,
+                schema_version: schemaVersion,
+                payload: {
+                    period_start: '2026-01-01',
+                    period_end: '2026-03-31',
+                    ...(componentId === 'broker.reconciliation' ? {broker_id: 5} : {}),
+                    target_currency: 'EUR',
+                    period_pnl: eur('2293.577981651376146788990826'),
+                    period_unrealized_gain_loss_delta: eur('1376.146788990825688073394495'),
+                    period_realized_gain_loss: eur('642.2018348623853211009174312'),
+                    period_income: eur('366.9724770642201834862385321'),
+                    period_fees_taxes: eur('137.6146788990825688073394495'),
+                    period_other_result: eur('45.8715596330275229357798172'),
+                    reconciled: true,
+                    residual: eur('0.000000000000000000000001'),
+                },
+            };
+        }
+
+        function render(componentId: ReconciliationId, componentVersion: number, schemaVersion = 1) {
+            const target = componentId === 'broker.reconciliation' ? {kind: 'broker', broker_id: 5} : {kind: 'portfolio'};
+            return renderSnapshotDataText([reconciliationSection(componentId, componentVersion, schemaVersion)], target, directory);
+        }
+
+        /** The pipe table on the lines right after `marker`: one header-keyed map per data row. */
+        function tableAfter(content: string, marker: string): Map<string, string>[] {
+            const lines = content.split('\n');
+            const start = lines.indexOf(marker);
+            expect(start, `a "${marker}" line`).toBeGreaterThanOrEqual(0);
+            const table: string[][] = [];
+            for (const line of lines.slice(start + 1)) {
+                if (!line.startsWith('|')) break;
+                table.push(line.slice(1, -1).split(/(?<!\\)\|/));
+            }
+            const [header = [], ...rows] = table;
+            return rows.map((cells) => new Map(header.map((column, index): [string, string] => [column, cells[index]])));
+        }
+
+        /** The one row whose `column` reads `value`: rows are found by what they hold, never by position. */
+        function rowWhere(rows: readonly Map<string, string>[], column: string, value: string): Map<string, string> {
+            const matches = rows.filter((row) => row.get(column) === value);
+            expect(matches, `rows whose ${column} is ${value}`).toHaveLength(1);
+            return matches[0];
+        }
+
+        /** The value cell of the SUMMARY row for `field`, the row found by its field name. */
+        function summaryValue(content: string, field: string): string | undefined {
+            return rowWhere(tableAfter(content, 'SUMMARY'), 'field', field).get('value');
+        }
+
+        it.each([
+            ['portfolio.reconciliation', 2],
+            ['broker.reconciliation', 2],
+        ] as const)('renders %s v%i (schema 1) as the very same text as its v1', (componentId, version) => {
+            const v1 = render(componentId, 1).content;
+            const bumped = render(componentId, version).content;
+
+            // Control: v1 is today's compact generic rendering of this payload.
+            expect(v1).toContain(`COMPONENT ${componentId}`);
+            expect(v1).not.toContain('PAYLOAD YAML FALLBACK');
+            // Subject: the bumped version goes through the same generic renderer — the same text, line for line.
+            expect(bumped).not.toContain('PAYLOAD YAML FALLBACK');
+            expect(bumped).toBe(v1);
+        });
+
+        it.each([
+            ['portfolio.reconciliation v3', 'portfolio.reconciliation', 3, 1],
+            ['broker.reconciliation v3', 'broker.reconciliation', 3, 1],
+            ['portfolio.reconciliation v2 with schema 2', 'portfolio.reconciliation', 2, 2],
+        ] as const)('still falls back to YAML for %s', (_label, componentId, version, schemaVersion) => {
+            const rendered = render(componentId, version, schemaVersion).content;
+
+            expect(rendered).toContain(`COMPONENT ${componentId}`);
+            expect(rendered).toContain('PAYLOAD YAML FALLBACK');
+        });
+
+        /*
+         * What the prompt says: the 1E-24 residual prints as `0` — below the euro's minor unit, the existing
+         * monetary-residual rule (see 'zeros sub-minor-unit reconciliation effects…'). v1 put `reconciled: false`
+         * beside that `0`, a gap of nothing; v2 reports the rounding as reconciled, so the flag and the figure
+         * agree. The v1 rows are the renderer's control: it prints this very payload compactly either way.
+         */
+        it.each([
+            ['portfolio.reconciliation', 1],
+            ['portfolio.reconciliation', 2],
+            ['broker.reconciliation', 1],
+            ['broker.reconciliation', 2],
+        ] as const)('renders %s v%i reconciled within the dust: reconciled reads true beside a residual amount of 0', (componentId, version) => {
+            const rendered = render(componentId, version).content;
+
+            expect(rendered).toContain(`COMPONENT ${componentId}`);
+            expect(rendered).not.toContain('PAYLOAD YAML FALLBACK');
+            expect(summaryValue(rendered, 'reconciled')).toBe('true');
+            expect(summaryValue(rendered, 'residual.amount')).toBe('0');
+        });
+    });
+
     it('normalizes decimal presentation without collapsing tiny nonzero values', () => {
         expect(formatPromptNumber('15000.000000000000')).toBe('15000');
         expect(formatPromptNumber('91.30339554862304')).toBe('91.3034');
