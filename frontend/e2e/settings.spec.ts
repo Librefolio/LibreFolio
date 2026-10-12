@@ -1,10 +1,10 @@
-import {expect, type Page, type Request, test} from './fixtures/playwright';
+import {type APIRequestContext, expect, type Page, type Request, type Response, test} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
 import {eventSeq, waitForEvent} from './fixtures/app-events';
 import {optionsClosed} from './fixtures/probe';
 import {uniqueSuffix} from './fixtures/unique';
-import {skipDueFlowsExcept} from './fixtures/onboarding-accounts';
+import {deleteDisposableUser, type DisposableUser, registerDisposableUser, skipDueFlowsExcept} from './fixtures/onboarding-accounts';
 
 test.describe('Runes parity', () => {
     // The preference case owns its account; the admin case changes only a local
@@ -516,6 +516,10 @@ test.describe('Settings', () => {
             await login(page, TEST_USER);
             await navigateTo(page, '/settings');
             await page.getByTestId('settings-tab-about').click();
+            // The tab renders its plugin sections only once its parallel reads are all in,
+            // and publishes that on its root. Wait for the state, not for a section to turn
+            // up within the default 3 s, which under four workers it did not.
+            await expect(page.getByTestId('about-tab')).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
         });
 
         test('can switch to about tab', async ({page}) => {
@@ -576,42 +580,111 @@ test.describe('Settings', () => {
     });
 
     test.describe('Preferences Persistence', () => {
-        test('theme preference persists after page reload', async ({page}) => {
-            await login(page, TEST_USER);
-            await navigateTo(page, '/settings');
+        // Theme and language are saved per account, and every later login applies them.
+        // The two writers below used to save them on the shared TEST_USER and never put
+        // them back: one run of the language case left that user Italian for every later
+        // session (layout/connection-security presumes English), while the theme case
+        // clicked its row container and saved nothing at all. Each writer now owns a
+        // disposable account: preferences seeded over the API before the browser signs
+        // in, the account deleted with everything it owns in `finally`.
+        const DARK_CLASS = /(?:^|\s)dark(?:\s|$)/;
+        const isPreferencesPut = (res: Response) => res.request().method() === 'PUT' && new URL(res.url()).pathname === '/api/v1/settings/user';
+
+        type StoredPreferences = {language: string; theme: string};
+
+        /**
+         * Sign the test's own API context in as `user` and set the two preferences under
+         * test, so the starting point is stated rather than inherited from the instance
+         * defaults. Done before the browser signs in, so its login applies them.
+         */
+        async function seedPreferences(request: APIRequestContext, user: DisposableUser, seed: StoredPreferences): Promise<void> {
+            const loggedIn = await request.post('/api/v1/auth/login', {data: {username: user.username, password: user.password}});
+            expect(loggedIn.ok(), 'The seed must authenticate as the account it owns').toBe(true);
+            expect(((await loggedIn.json()) as {user: {id: number}}).user.id).toBe(user.id);
+            const seeded = await request.put('/api/v1/settings/user', {data: seed});
+            expect(seeded.ok(), `Seeding the preferences failed (HTTP ${seeded.status()})`).toBe(true);
+            expect(await seeded.json()).toMatchObject(seed);
+        }
+
+        /** What the server holds for the account `request` is signed in as. */
+        async function readStoredPreferences(request: APIRequestContext): Promise<StoredPreferences> {
+            const response = await request.get('/api/v1/settings/user');
+            expect(response.ok(), `GET /api/v1/settings/user returned ${response.status()}`).toBe(true);
+            return (await response.json()) as StoredPreferences;
+        }
+
+        /** Open the tab; its rows render only once it has read the account's values. */
+        async function openPreferencesTab(page: Page): Promise<void> {
             await page.getByTestId('settings-tab-preferences').click();
-            await expect(page.getByTestId('preference-theme')).toBeVisible();
-
-            // Find current theme and toggle to a different one
-            // Theme buttons are: light, dark, auto
-            const themeContainer = page.getByTestId('preference-theme');
-            const darkButton = themeContainer.locator('button:has-text("Dark"), button[title*="Dark"], [class*="dark"]').first();
-
-            if (await darkButton.isVisible().catch(() => false)) {
-                await darkButton.click();
-            }
-
-            // Save if needed - look for save button and click it
-            const saveButton = themeContainer.locator('button[title*="Save"], [data-testid*="save"]');
-            if (await saveButton.isVisible().catch(() => false)) {
-                await saveButton.click();
-                // The settings tabs now report what they persisted; wait for that
-                // instead of hoping a second is enough before the reload below.
-                await expect(page.locator('[data-testid^="toast-"]').first()).toBeVisible({timeout: 15_000});
-            }
-
-            // Reload the page
-            await page.reload();
-            await page.waitForLoadState('networkidle');
-
-            // Navigate back to preferences
-            await navigateTo(page, '/settings');
-            await page.getByTestId('settings-tab-preferences').click();
-            await expect(page.getByTestId('preference-theme')).toBeVisible();
-
-            // Verify that we're still logged in and preferences tab loads
-            // The actual persistence is verified by the page loading without errors
             await expect(page.getByTestId('settings-tab-preferences')).toHaveAttribute('aria-selected', 'true');
+            await expect(page.getByTestId('settings-layout')).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+            await expect(page.getByTestId('preference-theme')).toBeVisible();
+            await expect(page.getByTestId('preference-language')).toBeVisible();
+        }
+
+        /**
+         * Sign the browser in as `user` and reach the Preferences tab. A fresh account is
+         * gated on /welcome: skip every flow still due over the API (skipping welcome,
+         * unlike completing it, writes no preference) and enter through the gate on a
+         * full load, which forwards to returnTo only once it has re-read that welcome is
+         * done.
+         */
+        async function enterPreferences(page: Page, user: DisposableUser): Promise<void> {
+            await login(page, user);
+            await skipDueFlowsExcept(page, []);
+            await navigateTo(page, '/welcome?returnTo=%2Fsettings');
+            await expect(page).toHaveURL((url) => url.pathname === '/settings', {timeout: 15_000});
+            const shell = page.getByTestId('app-shell');
+            await expect(shell).toBeVisible();
+            await expect(shell).toHaveAttribute('data-guide-inert', 'false');
+            await openPreferencesTab(page);
+        }
+
+        test('theme preference persists after page reload', async ({page, request}) => {
+            // A disposable account costs a registration, two logins and a skip per due flow.
+            test.setTimeout(45_000);
+            const user = await registerDisposableUser(request, 'theme');
+            try {
+                await seedPreferences(request, user, {language: 'en', theme: 'light'});
+                await enterPreferences(page, user);
+                // `<html class>` is where the app publishes the theme in force: applyTheme()
+                // and app.html's pre-paint script both write it, Tailwind's class strategy
+                // reads it. Here it is the contract, not a styling detail.
+                const html = page.locator('html');
+                const row = page.getByTestId('preference-theme');
+                const dark = row.getByTestId('setting-theme-option-dark');
+                // Precondition, read back: the seeded light theme is the one in force.
+                await expect(row.getByTestId('setting-theme-option-light')).toHaveAttribute('aria-pressed', 'true');
+                await expect(dark).toHaveAttribute('aria-pressed', 'false');
+                await expect(html).not.toHaveClass(DARK_CLASS);
+
+                await dark.click();
+                await expect(dark).toHaveAttribute('aria-pressed', 'true');
+                const since = await eventSeq(page);
+                const put = page.waitForResponse(isPreferencesPut);
+                await row.getByTestId('setting-save').click();
+                const saved = await put;
+                expect(saved.ok(), `PUT /api/v1/settings/user returned ${saved.status()}`).toBe(true);
+                expect(saved.request().postDataJSON()).toEqual({theme: 'dark'});
+                expect((await waitForEvent(page, 'settings.preferences.saved', {since})).detail).toMatchObject({field: 'theme', value: 'dark'});
+                await expect(row.getByTestId('setting-save')).toBeHidden();
+                await expect(html).toHaveClass(DARK_CLASS);
+
+                // Persisted for the account, not just painted on this page.
+                expect(await readStoredPreferences(request)).toMatchObject({theme: 'dark'});
+
+                // A new document: dark from its first paint, and the tab shows the value it
+                // re-reads from the server.
+                await page.reload();
+                await expect(html).toHaveAttribute('data-i18n-ready', 'true', {timeout: 15_000});
+                await expect(html).toHaveClass(DARK_CLASS);
+                await openPreferencesTab(page);
+                await expect(dark).toHaveAttribute('aria-pressed', 'true');
+                await expect(row.getByTestId('setting-theme-option-light')).toHaveAttribute('aria-pressed', 'false');
+                await expect(row.getByTestId('setting-save')).toBeHidden();
+            } finally {
+                await deleteDisposableUser(request, user);
+            }
         });
 
         test('preferences persist after navigating away and back', async ({page}) => {
@@ -638,55 +711,56 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('preference-theme')).toBeVisible();
         });
 
-        test('language change persists after page goto', async ({page}) => {
-            await login(page, TEST_USER);
+        test('language change persists after page goto', async ({page, request}) => {
+            // A disposable account costs a registration, two logins and a skip per due flow.
+            test.setTimeout(45_000);
+            const user = await registerDisposableUser(request, 'lang');
+            try {
+                await seedPreferences(request, user, {language: 'en', theme: 'light'});
+                await enterPreferences(page, user);
+                // `<html lang>` names the language on screen and `data-i18n-ready` says its
+                // dictionary is in (root +layout): the published pair, no text is read.
+                const html = page.locator('html');
+                const row = page.getByTestId('preference-language');
+                const trigger = row.getByRole('combobox');
+                await expect(html, 'precondition: the seeded language is the one on screen').toHaveAttribute('lang', 'en');
 
-            // Go to settings preferences
-            await navigateTo(page, '/settings');
-            await page.getByTestId('settings-tab-preferences').click();
-            await expect(page.getByTestId('preference-language')).toBeVisible();
+                await trigger.click();
+                // Precondition, read back: the seeded language is the selected option.
+                await expect(row.getByTestId('setting-select-option-en')).toHaveAttribute('aria-selected', 'true');
+                await row.getByTestId('setting-select-option-it').click();
+                await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+                const since = await eventSeq(page);
+                const put = page.waitForResponse(isPreferencesPut);
+                await row.getByTestId('setting-save').click();
+                const saved = await put;
+                expect(saved.ok(), `PUT /api/v1/settings/user returned ${saved.status()}`).toBe(true);
+                expect(saved.request().postDataJSON()).toEqual({language: 'it'});
+                expect((await waitForEvent(page, 'settings.preferences.saved', {since})).detail).toMatchObject({field: 'language', value: 'it'});
+                await expect(row.getByTestId('setting-save')).toBeHidden();
+                await expect(html).toHaveAttribute('lang', 'it');
+                await expect(html).toHaveAttribute('data-i18n-ready', 'true');
 
-            // The language selector is within preference-language
-            // Find and click on a different language option
-            const langContainer = page.getByTestId('preference-language');
+                // Persisted for the account, not just switched on this page.
+                expect(await readStoredPreferences(request)).toMatchObject({language: 'it'});
 
-            // Look for a dropdown/select trigger
-            const langTrigger = langContainer.locator('button, [role="combobox"]').first();
-            if (await langTrigger.isVisible().catch(() => false)) {
-                await langTrigger.click();
-
-                // Select Italian if available
-                const italianOption = page
-                    .locator('[role="option"], [class*="option"]')
-                    .filter({hasText: /Italiano|Italian/i})
-                    .first();
-                if (await italianOption.isVisible().catch(() => false)) {
-                    await italianOption.click();
-
-                    // Save if there's a save button
-                    const saveBtn = langContainer.locator('button[title*="Save"], [data-testid*="save"]');
-                    if (await saveBtn.isVisible().catch(() => false)) {
-                        await saveBtn.click();
-                        await expect(page.locator('[data-testid^="toast-"]').first()).toBeVisible({timeout: 15_000});
-                    }
-                }
+                // Away and back with full loads (goto, not the sidebar): each one is a new
+                // document, and each must come up in Italian.
+                await navigateTo(page, '/dashboard');
+                await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 10_000});
+                await expect(html).toHaveAttribute('lang', 'it');
+                await navigateTo(page, '/settings');
+                await expect(html).toHaveAttribute('lang', 'it');
+                await openPreferencesTab(page);
+                await expect(row.getByTestId('setting-save')).toBeHidden();
+                // And the tab shows the value it re-reads from the server.
+                await trigger.click();
+                await expect(row.getByTestId('setting-select-option-it')).toHaveAttribute('aria-selected', 'true');
+                await trigger.press('Escape');
+                await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+            } finally {
+                await deleteDisposableUser(request, user);
             }
-
-            // Navigate to dashboard and back using goto (not clicking sidebar)
-            await page.goto('/dashboard');
-            await page.waitForLoadState('networkidle');
-            await expect(page.getByTestId('dashboard-page')).toBeVisible();
-
-            // Go back to settings and manually select preferences tab
-            await page.goto('/settings');
-            await page.waitForLoadState('networkidle');
-            await expect(page.getByTestId('settings-page')).toBeVisible();
-
-            // Click preferences tab
-            await page.getByTestId('settings-tab-preferences').click();
-
-            // Verify the preferences are visible
-            await expect(page.getByTestId('preference-language')).toBeVisible();
         });
     });
 });
