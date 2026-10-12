@@ -47,6 +47,9 @@ carries the fix under «Formulas show in the documentation without internet».
 - **No test pins it yet.** The e2e specs that open the documentation check only the address a guide link opens. M
   proposed `frontend/e2e/layout/docs-offline-math.spec.ts` — a nested page with formulas, in English and Italian, every
   other host refused, `mjx-container` drawn — for test-author, once the shared runner file is assigned.
+- **Follow-up (batch 25)**: writing that spec found the local copy had no fonts, so formulas drew in the page's font —
+  [[problems/mathjax-fonts-missing-from-local-copy]]. The spec, extended to the font faces, still waits outside the
+  repository for the runner file.
 
 ## Still open — M-21
 

@@ -71,7 +71,10 @@ Proved at one and four workers (`front-fx fx-sync` 3/3, `fx-detail` 17/17, `fron
 `scheduler` 17/17), with the database clean after each run.
 
 **Still open**: checkpoint 2b, A4–A7, with the two new A7 cases (`tx-import-resolution` IWR-009,
-`tx-clone`'s «clone inside the workspace»). After A1–A7, the developer wants the seven E2E gaps of 1.2 closed on the
+`tx-clone`'s «clone inside the workspace»). The damage of A7 was proved on the database in train 66's journal (§12.7):
+`Test Broker`, `Private Broker`, `Unique Broker` and `T3-ws-…` left on `TEST_USER`; IWR-009 instead passes in silence —
+its selector exists only with files pending, the test adds none, so it always leaves through its conditional `return`.
+After A1–A7, the developer wants the seven E2E gaps of 1.2 closed on the
 same rules — [[decisions/e2e-gaps-of-1-2-before-release]].
 
 ## Prevention
