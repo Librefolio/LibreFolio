@@ -10,6 +10,12 @@
  * same `## [x.y.z] - date` lines, a chapter not translated yet simply absent.
  * Each file is a lazy chunk, fetched the first time the modal opens in that
  * language, and merged with the English file chapter by chapter.
+ *
+ * French chapters are shown with French spacing (M-23): the rules the French
+ * docs get from `mkdocs_src/hooks/fr_typography.py` at build time, applied here
+ * to the prose of the Markdown before it is cut into chapters. Code, link
+ * destinations, images, HTML and URLs keep their text, and `CHANGELOG.fr.md`
+ * keeps its plain spaces, as the translation pipeline writes them.
  */
 
 import changelogRaw from '../../../../../CHANGELOG.md?raw';
@@ -151,6 +157,225 @@ export function mergeChapters(english: readonly ChangelogChapter[], translated: 
     });
 }
 
+// =============================================================================
+// French typography (M-23): the rules of mkdocs_src/hooks/fr_typography.py
+// =============================================================================
+
+const NBSP = '\u00a0';
+const NNBSP = '\u202f';
+
+const SPACE = '[ \\t\\r\\n]+';
+// What may follow a sign for its space to be typeset: whitespace, the end of the text, closing punctuation or an entity.
+const AFTER_SIGN = '(?=[\\s)\\]}»”"\'.,;:?!…&]|$)';
+// In Markdown an emphasis, code, link or tag marker stands where the hook's HTML has a tag: a sign before one ends its text.
+const AFTER_SIGN_IN_MARKDOWN = '(?=[\\s)\\]}»”"\'.,;:?!…&*_~`\\[<]|$)';
+
+function typesettingRules(afterSign: string): Array<[RegExp, string]> {
+    return [
+        [new RegExp(`${SPACE}(?=:${afterSign})`, 'gu'), NBSP],
+        [new RegExp(`${SPACE}(?=[;?!]${afterSign})`, 'gu'), NNBSP],
+        [new RegExp(`${SPACE}(?=%)`, 'gu'), NNBSP],
+        [new RegExp(`(?<=\\p{Nd})${SPACE}(?=[€$£¥])`, 'gu'), NNBSP],
+        [new RegExp(`(?<=«)${SPACE}`, 'gu'), NBSP],
+        [new RegExp(`${SPACE}(?=»)`, 'gu'), NBSP],
+    ];
+}
+
+const TEXT_RULES = typesettingRules(AFTER_SIGN);
+const MARKDOWN_RULES = typesettingRules(AFTER_SIGN_IN_MARKDOWN);
+const THOUSANDS = /(?<![\p{L}\p{N}_.,#&])\p{Nd}{1,3}(?: \p{Nd}{3})+(?![\p{L}\p{N}_]|[.,]\p{Nd}{3})/gu;
+
+function applyRules(text: string, rules: Array<[RegExp, string]>): string {
+    for (const [pattern, space] of rules) text = text.replace(pattern, space);
+    return text.replace(THOUSANDS, (group) => group.replaceAll(' ', NNBSP));
+}
+
+/**
+ * French spacing in a run of text, as `mkdocs_src/hooks/fr_typography.py` sets it in the French docs: the whitespace
+ * before `:` and inside « » becomes a no-break space; the whitespace before `;` `?` `!` `%`, between a number and its
+ * currency and between thousand groups becomes a narrow one. It only replaces whitespace that is there.
+ */
+export function typesetFrench(text: string): string {
+    return applyRules(text, TEXT_RULES);
+}
+
+const FENCE_OPEN = /^\s*(`{3,}|~{3,})/;
+const FENCE_CLOSE = /^\s*(`{3,}|~{3,})\s*$/;
+const BLOCK_START = /^\s*(?:[-*+]\s|\d+[.)]\s|#{1,6}\s|>)/;
+const REFERENCE_DEFINITION = / {0,3}\[[^\]\n]+\]:[ \t]*\S[^\n]*/y;
+const COMMENT = /<!--[\s\S]*?-->/y;
+const AUTOLINK = /<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*>|<[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*>/y;
+const TAG = /<(\/?)([A-Za-z][A-Za-z0-9-]*)(?:\s[^<>]*)?>/y;
+const BARE_URL = /(?:https?:\/\/|www\.)[^\s<]*/y;
+// Elements whose content is code or not prose, skipped as the hook skips them.
+const OPAQUE_ELEMENTS = new Set(['code', 'pre', 'kbd', 'samp', 'var', 'svg', 'math', 'script', 'style', 'textarea']);
+
+function execAt(pattern: RegExp, text: string, at: number): RegExpExecArray | null {
+    pattern.lastIndex = at;
+    return pattern.exec(text);
+}
+
+/** Where the Markdown block holding `at` ends: before a blank line or a line that opens another block (an item, a heading, a quote). */
+function blockEnd(text: string, at: number): number {
+    let end = text.indexOf('\n', at);
+    while (end !== -1) {
+        const next = text.indexOf('\n', end + 1);
+        const line = text.slice(end + 1, next === -1 ? text.length : next);
+        if (!line.trim() || BLOCK_START.test(line)) return end;
+        end = next;
+    }
+    return text.length;
+}
+
+/** The end of the inline code span opened by the backtick run at `at`, or -1 when the run is literal text. */
+function codeSpanEnd(text: string, at: number): number {
+    let open = at;
+    while (text[open] === '`') open++;
+    const length = open - at;
+    const limit = blockEnd(text, at);
+    for (let from = open; from < limit; ) {
+        const start = text.indexOf('`', from);
+        if (start === -1 || start >= limit) return -1;
+        let end = start;
+        while (text[end] === '`') end++;
+        if (end - start === length) return end;
+        from = end;
+    }
+    return -1;
+}
+
+/** The end of the `]` closing the `[` at `open`, nested brackets included; -1 when it does not close in its block. */
+function labelEnd(text: string, open: number): number {
+    const limit = blockEnd(text, open);
+    let depth = 0;
+    for (let i = open; i < limit; i++) {
+        if (text[i] === '\\') i++;
+        else if (text[i] === '[') depth++;
+        else if (text[i] === ']' && --depth === 0) return i + 1;
+    }
+    return -1;
+}
+
+/** The end of the `(...)` opened at `open`: a link's destination and title, nested parentheses, `<...>` and quoted titles included; -1 when it does not close in its block. */
+function destinationEnd(text: string, open: number): number {
+    const limit = blockEnd(text, open);
+    let depth = 0;
+    for (let i = open; i < limit; i++) {
+        const ch = text[i];
+        if (ch === '\\') {
+            i++;
+        } else if (ch === '<' && i === open + 1) {
+            const close = text.indexOf('>', i);
+            if (close !== -1 && close < limit) i = close;
+        } else if ((ch === '"' || ch === "'") && /\s/.test(text[i - 1])) {
+            const close = text.indexOf(ch, i + 1);
+            if (close !== -1 && close < limit) i = close;
+        } else if (ch === '(') {
+            depth++;
+        } else if (ch === ')' && --depth === 0) {
+            return i + 1;
+        }
+    }
+    return -1;
+}
+
+/** The end of the HTML at `at` to keep as it is (a comment, an autolink, a tag; with an opaque element's content), or -1. */
+function htmlEnd(text: string, at: number): number {
+    const simple = execAt(COMMENT, text, at) ?? execAt(AUTOLINK, text, at);
+    if (simple) return at + simple[0].length;
+    const tag = execAt(TAG, text, at);
+    if (!tag) return -1;
+    let end = at + tag[0].length;
+    const name = tag[2].toLowerCase();
+    if (!tag[1] && !tag[0].endsWith('/>') && OPAQUE_ELEMENTS.has(name)) {
+        const close = new RegExp(`</${name}\\s*>`, 'i').exec(text.slice(end));
+        if (close) end += close.index + close[0].length;
+    }
+    return end;
+}
+
+/** `typesetFrench` on Markdown with no fence: code spans, link destinations, images, autolinks, HTML and URLs stay as they are. */
+function typesetProse(text: string): string {
+    let out = '';
+    let run = '';
+    let i = 0;
+    const keepUntil = (end: number) => {
+        out += applyRules(run, MARKDOWN_RULES) + text.slice(i, end);
+        run = '';
+        i = end;
+    };
+    while (i < text.length) {
+        const ch = text[i];
+        const reference = i === 0 || text[i - 1] === '\n' ? execAt(REFERENCE_DEFINITION, text, i) : null;
+        let end = -1;
+        if (reference) end = i + reference[0].length;
+        else if (ch === '`') end = codeSpanEnd(text, i);
+        else if (ch === '!' && text[i + 1] === '[') {
+            const label = labelEnd(text, i + 1);
+            end = label !== -1 && text[label] === '(' ? destinationEnd(text, label) : -1;
+            if (end === -1) end = i + 1; // a lone "![": its "!" is not a sign
+        } else if (ch === '<') end = htmlEnd(text, i);
+        else if ((ch === 'h' || ch === 'w') && (i === 0 || /[\s(*_~]/.test(text[i - 1]))) {
+            const url = execAt(BARE_URL, text, i);
+            if (url) end = i + url[0].length;
+        }
+        if (end !== -1) {
+            keepUntil(end);
+        } else if (ch === ']' && text[i + 1] === '(' && destinationEnd(text, i + 1) !== -1) {
+            run += ch;
+            i++;
+            keepUntil(destinationEnd(text, i));
+        } else if (ch === '\\' && i + 1 < text.length) {
+            run += text.slice(i, i + 2);
+            i += 2;
+        } else if (ch === '`') {
+            while (text[i] === '`') run += text[i++];
+        } else {
+            run += ch;
+            i++;
+        }
+    }
+    keepUntil(text.length);
+    return out;
+}
+
+/**
+ * French spacing on the prose of a Markdown text (`typesetFrench`), as the French docs get it from the hook at build
+ * time: fenced code, code spans, link destinations, images, autolinks, HTML and URLs stay byte for byte, and an
+ * emphasis, code, link or tag marker ends a run of text as a tag does in the hook's HTML.
+ */
+export function typesetFrenchMarkdown(markdown: string): string {
+    const out: string[] = [];
+    let prose: string[] = [];
+    let fence: {char: string; length: number} | null = null;
+    const flush = () => {
+        if (prose.length > 0) out.push(typesetProse(prose.join('\n')));
+        prose = [];
+    };
+    for (const line of markdown.split('\n')) {
+        if (fence) {
+            out.push(line);
+            const close = FENCE_CLOSE.exec(line);
+            if (close && close[1][0] === fence.char && close[1].length >= fence.length) fence = null;
+            continue;
+        }
+        const open = FENCE_OPEN.exec(line);
+        // A backtick fence's info string holds no backtick: "``` x ```" on one line is a code span.
+        if (open && !(open[1][0] === '`' && line.slice(open[0].length).includes('`'))) {
+            flush();
+            out.push(line);
+            fence = {char: open[1][0], length: open[1].length};
+            continue;
+        }
+        prose.push(line);
+    }
+    flush();
+    return out.join('\n');
+}
+
+/** The typography a translation gets before it is cut into chapters, by language: French alone has one. */
+const TYPESETTERS: ReadonlyMap<string, (markdown: string) => string> = new Map([['fr', typesetFrenchMarkdown]]);
+
 const TRANSLATION_FILE = /(?:^|\/)CHANGELOG\.([a-z]{2})\.md$/;
 
 /** Loader per language, from an `import.meta.glob` record of `CHANGELOG.<xx>.md` files. */
@@ -193,7 +418,8 @@ export function createLocalizedChangelog(english: readonly ChangelogChapter[], l
             request = Promise.resolve()
                 .then(loader)
                 .then((raw) => {
-                    const chapters = mergeChapters(english, parseChangelog(raw), language);
+                    const typeset = TYPESETTERS.get(language);
+                    const chapters = mergeChapters(english, parseChangelog(typeset ? typeset(raw) : raw), language);
                     merged.set(language, chapters);
                     return chapters;
                 })
