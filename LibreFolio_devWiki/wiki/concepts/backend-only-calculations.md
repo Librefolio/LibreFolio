@@ -16,7 +16,7 @@ All financial calculations in LibreFolio are performed exclusively in the backen
 - ROI, DW-ROI ([[F-058]])
 - Portfolio valuation, totals, gain/loss
 - Any aggregate across multiple assets or time periods
-- Allocation plans of the PAC allocator Tool: the backend searches (SCIP) and an exact Decimal replay referees every
+- Allocation plans of the PAC allocator Tool ([[features/F-107]]): the backend searches (SCIP) and an exact Decimal replay referees every
   number; booked amounts round against the plan ([[decisions/pac-rounding-against-the-plan]]). Every Tool computes
   on the backend, in a process of its own, from an explicit scenario ([[features/F-106]],
   [[decisions/tool-calculation-without-authority]])

@@ -4,7 +4,7 @@ category: problem
 status: resolved
 date: 2026-10-07
 tags: [frontend, i18n, svelte-i18n, icu, plural, cache, locale]
-related: [problems/i18n-audit-false-dead-and-false-used, decisions/i18n-key-rationalization]
+related: [problems/i18n-audit-false-dead-and-false-used, decisions/i18n-key-rationalization, features/F-107]
 ---
 
 # Problem: an ICU message identical in two catalogues gets one locale's rules

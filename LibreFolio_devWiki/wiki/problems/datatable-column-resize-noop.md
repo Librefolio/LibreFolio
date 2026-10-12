@@ -5,6 +5,7 @@ status: open
 date: 2026-07-07
 tags: [frontend, datatable, svelte5, ui, low-priority, pre-existing]
 related:
+  - problems/datatable-actions-column-on-mobile
   - sources/phase09-m1-m2-archive-2026-07
 ---
 

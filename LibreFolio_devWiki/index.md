@@ -19,7 +19,7 @@
 | [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | in-progress |
 | [[domains/scheduler]] | SCHEDULER | F-052–F-053 | implemented (registry corrected 2026-10-09) |
 | [[domains/dashboard]] | DASHBOARD | F-054–F-055, F-100 | implemented |
-| [[domains/calculations]] | CALCULATIONS | F-056–F-058 | stable |
+| [[domains/calculations]] | CALCULATIONS | F-056–F-058, F-107 | stable |
 | [[domains/infrastructure]] | INFRASTRUCTURE | F-059–F-074, F-106 | stable |
 
 ---
@@ -28,7 +28,7 @@
 
 | Page | Description |
 |------|-------------|
-| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (106 features across 12 domains, 2026-10-12) |
+| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (108 features across 12 domains, 2026-10-12) |
 
 ## Individual Feature Pages
 
@@ -43,6 +43,8 @@
 
 | Page | Title | Domain | Status |
 |------|-------|--------|--------|
+| [[features/F-107]] | PAC allocator — a purchase planner in broker increments: SCIP searches, an exact Decimal replay certifies, a fixed-reference L2 first | Calculations | documented |
+| [[features/F-108]] | Portfolio Rebalancer — the PAC engine with existing positions, sales and a tax reserve; designed, contract without a service | Planned | planned |
 | [[features/F-106]] | Tool platform — atomic Tool plugins with an explicit scenario, an owned process per item, generated codecs and compiled renderers | Infrastructure | documented |
 | [[features/F-105]] | Guided onboarding — Welcome setup, intro tour and contextual guides; versioned progress per flow, positions in the browser | Layout & Settings | documented |
 | [[features/F-100]] | Yield on Cost (YOC) per position — trailing-year ledger income per eligible unit over the residual average cost | Dashboard | documented |
@@ -83,6 +85,12 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/pac-scip-searches-exact-replay-certifies]] | **D, PAC, D-X1.** In production only SCIP runs and its status is the proof; the exhaustive oracle moved to the tests after it exhausted the budget on ordinary plans (X1); the exact replay certifies every number (`decimal_verified`) | 2026-09-24 | pac, scip, proof, oracle |
+| [[decisions/pac-lexicographic-fixed-l2-objective]] | **D, PAC.** `F_ref = V0 + K_reachable`, `L2_fixed` first, then unspent cash, route priority, cost, rows — lexicographic, no weighted sum; only `proportional` on the wire | 2026-09-16 | pac, optimization, objective |
+| [[decisions/pac-fx-one-rate-map-direct-conversions]] | **D, PAC.** One unordered rate map and one spread per scenario, direct conversions only (developer, 2026-09-17); extras dropped on 2026-10-02; a broker's conversion mode only changes the presentation | 2026-09-17 | pac, fx, spread |
+| [[decisions/pac-draft-copies-from-owned-data]] | **D, PAC.** Explicit copies through `POST /portfolio/allocation-source` — owner-only, `no-store`, saved data only, 403 on a mixed selection; re-read before Calculate; no result computed in the browser | 2026-09-16 | pac, copies, authority, privacy |
+| [[decisions/pac-contract-compacted-before-release]] | **D, PAC.** The wire compacted before integration at `1.0.0` (never released): defaults in the schema with `Field(default=…)`, optional fields with a meaning, freshness removed; the fingerprint moved again later at `1.0.0` | 2026-10-05 | pac, contract, versioning |
+| [[decisions/pac-p1-prototype-removed]] | **D, PAC.** P1 `analyze` deleted, `plan` wired (`b82e59ffa`, «togli p1 e poi lavora su v2»); its report branch and 285 keys per language removed later (`6ebad820b`); no legacy track | 2026-09-21 | pac, prototype, cleanup |
 | [[decisions/tool-calculation-without-authority]] | **C, Tool platform.** A Tool receives only an explicit scenario — no user, database, provider or service layer — and writes nothing; three authenticated endpoints, diagnostics for every active user; drafts are filled by the renderer through domain endpoints | 2026-09-08 | tools, authority, isolation, api |
 | [[decisions/tool-item-runs-in-owned-process]] | **C and D, Tool platform.** A fresh `spawn` process per item, no pool, cache or dedup; handshake, owned process tree, capacity back only after confirmed cleanup; budgets from 5/5/4 s to 30/44/45 s and 1 GiB per job (developer, 2026-09-16); not a sandbox | 2026-09-10 | tools, multiprocessing, budgets, memory |
 | [[decisions/tool-contract-from-pydantic-compiled-renderer]] | **C, Tool platform.** Pydantic as the only contract source, a generated fingerprint, four version identities, git-ignored Zod codecs, compiled renderers with no generic form; duplicate codes quarantine every claimant | 2026-09-08 | tools, pydantic, codegen, versioning |
@@ -264,6 +272,13 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/pac-solver-ran-on-default-budget]] | **D, PAC.** SCIP ran on a 3.5 s fallback while the Tool declared 30 s — nobody claimed the engine window — and plans changed between runs; `a7cd01b07` | resolved | pac, scip, budget |
+| [[problems/pac-scip-tolerance-misreported-proof]] | **D, PAC.** SCIP's absolute 1e-6 tolerance pinned a stage below the exact value: a worse plan «Proven optimal»; also a cut cascade and a false infeasibility at 10⁸; pins at the exact value, a bracket check, a guard (`8fa96ac28`) | resolved | pac, scip, floating-point, proof |
+| [[problems/pac-fee-floor-and-cap-misread]] | **D, PAC.** A minimum fee made the SCIP model infeasible, a maximum fee was ignored (499 shares, not 500); the oracle had hidden both (`f92e5560b`, `6061affd7`) | resolved | pac, scip, fees |
+| [[problems/pac-foreign-funding-calculation-failed]] | **D, PAC, found by M.** A funding source in another currency failed the calculation: a repeating FX residual and incoherent cross rates; `ExactNumber`, `allocation.fx_rate_inconsistent` (`bffc634b0`) | resolved | pac, fx, exact-arithmetic |
+| [[problems/pac-tool-error-instead-of-plan]] | **D, PAC.** Four times a strict result validation turned an engine slip into «Calculation failed»: exposures above 100 %, a half-unit credit tie, an unfinished tie-break, a float gap | resolved | pac, validation, fail-closed |
+| [[problems/svelte5-trims-leading-space-in-tag]] | **D, found by M.** Svelte 5 removes the whitespace at a tag's edges: «ROUTING–»; fixed with `{' '}` (`161a5b06b`) | resolved | svelte5, whitespace, template |
+| [[problems/datatable-actions-column-on-mobile]] | **PAC backlog, defects 2 and 5.** On a phone the «Actions» header stays pinned while the rows' ⋮ falls out of view; a hypothesis on sticky-header specificity, to confirm in a browser | open | datatable, mobile, css |
 | [[problems/guide-anchor-never-resolves]] | **J, Rounds 7–8.** A coachmark waited forever on an absent anchor, and a hidden 0×0 anchor pinned it at (0,0); now a 3 s stall with **Continue anyway** (`1982c254b`) and `isRendered()` (`f2abf9b47`); a stale `stalledStepId` fixed in the teardown | resolved | onboarding, coachmark, anchors, stall |
 | [[problems/coachmark-measured-mid-modal-transition]] | **J, Round 4.** The Import CTA was measured during `ModalBase`'s scale transition, and an unconditional `scrollIntoView()` hid it; motion root `.modal-content`, two identical frames, `scrollPolicy` | resolved | onboarding, geometry, modal, transitions |
 | [[problems/legacy-layout-gate-missed-runes-state]] | **J, Round 8.** The legacy `(app)` layout's `$:` gate did not track `appBootstrap.ready`: the requested page flashed 1–5 frames before the Welcome redirect; `toStore()` (`cc20b8288`) | resolved | svelte5, legacy-mode, layout, onboarding |
@@ -413,6 +428,8 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/phase00-pac-implementation-2026-10]] | `Release_2/Phase_0/13_pacAllocator/implementation/` — workstream D: Steps 1–6 with the 05/10 mapping notes, Round 5 and its review rounds, rows 7–16 | 2026-10-12 | phase0, pac, scip, contract, review |
+| [[sources/phase00-pac-rebalancer-design-2026-09]] | `Release_2/Phase_0/13_pacAllocator/` (designs, `drafts/`, `review/`) — the five authoritative designs, the decision chronicle, D's review dossier | 2026-10-12 | phase0, pac, rebalancer, design |
 | [[sources/phase00-tool-platform-2026-09]] | `Release_2/Phase_0/16_toolPlatform/` + the capacity round of `13_pacAllocator/` — workstream C's plan, manifest, review dossier and hand-off; D's budgets | 2026-10-12 | phase0, tools, plugins, multiprocessing, capacity |
 | [[sources/phase00-onboarding-2026-09]] | `Release_2/Phase_0/21_onboarding/` — workstream J: the foundation, Rounds 1–8 and the review dossier; fifteen flows, the developer's review of 2026-09-24, «Cosa resta aperto» | 2026-10-12 | phase0, onboarding, coachmark, settings, alembic |
 | [[sources/phase00-promote-pair-checks-2026-10]] | `Release_2/Phase_0/42_promotePairChecks/` — workstream P: promoted pairs (D1, D2), `fieldEq`, the 💡; the distribution editor; C-46…C-48; the localisation mini-lot | 2026-10-12 | phase0, promote, transfer, bulk-editor, i18n |
@@ -541,6 +558,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Step B6b — the PAC allocator (D, folder 13, 40 files).** F-107 registered and the Rebalancer as F-108 `planned`: SCIP searches and an exact replay certifies, a fixed-reference L2, one rate map, copies of owned data, a compact 1.0.0 contract, P1 deleted; seven problems, from the solver budget to the DataTable on a phone | [[sources/phase00-pac-implementation-2026-10]] *(17 pages — 2 features, 6 decisions, 7 problems, 2 sources; see log)* |
 | 2026-10-12 | **Step B6a — the Tool platform (C, folder 16).** F-106 registered: a Tool computes an explicit scenario without authority, each item in an owned process, against generated codecs and a compiled renderer; the dossier's risks checked on today's code; the `gapFix` effect accepted by the developer | [[sources/phase00-tool-platform-2026-09]] *(5 pages — 1 feature, 3 decisions, 1 source; see log)* |
 | 2026-10-12 | **Step B5 — the onboarding (J, folder 21).** F-105 registered: versioned progress per flow, existing users seeded `skipped`, the guide that never acts, positions in the browser, no text announcing a guide, the popup lane; the anchor stall, the mid-transition measure, the legacy layout gate | [[sources/phase00-onboarding-2026-09]] *(11 pages — 1 feature, 6 decisions, 3 problems, 1 source; see log)* |
 | 2026-10-12 | **Step B4 — plan 42 (P).** TRANSFER pairs that cancel, promotes that respect event links, `fieldEq` by value, the 💡's same-day window; a marker locale for hardcoded labels and a legacy-component trap | [[sources/phase00-promote-pair-checks-2026-10]] *(6 pages — 2 decisions, 2 problems, 1 concept, 1 source; see log)* |
