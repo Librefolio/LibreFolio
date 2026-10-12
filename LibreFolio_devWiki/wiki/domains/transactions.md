@@ -25,8 +25,8 @@ The primary user-facing flow for entering transactions is through the BRIM pipel
 | [[F-046]] | Transaction Model & Bulk API | backend | core — data model + multi-broker atomic bulk create with dry-run | implemented |
 | [[F-047]] | Transaction List Page (DataTable + filters) | frontend | display — client-side filtered DataTable, always-pair-adjacent rendering | implemented |
 | [[F-048]] | Transaction Modals (Form / Bulk / Delete / Promote Wizard) | frontend | core — FormModal (single + dual-form), BulkModal (mode-less, DataTable-based), DeleteModal (3 layouts), PickerModal, TagInput; CASH_TRANSFER, broker access gating, context menu, 48+ E2E tests | in-progress |
-| [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | core — wizard to match extracted assets + commit | in-progress |
-| [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | support — inline preview of uploaded broker report files | planned |
+| [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | core — wizard to match extracted assets + commit | documented |
+| [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | support — inline preview of uploaded broker report files | documented |
 | [[F-051]] | Transaction ↔ AssetEvent Link | backend | support — FK between transactions and asset events + suggest endpoint | implemented |
 
 ## Architecture at a glance
@@ -63,7 +63,7 @@ Phase 7 Parts 1+2+3 closed (2026-04-25). Phase 7 Part 4 Rounds 1–6 closed (202
 - **F-048** R6 Plan D: Split/promote integrated into batch pipeline ✅ (D1 backend + D2 frontend + bugfix1-4 done); standalone `/split`+`/promote` endpoints eliminated; `POST /transactions/promote-suggest` added; PromoteMergeModal for divergent field resolution; PMC auto-calc on TRANSFER receiver. D2-round2 ⏳ planning.
 - **F-048** `BulkDeleteLinkedPairModal` eliminated in Round 6; bulk delete now via BulkModal with `initialStatus: 'delete'`
 - **F-048** BulkModal is now **mode-less**: `mode` prop removed, each row infers create/edit from `tx.id > 0` ([[decisions/bulkmodal-mode-removal]])
-- **F-050** File Preview System still planned (Part 5+).
+- **F-050** File Preview System still planned (Part 5+). *Delivered on 2026-06-04 ([[F-050]]; lint 2026-10-12).*
 - **F-049** asset matching wizard live but UX polish ongoing.
 - **F-047** E2E test specs deferred to Phase 7 final.
 - **Unified batch pipeline**: `POST /validate` + `/commit` replace 4 old endpoints ([[decisions/unified-batch-pipeline]])
@@ -78,7 +78,7 @@ have been filed:
 
 ## What comes next
 
-- Complete Phase 7: F-048 Staging Modal, F-050 File Preview, F-051 TX↔AssetEvent link.
+- Complete Phase 7: F-048 Staging Modal, F-050 File Preview, F-051 TX↔AssetEvent link. *(F-050 delivered on 2026-06-04 — lint 2026-10-12.)*
 - [[F-081]] Fiscal Sale Method (FIFO/LIFO/PMC/SelectID) — user selects accounting method for realized gain calculation; FIFO is the Phase 7 default.
 - [[F-082]] Cash Split Transactions — represent cash from dividends as a separate CASH asset.
 - [[F-083]] Multi-File Multi-Broker Import — batch upload and parse multiple files in one workflow.

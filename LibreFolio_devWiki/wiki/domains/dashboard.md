@@ -38,7 +38,7 @@ are surfaced via `DataQualityBanner`, reading the now-populated `data_quality` f
 | Code | Feature | Layer | Role in domain | Status |
 |------|---------|-------|----------------|--------|
 | [[F-054]] | Dashboard KPI & Overview | fullstack | core — KPI cards + unified `/portfolio/report` fetch | implemented |
-| [[F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | frontend | display — GrowthChart, AllocationHistoryChart, Holdings/Performance panel | implemented |
+| [[F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | frontend | display — GrowthChart, AllocationHistoryChart, Holdings/Performance panel | documented |
 
 ## Architecture at a glance
 

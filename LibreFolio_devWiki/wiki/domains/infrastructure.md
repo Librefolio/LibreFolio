@@ -27,7 +27,7 @@ The project's single Docker image (F-062) and the `dev.py` CLI (F-063) encapsula
 | [[F-059]] | Provider Registry Pattern (auto-discovery via decorator) | backend | core pattern — enables all 3 provider families | implemented |
 | [[F-060]] | Thread Isolation for Providers | backend | core pattern — async-safe sync I/O in providers | implemented |
 | [[F-061]] | 5-layer Provider Cache | backend | core pattern — TTL cache for provider responses | implemented |
-| [[F-062]] | Docker Single-Image Deploy | infra | deploy — Python backend + SvelteKit + MkDocs in one image | implemented |
+| [[F-062]] | Docker Single-Image Deploy | infra | deploy — Python backend + SvelteKit + MkDocs in one image | documented |
 | [[F-063]] | dev.py CLI (single entry point) | infra | tooling — all dev operations via one CLI | implemented |
 | [[F-064]] | Data Separation prod/test (isolated SQLite) | backend | pattern — completely isolated data environments | implemented |
 | [[F-065]] | JWT Cookie Auth (stateless, multi-worker) | backend | core pattern — HttpOnly cookie JWT, no session store | implemented |
@@ -91,15 +91,15 @@ graph TD
 
 ## Known problems / limitations
 
-- [[problems/tanstack-svelte5-incompatibility]] — TanStack Table v8's official Svelte adapter is incompatible with Svelte 5 runes; a workaround is in place. [[F-075]] will address this when TanStack v9 ships a Svelte 5 adapter.
+- [[problems/tanstack-svelte5-incompatibility]] — TanStack Table v8's official Svelte adapter is incompatible with Svelte 5 runes; a workaround is in place. [[F-075]] will address this when TanStack v9 ships a Svelte 5 adapter. *Resolved by removal on 2026-08-05: TanStack left the frontend (`52c8d0d70`), so F-075 is superseded (lint 2026-10-12).*
 - [[problems/event-loop-blocking]] — the original provider calls (sync I/O in async handlers) froze the entire uvicorn event loop; resolved by F-060 thread isolation.
 
 ## What comes next
 
-- [[F-075]] TanStack Table v9 Migration — resolve the Svelte 5 incompatibility in the DataTable component.
+- [[F-075]] TanStack Table v9 Migration — resolve the Svelte 5 incompatibility in the DataTable component. *Superseded: nothing left to migrate (lint 2026-10-12).*
 - [[F-076]] Log Level Policy & TRACE Level — structured logging policy across all services.
 - [[F-091]] Multi-Worker Cache Server — Redis-backed cache to replace per-process `theine` if multi-host deployment becomes needed.
-- [[F-089]] FX Provider Per-Plugin Documentation — dedicated mkdocs pages per central bank provider.
+- [[F-089]] FX Provider Per-Plugin Documentation — dedicated mkdocs pages per central bank provider. *Delivered on 2026-06-19 (lint 2026-10-12).*
 
 ## Source files
 
