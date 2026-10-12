@@ -1035,3 +1035,119 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   >   questa chiave il runner non popola, e il setup di Playwright ripopola con il backend già acceso: è **ambiente**,
   >   V-17. Nel giro consolidato non succede: lì il runner popola e il setup salta.
   > - Backlog V-20 per le attese di 3 s. Possibile concausa del rallentamento: bcrypt nell'event loop (V-16).
+
+> Checkpoint 2a committato dal coordinatore: `e6333930c`, `495fb9e86`, `6d62171e3`, `262515898`. Treno 64 integrato:
+> `dev_release2` = `0afac8e14`, e il mio ramo è stato portato lì in fast-forward (12/10). Nessuno dei 50 commit del
+> treno tocca i file della 2b, le fixture o `auth.py`.
+
+### 12.6 Passo 2b: mandato e avanzamento
+
+**Decisioni del coordinatore** (12/10):
+- **Gate di `front-utility` con i 6 rossi**: accettato per la 2a. V-19 va a I, nel lotto di rifinitura UI: nasce da
+  `7c66234a7`, «Exportar IA» → «Exportación IA», e il termine resta. V-20 lo faccio io, nella 2b, con attese su uno
+  stato pubblicato. V-17 resta nel backlog: `_frontend_utility.py` ora è di T.
+- **IWR-009 e `tx-clone:549`**: entrano nella 2b (A7b, A7c).
+- **V-16 (bcrypt nell'event loop)**: nella 1.2, da me dopo la 2b. `backend/app/api/v1/auth.py`, le tre chiamate
+  (`:105`, `:205`, `:253`), con `await asyncio.to_thread(...)`.
+  - Prima il rosso, via test-author.
+  - Poi i gate `api` di auth e un E2E di login.
+  - Altri punti dello stesso tipo: li segnalo senza toccarli.
+- **Ordine**: 2b (A4-A7, A7b, A7c, V-20), poi V-16, poi le 7 lacune.
+
+**Lavoro della 2b**, con quattro test-author su file distinti e la corsia 6175 data a turno:
+
+| Agente | Casi | File |
+|---|---|---|
+| `b-tx-commit` | A4 | `transactions/tx-commit-all-types.spec.ts`, `transactions-modals.spec.ts` (T1), `tx-wac-formmodal.spec.ts` (FM6), `tx-wac-unit-toggle.spec.ts` |
+| `b-tx-seed` | A5, A6 | `transactions/tx-split-promote.spec.ts` (C3), `tx-paired-edit.spec.ts`, `tx-event-picker.spec.ts` |
+| `b-brokers` | A7, A7b, A7c | `brokers/brokers.spec.ts`, `brokers/multi-user.spec.ts`, `transactions/tx-import-resolution.spec.ts` (IWR-009), `transactions/tx-clone.spec.ts` (`:549`) |
+| `b-v20` | V-20 | `auth.spec.ts` (`:379`, `:615`), `layout/app-start-auth.spec.ts` (`:184`), `files.spec.ts` (`:835`) |
+
+**Gate finali**, a 4 worker: `front-transaction all`, `front-broker all`, `front-user all`, `front-utility all`,
+`front-portfolio all`.
+- ⏸️ **Stop dell'ambiente** (12/10, 17:23, coordinatore). Il `brew upgrade` dello sviluppatore ha rotto `node`:
+  `dyld: Library not loaded: libsimdjson.33.dylib`. Nessun nuovo comando frontend (Playwright, prettier, tsc, vitest,
+  svelte-check, npm) finché il coordinatore non dice che `node` è tornato sano. I rossi prodotti da `node` che aborta
+  sono ambiente: niente triage, nessuna modifica al codice per loro. Ho avvisato i quattro test-author. Si può
+  continuare a scrivere codice, e le letture del DB in Python vanno bene.
+- ▶️ **`node` di nuovo sano** (12/10, 17:26, coordinatore): v26.11.1. Python è passato a 3.13.16, e il venv lo segue;
+  il coordinatore l'ha verificato. Nuovo ordine sulla 6175, una suite alla volta: V-16 lato backend, poi l'E2E di
+  login, poi la 2b. b-brokers aveva già ripreso le sue prove (P0-P4) e le finisce prima di V-16, che intanto sta
+  ancora scrivendo il rosso.
+
+### 12.7 V-16: bcrypt fuori dall'event loop (checkpoint a sé)
+
+- **Mandato** (coordinatore, 12/10). Anticipare adesso la parte backend: il rosso via test-author (pytest), la cura e i
+  gate `api` di auth. L'E2E di login quando `node` è sano. Checkpoint separato dalla 2b.
+- **File assegnati**:
+  - `backend/app/api/v1/auth.py`, le chiamate di login (`:123`) e del cambio password (`:253`, `:262`);
+  - `backend/app/services/user_service.py`, la riga di `create_user` (`:168`), con la firma invariata perché la usa
+    anche il CLI sotto `asyncio.run`.
+- **Restano come sono**, d'accordo col coordinatore:
+  - `user_service.reset_password` (`:204`), usata solo dal CLI;
+  - `_dummy_password_hash` (`auth_service.py:69-71`), coperta dalla cura del login.
+- **Cura prevista**:
+  - login: `password_ok = await asyncio.to_thread(verify_password_or_dummy, …)`;
+  - cambio password: `await asyncio.to_thread(verify_password, …)` e `await asyncio.to_thread(hash_password, …)`;
+  - `create_user`: `hashed_password=await asyncio.to_thread(hash_password, password)`.
+- **Gate**: `api auth`, `api profile`, `api account-deletion`; poi un E2E di login.
+- ✅ **A7, A7b, A7c: prova del danno** (12/10). b-brokers, spec invariati, `--fresh-run`. Dopo ogni giro il DB letto in
+  sola lettura; base del seed: 8 broker, 11 utenti, 76 transazioni.
+
+  | Giro | Comando | Esito | Resti nel DB |
+  |---|---|---|---|
+  | P0 | `front-broker list "can access brokers page"` (innocuo) | 1/1 | nessuno |
+  | P1 (A7) | `front-broker list "create broker with name\|full broker CRUD flow"` | 2/2 | `Test Broker <ts>`, OWNER `e2e_test_user` |
+  | P2 (A7) | `front-user multi-user` | 2/2 | `Private Broker <ts>` e `Unique Broker <ts>`, OWNER `e2e_test_user` |
+  | P3 (A7b) | `front-transaction tx-import-resolution "IWR-009"` | 1/1 in 3,2 s | **nessuno: passa in silenzio** |
+  | P4 (A7c) | `front-transaction tx-clone "clone inside the workspace"` | 1/1 | `T3-ws-<suffix>`, OWNER `e2e_test_user` |
+
+  Log: `/tmp/libreFolio_v_b_brokers_p{0_harmless,1_list,2_multiuser,3_iwr009,4_t3}.log`.
+  > **Note implementazione**: IWR-009 non crea mai il broker. Il selettore esiste solo con file in attesa
+  > (`ImportWizardModal.svelte:4549-4551`), il test non ne aggiunge, e quindi esce sempre dal `return` condizionale.
+  > La cura gli dà un CSV nel passo 1. Il file resta nel browser, perché senza Next non viene caricato. Il selettore
+  > diventa una precondizione asserita, e il broker creato si cancella per id.
+  > **⚠️ Fuori pista**: i primi due tentativi di P0 sono caduti per ambiente, durante il `brew upgrade`. Il primo ha
+  > avuto il backend uscito con codice 250 nella build automatica; il secondo, il backend oltre i 300 s per le
+  > ricostruzioni. Il terzo è verde.
+- ✅ **V-16, rosso** (12/10). Test-author di V. Una classe nuova in fondo a
+  `backend/test_scripts/test_api/test_auth_api.py`, `TestPasswordWorkLeavesTheEventLoopFree`.
+  - Ogni test chiama il gestore in-process, su un SQLite suo sotto `tmp_path`, con un account il cui hash è un marcatore
+    (nessun bcrypt vero, niente scritture nel DB della corsia).
+  - La funzione password che il gestore chiama è sostituita, via `monkeypatch`, da un sostituto che blocca il suo thread
+    per 0,4 s. Un heartbeat nello stesso loop batte ogni 10 ms, e si misura il buco più lungo **durante** il
+    sostituto, con limite 0,15 s.
+  - Si controllano anche gli esiti, quindi un test non diventa verde saltando il lavoro: 401 per il login, l'hash del
+    sostituto salvato, gli argomenti delle chiamate.
+  - I test: LOOP-000 controlla lo strumento di misura e deve passare sia prima sia dopo la cura; LOOP-001 login;
+    LOOP-002 register, che passa da `user_service.create_user`; LOOP-003 cambio password.
+  - `… api auth "event_loop"` → **3 failed, 1 passed**. Buchi misurati: login 0,412 s, register 0,404 s, cambio
+    password 0,402 s più 0,402 s; LOOP-000 verde (`/tmp/libreFolio_v_v16_red.log`).
+  - ruff e black puliti.
+- ✅ **V-16, cura** (12/10, applicata da me):
+  - `api/v1/auth.py:123`: `password_ok = await asyncio.to_thread(verify_password_or_dummy, …)`;
+  - `:254`: `await asyncio.to_thread(verify_password, …)`;
+  - `:263`: `await asyncio.to_thread(hash_password, …)`;
+  - `services/user_service.py`: `import asyncio`, e alla riga `:169`
+    `hashed_password=await asyncio.to_thread(hash_password, password)`. La firma non cambia, quindi il CLI continua a
+    funzionare.
+
+  ruff e black puliti.
+  - Prove sulla 6175, una alla volta:
+
+    | Comando | Esito | Log |
+    |---|---|---|
+    | `api auth "event_loop"` | 4/4 | `/tmp/libreFolio_v_v16_green.log` |
+    | `api auth` | 60/60 | `/tmp/libreFolio_v_v16_auth.log` |
+    | `api profile` | 12/12 | `/tmp/libreFolio_v_v16_profile.log` |
+    | `api account-deletion` | 6/6 | `/tmp/libreFolio_v_v16_accdel.log` |
+    | E2E di login: `--fresh-run --workers 1 front-utility settings "Preferences Persistence"` | 3/3 | `/tmp/libreFolio_v_v16_e2e_w1.log` |
+    | lo stesso con `--workers 4` | 3/3 | `/tmp/libreFolio_v_v16_e2e_w4.log` |
+
+  - Ho scelto per l'E2E «Preferences Persistence», già committato nella 2a e non toccato dalla 2b: registra un utente
+    via API (`create_user`) e fa il login dalla UI, con verifica della password. `auth.spec.ts` lo sta riscrivendo
+    b-v20, e non è ancora verificato.
+  > **Note implementazione**: test-author ha passato in rassegna tutti i gestori `async def` di `backend/app/api/v1`,
+  > cercando chiamate dirette a bcrypt, I/O su file, `shutil`, `subprocess` e `urlopen`. Ha trovato solo i tre punti di
+  > V-16; l'`open` di `uploads.serve_file` gira già in `asyncio.to_thread`. La rassegna non scende nei servizi.
+  > `user_service.reset_password` (`:205`, solo CLI) resta com'è.
