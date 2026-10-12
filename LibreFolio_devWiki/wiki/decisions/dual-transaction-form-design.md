@@ -78,10 +78,10 @@ The question: how should the form modal handle paired transactions — open two 
 |------|------|
 | TransactionFormModal (dual-form logic) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
 | Transaction type store (pairFormLayout) | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
-| i18n EN | `frontend/src/lib/i18n/en.json` |
-| i18n IT | `frontend/src/lib/i18n/it.json` |
-| i18n FR | `frontend/src/lib/i18n/fr.json` |
-| i18n ES | `frontend/src/lib/i18n/es.json` |
+| i18n EN | `frontend/src/lib/i18n/base/en.json` |
+| i18n IT | `frontend/src/lib/i18n/base/it.json` |
+| i18n FR | `frontend/src/lib/i18n/base/fr.json` |
+| i18n ES | `frontend/src/lib/i18n/base/es.json` |
 | Plan file | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round5_ServerDrivenTypeRules.prompt.md` |
 
 ## Links

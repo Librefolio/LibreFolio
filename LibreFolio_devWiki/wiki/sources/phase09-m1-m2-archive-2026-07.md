@@ -43,7 +43,7 @@ every open item listed in the Milestone 2 analysis docs (`implementation_status_
 ## Key Takeaways
 
 ### Resolved (≈20 items) — already fixed by later implementation work (this session's Holdings/Performance
-refactor of 2026-07-06, commit `78aaa0a3`, plus prior work)
+refactor of 2026-07-06, commit `13052a006`, plus prior work)
 
 - `get_summary()` now wired to `PortfolioCalculationEngine` (reads `engine_result.position_states_end`,
   date-aware at `date_to`) — previously used a separate "latest price only" / today-biased loop.

@@ -3180,3 +3180,96 @@ Base `6e3d1368c`. The four July rows (hashes that no longer resolve, old `Phase_
 the `phases/` path; three reports moved unchanged, `INDEX.md` edited. Eleven files never ingested, listed on
 [[sources/beta-testing-2026-08-05]]; their topics already have pages, so no new page — a content check of the ten plans
 stays a candidate for a later lint. Graph: not updated (P-6).
+
+## [2026-10-12] lint | Follow-up of the read-only lint — two open problems re-checked
+Base `4d0cedec7`. The coordinator's decisions on the lint: re-check the two stale open problems against today's E2E;
+M-20 waits for I's plan 48 (FileGrid and FilesTable will be C-63); the unchecked areas become C-64. An explore agent
+read the specs. **Updated**: [[problems/bulk-modal-sticky-z-index]] (not covered → open, re-test after 1.2, C-61),
+[[problems/datatable-column-resize-noop]] (resize proved on the Risk Lab L1° table, `f55b2e42a`; others untested → open,
+C-62). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 70 — M's batch 28: the M-19 spec registered, the gallery's price guard after M-18
+Base `afd7d4821` (the target `b063b16ca` merged into W). Source: M's journal of round 12, §16.7 and §17 (batch 28),
+with the code of `0fe5195e8` and `e8d5a5668`, and T's CP1 note that found the guard (`43_financialMathHome`, before the
+STOP). **Created** [[problems/gallery-price-guard-expected-tofixed-text]] (resolved: red in English on prices over
+1,000, unseen because the runner excludes the gallery; the first control could not fail). **Updated**
+[[problems/docs-mathjax-looked-in-the-page-folder]] and [[problems/mathjax-fonts-missing-from-local-copy]] (the spec is
+in the repository, `front-utility docs-offline-math`), [[decisions/figures-in-the-interface-language]] (a consequence
+for tests), [[decisions/gallery-is-a-release-gate-with-real-data]], [[features/F-069]],
+[[sources/phase00-translation-round12-2026-10]] (batch 28; its stale «M-14 still in progress» line corrected). Graph:
+not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 1 — the unfinished features against today's code
+Base `0bd1a8368`. Asked by the coordinator before the tag, so that the wiki says what 1.2 really contains. Two explore
+agents read the code and the history of the 14 features not `implemented` or `documented`; F-048's findings were
+re-checked by hand, on the code and on the trees of `v1.0.0` and `v1.1.0`. **Updated** [[features/F-048]]
+(`in-progress` → `documented`: its four open items were delivered and shipped in 1.0.0, `dce60a5ee`; residuals K-1 …
+K-4 in backlog 38), [[features/registry]] (row, note, statistics: 99 shipped, none in progress),
+[[domains/transactions]], [[domains/brokers]], `index.md` (Domains row). Unchanged after the check: F-077, F-079,
+F-081, F-082, F-084, F-087, F-091, F-094 and F-108 (contract only) stay `planned`; F-085, F-093 and F-096 stay `idea`.
+Listed to the coordinator, not touched: F-090 (parts built under F-051, the provider-change modal and the reverse
+lookup not), F-094 (borderline), page drift on F-082, F-090 and F-096. Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 1 — the coordinator's decisions on F-090, F-094 and three page defects
+Base `f83a1486d` (C-65 and C-66 in the backlog). **Updated** [[features/F-090]]: stays `planned`; what was built under
+[[F-051]] is listed with its paths (the `RESTRICT` FK, `delete_events_bulk` with an outcome per id, the link field and
+rule 9, the event picker), the 409 it promised is gone, and the rest — the provider-change modal, the reverse lookup —
+points to C-65, with the `TODO_FUTURI.md` entry on suggested links as a neighbour. [[features/F-094]]: stays
+`planned`; the three sync dialogs on `SyncModalBase` sync the page's range, the warning on existing data is C-66.
+Page defects fixed: [[features/F-082]] (the staging modal's path), [[features/F-096]] (its two tables separated, the
+editor's path), [[domains/signals]] (`status: stable`, as in the index and the registry). [[features/registry]]: the
+C-64 note cites C-65 and C-66. `index.md`: F-048's row in «Individual Feature Pages» still said `in-progress`, missed
+in part 1 — now `documented`. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 71 — U-2 (the catalogue built from its sources), M's batch 29, a merge that died on a lock
+Base `c57acf510` (train 71, gates green). Sources: plan 45 §10 (U-2) and the code of `1b31f9057`; backlog U-B6; M's
+journal of round 12, §18 (batch 29, `18e872872`); the coordinator's report on train 71, with the mechanism checked in
+Git's own sources at v2.53.0. **Created** [[problems/git-merge-stash-failed-on-locked-index]] (Git 2.53 runs
+`git stash create` before every real merge; an IDE or a watcher holding `index.lock` killed it before it started;
+workaround: the train retries up to 5 times). **Updated** [[decisions/plugin-folders-and-split-i18n]] (U-2 delivered:
+generated catalogue, sources in `base/`, read-only and stamped, hooks, gate `utils gate-i18n-catalog`; U-3 and U-B6
+open), [[features/F-008]], [[sources/phase00-translation-round12-2026-10]] (batch 29),
+[[problems/fast-forward-blocked-by-a-dirty-file]] (see also). **Paths**: U-2 moved the four catalogues, so 28
+citations of `frontend/src/lib/i18n/<lang>.json` in 13 pages and 5 written as `{en,it,fr,es}` now point to `base/`;
+`$lib/i18n/en.json` imports stay (they name the generated file). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 72 — I's plan 48 (UI polish) and V's step 2b (the E2E cleanup)
+Base `0071b9703` (train 72, gates green). Sources: plan 48 and plan 46 §2b, digested by two explore agents, with the
+quotes, paths and figures re-checked on the files and the code. **Created** [[sources/phase00-ui-polish-2026-10]],
+[[problems/late-img-error-marked-the-visible-icon-failed]] (`2412c3fe4`), [[problems/test-passed-only-on-leftovers-of-other-tests]]
+(WB5, `1ea16aace`, linked to the isolation classes), [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]]
+(V-19, `7f8febd9d`), [[decisions/clipboard-through-one-helper-with-a-gate]] (M-20 and C-63, `65d20910e`),
+[[decisions/security-details-close-after-30-seconds]] (`5e9eff52d`). **Updated** [[problems/broker-icon-race-condition]]
+(the October symptoms had another cause; C-56, C-57 open), [[problems/copy-buttons-without-http-fallback]] (resolved),
+[[concepts/responsive-4mode-layout]] (the cure delivered), [[problems/e2e-writes-leaked-into-shared-state]] (checkpoint
+2b; V-21, V-17, V-18 still open), [[sources/phase00-data-quality-e2e-2026-10]], [[features/F-102]],
+[[decisions/plugin-folders-and-split-i18n]] (I's batch reached `base/` through the rename). Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 2 — dates and hashes in conflict between pages
+Base `fef272b65`. A script compared each of the 1 567 backticked hashes with the date written beside it and with Git;
+two explore agents compared trains, versions, archive dates, backlog and decision IDs, feature status events and
+batches across pages. **No real conflict**: every date that differs from a commit's own belongs to another event (the
+decision's date in the index's Date column, a report, an archive, a range such as `2026-06-08/09`); the two commits
+with one subject, `3e3f9c41f` and `f32e460ca`, are a parent and its follow-up, each cited for its own change; every
+dated train has one date. **A history rewrite**: 98 cited 7–8-character hashes resolve to nothing in today's
+repository (5b1333fa6b07 is an Alembic revision, not a commit). Six were matched to today's commit by subject and
+date and replaced in the pages (17 citations): 615a52eb → `c9f840680`, 78aaa0a3 → `13052a006`, ddb1fcfb →
+`93a88be2c`, a688bcb9 → `dadcc4de2`, b5a0bf9 → `82c9224d5`, a7b30d52 → `432d8642a`. Left: 23 in the pages,
+whose match is ambiguous (F-098's four, 3184a969/1a734008, …), and the citations in this log and in the ingest
+registry, kept as written. Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 2 — the history rewrite of 2026-09-04, remapped exactly
+Base `d88e10d15`. The repository's history was rewritten with `git filter-repo` on 2026-09-04: every older commit got
+a new hash, so the hashes written before that day — in this log, the ingest registry and some pages — resolve to
+nothing. With the rewrite's commit map (1 125 old → new pairs, a copy provided by the coordinator), 74 such hashes were
+mapped to today's commits, each unique and an ancestor of HEAD: 48 citations in the pages and the index, 165 in
+[raw/ingest-registry.md](raw/ingest-registry.md), whose drift check works again. The six matched earlier by subject
+and date agree with the map. This log keeps its old hashes as written: look them up in the map. Not a commit, left
+as is: an Alembic revision id. Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 2 — the dates the remap brought to light
+Base `8ba2db509`. The coordinator's decisions: beside a hash goes its commit's date. `c7cf528c4` (Policy D, the backup
+router) is dated 2026-04-24, its commit's date, in [[decisions/policy-d-currency-wipe]], [[entities/backup-router]]
+(twice) and [[sources/phase07-part3-closure]] — all four sentences describe the commit itself; [[features/F-099]]'s
+status row goes to 2026-05-30, the date of `9b9fcbb65`. In the ingest registry, the knowledge-base overview's row
+linked a page that never existed: it now names the two concepts that draw on that source. Graph: not updated (P-6).

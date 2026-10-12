@@ -83,7 +83,7 @@ The previous `/summary` + `/history` separate calls caused:
 
 An earlier proposal for a standalone `/allocation-history` endpoint (in early Milestone 2 architecture drafts)
 was never built — superseded by this unified endpoint. As of the Holdings/Performance panel refactor (commit
-`78aaa0a3`), this was explicitly re-confirmed: *"Endpoint `/portfolio/report` confermato come entrypoint
+`13052a006`), this was explicitly re-confirmed: *"Endpoint `/portfolio/report` confermato come entrypoint
 unico — nessun nuovo endpoint creato."* No separate endpoint is planned. See
 [[decisions/portfolio-summary-direct-wiring]] for the full rationale.
 

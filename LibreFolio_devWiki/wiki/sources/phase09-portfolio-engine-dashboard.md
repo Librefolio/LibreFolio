@@ -37,7 +37,7 @@ Phase 09 Milestone 2 delivers the production-grade portfolio calculation engine 
 - **Dashboard KPI cards**: Net Worth / Period P&L / Returns (TWRR + MWRR). GrowthChart has 3 series: NAV / invested capital / cash.
 - **Frontend store**: `portfolioStore.svelte.ts` (156 lines) — `fetchReport()` → `POST /portfolio/report`. Cache key = `broker_ids|dateFrom|dateTo|currency|contrib_flag`.
 - **ECharts + Emoji**: `AllocationPieChart` supports Noto Color Emoji (loaded via FontFace API for sector emoji). FX bulk fetch for currency conversion.
-- **Known issues at ingest** (RESOLVED 2026-07-06, commit `78aaa0a3` — see [[sources/phase09-m1-m2-archive-2026-07]]):
+- **Known issues at ingest** (RESOLVED 2026-07-06, commit `13052a006` — see [[sources/phase09-m1-m2-archive-2026-07]]):
   - ~~Bug 2: P2P/crowdfund `current_value=None` (no TRANSACTION_IMPLIED fallback in service holdings loop)~~ — fixed
   - ~~WAC computed 2× per asset (engine pre-load + service per-call redundancy)~~ — improved via `_compute_period_summary_metrics()` shared helper
   - ~~Realized/income/fees computed 2× (summary + contribution separate loops)~~ — improved, see [[entities/portfolio-service]] item 3 caveat

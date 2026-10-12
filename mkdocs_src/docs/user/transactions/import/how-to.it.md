@@ -76,12 +76,12 @@ basso, mostra:
 
 Poi scegli:
 
-- **Sposta in ‹broker›**, con l'icona di quel broker — il file viene caricato su quel broker,
-  nella stessa sessione, e rimosso da quello sbagliato. Se lo spostamento fallisce, un errore lo
-  segnala e il file resta dov'era;
+- **Sposta**, con l'icona del broker scelto in **Spostalo in** — il file viene caricato su quel
+  broker, nella stessa sessione, e rimosso da quello sbagliato. Se lo spostamento fallisce, un errore
+  lo segnala e il file resta dov'era;
 - **Tienilo qui** — il file resta, e la procedura guidata lo legge con un altro plugin in grado di
   farlo, come prima: lo vedi nella colonna **Plugin** di **Seleziona File**;
-- **Rimuovi il file** — il file viene eliminato.
+- **Rimuovi** — il file viene eliminato.
 
 Una richiesta per file, a turno (*File 1 di 3*); chiuderla mantiene il file. Se rimuovi tutti i file
 appena caricati, la procedura guidata resta su **Carica**, pronta per altri. Quando nessuno dei

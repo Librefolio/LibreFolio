@@ -1,10 +1,12 @@
 /**
  * The browser locale of a gallery shot: an Italian shot is taken by an Italian browser.
  *
- * The UI language and the browser locale are two settings. The header's selector sets the first. The second is the
- * browser's own, and the app formats with it wherever it passes no locale — `toLocaleString(undefined, …)`,
- * `Intl.NumberFormat(undefined, …)`: the amounts, the table dates, the charts, the scheduler log. Taken by an en-US
- * browser, the Italian shot of an amount reads «1,188.58 €».
+ * The UI language and the browser locale are two settings. The header's selector sets the first; the second is the
+ * browser's own. Since M-18 the app writes every figure in the interface locale (`uiLocale()`,
+ * `frontend/src/lib/stores/app/uiLocale.ts`): the interface language, plus the browser's region only when the browser
+ * speaks that language — otherwise British English for English, the bare language for the others. So the browser locale
+ * still decides the English shots (an en-US browser writes «Oct 12, 2026», a browser in another language «12 Oct
+ * 2026»), and pinning it for every language keeps each shot independent of the machine's own locale.
  *
  * ## Set at runtime, not as a context option
  *

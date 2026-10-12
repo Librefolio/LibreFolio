@@ -8,7 +8,7 @@ The **Preferences** tab controls **how the app looks and behaves for you** — c
 
 | Setting | Category | Description |
 |---------|----------|-------------|
-| **Language** | 🌍 Display | Interface language — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Applies as soon as you save it |
+| **Language** | 🌍 Display | Interface language — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Applies as soon as you save it, and also decides how numbers and dates are written |
 | **Default Currency** | 💰 Currency | Your own base currency. The Dashboard, the Brokers page and each broker's page, and the **Correlation** tab of the Assets page open in it, and the AI Export of a currency pair uses it too; a currency you pick on the Dashboard stays for the session. It is also proposed when you create something new — an asset, a new broker's first cash balance, a PAC plan. This menu lists every currency |
 | **Theme** | 🎨 Appearance | ☀️ Light / 🌙 Dark / 🖥️ Auto (follows your operating system) |
 
@@ -20,6 +20,14 @@ article table:first-of-type td:nth-child(-n + 2) {
     min-width: 11rem;
 }
 </style>
+
+!!! info "🌍 Numbers and dates follow the interface language"
+
+    Amounts, percentages and dates are written the way the interface language writes them: for example `14.788,01` and
+    `12 ott 2026` in Italian, `14 788,01` and `12 oct. 2026` in French, `14.788,01` and `12 oct 2026` in Spanish. Your browser
+    adds only its region, and only when it uses the same language: in English, a browser set to US English writes
+    `14,788.01` and `Oct 12, 2026`, and a browser in another language gets the British format, `14,788.01` and
+    `12 Oct 2026`.
 
 Pick a category in the sidebar — on a phone, in the **Category** menu — to show only its settings;
 **All Settings** shows everything.
@@ -119,7 +127,7 @@ does the sign, so a gain still reads as a gain and a loss as a loss:
 |---|---|
 | `1,234.56 € 🇪🇺 EUR` | `••• € 🇪🇺 EUR` |
 | `-1,234.56 € 🇪🇺 EUR` | `-••• € 🇪🇺 EUR` |
-| `€1,234.56` or `1.234,56 €` | `€•••` or `••• €` |
+| `€1,234.56` or `1234,56 €` | `€•••` or `••• €` |
 | `—` (no value) | `—` |
 
 `•••` is always the same three dots — even the **K** or **M** of a shortened figure goes — so it

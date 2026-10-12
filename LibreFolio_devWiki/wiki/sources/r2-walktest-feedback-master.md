@@ -36,8 +36,8 @@ Post-walktest round (2026-05-24, in-progress) addressing 3 blocking UX/feature g
 ## Sub-plan chain
 | Sub-plan | Status | Focus | Commit |
 |----------|--------|-------|--------|
-| SP-A — Cost Basis Currency + WAC Service | ✅ | DB + schema + service + recalc-wac endpoint | `92f4b1ba` |
-| SP-B — Backend Tests | ✅ | 13 WAC tests + mock data + financial-utils tests | `473d2611` |
+| SP-A — Cost Basis Currency + WAC Service | ✅ | DB + schema + service + recalc-wac endpoint | `a79e68156` |
+| SP-B — Backend Tests | ✅ | 13 WAC tests + mock data + financial-utils tests | `fb6d28606` |
 | SP-C — BulkModal Suggest UX | ✅ | Toolbar, split preview, suggest overhaul, PromoteMergeModal, ActionModal, E2E | multiple commits |
 | SP-C Bugfix 1-11 | ✅ | WAC Preview modal + 11 walktest bugs | 2026-05-30 |
 | SP-D — FormModal Features | ⏳ | CompactCash, AssetEvent picker, WAC Info modal, store-first | NEXT |

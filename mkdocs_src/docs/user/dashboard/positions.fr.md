@@ -65,7 +65,7 @@ Combien de revenu chaque unité vous verse-t-elle, par rapport à ce qu'elle a c
 - **Une valeur par actif et par courtier**, sur l'année qui se termine à la date de fin : déplacer la date de début ne la change pas.
 - **Brut, pas après impôt** : les transactions distinctes d'impôts et de frais ne sont pas soustraites.
 - **Survolez une valeur** pour voir le revenu par unité, la période et les taux de change utilisés — chaque paiement au taux de sa propre date.
-- **`0.00%`** signifie un revenu enregistré à zéro ; un simple **`-`** signifie aucun revenu au cours de la dernière année.
+- **`0,00 %`** signifie un revenu enregistré à zéro ; un simple **`-`** signifie aucun revenu au cours de la dernière année.
 
 🔗 **Théorie** : [Rendement sur coût](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) — les règles exactes, et en quoi le YOC diffère du rendement du dividende ou du CAGR
 
