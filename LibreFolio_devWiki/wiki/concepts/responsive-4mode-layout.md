@@ -112,7 +112,7 @@ values.
 | FX list thresholds | `frontend/src/routes/(app)/fx/+page.svelte` |
 | Scrollbar gutter | `frontend/src/app.css` |
 | Width sweep gate | `frontend/e2e/layout/toolbar-width-sweep.spec.ts` |
-| The Spanish label that expired the calibration (`aiExport`) | `frontend/src/lib/i18n/es.json` |
+| The Spanish label that expired the calibration (`aiExport`) | `frontend/src/lib/i18n/base/es.json` |
 | Long broker label | `frontend/e2e/portfolio/dashboard-broker-filter-label.spec.ts` |
 | Calibration (step 13 §5) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep13DevNotesFixes.prompt.md` |
 | Gutter (step 15) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep15ToolbarSweepGutter.prompt.md` |

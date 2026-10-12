@@ -673,3 +673,11 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `21c3a3adc` | 2026-10-12 | §16.7, §17 → [[sources/phase00-translation-round12-2026-10]], [[problems/gallery-price-guard-expected-tofixed-text]], [[problems/docs-mathjax-looked-in-the-page-folder]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `21c3a3adc` | 2026-10-12 | the M-19 line only (spec registered) → [[problems/docs-mathjax-looked-in-the-page-folder]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` | `d00c06685` | 2026-10-12 | the CP1 note on the gallery's guard (before the STOP) → [[problems/gallery-price-guard-expected-tofixed-text]] |
+
+## 2026-10-12 — train 71, U-2 and M's batch 29 (base `c57acf510`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md` | `0a5285dc0` | 2026-10-12 | §10, U-2 → [[decisions/plugin-folders-and-split-i18n]], [[features/F-008]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `78c67f1b6` | 2026-10-12 | U-B6 → [[decisions/plugin-folders-and-split-i18n]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `6180aefd0` | 2026-10-12 | §18, batch 29 → [[sources/phase00-translation-round12-2026-10]] |
