@@ -3244,3 +3244,16 @@ quotes, paths and figures re-checked on the files and the code. **Created** [[so
 [[concepts/responsive-4mode-layout]] (the cure delivered), [[problems/e2e-writes-leaked-into-shared-state]] (checkpoint
 2b; V-21, V-17, V-18 still open), [[sources/phase00-data-quality-e2e-2026-10]], [[features/F-102]],
 [[decisions/plugin-folders-and-split-i18n]] (I's batch reached `base/` through the rename). Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 2 — dates and hashes in conflict between pages
+Base `fef272b65`. A script compared each of the 1 567 backticked hashes with the date written beside it and with Git;
+two explore agents compared trains, versions, archive dates, backlog and decision IDs, feature status events and
+batches across pages. **No real conflict**: every date that differs from a commit's own belongs to another event (the
+decision's date in the index's Date column, a report, an archive, a range such as `2026-06-08/09`); the two commits
+with one subject, `3e3f9c41f` and `f32e460ca`, are a parent and its follow-up, each cited for its own change; every
+dated train has one date. **A history rewrite**: 98 cited 7–8-character hashes resolve to nothing in today's
+repository (5b1333fa6b07 is an Alembic revision, not a commit). Six were matched to today's commit by subject and
+date and replaced in the pages (17 citations): 615a52eb → `c9f840680`, 78aaa0a3 → `13052a006`, ddb1fcfb →
+`93a88be2c`, a688bcb9 → `dadcc4de2`, b5a0bf9 → `82c9224d5`, a7b30d52 → `432d8642a`. Left: 23 in the pages,
+whose match is ambiguous (F-098's four, 3184a969/1a734008, …), and the citations in this log and in the ingest
+registry, kept as written. Graph: not updated (P-6).
