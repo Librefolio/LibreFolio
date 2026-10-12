@@ -133,7 +133,7 @@ Le patch sugli attributi di classe (`DailyStateBuilder.build`, `_internal_transf
 | R1 ✔ | `portfolio_service.py:1040-1098` (summary) e `:1316-1350` (history) | ribasamento del periodo scritto due volte (flusso sintetico −NAV iniziale, filtri, TWRR/MWRR). In entrambe i due rami `if/else` sono identici; solo history antepone lo snapshot iniziale (`:1347-1348`) | summary, storico | (a), con una divergenza | U4 |
 | R2 | `portfolio_service.py:2249-2290` | riprova MWRR a freddo quando summary e storico divergono | report | (c) oggi; sparisce con R1 | U4 |
 | R3 | `portfolio_service.py:951-958` | rendimento netto del titolo (non realizzato + entrate − costi)/costo, poi CAGR | holdings | (b): la casa non ha un «rendimento netto»; i lotti ne hanno un altro (`lots_analysis_service.py:1333`) | U4 |
-| R4 | `portfolio_service.py:1926-1976` | P&L di periodo della posizione, % su \|inizio\|, annualizzato con base di ripiego; per i chiusi P&L/costo impiegato | contributi | (b) | F / B8 |
+| R4 | `portfolio_service.py:1926-1976` | P&L di periodo della posizione, % su \|inizio\|, annualizzato con base di ripiego; per i chiusi P&L/costo impiegato | contributi | (b) | U5, con B8 di I |
 | R5 ✔ | `portfolio_service.py:1110` | `total_gl_pct = gl/invested`, 0 se ≤ 0 | testata | (a) `calculate_simple_roi` | U4 |
 | R6 ✔ | `series_preparation.py:66-81` (`observed_annualization`); copie in `risk/service.py:1153` e `risk_plugins/comparison.py:236` | fattore osservazioni × 365 / giorni | plugin di rischio, segnali | (b) per la casa; (a) le due copie | U4 |
 | R7 | `risk/metrics.py:461-468` | da cumulato a periodo (l'inverso del TWRR) | `risk/service.py:1150` | (b) | U4 |
@@ -174,7 +174,7 @@ Le patch sugli attributi di classe (`DailyStateBuilder.build`, `_internal_transf
 | X2 ✔ | `lots_analysis_service.py:125-166` (`_FxRateResolver`) + 6 ripieghi `… or <non convertito>` | conversione col ripiego silenzioso | lotti | (b) al rovescio: la sua regola è peggiore | B3 / U1 |
 | X3 ✔ | `yield_on_cost.py:443-527` | piano di conversioni con provenienza (data del tasso, backfill) | YoC | (b): la provenienza manca altrove | U1 |
 | X4 ✔ | `financial_math/average_cost.py:348` (`_conversion_requests`) | richieste in blocco, `MissingConversion` | costo medio | casa (P) | U1 |
-| X5 ✔ | `portfolio_service.py:540-560` (`_convert_to_base`, una chiamata per importo) e `:1517-1567` (per transazione) | conversioni una a una | summary, storici di entrate, costi e depositi | (a) | F / U1 |
+| X5 ✔ | `portfolio_service.py:540-560` (`_convert_to_base`, una chiamata per importo) e `:1517-1567` (per transazione) | conversioni una a una | summary, storici di entrate, costi e depositi | (a) | F (i movimenti); U1/U5 (le 4 conversioni dei prezzi) |
 | X6 ✔ | `asset_sources/price_query.py:476-489` | fattore = close convertito / close; salta la barra se close = 0 | prezzi convertiti (rischio, segnali) | (a): usare il tasso | U1 |
 | X7 | `fx.py:1474` (upsert); `api/v1/fx.py:256-261` | inversione 1/rate inline | salvataggio dei tassi | (a) `normalize_rate_for_storage` | U1 |
 | X8 | `api/v1/fx.py:664-666` | tasso effettivo ricavato da importi arrotondati | endpoint di conversione | (a) | U1 |
@@ -223,7 +223,7 @@ Le patch sugli attributi di classe (`DailyStateBuilder.build`, `_internal_transf
 
 | # | Dove | Cosa | Chi | Classe | Lotto |
 |---|---|---|---|---|---|
-| W1 | `portfolio_service.py:1028-1034` | % di allocazione su Σ valori, senza il valore in viaggio; peso sul NAV con denominatore 1 se NAV ≤ 0 | holdings | (a)/(b) | F / U7 |
+| W1 | `portfolio_service.py:1028-1034` | % di allocazione su Σ valori, senza il valore in viaggio; peso sul NAV con denominatore 1 se NAV ≤ 0 | holdings | (a)/(b) | U7 |
 | W2 | AI `asset_core.py:253-287`; `technical_shared.py:473-485`, `:531-537` | pesi su \|valore\| lordo, tre definizioni | AI | (b): varianti esplicite nella casa | U7 |
 | W3 | AI `broker_financial.py:202-208` = `broker_concentration_context.py:97-103` | HHI e peso massimo: codice identico | AI | (a) | U7 |
 | W4 | AI `broker_concentration_context.py:208-214`, `:409`; `technical_shared.py:1405-1441`; `technical_context.py:646-659`; `portfolio_broker_technical.py:157-191` | quote %, rapporti di copertura (3 copie) | AI | (a)/(c) | U9 |
@@ -237,7 +237,7 @@ Le patch sugli attributi di classe (`DailyStateBuilder.build`, `_internal_transf
 
 | # | Dove | Cosa | Chi | Classe | Lotto |
 |---|---|---|---|---|---|
-| P1 | `portfolio_service.py:595-665` (`_compute_period_summary_metrics`); lo stato d'inizio periodo ripetuto in `:318-357` | P&L di periodo = NAV fine − NAV inizio − flussi | summary, report | (a) | F |
+| P1 | `portfolio_service.py:595-665` (`_compute_period_summary_metrics`); lo stato d'inizio periodo ripetuto in `:318-357` | P&L di periodo = NAV fine − NAV inizio − flussi | summary, report | (a) | U4 |
 | P2 | `portfolio_service.py:903-928` | variazione a 1 giorno di prezzo e valore | holdings | (a) | B8 |
 | P3 | AI `broker_cost_efficiency.py:550-560` | NAV medio | rapporti di costo | (b): metrica nuova | U9 |
 | P4 | `lib/components/dashboard/PerformanceChart.svelte:197-208` | contributo % sul valore d'apertura | tooltip | (b) | U8 |
@@ -1285,3 +1285,91 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 >     - la sonda ha 0 fallimenti, controlli pubblici compresi;
 >     - UI e sonda identiche, stringa e byte UTF-8.
 > - **Cosa c'era già nella v1.1.0**: il difetto (`ea0558b3c`).
+
+### T-1 — inventario sulla base con F (2026-10-12) — 🧊 in attesa dell'ok del coordinatore
+- **Base**: `5d62658bb` (treno 42, con F). Worktree pulita, corsia 6164 libera.
+- **Riverifiche** (le righe di §3.1 erano su `b20eac99`):
+  - `portfolio_engine.py`, 2 872 righe:
+    - modelli `:115-229`, `:448-619`, `:1826-1872`;
+    - classificatore `:237-436`;
+    - `DailyStateBuilder` `:627-1817`;
+    - `build_cost_positions` `:1875-1901`;
+    - `DerivedViewsBuilder` `:1909-2336`;
+    - identità della cache `:2344-2428`;
+    - `load_configured_fx_pair_sets` `:2431-2445`;
+    - `PortfolioCalculationEngine` `:2448-2872`.
+  - `EngineEndState` e `PortfolioCalculationResult` sono definiti dopo `DailyStateBuilder`, ma lui li usa → vanno in `portfolio/models.py`.
+  - `build_data_quality_report` è un metodo di `DerivedViewsBuilder`, non una funzione. B lo estrae in `data_quality.py`; i lotti lo chiamano su un builder vuoto (`lots_analysis_service.py:954`).
+  - Lo slug doppio c'è ancora: `portfolio_engine.py:65` `(pair)` e `PortfolioService._normalize_fx_pair_slug(base_or_pair, quote=None)` (`portfolio_service.py:580`), che lo contiene → una sola funzione, con la firma più larga.
+  - `fifo_lot_engine.py` usa solo la stdlib:
+    - modelli `:16-372`, con `_require_*` (`:1589-1604`) che servono a `FifoInputTransaction`;
+    - `eligible_income_quantity` `:1542-1564`;
+    - motore `:375-1539`.
+  - `native_cash.py` (di F) importa solo `fx` e `schemas.common`: nessun ciclo col motore spostato.
+  - Gli import pigri del motore: in `portfolio_service` `:593`, `:691`, `:1232`, `:1384`, `:1435`, `:1606`, `:1674`, `:2044`; nel PAC `:1319-1320`.
+  - **Test**: 32 file da toccare, solo per import e per la stringa di percorso in `test_data_quality_thresholds.py:57`.
+  - **Runner**: `_backend_utils.py:121`, `_backend_services.py:584`, `:626` e `:607` (questa con B). `services financial-math` esegue la cartella, quindi la guardia nuova non va registrata.
+  - **Doc**: 13 pagine dev da aggiornare, più 1 nuova.
+  - **`.github`**: solo la sezione «One Home» di `backend.instructions.md` (`:56-77`).
+  - **devWiki**: 61 righe «Source files» in 46 pagine. `check_source_paths.py` sulla base dà **6** inesistenti (9 occorrenze) in 6 pagine: il DoD diventa «resta a 6».
+- **Nessun riferimento per stringa**: niente filtri per nome di logger, niente `importlib`.
+- **Inventario completo**: nei file della sessione (`t1/inventory_5d62658bb.md`). La base `all-backend` di §7.3 è in corso sulla 6164.
+
+### T-1 — via libera del coordinatore (2026-10-12)
+- **Nessun ramo attivo** tocca il motore, il FIFO, i lotti o `portfolio_service.py`. A e B entrano nel target con **un treno solo**.
+- **A in un commit a sé**: il coordinatore lo committa sul ramo di T senza integrarlo, così git vede le rinomine al ~99 %. Poi B sopra.
+- **File condivisi assegnati a T**:
+  - il runner (`_backend_utils.py`, `_backend_services.py`, compresi `:572-574` e la `desc` di `financial-math`);
+  - `pyproject.toml:83-85`;
+  - la voce di nav in `mkdocs.yml`;
+  - `backend.instructions.md:56-77`;
+  - una riga di `frontend.instructions.md`;
+  - D-11, `financial-math.instructions.md`: lo scrive T dopo B;
+  - `TODO_FUTURI.md:2033` e `:2040`, riverificando le righe citate;
+  - le 61 righe «Source files» della devWiki, con `project-historian` nella worktree di T.
+- Niente CHANGELOG. Identificatori di contratto invariati. In `asset_core.py` e `fx_core.py` cambia solo l'import: niente sonda.
+
+#### Base prima di T-1 ✅ (2026-10-12)
+> **Note implementazione**:
+> - `all-backend` sulla 6164, su `5d62658bb`: 7/7, **12 353 passed, 28 skipped, 0 failed** (22 min 56 s). I conteggi per sessione sono nei file della sessione (`t1/baseline_all_backend_summaries.txt`).
+> - **Statici**:
+>   - il backend è pulito per ruff e black: i 197 reperti di ruff e i 29 file di black sono tutti in `dev.py` e `scripts/`, fuori dai file di T-1;
+>   - dead code: 38 reperti;
+>   - `api sync`: presi gli hash dei 5 file generati.
+> - `check_source_paths.py`: 6 percorsi inesistenti (9 occorrenze).
+
+#### Passo A — rinomina ✅ (2026-10-12)
+> **Note implementazione**:
+> - **Spostati con `mv`**, niente shim (script `/tmp/libreFolio_t1_a_apply.py`):
+>   - `roi_utils` → `returns.py`, `valuation_utils` → `valuation.py`;
+>   - `yield_on_cost.py` resta col suo nome;
+>   - `price_resolver` → `price_marks.py`;
+>   - `fifo_lot_engine` → `fifo/engine.py`, `portfolio_engine` → `portfolio/engine.py`.
+>   - Spariscono il barile `utils/financial/__init__.py` e la sua cartella.
+>   - `fifo/__init__.py` e `portfolio/__init__.py` hanno solo la docstring.
+> - **Import riscritti in 43 file**: 8 dell'app, 33 di test, 2 del runner.
+>   - La forma del PAC (`from backend.app.services import portfolio_engine, portfolio_service`) l'ho riscritta a mano.
+>   - In 11 file `ruff --select I --fix` ha solo riordinato gli import.
+> - **Testo**: aggiornate 5 menzioni nei commenti dell'app (`price_resolver`, `roi_utils`, `asset_sources/core.py:300`) e 5 nei docstring dei test. Restano, di proposito:
+>   - le menzioni storiche con lo SHA (`test_broker_internal_flows.py:3`, `test_foreign_cash_revaluation.py:3`);
+>   - il valore di contratto `"valuation_source": "portfolio_engine"`.
+> - **`financial_math/__init__.py`**: la regola emendata (§3.2) e la mappa dei moduli. **`pyproject.toml:83-85`**: ora i barili sono 4.
+> - **⚠️ Fuori pista**: `ROIResult` (`returns.py`) restava vivo solo grazie all'`__all__` del barile, e senza il barile vulture lo segnala. Non ha riferimenti in app, test, frontend, doc e wiki; è un contenitore di 3 campi, senza logica da integrare. L'ho tolto (9 righe).
+> - **Gate**:
+>   - grep dei vecchi percorsi a 0 in `backend/`, `scripts/`, `dev.py`, `pyproject.toml`;
+>   - `import backend.app.main` ok;
+>   - ruff e black puliti sui 53 file toccati;
+>   - mirati verdi: `financial-math` 175, `roi-fifo-utils` 652, `portfolio-engine` 40, `lots-analysis-pure` 121, `portfolio-allocation-source` 89, `utils roi-utils` 9;
+>   - `api sync`: hash identici;
+>   - dead code: uguale alla base, meno i 2 reperti del barile.
+>   - `all-backend` sulla 6164: 7/7, **12 353 passed, 28 skipped, 0 failed** (20 min 05 s). Identico alla base anche in ognuna delle 23 invocazioni. Porta 6164 libera.
+
+#### Proposte di I (treno 43, `d27a2f729`, solo journal) ✅ (2026-10-12)
+> **Note implementazione**:
+> - Le righe dell'inventario seguono la ripartizione di §17.6 del piano 41:
+>   - P1 → U4;
+>   - R4 → U5, con B8 di I;
+>   - W1 → U7;
+>   - X5: F ha chiuso i movimenti, mentre le 4 conversioni dei prezzi restano in U1/U5.
+> - Nell'indice, sezione T: U1 dice «X5 sui movimenti»; U4, U5 e U7 nominano P1, R4 e W1.
+> - Il commento PURE di `financial-math` nel runner («each module's only I/O is convert_bulk, which every test replaces on its module with a double») entra con B, insieme alla `desc` e alla guardia.
