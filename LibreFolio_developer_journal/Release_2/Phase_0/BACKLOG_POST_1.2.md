@@ -457,7 +457,13 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   sempre alla radice del sito. Provato senza internet: 34 pagine su 34 (16 pagine con formule, 4 lingue, profondità da 2
   a 6, servite sotto `/mkdocs/` e sotto `/LibreFolio/`) caricano la copia locale e disegnano ogni formula. Il test e2e
   aspetta che il coordinatore assegni il file del runner. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
-  sezione «15».
+  sezione «15». **Seguito nel lotto 25** (12/10, decisione del coordinatore): la copia locale non aveva i font di MathJax,
+  che il bundle cerca accanto a sé (`output/chtml/fonts/woff-v2/`). Con la correzione ogni pagina annidata prendeva lo
+  script locale e disegnava le formule col font della pagina: lettere diritte, frazioni tagliate. Prima, online, quelle
+  pagine passavano dalla CDN e i font c'erano. Anche il sito pubblico (1.1.0) serve lo script senza i font.
+  `scripts/update_js_cache.py` ora scarica anche i 22 font che il bundle nomina (321 KB), con la stessa severità dello
+  script; `mathjax.js` non chiama più `MathJax.typesetPromise()` prima che MathJax esista (un `TypeError` su ogni
+  pagina). Dettagli: [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md), passo «8».
 - **M-20 · Cinque pulsanti «copia» senza il ripiego per l'HTTP** — basso; M (trovato da docs-writer), 12/10, fuori dal
   perimetro di M: assegnata a I nel lotto di rifinitura UI (decisione del coordinatore). Il browser non dà l'API degli appunti a una pagina in `http://` fuori da `localhost` (per esempio
   Tailscale in HTTP, o l'indirizzo di rete locale). `frontend/src/lib/utils/clipboard.ts:14` (`writeTextToClipboard`)
@@ -472,8 +478,17 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   `_docker_ensure_assets_built()` (per `dev.py docker build`) ricompilano `mkdocs_src/site` solo se un `.md` è più nuovo
   di `site/index.html`. Una modifica al solo `lib-loader.js` o a `extra.css` lascia com'è un sito già compilato: un server
   o un'immagine costruiti in locale non la prendono senza `dev.py mkdocs build`. In CI il sito si compila da zero, quindi
-  le immagini pubblicate non ne soffrono. Basterebbe guardare tutti i file sotto `mkdocs_src/docs/`. Dettagli:
+  le immagini pubblicate non ne soffrono. Basterebbe guardare tutti i file sotto `mkdocs_src/docs/`. Lo stesso vale per
+  i file che `dev.py cache js` scarica in `javascripts/vendor/` (dal lotto 25 anche i font di MathJax). Dettagli:
   [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «15.3».
+- **M-22 · Mermaid si disegna solo con internet** — medio; M (trovato da test-author scrivendo lo spec di M-19), 12/10,
+  dopo la 1.2 (decisione del coordinatore). `mkdocs_src/docs/javascripts/mermaid.mjs` importa Mermaid e il layout ELK
+  solo da jsDelivr (`mermaid@11`, `@mermaid-js/layout-elk@0`), senza copia locale né ripiego. Senza internet, come
+  nell'immagine completa, i diagrammi restano codice: 74 pagine (20 tradotte nelle 4 lingue e 54 della guida per
+  sviluppatori, 134 file). Online ogni pagina chiama un server terzo, come MathJax prima di M-19. La strada è quella di
+  MathJax: una copia in `vendor/` scaricata da `scripts/update_js_cache.py` e un caricatore con ripiego; resta da
+  scegliere il formato da copiare, perché il modulo ESM di Mermaid ne carica altri. Dettagli:
+  [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md), passo «8».
 
 ## Q · Documentazione e onboarding (21, 32)
 
