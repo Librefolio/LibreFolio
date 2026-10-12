@@ -4778,7 +4778,7 @@ test.describe('Gallery Screenshots', () => {
                 await selectOneYearDateRange(page);
                 await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                 // The live prices are not part of the list's data-busy: wait for this load's, drawn on the cards.
-                await expectOfflinePricesDrawn(page, polled);
+                await expectOfflinePricesDrawn(page, polled, lang);
                 await freezeAnimations(page);
                 await page.waitForTimeout(1500);
                 await screenshot(page, viewport, lang, theme, 'assets', 'list');
@@ -4795,7 +4795,7 @@ test.describe('Gallery Screenshots', () => {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
-                    await expectOfflinePricesDrawn(page, polled);
+                    await expectOfflinePricesDrawn(page, polled, lang);
                     await freezeAnimations(page);
 
                     // Switch to table view
@@ -4823,7 +4823,7 @@ test.describe('Gallery Screenshots', () => {
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
                     // Before the search, while every card stands still: the ETFs it keeps show the fixture's prices.
-                    await expectOfflinePricesDrawn(page, polled);
+                    await expectOfflinePricesDrawn(page, polled, lang);
                     await freezeAnimations(page);
 
                     // Type search text
