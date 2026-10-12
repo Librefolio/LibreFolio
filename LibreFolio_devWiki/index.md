@@ -468,6 +468,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/phase00-feedback-jobs-2026-09]] | `Release_2/Phase_0/09_feedbackJobs/` — the September backlog in 16 sprints, each area mapped to the lot that delivered it; what is still open (P4-7, P4-9, P4-10, R2, §2.4, SP14, SP15) | 2026-10-12 | phase0, feedback, backlog |
 | [[sources/phase00-risk-integration-2026-09]] | `Release_2/Phase_0/02_riskfolioIntegration/` — Risk Analysis replanned and rebuilt (two rounds), paused until after 1.2 (D382); README ingested in step R0, the rest in R1–R6 | 2026-10-12 | phase0, risk, levels, lab |
 | [[sources/phase00-chart-axis-day-labels-2026-10]] | `Release_2/Phase_0/47_chartAxisDayLabels/` — workstream I: the day back on line-chart x-axes, localized labels, the stale P&L lines | 2026-10-12 | phase0, charts, echarts, workstream-i |
 | [[sources/phase00-docs-english-12-2026-10]] | `Release_2/Phase_0/32_docsEnglish12/` — workstream Q: the English docs aligned with 1.2 (Q1, Q2, S1–S23), the developer's reviews, the drifts found in the code | 2026-10-12 | phase0, docs, mkdocs, workstream-q |
@@ -602,6 +603,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Folder 09, step F0 — the feedback jobs.** The September backlog and its sprints, each area mapped to the lot and the wiki source that cover it | [[sources/phase00-feedback-jobs-2026-09]] *(1 page — 1 source)* |
 | 2026-10-12 | **Folder 02, step R6 — the archive G0–G6.** Drift only: archived on 2026-09-16, one alignment since; what still holds and what is superseded, on [[sources/phase00-risk-analysis-backend]]. Folder 02 covered (R0–R6) | *(none)* |
 | 2026-10-12 | **Folder 02, step R5 — the analysis documents.** The per-tool verdicts (and where today's code departs from them), the rule for library versus own maths | *(2 pages — 2 decisions; see log)* |
 | 2026-10-12 | **Folder 02, step R4 — the first round, `implementation/`.** The contracts K1–K9 and their homes, the histogram pinned on the VaR cut, the observed annualisation factor | *(3 pages — 1 concept, 1 decision, 1 problem; see log)* |
