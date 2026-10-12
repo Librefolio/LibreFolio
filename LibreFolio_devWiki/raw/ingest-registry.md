@@ -110,7 +110,7 @@ Their rows below now carry repository paths and `(blob)` content hashes.
 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacFxEnrich.prompt.md` | `4e5e500c0` | 2026-06-04 | [[sources/r3-sp-d-formmodal-wac-fx-chain]] |
 | Source Path | Git Hash at Ingest | Date | Wiki Page |
 |-------------|-------------------|------|-----------|
-| `LibreFolio_developer_journal/knowledge_base/00_project_overview.md` | `8d21ced5a` | 2026-04-24 | [[sources/knowledge-base-overview]] |
+| `LibreFolio_developer_journal/knowledge_base/00_project_overview.md` | `8d21ced5a` | 2026-04-24 | no source page of its own; the pages that draw on it: [[concepts/backend-only-calculations]], [[concepts/dual-view-pattern]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/00-index.md` | `8d21ced5a` | 2026-04-24 | [[sources/roadmap-v4-index]] |
 | `LibreFolio_developer_journal/RoadmapV4_UI/plan-phase07-transaction-Part1.md` | `8d21ced5a` | 2026-04-24 | [[sources/phase07-transactions]] |
 | `LibreFolio_developer_journal/knowledge_base/05_project_conventions.md` | `dd949cb6a` | 2026-04-24 | [[concepts/async-io-rule]], [[concepts/single-migration-strategy]], [[concepts/svelte5-runes]], [[problems/flag-emoji-windows]] |

@@ -3266,3 +3266,10 @@ mapped to today's commits, each unique and an ancestor of HEAD: 48 citations in 
 [raw/ingest-registry.md](raw/ingest-registry.md), whose drift check works again. The six matched earlier by subject
 and date agree with the map. This log keeps its old hashes as written: look them up in the map. Not a commit, left
 as is: an Alembic revision id. Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 2 — the dates the remap brought to light
+Base `8ba2db509`. The coordinator's decisions: beside a hash goes its commit's date. `c7cf528c4` (Policy D, the backup
+router) is dated 2026-04-24, its commit's date, in [[decisions/policy-d-currency-wipe]], [[entities/backup-router]]
+(twice) and [[sources/phase07-part3-closure]] — all four sentences describe the commit itself; [[features/F-099]]'s
+status row goes to 2026-05-30, the date of `9b9fcbb65`. In the ingest registry, the knowledge-base overview's row
+linked a page that never existed: it now names the two concepts that draw on that source. Graph: not updated (P-6).
