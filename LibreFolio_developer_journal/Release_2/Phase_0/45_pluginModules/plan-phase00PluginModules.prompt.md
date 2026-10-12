@@ -1145,3 +1145,89 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   - `mkdocs build` strict senza avvisi; `check-links` 95 validi e 0 rotti; `git diff --check` pulito.
 - ✅ **Checkpoint U-4, parte 2** (13/10): 8 file (7 pagine e questo piano). Stato FROZEN. Il prossimo passo è U-5, al via
   del coordinatore.
+
+### U-5 — Gate finali e passaggio di consegne (chiuso il 13/10, handoff finale inviato)
+
+- ✅ **Via** (13/10, 00:46), dopo che U-4 è entrato nel treno 78 (`1c710c7a8`, commit `bb3772324` e `873d45175`). La
+  worktree è allineata e pulita, a HEAD `1c710c7a8`.
+- ✅ **I gate scelti** (`files/scripts/u5_gates.sh`, corsia 6174, una prova alla volta), nell'ordine:
+  1. `front build --debug`, prima di tutto: il server condiviso parte senza ricostruire dentro i 300 s, il fuori pista
+     di U-3;
+  2. `all-backend`;
+  3. `front check` e le 19 Vitest;
+  4. **9 E2E** che mostrano le tre sorgenti del catalogo, più le spec di cui U-4 ha cambiato i commenti:
+     - il cambio lingua: `front-utility auth`, che legge l'`it.json` generato;
+     - le chiavi del sottosistema `app` in italiano: `front-utility changelog-locale`;
+     - i nomi dei segnali, dai frammenti, nel pannello del grafico: `front-asset asset-detail`;
+     - il catalogo per lingua: `front-asset asset-classification`;
+     - i nomi dei plugin BRIM nella scelta dell'import: `front-broker detail`;
+     - il wizard d'import, con i nomi BRIM e le chiavi `importWizard`, comprese quelle di I: `front-transaction
+       tx-brim-import`;
+     - `front-transaction tx-bulk-import-handoff`;
+     - i nomi delle analisi di rischio, dai frammenti: `front-portfolio risk` e `risk-lab`;
+     - U-4 ha cambiato i commenti di 3 di queste spec: `tx-bulk-import-handoff`, `risk-analysis` (azione `risk`) e
+       `risk-lab`. Gli altri 4 file di `frontend/e2e` toccati da U-4 sono fixture della galleria (`galleryOfflineData`,
+       `galleryPac`, `galleryProviderCompare`, `galleryRiskLab`). Cambiano solo i commenti e la galleria è di M, quindi
+       non si rigenera qui;
+  5. per ultima la build di produzione, poi `locale_chunk_objects.py check-against HEAD`, `i18n check`, `i18n audit` e
+     il dead-code.
+- ✅ **Catena completata** (00:48–01:41, `files/scripts/u5_gates.sh`, corsia 6174, una prova alla volta; log in
+  `/tmp/libreFolio_u5/`). Tutto verde; il dead-code esce con 1 come nella base.
+  - **`front build --debug`** in 3,4 min. Poi il server condiviso di `all-backend` parte senza ricostruire: il fuori
+    pista di U-3 non si ripete.
+  - **`all-backend`**: 7/7, EXIT 0, **12 869 passati, 28 saltati, 0 falliti**, in 25 min 26 s.
+    - 22 invocazioni su 23 sono identiche a U-3. La diversa è utils, da 2 091 a 2 103: sono i 12 casi parametrizzati
+      (9 + 3) che `31b6063c4` (I2, dopo M-18) aggiunge a `test_translation_validator.py`, unico file di test backend
+      cambiato dopo U-3.
+    - I 4 gate di U girano nel passo consolidato con tutti i loro test: `gate-i18n-catalog` 176,
+      `gate-plugin-i18n-ownership` 45, `gate-plugin-layout` 33, `runtime-isolation` 167. Contati come id distinti nel
+      log, perché una riga `PASSED` cade dopo l'output del test e un grep sulla stessa riga ne perde alcuni.
+    - Conteggi in `files/u5_all_backend_counts.txt`.
+  - **`front check`** 0/0. **Le 19 Vitest** sono verdi, con **11 313 test**.
+    - 11 azioni sono identiche a U-3; 8 sono cresciute, di 198 test in tutto.
+    - Dopo U-3 sono cambiati 40 file Vitest, tutti di commit del target: T CP2 (`ff7c96fd0`), T CP3 (`c17d39d5a`,
+      `33cc145b5`), V (`56830fc79`, con il nuovo `OtherPeriodEffectsTable.test.ts`, l'unico file in più, in
+      `component-unit`, da 114 a 115).
+    - I commit di U dopo U-3 (U-4) non toccano `frontend/src`.
+  - **9 E2E, 197 test, 0 falliti, 0 instabili**:
+
+    | Azione | Passati |
+    |---|---|
+    | `front-utility auth` | 29 |
+    | `front-utility changelog-locale` | 2 |
+    | `front-asset asset-detail` | 32 |
+    | `front-asset asset-classification` | 4 |
+    | `front-broker detail` | 37 |
+    | `front-transaction tx-brim-import` | 8 |
+    | `front-transaction tx-bulk-import-handoff` | 3 |
+    | `front-portfolio risk` | 38 |
+    | `front-portfolio risk-lab` | 44 |
+  - **Build di produzione**: l'hook `prebuild` gira. **I 4 chunk di lingua hanno gli stessi nomi della build post-split
+    di U-3** (`_e6AbF90.js`, `BfFDKEV1.js`, `pTQFMpK5.js`, `9ZmZb55i.js`): Vite li nomina dal contenuto, quindi dopo
+    U-3 il catalogo non è cambiato. Decodificati da Node, sono uguali al catalogo a HEAD nelle 4 lingue.
+  - `i18n check` severo: 4 351 chiavi da 89 sorgenti. **`i18n audit` è identico a U-3** (`diff` vuoto, fuori dalla
+    data): 0 morte, 3 non verificate, 0 chiavi backend mancanti, 0 problemi di sorgente. Il **dead-code** è identico
+    a U-3.
+  - Porta 6174 libera; nessun server.
+- ✅ **Backlog**: aggiunta **U-B2**, i sottosistemi accanto al codice con T-FE (decisione D-B). Era nel §9 ma mancava
+  nell'indice.
+- ✅ **Definizione di fatto del §6**, voce per voce:
+  - gli 84 plugin hanno la forma `cartella/plugin.py`, con le due guardie (U-1);
+  - `base` ha 288 chiavi, ci sono 17 sottosistemi e 71 frammenti, nessuna chiave fuori posto (U-3);
+  - il catalogo unito è uguale nelle 4 lingue (U-3 `check --against`; U-5 chunk);
+  - c'è un generatore solo, con ripiego in build e audit severo (U-2);
+  - `dev.py i18n` è completo, con `absorb` e `check --against` (U-2);
+  - i gate sono verdi e identici alla base, salvo i test entrati col target (U-5);
+  - doc, istruzioni e skill sono aggiornate (U-4); le voci di backlog sono scritte; la porta è libera.
+- ✅ **Handoff finale** mandato al coordinatore. Stato FROZEN.
+- ✅ **U-B5 chiusa nel backlog** (13/10), su indicazione del coordinatore. La parte del devWiki l'aveva già fatta W, nel
+  passo D del 12/10 (`a74a5bfb6`, entrato nel treno 63 con `3f9de8bdb`): 112 citazioni spostate in 54 pagine, 8 lasciate
+  come storia. Le 84 citazioni in 47 pagine della §3 erano il mio conteggio, più stretto del suo: 120 in 56 pagine,
+  compresi i nomi di file nudi e un import.
+  > **Note implementazione**: verifica in sola lettura sull'HEAD `1c710c7a8`.
+  > - `python3 LibreFolio_devWiki/check_source_paths.py` dà 5 percorsi inesistenti (8 occorrenze su 3 724), nessuno di
+  >   plugin: `htmlcov-*`, `frontend/coverage-js/` e la cartella di una probe, tutti artefatti ignorati.
+  > - Una ricerca dei percorsi `<famiglia>/<nome>.py`, per gli 84 plugin di oggi, trova 5 occorrenze in 2 file, ed è
+  >   cronaca: `log.md` (3) e `raw/ingest-registry.md` (2, il registro d'ingestione del 10/05).
+  >
+  > Log: `/tmp/libreFolio_u5_check_source_paths.log`, `/tmp/libreFolio_u5_wiki_oldpaths.log`.
