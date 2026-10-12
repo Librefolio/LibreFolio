@@ -1708,7 +1708,8 @@
     "pnlAxisWithYear": "{label} {year}",
     "unrealizedAssetEffect": "Activos en {currency}",
     "unrealizedFxEffect": "Tipo de cambio {from} → {to}",
-    "unrealizedUnsplit": "{currency}, sin desglosar"
+    "unrealizedUnsplit": "{currency}, sin desglosar",
+    "fxOnCash": "Efecto del tipo de cambio sobre el efectivo"
   },
   "dataQuality": {
     "headerInfoOnly": "Nota de calidad de datos",

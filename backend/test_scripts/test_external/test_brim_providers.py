@@ -1668,6 +1668,7 @@ class TestBrokerParserCoverageHelpers:
             )
         }
         from backend.test_scripts.test_services._engine_average_costs import engine_average_costs  # noqa: PLC0415 — test-local: the only DailyStateBuilder replay in this suite
+        from backend.test_scripts.test_services._engine_native_cash import engine_native_cash  # noqa: PLC0415 — test-local: the only DailyStateBuilder replay in this suite
 
         classified_txs = [ClassifiedTransaction(tx=tx, classification="normal", share=Decimal("1"), paired_tx=None) for tx in engine_txs]
         states = (
@@ -1682,6 +1683,7 @@ class TestBrokerParserCoverageHelpers:
                 asset_types={},
                 asset_currencies={sell.asset_id: "EUR"},
                 average_costs=engine_average_costs(classified_txs, asset_currencies={sell.asset_id: "EUR"}, target_currency="EUR", fx_rate_map={}, date_to=date(2025, 5, 27)),
+                native_cash=engine_native_cash(classified_txs, target_currency="EUR", fx_rate_map={}, date_to=date(2025, 5, 27)),
                 mark_series=mark_series,
                 target_currency="EUR",
                 date_from=date(2025, 5, 25),

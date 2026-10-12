@@ -568,10 +568,10 @@ def services_brim_create_transaction(verbose: bool = False, test_names: list = N
 
 
 def services_financial_math(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the financial_math layer: the single average-cost implementation."""
-    print_section("Services: Financial Math (average cost)")
-    print_info("Testing: backend/app/services/financial_math/average_cost.py")
-    print_info("Tests: compute_average_costs, cost_movement_from_transaction, determine_target_currency")
+    """Test the financial_math layer: average cost and native cash."""
+    print_section("Services: Financial Math (average cost, native cash)")
+    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py)")
+    print_info("Tests: compute_average_costs, cost_movement_from_transaction, determine_target_currency, compute_native_cash, cash_movement_from_transaction, effective_share, exchange_results")
     print_info("Pure — convert_bulk is stubbed: no server, no DB")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_math/", test_names)
