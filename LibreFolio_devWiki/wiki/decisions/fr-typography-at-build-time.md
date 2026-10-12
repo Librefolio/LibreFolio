@@ -77,8 +77,11 @@ run of the translation pipeline writes plain spaces, so fixing the sources would
 - **What the hook cannot reach (M-23, 2026-10-12)**: text rendered outside MkDocs. The in-app changelog reads
   `CHANGELOG.fr.md` in the browser (`frontend/src/lib/features/changelog/changelog.ts`, no such rule), so a French line
   there can break before `;` `:` `?` `!` `%` or inside « ». The same rules belong in the modal's renderer, for French,
-  with the sources left as they are. Backlog M-23, open; the coordinator moved it into release 1.2
-  ([[features/F-109]]).
+  with the sources left as they are. Backlog M-23; the coordinator moved it into release 1.2 ([[features/F-109]]).
+  *Resolved in 1.2 (M's batch 27, train 69)*: `typesetFrench()` in `changelog.ts` applies the hook's rules to the
+  French chapters, on the Markdown prose before it is cut into chapters (`99aa2f4ec`); fenced code, code spans, link
+  destinations, images, HTML and URLs keep their text, other languages and the English fallback chapters are
+  untouched, and `CHANGELOG.fr.md` itself is unchanged. Tests ported from the hook's cases (`53673ae9f`).
 
 ## Links
 
