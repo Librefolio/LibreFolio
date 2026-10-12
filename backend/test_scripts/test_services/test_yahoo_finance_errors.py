@@ -22,8 +22,8 @@ from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
 from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.asset_source import AssetSourceError
-from backend.app.services.asset_source_providers import yahoo_finance as yfp
-from backend.app.services.asset_source_providers.yahoo_finance import YahooFinanceProvider
+from backend.app.services.asset_source_providers.yahoo_finance import plugin as yfp
+from backend.app.services.asset_source_providers.yahoo_finance.plugin import YahooFinanceProvider
 
 # A type Yahoo does not accept (only TICKER and ISIN are valid).
 INVALID_TYPE = IdentifierType.CUSIP

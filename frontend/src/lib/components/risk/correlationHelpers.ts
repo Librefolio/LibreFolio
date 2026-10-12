@@ -11,7 +11,7 @@
  * Two conventions hold throughout:
  *
  * - The backend emits the **full N×N matrix**, diagonal included (see
- *   `risk_plugins/correlation.py`). Callers that want half of it filter here;
+ *   `risk_plugins/correlation/plugin.py`). Callers that want half of it filter here;
  *   the payload is never assumed to be triangular.
  * - A cell whose `status` is not `ok` carries no usable number. It is treated
  *   as *unknown*, never as zero — a missing correlation is not an absence of

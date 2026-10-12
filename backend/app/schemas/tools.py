@@ -316,7 +316,7 @@ class ToolComputeBatchResponse(ToolTransportModel):
 
 class ToolDiscoveryFailure(ToolTransportModel):
     tool_code: ToolCode | None
-    filename: Annotated[str, Field(strict=True, max_length=132, pattern=r"^[A-Za-z0-9_.-]+$")]
+    filename: Annotated[str, Field(strict=True, max_length=138, pattern=r"^(?:[A-Za-z0-9_.-]+|[A-Za-z0-9_-]+/plugin\.py)$")]
     reason: ToolDiscoveryReason
 
 

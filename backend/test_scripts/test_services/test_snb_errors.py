@@ -26,8 +26,8 @@ import httpx
 import pytest
 
 from backend.app.services.fx import FXServiceError
-from backend.app.services.fx_providers import snb as snb_mod
-from backend.app.services.fx_providers.snb import SNBProvider
+from backend.app.services.fx_providers.snb import plugin as snb_mod
+from backend.app.services.fx_providers.snb.plugin import SNBProvider
 
 # ── httpx double bound into the snb module only ─────────────────────────────
 
