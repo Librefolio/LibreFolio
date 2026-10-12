@@ -831,6 +831,44 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
 - ✅ **U-2 chiuso il 12/10.** Checkpoint mandato al coordinatore con lo staging esplicito: prima `git rm --cached` dei 4
   vecchi percorsi, poi `git add` di `base/` e del resto. Stato FROZEN. Il prossimo passo, U-3, aspetta il via del
   coordinatore dopo le chiavi di I.
+- ✅ **Committato dal coordinatore** (12/10, 20:54): `1b31f9057`, con le 4 rinomine al 100 % verificate, e `0a5285dc0`,
+  con piano e backlog. Prima del commit ha provato su un clone: albero finale identico, i 4 file generati restano sul
+  disco ignorati e in sola lettura, la worktree pulita.
+- ✅ **Merge del target** `8d0b222d3`, pulito: ora sono a **`7a065caed`**, albero `ae31f8455`. Il backlog, unico file
+  toccato da entrambi i lati, si è fuso da solo. Il target non aveva toccato i cataloghi dopo `bd8ee8e4d`.
+  - `catalogIcuLocale.test.ts` (T, M-18) importa i 4 cataloghi generati, che il `globalSetup` scrive prima.
+  - Il suo `readdirSync` cerca solo file `.svelte`, quindi `base/` non lo tocca.
+  - Il target aggiunge 5 file Vitest ad azioni esistenti e un E2E (`docs-offline-math`): le azioni Vitest restano 19.
+- ✅ **Revisione combinata `7a065caed` validata** (20:55–21:17, `files/scripts/u2_combined.sh`, corsia 6174, una prova
+  alla volta; log in `/tmp/libreFolio_u2c/`). Tutto verde:
+  - **catalogo**: la build risponde «up to date»; i file generati e `base/` hanno gli sha256 della base.
+  - **pytest**, con gli stessi conteggi della U-2 su `bd8ee8e4d`:
+
+    | Selettore | Passati |
+    |---|---|
+    | `gate-i18n-catalog` | 163 |
+    | `runtime-isolation` | 167 |
+    | `gate-i18n-usage` | 195 |
+    | `brim-degiro` | 169 |
+    | `brim-providers` | 705 + 1 saltato |
+    | `brim-scalable` | 145 |
+    | `schemas risk` | 69 |
+    | `risk-all` | 896 |
+    | `signal-plugin-matrix` | 92 |
+
+    `check-orphans` è verde: 261 file backend, 352 Vitest (+5 del target), 110 E2E (+1 del target).
+  - **`front check`**: 0 errori, 0 avvisi.
+  - **Le 19 Vitest**, 11 070 test:
+    - 16 azioni identiche alla U-2;
+    - 3 cresciute per i 13 file Vitest cambiati dal target (U-2 non ne cambia nessuno): `risk-frame-component` da 17 a 20,
+      `component-unit` da 2 992 a 3 006, `core-unit` da 3 766 a 3 961, che comprende `catalogIcuLocale.test.ts`.
+  - **Build di produzione**: i 4 chunk di lingua hanno nomi e sha256 della base.
+  - **`i18n audit`**: stessi verdetti (4 350 chiavi, 0 morte, 3 non verificate, 0 chiavi backend mancanti, 0 problemi
+    di sorgente). Le chiavi usate letteralmente nel codice sono 3 711 contro 3 710: un uso in più nel sorgente del target.
+  - **`lint --dead-code`**: output identico (exit 1). Cambia solo un numero di riga in `user_service.py`, file toccato
+    dal target.
+  - `git status`: solo questo piano. Porta 6174 libera.
+- ✅ **Handoff mandato** (21:2x). Stato FROZEN: U-2 entra nel prossimo treno, U-3 aspetta il lotto 48 di I nel target.
 - ✅ **Staleness della build** (preparato in `u2_apply.py`): `check_frontend_needs_build()` risponde «sì» anche quando
   manca un file generato con il bundle fresco. Gli E2E leggono il catalogo generato e passano da `auto_build_frontend`,
   quindi una pulizia dei file ignorati non li lascia senza. Per questo la libreria espone `generated_catalogs()`.
@@ -860,3 +898,142 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   I test descritti entrano col treno 66 (`2aecd5a6f`, `e63cfb074`, `92fb9c83e`) e non sono nella mia base. Fra
   `bd8ee8e4d` e `dev_release2` (`b91d6d902`) nessun file di U-2 è cambiato, compresi i 4 cataloghi, quindi il merge è
   pulito.
+
+### U-3 — Un catalogo per sottosistema e per plugin (chiuso il 12/10, checkpoint inviato)
+
+- ✅ **Preparazione in sola lettura** (12/10, 21:30–21:40, prima del via), su sandbox estratte con `git archive` in `/tmp`.
+  Dettaglio in `files/u3_prep.md`, mappe chiave → sorgente in `files/u3_dry/`.
+  - **Dry run** (`files/scripts/u3_dry.py`) sul target `c57acf510` (treno 71) e sull'anteprima del treno 72 (il ramo di I,
+    `0a148a109`):
+    - l'**equivalenza** delle 4 lingue, chiavi e valori, è IDENTICA, e `check --strict --against` esce con 0;
+    - il piano delle mosse è ancora valido: 71 frammenti, 219 chiavi, ogni prefisso col numero previsto, nessun plugin
+      nuovo con chiavi;
+    - `base` ha 288 chiavi, i 15 namespace del piano;
+    - i 17 sottosistemi hanno i conteggi del §2.4, tranne `app` a 72 per `changelog.notTranslated`;
+    - i file sono 356 JSON più 17 `prefixes.txt`.
+  - **I tre cambi di I**: `importWizard.brokerMismatch.remove` e `.move` vanno in `importWizard`,
+    `assets.probe.copyErrorDetail` va in `assets`.
+  - **Le chiavi dichiarate nei metadati dei plugin** sono 130: 105 stanno nel frammento del loro plugin. Le altre 25
+    stanno in un sottosistema:
+    - 22 `risk.warnings.*`, in `risk`;
+    - `signals.reference.zero`, condivisa da 8 plugin, e `signals.riskRollingReturn.*`, condivisa da 2, in `charts`.
+
+    `rolling_return` e `calendar_rolling_return` quindi non hanno frammento.
+  - **Chiavi di plugin usate per nome dall'interfaccia**: 9 `risk.analytics.*`, nel pannello del rischio.
+  - **Prova sui chunk**: `files/scripts/locale_chunk_objects.py check-against <REV>`. Fa importare a Node i 4 chunk di
+    lingua e li confronta, come oggetti, col catalogo alla revisione. Serve perché lo split cambia l'ordine delle chiavi,
+    e quindi byte e nomi dei chunk. Collaudato sulla build di U-2 contro `c57acf510`: uguale.
+- ✅ **Decisioni del coordinatore** (12/10, 21:39), annotate per il developer come informazione:
+  - **D-U3-1**: le 22 `risk.warnings.*` restano nel sottosistema `risk`, come vocabolario unico degli avvisi;
+  - **D-U3-2**: le 9 `risk.analytics.*` usate dall'interfaccia restano nei frammenti, come da piano;
+  - il debito di U-2 sull'avviso di `add` (§2.3) si chiude in U-3;
+  - il gate di proprietà R1–R4 lo scrive test-author.
+- ✅ **Via** (12/10, 22:02): il treno 72 (lotto 48 di I + 2b di V) è nel target `0071b9703`. Il coordinatore mi ha portato
+  a **`f16bb7958`**; il piano 45 resta sporco e entra nel primo checkpoint di U-3. Rispetto a `7a065caed` sono cambiati
+  solo i 4 `base/<lang>.json` (lotto 48): 4 351 chiavi. T non aggiunge chiavi fino allo split.
+- ✅ **L'avviso di `add`** (§2.3):
+  - la nuova `base_namespace_notice(key, target, owners)` della libreria restituisce l'avviso quando una chiave apre un
+    namespace nuovo in `base`;
+  - `where()` lo aggiunge alla risposta;
+  - `dev.py i18n add` lo stampa solo senza `--into`, perché un `--into` esplicito è già la scelta dell'autore.
+
+  Il lint è pulito; in `i18n-audit.py` ruff e black restano invariati rispetto a HEAD.
+- ✅ **Basi pre-split** su `f16bb7958` (`files/scripts/u3_base.sh`, 22:05–22:27, corsia 6174; conteggi in
+  `files/u3_base_counts.tsv`):
+  - backend:
+
+    | Selettore | Passati |
+    |---|---|
+    | `runtime-isolation` | 167 |
+    | `gate-i18n-usage` | 195 |
+    | `gate-plugin-layout` | 33 |
+    | `brim-degiro` | 169 |
+    | `brim-providers` | 705 + 1 saltato |
+    | `brim-scalable` | 145 |
+    | `schemas risk` | 69 |
+    | `risk-all` | 896 |
+    | `signal-plugin-matrix` | 92 |
+
+    `check-orphans` è verde, con 354 file Vitest.
+  - `gate-i18n-catalog`: 162 passati e 1 rosso atteso. Il caso `test_where_…[a-new-key-for-base]` fissava `"(new key)"`,
+    mentre ora `where()` aggiunge l'avviso del §2.3; l'aggiornamento è affidato a test-author;
+  - `front check` 0/0; le 19 Vitest verdi, **11 134 test**;
+  - `i18n audit`: 4 351 chiavi, 0 morte, 3 non verificate, 3 712 usate letteralmente;
+  - il dead-code è identico alla validazione combinata.
+- ✅ **Split applicato** (22:29, `files/scripts/u3_apply.py`, corsia ferma):
+  - 17 `prefixes.txt`, con un'intestazione commentata;
+  - `split`: 3 997 chiavi da `base` ai sottosistemi;
+  - 71 `move`: 219 chiavi nei frammenti;
+  - risultato: `base` 288 chiavi, 17 sottosistemi con 3 844, 71 frammenti con 219;
+  - l'**equivalenza** con le sorgenti pre-split, nelle 4 lingue, chiavi e valori, senza ripiego, è **IDENTICA**.
+
+  I file nuovi sono 369 (284 JSON dei frammenti, 68 JSON dei sottosistemi, 17 `prefixes.txt`); i modificati sono i 4
+  `base/<lang>.json`. Ogni frammento conserva l'ordine delle chiavi di ciascuna lingua.
+- ✅ **Prova** (`u3_gates.sh proof`):
+  - `check --strict`: 4 351 chiavi, base 1, sottosistemi 17, plugin 71;
+  - **`check --against f16bb7958`: identico nelle 4 lingue**;
+  - la build legge 89 sorgenti e riscrive le 4 lingue: cambia solo l'ordine delle chiavi;
+  - i file generati restano ignorati, le sorgenti nuove no.
+- ✅ **Gate frontend dopo lo split** (`u3_gates.sh frontend`, 22:30–22:43), tutti uguali alla base pre-split:
+  - `front check` 0/0;
+  - **le 19 Vitest hanno i conteggi della base, azione per azione: 11 115 test**;
+  - **i chunk di lingua** cambiano nome (`_e6AbF90.js`, `BfFDKEV1.js`, `pTQFMpK5.js`, `9ZmZb55i.js`), perché l'ordine
+    delle chiavi è cambiato. Decodificati da Node, sono **uguali al catalogo a `f16bb7958`** e ai file generati;
+  - `i18n audit` è identico alla base, con «4 351 keys from 89 source(s)» e «1 base, 71 plugin, 17 subsystem»;
+  - il dead-code è identico: knip non segnala i JSON nuovi.
+- ✅ **test-author** (22:40):
+  - il nuovo `test_plugin_i18n_ownership_gate.py` (45 test) legge i registri veri e prova le regole R1–R4 in tutti e due
+    i sensi, con una sentinella che fallisce se un registro pubblica un campo di chiave che il gate non legge. Sull'albero
+    reale le 4 regole non trovano problemi: delle 261 chiavi dichiarate dai registri, 210 stanno nel frammento del loro
+    plugin, 36 in `charts`, 15 in `risk`;
+  - `test_i18n_catalog_gate.py` passa a 176 test: l'avviso di `base_namespace_notice` e `where()`, con il caso
+    `[a-new-key-for-base]` aggiornato;
+  - ruff e black puliti.
+- ✅ **Registrazione** di `utils gate-plugin-i18n-ownership` (`isolation="pure"`) in `_backend_utils.py`, accanto a
+  `gate-plugin-layout`. L'ho fatta io a corsia ferma, con sostituzione atomica, perché il runner importa il modulo a ogni
+  avvio.
+- ✅ **CLI sul layout nuovo** (`u3_gates.sh cli`, 22:44):
+  - `where` nomina la sorgente giusta per una chiave di `base`, di sottosistema e di plugin;
+  - una chiave nuova di plugin va nel suo frammento; una chiave con namespace nuovo va in `base` **con l'avviso del §2.3**;
+  - `add` scrive in `assets` per una chiave di sottosistema e in `broker_directa/i18n` per una di plugin;
+  - `search` mostra la colonna Source; `update` e `remove` funzionano;
+  - `split` rilanciato risponde «Every key is already in place»;
+  - **dopo il giro gli sha256 di tutte le sorgenti sono quelli di prima**;
+  - `check` severo verde.
+
+  La colonna Source di `search` andava a capo sui nomi di plugin: l'ho allargata da 28 a 40 caratteri.
+- ✅ **Gate mirati dopo lo split** (`u3_gates.sh targeted`, 22:45–22:48), tutti verdi:
+  - con gli stessi conteggi della base: `runtime-isolation` 167, `gate-i18n-usage` 195, `gate-plugin-layout` 33,
+    `brim-degiro` 169, `brim-providers` 705 + 1 saltato, `brim-scalable` 145, `schemas risk` 69, `risk-all` 896,
+    `signal-plugin-matrix` 92;
+  - `gate-i18n-catalog` passa a **176**, cioè i 163 di prima più i casi nuovi;
+  - il nuovo **`gate-plugin-i18n-ownership`** dà **45**;
+  - `dev-cli-image` 31;
+  - `check-orphans` è verde: ora 262 file backend, uno in più col gate nuovo.
+- > **⚠️ Fuori pista, ambiente** (22:48–22:53): la prima `all-backend` è uscita dopo 5 minuti con «Shared backend did
+  > not answer within 300s», prima di pytest. Il database era stato creato bene.
+  > - **Causa**: all'avvio il server condiviso ha dovuto ricostruire il frontend in debug, perché l'ultima build, dei miei
+  >   gate frontend, era di produzione. La build in debug è finita alle 22:52:14, come mostra `.build-debug`; poi uvicorn
+  >   doveva ancora avviare l'app con load average 36, e i 300 s scadevano alle 22:53:30.
+  > - Il server non ha lasciato processi, e la porta è libera.
+  > - **Verdetto**: ambiente e lentezza, non U-3. La build in debug dura circa 3,7 minuti, come prima di U-3, e lo split
+  >   non tocca ciò che svelte-check e Vite processano.
+  > - **Rimedio**: con la build in debug ormai fresca, `all-backend` rilanciata senza altri cambi (22:55).
+  > - **Per la prossima volta**: `all-backend` prima della build di produzione, non dopo.
+- ✅ **`all-backend`, seconda prova** (22:55–23:41, 40 min 47 s): il server condiviso è partito senza ricostruire. 7
+  categorie su 7, EXIT 0: **12 857 passati, 28 saltati, 0 falliti**. Rispetto alla `all-backend` finale di U-2
+  (`bd8ee8e4d` + U-2), 21 invocazioni su 23 sono identiche; le 2 diverse sono spiegate per intero:
+  - utils fa **+184**: +13 casi del gate catalogo, +45 del gate di proprietà, +126 dei test entrati col treno 66, che
+    sono 94 della traduzione del CHANGELOG (`e63cfb074`) e 32 delle dipendenze di MathJax (`92fb9c83e`);
+  - API fa **+4**: i 4 test nuovi di `test_auth_api.py` (`0d6aee67c`, le password fuori dall'event loop), del target.
+
+  Conteggi in `files/u3_all_backend_counts.txt`; porta 6174 libera.
+- ✅ **Controlli statici**: `git diff --check` è pulito. La libreria, i due gate e `_backend_utils.py` sono puliti con
+  ruff e black, e la libreria resta compatibile con la sintassi 3.9. In `i18n-audit.py` ruff e black sono invariati
+  rispetto a HEAD.
+- ✅ **Manifest** (`files/u3_manifest.txt`): 9 file modificati e 370 nuovi (284 JSON dei frammenti, 68 JSON dei
+  sottosistemi, 17 `prefixes.txt`, il gate di proprietà).
+- ✅ **Commit proposti**:
+  - `/tmp/libreFolio_commit_u3.txt`, «refactor(i18n): catalogue per subsystem and plugin»;
+  - `/tmp/libreFolio_commit_u3_docs.txt`, per questo piano.
+- ✅ **U-3 chiuso il 12/10.** Checkpoint mandato al coordinatore, stato FROZEN. Il prossimo passo è U-4, la documentazione.
