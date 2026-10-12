@@ -1097,3 +1097,42 @@ Base `1bb4abe68`: the target with `e7bfa342f`; T's CP2 and CP3 are not in it yet
 > - **Links:** `check-links` 95 valid.
 > - **`git diff --check`:** clean.
 > - **Ports:** 6158, 6168 and 6042 free.
+
+### 23. ✅ I5, part one: the security shot and `galleryLocale.ts` — on `104ba23d0` (train 75: T's CP2 and CP3, U-3), 2026-10-13 00:15
+
+**23.1 ✅ The approved patch, applied**
+> **Note implementazione**: `gallery.spec.ts` and `galleryLocale.ts` were byte-identical to the patch's base (blobs
+> `67964b8dae3a` and `0d9cf94ee5f1`). The patch applied as it was, and `gallery.spec.ts` is identical to the approved
+> proposal.
+>
+> `galleryLocale.ts` takes two updates for CP3 on top of the approved text:
+> - CP3's `resolveUiLocale` takes the browser's tag only when it names a region (a bare `en` falls back to en-GB), so
+>   the text says «only when it speaks that language and names one»;
+> - after CP3 the app passes a locale wherever it formats: 37 call sites without one on the batch-31 base, 0 now (the 2
+>   left read the time zone). So the last sentence says the pin «still covers whatever formats without one — a library,
+>   the browser's own controls».
+>
+> Prettier is clean. `tsc -p tsconfig.e2e.json` shows the 2 errors of the base, none in the two files.
+> - **⚠️ Fuori pista:** `dev.py mkdocs gallery` does have `--headed` and `--ui` (`dev.py:2541-2545`). The preparation
+>   (21.2) said otherwise, from a search that missed `dev.py`. It weighs on M-24.
+
+**23.2 ✅ The Security test alone, desktop and mobile** (lane 6158, `/tmp/librefolio-r2-m`, load 24–35)
+> - **Frontend built first** (`dev.py front build`: API client, catalogues, svelte-check clean), since `frontend/build`
+>   predated CP2, CP3 and U-3.
+> - **Real run** (`mkdocs gallery --test-port 6158 --workers 2 -f "connection indicator"`, the gallery dataset
+>   populated): 2 passed (desktop 37.1 s, mobile 39.1 s), 16 shots.
+>   - Checked by eye: the details are open, there is no hover on the toggle and no tooltip.
+>   - The French shot writes `+3 785,94 €` and `-4,04 %`.
+> - **Positive control** (temporary: 31 s before the first shot, the pointer on the details): 2 passed, 1.2 min each.
+> - **Negative control** (temporary: `parkPointer` and the same 31 s): 2 failed, both on «the details stayed open
+>   through the shot» (expected `true`, received `false`). The picture shows the line closed: the one that used to pass
+>   silently.
+> - **Reverted:** `gallery.spec.ts` is the approved version again (sha `1238d7342c64`).
+> - **Nothing left in the repo:** the gallery's PNGs are ignored by Git (`.gitignore:79`). The 16 local shots are those
+>   of the real run again.
+> - **Evidence:** `release-pipeline/i5/` and `release-pipeline/runs/i5/`.
+> - **For the full gallery:** the sidebar's version reads `v1.1.0-1489-g104ba23d0-dirty`, because the build ran on an
+>   uncommitted tree. Build from a clean tree first.
+
+**23.3 ✅ M-24 in the backlog**
+> **Note implementazione**: the guard on `navigator.language`, as the coordinator decided (`BACKLOG_POST_1.2.md` §M).
