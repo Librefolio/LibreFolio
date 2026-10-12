@@ -1931,3 +1931,102 @@ Passi:
 > - `dev.py i18n audit`: l'unica chiave «Likely Unused» è `changelog.notTranslated`, com'è giusto finché non entra la modale.
 > - Il gate `utils gate-i18n-usage` prova il classificatore su dati sintetici, non sul catalogo vero, quindi non diventa rosso.
 > - Checkpoint a sé, FROZEN. Commit proposto `/tmp/libreFolio_commit_t_cl_key.txt`.
+
+### CL — via al resto (coordinatore, 2026-10-12)
+- CL-0 è nel target: `a8691bd27` (la chiave) e `0aca4948f` (il piano), treno 57, `dev_release2` = `37304d716`. Worktree in fast-forward lì, pulita.
+- **Il contratto** del modulo `changelog.ts`: gli export di oggi restano invariati. Gli export nuovi:
+  - `DisplayedChapter` (`ChangelogChapter` + `lang`);
+  - `baseLanguage(locale)`;
+  - `mergeChapters(english, translated, lang)`;
+  - `translationLoaders(globRecord)`;
+  - `createLocalizedChangelog(english, loaders)` → `{peek, load}`, dove `load` non va mai in errore e mette in cache solo i successi;
+  - `changelogTranslationLoaders`, dal glob pigro `CHANGELOG.[a-z][a-z].md`;
+  - `localizedChangelog`.
+- **La modale**:
+  - `$locale` → `baseLanguage`; `peek` subito, altrimenti caricamento (`changelog-loading`, `aria-busy`) e `load`, solo con la modale aperta;
+  - `<section data-version lang>`;
+  - la pillola `changelog-not-translated-{ci}`, col `lang` della UI, solo se il `lang` del capitolo è diverso da quello della UI;
+  - `{@html sanitizeHtml(renderHighlighted(…))}` sulle 3 uscite, con l'output di marked in cache per corpo;
+  - la voce di `htmlSink.gate.test.ts` per la modale si toglie: ora l'uscita è sanificata, e il gate lo verifica da sé.
+- **Passi**:
+  1. i rossi (test-author): Vitest node, jsdom, E2E con il blocco del runner;
+  2. la cura;
+  3. verdi, statici e build;
+  4. la doc (docs-writer);
+  5. il checkpoint.
+- Deroga concessa dal coordinatore: un `CHANGELOG.it.md` sintetico, non tracciato, da cancellare subito dopo; nel checkpoint `git status` e un «Fuori pista». In più gli è stato assegnato `scripts/cli_base.py`, ma solo `check_frontend_needs_build()`.
+
+#### CL passo 1 — i rossi ✅ (2026-10-12)
+> **Note implementazione** (test-author; log in `/tmp/libreFolio_cl_reds_*.log`):
+> - **`changelog.test.ts`** (node), righe 296–678: `baseLanguage`, `mergeChapters`, `translationLoaders`, `createLocalizedChangelog` e una guardia sui file tradotti veri, vuota oggi.
+>   - La guardia controlla anche che i loader trovati corrispondano ai file su disco.
+>   - Esito: **30 rossi**, per gli export mancanti; 23 test esistenti verdi.
+> - **`ChangelogModal.test.ts`** (jsdom): un fake di `localizedChangelog` alle righe 58–165, i test CL alle righe 1030–1304.
+>   - Esito: **8 rossi**: `data-version`, `changelog-loading`, `load` mai chiamato, la ricerca, l'espandi tutto, la sanificazione. 76 verdi.
+> - **`AboutTab.test.ts`**: solo il mock, completato con `baseLanguage` e `localizedChangelog`.
+> - **E2E nuovo** `e2e/layout/changelog-locale.spec.ts`:
+>   - non dipende dal contenuto: legge `CHANGELOG.it.md` dal disco, e senza file si aspetta tutto in `en` con la pillola;
+>   - solo desktop; la lingua passa dal selettore dell'header, cioè dal localStorage di quel contesto;
+>   - esito: **2 rossi**, perché `data-version` è `null`.
+> - **Runner**, `_frontend_utility.py`: `front_changelog_locale` (426–433) e `add_test` (624–632). Solo il blocco assegnato.
+> - **`test_runtime_isolation.py`**: `TestFrontendBuildStaleness` (1803–1871), con un progetto finto e mtime fissati con `os.utime`.
+>   - Esito: **2 rossi** (`CHANGELOG.md` e `CHANGELOG.it.md` più nuovi della build); 3 guardie e 153 test esistenti verdi.
+
+#### CL passo 2 — la cura ✅ (2026-10-12)
+> **Note implementazione** (`/tmp/libreFolio_tcl_apply.py`, sostituzioni esatte e controllate):
+> - **`changelog.ts`**: l'intestazione, e dopo `CHANGELOG_REMOTE_URL`:
+>   - `DisplayedChapter`, `baseLanguage`, `mergeChapters`;
+>   - `translationLoaders`, con la regex `CHANGELOG.([a-z]{2}).md` e `en` escluso;
+>   - `createLocalizedChangelog`: peek e load, una richiesta condivisa per lingua, cache dei soli successi, ripiego sull'inglese;
+>   - `changelogTranslationLoaders`, dal glob pigro `CHANGELOG.[a-z][a-z].md`;
+>   - `localizedChangelog`.
+> - **`ChangelogModal.svelte`**:
+>   - `uiLanguage`, poi `ready` / `chapters` / `loading`, ricavati da `peek` e dall'ultimo `load`;
+>   - un `$effect` che carica solo a modale aperta;
+>   - `changelog-loading` con `aria-busy`;
+>   - `<section data-version lang>` e la pillola `changelog-not-translated-{ci}` col `lang` della UI;
+>   - `{@html sanitizeHtml(renderHighlighted(…))}` sulle 3 uscite, e l'output di marked in cache per corpo.
+> - **`htmlSink.gate.test.ts`**: tolta la voce della modale. Le uscite ora sono sanificate, e una voce che non copre più nulla farebbe fallire il gate.
+> - **`scripts/cli_base.py`**: 2 righe fra gli input di `check_frontend_needs_build()`, `*sorted(project_root.glob("CHANGELOG*.md"))` con un commento. Limite noto: una cancellazione non si vede dagli mtime.
+>
+> **⚠️ Fuori pista**:
+> - In `setAll` una variabile locale `chapters` oscurava il nuovo `$derived`: 3 rossi in component-unit, uno su un test preesistente. Rinominate le locali in `chapterFolds` e `sectionFolds`.
+> - `scripts/cli_base.py` non è pulito per black già sulla base: 72 righe di diff di black, identiche prima e dopo, e nessuna è mia. Niente black sul file; ruff è pulito.
+
+#### CL passo 3 — verdi, statici e build ✅ (2026-10-12)
+> **Note implementazione**:
+> - Tutto sulla 6164, in sequenza, con `bash /tmp/libreFolio_t1_run.sh`:
+>   - `front-utility core-unit`: 121 file, **3 766 passed**;
+>   - `front-utility component-unit`: 112 file, **2 992 passed**;
+>   - `utils runtime-isolation`: **158 passed**;
+>   - `check-orphans`: pulito (e2e 109, unit 347, backend 259, tutti raggiungibili);
+>   - `front-utility changelog-locale`: **2 passed**.
+> - `dev.py front check`: svelte-check con 0 errori e 0 avvisi. prettier pulito sui 7 file del frontend.
+> - Alla fine la porta è libera.
+>
+> **⚠️ Fuori pista (deroga del coordinatore)**: un `CHANGELOG.it.md` sintetico, mai tracciato. Conteneva 1.1.0 con una data diversa, 1.0.1, e un capitolo orfano 0.9.0.
+> - **Con il file**: `dev.py front build`.
+>   - Il chunk pigro `_app/immutable/chunks/BtiW0acR.js` (438 byte) contiene il testo italiano.
+>   - Il chunk inglese (`Bu-IDQsZ.js`, 148 KB) non contiene il marcatore e richiama l'altro per nome.
+>   - E2E: **2 passed**, col ramo tradotto davvero esercitato: 1.1.0 e 1.0.1 attesi `it`, letti dal file.
+> - **Dopo**: file cancellato e `dev.py front build` esplicito, perché la cancellazione non si vede dagli mtime.
+>   - Nella build non resta nessun chunk italiano.
+>   - E2E: **2 passed**, tutto `en` con la pillola.
+>   - `git status` senza `CHANGELOG.it.md`.
+
+#### CL passo 4 — la doc ✅ (2026-10-12)
+> **Note implementazione** (docs-writer): `mkdocs_src/docs/user/settings/about.en.md`, §Changelog Modal.
+> - La prima frase ora dice che la modale mostra il changelog nella lingua dell'interfaccia.
+> - Un paragrafo nuovo dice che una release non ancora tradotta appare in inglese con l'etichetta **Not translated yet**, il valore EN di `changelog.notTranslated`.
+> - Il `mkdocs build` stretto è verde, senza avvisi, con 3 012 URL relativi risolti.
+> - Niente `translate-stamp`: it, fr ed es li traduce M. Il debito: la prima frase e il paragrafo nuovo, fra le due liste.
+> - Effetto sul rendering: il paragrafo separa le due liste, che prima uscivano fuse in una sola.
+
+### Checkpoint CL 🧊 (2026-10-12) — FROZEN, in attesa del coordinatore
+- Base `37304d716`. 11 file modificati e 1 nuovo, `e2e/layout/changelog-locale.spec.ts`.
+- Quattro commit proposti:
+  1. `feat(changelog)`: il codice, i test e il blocco del runner;
+  2. `fix(runner)`: `cli_base.py` e `test_runtime_isolation.py`;
+  3. `docs(user)`: `about.en.md`;
+  4. `docs(journal)`: questo piano.
+- Niente CHANGELOG. Il `CHANGELOG.it.md` sintetico è stato cancellato.
