@@ -50,6 +50,7 @@ the other parts are ingested in steps R1–R6.
   [[problems/replay-baseline-shortened-by-late-starter]], [[problems/echarts-stacked-band-null-base]].
 - From the first round, `implementation/` (step R4): [[concepts/risk-contracts-k1-k9]],
   [[decisions/histogram-grid-pinned-to-var-cut]], [[problems/annualization-factor-not-coverage]].
+- From the analysis documents (step R5): [[decisions/risk-tool-verdicts]], [[decisions/risk-library-versus-own-maths]].
 
 ## Source files
 

@@ -583,3 +583,10 @@ are each file's last commit at the base. Paths are relative to the repository ro
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation/contracts/README.md` | `33d5a599b` | 2026-10-12 | [[concepts/risk-contracts-k1-k9]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation/progress/A-esecuzione.md` | `33d5a599b` | 2026-10-12 | [[decisions/histogram-grid-pinned-to-var-cut]], [[problems/annualization-factor-not-coverage]] |
+
+## 2026-10-12 — folder 02 (Risk), step R5 (base `b4acfb250`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/02-verdetti-per-strumento.md` | `245aabf97` | 2026-10-12 | [[decisions/risk-tool-verdicts]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/06-matematica-librerie-e-reimplementazioni.md` | `0e704af4e` | 2026-10-12 | [[decisions/risk-library-versus-own-maths]] |
