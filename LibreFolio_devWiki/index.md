@@ -583,6 +583,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Train 67 in the wiki — M's batch 26.** The first append to the translated CHANGELOG, ported by hand and stamped; M-23 (French spacing in the app's changelog) recorded as open, planned in 1.2 | *(none)* |
 | 2026-10-12 | **Train 66 in the wiki.** V-16 resolved (bcrypt off the event loop); M's batch 25: the CHANGELOG translated by pieces, the MathJax fonts, a fast-forward over a dirty file; the ✨ line «The changelog speaks your language»; the changelog decision corrected | *(3 pages — 1 decision, 2 problems; see log)* |
 | 2026-10-12 | **Trains 58 and 64 in the wiki — V's batch 2 and work 3 (plan 46 §11–§12).** V-1 closed (the price sync refreshes open panels), V-5…V-7, V-9, V-10; the E2E isolation audit and cures A1–A3; bcrypt in the event loop (V-16); the developer's «Tutte e 7 nella 1.2» for the E2E gaps | *(3 pages — 1 decision, 2 problems; see log)* |
 | 2026-10-12 | **Step B8 — M's batches 23–24, T's CL, I's plan 47, the backlog of 12/10.** The Scalable page and the security guide reviewed live; MathJax offline on nested pages (M-19); five copy buttons over HTTP (M-20); the changelog in the UI language, registered as F-109; the day back on the x-axis and the stale P&L lines; a translation that expired the toolbar calibration (V-19); backlog ids in F-106 and the broker-icon page | [[sources/phase00-chart-axis-day-labels-2026-10]] *(8 pages — 1 feature, 1 decision, 5 problems, 1 source; see log)* |

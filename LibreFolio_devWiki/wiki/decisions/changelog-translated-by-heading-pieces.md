@@ -60,6 +60,13 @@ The translations themselves came in `4325e03d4` (`CHANGELOG.{it,fr,es}.md`, ever
 - `CHANGELOG.md` stays the coordinator's alone; its translations are generated, and the app reads them lazily.
 - A structure change in a translation surfaces as a refused piece, not as a silent full re-translation.
 - The release-notes discipline of «Changelog Rules» now has three translated companions to keep in step.
+- **The first append** (M's batch 26, train 67, `98fe9ce1d`): the ✨ line «The changelog speaks your language» joined
+  [1.2.0]. The dry-run planned `1.2.0/added` ×3, about 50,400 tokens each, and a model run would have re-translated the
+  whole 16.8 KB piece over its hand review; so M ported the line by hand, with each catalogue's
+  `changelog.notTranslated` label and each file's own words and marks, then ran `translate-stamp --file CHANGELOG.md`:
+  the next dry-run was empty and `translate-validate` clean. The hand path is the cheap one for a single line.
+- French spacing does not reach the app: the no-break spaces are put in at build time by MkDocs, and the modal renders
+  `CHANGELOG.fr.md` without it (M-23) — see [[decisions/fr-typography-at-build-time]].
 
 ## Source files
 

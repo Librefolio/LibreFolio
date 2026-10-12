@@ -3033,3 +3033,13 @@ first; `reset_password`, CLI only, unchanged), [[concepts/async-io-rule]], [[dec
 [[problems/docs-mathjax-looked-in-the-page-folder]] (the follow-up), [[problems/e2e-writes-leaked-into-shared-state]]
 (A7's damage proved; IWR-009 passes in silence).
 Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 67 — M's batch 26: the first append, and M-23
+Base `0c8412745`. Source: step 10 of `27_releaseImages/plan-phase00ChangelogTranslation.prompt.md` (`872d42107`) and
+the backlog's M-23. The ✨ line of `b91d6d902` was ported by hand into `CHANGELOG.{it,fr,es}.md` and stamped
+(`98fe9ce1d`) instead of re-translating a 16.8 KB piece three times.
+
+**Updated**: [[decisions/changelog-translated-by-heading-pieces]] (the first append, by hand), [[decisions/fr-typography-at-build-time]]
+(what the build-time hook cannot reach: M-23, open, planned in 1.2 by the coordinator), [[features/F-109]] (still open:
+M-23). Checked on the code: `changelog.ts` and `ChangelogModal.svelte` apply no French spacing rule.
+Graph: not updated (P-6).
