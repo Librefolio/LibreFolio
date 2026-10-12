@@ -62,7 +62,7 @@ import {
     writeSavingsStatement,
 } from './fixtures/galleryReportSets';
 import {selectBrokerFile} from './fixtures/import-wizard';
-import {optionsClosed} from './fixtures/probe';
+import {appears, becomesEnabled, optionsClosed} from './fixtures/probe';
 import {
     chooseLabYear,
     currentUserId,
@@ -714,10 +714,10 @@ test.describe('Gallery Screenshots', () => {
 
     /**
      * The 1-year range, strictly: the dashboard shots' form of selectOneYearDateRange(), which
-     * the asset and broker shots keep as it is — it looks once and, on a preset bar not painted
-     * yet, clicks nothing. The range persists in the session. When the click changed it, the
-     * page is reloaded, so every chart draws once on the new range instead of being redrawn,
-     * by the report the click asked for, while a shot is taken.
+     * the asset and broker shots keep as it is — it waits half a second at most and, on a preset
+     * bar not painted by then, clicks nothing. The range persists in the session. When the click
+     * changed it, the page is reloaded, so every chart draws once on the new range instead of
+     * being redrawn, by the report the click asked for, while a shot is taken.
      */
     async function selectOneYearPreset(page: Page): Promise<void> {
         const oneYear = page.getByTestId('date-preset-1y');
@@ -906,9 +906,9 @@ test.describe('Gallery Screenshots', () => {
     async function selectMaxDateRange(page: Page) {
         const maxBtn = page.getByTestId('date-preset-max');
         const y2Btn = page.getByTestId('date-preset-2y');
-        if (await maxBtn.isVisible({timeout: 500}).catch(() => false)) {
+        if (await appears(maxBtn, 500)) {
             await maxBtn.click();
-        } else if (await y2Btn.isVisible({timeout: 500}).catch(() => false)) {
+        } else if (await appears(y2Btn, 500)) {
             await y2Btn.click();
         }
     }
@@ -918,7 +918,7 @@ test.describe('Gallery Screenshots', () => {
     // so the engine auto-centers on the lots' full lifecycle.
     async function selectOneYearDateRange(page: Page) {
         const y1Btn = page.getByTestId('date-preset-1y');
-        if (await y1Btn.isVisible({timeout: 500}).catch(() => false)) {
+        if (await appears(y1Btn, 500)) {
             await y1Btn.click();
         }
     }
@@ -1022,7 +1022,7 @@ test.describe('Gallery Screenshots', () => {
         }
 
         const comparisonReturnToggle = page.getByTestId('lot-comparison-mode-return');
-        if (await comparisonReturnToggle.isVisible({timeout: 2_000}).catch(() => false)) {
+        if (await appears(comparisonReturnToggle, 2_000)) {
             await comparisonReturnToggle.click();
             await page.waitForTimeout(300);
             await screenshot(page, viewport, lang, theme, category, 'fifo-lots-comparison-chart-return');
@@ -1854,7 +1854,7 @@ test.describe('Gallery Screenshots', () => {
                     // Click the configure button to open SchedulerConfigModal
                     const configBtn = page.getByTestId('scheduler-config-btn');
                     await configBtn.scrollIntoViewIfNeeded();
-                    if (await configBtn.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(configBtn, 3_000)) {
                         await configBtn.click();
                         const configModal = page.getByTestId('scheduler-config-modal');
                         await expect(configModal).toBeVisible({timeout: 5_000});
@@ -1893,7 +1893,7 @@ test.describe('Gallery Screenshots', () => {
                     // Click the scheduler status row to open SchedulerLogModal
                     const statusRow = page.getByTestId('scheduler-status-row');
                     await statusRow.scrollIntoViewIfNeeded();
-                    if (await statusRow.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(statusRow, 3_000)) {
                         await statusRow.click();
                         const logModal = page.getByTestId('scheduler-log-modal');
                         await expect(logModal).toBeVisible({timeout: 5_000});
@@ -1966,7 +1966,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Unlock as admin so the Clear actions are rendered too
                     const lockToggle = page.getByTestId('settings-lock-toggle');
-                    if (await lockToggle.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(lockToggle, 3_000)) {
                         const isLocked = await page
                             .getByTestId('scheduler-config-btn')
                             .isDisabled()
@@ -1979,7 +1979,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Narrow to the Memory category when the category sidebar is rendered (desktop)
                     const memoryCategory = page.getByTestId('global-settings-category-memory');
-                    if (await memoryCategory.isVisible({timeout: 1_000}).catch(() => false)) {
+                    if (await appears(memoryCategory, 1_000)) {
                         await memoryCategory.click();
                         await page.waitForTimeout(300);
                     }
@@ -2600,12 +2600,12 @@ test.describe('Gallery Screenshots', () => {
          */
         async function selectTransactionType(page: Page, type: string) {
             const typeCombobox = page.locator('[data-testid="tx-form-type"] [role="combobox"]');
-            if (!(await typeCombobox.isVisible({timeout: 2_000}).catch(() => false))) return;
+            if (!(await appears(typeCombobox, 2_000))) return;
             const icon = typeCombobox.locator('img');
             const prevSrc = await icon.getAttribute('src').catch(() => null);
             await typeCombobox.click();
             const option = page.locator(`[data-testid="search-select-option-${type}"]`);
-            if (!(await option.isVisible({timeout: 2_000}).catch(() => false))) return;
+            if (!(await appears(option, 2_000))) return;
             await option.click();
             if (prevSrc != null) {
                 await expect(icon).not.toHaveAttribute('src', prevSrc, {timeout: 3_000});
@@ -2746,11 +2746,11 @@ test.describe('Gallery Screenshots', () => {
                             .getByTestId('tx-table')
                             .getByTestId(/^row-actions-/)
                             .nth(i);
-                        if (!(await kebab.isVisible({timeout: 1_000}).catch(() => false))) continue;
+                        if (!(await appears(kebab, 1_000))) continue;
                         await kebab.scrollIntoViewIfNeeded();
                         await kebab.click();
                         const splitAction = page.getByTestId('context-menu-action-split');
-                        if (await splitAction.isVisible({timeout: 500}).catch(() => false)) {
+                        if (await appears(splitAction, 500)) {
                             await splitAction.click();
                             const actionModal = page.getByTestId('tx-action-modal');
                             await expect(actionModal).toBeVisible({timeout: 5_000});
@@ -2796,7 +2796,7 @@ test.describe('Gallery Screenshots', () => {
                     // The pre-filled form auto-opens only for a single-row clone; cloning a
                     // paired row stages both legs instead (no form). Close it when present.
                     const formClose = page.getByTestId('tx-form-close');
-                    if (await formClose.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(formClose, 3_000)) {
                         await formClose.click();
                         await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 3_000});
                     }
@@ -2844,7 +2844,7 @@ test.describe('Gallery Screenshots', () => {
                         for (let j = i + 1; j < maxTry && !screenshotTaken; j++) {
                             // Clear any prior selection before EACH attempt
                             const clearBtn = page.locator('button.selected-count-btn').first();
-                            if (await clearBtn.isVisible({timeout: 300}).catch(() => false)) {
+                            if (await appears(clearBtn, 300)) {
                                 await clearBtn.click();
                                 await page.waitForTimeout(200);
                             }
@@ -2857,7 +2857,7 @@ test.describe('Gallery Screenshots', () => {
                             await page.waitForTimeout(800); // Wait for Svelte to re-derive promoteMatch
 
                             const promoteBtn = page.getByTestId('toolbar-action-promote');
-                            const promoteBtnVisible = await promoteBtn.isVisible({timeout: 5_000}).catch(() => false);
+                            const promoteBtnVisible = await appears(promoteBtn, 5_000);
                             if (promoteBtnVisible) {
                                 await promoteBtn.click();
                                 await page.waitForTimeout(500);
@@ -2867,10 +2867,10 @@ test.describe('Gallery Screenshots', () => {
                                 // which also has data-testid="promote-merge-modal"
                                 const mergeModal = page.locator('[data-testid="promote-merge-modal"][role="dialog"]');
                                 const confirmBtn = page.getByTestId('confirm-modal-confirm');
-                                if (await mergeModal.isVisible({timeout: 3_000}).catch(() => false)) {
+                                if (await appears(mergeModal, 3_000)) {
                                     await screenshot(page, viewport, lang, theme, 'transactions', 'promote-merge-modal');
                                     screenshotTaken = true;
-                                } else if (await confirmBtn.isVisible({timeout: 3_000}).catch(() => false)) {
+                                } else if (await appears(confirmBtn, 3_000)) {
                                     await screenshot(page, viewport, lang, theme, 'transactions', 'promote-merge-modal');
                                     screenshotTaken = true;
                                 }
@@ -3271,14 +3271,15 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
 
                     // Skip step 1 (go to step 2 which shows files already in DB)
+                    await waitForSettled(page.getByTestId('import-wizard-step1'));
                     await page.getByTestId('import-wizard-next').click();
                     await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 8_000});
-                    await page.waitForTimeout(800);
+                    await waitForSettled(page.getByTestId('import-wizard-step2'), 30_000);
 
                     // Find and select the generic_simple.csv row
                     const step2 = page.getByTestId('import-wizard-step2');
                     const fileRow = step2.locator('tr[data-row-id]').filter({hasText: 'generic_simple.csv'}).first();
-                    if (await fileRow.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(fileRow, 3_000)) {
                         const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
                         await checkbox.scrollIntoViewIfNeeded();
                         await page.keyboard.press('Escape'); // dismiss any open dropdown
@@ -3287,7 +3288,7 @@ test.describe('Gallery Screenshots', () => {
 
                         // Parse (step 3)
                         const parseBtn = page.getByTestId('import-wizard-parse');
-                        if (await parseBtn.isEnabled({timeout: 3_000}).catch(() => false)) {
+                        if (await becomesEnabled(parseBtn, 3_000)) {
                             await parseBtn.click();
                             await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
                             await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
@@ -3341,15 +3342,16 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
 
                     // Skip to step 2
+                    await waitForSettled(page.getByTestId('import-wizard-step1'));
                     await page.getByTestId('import-wizard-next').click();
                     await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 8_000});
-                    await page.waitForTimeout(800);
+                    await waitForSettled(page.getByTestId('import-wizard-step2'), 30_000);
 
                     // Select generic_simple.csv — has AAPL/MSFT rows + UNETF (unresolved)
                     // The AAPL rows match existing DB transactions → show as "likely duplicate"
                     const step2 = page.getByTestId('import-wizard-step2');
                     const fileRow = step2.locator('tr[data-row-id]').filter({hasText: 'generic_simple.csv'}).first();
-                    if (await fileRow.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(fileRow, 3_000)) {
                         const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
                         await checkbox.scrollIntoViewIfNeeded();
                         await page.keyboard.press('Escape');
@@ -3357,7 +3359,7 @@ test.describe('Gallery Screenshots', () => {
                         await checkbox.click();
 
                         const parseBtn = page.getByTestId('import-wizard-parse');
-                        if (await parseBtn.isEnabled({timeout: 3_000}).catch(() => false)) {
+                        if (await becomesEnabled(parseBtn, 3_000)) {
                             await parseBtn.click();
                             await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
                             await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
@@ -3374,7 +3376,7 @@ test.describe('Gallery Screenshots', () => {
                             // Scroll to the transaction table (below the resolve section) to show duplicate badges
                             const step4 = page.getByTestId('import-wizard-step4');
                             const txTable = step4.locator('table').first();
-                            if (await txTable.isVisible({timeout: 2_000}).catch(() => false)) {
+                            if (await appears(txTable, 2_000)) {
                                 await txTable.evaluate((el) => el.scrollIntoView({block: 'center'}));
                                 await page.waitForTimeout(300);
                             }
@@ -4098,24 +4100,24 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForTimeout(500);
 
                     const card = page.locator('[data-testid^="broker-card-"]').first();
-                    if (await card.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(card, 2000)) {
                         await card.click();
                         await page.waitForLoadState('networkidle', {timeout: 20_000});
                         await page.waitForTimeout(500);
 
                         // Click edit button to open BrokerModal
                         const editBtn = page.getByTestId('broker-edit-button');
-                        if (await editBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                        if (await appears(editBtn, 2000)) {
                             await editBtn.click();
                             await expect(page.getByTestId('broker-modal')).toBeVisible({timeout: 3000});
                             await page.waitForTimeout(300);
 
                             // Click on broker icon to open AssetPickerModal
                             const iconTrigger = page.getByTestId('broker-icon-trigger');
-                            if (await iconTrigger.isVisible({timeout: 1000}).catch(() => false)) {
+                            if (await appears(iconTrigger, 1000)) {
                                 await iconTrigger.click();
                                 const pickerModal = page.getByTestId('asset-picker-modal');
-                                if (await pickerModal.isVisible({timeout: 3000}).catch(() => false)) {
+                                if (await appears(pickerModal, 3000)) {
                                     await waitForNetworkSettled(page);
                                     await page.waitForTimeout(1500); // Wait for file previews to load
                                     await screenshot(page, viewport, lang, theme, 'media', 'asset-picker-modal');
@@ -4189,7 +4191,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Switch to table view
                     const tableBtn = page.getByTestId('view-mode-list');
-                    if (await tableBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(tableBtn, 2000)) {
                         await tableBtn.click();
                         await page.waitForTimeout(1000); // Wait for table to render
                     }
@@ -4210,11 +4212,11 @@ test.describe('Gallery Screenshots', () => {
 
                     // Apply currency filter (EUR)
                     const filterSelect = page.getByTestId('fx-currency-filter').first();
-                    if (await filterSelect.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(filterSelect, 2000)) {
                         await filterSelect.locator('[role="combobox"]').click();
                         await page.waitForTimeout(300);
                         const option = page.locator('[role="listbox"] button').filter({hasText: 'EUR'}).first();
-                        if (await option.isVisible({timeout: 1000}).catch(() => false)) {
+                        if (await appears(option, 1000)) {
                             await option.click();
                             await page.waitForTimeout(1500); // Wait for charts to re-render
                         }
@@ -4414,7 +4416,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Click sync all button
                     const syncBtn = page.getByTestId('fx-sync-all-button');
-                    if (await syncBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(syncBtn, 2000)) {
                         await syncBtn.click();
                         // Wait for sync modal to appear and show progress
                         await page.waitForTimeout(1500);
@@ -4460,12 +4462,12 @@ test.describe('Gallery Screenshots', () => {
 
                     // Toggle signals panel
                     const signalsToggle = page.getByTestId('fx-detail-signals-toggle');
-                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(signalsToggle, 2000)) {
                         await signalsToggle.click();
                         await page.waitForTimeout(500);
                         // Scroll down to make signals panel content visible
                         const signalsPanel = page.getByTestId('fx-detail-signals-panel');
-                        if (await signalsPanel.isVisible({timeout: 2000}).catch(() => false)) {
+                        if (await appears(signalsPanel, 2000)) {
                             await signalsPanel.scrollIntoViewIfNeeded();
                             await page.waitForTimeout(300);
                         }
@@ -4496,7 +4498,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Toggle measures panel
                     const measuresToggle = page.getByTestId('fx-detail-measures-toggle');
-                    if (await measuresToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(measuresToggle, 2000)) {
                         await measuresToggle.click();
                         await page.waitForTimeout(500);
                     }
@@ -4521,12 +4523,12 @@ test.describe('Gallery Screenshots', () => {
 
                     // Click edit button to open data editor
                     const editBtn = page.getByTestId('fx-detail-edit-btn');
-                    if (await editBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(editBtn, 2000)) {
                         await editBtn.click();
                         await page.waitForTimeout(500);
                         // Scroll to editor panel for full view
                         const editorPanel = page.getByTestId('fx-detail-editor-panel');
-                        if (await editorPanel.isVisible({timeout: 2000}).catch(() => false)) {
+                        if (await appears(editorPanel, 2000)) {
                             await editorPanel.scrollIntoViewIfNeeded();
                             await page.waitForTimeout(300);
                         }
@@ -4672,7 +4674,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Switch to table view
                     const tableBtn = page.getByTestId('view-mode-list');
-                    if (await tableBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(tableBtn, 2000)) {
                         await tableBtn.click();
                         await page.waitForTimeout(1000); // Wait for table to render
                     }
@@ -4699,7 +4701,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Type search text
                     const searchInput = page.getByTestId('assets-search-input');
-                    if (await searchInput.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(searchInput, 2000)) {
                         await searchInput.fill('ETF');
                         await page.waitForTimeout(1000);
                     }
@@ -4732,7 +4734,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Screenshot 2: candlestick chart
                     const candlestickBtn = page.getByTestId('chart-type-candlestick');
-                    if (await candlestickBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(candlestickBtn, 2000)) {
                         await candlestickBtn.click();
                         await page.waitForTimeout(800); // Wait for candlestick to render
                         await freezeAnimations(page);
@@ -4882,7 +4884,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Toggle signals panel
                     const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
-                    if (await signalsToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(signalsToggle, 2000)) {
                         await signalsToggle.click();
                         await page.waitForTimeout(500);
                     }
@@ -5190,9 +5192,9 @@ test.describe('Gallery Screenshots', () => {
 
             // The dividend sits ~120 days back, outside the 3-month session default, so the range
             // must really be «All». Strict local form of selectMaxDateRange() (still used by the FIFO
-            // shots): that one looks once, and on a preset bar not painted yet it clicks nothing,
-            // silently. Here the button is waited for, clicked only when not already active (the
-            // range persists in the session), and its active state asserted.
+            // shots): it waits half a second at most per preset, and on a preset bar not painted by
+            // then it clicks nothing, silently. Here the button is waited for, clicked only when not
+            // already active (the range persists in the session), and its active state asserted.
             const selectMaxPreset = async () => {
                 const maxPreset = page.getByTestId('date-preset-max');
                 await expect(maxPreset).toBeVisible({timeout: 10_000});
@@ -5321,7 +5323,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Toggle measures panel — screenshot 1: panel open (empty)
                     const measuresToggle = page.getByTestId('asset-detail-measures-toggle');
-                    if (await measuresToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(measuresToggle, 2000)) {
                         await measuresToggle.click();
                         await page.waitForTimeout(500);
                     }
@@ -5331,7 +5333,7 @@ test.describe('Gallery Screenshots', () => {
 
                     // Screenshot 2: panel with a measurement added (full date range)
                     const addMeasureBtn = page.getByTestId('asset-detail-add-measure-btn');
-                    if (await addMeasureBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(addMeasureBtn, 2000)) {
                         await addMeasureBtn.click();
                         await page.waitForTimeout(800); // Wait for measurement to appear
                         await page.getByTestId('asset-detail-chart').scrollIntoViewIfNeeded();
@@ -5360,13 +5362,13 @@ test.describe('Gallery Screenshots', () => {
 
                     // Toggle classification (metadata) panel
                     const metadataToggle = page.getByTestId('asset-detail-metadata-toggle');
-                    if (await metadataToggle.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(metadataToggle, 2000)) {
                         await metadataToggle.click();
                         await page.waitForTimeout(1000); // Wait for pie charts and map to render
 
                         // Scroll to classification panel
                         const metadataPanel = page.getByTestId('asset-detail-metadata-panel');
-                        if (await metadataPanel.isVisible({timeout: 2000}).catch(() => false)) {
+                        if (await appears(metadataPanel, 2000)) {
                             await metadataPanel.scrollIntoViewIfNeeded();
                             await page.waitForTimeout(500);
                         }
@@ -5390,12 +5392,12 @@ test.describe('Gallery Screenshots', () => {
 
                     // Click edit data button
                     const editDataBtn = page.getByTestId('asset-detail-editdata-btn');
-                    if (await editDataBtn.isVisible({timeout: 2000}).catch(() => false)) {
+                    if (await appears(editDataBtn, 2000)) {
                         await editDataBtn.click();
                         await page.waitForTimeout(500);
                         // Scroll to editor panel
                         const editorPanel = page.getByTestId('asset-detail-editor-panel');
-                        if (await editorPanel.isVisible({timeout: 2000}).catch(() => false)) {
+                        if (await appears(editorPanel, 2000)) {
                             await editorPanel.scrollIntoViewIfNeeded();
                             await page.waitForTimeout(300);
                         }
@@ -5602,14 +5604,15 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
 
                     // Skip step 1, advance to step 2
+                    await waitForSettled(page.getByTestId('import-wizard-step1'));
                     await page.getByTestId('import-wizard-next').click();
                     await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 8_000});
-                    await page.waitForTimeout(800);
+                    await waitForSettled(page.getByTestId('import-wizard-step2'), 30_000);
 
                     // Select generic_simple.csv (has UNETF - unresolved asset)
                     const step2 = page.getByTestId('import-wizard-step2');
                     const fileRow = step2.locator('tr[data-row-id]').filter({hasText: 'generic_simple.csv'}).first();
-                    if (await fileRow.isVisible({timeout: 3_000}).catch(() => false)) {
+                    if (await appears(fileRow, 3_000)) {
                         const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
                         await checkbox.scrollIntoViewIfNeeded();
                         await page.keyboard.press('Escape');
@@ -5617,7 +5620,7 @@ test.describe('Gallery Screenshots', () => {
                         await checkbox.click();
 
                         const parseBtn = page.getByTestId('import-wizard-parse');
-                        if (await parseBtn.isEnabled({timeout: 3_000}).catch(() => false)) {
+                        if (await becomesEnabled(parseBtn, 3_000)) {
                             await parseBtn.click();
                             await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
                             await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
@@ -5629,16 +5632,16 @@ test.describe('Gallery Screenshots', () => {
                                 await page.waitForTimeout(300);
                             }
                             await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 10_000});
-                            await page.waitForTimeout(800);
+                            await waitForSettled(page.getByTestId('import-wizard-step4'), 30_000);
 
                             // The resolve section defaults to expanded when there are unresolved assets.
                             // Just find the AssetSelect directly — it's inside the resolve section.
                             // Use the [role="combobox"] inside the asset-select element.
                             const assetSelect = page.getByTestId('asset-select').first();
-                            if (await assetSelect.isVisible({timeout: 5_000}).catch(() => false)) {
+                            if (await appears(assetSelect, 5_000)) {
                                 // Open the search dropdown by clicking the combobox trigger
                                 const combobox = assetSelect.locator('[role="combobox"], input[type="text"]').first();
-                                if (await combobox.isVisible({timeout: 1_000}).catch(() => false)) {
+                                if (await appears(combobox, 1_000)) {
                                     await combobox.click();
                                 } else {
                                     await assetSelect.click();
@@ -5647,11 +5650,11 @@ test.describe('Gallery Screenshots', () => {
 
                                 // Click the "Create new" option in the dropdown
                                 const createNewBtn = page.getByTestId('search-select-create-new');
-                                if (await createNewBtn.isVisible({timeout: 2_000}).catch(() => false)) {
+                                if (await appears(createNewBtn, 2_000)) {
                                     await createNewBtn.click();
                                     // AssetModal opens pre-filled with extracted ticker/ISIN/name
                                     const assetModal = page.getByTestId('asset-modal-form');
-                                    if (await assetModal.isVisible({timeout: 5_000}).catch(() => false)) {
+                                    if (await appears(assetModal, 5_000)) {
                                         await waitForNetworkSettled(page);
                                         await page.waitForTimeout(500);
                                         await freezeAnimations(page);
