@@ -78,8 +78,8 @@
  * ## Why the component's fast path is pinned by reading its source
  *
  * A test of the pure module cannot see how the chart *refreshes*. `AllocationPieChart` has a
- * data-only path — chart already drawn, same theme, same set of types — that calls
- * `setOption({series: …})` without rebuilding the option. With two rings it must address both
+ * data-only path — chart already drawn, same theme, same interface locale, same set of types — that
+ * calls `setOption({series: …})` without rebuilding the option. With two rings it must address both
  * series by id. The trap was written down before D72 was built (mandate G §6,
  * `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation/G-frontend-colori-allocazione.md`):
  * a `series: [{data}]` that refreshes the base ring and leaves the outer one on stale numbers —
@@ -1187,8 +1187,14 @@ describe('buildAllocationRingData — rounding', () => {
 // AllocationPieChart — the data-only fast path, pinned by source
 // =============================================================================
 
-/** The guard of the data-only update in `AllocationPieChart.svelte`. */
-const FAST_PATH_HEADER = /if\s*\(\s*chartFullyInitialized\s*&&\s*lastDark\s*===\s*isDark\s*&&\s*sameTypeSet\s*\)\s*\{/;
+/**
+ * The guard of the data-only update in `AllocationPieChart.svelte`.
+ *
+ * Why (re-pin, M-18): a language switch rebuilds in full, as a theme switch does — the legend's name map
+ * and the label formatters were built for the locale of the last full build — so the guard also requires
+ * `lastLocale === locale`, the interface locale the full build records beside `lastDark`.
+ */
+const FAST_PATH_HEADER = /if\s*\(\s*chartFullyInitialized\s*&&\s*lastDark\s*===\s*isDark\s*&&\s*lastLocale\s*===\s*locale\s*&&\s*sameTypeSet\s*\)\s*\{/;
 
 /** The two series of D72 since the redesign of 24/09, as `ringSeries()` names them. */
 const RING_SERIES_IDS = ['alloc-base', 'alloc-outer'];
@@ -1306,10 +1312,11 @@ function expectOnlyTheTwoRingSeries(code: string): void {
 /**
  * The historical trap, with decoys: both ids appear in a comment inside the fast path and in
  * a `ringSeries()` after it, so only a correct isolation *and* the comment stripping can make
- * the check fail here.
+ * the check fail here. Its guard is the component's current one, so the control is isolated by
+ * the very `FAST_PATH_HEADER` the real check uses.
  */
 const SINGLE_SERIES_FAST_PATH = `
-        if (chartFullyInitialized && lastDark === isDark && sameTypeSet) {
+        if (chartFullyInitialized && lastDark === isDark && lastLocale === locale && sameTypeSet) {
             // was: {id: 'alloc-base', data: baseRingData}, {id: 'alloc-outer', data: outerRingData}
             chartInstance.setOption({series: [{data: chartData}]});
             return;

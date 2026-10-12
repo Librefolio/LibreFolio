@@ -11,8 +11,20 @@
  * branches that no caller can reach (a typed cell is stringified by the filter
  * before its object sub-paths can fire; a matchMode outside the four the type
  * allows) are documented at the bottom, not forced with a cast.
+ *
+ * Dates (M-18 CP2): `formatCellDate` writes in the interface locale, the UI
+ * language regionalised by the browser. Node's `navigator.language` follows the
+ * host's ICU locale, so it is pinned to en-US before any import, as jsdom's
+ * always is: under the English UI the interface locale is en-US.
  */
-import {describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
+
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 import {compareRowsByColumn, extractRawValue, formatCellDate, getColumnMinMax, getCurrencyMinMaxByCode, getCurrencyOptions, getEnumOptionsWithCounts, getMultiEnumOptions, getMultiEnumOptionsWithCounts, matchesColumnFilter} from './dataTableLogic';
 import type {CellContent, ColumnDef, EnumOption, FilterValue} from './types';
 
@@ -500,29 +512,36 @@ describe('getCurrencyMinMaxByCode', () => {
     });
 });
 
+/**
+ * The expectations of this block are built for the interface locale — the English UI on the en-US
+ * browser stubbed at the top: en-US — and no longer by the bare `toLocale*String()` /
+ * `(undefined, …)` calls that read the machine's (M-18 CP2). On an en-US machine the text is today's.
+ */
 describe('formatCellDate', () => {
     const DAY = 24 * 60 * 60 * 1000;
     /** n days ago, offset a minute into the day so Math.floor lands cleanly on n. */
     const daysAgo = (n: number) => new Date(Date.now() - n * DAY - 60_000);
+    /** The interface locale of this block. */
+    const UI_LOCALE = 'en-US';
 
     it('renders the time-only format', () => {
         const d = new Date('2020-05-05T13:45:00Z');
-        expect(formatCellDate(d, 'time')).toBe(d.toLocaleTimeString());
+        expect(formatCellDate(d, 'time')).toBe(d.toLocaleTimeString(UI_LOCALE));
     });
 
     it('renders the datetime format', () => {
         const d = new Date('2020-05-05T13:45:00Z');
-        const expected = d.toLocaleString(undefined, {year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+        const expected = d.toLocaleString(UI_LOCALE, {year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
         expect(formatCellDate(d, 'datetime')).toBe(expected);
     });
 
     it('renders the default date format when no format is given', () => {
         const d = new Date('2020-05-05T13:45:00Z');
-        expect(formatCellDate(d)).toBe(d.toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'}));
+        expect(formatCellDate(d)).toBe(d.toLocaleDateString(UI_LOCALE, {year: 'numeric', month: 'short', day: 'numeric'}));
     });
 
     it('accepts a string value, parsing it to a Date', () => {
-        expect(formatCellDate('2020-05-05T13:45:00Z', 'time')).toBe(new Date('2020-05-05T13:45:00Z').toLocaleTimeString());
+        expect(formatCellDate('2020-05-05T13:45:00Z', 'time')).toBe(new Date('2020-05-05T13:45:00Z').toLocaleTimeString(UI_LOCALE));
     });
 
     it('relative: says today for the current day using the supplied label', () => {
@@ -539,12 +558,91 @@ describe('formatCellDate', () => {
 
     it('relative: falls back to a full date once a week has passed', () => {
         const d = daysAgo(8);
-        expect(formatCellDate(d, 'relative')).toBe(d.toLocaleDateString());
+        expect(formatCellDate(d, 'relative')).toBe(d.toLocaleDateString(UI_LOCALE));
     });
 
     it('defaults the relative labels to English when none are passed', () => {
         expect(formatCellDate(daysAgo(0), 'relative')).toBe('Today');
         expect(formatCellDate(daysAgo(1), 'relative')).toBe('Yesterday');
+    });
+});
+
+/**
+ * M-18 CP2 — the dates of a table cell in the interface language.
+ *
+ * Every figure follows the UI language (the developer's rule of 2026-10-12). `formatCellDate`'s four
+ * date branches — `time`, `datetime`, `relative` past a week, and the default — called the platform
+ * formatters with no locale, so an Italian UI on an English browser read `May 5, 2020` in its tables.
+ * The cure: they write in `uiLocale()`; the relative words stay the caller's. Expectations are Intl's
+ * output for the locale with the branch's own options, never typed, and a control checks that each
+ * Italian form differs from the English one. The instant sits in 2020, a week past whatever today is.
+ */
+describe('formatCellDate — in the interface language (M-18 CP2)', () => {
+    const INSTANT = new Date('2020-05-17T13:45:00Z');
+    const SHORT_DATE: Intl.DateTimeFormatOptions = {year: 'numeric', month: 'short', day: 'numeric'};
+    const DATE_TIME: Intl.DateTimeFormatOptions = {...SHORT_DATE, hour: '2-digit', minute: '2-digit'};
+
+    /** The four date branches of `INSTANT`, written by Intl in `locale`. */
+    function branchesIn(locale: string): Record<string, string> {
+        return {
+            time: INSTANT.toLocaleTimeString(locale),
+            datetime: INSTANT.toLocaleString(locale, DATE_TIME),
+            relative: INSTANT.toLocaleDateString(locale),
+            date: INSTANT.toLocaleDateString(locale, SHORT_DATE),
+        };
+    }
+
+    /** The four date branches of `INSTANT`, as `formatCellDate` writes them without a locale. */
+    function branchesWritten(): Record<string, string> {
+        return {
+            time: formatCellDate(INSTANT, 'time'),
+            datetime: formatCellDate(INSTANT, 'datetime'),
+            relative: formatCellDate(INSTANT, 'relative'),
+            date: formatCellDate(INSTANT),
+        };
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'it' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('English UI on an en-US browser (control): every branch writes en-US, today’s text', async () => {
+        await uiLanguage('en');
+
+        expect(branchesWritten()).toEqual(branchesIn('en-US'));
+    });
+
+    it('Italian UI: every branch writes the Italian date, without passing a locale', async () => {
+        await uiLanguage('it');
+        const italian = branchesIn('it');
+        const english = branchesIn('en-US');
+        for (const branch of Object.keys(italian)) expect(italian[branch], `control: the Italian ${branch} differs from the English one`).not.toBe(english[branch]);
+
+        expect(branchesWritten()).toEqual(italian);
+        expect(formatCellDate(INSTANT.toISOString(), 'time'), 'a string value, too').toBe(italian.time);
+    });
+
+    it('the relative words stay the caller’s in any language (control)', async () => {
+        await uiLanguage('it');
+
+        expect(formatCellDate(new Date(Date.now() - 60_000), 'relative', {today: 'OGGI', yesterday: 'IERI'})).toBe('OGGI');
+    });
+
+    it('follows the UI language from one call to the next: it → fr → en', async () => {
+        const written: Record<string, string> = {};
+        for (const lang of ['it', 'fr', 'en'] as const) {
+            await uiLanguage(lang);
+            written[lang] = formatCellDate(INSTANT);
+        }
+
+        expect(written).toEqual({it: branchesIn('it').date, fr: branchesIn('fr').date, en: branchesIn('en-US').date});
     });
 });
 

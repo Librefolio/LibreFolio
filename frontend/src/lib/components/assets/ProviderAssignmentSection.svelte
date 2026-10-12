@@ -25,6 +25,7 @@
     import {getCurrencyInfo, currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {isSoftProbeFailure, summarizeProbeError, formatCurrencyForTooltip, buildProbeTooltipHtml} from './providerProbe';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
     import {resolveProviderError} from './resolveProviderError';
     import {createProviderProbeState, providerConfigurationKey, type ProviderConfiguration, type ProviderProbeState} from './providerProbeState.svelte';
     import {safeScalar, safeString} from '$lib/types/common';
@@ -331,7 +332,7 @@
             // I3: failures resolve code+details to a localized message; the
             // raw English `error` stays as fallback for unmapped codes.
             const cpError = cp.success ? null : resolveProviderError({error: safeString(cp.error), error_code: safeString(cp.error_code), error_details: safeScalar(cp.error_details)}, $t);
-            const detail = cp.success ? `${Number(cpValue).toFixed(2)} ${ccyLabel}${cpDate ? ` (${cpDate})` : ''}` : (cpError ?? undefined);
+            const detail = cp.success ? `${formatFixed(Number(cpValue), 2)} ${ccyLabel}${cpDate ? ` (${cpDate})` : ''}` : (cpError ?? undefined);
             items.push({
                 success: cp.success,
                 status: cp.success ? 'success' : isSoftProbeFailure(safeString(cp.error) ?? undefined, safeString(cp.error_code)) ? 'warning' : 'error',
@@ -350,7 +351,7 @@
             const h = history;
             const ccyLabel = formatCurrencyForTooltip(displayCurrency || undefined);
             const hError = h.success ? null : resolveProviderError({error: safeString(h.error), error_code: safeString(h.error_code), error_details: safeScalar(h.error_details)}, $t);
-            const detail = h.success ? `${h.points_count} points${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${h.date_range}` : ''}` : (hError ?? undefined);
+            const detail = h.success ? `${formatFixed(Number(h.points_count), 0)} points${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${h.date_range}` : ''}` : (hError ?? undefined);
             items.push({
                 success: h.success,
                 status: h.success ? 'success' : isSoftProbeFailure(safeString(h.error) ?? undefined, safeString(h.error_code)) ? 'warning' : 'error',
@@ -583,7 +584,7 @@
                                     {result.summary ?? result.detail ?? '—'}
                                 </span>
                                 <span class="text-xs text-gray-400 shrink-0">
-                                    ({(result.execution_time_ms / 1000).toFixed(2)}s)
+                                    ({formatFixed(result.execution_time_ms / 1000, 2)}s)
                                 </span>
                                 {#if result.status === 'error' && result.detail}
                                     <button
@@ -615,7 +616,7 @@
                     {/if}
                     {#if testResults.length > 0 && testStatus !== 'testing'}
                         <div class="text-xs text-gray-400 dark:text-gray-500 pt-1">
-                            {$t('assets.probe.totalTime')}: {(totalExecutionMs / 1000).toFixed(2)}s
+                            {$t('assets.probe.totalTime')}: {formatFixed(totalExecutionMs / 1000, 2)}s
                         </div>
                     {/if}
                 </div>

@@ -22,6 +22,7 @@
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {maskableQuantity, PRIVACY_PLACEHOLDER, shouldMaskAmount} from '$lib/utils/privacy/maskable';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /** Every state a FIFO lot can carry. */
 export type LotState = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED' | 'DISTRIBUTED' | 'IN_TRANSIT' | 'DEGRADED';
@@ -56,10 +57,10 @@ export function filterStates(stateList: readonly string[]): LotState[] {
 
 /**
  * Format a quantity with up to six fraction digits, or an em dash when absent.
- * `locale` is exposed for deterministic tests; it defaults to the machine locale,
- * matching the component.
+ * `locale` is exposed for deterministic tests; it defaults to the interface locale
+ * (`uiLocale()`, M-18), so the table, which passes none, follows the interface.
  */
-export function formatLotQuantity(value: number | null, locale?: string): string {
+export function formatLotQuantity(value: number | null, locale: string = uiLocale()): string {
     return value == null ? '—' : value.toLocaleString(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6});
 }
 
@@ -68,7 +69,7 @@ export function formatLotQuantity(value: number | null, locale?: string): string
  * next to a price is what the user owns), and still an em dash when absent, because masking
  * an absence would claim a quantity the lot does not have.
  */
-export function formatLotQuantityMasked(value: number | null, locale?: string): string {
+export function formatLotQuantityMasked(value: number | null, locale: string = uiLocale()): string {
     return value == null ? '—' : maskableQuantity(formatLotQuantity(value, locale));
 }
 
@@ -81,7 +82,7 @@ export function formatLotQuantityMasked(value: number | null, locale?: string): 
  * visible; the share discloses no quantity, and percentages stay visible by D6. Without an
  * original to divide by, the cell is the placeholder alone.
  */
-export function formatLotQuantityCell(open: number | null, original: number | null, partial: boolean, locale?: string): string {
+export function formatLotQuantityCell(open: number | null, original: number | null, partial: boolean, locale: string = uiLocale()): string {
     if (!partial) return formatLotQuantityMasked(open, locale);
     if (!shouldMaskAmount()) return `${formatLotQuantity(open, locale)} / ${formatLotQuantity(original, locale)}`;
     const share = ratioOrNull(open, original);

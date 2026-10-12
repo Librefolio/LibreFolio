@@ -42,6 +42,7 @@
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from './echartsTooltipHelpers';
     import {buildScatterOption, type RiskReturnPoint} from './scatterChartHelpers';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Props {
         points: readonly RiskReturnPoint[];
@@ -91,6 +92,8 @@
 
     $effect(() => {
         void built;
+        // The axes are written in the interface locale: a language switch redraws them (M-18).
+        void uiLocale();
         void tick().then(() => {
             // Going empty removes the canvas host from the DOM, leaving the ECharts
             // instance bound to a detached node. Refilling then draws into nothing

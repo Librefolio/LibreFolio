@@ -33,7 +33,7 @@
  *     half of the same state — the Save button appearing — is asserted instead.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {readable, writable} from 'svelte/store';
+import {get, readable, writable} from 'svelte/store';
 import {fireEvent, render, screen, waitFor, within} from '$test/component';
 import type {SupportedLocale} from '$lib/i18n';
 
@@ -105,6 +105,8 @@ vi.mock('$lib/stores/app/language', () => ({currentLanguage: appLanguage}));
 
 import ProfileTab from './ProfileTab.svelte';
 import {zodiosApi} from '$lib/api';
+// The real interface-locale store, derived from the mocked `currentLanguage` above (`appLanguage`).
+import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
 // --- Helpers ------------------------------------------------------------
 
@@ -806,5 +808,83 @@ describe('ProfileTab — the creation date, in the app language', () => {
         // inside `formatDate`'s body, it would freeze at mount.
         await waitFor(() => expectDateIn(row, 'fr'));
         expect(row).not.toHaveTextContent(squash(longDate('it')));
+    });
+});
+
+// =========================================================================
+/**
+ * M-18 CP2 — the creation date in the interface locale, the browser's region included.
+ *
+ * The rule (the developer's, 2026-10-12): every figure is written in the interface locale — the UI
+ * language, with the browser's region when the browser speaks that language, else the language's own
+ * default: `en-GB` for English, the bare language for the others (uiLocale.test.ts). The block above
+ * proves the date follows the language; it cannot see the region, because jsdom's browser is en-US and
+ * an English UI on it writes like a bare `en`. On an Italian browser they part: ProfileTab passes
+ * `$currentLanguage`, so the English UI writes the American long date `en` means to Intl
+ * (`March 5, 2024`), where the rule says British (`5 March 2024`). The cure: the template passes
+ * `$uiLocaleStore`.
+ *
+ * The browser. `navigator.language` is spied to `it-IT` for each test, before anything subscribes to the
+ * locale, and restored after it. A control reads the resolved interface locale through the real
+ * `uiLocaleStore` (derived from this file's `appLanguage`), so a red below is about ProfileTab, not the
+ * stub.
+ *
+ * ProfileTab is a legacy component: only a store read in the template expression is tracked, so the
+ * in-place switch tells `$uiLocaleStore` from a read inside `formatDate`'s body, which a mount passes
+ * either way. Expectations are Intl's output for the locale, never typed, collapsed like jest-dom
+ * collapses the text it reads.
+ */
+describe('ProfileTab — the creation date in the interface locale, the browser’s region included (M-18 CP2)', () => {
+    /** Midday UTC: the same calendar day from UTC−11 to UTC+11. */
+    const CREATED_AT = '2024-03-05T12:00:00Z';
+    const LONG_DATE: Intl.DateTimeFormatOptions = {year: 'numeric', month: 'long', day: 'numeric'};
+    /** The long date in `locale`, as Intl writes it in this runtime. */
+    const longDate = (locale: string) => new Date(CREATED_AT).toLocaleDateString(locale, LONG_DATE);
+    const squash = (text: string) => text.replace(/\s+/g, ' ').trim();
+    /** Found by its label, as the block above finds it: the identity translator renders the key. */
+    const createdRow = () => screen.getByText('settings.accountCreated').closest('.setting-row') as HTMLElement;
+
+    let restoreBrowser: () => void = () => undefined;
+
+    beforeEach(() => {
+        const browserLanguage = vi.spyOn(navigator, 'language', 'get').mockReturnValue('it-IT');
+        restoreBrowser = () => browserLanguage.mockRestore();
+        user.set({username: 'alice', email: 'alice@example.com', created_at: CREATED_AT});
+    });
+
+    afterEach(() => {
+        restoreBrowser();
+    });
+
+    it('control: on an Italian browser the English UI resolves to en-GB, the Italian UI to it-IT', () => {
+        expect(navigator.language, 'the browser is Italian').toBe('it-IT');
+        expect(get(uiLocaleStore), 'English UI').toBe('en-GB');
+        appLanguage.set('it');
+        expect(get(uiLocaleStore), 'Italian UI').toBe('it-IT');
+        expect(longDate('en-GB'), 'British and American long dates differ').not.toBe(longDate('en'));
+    });
+
+    it('English UI on an Italian browser: the British long date, not the American one a bare `en` writes', async () => {
+        expect(get(uiLocaleStore), 'control: the interface locale is British').toBe('en-GB');
+
+        await mount();
+
+        const row = createdRow();
+        expect(row).toHaveTextContent(squash(longDate('en-GB')));
+        expect(row).not.toHaveTextContent(squash(longDate('en')));
+    });
+
+    it('follows an in-place switch of the UI language, en → it → en, with the browser’s region', async () => {
+        await mount();
+        const row = createdRow();
+        // Soft: a row that ignores the region at mount must still show whether it follows the switch.
+        expect.soft(row, 'en, mount — British').toHaveTextContent(squash(longDate('en-GB')));
+
+        appLanguage.set('it');
+        await waitFor(() => expect(row, 'en → it in place — it-IT').toHaveTextContent(squash(longDate('it-IT'))));
+
+        appLanguage.set('en');
+        await waitFor(() => expect(row, 'it → en in place — British again').toHaveTextContent(squash(longDate('en-GB'))));
+        expect(row).not.toHaveTextContent(squash(longDate('en')));
     });
 });

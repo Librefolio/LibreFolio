@@ -17,7 +17,6 @@
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import ContextMenu, {type ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {buildTooltipTheme, buildTooltipRow, buildTooltipHeader, buildTooltipDivider, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
@@ -26,6 +25,8 @@
     import {attachTreemapZoomGuard, resetTreemapView, panTreemapBy, type TreemapZoomGuardHandle} from '$lib/components/charts/echartsTreemapZoomGuard';
     import {truncateName} from '$lib/utils/text';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Holding {
         asset_id: number;
@@ -206,7 +207,7 @@
         void displayCurrency;
         void $brokerStoreVersion;
         void brokerIconsReady;
-        void $currentLanguage;
+        void uiLocale();
         tick().then(() => renderChart());
     });
 
@@ -588,14 +589,14 @@
                         html += buildTooltipRow($_('common.asset'), escapeHtml(meta.assetId ? truncateName(meta.name ?? '') : String(params.name ?? '')));
                         html += buildTooltipRow($_('common.type'), escapeHtml(String(meta.type ?? '')));
                         html += buildTooltipRow($_('common.value'), escapeHtml(formatCurrencyAmountPlain(meta.value, displayCurrency)));
-                        if (meta.weight != null) html += buildTooltipRow($_('dashboard.navWeight'), `${meta.weight.toFixed(1)}%`);
+                        if (meta.weight != null) html += buildTooltipRow($_('dashboard.navWeight'), formatPercent(meta.weight, {digits: 1, signed: false}));
                         html += buildTooltipDivider(theme.border);
                         if (meta.gl != null) {
                             const glColor = meta.gl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
                             html += buildTooltipRow($_('dashboard.unrealizedPnl'), `<span style="color:${glColor}">${escapeHtml(formatCurrencyAmountPlain(meta.gl, displayCurrency, {showSign: true}))}</span>`);
                         }
                         if (meta.glPct != null) {
-                            html += buildTooltipRow('', `${(meta.glPct * 100).toFixed(2)}%`);
+                            html += buildTooltipRow('', formatPercent(meta.glPct, {scale: 100, signed: false}));
                         }
                         return `<div style="font-size:11px;color:${theme.textColor}">${html}</div>`;
                     },

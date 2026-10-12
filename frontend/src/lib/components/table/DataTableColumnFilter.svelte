@@ -25,6 +25,7 @@
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
 
     import {numericArrows} from '$lib/actions/numericArrows';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
     type TextMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'equals';
     type SizeUnit = 'B' | 'KB' | 'MB' | 'GB';
 
@@ -167,9 +168,9 @@
 
     /** Format number for slider labels */
     function fmtNum(v: number): string {
-        if (Math.abs(v) >= 1000) return v.toLocaleString(undefined, {maximumFractionDigits: 0});
-        if (Math.abs(v) >= 1) return v.toLocaleString(undefined, {maximumFractionDigits: 2});
-        return v.toPrecision(3);
+        if (Math.abs(v) >= 1000) return v.toLocaleString(uiLocale(), {maximumFractionDigits: 0});
+        if (Math.abs(v) >= 1) return v.toLocaleString(uiLocale(), {maximumFractionDigits: 2});
+        return v.toLocaleString(uiLocale(), {minimumSignificantDigits: 3, maximumSignificantDigits: 3});
     }
 
     /** Snap threshold: if the slider position is within this many units (out of

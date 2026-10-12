@@ -80,7 +80,7 @@
  */
 import {existsSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
 /**
  * The ECharts stand-in. It answers what the chart calls on an instance (`attachChartReady` → `on`, the
@@ -152,10 +152,13 @@ vi.mock('$lib/api', () => ({
     ),
 }));
 
+import {flushSync, tick} from 'svelte';
 import {get} from 'svelte/store';
+import {locale, waitLocale} from 'svelte-i18n';
 import {render, setupI18n, waitFor} from '$test/component';
 import {parseSourcePalette} from '$test/sourcePalettes';
 import {_} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
 import {buildTooltipByThreshold, buildTooltipHeader, buildTooltipTheme} from '$lib/components/charts/echartsTooltipHelpers';
 import {getAssetTypeEmoji} from './allocationTypeEmoji';
@@ -1215,5 +1218,133 @@ describe('AllocationHistoryChart — sector and geography draw as before (D375 l
 
         expect(html).toBe(buildTooltipHeader(ONE_DATE, theme.mutedColor) + buildTooltipByThreshold(items, 3, theme, remainingLabel()));
         expect(html).not.toMatch(/data-allocation-(family|member)/);
+    });
+});
+
+// =============================================================================
+// M-18 — the y axis and the type tooltip in the interface language
+// =============================================================================
+
+/**
+ * M-18 CP2: the y axis and the type tooltip in the interface language.
+ *
+ * The y axis prints its ticks by interpolating the number, `${value}%`, and the type tooltip printed the
+ * share of each family and member with `toFixed(1)`: a French reader got `12.5%` and `34.0%` where French
+ * writes `12,5 %` and `34,0 %`. Every figure is written in the interface language (the developer's
+ * decision M-18, 2026-10-12):
+ *
+ *   - a y tick: `formatPercent(value, {digits: 2, signed: false, trim: true})`, the decimals the tick has,
+ *     up to two — `25 %`, `12,5 %`;
+ *   - a share in the type tooltip: `formatPercent(value, {digits: 1, signed: false})`, one decimal always.
+ *     This one belongs to the main CP2 cure: its case was written after that cure had landed, so it is
+ *     green with it, and red in French against the `toFixed(1)` before it.
+ *
+ * Read: the y-axis formatter of the last full option, called as ECharts calls it on a tick; the value
+ * cell of every row of the type tooltip, found by its `data-allocation-family` or
+ * `data-allocation-member` attribute. Expectations from `Intl` in an explicit locale; English is the
+ * control, today's text.
+ *
+ * Language. Switched as LanguageSelector does — `currentLanguage.set`, which also drives svelte-i18n —
+ * before the mount; the `afterEach` puts English back.
+ */
+describe('AllocationHistoryChart — the y axis and the type tooltip in the interface language (M-18)', () => {
+    /** The UI languages read, with the interface locale each gives on jsdom's en-US browser. */
+    const LANGUAGES = [
+        {lang: 'en', locale: 'en-US'},
+        {lang: 'fr', locale: 'fr'},
+    ] as const;
+
+    /** Ticks with no decimal, one and two, and the ends of the axis. */
+    const TICKS = [0, 12.5, 25, 37.75, 100];
+
+    /** A tick as the y axis must write it in `localeTag`: the decimals it has, up to two, after `toFixed(2)`. */
+    const tickIn = (value: number, localeTag: string) => new Intl.NumberFormat(localeTag, {style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 2}).format(Number(value.toFixed(2)) / 100);
+
+    /** A share as the type tooltip must write it in `localeTag`: exactly one decimal, after `toFixed(1)`. */
+    const shareIn = (value: number, localeTag: string) => new Intl.NumberFormat(localeTag, {style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1}).format(Number(value.toFixed(1)) / 100);
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: 'en' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    /** The y-axis label formatter of the last full option. */
+    function yAxisFormatter(): (value: number) => string {
+        const formatter = (drawnOption() as unknown as {yAxis?: {axisLabel?: {formatter?: unknown}}}).yAxis?.axisLabel?.formatter;
+        if (typeof formatter !== 'function') throw new Error('the y axis carries no label formatter');
+        return formatter as (value: number) => string;
+    }
+
+    /** The value cell of every row of a type tooltip, keyed `FAMILY` for a family's own row and `FAMILY › KEY` for a member's. */
+    function sharesIn(html: string): Record<string, string> {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        const shares: Record<string, string> = {};
+        for (const entry of Array.from(host.querySelectorAll('[data-allocation-family]'))) {
+            const family = entry.getAttribute('data-allocation-family') ?? '';
+            const own = Array.from(entry.querySelectorAll('b')).find((cell) => cell.closest('[data-allocation-member]') === null);
+            shares[family] = own?.textContent ?? '(no value cell)';
+            for (const member of Array.from(entry.querySelectorAll('[data-allocation-member]'))) {
+                shares[`${family} › ${member.getAttribute('data-allocation-member')}`] = member.querySelector('b')?.textContent ?? '(no value cell)';
+            }
+        }
+        return shares;
+    }
+
+    /** The shares the type tooltip must print for one day, keyed as `sharesIn` reads them, from D375's expected entries. */
+    function expectedShares(weights: readonly Weight[], localeTag: string): Record<string, string> {
+        const {shown} = expectedEntries(weights);
+        return Object.fromEntries(shown.flatMap(({family, value, members}) => [[family, shareIn(value, localeTag)], ...members.map(({key, value: memberValue}) => [`${family} › ${key}`, shareIn(memberValue, localeTag)])]));
+    }
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; French joins it, so a switch never waits on a loader.
+        await waitLocale('fr');
+        // Controls: this runtime has French data, so both shapes of percentage differ from English.
+        expect(tickIn(12.5, 'fr'), 'a French tick differs from English').not.toBe(tickIn(12.5, 'en-US'));
+        expect(shareIn(34, 'fr'), 'a French share differs from English').not.toBe(shareIn(34, 'en-US'));
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it.each(LANGUAGES)('$lang UI on an en-US browser: the y-axis ticks in $locale, with the decimals they have', async ({lang, locale: localeTag}) => {
+        // WHY: the axis interpolates its ticks (`${value}%`), so they carry a point in every language.
+        // English is the control: today's text, which is also the trimmed text of the rule.
+        await switchLanguage(lang);
+        await mountChart(TOOLTIP_DAYS, 'type');
+        const format = yAxisFormatter();
+        const expected = TICKS.map((value) => tickIn(value, localeTag));
+
+        expect(
+            TICKS.map((value) => format(value)),
+            spelled(expected),
+        ).toEqual(expected);
+    });
+
+    it.each(LANGUAGES)('$lang UI on an en-US browser: the type tooltip’s shares in $locale, one decimal each (main cure)', async ({lang, locale: localeTag}) => {
+        // WHY: each family's and member's share was `toFixed(1)` and a `%`. Catches a row left on that
+        // route, family or member, on either day.
+        await switchLanguage(lang);
+        await mountChart(TOOLTIP_DAYS, 'type');
+        const option = drawnOption();
+        const expected = TOOLTIP_DAYS.map(({weights}) => expectedShares(weights, localeTag));
+
+        expect(
+            TOOLTIP_DAYS.map((_day, index) => sharesIn(tooltipOf(option, index))),
+            spelled(expected),
+        ).toEqual(expected);
     });
 });

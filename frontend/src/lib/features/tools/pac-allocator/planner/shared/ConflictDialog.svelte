@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {t, locale} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import type {CopyConflict} from '../copies';
     import type {CopyRecord, CopyRef, PlannerDraft} from '../draft.svelte';
     import {formatPlannerMoneyPlain, formatPlannerTimestamp} from '../format';
@@ -24,10 +24,10 @@
 
     function copiedAt(stamp: CopyRef | null): string {
         const record = draft.copyRecord(stamp);
-        return record ? formatPlannerTimestamp(record.capturedAt, $locale) : '—';
+        return record ? formatPlannerTimestamp(record.capturedAt) : '—';
     }
 
-    const incomingAt = $derived(copy ? formatPlannerTimestamp(copy.capturedAt, $locale) : '—');
+    const incomingAt = $derived(copy ? formatPlannerTimestamp(copy.capturedAt) : '—');
 </script>
 
 <PlannerDialog {open} {title} testid="pac-planner-conflict" onclose={() => onresolve('keep')} zIndex={60}>

@@ -10,7 +10,7 @@
 
 import {readFileSync} from 'node:fs';
 import {expect, test} from '../fixtures/playwright';
-import type {Locator, Page} from '../fixtures/playwright';
+import type {Locator, Page, Request} from '../fixtures/playwright';
 import {login, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
@@ -931,6 +931,30 @@ test.describe('Asset Detail Page', () => {
         const priceComparisonRequestCountsByRange = new Map<string, number>();
         let calendarRequestCount = 0;
         let backendSignalRequestCount = 0;
+        // `page.waitForRequest` resolves on the `request` event, before the `page.route` handler has run.
+        // `waitForCountedRequest` resolves only after the handler has counted the request, so a counter read right after it is fresh.
+        const countedRequests = new WeakSet<Request>();
+        const countedRequestWaiters = new Map<Request, Array<() => void>>();
+        const markRequestCounted = (request: Request) => {
+            countedRequests.add(request);
+            const waiters = countedRequestWaiters.get(request) ?? [];
+            countedRequestWaiters.delete(request);
+            for (const waiter of waiters) waiter();
+        };
+        const untilCounted = (request: Request): Promise<Request> => {
+            if (countedRequests.has(request)) return Promise.resolve(request);
+            return new Promise<Request>((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error(`${request.method()} ${new URL(request.url()).pathname} was never counted by its page.route handler`)), 10_000);
+                countedRequestWaiters.set(request, [
+                    ...(countedRequestWaiters.get(request) ?? []),
+                    () => {
+                        clearTimeout(timer);
+                        resolve(request);
+                    },
+                ]);
+            });
+        };
+        const waitForCountedRequest = (...args: Parameters<Page['waitForRequest']>) => page.waitForRequest(...args).then(untilCounted);
 
         const parseQueries = (raw: unknown): PriceQueryRequest[] => (Array.isArray(raw) ? (raw as PriceQueryRequest[]) : []);
         const matchesSingleFxSyncRequest = (raw: unknown, expectedSlug: string): boolean => {
@@ -1481,7 +1505,7 @@ test.describe('Asset Detail Page', () => {
         const waitForCalendarResponseForRange = (windowDays: CalendarWindow, range: Pick<SyntheticRange, 'start' | 'end'>) =>
             page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/assets/prices/query' && calendarRequestMatchesRange(response.request().postDataJSON(), windowDays, range), {timeout: 10_000});
         const waitForCalendarRequest = (windowDays: CalendarWindow) =>
-            page.waitForRequest(
+            waitForCountedRequest(
                 (request) => {
                     if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
                     return findCalendarSignal(request.postDataJSON())?.params?.window_days === windowDays;
@@ -1489,7 +1513,7 @@ test.describe('Asset Detail Page', () => {
                 {timeout: 10_000},
             );
         const waitForCalendarRequestForRange = (windowDays: CalendarWindow, range: Pick<SyntheticRange, 'start' | 'end'>) =>
-            page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/assets/prices/query' && calendarRequestMatchesRange(request.postDataJSON(), windowDays, range), {timeout: 10_000});
+            waitForCountedRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/assets/prices/query' && calendarRequestMatchesRange(request.postDataJSON(), windowDays, range), {timeout: 10_000});
         const assertCalendarRequest = (raw: unknown, windowDays: CalendarWindow, expectedIncludePrice?: boolean) => {
             const query = parseQueries(raw).find((candidate) => candidate.asset_id === assetId);
             expect(query, `calendar request must target synthetic asset ${assetId}`).toBeDefined();
@@ -1540,7 +1564,7 @@ test.describe('Asset Detail Page', () => {
             }
         };
         const waitForPriceComparisonRequest = (expectedPeerIds: readonly number[], expectedRange: Pick<SyntheticRange, 'start' | 'end'>, expectedTargetCurrency: string) =>
-            page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/assets/prices/query' && matchesPriceComparisonRequest(request.postDataJSON(), expectedPeerIds, expectedRange, expectedTargetCurrency), {timeout: 10_000});
+            waitForCountedRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/assets/prices/query' && matchesPriceComparisonRequest(request.postDataJSON(), expectedPeerIds, expectedRange, expectedTargetCurrency), {timeout: 10_000});
         const waitForPriceComparisonResponse = (expectedPeerIds: readonly number[] = comparisonPeerIds, expectedRange?: Pick<SyntheticRange, 'start' | 'end'>, expectedTargetCurrency?: string) =>
             page.waitForResponse(
                 (response) => {
@@ -1561,7 +1585,7 @@ test.describe('Asset Detail Page', () => {
                 {timeout: 10_000},
             );
         const waitForMainPriceRequest = (range: Pick<SyntheticRange, 'start' | 'end'>) =>
-            page.waitForRequest(
+            waitForCountedRequest(
                 (request) => {
                     if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
                     const queries = parseQueries(request.postDataJSON());
@@ -1582,7 +1606,7 @@ test.describe('Asset Detail Page', () => {
                 {timeout: 10_000},
             );
         const waitForBackendSignalRequest = (range?: Pick<SyntheticRange, 'start' | 'end'>) =>
-            page.waitForRequest(
+            waitForCountedRequest(
                 (request) => {
                     if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
                     const query = parseQueries(request.postDataJSON()).find((candidate) => candidate.asset_id === assetId);
@@ -1801,6 +1825,7 @@ test.describe('Asset Detail Page', () => {
             assetSyncRequestCount += 1;
             const deferred = deferredAssetSyncResponse;
             deferredAssetSyncResponse = null;
+            markRequestCounted(route.request());
             if (deferred) {
                 await deferred.wait;
             }
@@ -1856,6 +1881,7 @@ test.describe('Asset Detail Page', () => {
             } else {
                 deferredFxSyncResponse = null;
             }
+            markRequestCounted(route.request());
             if (deferred) {
                 await deferred.wait;
             }
@@ -2031,6 +2057,7 @@ test.describe('Asset Detail Page', () => {
             if (isCorrectedPriceComparison) {
                 correctedPriceComparisonResponseCount += 1;
             }
+            markRequestCounted(route.request());
             if (deferred && deferredWindow !== undefined) {
                 deferredCalendarResponses.delete(deferredWindow);
                 await deferred.wait;
@@ -4371,9 +4398,9 @@ test.describe('Asset Detail Page', () => {
         nextFxSyncStatus = 'partial';
         const staleContextAssetSyncRequestsBefore = assetSyncRequestCount;
         const staleContextFxSyncRequestsBefore = fxSyncRequestCount;
-        const staleContextAssetRequestPromise = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/assets/prices/sync', {timeout: 10_000});
+        const staleContextAssetRequestPromise = waitForCountedRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/assets/prices/sync', {timeout: 10_000});
         const staleContextAssetResponsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/assets/prices/sync', {timeout: 10_000});
-        const staleContextFxRequestPromise = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/fx/currencies/sync', {timeout: 10_000});
+        const staleContextFxRequestPromise = waitForCountedRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/fx/currencies/sync', {timeout: 10_000});
         const staleContextFxResponsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/fx/currencies/sync', {timeout: 10_000});
         await activateComparisonAssetSync(readySignalId);
 
@@ -7367,7 +7394,7 @@ test.describe('Asset Detail Page', () => {
         const maxRefreshRangeRequestsBefore = priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0;
         const maxRefreshCalendarRequestsBefore = calendarRequestCount;
         const maxRefreshMainGate = deferNextMainPriceResponse();
-        const maxRefreshMainRequestPromise = page.waitForRequest(
+        const maxRefreshMainRequestPromise = waitForCountedRequest(
             (request) => {
                 if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
                 const queries = parseQueries(request.postDataJSON());
