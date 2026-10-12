@@ -86,7 +86,7 @@ decision 1).
 belongs to a service layer, such as `financial_math/` (developer decision D-P7, 2026-10-12). Its folders group them by
 type: `utils/asset/` (sectors, geographic areas, identifiers, display-name locale), `utils/fx/` (currencies),
 `utils/runtime/` (version, client network address, TTL caches); `datetime_utils`, `json_utils` and `decimal_utils` stay
-at the root.
+at the root. The truncation to the database precision reads the models, so it lives in `db/precision.py`.
 
 ## Where to Find Things
 

@@ -8,13 +8,8 @@ from decimal import Decimal
 import pytest
 
 from backend.app.db.models import FxRate, PriceHistory, Transaction
-from backend.app.utils.decimal_utils import (
-    get_model_column_precision,
-    parse_decimal_value,
-    truncate_fx_rate,
-    truncate_priceHistory,
-    truncate_to_db_precision,
-)
+from backend.app.db.precision import get_model_column_precision, truncate_fx_rate, truncate_priceHistory, truncate_to_db_precision
+from backend.app.utils.decimal_utils import parse_decimal_value
 
 
 def test_get_model_column_precision_price_history():
