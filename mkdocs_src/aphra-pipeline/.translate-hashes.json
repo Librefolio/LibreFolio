@@ -10787,11 +10787,11 @@
     }
   },
   "CHANGELOG.md#1.2.0/fixed/sign-in-language-app-icons-and-small-screens": {
-    "md5": "ca14a14c4538591b276be3c13030f189",
+    "md5": "d46a1fd9416717ad2e7bfca0c626eb47",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-10-12T14:34:27.049409+00:00",
     "analysis": "[{\"name\": \"LibreFolio\", \"keywords\": [\"brand name\", \"product name\", \"self-hosted portfolio tracker\", \"do not translate\"]}, {\"name\": \"Sign-in / sign out / sign in again\", \"keywords\": [\"authentication UI glossary\", \"login vs sign-in\", \"sign out\", \"session\", \"registration\"]}, {\"name\": \"session has really ended\", \"keywords\": [\"session expiry\", \"authentication\", \"user session\", \"timeout\"]}, {\"name\": \"Dashboard\", \"keywords\": [\"LibreFolio UI\", \"dashboard\", \"main overview page\", \"portfolio tracker\"]}, {\"name\": \"Retry\", \"keywords\": [\"UI button\", \"retry action\", \"error state\", \"server unavailable\"]}, {\"name\": \"server is not responding / slow server / unavailable\", \"keywords\": [\"server error\", \"timeout\", \"network error\", \"UI message\"]}, {\"name\": \"saved credentials\", \"keywords\": [\"browser password manager\", \"autofill\", \"credentials\", \"username field\"]}, {\"name\": \"password managers\", \"keywords\": [\"password manager\", \"registration recognition\", \"password change\", \"saved account\"]}, {\"name\": \"interface language / app language / browser language\", \"keywords\": [\"i18n\", \"localization\", \"UI language\", \"language switch\", \"browser locale\"]}, {\"name\": \"rebuilds the app / whole app was reloaded\", \"keywords\": [\"SPA reload\", \"app rebuild\", \"hot language switch\", \"unsaved changes\"]}, {\"name\": \"unsaved changes\", \"keywords\": [\"dirty form\", \"unsaved data\", \"page reload warning\", \"UI state\"]}, {\"name\": \"wrong username or password / invalid input / failed sign-in\", \"keywords\": [\"authentication error messages\", \"validation\", \"login failure\", \"i18n\"]}, {\"name\": \"sector and geographic distributions\", \"keywords\": [\"asset allocation\", \"sector breakdown\", \"geographic exposure\", \"portfolio distribution\"]}, {\"name\": \"asset / asset editor / asset page / asset detail\", \"keywords\": [\"financial instrument\", \"security\", \"asset editor\", \"asset detail page\", \"portfolio\"]}, {\"name\": \"weight column / Weight %\", \"keywords\": [\"portfolio weight\", \"allocation percentage\", \"table column\", \"asset editor\"]}, {\"name\": \"decimal separator / dot\", \"keywords\": [\"locale formatting\", \"decimal comma vs dot\", \"number formatting\", \"i18n\"]}, {\"name\": \"Poids (%) / 12,50 % in French\", \"keywords\": [\"French localization\", \"percentage format\", \"decimal comma\", \"Weight %\"]}, {\"name\": \"Agregar país / excès / données / Comparación\", \"keywords\": [\"Spanish French accents\", \"diacritics\", \"UI strings\", \"localization QA\"]}, {\"name\": \"Broker percentages / broker's card / broker page / broker detail\", \"keywords\": [\"broker\", \"brokerage account\", \"broker card\", \"gain loss percentage\"]}, {\"name\": \"bróker / brókeres\", \"keywords\": [\"Spanish broker translation\", \"accented loanword\", \"financial glossary\"]}, {\"name\": \"gain or loss percentage\", \"keywords\": [\"profit loss\", \"performance percentage\", \"broker performance\", \"portfolio return\"]}, {\"name\": \"your share / shares / sharing panel\", \"keywords\": [\"ownership share\", \"shared portfolio\", \"sharing panel\", \"allocation\"]}, {\"name\": \"glossary\", \"keywords\": [\"terminology glossary\", \"translation consistency\", \"financial terms\", \"UI terms\"]}, {\"name\": \"AI Export\", \"keywords\": [\"feature name\", \"proper noun\", \"keep in English\", \"export feature\"]}, {\"name\": \"manual cost basis / costo di carico manuale\", \"keywords\": [\"cost basis\", \"book value\", \"tax basis\", \"Italian translation\", \"portfolio accounting\"]}, {\"name\": \"exchange rates / tipos de cambio / FX\", \"keywords\": [\"foreign exchange\", \"FX rates\", \"currency conversion\", \"Spanish translation\"]}, {\"name\": \"currency / divisa / base currency\", \"keywords\": [\"currency\", \"base currency\", \"reporting currency\", \"Spanish translation\"]}, {\"name\": \"viewer / lector\", \"keywords\": [\"user role\", \"viewer\", \"read-only user\", \"Spanish translation\"]}, {\"name\": \"replay / repetición\", \"keywords\": [\"transaction replay\", \"replay feature\", \"Spanish translation\", \"portfolio history\"]}, {\"name\": \"upload / téléverser / download / télécharger\", \"keywords\": [\"French false friends\", \"upload download\", \"téléverser\", \"télécharger\"]}, {\"name\": \"taxes / impôts\", \"keywords\": [\"tax\", \"taxes\", \"French translation\", \"financial charges\"]}, {\"name\": \"date range presets\", \"keywords\": [\"date range selector\", \"presets\", \"chart settings\", \"UI control\"]}, {\"name\": \"unit letters / 1S / 1A\", \"keywords\": [\"localized abbreviations\", \"date range units\", \"Italian French Spanish\", \"time units\"]}, {\"name\": \"rolling return's window\", \"keywords\": [\"rolling return\", \"time window\", \"performance calculation\", \"asset page\"]}, {\"name\": \"status column and badges\", \"keywords\": [\"table status\", \"badge UI\", \"data editor\", \"status labels\"]}, {\"name\": \"Auto, Min, Max\", \"keywords\": [\"chart settings\", \"axis scale\", \"UI labels\", \"Auto Min Max\"]}, {\"name\": \"Period labels / Δ columns / Δ 1G / Δ 1S\", \"keywords\": [\"period labels\", \"delta columns\", \"Assets table\", \"FX table\", \"localized abbreviations\"]}, {\"name\": \"date picker\", \"keywords\": [\"date picker\", \"calendar UI\", \"locale-aware dates\"]}, {\"name\": \"Admin › Global Settings\", \"keywords\": [\"admin UI path\", \"global settings\", \"scheduler settings\", \"navigation label\"]}, {\"name\": \"scheduler switch / scheduler's timezone / server's timezone\", \"keywords\": [\"scheduler\", \"cron\", \"timezone handling\", \"admin settings\", \"history sync\"]}, {\"name\": \"history sync times\", \"keywords\": [\"history sync\", \"data synchronization\", \"scheduled task\", \"timezone\"]}, {\"name\": \"Register here / administrator has closed registration\", \"keywords\": [\"registration UI\", \"sign-up\", \"admin disabled registration\", \"error message\"]}, {\"name\": \"account creation date / Settings › Profile\", \"keywords\": [\"profile settings\", \"account creation date\", \"user profile\", \"localization\"]}, {\"name\": \"Files grid / file sizes / 128 o\", \"keywords\": [\"file manager\", \"file size units\", \"octet\", \"French abbreviation\", \"localization\"]}, {\"name\": \"installed app / Android splash screen / iPhone home-screen icon / maskable icon\", \"keywords\": [\"PWA\", \"mobile app\", \"splash screen\", \"maskable icon\", \"home screen icon\"]}, {\"name\": \"Save and Cancel\", \"keywords\": [\"dialog buttons\", \"asset dialog\", \"UI actions\", \"mobile reachability\"]}, {\"name\": \"Sync / asset page tabs\", \"keywords\": [\"sync button\", \"asset page\", \"tabs\", \"mobile UI\", \"loading state\"]}, {\"name\": \"price chart tooltip / long name / ellipsis\", \"keywords\": [\"tooltip\", \"chart\", \"truncation\", \"ellipsis\", \"responsive UI\"]}, {\"name\": \"value and its currency stay whole\", \"keywords\": [\"tooltip layout\", \"currency formatting\", \"number wrapping\", \"responsive design\"]}, {\"name\": \"footer / Active and Benchmark switches / spread across row / wraps\", \"keywords\": [\"asset dialog\", \"footer\", \"toggle switches\", \"responsive layout\", \"Benchmark\"]}, {\"name\": \"Benchmark\", \"keywords\": [\"benchmark index\", \"comparison asset\", \"portfolio benchmark\", \"financial term\"]}, {\"name\": \"top toolbars / bar / intermediate widths / narrow screens\", \"keywords\": [\"toolbar\", \"responsive breakpoints\", \"overflow\", \"UI layout\"]}, {\"name\": \"broker filter / long broker name\", \"keywords\": [\"Dashboard filter\", \"broker selector\", \"truncation\", \"ellipsis\"]}, {\"name\": \"preference / language, base currency or theme\", \"keywords\": [\"user preference\", \"settings\", \"theme\", \"base currency\", \"language\"]}, {\"name\": \"avatar / sidebar\", \"keywords\": [\"profile avatar\", \"sidebar UI\", \"navigation\", \"preference save\"]}, {\"name\": \"percentage wraps between the number and the % sign\", \"keywords\": [\"typography\", \"non-breaking space\", \"percentage formatting\", \"French Spanish\"]}]",
@@ -10807,7 +10807,9 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 169.9,
-        "index": 12
+        "index": 12,
+        "stamped_at": "2026-10-12T20:48:53.689541+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-12T14:34:27.049409+00:00",
@@ -10819,7 +10821,9 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 144.1,
-        "index": 12
+        "index": 12,
+        "stamped_at": "2026-10-12T20:48:53.689541+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-12T14:34:27.049409+00:00",
@@ -10831,7 +10835,9 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 148.3,
-        "index": 12
+        "index": 12,
+        "stamped_at": "2026-10-12T20:48:53.689541+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -11038,11 +11044,11 @@
     }
   },
   "CHANGELOG.md#1.2.0/changed": {
-    "md5": "461cc54be6bd97cc907a0d310dccec28",
+    "md5": "53268d157b03f293792b479be73eafec",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-10-12T14:34:27.049409+00:00",
     "analysis": "[{\"name\": \"PRU / PMC / average purchase cost\", \"keywords\": [\"PRU prix de revient unitaire\", \"PMC precio medio de compra\", \"average purchase cost\", \"cost basis\", \"LibreFolio financial terms\"]}, {\"name\": \"Giroconto / Imposte / Rettifica / Trasferimento Asset\", \"keywords\": [\"Giroconto Italian banking\", \"Imposte Italian taxes\", \"Rettifica accounting adjustment\", \"Trasferimento Asset Italian asset transfer\", \"LibreFolio Italian translations\"]}, {\"name\": \"NAV / VAN / VNI / net present value\", \"keywords\": [\"NAV net asset value\", \"VAN valor actual neto\", \"VNI valeur nette intrinsèque\", \"net present value\", \"NPV vs NAV\", \"LibreFolio localization\"]}, {\"name\": \"drawdown / risk pages\", \"keywords\": [\"drawdown risk metric\", \"maximum drawdown\", \"portfolio risk\", \"risk pages\", \"LibreFolio risk analysis\"]}, {\"name\": \"broker / broker icons\", \"keywords\": [\"financial broker\", \"brokerage account\", \"broker icon\", \"broker logo\", \"LibreFolio broker\"]}, {\"name\": \"default import plugin / portal's favicon / Generic CSV / custom icon / favicon\", \"keywords\": [\"default import plugin\", \"portal favicon\", \"Generic CSV import\", \"custom icon\", \"favicon priority\", \"LibreFolio icons\"]}, {\"name\": \"existing databases / upgrade / ids / server rebuilds six tables\", \"keywords\": [\"database migration\", \"existing database upgrade\", \"database IDs\", \"primary keys\", \"server rebuild tables\", \"LibreFolio backend\"]}, {\"name\": \"backup copy / conversion / leftover report folders\", \"keywords\": [\"database backup\", \"data conversion\", \"migration verification\", \"leftover report folders\", \"broker reports cleanup\"]}, {\"name\": \"post_migration / dry-run / python -m backend.app.db.post_migration\", \"keywords\": [\"post_migration script\", \"dry-run flag\", \"backend.app.db.post_migration\", \"CLI command\", \"LibreFolio migration\"]}, {\"name\": \"gzip / metered connections\", \"keywords\": [\"gzip compression\", \"HTTP compression\", \"server response\", \"metered internet\", \"slow connections\", \"data usage\"]}, {\"name\": \"PORTFOLIO_BASE_CURRENCY / .env.example / Docker image / .env\", \"keywords\": [\"environment variable\", \"portfolio base currency\", \"dotenv example\", \".env file\", \"Docker image\", \"LibreFolio configuration\"]}, {\"name\": \"display currency / administrator defaults / onboarding\", \"keywords\": [\"display currency\", \"administrator defaults\", \"user onboarding\", \"first-time setup\", \"LibreFolio settings\"]}, {\"name\": \"paginate / Import file tables / expanded\", \"keywords\": [\"pagination UI\", \"table pagination\", \"rows per page\", \"import file tables\", \"expanded table row\", \"broker list UI\"]}, {\"name\": \"asset creation / ISINs / tickers / prefill / asset name\", \"keywords\": [\"asset creation\", \"financial instrument creation\", \"ISIN\", \"international securities identification number\", \"ticker symbol\", \"prefill form\", \"asset name\", \"LibreFolio assets\"]}, {\"name\": \"currency tooltip / asset prices\", \"keywords\": [\"currency tooltip\", \"tooltip UI\", \"asset prices\", \"quote currency\", \"price storage\", \"LibreFolio UI\"]}, {\"name\": \"Generic CSV guide / column reference / one file per broker\", \"keywords\": [\"Generic CSV guide\", \"CSV column reference\", \"import documentation\", \"one file per broker\", \"LibreFolio CSV import\"]}, {\"name\": \"sortable column / avatar/name multi-select filter / Uploader filters / list and grid\", \"keywords\": [\"sortable column\", \"multi-select filter\", \"avatar filter\", \"uploader filter\", \"list view\", \"grid view\", \"file list UI\"]}, {\"name\": \"header / scrolling down / scrolling up / Focus / open menus / dialogs\", \"keywords\": [\"page header\", \"sticky header\", \"scroll direction\", \"keyboard focus\", \"accessibility\", \"open menus\", \"modal dialogs\", \"UI navigation\"]}, {\"name\": \"browser tab title / LibreFolio / Files page / linger\", \"keywords\": [\"browser tab title\", \"document title\", \"LibreFolio\", \"Files page\", \"SPA routing\", \"linger meaning\", \"persistent tab title\"]}, {\"name\": \"Preferences / broker-sharing forms / staged Save/Undo/Reset / persisted values / role-based access / Svelte 5 migration\", \"keywords\": [\"user preferences\", \"broker sharing forms\", \"staged form\", \"save undo reset\", \"persisted values\", \"role-based access control\", \"RBAC\", \"Svelte 5 migration\", \"frontend framework\"]}, {\"name\": \"list-page modal / discard prompt / Info tab / inline editor\", \"keywords\": [\"list page modal\", \"discard changes prompt\", \"unsaved changes\", \"Info tab\", \"inline editor\", \"LibreFolio UI\"]}, {\"name\": \"FX-pair / automatic synchronization / flagged, clickable pair links / fetched/changed counters / provider badges / detail row\", \"keywords\": [\"FX pair\", \"foreign exchange pair\", \"currency pair\", \"automatic synchronization\", \"auto sync\", \"flagged link\", \"clickable pair links\", \"fetched changed counters\", \"provider badges\", \"detail row\", \"UI feedback\"]}, {\"name\": \"Asset-library / contextual import / transaction flows\", \"keywords\": [\"asset library\", \"instrument library\", \"contextual import\", \"import flow\", \"transaction flows\", \"portfolio transactions\", \"LibreFolio assets\"]}, {\"name\": \"Asset panels / held now / Your assets / Other users' assets / Watched / having once traded an asset\", \"keywords\": [\"asset panels\", \"current holdings\", \"held now\", \"your assets\", \"owned assets\", \"other users assets\", \"shared assets\", \"watched assets\", \"watchlist\", \"historical trade\", \"asset categorization\"]}, {\"name\": \"PDF preview / viewer only / inserting / filling in forms / redacting / undo and redo / document menu / print / protect / capture / export\", \"keywords\": [\"PDF preview\", \"read-only viewer\", \"PDF viewer\", \"inserting\", \"filling in forms\", \"redacting\", \"PDF redaction\", \"undo redo\", \"document menu\", \"print\", \"protect\", \"capture\", \"export\", \"LibreFolio PDF\"]}, {\"name\": \"Full screen / copying selected text / password-protected PDF / password prompt / error card\", \"keywords\": [\"full screen\", \"copying selected text\", \"password-protected PDF\", \"encrypted PDF\", \"password prompt\", \"error card\", \"preview error UI\"]}, {\"name\": \"Dividends / Candles / Income / lot comparison chart / teal / gold / deposits\", \"keywords\": [\"dividends\", \"dividend finance\", \"candlestick chart\", \"Candles page\", \"Income page\", \"dividend income\", \"lot comparison chart\", \"tax lot chart\", \"teal color\", \"gold color\", \"deposits\", \"portfolio UI colors\"]}, {\"name\": \"period / 2W / month / quarter / half-year / year / turn 45°\", \"keywords\": [\"period label\", \"2W abbreviation\", \"two weeks\", \"month\", \"quarter\", \"half-year\", \"year\", \"chart label rotation\", \"45 degrees\", \"Candles and Income labels\"]}, {\"name\": \"Line and price charts / date axis / gap / app's language / never repeat\", \"keywords\": [\"line chart\", \"price chart\", \"financial chart\", \"date axis\", \"x-axis\", \"gap between labels\", \"app language\", \"localization\", \"date labels\", \"never repeat\"]}]",
@@ -11058,7 +11064,9 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 173.5,
-        "index": 15
+        "index": 15,
+        "stamped_at": "2026-10-12T20:48:53.689541+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-12T14:34:27.049409+00:00",
@@ -11070,7 +11078,9 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 210.7,
-        "index": 15
+        "index": 15,
+        "stamped_at": "2026-10-12T20:48:53.689541+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-12T14:34:27.049409+00:00",
@@ -11082,7 +11092,9 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 186.0,
-        "index": 15
+        "index": 15,
+        "stamped_at": "2026-10-12T20:48:53.689541+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
