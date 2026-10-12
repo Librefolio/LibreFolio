@@ -83,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI Export values a lot at its opening date with the asset's quote base.** In the Asset export, a lot's opening market value multiplied the quoted price by the quantity without the asset's quote base, so a bond quoted per 100 of nominal came out 100 times too large. It is now computed like every other valuation. Present since v1.1.0.
 - **The lot detail of the Asset export is a compact table again.** Since v1.1.0 it came out as a YAML block about four times longer, where brokers appeared as internal numbers instead of the B1, B2… references of the directory. It is now a table like the other sections, with the same data. Present since v1.1.0.
 - **AI Export names the portfolio weight consistently.** When an asset's portfolio weight was unavailable, the Asset export listed it as `portfolio_weight_ratio` while showing it as `portfolio_weight_percent`; both now use the public name. Present since v1.1.0.
+- **AI Export no longer calls a reconciled period P&L unreconciled.** The Portfolio and Broker exports said the period P&L did not reconcile with its parts when they differed only by calculation rounding, next to a residual shown as 0. A difference below one billionth now counts as reconciled; the residual is still stated exactly. Present since v1.1.0.
 
 #### 📥 Imports and transaction editing
 
