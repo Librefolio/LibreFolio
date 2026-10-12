@@ -43,6 +43,16 @@ the other parts are ingested in steps R1–R6.
 ## Pages created from this source
 
 - [[features/F-110]], [[features/F-111]], [[features/F-112]], [[features/F-113]] (step R0).
+- [[decisions/risk-answers-four-questions]], [[concepts/risk-binding-decisions]] (step R2).
+- From `implementation_2/` (step R3): [[decisions/asset-set-one-preparation-not-fan-out]],
+  [[decisions/l3-reads-current-composition]], [[problems/runner-catalog-merge-not-line-union]].
+- From the post-merge review R5 (step R3b): [[problems/risk-stress-buckets-hand-listed]],
+  [[problems/replay-baseline-shortened-by-late-starter]], [[problems/echarts-stacked-band-null-base]].
+- From the first round, `implementation/` (step R4): [[concepts/risk-contracts-k1-k9]],
+  [[decisions/histogram-grid-pinned-to-var-cut]], [[problems/annualization-factor-not-coverage]].
+- From the analysis documents (step R5): [[decisions/risk-tool-verdicts]], [[decisions/risk-library-versus-own-maths]].
+- The archive G0–G6 (step R6): drift only, recorded on [[sources/phase00-risk-analysis-backend]]. With R6 the folder is
+  covered; the big progress logs stay in the journal, their outcomes being in the code and in the pages above.
 
 ## Source files
 

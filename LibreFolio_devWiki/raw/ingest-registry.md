@@ -556,3 +556,112 @@ are each file's last commit at the base. Paths are relative to the repository ro
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/01-tesi-e-quattro-domande.md` | `245aabf97` | 2026-10-12 | [[decisions/risk-answers-four-questions]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md` | `107098edf` | 2026-10-12 | [[concepts/risk-binding-decisions]] — partial: the binding list via the README |
+
+## 2026-10-12 — train 69: M-23 (base `d877a4e14`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00ChangelogTranslation.prompt.md` | `1ed372534` | 2026-10-12 | [[decisions/fr-typography-at-build-time]], [[features/F-109]] (M-23) |
+
+## 2026-10-12 — folder 02 (Risk), step R3a (base `4549376b8`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/A-contratto-asset-set.md` | `daa03c0f2` | 2026-10-12 | [[decisions/asset-set-one-preparation-not-fan-out]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/S3-livello-3.md` | `ac929a78e` | 2026-10-12 | [[decisions/l3-reads-current-composition]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/REGISTRO.md` | `33d5a599b` | 2026-10-12 | [[problems/runner-catalog-merge-not-line-union]], [[decisions/l3-reads-current-composition]] |
+
+## 2026-10-12 — folder 02 (Risk), step R3b (base `e050cc142`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/R5-post-merge-e-review.md` | `107098edf` | 2026-10-12 | [[problems/risk-stress-buckets-hand-listed]], [[problems/replay-baseline-shortened-by-late-starter]], [[problems/echarts-stacked-band-null-base]] — partial: marker sections |
+
+## 2026-10-12 — folder 02 (Risk), step R4 (base `97eecde84`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation/contracts/README.md` | `33d5a599b` | 2026-10-12 | [[concepts/risk-contracts-k1-k9]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation/progress/A-esecuzione.md` | `33d5a599b` | 2026-10-12 | [[decisions/histogram-grid-pinned-to-var-cut]], [[problems/annualization-factor-not-coverage]] |
+
+## 2026-10-12 — folder 02 (Risk), step R5 (base `b4acfb250`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/02-verdetti-per-strumento.md` | `245aabf97` | 2026-10-12 | [[decisions/risk-tool-verdicts]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/06-matematica-librerie-e-reimplementazioni.md` | `0e704af4e` | 2026-10-12 | [[decisions/risk-library-versus-own-maths]] |
+
+## 2026-10-12 — folder 02 (Risk), step R6 (base `843c9a9d2`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/README.md` | `33d5a599b` | 2026-10-12 | [[sources/phase00-risk-analysis-backend]] — drift only |
+
+## 2026-10-12 — folder 09, step F0 (base `dc00cbe9f`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/README.md` | `d614daed9` | 2026-10-12 | [[sources/phase00-feedback-jobs-2026-09]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/06_piano_sprint.md` | `d614daed9` | 2026-10-12 | [[sources/phase00-feedback-jobs-2026-09]] |
+
+## 2026-10-12 — folder 09, step F1 (base `7ff48ac9b`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md` | `d614daed9` | 2026-10-12 | [[sources/phase00-feedback-jobs-2026-09]], [[problems/privacy-gate-blind-to-formatter-consumers]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/09_reperti_analisi_statica_20260922.md` | `d614daed9` | 2026-10-12 | [[sources/phase00-feedback-jobs-2026-09]], [[problems/missing-event-detail-read-as-consent]] |
+
+## 2026-10-12 — folder 09, step F2 (base `5c82d9bd4`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/08_review_visiva_20260922.md` | `d614daed9` | 2026-10-12 | [[problems/stale-version-file-shadows-git-describe]], [[sources/phase00-feedback-jobs-2026-09]] |
+
+## 2026-10-12 — historical folder H1, 01_signalMigration (base `62471add2`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/README.md` | `8da24ef22` | 2026-10-12 | re-baseline of the July row (path moved, hash was `untracked`) |
+| `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md` | `8da24ef22` | 2026-10-12 | re-baseline of the July row |
+| `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/contract-phase00AiExportTaskProfiles.md` | `8da24ef22` | 2026-10-12 | re-baseline of the July row |
+| `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportMigrationEquivalence.md` | `8da24ef22` | 2026-10-12 | re-baseline of the July row |
+| `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/plan-phase00SignalsBackendMigrationImplementation.prompt.md` | `8da24ef22` | 2026-10-12 | [[decisions/signal-indicator-warmup-sizing]], [[problems/spa-logout-cross-user-cache-leak]] — gaps only |
+
+## 2026-10-12 — historical folder H2, 05_cleanAudit (base `42fc4dd7f`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/phases/05_cleanAudit/README.md` | `8da24ef22` | 2026-10-12 | [[sources/phase00-clean-audit-2026-08]] |
+| `LibreFolio_developer_journal/Release_2/phases/05_cleanAudit/17_stabilizzazione_suite_completa.md` | `8da24ef22` | 2026-10-12 | [[problems/asset-events-lost-on-price-cache-hit]], [[concepts/test-isolation-classes]] |
+
+## 2026-10-12 — historical folder H3, 08_newCleanAndDocumentation_audit (base `61f7c970b`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/phases/08_newCleanAndDocumentation_audit/00_INDEX.md` | `a9138140a` | 2026-10-12 | [[sources/phase00-clean-audit-2026-08]] |
+| `LibreFolio_developer_journal/Release_2/phases/08_newCleanAndDocumentation_audit/14_backlog_ed_esecuzione.md` | `a9138140a` | 2026-10-12 | [[problems/base-currency-setting-silently-defaulted-eur]] |
+
+## 2026-10-12 — historical folders H4, 03 and 04 (base `63121ee78`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/phases/03_brokerImportRecovery/README.md` | `8da24ef22` | 2026-10-12 | covered by [[decisions/credit-agricole-securities-only-cash-neutral-brim]] — read for drift, no new page |
+| `LibreFolio_developer_journal/Release_2/phases/04_webSearchEngine/README.md` | `8dd918a15` | 2026-10-12 | [[decisions/web-link-finder-ddgs]] |
+
+## 2026-10-12 — historical folder H5, Ai_ideas (base `b899903db`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Ai_ideas/brainstorming_ai_features.md` | `28b8443dd` | 2026-10-12 | [[sources/release2-ai-ideas-2026-07]] |
+| `LibreFolio_developer_journal/Release_2/Ai_ideas/roadmap_and_signals_brainstorm.md` | `e7c33c85a` | 2026-10-12 | [[sources/release2-ai-ideas-2026-07]] |
+| `LibreFolio_developer_journal/Release_2/Ai_ideas/mcp_server_architecture_draft.md` | `07be11cbc` | 2026-10-12 | [[sources/release2-ai-ideas-2026-07]] |
+| `LibreFolio_developer_journal/Release_2/Ai_ideas/phase_0_detailed_roadmap.md` | `7992471b6` | 2026-10-12 | [[sources/release2-ai-ideas-2026-07]] |
+
+## 2026-10-12 — historical folder H6, 06_betaTestingReportAndFixing (base `6e3d1368c`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/00_20260805_betaTester_report.md` | `91e88b8d1` | 2026-10-12 | [[sources/beta-testing-2026-08-05]] — re-baseline (moved) |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/01_tassonomia_findings.md` | `91e88b8d1` | 2026-10-12 | [[sources/beta-testing-2026-08-05]] — re-baseline (moved) |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/02_riconciliazione_credit_agricole.md` | `91e88b8d1` | 2026-10-12 | [[sources/beta-testing-2026-08-05]] — re-baseline (moved) |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/INDEX.md` | `91e88b8d1` | 2026-10-12 | [[sources/beta-testing-2026-08-05]] — re-baseline (edited) |
