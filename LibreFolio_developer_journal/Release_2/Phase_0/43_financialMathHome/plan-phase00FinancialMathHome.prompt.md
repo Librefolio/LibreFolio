@@ -1373,3 +1373,143 @@ Motivo: prima di un rilascio servono cambi che non spostano superfici usate da a
 >   - X5: F ha chiuso i movimenti, mentre le 4 conversioni dei prezzi restano in U1/U5.
 > - Nell'indice, sezione T: U1 dice «X5 sui movimenti»; U4, U5 e U7 nominano P1, R4 e W1.
 > - Il commento PURE di `financial-math` nel runner («each module's only I/O is convert_bulk, which every test replaces on its module with a double») entra con B, insieme alla `desc` e alla guardia.
+
+### Passo B — il taglio (2026-10-12)
+> Il coordinatore ha committato A sul ramo di T (`1cc9cd8f5` refactor, `528ef2fe1` journal), senza integrarlo. B parte da `528ef2fe1`. `risk/service.py:1304` e il suo import sono assegnati a T.
+
+#### B1 — FIFO in tre moduli ✅ (2026-10-12)
+> **Note implementazione**:
+> - Script `/tmp/libreFolio_t1_b_split.py`: ogni definizione di primo livello, coi commenti sopra, va nel modulo assegnato. Gli spazi originali restano fra le definizioni vicine, e ruff toglie poi gli import inutili.
+> - Risultato: `fifo/models.py` (tipi, dataclass, risultato, `_require_*`), `fifo/eligibility.py` (`eligible_income_quantity`) e `fifo/engine.py` (`FifoLotEngine`, `run_fifo_lot_engine` e gli aiuti privati). Il grafo è senza cicli: models → eligibility → engine.
+> - Gli import di 4 file puntano al modulo che definisce il nome (script `/tmp/libreFolio_t1_b_imports.py`).
+> - Mirati: `roi-fifo-utils` 652, `lots-analysis-pure` 121, gli stessi conteggi.
+> - **⚠️ Fuori pista**: alla prima passata lo script metteva due righe vuote fra alias `Literal` che nell'originale sono adiacenti. Ho ripristinato `fifo/engine.py` con `git show HEAD:… >` e ho rifatto la passata conservando gli spazi originali.
+
+#### B2 — motore del portafoglio in sei moduli ✅ (2026-10-12)
+> **Note implementazione**:
+> - `portfolio/models.py`, `classifier.py`, `daily_state.py`, `data_quality.py`, `derived_views.py` ed `engine.py`. Il grafo è senza cicli: models → classifier → daily_state; data_quality → derived_views; tutti → engine.
+>   - `EngineEndState` e `PortfolioCalculationResult` vanno in `models`.
+>   - `_cumulative_split_ratio` va in `daily_state`, `_EXTERNAL_CASH_TYPES` in `classifier`.
+>   - La docstring d'architettura del vecchio motore ora è in `portfolio/__init__.py`, coi nomi dei moduli.
+> - **Qualità dei dati**:
+>   - il report è una funzione, `data_quality.build_data_quality_report(daily_states, …)`, con lo stesso corpo;
+>   - `DerivedViewsBuilder` tiene un metodo di una riga che le passa i suoi stati, così le 2 chiamate del servizio e le 38 del test dedicato restano uguali;
+>   - i lotti (`lots_analysis_service.py:944`) e `test_risk_asset_set.py:1861` costruivano un builder vuoto solo per il report: ora chiamano la funzione.
+> - **Slug unico**: `normalize_fx_pair_slug(pair)`, pubblico, in `data_quality.py`.
+>   - Via `PortfolioService._normalize_fx_pair_slug`, la cui forma a due argomenti non era usata da nessuno.
+>   - `risk/service.py:1304` chiama la funzione unica.
+> - **PAC**: `QUANTITY_DUST_THRESHOLD` pubblico da `data_quality_thresholds`, al posto di `_QUANTITY_DUST_THRESHOLD` di `portfolio_service`.
+>   - L'import del motore resta pigro, ma per un'altra ragione: il test sostituisce `PortfolioCalculationEngine` sul suo modulo. Ho aggiornato il commento.
+> - **Import**: 23 file puntano al modulo che definisce il nome.
+>   - Le 10 letture di `portfolio_engine_module.DailyStateBuilder` (3 test) importano `DailyStateBuilder` da `daily_state`.
+>   - `TransactionType` arriva da `db.models`.
+> - **Percorsi nel testo**:
+>   - `test_data_quality_thresholds.py:57` → `daily_state.py`;
+>   - `test_native_cash_guard.py:260` → `classifier.py`;
+>   - `fx_core.py:355` → `daily_state`;
+>   - il commento di `schemas/portfolio.py:165` → `data_quality.build_data_quality_report`.
+> - **Mirati**:
+>   - `portfolio-engine` 40, `roi-fifo-utils` 652, `lots-analysis-pure` 121, `portfolio-allocation-source` 89;
+>   - `risk-asset-set` 51, `fx-core` 23, `financial-math` 175;
+>   - `risk-all -k data_quality_thresholds` 31.
+> - ruff e black puliti sui 38 file toccati.
+> - **Reperto, fuori lotto**: `risk/service.py:439` chiama il privato `PortfolioService._get_configured_fx_pair_sets()`, che avvolge `load_configured_fx_pair_sets`. Non lo tocco: la riga assegnata è solo `:1304`.
+
+#### B3 — matematica dei lotti in `financial_math/lots/` (T-1f) ✅ (2026-10-12)
+> **Note implementazione**:
+> - Script `/tmp/libreFolio_t1_lots.py`. Ogni metodo puro di `LotsAnalysisService` diventa una funzione:
+>   - stesso corpo, de-indentato, senza `self` e senza `@staticmethod`;
+>   - le chiamate agli altri metodi spostati diventano chiamate di funzione.
+>   - I nomi letti fra moduli diventano pubblici (`FxRateResolver`, `WithheldEconomics`, `ALL_BROKERS`, …). La mappa di 50 nomi è in `/tmp/libreFolio_t1_lots_map.txt`.
+> - **Moduli** (grafo senza cicli: prices → conversions → economic_events → histories; average_cost_lines da solo):
+>   - `prices.py` (69 righe): `PriceHistoryLookup`, `opening_reference_price`;
+>   - `conversions.py` (181): `FxRateResolver`, i bisogni di cambio;
+>   - `economic_events.py` (336);
+>   - `histories.py` (558);
+>   - `average_cost_lines.py` (55).
+> - **Il servizio resta** (2 274 → 1 172 righe): orchestrazione, caricamenti dal DB, i DTO (sintesi, Gantt, righe degli eventi), il report di qualità dei lotti e `_compute_average_cost_lines`, che passa da `compute_average_costs`.
+> - **⚠️ Fuori pista**: il nome nuovo `known_realized_pnl` coincideva con una variabile locale di `_build_lot_summaries` (F823). La variabile ora si chiama `lot_realized_pnl`. Una scansione `ast` non trova altre collisioni fra parametri, locali e nomi nuovi.
+> - **Prove**: import dell'app ok; ruff e black puliti; `roi-fifo-utils` 652 (compreso il test end-to-end dei lotti) e `ai-export` 1 002.
+> - `test_lots_analysis_pure.py` (121 test, 45 chiamate a metodi privati) lo riscrive test-author, e scrive anche la guardia T-1g.
+> - **test-author**: `test_lots_analysis_pure.py` riscritto.
+>   - Le chiamate ai metodi spostati diventano chiamate di funzione; `ALL_BROKERS` arriva da `average_cost_lines`.
+>   - La patch di `convert_bulk` va su `lots.conversions`, il modulo che lo legge; il test lo conferma (`calls == [1]`).
+>   - 121 test e 130 assert, come prima. `lots-analysis-pure` 121 passed.
+
+#### T-1g — guardie dello strato ✅ (2026-10-12)
+> **Note implementazione** (test-author): `test_financial_math/test_layer_boundaries.py`, 270 righe, solo `ast`, senza import dell'app.
+> - **(a)** Gli import vietati, un test per ognuno dei 24 file dello strato. Conta ogni import, anche pigro o sotto `TYPE_CHECKING`; risolve i relativi, e `from a import b` vale anche come `a.b`.
+> - **(b)** I 4 `__init__.py` contengono solo la docstring.
+> - **(c)** Le 5 vecchie case non esistono più. Una cartella `utils/financial/` con il solo `__pycache__` non conta: git lascia quella cache sui checkout che hanno girato il codice vecchio.
+> - **4 test di controllo**:
+>   - il riconoscitore segnala 18 import vietati e nessuno dei 12 permessi, compreso `import signal` della libreria standard;
+>   - il controllo degli `__init__` segnala import, assegnazioni, `__all__` e una seconda stringa;
+>   - il controllo delle vecchie case gira in una cartella temporanea;
+>   - la scansione deve trovare i moduli noti dello strato.
+> - `financial-math`: 212 passed, cioè 175 + 37.
+> - `check-orphans` pulito.
+
+#### B4 — devWiki ✅ (2026-10-12)
+> **Note implementazione** (project-historian, nella worktree di T, solo le righe «Source files»):
+> - 58 righe in 46 pagine: diff di 58+/58−, solo righe di tabella. Il controllo trova esattamente le 58 occorrenze dei percorsi spostati; la stima di 61 contava anche righe che esistono ancora.
+>   - Per vecchio file: `portfolio_engine` 25, `fifo_lot_engine` 18, `roi_utils` 10, `yield_on_cost` 3, `price_resolver` 1, `valuation_utils` 1.
+>   - 10 righe citano 2 o 3 sotto-moduli, nella forma con le virgole già usata da 64 righe della wiki.
+> - `check_source_paths.py`: prima 12 percorsi inesistenti (67 occorrenze), dopo **6 (9 occorrenze, 6 pagine)**, cioè quelli di prima di T-1, invariati.
+> - Restano di proposito 7 righe su `lots_analysis_service.py`, che esiste ancora: le linee del costo medio e i buchi si calcolano ancora lì.
+> - **Dopo la 1.2** (T-W1 nell'indice): 50 menzioni dei vecchi percorsi nella prosa, in 28 file, fuori dalle tabelle. Fra queste `domains/calculations.md:70`, che chiama «FIFO engine» `transaction_service.py`.
+
+#### Runner, `.github`, `TODO_FUTURI` ✅ (2026-10-12)
+> **Note implementazione**:
+> - **Runner** (`_backend_services.py`):
+>   - `financial-math`: docstring, sezione e `print_info` con la guardia;
+>   - la `desc` è la formulazione di I, allargata con «boundaries of the whole layer»;
+>   - il commento PURE è quello di I, più la riga sulla guardia;
+>   - `lots-analysis-pure` → `financial_math/lots/`;
+>   - `portfolio-engine` → `daily_state.py`;
+>   - «price resolver» → «price marks» (2 righe).
+> - **`.github`**:
+>   - la sezione «One Home» di `backend.instructions.md`: tabella coi percorsi finali (più `native_cash`, `lots/`, `price_marks`), la riga su rischio, segnali e PAC, e il rimando al file d'istruzioni nuovo;
+>   - `frontend.instructions.md`: la sezione «Financial numbers», una riga;
+>   - nuovo `financial-math.instructions.md` (D-11): `applyTo` `backend/app/services/financial_math/**`, coi moduli, le regole, come aggiungere un calcolo, le guardie e i test.
+> - **`TODO_FUTURI.md`**, sulle sole righe citate:
+>   - `:2033` → `financial_math/portfolio/engine.py:312`;
+>   - `:2036` → `:246`;
+>   - `:2038` → `daily_state.py:366`;
+>   - `:2040` → `financial_math/price_marks.py:146`;
+>   - `:2046` → `:312`.
+>   - Ho verificato le righe sul codice del 01/10 (`5405f25a1`), il commit che le ha scritte.
+>   - La menzione `portfolio_engine` a `:2030` resta: non è fra le righe assegnate.
+> - **Docstring dello strato e dei pacchetti**: la mappa con i sotto-moduli di `fifo`, `portfolio` e `lots`.
+
+#### B5 — doc per sviluppatori ✅ (2026-10-12)
+> **Note implementazione** (docs-writer, solo EN):
+> - Pagina nuova `developer/backend/financial_math.md`, con la mappa dei pacchetti, il motore del portafoglio passo per passo, le regole con un diagramma, come aggiungere un calcolo, le guardie e i selettori.
+> - Voce di nav fra Scheduler e Risk Engine.
+> - 13 pagine aggiornate. Nel farlo ha corretto:
+>   - la firma vecchia di `run_fifo_lot_engine` nella pagina del FIFO, che non aveva 3 parametri;
+>   - il passo 2 della pipeline dei lotti;
+>   - «due moduli importano il resolver», che oggi sono tre.
+> - **Cose segnalate, sistemate da T**:
+>   - il punto di lettura `load_configured_fx_pair_sets` ora è nominato nella regola (docstring dello strato e D-11);
+>   - le eccezioni del frontend «devono essere dichiarate»: oggi nel codice non lo sono;
+>   - `architecture/overview.md:76` e `developer/index.md` puntano alla pagina nuova;
+>   - le docstring di `returns.py` e `portfolio_service.py` usano i nomi nuovi.
+
+#### Gate finali di T-1 ✅ (2026-10-12)
+> - **`all-backend`** sulla 6164: 7/7, **12 390 passed, 28 skipped, 0 failed** (20 min 12 s).
+>   - In 22 invocazioni su 23 i conteggi sono uguali alla base.
+>   - Nei `services` ci sono 37 test in più, quelli della guardia.
+> - **Docstring toccate durante il giro**: le ho riprovate dopo con `financial-math` 212, `utils roi-utils` 9 e `roi-fifo-utils` 652.
+> - **Statici**:
+>   - ruff e black come la base;
+>   - dead code come la base, meno i 2 reperti del barile;
+>   - `api sync`: `generated.ts` e altri 3 file identici. `openapi.json` cambia solo in `info.version`, che viene da `git describe` (la HEAD è `528ef2fe1`). Rigenerato da `HEAD` in una copia, è l'unica differenza.
+> - **Doc**: `mkdocs build` stretto ok; `check-links` 95 link validi.
+> - **devWiki**: `check_source_paths.py` a 6, come la base.
+> - **Grep dei vecchi percorsi** (`backend/`, `scripts/`, `dev.py`, `.github/`, `mkdocs_src/docs/developer/`, `pyproject.toml`): 9 righe, tutte volute. Sono le vecchie case nella sezione delle guardie del file d'istruzioni e la tabella vecchio → nuovo della pagina nuova.
+> - `git diff --check` pulito; porta 6164 libera.
+
+### Checkpoint B 🧊 (2026-10-12) — FROZEN, in attesa del coordinatore
+- Quattro commit proposti: refactor (codice, test, guardia, runner), doc, devWiki, journal.
+- Niente CHANGELOG.
+- Due voci per dopo la 1.2 nella sezione T dell'indice: T-W1 e T-R1.
