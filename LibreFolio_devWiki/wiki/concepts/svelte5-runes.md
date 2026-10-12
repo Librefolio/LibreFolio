@@ -42,6 +42,8 @@ $: console.log('count changed:', count);
 - A legacy `$:` statement does not track a runes field read through a module singleton: the `(app)` layout's gate
   missed `appBootstrap.ready` and the requested page flashed before the Welcome redirect. A legacy component that must
   react to runes state reads it through `toStore()`: [[problems/legacy-layout-gate-missed-runes-state]].
+- Svelte 5 removes the whitespace at the start and end of a tag, so a space that must be shown at a tag's edge is
+  written `{' '}`: [[problems/svelte5-trims-leading-space-in-tag]].
 
 ## Tailwind v4 parallel convention
 Tailwind CSS 4 config lives in `app.css` via `@theme {}` — **not** `tailwind.config.ts`:

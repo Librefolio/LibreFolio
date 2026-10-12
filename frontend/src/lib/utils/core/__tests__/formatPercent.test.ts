@@ -1,4 +1,14 @@
-import {describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
+
+// The default locale is the UI language regionalised by `navigator.language` (M-18, last block). Node's tag
+// follows the host's ICU locale (`LANG=it_CH.UTF-8` gives `it-CH`), so it is pinned to en-US — jsdom's own —
+// before any import.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 import {formatPercent, type FormatPercentOptions} from '../formatPercent';
 
 /**
@@ -153,7 +163,9 @@ describe('formatPercent', () => {
      * - `locale` with another suffix: `toLocaleString(locale)` with the same digits,
      *   then the suffix as written;
      * - `signed`, `empty` and the `-0` guard keep their meaning;
-     * - no `locale`: the output does not change by one character.
+     * - no `locale`: the interface locale, `uiLocale()` (M-18). With the English UI and
+     *   the en-US browser pinned at the top of the file, that is today's text below a
+     *   thousand; the last block of the file pins the other languages.
      *
      * Every expected string comes from `Intl` at run time, never typed here. The
      * separators are ICU data — which no-break space precedes a French `%` has
@@ -197,7 +209,7 @@ describe('formatPercent', () => {
             expect(localised(12.5, {signed: false, locale: 'en'})).toBe(intlPercent('en', 0.125));
         });
 
-        it('changes nothing for a caller that passes no locale', () => {
+        it('without a locale, writes the interface locale: today’s text for an English UI on an en-US browser', () => {
             expect(formatPercent(2.5)).toBe('+2.50%');
             expect(formatPercent(0.6, {scale: 100, digits: 1, suffix: 'pp'})).toBe('+60.0pp');
         });
@@ -216,5 +228,94 @@ describe('formatPercent', () => {
                 expect(written).not.toMatch(/[-\u2212]/);
             }
         });
+    });
+});
+
+/**
+ * M-18 CP1 — without `locale`, the UI language.
+ *
+ * Numbers follow the UI language (the developer's rule of 2026-10-12), so `locale` now defaults to
+ * `uiLocale()`: the UI language, regionalised by the browser when the two agree. The fixed `12.50%`
+ * shape is gone. A French UI reads `+12,50 %` out of `formatPercent(12.5)` with nothing passed by the
+ * caller, which is what lets the calls without `locale` follow the language untouched. What stays: `%`
+ * through `Intl.NumberFormat(locale, {style: 'percent'})`, any other unit after the localized number,
+ * an explicit `locale` winning over the default, the placeholder and the `-0` guard.
+ *
+ * English. The UI starts in English and the browser here is en-US (pinned at the top of the file), so
+ * English output is today's text but for one thing: thousands are grouped.
+ *
+ * Expectations come from Intl in this runtime and are never typed, as in the `locale` block above;
+ * English is typed where it is today's exact text.
+ *
+ * Language. `currentLanguage.set`, as LanguageSelector does; module-level state, put back to English
+ * after every test.
+ */
+describe('formatPercent — without a locale, the UI language (M-18)', () => {
+    type UiLanguage = 'en' | 'it' | 'fr' | 'es';
+
+    const intlPercent = (locale: string, fraction: number, digits = 2) => new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: digits, maximumFractionDigits: digits}).format(fraction);
+    const intlNumber = (locale: string, value: number, digits = 2) => new Intl.NumberFormat(locale, {minimumFractionDigits: digits, maximumFractionDigits: digits}).format(value);
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: UiLanguage): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        await uiLanguage('en');
+    });
+
+    it.each(['fr', 'it', 'es'] as const)('%s UI: a share in that language’s notation, with its sign, from a call that passes no locale', async (lang) => {
+        await uiLanguage(lang);
+        // Control: the notation really differs from English in this runtime.
+        expect(intlPercent(lang, 0.125)).not.toBe(intlPercent('en', 0.125));
+
+        expect(formatPercent(12.5)).toBe(`+${intlPercent(lang, 0.125)}`);
+        expect(formatPercent(0.125, {scale: 100, signed: false})).toBe(intlPercent(lang, 0.125));
+        expect(formatPercent(-3.21, {digits: 1})).toBe(intlPercent(lang, -0.0321, 1));
+    });
+
+    it('Italian UI, another unit: the number in Italian notation, the unit as written', async () => {
+        await uiLanguage('it');
+
+        expect(formatPercent(0.6, {scale: 100, digits: 1, suffix: 'pp'})).toBe(`+${intlNumber('it', 60, 1)}pp`);
+        expect(formatPercent(7.25, {signed: false, suffix: ''})).toBe(intlNumber('it', 7.25));
+    });
+
+    it('English UI on an en-US browser: today’s text, except that thousands are grouped', async () => {
+        await uiLanguage('en');
+
+        expect(formatPercent(2.5), 'control: below a thousand, today’s text').toBe('+2.50%');
+        expect(formatPercent(1234.5, {signed: false})).toBe(intlPercent('en-US', 12.345));
+        expect(formatPercent(1234.5, {signed: false})).toBe('1,234.50%');
+        expect(formatPercent(1234.5, {signed: false, suffix: 'pp'})).toBe('1,234.50pp');
+    });
+
+    it('follows the UI language from one call to the next: fr → it → en', async () => {
+        const written: Record<string, string> = {};
+        for (const lang of ['fr', 'it', 'en'] as const) {
+            await uiLanguage(lang);
+            written[lang] = formatPercent(12.5, {signed: false});
+        }
+
+        expect(written).toEqual({fr: intlPercent('fr', 0.125), it: intlPercent('it', 0.125), en: '12.50%'});
+    });
+
+    it('an explicit locale still wins over the UI language (control: green before the default exists)', async () => {
+        await uiLanguage('fr');
+
+        expect(formatPercent(12.5, {signed: false, locale: 'it'})).toBe(intlPercent('it', 0.125));
+        expect(formatPercent(12.5, {signed: false, locale: 'en'})).toBe('12.50%');
+    });
+
+    it('French UI: -0 is a plain zero on every route, and a missing value keeps its placeholder', async () => {
+        await uiLanguage('fr');
+
+        expect(formatPercent(-0)).toBe(intlPercent('fr', 0));
+        expect(formatPercent(-0, {scale: 100})).toBe(intlPercent('fr', 0));
+        expect(formatPercent(-0, {suffix: 'pp'})).toBe(`${intlNumber('fr', 0)}pp`);
+        expect(formatPercent(null)).toBe('—');
+        expect(formatPercent(NaN, {suffix: 'pp', empty: 'n/a'})).toBe('n/a');
     });
 });

@@ -64,7 +64,7 @@ several files become one import without changing the single-file plugins.
 | Plugin hooks (`report_roles`, `detect_role`, `describe_member`, `combine`) | `backend/app/services/brim_provider.py` |
 | `BRIMReportRole`, `batch_id`, `combined_into` | `backend/app/schemas/brim.py` |
 | Upload with `batch_id`; `/sets/preview`, `/sets/combine`, `/gap-fix` | `backend/app/api/v1/brokers.py` |
-| Danske Bank set plugin | `backend/app/services/brim_providers/broker_danske_bank.py` |
+| Danske Bank set plugin | `backend/app/services/brim_providers/broker_danske_bank/plugin.py` |
 | Wizard set logic | `frontend/src/lib/utils/transactions/importReportSets.ts` |
 | Set card, gap-fix step | `frontend/src/lib/components/transactions/import/ReportSetCard.svelte` |
 | Gap-fix step | `frontend/src/lib/components/transactions/import/GapFixStep.svelte` |

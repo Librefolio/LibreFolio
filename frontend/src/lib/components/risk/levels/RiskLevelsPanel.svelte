@@ -26,6 +26,7 @@
     import RiskPartialNotice from './RiskPartialNotice.svelte';
     import {selectKpiWave} from './l3Helpers';
     import {resultByCode, DAILY_VAR_INSTANCE, MONTHLY_VAR_INSTANCE} from '../riskAnalysisHelpers';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     /**
      * The four levels of risk, as one component.
@@ -309,8 +310,8 @@
         return $t('risk.levels.l2.lead', {
             values: {
                 name: assetNames[lead.assetId] ?? `#${lead.assetId}`,
-                weight: `${(lead.weight * 100).toFixed(0)}%`,
-                contribution: `${(lead.contribution * 100).toFixed(0)}%`,
+                weight: formatPercent(lead.weight, {scale: 100, signed: false, digits: 0}),
+                contribution: formatPercent(lead.contribution, {scale: 100, signed: false, digits: 0}),
             },
         });
     });

@@ -2,7 +2,7 @@
 
 > Authoritative list of all LibreFolio features with permanent codes.
 > Codes are assigned at first mention and **never change** even if the feature is renamed/split/superseded.
-> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git); 2026-10-12 (step B5: F-105 guided onboarding)
+> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git); 2026-10-12 (step B5: F-105 guided onboarding; step B6a: F-106 Tool platform; step B6b: F-107 PAC allocator, F-108 Rebalancer planned; step C: F-078 implemented); 2026-10-12 (step B8: F-109 in-app changelog, localized by chapter); 2026-10-12 (folder 02, step R0: F-110–F-113 Risk)
 >
 > **Macro-level navigation**: for product-level domain narratives (what each domain does, how features cluster, data-flow diagrams), see [`wiki/domains/`](../domains/) — 11 domain pages covering all features.
 
@@ -42,6 +42,7 @@
 | [[F-101]] | Global Privacy Mode (hide values) | frontend | `documented` | `user/settings/preferences.en.md` |
 | [[F-104]] | Recommend LibreFolio (social share, copy and go) | frontend | `documented` | `user/settings/about.en.md` |
 | [[F-105]] | Guided onboarding (Welcome, intro tour, contextual guides) | fullstack | `documented` | [`dev/fe/onboarding.md`](developer/frontend/onboarding.md) |
+| [[F-109]] | In-app changelog (sidebar version → modal; each release in the UI language when translated) | frontend | `documented` | `user/settings/about.en.md` |
 
 ---
 
@@ -140,6 +141,9 @@
 | [[F-054]] | Dashboard KPI & Overview | fullstack | `implemented` | — |
 | [[F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart with P&L modes, Allocation) | frontend | `documented` | `user/dashboard/charts.en.md` |
 | [[F-100]] | Yield on Cost (YOC) per position | fullstack | `documented` | `user/dashboard/positions.en.md` |
+| [[F-111]] | Risk tab of the Dashboard and broker pages (four levels L1–L4) | frontend | `documented` | `user/dashboard/risk.en.md` |
+| [[F-112]] | Risk Lab of Asset Global (correlation, losses, risk–return, replay) | frontend | `documented` | `user/assets/correlation.en.md` |
+| [[F-113]] | Risk tab of Asset Detail (legacy panel, beta) | frontend | `implemented` | — |
 
 ---
 
@@ -150,6 +154,8 @@
 | [[F-056]] | FIFO at Runtime (on-demand cost basis) | backend | `implemented` | `fifo-lot-analysis.en.md` |
 | [[F-057]] | Currency Conversion (triangulation via FX graph) | backend | `implemented` | — |
 | [[F-058]] | ROI Calculations (TWRR + MWRR) | backend | `implemented` | — |
+| [[F-107]] | PAC allocator (purchase planner: SCIP search, exact replay, broker increments) | fullstack | `documented` | `user/tools/pac-allocator/index.en.md` |
+| [[F-110]] | Risk engine (analytic plugins, quant libraries in spawned processes) | backend | `documented` | [`dev/be/risk/architecture.md`](developer/backend/risk/architecture.md) |
 
 ---
 
@@ -173,6 +179,7 @@
 | [[F-072]] | TimeSeriesStore Pattern (delta-fetching client cache) | frontend | `implemented` | [`dev/fe/state/index.md`](developer/frontend/state/index.md) |
 | [[F-073]] | Backup & Restore | fullstack | `implemented` | — |
 | [[F-074]] | E2E Test Gallery (auto-screenshots for docs) | infra | `implemented` | — |
+| [[F-106]] | Tool platform (atomic Tool plugins, an owned process per item, compiled renderers) | fullstack | `documented` | [`dev/arch/patterns/tool_plugins.en.md`](developer/architecture/patterns/tool_plugins.en.md) |
 
 ---
 
@@ -183,7 +190,7 @@
 | [[F-075]] | TanStack Table v9 Migration | frontend | `superseded` | — |
 | [[F-076]] | Log Level Policy & TRACE Level | backend | `implemented` | — |
 | [[F-077]] | Mobile DataTable Touch Drag Column Reorder | frontend | `planned` | — |
-| [[F-078]] | User Filter in Files Page | fullstack | `planned` | — |
+| [[F-078]] | User Filter in Files Page (an uploader column filter, for every user) | fullstack | `implemented` | — |
 | [[F-079]] | GDPR Broker Access Compliance | fullstack | `planned` | — |
 | [[F-080]] | Candlestick Chart / Volume Bars | frontend | `implemented` | — |
 | [[F-081]] | Fiscal Sale Method (FIFO/LIFO/PMC/SelectID) | fullstack | `planned` | — |
@@ -205,6 +212,7 @@
 | [[F-097]] | WAC — Weighted Average Cost (cross-currency, auto-calc on TRANSFER) | fullstack | `documented` | [`dev/be/transactions/wac.md`](developer/backend/transactions/wac.md) |
 | [[F-098]] | Progressive Web App (PWA) | frontend | `implemented` | `user/pwa.en.md` |
 | [[F-099]] | Borsa Italiana Asset Provider | fullstack | `implemented` | `developer/backend/assets/provider_borsa_italiana.md` |
+| [[F-108]] | Portfolio Rebalancer (PAC engine with existing positions, sales and taxes) | fullstack | `planned` | — |
 
 ---
 
@@ -212,24 +220,24 @@
 
 > Recomputed from the rows above on 2026-10-09 (the previous table still counted 96 features and listed F-052/F-053
 > as planned), and again on 2026-10-12 after the lint (F-050, F-089, F-092 shipped; F-075 superseded) and after
-> step B5 (F-105 added). "PLANNED / IDEA" is the section where a feature was first registered, not its status:
-> eleven of its rows have shipped and one is superseded.
+> steps B5, B6a and B6b (F-105 to F-108 added), step B8 (F-109), and step R0 of folder 02 (F-110–F-113, Risk). "PLANNED / IDEA" is the section where a feature was first
+> registered, not its status: twelve of its rows have shipped (F-078 recognised in step C) and one is superseded.
 
 | Domain | Total | implemented/documented | in-progress | planned | idea | superseded |
 |--------|-------|----------------------|-------------|---------|------|------------|
 | AUTH | 4 | 4 | 0 | 0 | 0 | 0 |
-| LAYOUT & SETTINGS | 8 | 8 | 0 | 0 | 0 | 0 |
+| LAYOUT & SETTINGS | 9 | 9 | 0 | 0 | 0 | 0 |
 | BROKERS | 7 | 7 | 0 | 0 | 0 | 0 |
 | FX | 9 | 9 | 0 | 0 | 0 | 0 |
 | ASSETS | 13 | 13 | 0 | 0 | 0 | 0 |
 | SIGNALS | 9 | 9 | 0 | 0 | 0 | 0 |
 | TRANSACTIONS | 6 | 5 | 1 | 0 | 0 | 0 |
 | SCHEDULER | 2 | 2 | 0 | 0 | 0 | 0 |
-| DASHBOARD | 3 | 3 | 0 | 0 | 0 | 0 |
-| CALCULATIONS | 3 | 3 | 0 | 0 | 0 | 0 |
-| INFRASTRUCTURE | 16 | 16 | 0 | 0 | 0 | 0 |
-| PLANNED/IDEA (first registered) | 25 | 11 | 0 | 10 | 3 | 1 |
-| **TOTAL** | **105** | **90** | **1** | **10** | **3** | **1** |
+| DASHBOARD | 6 | 6 | 0 | 0 | 0 | 0 |
+| CALCULATIONS | 5 | 5 | 0 | 0 | 0 | 0 |
+| INFRASTRUCTURE | 17 | 17 | 0 | 0 | 0 | 0 |
+| PLANNED/IDEA (first registered) | 26 | 12 | 0 | 10 | 3 | 1 |
+| **TOTAL** | **113** | **98** | **1** | **10** | **3** | **1** |
 
 ## Key source files
 

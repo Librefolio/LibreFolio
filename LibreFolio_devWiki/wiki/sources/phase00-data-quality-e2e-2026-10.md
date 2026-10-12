@@ -9,6 +9,9 @@ related:
   - decisions/data-quality-proved-on-real-data
   - problems/open-panels-stale-after-fx-sync
   - features/F-054
+  - problems/e2e-writes-leaked-into-shared-state
+  - decisions/e2e-gaps-of-1-2-before-release
+  - problems/bcrypt-blocks-the-event-loop
 ---
 
 # Source: Phase 0 / 46 — data-quality E2E on real data
@@ -34,6 +37,29 @@ panels did not refresh after the sync (D2). Seven items were left for after rele
 - **Two testability attributes**: `data-column-id` on DataTable cells and the `kpi-unrealized-delta` test id.
 - **A red that was not V's**, triaged with the test-triage skill: `dashboard-cache.spec.ts` failed next to
   `dashboard-broker-filter-label`, which creates and deletes a broker of the shared `TEST_USER` (V-7).
+
+## Batch 2 and work 3 (trains 58 and 64, added 2026-10-12)
+
+The plan grew after this page was written (registered now at `262515898`):
+
+- **Batch 2, §11 (train 58)** — the coordinator's mandate «nello spirito della decisione D2»: V-1, «Sync prices» did not
+  refresh open panels, red first then `refreshVersion += 1` (`a0722f755`,
+  [[problems/open-panels-stale-after-fx-sync]]); V-7, `dashboard-broker-filter-label` moved to a disposable account
+  owning two brokers (`4e710a1f9`); V-5 and V-6, a comment and the developer doc's test list (`6f5a3bcff`). docs-writer
+  found V-9 and V-10.
+- **Work 3, step 1, §12.1–§12.2 (train 58)** — V-9, two outdated sentences of the banner doc (`973ca3961`); V-10, two
+  latent defects of `data-quality-banners.spec.ts`, which now pins the header counts on a heading the test decides
+  (`8994100b4`). Three more findings went to the backlog: V-11 (`TRANSACTION_IMPLIED` can claim no market price for
+  over two weeks on an asset quoted yesterday), V-12, V-13; and V-14 (probes still tied to the seed).
+- **Work 3, step 2, §12.3 and §12.5 (train 64)** — the audit of the E2E suite's writes and checkpoint 2a, cures A1–A3:
+  reserved MOCKFX pairs, disposable accounts, the scheduler's keys read and restored —
+  [[problems/e2e-writes-leaked-into-shared-state]]. The gate's six reds outside the batch were triaged: V-19 (a Spanish
+  label past the toolbar, [[concepts/responsive-4mode-layout]]), V-20 (3 s waits under load), V-17 (the runner);
+  test-author also found V-16, [[problems/bcrypt-blocks-the-event-loop]].
+- **Work 3, step 3, §12.4** — eight E2E gaps of 1.2, and the developer's «Tutte e 7 nella 1.2» —
+  [[decisions/e2e-gaps-of-1-2-before-release]] (planned).
+- **Open in section V** after train 64: V-2, V-3, V-4, V-8 (the Risk panel with a vanished broker: a 403 and no
+  re-read; needs a decision), V-11…V-20; checkpoint 2b (A4–A7) to come.
 
 ## Wiki pages created or updated
 

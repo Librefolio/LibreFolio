@@ -50,5 +50,5 @@ Any new provider or endpoint touching external HTTP must follow the rule.
 | Role | Path |
 |------|------|
 | Thread isolation fix | `backend/app/services/asset_source.py` |
-| yfinance provider (example) | `backend/app/services/asset_source_providers/yahoo_finance.py` |
+| yfinance provider (example) | `backend/app/services/asset_source_providers/yahoo_finance/plugin.py` |
 | FastAPI main (sync endpoints) | `backend/app/main.py` |

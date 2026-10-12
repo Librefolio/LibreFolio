@@ -38,9 +38,11 @@ decision to write the red test and the fix in the same lot was the developer's (
 ## Prevention
 
 Any action that changes the data under the Dashboard must send the same refresh signal as «Aggiorna», not only reload
-the report. **Still open, same gap (V-1)**: the stale-price button («Sync prices», `sync_asset_prices` in
-`handleBannerAction`) reloads the report without incrementing `refreshVersion`, so open panels stay old until a
-reload.
+the report. **The same gap after «Sync prices» (V-1)** — the stale-price button (`sync_asset_prices` in
+`handleBannerAction`) reloaded the report without incrementing `refreshVersion`, so open panels stayed old until a
+reload — was closed the same way in V's batch 2 (`a0722f755`, train 58): red first in `stale-price-banner.spec.ts`
+(the lots panel already open must ask `POST /portfolio/lots/analysis` again, in the same page load), then
+`refreshVersion += 1` after `invalidate()`.
 
 ## Source files
 

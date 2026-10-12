@@ -21,6 +21,8 @@
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {assetTypeBadgeClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     // =========================================================================
     // Props
@@ -220,20 +222,20 @@
                 class="text-xl font-mono font-bold transition-colors duration-300
                          {livePriceDirection === 'up' ? 'text-emerald-600 dark:text-emerald-400' : livePriceDirection === 'down' ? 'text-red-500 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}"
             >
-                {livePrice != null ? Number(livePrice).toFixed(2) : '--'}
+                {livePrice != null ? formatFixed(Number(livePrice), 2) : '--'}
             </span>
             <span class="text-xs text-gray-500 dark:text-gray-400 emoji-flag">{currencyFlag(asset.currency)}</span>
             <span class="text-xs text-gray-500 dark:text-gray-400">{asset.currency}</span>
             {#if cardViewMode === 'absolute' && deltaAbs !== null}
                 <span class="text-sm font-medium {deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
                     {deltaAbs >= 0 ? '▲' : '▼'}
-                    {deltaAbs >= 0 ? '+' : ''}{Number(deltaAbs).toFixed(2)}
+                    {formatFixed(Number(deltaAbs), 2, {signed: true})}
                     {asset.currency}
                 </span>
             {:else if deltaPercent !== null}
                 <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
                     {deltaPercent >= 0 ? '▲' : '▼'}
-                    {deltaPercent >= 0 ? '+' : ''}{Number(deltaPercent).toFixed(2)}%
+                    {formatPercent(Number(deltaPercent))}
                 </span>
             {/if}
         </div>
