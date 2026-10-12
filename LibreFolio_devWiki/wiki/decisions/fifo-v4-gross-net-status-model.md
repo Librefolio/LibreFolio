@@ -77,7 +77,7 @@ quantitative corruption. Net table columns default to visible only when relevant
 | Dead `net_metrics_status` finding | `.../v4-fee_tax_integration/post-implementation-review-v5.md` §5; `review-checklist-v5.md` D3/R4 |
 | Net-column visibility fix | `.../v4-fee_tax_integration/post-implementation-review-v5.md` §2; `review-checklist-v5.md` D1 |
 | Public DTO | `backend/app/schemas/portfolio.py` |
-| Engine | `backend/app/services/fifo_lot_engine.py` |
+| Engine | `backend/app/services/financial_math/fifo/engine.py` |
 | Frontend table | `frontend/src/lib/components/brokers/lots/UnifiedLotsTable.svelte` |
 | Frontend panel (FAILED banner) | `frontend/src/lib/components/brokers/lots/LotsAnalysisPanel.svelte` |
 | User-facing doc | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.en.md` §"Costs & Net Metrics" → "Gross vs net" |

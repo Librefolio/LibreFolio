@@ -76,6 +76,6 @@ fee/income share.
 | Rejected Option C critique | `.../v4-fee_tax_integration/feasibility-analysis-v4-review.md` §10 |
 | Rejected flat-audit critique | `.../v4-fee_tax_integration/feasibility-analysis-v4-review.md` C1/§9 |
 | Executable plan | `.../v4-fee_tax_integration/implementation-plan-v5.md` §1.1, §3, §7.3-§7.4, Fase 2-8 |
-| Engine | `backend/app/services/fifo_lot_engine.py` |
+| Engine | `backend/app/services/financial_math/fifo/engine.py` |
 | Orchestration service | `backend/app/services/lots_analysis_service.py` |
 | Public DTO | `backend/app/schemas/portfolio.py` |
