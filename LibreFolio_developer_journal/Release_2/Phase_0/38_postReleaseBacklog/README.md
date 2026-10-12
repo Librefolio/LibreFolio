@@ -351,7 +351,9 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
     col client generato presente, quindi non dipende dalla worktree: sono proprio i `paths`. Nessun gate li vede,
     perché Playwright non controlla i tipi e `front check` non guarda `e2e/`. Con la cura, il controllo dei tipi
     degli E2E va fra i gate.
-- **I-08 · debito di traduzione MkDocs** — medio, giro Aphra: «quando arriva il momento lo faremo» (developer,
+- ✅ **I-08 · debito di traduzione MkDocs** — chiusa il 12/10: dopo i giri di traduzione di M (lotti 11–18, treni
+  29–44) `translate-validate` è a 0/0 e `translate-diff` pulito su 624 pagine; `yield-on-cost` ha it/fr/es (verifica del
+  coordinatore). Era: medio, giro Aphra: «quando arriva il momento lo faremo» (developer,
   09/10). Il conto esatto lo dà `./dev.py mkdocs translate-validate`. Le pagine note il 09/10:
   - di I: `yield-on-cost.en.md` senza it/fr/es; `user/dashboard/charts`, `user/dashboard/index`,
     `user/assets/detail/chart`;
