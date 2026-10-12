@@ -70,6 +70,7 @@ from backend.app.services.ai_export.components.resources import BROKER_LOTS_RESU
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext
+from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 
 _BROKER_FIFO_ASSET_METADATA_RESOURCE: ResourceKey[Mapping[int, Asset]] = ResourceKey("broker.fifo_asset_metadata", Mapping)
 
@@ -432,7 +433,9 @@ async def _build_broker_reconciliation(context: BuildContext, dependencies: Mapp
         if summary.period_pnl is not None and all(component is not None for component in components):
             residual_amount = summary.period_pnl.amount - (summary.period_unrealized_gain_loss_delta.amount + summary.period_realized_gain_loss.amount + summary.period_income.amount - summary.period_fees_taxes.amount + summary.period_other_result.amount)
             residual = Currency(code=currency_code, amount=residual_amount)
-            reconciled = residual_amount == Decimal("0")
+            # A residual below CONVERSION_DUST is the rounding of Decimal arithmetic on converted
+            # amounts, not a gap: the summary closes the decomposition with period_other_result.
+            reconciled = abs(residual_amount) < CONVERSION_DUST
     return BrokerReconciliationPayload(
         broker_id=scope.broker_id,
         period_start=scope.period_start,
@@ -603,7 +606,7 @@ BROKER_FLOWS_INCOME_COSTS_COMPONENT = ComponentSpec(
 
 BROKER_RECONCILIATION_COMPONENT = ComponentSpec(
     component_id="broker.reconciliation",
-    version=1,
+    version=2,  # v2 (C-53): reconciled tolerates conversion dust
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerReconciliationPayload,
     builder=_build_broker_reconciliation,
