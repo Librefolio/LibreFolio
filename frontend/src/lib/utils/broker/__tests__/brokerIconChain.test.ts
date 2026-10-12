@@ -178,3 +178,29 @@ describe('createBrokerIconChain — custom, plugin made for the broker, portal f
         expect(walkChain(modules, chain), 'the plugin icon arrived, after the favicon').toEqual([FAVICON, GENERIC.icon_url]);
     });
 });
+
+/**
+ * BrokerIcon draws each URL in a new <img>, and Svelte never removes `onerror` / `onload` from an <img>
+ * that left the page: a request still in flight when its <img> was swapped out reports to the chain after
+ * the swap. The handler is attached here as the component attaches it — as the <img>'s listener — so it
+ * receives the event, and the event says which URL failed: the `src` of the <img> that raised it.
+ */
+describe('createBrokerIconChain — an <img> event belongs to the URL of the <img> that raised it', () => {
+    it('plugin list not loaded yet, dedicated plugin: a late error from the swapped-out favicon <img> fails the favicon, not the plugin icon on screen', async () => {
+        const {modules, land} = await modulesWithPluginsInFlight();
+        const chain = mountChain(modules, {portal_url: PORTAL, default_import_plugin: DEDICATED.code});
+        expect(chain.currentDisplayUrl, 'while the list is in flight').toBe(FAVICON);
+        await land();
+        expect(chain.currentDisplayUrl, "the list landed: the plugin icon took the favicon's place").toBe(DEDICATED.icon_url);
+
+        // The favicon's <img>, out of the page since the swap, whose request fails only now.
+        const faviconImage = document.createElement('img');
+        faviconImage.setAttribute('src', FAVICON);
+        faviconImage.addEventListener('error', chain.handleError);
+        faviconImage.dispatchEvent(new Event('error'));
+        modules.flushSync();
+
+        expect(chain.currentDisplayUrl, 'the error came from the favicon <img>: the plugin icon stays the one on screen').toBe(DEDICATED.icon_url);
+        expect(walkChain(modules, chain), 'the favicon is known to fail now: when the plugin icon fails too, the briefcase follows').toEqual([DEDICATED.icon_url]);
+    });
+});
