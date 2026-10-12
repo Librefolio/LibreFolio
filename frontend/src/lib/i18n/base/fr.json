@@ -275,7 +275,8 @@
     "probe": {
       "history": "Historique",
       "notTested": "Non testé",
-      "totalTime": "Total"
+      "totalTime": "Total",
+      "copyErrorDetail": "Copier le détail de l'erreur"
     },
     "identifiers": {
       "askProvider": "Demander au Fournisseur",
@@ -933,9 +934,9 @@
       "targetMany": "Les plugins d’import par défaut de ces courtiers savent le lire : choisissez où le déplacer.",
       "noTarget": "{plugins} sait le lire, mais aucun de vos courtiers ne l’utilise comme plugin d’import par défaut.",
       "noReader": "Aucun plugin d’import ne sait le lire.",
-      "move": "Déplacer vers {broker}",
+      "move": "Déplacer",
       "keep": "Le garder ici",
-      "remove": "Retirer le fichier",
+      "remove": "Retirer",
       "moveFailed": "Impossible de déplacer le fichier",
       "removeFailed": "Impossible de retirer le fichier",
       "fromLabel": "Assigné à",

@@ -3220,3 +3220,15 @@ Page defects fixed: [[features/F-082]] (the staging modal's path), [[features/F-
 editor's path), [[domains/signals]] (`status: stable`, as in the index and the registry). [[features/registry]]: the
 C-64 note cites C-65 and C-66. `index.md`: F-048's row in «Individual Feature Pages» still said `in-progress`, missed
 in part 1 — now `documented`. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 71 — U-2 (the catalogue built from its sources), M's batch 29, a merge that died on a lock
+Base `c57acf510` (train 71, gates green). Sources: plan 45 §10 (U-2) and the code of `1b31f9057`; backlog U-B6; M's
+journal of round 12, §18 (batch 29, `18e872872`); the coordinator's report on train 71, with the mechanism checked in
+Git's own sources at v2.53.0. **Created** [[problems/git-merge-stash-failed-on-locked-index]] (Git 2.53 runs
+`git stash create` before every real merge; an IDE or a watcher holding `index.lock` killed it before it started;
+workaround: the train retries up to 5 times). **Updated** [[decisions/plugin-folders-and-split-i18n]] (U-2 delivered:
+generated catalogue, sources in `base/`, read-only and stamped, hooks, gate `utils gate-i18n-catalog`; U-3 and U-B6
+open), [[features/F-008]], [[sources/phase00-translation-round12-2026-10]] (batch 29),
+[[problems/fast-forward-blocked-by-a-dirty-file]] (see also). **Paths**: U-2 moved the four catalogues, so 28
+citations of `frontend/src/lib/i18n/<lang>.json` in 13 pages and 5 written as `{en,it,fr,es}` now point to `base/`;
+`$lib/i18n/en.json` imports stay (they name the generated file). Graph: not updated (P-6).

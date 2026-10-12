@@ -7,6 +7,7 @@
  * 3. Guard: promote hidden on paired
  * 4. Promote from Main Table → select 2 promote-test rows
  * 5. BulkModal open after page refresh (NR-1 non-regression for F6)
+ * 6. C3: split + edit in the BulkModal → commit payload (on a pair the test owns)
  *
  * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract: populate_mock_data.py creates tagged transactions:
@@ -15,21 +16,38 @@
  * - "promote-test-access-fail" tag on DEPOSIT/WITHDRAWAL where one broker is VIEWER
  * - "delete-safe" tag on pairs suitable for split tests
  *
+ * Tests 1-5 only read mock data. C3 commits — a real split and a real edit — so it never
+ * touches a mock row: it builds its own pair on a disposable account (two brokers the
+ * account owns, the seeded Ethereum as the asset) and deletes the account afterwards,
+ * its brokers and every row on them included.
+ *
  * DOM patterns (DataTable + TransactionsTable):
  * - Table wrapper: [data-testid="tx-table"]
  * - Row: tr[data-row-id="tx-{id}"] or tr[data-row-id="ghost-{id}"]
- * - Checkbox: .checkbox-btn inside td.td-select
+ * - Checkbox: [data-testid="dt-row-checkbox-{row-id}"], data-state checked|unchecked
  * - Link indicator: button.tx-link-icon[data-tx-link="{id}"]
  * - Row actions: kebab button [data-testid^="row-actions-"] → opens context menu with
  *   items at [data-testid="context-menu-action-{id}"] (e.g. "split", "edit", "view").
  */
-import {expect, test, type Page} from '../fixtures/playwright';
+import {randomUUID} from 'crypto';
+import {expect, test, type APIRequestContext, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {appears} from '../fixtures/probe';
+import {daysAgoIso} from '../fixtures/dates';
+import {createOwnedBroker, deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 
 test.setTimeout(30_000);
+
+const API = '/api/v1';
+
+type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
+type CommitBody = {committed: boolean; issues?: unknown[]; results?: Array<{operation: string; index: number; ids: number[]}>};
+/** What the committing test created, recorded the moment it exists so the cleanup finds all of it. */
+type Owned = {user: DisposableUser | null; brokerIds: number[]};
+/** A saved asset TRANSFER between the account's two brokers: `fromId` sends from `fromBroker`, `toId` receives. */
+type OwnedPair = {fromId: number; toId: number; fromBroker: string};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,10 +77,11 @@ async function findRowId(page: Page, includes: string[], excludes: string[] = []
 
 /** Select a row by its row-id checkbox. */
 async function selectRow(page: Page, rowId: string) {
-    const row = page.locator(`[data-testid="tx-table"] tr[data-row-id="${rowId}"]`);
-    const checkbox = row.locator('.checkbox-btn').first();
+    const checkbox = page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-${rowId}`);
     await expect(checkbox).toBeVisible({timeout: 2_000});
     await checkbox.click();
+    // The checkbox publishes its own state: the row is selected, not merely clicked.
+    await expect(checkbox).toHaveAttribute('data-state', 'checked');
     // The toolbar publishes how many rows it holds. A paired row selects both
     // halves, so the count is not always 1 — what matters is that the selection
     // registered at all before the caller reaches for a toolbar action.
@@ -135,6 +154,91 @@ async function findSplittableRowId(page: Page, prefer: string[] = []): Promise<s
         }
     }
     return null;
+}
+
+// ---------------------------------------------------------------------------
+// Owned pair — for the one test here that commits
+// ---------------------------------------------------------------------------
+
+async function jsonFrom<T>(response: HttpResponse, purpose: string): Promise<T> {
+    expect(response.ok(), `${purpose}: HTTP ${response.status()} ${await response.text()}`).toBe(true);
+    return (await response.json()) as T;
+}
+
+/** Commit `creates` as one batch; returns the id of each create, in request order. */
+async function commitCreates(page: Page, creates: Array<Record<string, unknown>>, purpose: string): Promise<number[]> {
+    const body = await jsonFrom<CommitBody>(await page.request.post(`${API}/transactions/commit`, {data: {creates}}), purpose);
+    expect(body.committed, `${purpose}: rolled back — ${JSON.stringify(body.issues ?? [])}`).toBe(true);
+    return creates.map((_, index) => {
+        const id = body.results?.find((item) => item.operation === 'create' && item.index === index)?.ids[0];
+        if (typeof id !== 'number') throw new Error(`${purpose}: the commit returned no id for create #${index} — ${JSON.stringify(body.results)}`);
+        return id;
+    });
+}
+
+/** The seeded asset with this exact ticker — read, never assumed. */
+async function seededAssetId(page: Page, ticker: string): Promise<number> {
+    const assets = await jsonFrom<Array<{id: number}>>(await page.request.get(`${API}/assets/query?ticker=${encodeURIComponent(ticker)}`), `look up the ${ticker} asset`);
+    if (assets.length !== 1) throw new Error(`Expected exactly one asset with ticker ${ticker}, found ${assets.length} — check populate_mock_data.py`);
+    return assets[0].id;
+}
+
+/**
+ * A disposable account holding one saved asset TRANSFER between two brokers it owns.
+ *
+ * Why not the seeded `delete-safe` pair: a committed split rewrites both rows in place —
+ * same ids, new types, no link — so nothing short of a repopulate puts them back (the
+ * tx-hygiene net drops new ids, or repopulates when an id is missing: neither happens
+ * here), and other specs look that pair up afterwards (tx-bulk-suggest-ux, tx-delete,
+ * tx-crud-full). Rows on an account of its own are invisible to every other spec, and
+ * deleting its brokers takes them all.
+ *
+ * The giver is funded first — a deposit, then a buy — so neither the transfer nor the
+ * split's edited quantity takes it below zero. The asset is the seeded Ethereum, which
+ * this test only reads.
+ */
+async function openAccountWithPair(page: Page, request: APIRequestContext, owned: Owned, tag: string): Promise<OwnedPair> {
+    owned.user = await registerDisposableUser(request, tag);
+    await prepareOnboardingAccount(page, owned.user, []);
+    const giver = await createOwnedBroker(page, `${tag}-from`, owned.brokerIds);
+    const receiver = await createOwnedBroker(page, `${tag}-to`, owned.brokerIds);
+    const assetId = await seededAssetId(page, 'ETH-USD');
+
+    const funding = [
+        {broker_id: giver.id, type: 'DEPOSIT', date: daysAgoIso(10), cash: {code: 'USD', amount: '100'}},
+        {broker_id: giver.id, asset_id: assetId, type: 'BUY', date: daysAgoIso(9), quantity: '0.01', cash: {code: 'USD', amount: '-30'}},
+    ];
+    await commitCreates(page, funding, 'fund the giver broker');
+
+    const linkUuid = randomUUID();
+    const description = `Owned pair ${tag}`;
+    const transfer = [
+        {broker_id: giver.id, asset_id: assetId, type: 'TRANSFER', date: daysAgoIso(5), quantity: '-0.001', link_uuid: linkUuid, description},
+        {broker_id: receiver.id, asset_id: assetId, type: 'TRANSFER', date: daysAgoIso(5), quantity: '0.001', link_uuid: linkUuid, description, cost_basis_mode: 'auto'},
+    ];
+    const [fromId, toId] = await commitCreates(page, transfer, 'commit the owned TRANSFER pair');
+
+    // The premise, read back rather than inferred: the two halves point at each other.
+    const halves = await jsonFrom<Array<{id: number; related_transaction_id?: number | null}>>(await page.request.get(`${API}/transactions?ids=${fromId}&ids=${toId}`), 'read the owned pair back');
+    const linkOf = new Map(halves.map((tx) => [tx.id, tx.related_transaction_id ?? null] as const));
+    expect([linkOf.get(fromId), linkOf.get(toId)], 'premise: the two halves of the owned pair are linked to each other').toEqual([toId, fromId]);
+    return {fromId, toId, fromBroker: giver.name};
+}
+
+/**
+ * Leave the page, then delete the account: its brokers first — `force` takes their
+ * transactions with them, the pair and whatever the test made of it — and the account
+ * last. Only what this test recorded.
+ */
+async function cleanupOwned(page: Page, request: APIRequestContext, owned: Owned): Promise<void> {
+    const user = owned.user;
+    if (!user) return; // nothing was created: brokers only ever exist under the account
+    try {
+        // Unmount the page first, so nothing on it reloads the rows while they go.
+        await page.goto('about:blank');
+    } finally {
+        await deleteDisposableUser(request, user, owned.brokerIds);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -297,54 +401,75 @@ test.describe('Split & Promote', () => {
         const promoteBtn = page.locator('[data-testid="toolbar-action-promote"]');
         await expect(promoteBtn).toBeVisible({timeout: 3_000});
     });
+});
+
+// ---------------------------------------------------------------------------
+// C3 — the one test here that commits, on a pair of its own
+// ---------------------------------------------------------------------------
+
+// Same title as the block above, so the test keeps its full name. A block of its own
+// because the TEST_USER login above must not run for it: it signs in as the disposable
+// account that owns its pair.
+test.describe('Split & Promote', () => {
+    let owned: Owned = {user: null, brokerIds: []};
+
+    test.beforeEach(() => {
+        owned = {user: null, brokerIds: []};
+    });
+
+    // afterEach, not `finally`: it runs after a timeout too, and an error of its own is
+    // reported beside the test's instead of replacing it.
+    test.afterEach(async ({page, request}) => {
+        await cleanupOwned(page, request, owned);
+    });
 
     // -----------------------------------------------------------------------
     // C3 REGRESSION: Split + Edit → commit includes splits AND updates (no type in update)
     // -----------------------------------------------------------------------
 
-    test('C3: Split + edit quantity → commit payload has splits + updates without type', async ({page}) => {
+    test('C3: Split + edit quantity → commit payload has splits + updates without type', async ({page, request}, testInfo) => {
+        // The account goes through the real welcome flow before the split itself.
+        test.setTimeout(60_000);
+        const pair = await openAccountWithPair(page, request, owned, `c3_${testInfo.project.name}`);
         await goToTransactions(page);
 
-        // Find a splittable "delete-safe" row (Asset Transfer). Verified, not
-        // assumed: a neighbour may already have split the obvious candidate.
-        const pairedRowId = await findSplittableRowId(page, ['delete-safe']);
-        expect(pairedRowId, 'splittable delete-safe TX must exist — check populate_mock_data.py').toBeTruthy();
-
-        // Select the row and open BulkModal via Edit toolbar
-        await selectRow(page, pairedRowId!);
-        const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
+        // Select both halves of this test's own pair — by the ids it created, never by
+        // position — and open the BulkModal via the Edit toolbar. With two rows selected
+        // the workspace opens no FormModal by itself (with one it does, and may open it
+        // again after it has been dismissed), so the grid is reachable directly.
+        await selectRow(page, `tx-${pair.fromId}`);
+        await selectRow(page, `tx-${pair.toId}`);
+        await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', '2');
+        const editBtn = page.getByTestId('toolbar-action-edit');
         await expect(editBtn).toBeVisible({timeout: 2_000});
         await editBtn.click();
 
         // BulkModal should be open
-        const bulkModal = page.locator('[data-testid="tx-bulk-modal"]');
+        const bulkModal = page.getByTestId('tx-bulk-modal');
         await expect(bulkModal).toBeVisible({timeout: 3_000});
 
-        // Dismiss FormModal if it auto-opened (single row selection triggers it)
-        const formModalInit = page.locator('[data-testid="tx-form-modal"]');
-        if (await formModalInit.isVisible({timeout: 1_000}).catch(() => false)) {
-            await page.keyboard.press('Escape');
-            await expect(formModalInit).not.toBeVisible({timeout: 2_000});
-        }
+        // The pair arrives as one row, its receiver hidden behind it. Found by the giver's
+        // broker — a name only this account has — not by position: before the split and
+        // after it, that row is the giver's.
+        const giverRow = bulkModal.getByTestId('tx-bulk-body').locator('tr[data-row-id]').filter({hasText: pair.fromBroker});
+        await expect(giverRow).toHaveCount(1, {timeout: 5_000});
 
         // Click Split on the row — need to hover to reveal row actions
-        const bulkRow = bulkModal.locator('tr[data-row-id]').first();
-        await bulkRow.hover();
-        const splitBtn = bulkRow.getByTestId(/^row-actions-/);
-        await expect(splitBtn).toBeVisible({timeout: 2_000});
-        await splitBtn.click();
+        await giverRow.hover();
+        const rowActions = giverRow.getByTestId(/^row-actions-/);
+        await expect(rowActions).toBeVisible({timeout: 2_000});
+        await rowActions.click();
         await page.getByTestId('context-menu-action-split').click();
 
         // Verify split-queued badge appears in the header summary
-        const splitBadge = bulkModal.locator('[data-testid="split-queued-badge"]');
+        const splitBadge = bulkModal.getByTestId('split-queued-badge');
         await expect(splitBadge).toBeVisible({timeout: 2_000});
 
-        // Double-click first row to open FormModal (triggers handleEditRowClick)
-        const firstRow = bulkModal.locator('tr[data-row-id]').first();
-        await firstRow.dblclick();
+        // Double-click the giver row to open FormModal (triggers handleEditRowClick)
+        await giverRow.dblclick();
 
         // FormModal should open
-        const formModal = page.locator('[data-testid="tx-form-modal"]');
+        const formModal = page.getByTestId('tx-form-modal');
         await expect(formModal).toBeVisible({timeout: 3_000});
 
         // Change quantity value in the FormModal (keep negative to preserve TRANSFER 'from' side)
@@ -354,8 +479,7 @@ test.describe('Split & Promote', () => {
         await expect(qtyInput).toHaveValue('-0.002');
 
         // Save the FormModal
-        const saveBtn = formModal.locator('button[data-testid="tx-form-save"], button:has-text("Save"), button:has-text("Apply")').first();
-        await saveBtn.click();
+        await formModal.getByTestId('tx-form-save').click();
 
         // FormModal should close
         await expect(formModal).not.toBeVisible({timeout: 2_000});
@@ -390,7 +514,13 @@ test.describe('Split & Promote', () => {
         const qtyUpdate = requestBody.updates.find((u: any) => u.quantity != null);
         expect(qtyUpdate, 'Should find our quantity update').toBeTruthy();
 
-        // 5. Backend should accept it (no type error, no balance error with fixed mock data)
+        // 5. Backend should accept it (no type error, no balance error on the funded giver)
         expect(responseBody.committed, `Commit should succeed. Issues: ${JSON.stringify(responseBody.issues)}`).toBe(true);
+
+        // 6. ...and all of it is about this test's own pair: the split is that pair, the edit its giver
+        const ownPair = [pair.fromId, pair.toId].sort((a, b) => a - b);
+        const splitPairs = requestBody.splits.map((s: {id_a: number; id_b: number}) => [s.id_a, s.id_b].sort((a, b) => a - b));
+        expect(splitPairs, 'The split must be this test’s own pair').toEqual([ownPair]);
+        expect(qtyUpdate.id, 'The quantity edit must land on the giver this test double-clicked').toBe(pair.fromId);
     });
 });

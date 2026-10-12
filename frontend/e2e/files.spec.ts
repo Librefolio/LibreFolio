@@ -200,6 +200,10 @@ async function openStaticListView(page: Page): Promise<void> {
 
 async function openStaticGridView(page: Page): Promise<void> {
     await navigateTo(page, '/files?tab=static');
+    // navigateTo ends on hydration; on a full load the (app) layout then checks the session and loads the bootstrap
+    // before the page mounts, and the page loads its lists — seconds more under load. `files-page` publishes that load
+    // as data-busy, so the tab and the toggle below are read on a loaded page instead of within the 3 s default.
+    await waitForSettled(page.getByTestId('files-page'));
     await expect(page.getByTestId('files-tab-static')).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByTestId('view-mode-toggle')).toBeVisible({timeout: 8_000});
     await page.getByTestId('view-mode-grid').click();
@@ -550,6 +554,21 @@ test.describe('Files Page', () => {
     });
 
     test.describe('File Preview', () => {
+        /**
+         * Static files a test of this block uploaded, deleted after it: whoever writes, cleans up. In afterEach, not in
+         * a `finally`: the after-hooks run in a time slot of their own, so the file is deleted even when the test ran out
+         * of time — a `finally` shares the test's slot, and was itself cut by the timeout it followed.
+         */
+        let ownedStaticFiles: string[] = [];
+
+        test.beforeEach(() => {
+            ownedStaticFiles = [];
+        });
+
+        test.afterEach(async ({page}) => {
+            for (const fileId of ownedStaticFiles) await deleteStaticFile(page, fileId);
+        });
+
         test('opens markdown preview from static list view', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-${Date.now()}.md`, '# Hello preview\n\nThis is a markdown preview smoke test.\n', 'text/markdown');
 
@@ -833,29 +852,35 @@ test.describe('Files Page', () => {
         });
 
         test('pdf preview closes when its viewer is left empty', async ({page}) => {
+            // Every step waits on a state the page publishes: the files page's load, the preview's fetch, the viewer's
+            // error, its error card, the modal closing. Their sum on a loaded machine exceeded the 30 s default and the
+            // cleanup was what the timeout cut. Measured at four workers on a loaded machine: the preview's fetch (the
+            // shell's data-busy) 5–10 s, the viewer under 2 s after it. So the test gets the room its own budgets need,
+            // and a red ends on its own assertion.
+            test.setTimeout(60_000);
             // The backend takes the broken file as a PDF (its upload check sniffs the signature); the viewer cannot open
             // it and shows its own error card, whose one action, Close, closes the document. A viewer left without a
             // document only offers to open a file of one's own, so the preview closes with it (developer's decision).
             const fileId = await uploadStaticFile(page, `broken-${uniqueSuffix()}.pdf`, BROKEN_PDF, 'application/pdf');
-            try {
-                await openStaticGridView(page);
-                const previewButton = page.getByTestId(`file-grid-preview-${fileId}`);
-                await expect(previewButton).toBeVisible({timeout: 8_000});
-                await previewButton.click();
-                await waitForPreviewReady(page);
-                const stage = page.getByTestId('file-preview-pdf');
-                // Generous, as for ready: the viewer fetches its engine before it can tell the file is broken.
-                await expect(stage).toHaveAttribute('data-state', 'error', {timeout: 20_000});
+            ownedStaticFiles.push(fileId);
 
-                // The viewer's error card, by its shape: a title, the message, and its one button.
-                const close = stage.locator('div:has(> h3):has(> p) > button');
-                await expect(close).toBeVisible();
-                await close.click();
+            await openStaticGridView(page);
+            const previewButton = page.getByTestId(`file-grid-preview-${fileId}`);
+            await expect(previewButton).toBeVisible({timeout: 8_000});
+            await previewButton.click();
+            await waitForPreviewReady(page);
+            const stage = page.getByTestId('file-preview-pdf');
+            // Generous, as for ready: the viewer fetches its engine before it can tell the file is broken.
+            await expect(stage).toHaveAttribute('data-state', 'error', {timeout: 20_000});
 
-                await expect(page.getByTestId('file-preview-modal')).toBeHidden();
-            } finally {
-                await deleteStaticFile(page, fileId);
-            }
+            // The viewer's error card, by its shape: a title, the message, and its one button. The viewer draws it on
+            // the error the stage has just published; an explicit budget, not the 3 s default, for a busy renderer.
+            const close = stage.locator('div:has(> h3):has(> p) > button');
+            await expect(close).toBeVisible({timeout: 10_000});
+            await close.click();
+
+            // Close empties the viewer — a round trip to its engine's worker — and the preview closes with it.
+            await expect(page.getByTestId('file-preview-modal')).toBeHidden({timeout: 10_000});
         });
 
         test('opens table preview for BRIM files', async ({page}) => {

@@ -5,12 +5,48 @@ import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
 import {LANGUAGE_INFO, SUPPORTED_LANGUAGES, t} from './fixtures/i18n-data';
 import {uniqueSuffix} from './fixtures/unique';
 
+// The round trips a test makes before its subject: `/` asks GET /auth/me before it shows anything, a sign-in posts the
+// form, and the root page then loads the bootstrap before it routes the user on. They are the first steps a busy lane
+// delays — four workers on one backend, or a run that opens on a backend still warming up — and the 3 s expect default
+// is a localhost bet they lose. Each is awaited as the state the page publishes once the trip is over, never as a delay,
+// with the budgets the shared login() gives the same steps (10 s, then a retry of 10 s; the form gone within 20 s).
+const FIRST_PAINT_MS = 20_000;
+const SIGN_IN_MS = 20_000;
+// After the sign-in: the routing budgets the bootstrap tests below already give the same post-login routing.
+const ROUTED_MS = 15_000;
+const LANDED_MS = 10_000;
+/** The path, not just the word: a welcome forced on the user would read `/welcome?returnTo=%2Fdashboard`. */
+const DASHBOARD_URL = /\/dashboard(?:[/?#]|$)/;
+
+// login() alone may spend 10 s + 10 s on the first paint and 20 s on the sign-in, and the landing adds its own budgets:
+// past the 30 s default on a loaded machine. A red must end on its own assertion, not on the test timeout.
+test.setTimeout(60_000);
+
+/** Open `/` and end on the login: `login-page` renders only once the root page's GET /auth/me has answered. */
+async function openLoginPage(page: Page): Promise<void> {
+    await page.goto('/');
+    await expect(page.getByTestId('login-page')).toBeVisible({timeout: FIRST_PAINT_MS});
+}
+
+/**
+ * A sign-in that has landed. login() returns as soon as the form is gone, while the root page — still on `/`, showing
+ * `auth-loading` — loads the bootstrap and only then routes to /dashboard: the URL, then the page that renders there.
+ */
+async function expectLandedOnDashboard(page: Page): Promise<void> {
+    await expect(page).toHaveURL(DASHBOARD_URL, {timeout: ROUTED_MS});
+    await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: LANDED_MS});
+}
+
+/** The same landing for an account whose Welcome is still due: the bootstrap routes it to /welcome, behind the bare shell. */
+async function expectLandedOnWelcome(page: Page): Promise<void> {
+    await expect(page).toHaveURL(/\/welcome/, {timeout: ROUTED_MS});
+    await expect(page.getByTestId('welcome-shell')).toBeVisible({timeout: LANDED_MS});
+}
+
 test.describe('Authentication', () => {
     test.describe('Core Auth Flow (language-agnostic)', () => {
         test('login page renders correctly', async ({page}) => {
-            await page.goto('/');
-            // Wait for auth check to complete (3s timeout for localhost)
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            await openLoginPage(page);
             // Then check login form elements
             await expect(page.getByTestId('login-modal')).toBeVisible();
             await expect(page.getByTestId('login-form')).toBeVisible();
@@ -20,45 +56,43 @@ test.describe('Authentication', () => {
 
         test('successful login redirects to dashboard', async ({page}) => {
             await login(page, TEST_USER);
-            await expect(page).toHaveURL(/.*dashboard.*/);
-            await expect(page.getByTestId('dashboard-page')).toBeVisible();
+            await expectLandedOnDashboard(page);
         });
 
         test('invalid credentials show error', async ({page}) => {
-            await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            await openLoginPage(page);
             await page.getByTestId('login-username').fill('wronguser');
             await page.getByTestId('login-password').fill('wrongpass');
             await page.getByTestId('login-submit').click();
-            // Error message should appear (any language)
-            await expect(page.getByTestId('login-error')).toBeVisible({timeout: 3000});
+            // Error message should appear (any language): it is the answer of POST /auth/login, a sign-in's round trip.
+            await expect(page.getByTestId('login-error')).toBeVisible({timeout: SIGN_IN_MS});
         });
 
         test('logout returns to login page', async ({page}) => {
             await login(page, TEST_USER);
+            // Precondition: the shell is up — logout() clicks its sidebar button.
+            await expectLandedOnDashboard(page);
             await logout(page);
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            // Back on `/`, which asks GET /auth/me again before it shows the login.
+            await expect(page.getByTestId('login-page')).toBeVisible({timeout: FIRST_PAINT_MS});
             await expect(page.getByTestId('login-modal')).toBeVisible();
         });
 
         test('admin can login', async ({page}) => {
             await login(page, TEST_ADMIN);
-            await expect(page).toHaveURL(/.*dashboard.*/);
-            await expect(page.getByTestId('dashboard-page')).toBeVisible();
+            await expectLandedOnDashboard(page);
         });
     });
 
     test.describe('Register Modal', () => {
         test('can open register modal from login', async ({page}) => {
-            await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            await openLoginPage(page);
             await page.getByTestId('goto-register').click();
             await expect(page.getByTestId('register-modal')).toBeVisible();
         });
 
         test('register form has all required fields', async ({page}) => {
-            await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            await openLoginPage(page);
             await page.getByTestId('goto-register').click();
             await expect(page.getByTestId('register-modal')).toBeVisible();
 
@@ -71,8 +105,7 @@ test.describe('Authentication', () => {
         });
 
         test('password strength meter shows when typing', async ({page}) => {
-            await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            await openLoginPage(page);
             await page.getByTestId('goto-register').click();
             await expect(page.getByTestId('register-modal')).toBeVisible();
 
@@ -87,8 +120,7 @@ test.describe('Authentication', () => {
         });
 
         test('can navigate back to login from register', async ({page}) => {
-            await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            await openLoginPage(page);
             await page.getByTestId('goto-register').click();
             await expect(page.getByTestId('register-modal')).toBeVisible();
 
@@ -150,8 +182,7 @@ test.describe('Authentication', () => {
         test('the login page does not offer «Register here» once an admin closed registration', async ({page}) => {
             const stub = await closeRegistrationForThisPage(page);
 
-            await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 10_000});
+            await openLoginPage(page);
             await expect(page.getByTestId('login-form')).toBeVisible();
             // A sibling control of the link: the card is up, so a link missing below is the setting, not a slow page.
             await expect(page.getByTestId('goto-forgot')).toBeVisible();
@@ -168,15 +199,13 @@ test.describe('Authentication', () => {
 
     test.describe('Forgot Password Modal', () => {
         test('can open forgot password modal from login', async ({page}) => {
-            await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            await openLoginPage(page);
             await page.getByTestId('goto-forgot').click();
             await expect(page.getByTestId('forgot-modal')).toBeVisible();
         });
 
         test('can navigate back to login from forgot password', async ({page}) => {
-            await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            await openLoginPage(page);
             await page.getByTestId('goto-forgot').click();
             await expect(page.getByTestId('forgot-modal')).toBeVisible();
 
@@ -188,8 +217,7 @@ test.describe('Authentication', () => {
 
     test.describe('Language Selector', () => {
         test('language selector is visible and clickable', async ({page}) => {
-            await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            await openLoginPage(page);
             await expect(page.getByTestId('language-selector')).toBeVisible();
             await page.getByTestId('language-selector-button').click();
             // Dropdown should open with language options (use menuitem role to be specific)
@@ -207,8 +235,7 @@ test.describe('Authentication', () => {
             if (!info) continue;
 
             test(`switching to ${info.name} (${lang}) updates login button text`, async ({page}) => {
-                await page.goto('/');
-                await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+                await openLoginPage(page);
                 await setLanguage(page, lang as any);
 
                 // Get expected login button text for this language
@@ -378,7 +405,7 @@ test.describe('Integrated onboarding', () => {
 
     test('1: canonical seeded user lands on the real shell and is never forced through welcome', async ({page}) => {
         await login(page, TEST_USER);
-        await expect(page).toHaveURL(/.*dashboard.*/);
+        await expectLandedOnDashboard(page);
         await expect(page.getByTestId('welcome-shell')).toHaveCount(0);
         await expect(page.getByTestId('app-header')).toBeVisible();
     });
@@ -409,8 +436,7 @@ test.describe('Integrated onboarding', () => {
         const user = await registerDisposableUser(request, 'shell');
         try {
             await login(page, user);
-            await expect(page).toHaveURL(/\/welcome/);
-            await expect(page.getByTestId('welcome-shell')).toBeVisible();
+            await expectLandedOnWelcome(page);
             await expect(page.getByTestId('welcome-page')).toBeVisible();
             // Nothing from the ordinary authenticated shell renders behind it — the
             // (app)/+layout.svelte welcome branch mounts only <slot/>, no Sidebar, no
@@ -428,7 +454,7 @@ test.describe('Integrated onboarding', () => {
         const user = await registerDisposableUser(request, 'complete');
         try {
             await login(page, user);
-            await expect(page.getByTestId('welcome-shell')).toBeVisible();
+            await expectLandedOnWelcome(page);
             await expect(page.getByTestId('welcome-form')).toBeVisible({timeout: 10_000});
 
             await selectWelcomeLocale(page, 'it');
@@ -489,7 +515,7 @@ test.describe('Integrated onboarding', () => {
             // Terminal across a fresh session too.
             await logout(page);
             await login(page, user);
-            await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
+            await expectLandedOnDashboard(page);
             await expect(page.getByTestId('welcome-shell')).toHaveCount(0);
             await expect(page.getByTestId('onboarding-intro-scene')).toHaveCount(0);
             await expect(page.getByTestId('onboarding-coachmark')).toHaveCount(0);
@@ -502,7 +528,7 @@ test.describe('Integrated onboarding', () => {
         const user = await registerDisposableUser(request, 'skip');
         try {
             await login(page, user);
-            await expect(page.getByTestId('welcome-shell')).toBeVisible();
+            await expectLandedOnWelcome(page);
             await expect(page.getByTestId('welcome-form')).toBeVisible({timeout: 10_000});
 
             const progress = await page.request.get('/api/v1/settings/onboarding');
@@ -543,7 +569,7 @@ test.describe('Integrated onboarding', () => {
 
             await logout(page);
             await login(page, user);
-            await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
+            await expectLandedOnDashboard(page);
             await expect(page.getByTestId('welcome-shell')).toHaveCount(0);
             await expect(page.getByTestId('onboarding-intro-scene')).toHaveCount(0);
             await expect(page.getByTestId('onboarding-coachmark')).toHaveCount(0);
@@ -614,7 +640,8 @@ test.describe('Integrated onboarding', () => {
 
     test('4: a canonical terminal user landing directly on /welcome?returnTo=... with no replay token is redirected to the return target, never stuck on welcome', async ({page}) => {
         await login(page, TEST_USER);
-        await expect(page).toHaveURL(/.*dashboard.*/);
+        // Precondition: signed in and routed as a terminal user, before the direct load below.
+        await expectLandedOnDashboard(page);
 
         // TEST_USER is grandfathered `completed` on welcome (see this describe block's
         // seeding note) and carries no replay flag, so nothing here is "mid-onboarding".
@@ -638,7 +665,7 @@ test.describe('Integrated onboarding', () => {
         const user = await registerDisposableUser(request, 'boundary');
         try {
             await login(page, user);
-            await expect(page.getByTestId('welcome-shell')).toBeVisible();
+            await expectLandedOnWelcome(page);
             await expect(page.getByTestId('welcome-form')).toBeVisible({timeout: 10_000});
             // Deliberately mid-onboarding: never completed or skipped for this account —
             // the strongest version of the boundary check, since there is no terminal
@@ -648,6 +675,8 @@ test.describe('Integrated onboarding', () => {
             await expect(page.getByTestId('login-page')).toBeVisible({timeout: 10_000});
 
             await login(page, TEST_USER);
+            // Landed first: until the root page has routed, the absences below hold on `/` and prove nothing.
+            await expectLandedOnDashboard(page);
             await expect(page).not.toHaveURL(/\/welcome/);
             await expect(page.getByTestId('welcome-shell')).toHaveCount(0);
             await expect(page.getByTestId('app-header')).toBeVisible({timeout: 10_000});

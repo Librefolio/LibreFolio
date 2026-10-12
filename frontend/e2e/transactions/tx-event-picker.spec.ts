@@ -12,14 +12,22 @@
  * Mock data contract:
  *   - Apple has DIVIDEND event at today-3 (within ±7 default range)
  *   - e2e_test_user has OWNER on Interactive Brokers
+ *
+ * The inline-create test writes an asset event, so it never writes one on Apple: it
+ * creates a manual asset of its own, creates the event there, and deletes the asset —
+ * the event with it — afterwards. Its transaction form is never saved.
  */
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {appears, optionsClosed} from '../fixtures/probe';
+import {uniqueSuffix} from '../fixtures/unique';
 
 test.setTimeout(45_000);
+
+/** A manual asset this spec created: nothing but this spec ever uses it. */
+type OwnedAsset = {id: number; name: string};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,6 +81,22 @@ async function pickAssetByName(page: Page, name: string) {
     await optionsClosed(page);
 }
 
+/**
+ * Pick exactly the asset with this id: search its unique name, then click the option
+ * carrying its id — never the first option of whatever the search left.
+ */
+async function pickOwnedAsset(page: Page, asset: OwnedAsset) {
+    await page.getByTestId('tx-form-asset-trigger').click();
+    const searchInput = page.getByTestId('tx-form-asset-search');
+    await expect(searchInput).toBeVisible({timeout: 3_000});
+    await searchInput.fill(asset.name);
+    await expect(searchInput).toHaveValue(asset.name);
+    const option = page.getByTestId(`search-select-option-${asset.id}`);
+    await expect(option).toBeVisible({timeout: 3_000});
+    await option.click();
+    await optionsClosed(page);
+}
+
 /** Open the "Optional" disclosure if not already open. */
 async function openOptionalSection(page: Page) {
     const toggle = page.getByTestId('tx-form-optional-toggle');
@@ -98,14 +122,65 @@ async function setupDividendForm(page: Page) {
     // Date is auto-set to today by FormModal
 }
 
+/**
+ * A manual asset of this spec's own — where the inline modal's new event lands.
+ *
+ * Not Apple: an asset is a global row, so an event created on it is every other spec's
+ * input — the picker offers it to every DIVIDEND on Apple, and a DIVIDEND committed on
+ * Apple could link to it. Deleting it afterwards would not make Apple safe either: an
+ * event saved without an id is matched on (date, type) and updated IN PLACE, so on a
+ * day Apple already carries a DIVIDEND the "new" event would overwrite that one, and
+ * its cleanup would delete a row this spec never created. On an asset of its own the
+ * event can only be its own.
+ *
+ * The id is recorded for cleanup before anything about the result is checked.
+ */
+async function createOwnedAsset(page: Page, ownedAssetIds: number[]): Promise<OwnedAsset> {
+    const name = `E2E event picker ${uniqueSuffix()}`;
+    const response = await page.request.post('/api/v1/assets', {data: [{display_name: name, currency: 'USD', asset_type: 'STOCK'}]});
+    expect(response.ok(), `Owned asset setup: HTTP ${response.status()} ${await response.text()}`).toBe(true);
+    const body = (await response.json()) as {results: Array<{asset_id: number | null; display_name: string; success: boolean; message?: string}>};
+    const created = body.results.find((item) => item.display_name === name);
+    if (typeof created?.asset_id === 'number') ownedAssetIds.push(created.asset_id);
+    if (!created?.success || typeof created.asset_id !== 'number') throw new Error(`Owned asset setup returned no id for ${name}: ${created?.message ?? 'missing result'}`);
+    return {id: created.asset_id, name};
+}
+
+/** Delete the assets this spec created; their events go with them (asset_events cascade on the asset). */
+async function deleteOwnedAssets(page: Page, ownedAssetIds: readonly number[]): Promise<void> {
+    if (ownedAssetIds.length === 0) return;
+    try {
+        // Unmount the form first, so nothing on the page queries the asset while it goes.
+        await page.goto('about:blank');
+    } finally {
+        for (const id of ownedAssetIds) {
+            const response = await page.request.delete(`/api/v1/assets?asset_ids=${id}`);
+            expect(response.ok(), `Delete owned asset ${id}: HTTP ${response.status()} ${await response.text()}`).toBe(true);
+            const body = (await response.json()) as {results: Array<{asset_id: number; success: boolean; message?: string}>};
+            const result = body.results.find((item) => item.asset_id === id);
+            expect(result?.success, `Owned asset ${id} and its events are deleted: ${result?.message ?? 'missing result'}`).toBe(true);
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 test.describe('Event Picker', () => {
+    /** Assets created by the running test; deleted after it, whatever its outcome. */
+    let ownedAssetIds: number[] = [];
+
     test.beforeEach(async ({page}) => {
+        ownedAssetIds = [];
         await login(page, TEST_USER);
         await goToTransactions(page);
+    });
+
+    // afterEach, not `finally`: it runs after a timeout too, and an error of its own is
+    // reported beside the test's instead of replacing it.
+    test.afterEach(async ({page}) => {
+        await deleteOwnedAssets(page, ownedAssetIds);
     });
 
     test('picker hidden for BUY type', async ({page}) => {
@@ -168,7 +243,16 @@ test.describe('Event Picker', () => {
     });
 
     test('create new event via inline modal', async ({page}) => {
-        await setupDividendForm(page);
+        // The event lands on an asset of this test's own (see createOwnedAsset). The page
+        // keeps its assets in a session cache loaded before the asset existed: load it again.
+        const asset = await createOwnedAsset(page, ownedAssetIds);
+        await goToTransactions(page);
+
+        // The same DIVIDEND form on Interactive Brokers, on the owned asset. Never saved.
+        await openCreateFlow(page);
+        await selectType(page, 'DIVIDEND');
+        await pickBroker(page, 'Interactive Brokers');
+        await pickOwnedAsset(page, asset);
         await openOptionalSection(page);
 
         // Open event picker dropdown
@@ -185,17 +269,21 @@ test.describe('Event Picker', () => {
         const modal = page.getByTestId('event-create-mini-modal');
         await expect(modal).toBeVisible({timeout: 3_000});
 
-        // Type should default to DIVIDEND (SimpleSelect shows text)
+        // Type should default to DIVIDEND. The select shows the type's icon beside its
+        // label: 💰 is DIVIDEND's, and unlike the label it is not translated text.
         const typeSelect = page.getByTestId('event-create-type');
-        await expect(typeSelect).toContainText('Dividend', {timeout: 3_000});
+        await expect(typeSelect).toContainText('💰', {timeout: 3_000});
 
         // Fill amount
         const amountInput = page.getByTestId('event-create-amount');
         await amountInput.fill('1.50');
+        await expect(amountInput).toHaveValue('1.50');
 
-        // Fill notes
+        // Fill notes — a marker only this test writes
+        const note = `E2E test event ${uniqueSuffix()}`;
         const notesInput = page.getByTestId('event-create-notes');
-        await notesInput.fill('E2E test event');
+        await notesInput.fill(note);
+        await expect(notesInput).toHaveValue(note);
 
         // Submit
         const submitBtn = page.getByTestId('event-create-submit');
@@ -204,7 +292,9 @@ test.describe('Event Picker', () => {
         // Modal should close and event should be auto-selected
         await expect(modal).not.toBeVisible({timeout: 10_000});
 
-        // The trigger should now show the newly created event (with 💰 emoji)
+        // The trigger should now show the newly created event (with 💰 emoji) — this
+        // test's own, by the note only it wrote
         await expect(trigger).toContainText('💰', {timeout: 5_000});
+        await expect(trigger).toContainText(note);
     });
 });

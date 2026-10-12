@@ -48,6 +48,6 @@ goes further: seventeen subsystem catalogues plus a `base`, and each plugin's tr
 | Plugin names and descriptions | `frontend/src/lib/utils/brim/pluginText.ts` |
 | Notices and evidence captions | `frontend/src/lib/utils/transactions/resolveBrimNotice.ts` |
 | Refusals | `frontend/src/lib/utils/brim/defaultPluginCheck.ts` |
-| The catalogue | `frontend/src/lib/i18n/en.json` |
+| The catalogue | `frontend/src/lib/i18n/base/en.json` |
 | `TestPluginTextCatalogues` | `backend/test_scripts/test_external/test_brim_providers.py` |
 | `TestWhatTheWizardWords` | `backend/test_scripts/test_external/test_brim_scalable.py` |
