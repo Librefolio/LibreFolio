@@ -17,7 +17,6 @@
     import {ExternalLink, Layers} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import ContextMenu, {type ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -26,6 +25,8 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface AssetPeriodContribution {
         asset_id: number;
@@ -172,7 +173,7 @@
         // to zero; `-0 === 0`, so a negative zero becomes +0, which `auto` would print `-0`.
         const signDisplay = showSign ? 'exceptZero' : 'auto';
         const value = amount === 0 ? 0 : amount;
-        const formatted = abs >= 1000 ? new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1, signDisplay}).format(value) : value.toLocaleString(undefined, {minimumFractionDigits: abs % 1 === 0 ? 0 : 2, maximumFractionDigits: 2, signDisplay});
+        const formatted = abs >= 1000 ? new Intl.NumberFormat(uiLocale(), {notation: 'compact', maximumFractionDigits: 1, signDisplay}).format(value) : value.toLocaleString(uiLocale(), {minimumFractionDigits: abs % 1 === 0 ? 0 : 2, maximumFractionDigits: 2, signDisplay});
         const sign = LEADING_SIGN.exec(formatted)?.[0] ?? '';
         const compact = formatted.slice(sign.length);
         // D8: sign, symbol and currency stay readable. The compact suffix goes inside the
@@ -185,13 +186,11 @@
         // amount has none (`2K`). D23: the signed amount goes in, so the minus is the locale's;
         // a negative zero prints `0`. D8: the sign stays outside the mask, the compact suffix
         // inside it, zero included (D12).
-        return maskFormattedNumber(new Intl.NumberFormat(undefined, {notation: 'compact', maximumSignificantDigits: 15}).format(amount === 0 ? 0 : amount));
+        return maskFormattedNumber(new Intl.NumberFormat(uiLocale(), {notation: 'compact', maximumSignificantDigits: 15}).format(amount === 0 ? 0 : amount));
     }
 
     function formatSignedPercent(value: number): string {
-        const normalized = Object.is(value, -0) ? 0 : value;
-        const sign = normalized > 0 ? '+' : '';
-        return `${sign}${normalized.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}%`;
+        return formatPercent(value, {digits: 1});
     }
 
     function openingPctSuffix(value: number, openingValue: number): string {
@@ -1138,7 +1137,7 @@
         void isMobile;
         void axisBound;
         void labels;
-        void $currentLanguage;
+        void uiLocale();
         // Read here, not in renderChart: the render runs inside `tick().then`, where a read
         // registers no dependency, so the privacy toggle would not redraw the labels.
         void shouldMaskAmount();

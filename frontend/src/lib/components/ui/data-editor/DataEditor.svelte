@@ -29,6 +29,7 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ErasableNumberCell from './ErasableNumberCell.svelte';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Props
@@ -103,7 +104,7 @@
     function weekday(dateStr: string): string {
         try {
             const d = new Date(dateStr + 'T00:00:00Z');
-            return d.toLocaleDateString('en-US', {weekday: 'short', timeZone: 'UTC'});
+            return d.toLocaleDateString(uiLocale(), {weekday: 'short', timeZone: 'UTC'});
         } catch {
             return '';
         }
@@ -151,7 +152,7 @@
         const cols: DTColumnDef<DataRow>[] = [
             {
                 id: 'date',
-                header: 'Date',
+                header: $t('common.date'),
                 type: 'date',
                 cell: (r) => {
                     // Editable date for appended rows
@@ -176,7 +177,7 @@
                     if (stale > 0) {
                         return {
                             type: 'html',
-                            html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">${wd}</span> <span class="ml-1 text-[10px] text-amber-600 dark:text-amber-400" title="${stale} days stale">⚠️ ${stale}d</span></span>`,
+                            html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">${wd}</span> <span class="ml-1 text-[10px] text-amber-600 dark:text-amber-400" title="${escapeHtml($t('chart.tooltip.stale', {values: {days: stale}}))}">⚠️ ${stale}d</span></span>`,
                         };
                     }
                     return {
@@ -202,7 +203,7 @@
                         cell: (r) => {
                             if (r.readonly) {
                                 const val = r.values[col.key];
-                                const display = val != null ? Number(val).toLocaleString(undefined, {maximumFractionDigits: 4}) : '—';
+                                const display = val != null ? Number(val).toLocaleString(uiLocale(), {maximumFractionDigits: 4}) : '—';
                                 return {
                                     type: 'html',
                                     html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${display}</span>`,

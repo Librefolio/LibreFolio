@@ -17,7 +17,7 @@
  * No translated text is asserted; `kpi-total-pnl-delta` and `kpi-returns` are
  * the structural anchors.
  */
-import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
 import {get} from 'svelte/store';
 import {locale, waitLocale} from 'svelte-i18n';
@@ -34,6 +34,8 @@ vi.mock('$lib/api', () => ({
 }));
 
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import enCatalogue from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
 // Namespace import on purpose: the hydration context (page cache, phase 1) is read by name below, so
 // the F5 and V2 cases keep running while `TweenedValue.svelte` does not export it yet.
 import * as Tweened from '$lib/components/ui/TweenedValue.svelte';
@@ -688,5 +690,136 @@ describe('KpiSection — percentages in the UI language (M-18)', () => {
 
         await switchLanguage('en');
         expect(readPercentages(), 'fr → en in place — today’s text again').toEqual(ENGLISH);
+    });
+});
+
+/**
+ * M-18 CP2: the KPI amounts and the timing effect in the UI language.
+ *
+ * Amounts follow the UI language like the percentages of CP1 (the developer's rule of 2026-10-12). Every
+ * money figure of the row goes through `formatCurrencyAmountPlain`, which wrote its number with
+ * `toLocaleString(undefined, …)` — the browser's notation, never the UI's. Timing effect
+ * (`kpi-timing-effect-value`, `mwrr_cum − twrr` in percentage points) is written by hand in the template
+ * the same way, and puts a `+` before every value not below zero, zero included. The cure: the
+ * formatter's number defaults to `uiLocale()`, the timing effect takes its number from the same source,
+ * and zero carries no sign (CP1's rule); the unit stays `dashboard.pp`.
+ *
+ * Fixture. The file's summary: net worth 10 500 EUR; TWRR 40% and MWRR cumulative 45%, a timing effect of
+ * +5 pp; and a variant with both returns at 40%, a timing effect of exactly zero.
+ *
+ * Subjects. Card 3's hero (`kpi-net-worth` → `kpi-value`), the net worth through
+ * `formatCurrencyAmountPlain(…, 'EUR')`: no currency cache is loaded here, so the amount is followed by
+ * its code alone, a composition the English control pins on today's exact text. Timing effect, read
+ * whole: sign and number, then the unit read from the shipped catalogue of the step's language.
+ *
+ * Expectations. Italian digits come from `Intl.NumberFormat('it', …)` in this runtime, never typed;
+ * English is today's exact text, typed — jsdom's browser is en-US, so the English UI keeps en-US notation.
+ *
+ * Language. Switched as LanguageSelector does — `currentLanguage.set` — with both catalogues loaded first.
+ * KpiSection is a runes component: the in-place test is what proves the figures read the UI language
+ * reactively, not merely right at mount. The page cache's hydration context puts every figure at its
+ * value on the first frame, so no read waits on an animation.
+ */
+describe('KpiSection — amounts and the timing effect in the UI language (M-18 CP2)', () => {
+    const hydration = Tweened as unknown as {TWEEN_HYDRATION_CONTEXT?: unknown};
+    type UiLanguage = 'en' | 'it';
+    /** The interface locale of each language here: jsdom's browser is en-US. */
+    const LOCALE_OF: Record<UiLanguage, string> = {en: 'en-US', it: 'it'};
+    const CATALOGUES = {en: enCatalogue, it: itCatalogue};
+
+    const NET_WORTH = Number(summary().net_worth.amount);
+    /** mwrr_cumulative − twrr of the file's summary, in percentage points: 45 − 40. */
+    const TIMING_PP = 5;
+
+    type Reading = {netWorth: string; timing: string};
+
+    /** Today's English text, exactly. */
+    const ENGLISH: Reading = {netWorth: '10,500.00 EUR', timing: '+5.00 pp'};
+
+    /** Two decimals, in `locale`'s notation. */
+    const twoDecimals = (locale: string, value: number): string => new Intl.NumberFormat(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
+    /** The unit of the timing effect, as the shipped catalogue of `lang` writes it. */
+    const ppIn = (lang: UiLanguage): string => CATALOGUES[lang].dashboard.pp;
+    /** What the two figures read in `lang`. */
+    const readingIn = (lang: UiLanguage): Reading => ({
+        netWorth: `${twoDecimals(LOCALE_OF[lang], NET_WORTH)} EUR`,
+        timing: `+${twoDecimals(LOCALE_OF[lang], TIMING_PP)} ${ppIn(lang)}`,
+    });
+    const ITALIAN = readingIn('it');
+
+    const netWorthHero = (): HTMLElement => within(screen.getByTestId('kpi-net-worth')).getByTestId('kpi-value');
+    const timingEffect = (): HTMLElement => within(screen.getByTestId('kpi-returns')).getByTestId('kpi-timing-effect-value');
+    /** Trimmed only: a no-break space inside is the notation. */
+    const shown = (element: HTMLElement): string => (element.textContent ?? '').trim();
+    const readFigures = (): Reading => ({netWorth: shown(netWorthHero()), timing: shown(timingEffect())});
+
+    /** The KPI row, every figure at its value on the first frame. */
+    function mountKpis(overrides: Partial<ReturnType<typeof summary>> = {}): void {
+        expect(hydration.TWEEN_HYDRATION_CONTEXT, 'control: TweenedValue exports its hydration context').toBeDefined();
+        render(KpiSection, {
+            props: {summary: {...summary(), ...overrides}, history: [], loading: false, displayCurrency: 'EUR'},
+            context: new Map([[hydration.TWEEN_HYDRATION_CONTEXT, () => true]]),
+        });
+    }
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: UiLanguage): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; Italian joins it, so a switch never waits on a loader.
+        await waitLocale('it');
+        // Controls: today's English is what Intl writes for en-US, and this runtime has Italian ICU data.
+        expect(readingIn('en'), 'English, from Intl and the catalogue').toEqual(ENGLISH);
+        expect(ITALIAN.netWorth, 'the Italian net worth differs from English').not.toBe(ENGLISH.netWorth);
+        expect(ITALIAN.timing, 'the Italian timing effect differs from English').not.toBe(ENGLISH.timing);
+    });
+
+    beforeEach(() => {
+        // A masked amount has no notation: privacy is module-level state, off for this block.
+        setPrivacyEnabled(false);
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('English UI (control): the net worth and the timing effect print exactly today’s text', () => {
+        mountKpis();
+
+        expect(readFigures()).toEqual(ENGLISH);
+    });
+
+    it('mounted with the UI in Italian: the net worth and the timing effect in Italian notation', async () => {
+        await switchLanguage('it');
+        mountKpis();
+
+        expect(readFigures()).toEqual(ITALIAN);
+    });
+
+    it('follows an in-place switch of the UI language, en → it → en', async () => {
+        mountKpis();
+        expect(readFigures(), 'en, mount — today’s text').toEqual(ENGLISH);
+
+        await switchLanguage('it');
+        expect(readFigures(), 'en → it in place — Italian notation').toEqual(ITALIAN);
+
+        await switchLanguage('en');
+        expect(readFigures(), 'it → en in place — today’s text again').toEqual(ENGLISH);
+    });
+
+    it.each(['en', 'it'] as const)('a timing effect of exactly zero carries no sign (%s)', async (lang) => {
+        await switchLanguage(lang);
+        // Both returns at 40%: mwrr_cum − twrr is exactly 0.
+        mountKpis({twrr_percent: '0.40', mwrr_cumulative_percent: '0.40'});
+
+        expect(shown(timingEffect())).toBe(`${twoDecimals(LOCALE_OF[lang], 0)} ${ppIn(lang)}`);
     });
 });

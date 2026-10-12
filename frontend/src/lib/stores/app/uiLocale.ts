@@ -6,8 +6,9 @@
  * amount written another way. The browser contributes only its region, and only when its primary
  * language is the interface language: an English interface on an `en-GB` browser stays British, on
  * an `en-US` browser American, and an Italian one on `it-CH` keeps the Swiss decimal point. Any
- * other combination takes the language's own default — `en-GB` for English (12/10/2026,
- * 12 Oct 2026, 14:05), the bare language for Italian, French and Spanish.
+ * other combination — a browser in another language, or one naming no region (`en`) — takes the
+ * language's own default: `en-GB` for English (12/10/2026, 12 Oct 2026, 14:05), the bare language
+ * for Italian, French and Spanish.
  *
  * Only `navigator.language`, the primary tag, is read. Browsers list `en-US` among the secondary
  * languages of most users, so reading the list would give an Italian who chose English American
@@ -39,7 +40,12 @@ function canonicalTag(tag: string): string | undefined {
 export function resolveUiLocale(uiLanguage: string, browserTag: string | null | undefined): string {
     const language = uiLanguage.trim().toLowerCase();
     const tag = browserTag ? canonicalTag(browserTag.trim()) : undefined;
-    if (tag && tag.split('-')[0].toLowerCase() === language) return tag;
+    if (tag) {
+        // The browser contributes its region and nothing else: a bare `en` (or `en-Latn`) names none,
+        // and kept as it is Intl would write it American (10/12/2026, 2:05 PM).
+        const browser = new Intl.Locale(tag);
+        if (browser.language === language && browser.region) return tag;
+    }
     return LANGUAGE_DEFAULTS[language] ?? language;
 }
 

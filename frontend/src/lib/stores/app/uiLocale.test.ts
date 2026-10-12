@@ -1,12 +1,16 @@
 /**
- * uiLocale — the locale every number is written in (M-18 CP1).
+ * uiLocale — the locale every number is written in (M-18 CP1, CP2).
  *
  * The rule, the developer's (2026-10-12): numbers follow the language of the UI, not the machine. The
  * browser only chooses the region, and only when it speaks the same language:
  *
- *   - UI language L, browser primary tag B (`navigator.language`): when B's language is L, B itself,
- *     canonical and with its region — `it-CH` writes `4788.01`, `fr-CA` has dates of its own;
- *   - otherwise L's default: `en-GB` for English, the bare language for the others;
+ *   - UI language L, browser primary tag B (`navigator.language`): when B's language is L and B names a
+ *     region, B itself, canonical — `it-CH` writes `4788.01`, `fr-CA` has dates of its own, and a numeric
+ *     region is a region too: `es-419`, Latin America;
+ *   - otherwise L's default: `en-GB` for English, the bare language for the others. That includes a B in
+ *     L that names no region (CP2, "English without a region falls back to en-GB"): a bare `en`, or an
+ *     `en-Latn` with only a script, has no region to lend — and kept as it is, a bare `en` is written by
+ *     Intl as American, `10/12/2026` and `2:05 PM`;
  *   - only the primary tag counts. Chrome lists `en-US` second on almost every install, so scanning the
  *     list would send an Italian reading the English UI to American conventions; equally, an English
  *     browser does not lend the `it-CH` it lists second to the Italian UI.
@@ -76,15 +80,24 @@ afterEach(() => {
 
 describe('resolveUiLocale — the UI language, with the browser’s region only when the two agree', () => {
     it.each([
-        // The browser speaks the UI language: its own tag, region included.
+        // The browser speaks the UI language and names a region: its own tag, region included.
         ['en', 'en-US', 'en-US'],
         ['en', 'en-GB', 'en-GB'],
         ['it', 'it-CH', 'it-CH'],
         ['fr', 'fr-CA', 'fr-CA'],
         ['es', 'es-MX', 'es-MX'],
-        ['it', 'it', 'it'],
+        // …a numeric region is a region: es-419, Latin America (UN M.49), is kept just as es-MX is.
+        ['es', 'es-419', 'es-419'],
         // …compared without regard to case, and returned canonical.
         ['IT', 'it-ch', 'it-CH'],
+        // The browser speaks the UI language but names no region: nothing to lend, the UI language's default.
+        // English is where it shows: a bare en kept as it is would be written American (10/12/2026, 2:05 PM).
+        ['en', 'en', 'en-GB'],
+        // …and a script is not a region.
+        ['en', 'en-Latn', 'en-GB'],
+        // …for the others the default is the bare language, the very tag the browser gave.
+        ['it', 'it', 'it'],
+        ['fr', 'fr', 'fr'],
         // Another language: the UI language's default — en-GB for English, the bare language otherwise.
         ['en', 'it-IT', 'en-GB'],
         ['it', 'en-US', 'it'],
@@ -180,6 +193,13 @@ describe('uiLocaleStore and uiLocale() — the browser’s own tag', () => {
         graph.currentLanguage.set('it');
 
         expect(bothFaces(graph)).toEqual(as('it-CH'));
+    });
+
+    it('English UI on a bare en browser, which names no region: en-GB through both faces', async () => {
+        const graph = await boot('en');
+
+        expect(graph.store.get(graph.currentLanguage), 'control: the UI starts in English').toBe('en');
+        expect(bothFaces(graph), 'kept as it is, a bare en is written American by Intl: 10/12/2026, 2:05 PM').toEqual(as('en-GB'));
     });
 
     it('only the primary tag counts: an en-US browser listing it-CH second leaves the Italian UI on it', async () => {

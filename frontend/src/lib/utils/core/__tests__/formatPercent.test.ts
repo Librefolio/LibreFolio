@@ -9,6 +9,7 @@ vi.hoisted(() => {
 
 import {waitLocale} from 'svelte-i18n';
 import {currentLanguage} from '$lib/stores/app/language';
+import {formatFixed} from '../formatFixed';
 import {formatPercent, type FormatPercentOptions} from '../formatPercent';
 
 /**
@@ -317,5 +318,138 @@ describe('formatPercent — without a locale, the UI language (M-18)', () => {
         expect(formatPercent(-0, {suffix: 'pp'})).toBe(`${intlNumber('fr', 0)}pp`);
         expect(formatPercent(null)).toBe('—');
         expect(formatPercent(NaN, {suffix: 'pp', empty: 'n/a'})).toBe('n/a');
+    });
+});
+
+/**
+ * M-18 CP2 — `trim`: the decimals the figure has, up to `digits`.
+ *
+ * Four charts print a percentage by interpolating the number itself — `${params.value}%` in the
+ * allocation pie and the geography map, `${value}%` on the allocation history's y axis, `${percentage}%`
+ * in a signal's coverage — so a French reader gets `44.5%`, and each figure carries only the decimals it
+ * has: `44.5%`, `24%`. Written with fixed digits they would read `44,50 %` and `24,00 %`, which changes
+ * what the chart says, not only how. `trim` keeps the shape and moves only the notation: `digits` becomes
+ * a maximum, and the trailing zeros go.
+ *
+ *   - `%`: `Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: 0, maximumFractionDigits:
+ *     digits})`, after the same `toFixed(digits)` pre-rounding as without `trim`;
+ *   - another suffix: `formatFixed(value, digits, {trim: true, locale})`, then the suffix as written;
+ *   - `signed`, the `-0` guard and the placeholder keep their meaning; `trim` defaults to `false`, and
+ *     without it nothing changes.
+ *
+ * Expectations come from `Intl` in this runtime, or from `formatFixed` with `trim`, never typed but for
+ * English, which is typed where it is today's text or the trimmed text of the rule. `trim` is typed in
+ * through `trimmed`, as `locale` once was in its own block, so the file type-checks before
+ * `FormatPercentOptions` declares the option.
+ */
+describe('formatPercent — trim (M-18 CP2)', () => {
+    /** `trim` typed in, so this block type-checks before FormatPercentOptions declares it. */
+    const trimmed = (value: number | null | undefined, options: FormatPercentOptions & {trim?: boolean}) => formatPercent(value, options);
+
+    /** A percentage as Intl writes it with at most `digits` decimals, after `toFixed(digits)` has rounded it: what `trim` must print. */
+    const intlTrimmed = (locale: string, value: number, digits = 2) => new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: digits}).format(Number(value.toFixed(digits)) / 100);
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        await uiLanguage('en');
+    });
+
+    it('without trim (guard): the fixed digits of today, trailing zeros included', () => {
+        expect(formatPercent(44.5, {digits: 2, signed: false})).toBe('44.50%');
+        expect(formatPercent(44, {digits: 2, signed: false})).toBe('44.00%');
+        expect(trimmed(44.5, {digits: 2, signed: false, trim: false}), 'trim: false is the default').toBe('44.50%');
+    });
+
+    it('English UI on an en-US browser: the decimals the figure has, up to digits', () => {
+        const written = {
+            half: trimmed(44.5, {digits: 2, signed: false, trim: true}),
+            whole: trimmed(44, {digits: 2, signed: false, trim: true}),
+            two: trimmed(12.35, {digits: 2, signed: false, trim: true}),
+            capped: trimmed(12.3456, {digits: 2, signed: false, trim: true}),
+            oneDigit: trimmed(87.6, {digits: 1, signed: false, trim: true}),
+        };
+
+        expect(written).toEqual({half: '44.5%', whole: '44%', two: '12.35%', capped: '12.35%', oneDigit: '87.6%'});
+    });
+
+    it('rounds as without trim — toFixed’s digits, not Intl’s — then drops the trailing zeros', () => {
+        // Controls: on these figures Intl's own rounding would land elsewhere (2.675 → 2.68, 1.2345 → 1.235),
+        // so the case tells the two roundings apart.
+        expect(new Intl.NumberFormat('en-US', {style: 'percent', maximumFractionDigits: 2}).format(2.675 / 100)).toBe('2.68%');
+        expect(new Intl.NumberFormat('en-US', {style: 'percent', maximumFractionDigits: 3}).format(1.2345 / 100)).toBe('1.235%');
+
+        expect({
+            roundsToWhole: trimmed(44.999, {digits: 2, signed: false, trim: true}),
+            roundsToTenth: trimmed(1.005, {digits: 2, signed: false, trim: true}),
+            tie2: trimmed(2.675, {digits: 2, signed: false, trim: true}),
+            tie3: trimmed(1.2345, {digits: 3, signed: false, trim: true}),
+        }).toEqual({roundsToWhole: '45%', roundsToTenth: '1%', tie2: '2.67%', tie3: '1.234%'});
+    });
+
+    it('keeps the + of a signed positive, gives a zero no sign, and a negative its own minus', () => {
+        expect({
+            gain: trimmed(44.5, {digits: 2, trim: true}),
+            zero: trimmed(0, {digits: 2, trim: true}),
+            negativeZero: trimmed(-0, {digits: 2, trim: true}),
+            loss: trimmed(-3.2, {digits: 2, trim: true}),
+        }).toEqual({gain: '+44.5%', zero: '0%', negativeZero: '0%', loss: '-3.2%'});
+    });
+
+    it('an explicit French locale: French notation, with the decimals the figure has', () => {
+        const expected = {half: intlTrimmed('fr', 44.5), whole: intlTrimmed('fr', 44), signed: `+${intlTrimmed('fr', 44.5)}`, zero: intlTrimmed('fr', 0)};
+        // Control: this runtime carries French data, so the French text is not the English one.
+        expect(expected.half, 'French differs from English').not.toBe('44.5%');
+
+        const written = {
+            half: trimmed(44.5, {digits: 2, signed: false, trim: true, locale: 'fr'}),
+            whole: trimmed(44, {digits: 2, signed: false, trim: true, locale: 'fr'}),
+            signed: trimmed(44.5, {digits: 2, trim: true, locale: 'fr'}),
+            zero: trimmed(0, {digits: 2, trim: true, locale: 'fr'}),
+        };
+        expect(written, spelled(expected)).toEqual(expected);
+    });
+
+    it('French UI, no locale passed: the interface locale, trimmed', async () => {
+        await uiLanguage('fr');
+        const expected = {half: intlTrimmed('fr', 44.5), whole: intlTrimmed('fr', 44), twelve: intlTrimmed('fr', 12.35)};
+
+        const written = {
+            half: trimmed(44.5, {digits: 2, signed: false, trim: true}),
+            whole: trimmed(44, {digits: 2, signed: false, trim: true}),
+            twelve: trimmed(12.35, {digits: 2, signed: false, trim: true}),
+        };
+        expect(written, spelled(expected)).toEqual(expected);
+    });
+
+    it('another suffix: the number trimmed by formatFixed, then the suffix as written', () => {
+        const expected = {
+            en: `${formatFixed(44.5, 2, {trim: true, locale: 'en-US'})}pp`,
+            whole: `${formatFixed(44, 2, {trim: true, locale: 'en-US'})}pp`,
+            fr: `${formatFixed(44.5, 2, {trim: true, locale: 'fr'})}pp`,
+        };
+        // Control: the trimmed English text is what the rule says.
+        expect({en: expected.en, whole: expected.whole}).toEqual({en: '44.5pp', whole: '44pp'});
+
+        const written = {
+            en: trimmed(44.5, {digits: 2, signed: false, trim: true, suffix: 'pp'}),
+            whole: trimmed(44, {digits: 2, signed: false, trim: true, suffix: 'pp'}),
+            fr: trimmed(44.5, {digits: 2, signed: false, trim: true, suffix: 'pp', locale: 'fr'}),
+        };
+        expect(written, spelled(expected)).toEqual(expected);
+    });
+
+    it('a missing value keeps its placeholder (guard)', () => {
+        expect(trimmed(null, {digits: 2, trim: true})).toBe('—');
+        expect(trimmed(NaN, {digits: 2, trim: true, empty: 'n/a'})).toBe('n/a');
     });
 });

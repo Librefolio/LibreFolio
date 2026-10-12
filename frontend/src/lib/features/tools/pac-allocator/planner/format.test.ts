@@ -42,10 +42,11 @@
  * minor unit as both fraction bounds), with `≈` in front where the rounding changed the value.
  * That would be circular if the shared formatter were broken. So the digits of the clear outputs
  * are checked once against the value put in, and each case that turns on the rounding also checks
- * that the dropped digits are gone. The L2 distance prints its digits with the host's plain number
- * format (`toLocaleString`, at most two decimals), so its expected text is that format applied to
- * the rounded value, its digits are checked in every case, and its values stay below 1000 so that
- * no grouping separator is involved. Masked strings and solver counts have no locale (a
+ * that the dropped digits are gone. The L2 distance prints its digits with the plain number format
+ * (`toLocaleString`, at most two decimals) of the interface locale — en-US in every case but the
+ * M-18 block's, where the UI is English and the browser pinned to en-US — so its expected text is
+ * that format applied to the rounded value, its digits are checked in every case, and its values
+ * stay below 1000 so that no grouping separator is involved. Masked strings and solver counts have no locale (a
  * placeholder, and `formatDecimalForDisplay`), so those are exact literals. So are the plural
  * counts, plain numbers. `toBe` compares them with `Object.is`, so NaN matches NaN; a plural rule
  * reads -0 as 0, and the table of counts does too.
@@ -65,8 +66,23 @@
  *
  * Storage. The shared `$app/environment` mock reports `browser: false`, so `setPrivacyEnabled`
  * moves the in-memory rune and never touches `localStorage`.
+ *
+ * The interface language (M-18 CP2). Every figure is written in the interface language — the
+ * developer's rule of 2026-10-12 — through one source, `uiLocale()`: the UI language, regionalised by
+ * the browser only when the two agree. Without a locale, the planner's calendar dates
+ * (`formatPlannerDate`), timestamps (`formatPlannerTimestamp`), copy stamps (`formatCopyStamp`) and
+ * the digits of an L2 distance follow it; until now they followed the browser (`locale ?? undefined`,
+ * `toLocaleString(undefined, …)`). An explicit locale still wins. The browser is pinned to en-US
+ * before any import, since Node's follows the host's ICU locale: an English UI is written en-US, an
+ * Italian one bare `it` (an en-US browser lends no region to Italian, uiLocale.test.ts). The language
+ * is switched as LanguageSelector does and put back to English after every case of that block.
  */
-import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+
+// The browser, pinned before any import: the interface locale takes its region from it.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
 
 // The currency catalogue is the only request in this graph. It is answered so that the output
 // carries a real symbol and flag; everything else is inert.
@@ -93,18 +109,25 @@ import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.
 import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
+import {defaultAsOf} from './defaults';
 import {
     catalogCurrencyDigits,
     exactMoneyDisplay,
     exactQuantityCount,
+    formatCopyStamp,
     formatExactMoneyHtml,
     formatExactMoneyPlain,
     formatExactQuantity,
     formatObjectiveValue,
+    formatPlannerDate,
     formatPlannerL2,
     formatPlannerMoneyPlain,
     formatPlannerPlainDecimal,
     formatPlannerQuantity,
+    formatPlannerTimestamp,
     formatSolverNumber,
     plannerPlainDecimalCount,
     plannerQuantityCount,
@@ -148,9 +171,16 @@ function sharedHtml(amount: number, code: string, minFraction: number, maxFracti
     return formatCurrencyAmountHtml(amount, code, {minFraction, maxFraction, showSign, sensitivity: 'personal'});
 }
 
-/** The host's plain number with at most two decimals: how the L2 formatter prints its digits. */
-function plainNumber(amount: number): string {
-    return amount.toLocaleString(undefined, {maximumFractionDigits: 2});
+/**
+ * The interface locale of every case outside the M-18 block: an English UI on the pinned en-US
+ * browser. M-18 rewrite: this helper used the host's locale (`toLocaleString(undefined, …)`), the
+ * L2 formatter's own until the interface language decided its digits.
+ */
+const INTERFACE_LOCALE = 'en-US';
+
+/** A plain number with at most two decimals in `locale`, the interface's by default: how the L2 formatter prints its digits. */
+function plainNumber(amount: number, locale = INTERFACE_LOCALE): string {
+    return amount.toLocaleString(locale, {maximumFractionDigits: 2});
 }
 
 /** The digits of a formatted string, whatever separators the locale puts between them. */
@@ -183,6 +213,10 @@ beforeAll(async () => {
 afterEach(() => {
     // The flag is module-level state shared by every test in this file.
     setPrivacyEnabled(false);
+});
+
+afterAll(() => {
+    vi.unstubAllGlobals();
 });
 
 describe('exactMoneyDisplay — the text at the minor unit, and whether the rounding changed it', () => {
@@ -539,6 +573,93 @@ describe('formatPlannerL2 — an L2 distance in squared valuation money', () => 
         expect(formatPlannerL2(finite('12.5'), 'EUR')).toBe(`${P} EUR²`);
         expect(formatPlannerL2(ratio('1', '3', '0.333333333333333333', 18), 'EUR')).toBe(`≈${P} EUR²`);
         expect(formatSolverNumber('12.345', EUR_SQUARED)).toBe(`≈${P} EUR²`);
+    });
+});
+
+describe('without a locale, the interface language: dates, timestamps, copy stamps and L2 digits (M-18)', () => {
+    /** `formatPlannerDate`'s options. */
+    const DATE = {year: 'numeric', month: '2-digit', day: '2-digit'} as const;
+    /** `formatCopyStamp`'s for data of today: the date and the time the copy ran. */
+    const STAMP = {year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'} as const;
+    /** `formatDateTime`'s, through which `formatPlannerTimestamp` writes. */
+    const TIMESTAMP = {year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'} as const;
+
+    /** A local noon: its UTC day is its local day in every zone within twelve hours of UTC. */
+    const NOW = new Date(2026, 9, 12, 12, 0);
+    const TODAY = '2026-10-12';
+    const EARLIER = '2026-10-09';
+    /** When the copy ran: an instant, written in the run's time zone by the helper and the expectation alike. */
+    const CAPTURED_AT = '2026-10-12T09:05:00Z';
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    /** The UI in Italian on the pinned en-US browser: the interface locale is bare `it`. */
+    async function italianUi(): Promise<void> {
+        await uiLanguage('it');
+        expect(uiLocale(), 'control: an Italian UI on an en-US browser is written bare it').toBe('it');
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('formatPlannerDate: a calendar date in the interface locale; an explicit locale still wins', async () => {
+        const date = new Date(2026, 9, 12);
+        const italian = date.toLocaleDateString('it', DATE);
+        const american = date.toLocaleDateString('en-US', DATE);
+        expect(italian, 'control: Italian writes the date otherwise than en-US').not.toBe(american);
+        expect(formatPlannerDate(TODAY), 'control: an English UI on an en-US browser writes en-US').toBe(american);
+
+        await italianUi();
+        expect(formatPlannerDate(TODAY, 'en-US'), 'an explicit locale still wins').toBe(american);
+
+        expect(formatPlannerDate(TODAY), 'without a locale, an Italian UI must read an Italian date').toBe(italian);
+    });
+
+    it('formatPlannerTimestamp: when a fact was copied, in the interface locale; an explicit locale still wins', async () => {
+        const instant = new Date(CAPTURED_AT);
+        const italian = instant.toLocaleDateString('it', TIMESTAMP);
+        const american = instant.toLocaleDateString('en-US', TIMESTAMP);
+        expect(italian, 'control: Italian writes the timestamp otherwise than en-US').not.toBe(american);
+        expect(formatPlannerTimestamp(CAPTURED_AT), 'control: an English UI on an en-US browser writes en-US').toBe(american);
+
+        await italianUi();
+        expect(formatPlannerTimestamp(CAPTURED_AT, 'en-US'), 'an explicit locale still wins').toBe(american);
+
+        expect(formatPlannerTimestamp(CAPTURED_AT), 'without a locale, an Italian UI must read an Italian timestamp').toBe(italian);
+    });
+
+    it('formatCopyStamp: data of today shows when the copy ran, data of an earlier day its date — both in the interface locale; an explicit locale still wins', async () => {
+        expect(defaultAsOf(NOW), 'control: the as-of day of NOW is TODAY, so data of TODAY shows a time and data of EARLIER a date').toBe(TODAY);
+        const written = (locale: string) => ({today: new Date(CAPTURED_AT).toLocaleString(locale, STAMP), earlier: new Date(2026, 9, 9).toLocaleDateString(locale, DATE)});
+        const stamps = (locale?: string) => ({today: formatCopyStamp(TODAY, CAPTURED_AT, locale, NOW), earlier: formatCopyStamp(EARLIER, CAPTURED_AT, locale, NOW)});
+        const italian = written('it');
+        const american = written('en-US');
+        expect(italian.today, 'control: Italian writes the date and time otherwise than en-US').not.toBe(american.today);
+        expect(italian.earlier, 'control: Italian writes the date otherwise than en-US').not.toBe(american.earlier);
+        expect(stamps(undefined), 'control: an English UI on an en-US browser writes en-US').toEqual(american);
+
+        await italianUi();
+        expect(stamps('en-US'), 'an explicit locale still wins').toEqual(american);
+
+        expect(stamps(undefined), 'without a locale, an Italian UI must read Italian stamps').toEqual(italian);
+    });
+
+    it('formatPlannerL2: the digits of an L2 distance in the interface locale, through a squared solver number too', async () => {
+        // 12345.678 is shown at two decimals, ≈12345.68: above a thousand, so the grouping is written as well.
+        const italian = `≈${plainNumber(12345.68, 'it')} EUR²`;
+        const american = `≈${plainNumber(12345.68, 'en-US')} EUR²`;
+        expect(italian, 'control: Italian writes the digits otherwise than en-US').not.toBe(american);
+        expect(formatPlannerL2(finite('12345.678'), 'EUR'), 'control: an English UI on an en-US browser writes en-US').toBe(american);
+
+        await italianUi();
+
+        expect({l2: formatPlannerL2(finite('12345.678'), 'EUR'), solver: formatSolverNumber('12345.678', EUR_SQUARED)}, 'an Italian UI must read Italian digits').toEqual({l2: italian, solver: italian});
     });
 });
 
