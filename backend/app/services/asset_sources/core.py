@@ -297,7 +297,7 @@ class AssetSourceProvider(ABC):
     5. Gaps (weekends, holidays) are filled only when prices are read: the read
        path (asset_sources/price_query.py) adds the missing days with
        backward_fill_info, and valuation carries the last observation forward
-       (price_resolver.py)
+       (financial_math/price_marks.py)
 
     Required implementations:
     - provider_code: Unique identifier for this provider

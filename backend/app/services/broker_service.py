@@ -52,12 +52,12 @@ from backend.app.schemas.brokers import (
 from backend.app.schemas.common import Currency
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
+from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.transaction_service import (
     BalanceValidationError,
     TransactionService,
 )
 from backend.app.utils.datetime_utils import today_date, utcnow
-from backend.app.utils.financial.valuation_utils import compute_holding_value
 
 BROKER_NAME_RECOVERY = "To resolve this, rename the existing broker or choose a different name for the broker you are adding."
 

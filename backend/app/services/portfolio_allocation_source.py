@@ -1316,7 +1316,7 @@ async def _build_planner_current_distribution(  # noqa: C901 — per-Asset valua
     held Asset without a valuation withholds every weight instead of vanishing.
     """
     # Lazy: portfolio_service imports this module at load time.
-    from backend.app.services.portfolio_engine import PortfolioCalculationEngine, ValuationSource  # noqa: PLC0415
+    from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine, ValuationSource  # noqa: PLC0415
     from backend.app.services.portfolio_service import _QUANTITY_DUST_THRESHOLD  # noqa: PLC0415
 
     engine_result = await PortfolioCalculationEngine(session).calculate(

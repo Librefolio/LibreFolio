@@ -118,7 +118,7 @@ def utils_provider_core_cache(verbose: bool = False, test_names: list = None) ->
 def utils_roi_utils(verbose: bool = False, test_names: list = None) -> bool:
     """Test pure ROI helper functions (annualized_to_cumulative, calculate_mwrr*)."""
     print_section("Utils: ROI Helpers")
-    print_info("Testing: backend/app/utils/financial/roi_utils.py")
+    print_info("Testing: backend/app/services/financial_math/returns.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_roi_utils.py", test_names)
     return run_command(cmd, "ROI helper tests", verbose=verbose)
 

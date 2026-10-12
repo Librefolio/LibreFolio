@@ -25,7 +25,7 @@ setup_test_database()
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import delete
 
-import backend.app.services.portfolio_engine as portfolio_engine_module
+import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine
 from backend.app.services.fx import (
@@ -423,7 +423,7 @@ class TestUpsertRatesBulkEdgeCases:
 # ============================================================================
 #
 # delete_rates_bulk() feeds compute_portfolio_fx_cache_identity()'s dependency
-# set (backend/app/services/portfolio_engine.py): deleting a rate that a
+# set (backend/app/services/financial_math/portfolio/engine.py): deleting a rate that a
 # portfolio depended on must not leave a stale L1 blob / L2 report entry
 # alive for the rest of its TTL. A no-op delete (nothing matched) must, by the
 # same logic, leave both caches untouched — clearing them on every call,

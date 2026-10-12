@@ -48,12 +48,12 @@ from backend.app.services.financial_math.average_cost import (
     cost_movement_from_transaction,
 )
 from backend.app.services.financial_math.native_cash import NativeCash, cash_movement_from_transaction, compute_native_cash, effective_share
+from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
+from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot
+from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.fx import convert_bulk
-from backend.app.services.price_resolver import AssetPriceSeries, build_asset_price_series
 from backend.app.services.settings_service import get_effective_base_currency
 from backend.app.utils.cache_utils import get_ttl_cache
-from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot
-from backend.app.utils.financial.valuation_utils import compute_holding_value
 
 logger = structlog.get_logger(__name__)
 
@@ -1553,7 +1553,7 @@ class DailyStateBuilder:
                     split_ratio, split_adjusted = _cumulative_split_ratio(self.split_history.get(asset_id, ()), mark.as_of_date, dt)
                     native_effective = native_ref / split_ratio
                     # Trade observations were lifted onto the market ×quote_base_quantity axis at
-                    # ingestion (price_resolver), so ``native_ref`` is on that axis. Restate the
+                    # ingestion (price_marks), so ``native_ref`` is on that axis. Restate the
                     # *reference* unit price back to the source per-unit axis so it reports the price
                     # as it appeared in the trade record. ``effective_unit_price`` stays on the market
                     # axis (it is the price actually fed to ``compute_holding_value``). Market quotes
@@ -1568,7 +1568,7 @@ class DailyStateBuilder:
                     source = ValuationSource.MARKET_PRICE
                 holding_value = compute_holding_value(qty, native_effective, quote_base)
                 # G1b: OHLC is only ever present on a mark.estimated=False exact MARKET day (see
-                # price_resolver — CARRIED/TRADE_AVG always report None), so it never needs the
+                # price_marks — CARRIED/TRADE_AVG always report None), so it never needs the
                 # split-restatement above (real quotes already sit on the current-unit axis).
                 holding_open = holding_high = holding_low = None
                 if compute_ohlc and mark.open is not None and mark.high is not None and mark.low is not None:
@@ -2019,7 +2019,7 @@ class DerivedViewsBuilder:
     ) -> tuple[list, list]:
         """Extract NAV snapshots and the invested-capital flow series for ROI/TWRR/MWRR.
 
-        Returns (nav_snapshots, cash_flows) compatible with roi_utils functions.
+        Returns (nav_snapshots, cash_flows) compatible with the ``returns`` functions.
 
         The capital flow is derived from the day-over-day change in
         ``cumulative_external_cash_flow`` (the *capital baseline*), NOT from the
