@@ -414,3 +414,18 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | Source Path | Git Hash at Ingest | Date | Wiki Page |
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/Phase_0/42_promotePairChecks/plan-phase00PromotePairChecks.prompt.md` | `6c32f4aff` | 2026-10-12 | [[sources/phase00-promote-pair-checks-2026-10]], [[decisions/transfer-pair-same-asset-opposite-quantity]], [[decisions/promote-respects-asset-event-link]], [[problems/bulk-cost-basis-compared-by-reference]], [[problems/legacy-component-language-untracked]], [[concepts/marker-locale-for-catalogue-labels]] |
+
+## 2026-10-12 — step B5: folder 21, the onboarding (J) (base `c7261618d`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00Onboarding.prompt.md` | `020c762e0` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]], [[features/F-105]], [[decisions/onboarding-versioned-progress-per-flow]], [[decisions/onboarding-guide-observes-never-acts]], [[decisions/automatic-popups-wait-for-guides]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00OnboardingRound1-UXRefinement.prompt.md` | `1982c254b` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]], [[decisions/onboarding-guide-observes-never-acts]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00OnboardingRound2-ModularGuides.prompt.md` | `8a8e686f0` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]], [[decisions/onboarding-versioned-progress-per-flow]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00OnboardingRound3-TriggeredTours.prompt.md` | `1982c254b` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00OnboardingRound4-GeometryMilestones.prompt.md` | `1982c254b` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]], [[problems/coachmark-measured-mid-modal-transition]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00OnboardingRound5-StepProgressPolish.prompt.md` | `1982c254b` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]], [[decisions/onboarding-versioned-progress-per-flow]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00OnboardingRound6-FinalUX.prompt.md` | `1982c254b` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00OnboardingRound7-AnchorStall.prompt.md` | `176f19707` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]], [[problems/guide-anchor-never-resolves]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00OnboardingRound8-PostReview.prompt.md` | `020c762e0` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]], [[decisions/onboarding-positions-in-browser-per-account]], [[decisions/guide-text-never-announces-another-guide]], [[problems/legacy-layout-gate-missed-runes-state]], [[problems/guide-anchor-never-resolves]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/onboarding-review-dossier.md` | `d614daed9` | 2026-10-12 | [[sources/phase00-onboarding-2026-09]], [[decisions/onboarding-existing-users-seeded-skipped]] |

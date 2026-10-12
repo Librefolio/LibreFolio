@@ -2,7 +2,7 @@
 
 > Authoritative list of all LibreFolio features with permanent codes.
 > Codes are assigned at first mention and **never change** even if the feature is renamed/split/superseded.
-> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git)
+> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git); 2026-10-12 (step B5: F-105 guided onboarding)
 >
 > **Macro-level navigation**: for product-level domain narratives (what each domain does, how features cluster, data-flow diagrams), see [`wiki/domains/`](../domains/) — 11 domain pages covering all features.
 
@@ -41,6 +41,7 @@
 | [[F-008]] | i18n System (EN/IT/FR/ES, 4 215 keys) | frontend | `implemented` | [`dev/fe/i18n.md`](developer/frontend/i18n.md) |
 | [[F-101]] | Global Privacy Mode (hide values) | frontend | `documented` | `user/settings/preferences.en.md` |
 | [[F-104]] | Recommend LibreFolio (social share, copy and go) | frontend | `documented` | `user/settings/about.en.md` |
+| [[F-105]] | Guided onboarding (Welcome, intro tour, contextual guides) | fullstack | `documented` | [`dev/fe/onboarding.md`](developer/frontend/onboarding.md) |
 
 ---
 
@@ -210,14 +211,14 @@
 ## Statistics
 
 > Recomputed from the rows above on 2026-10-09 (the previous table still counted 96 features and listed F-052/F-053
-> as planned), and again on 2026-10-12 after the lint (F-050, F-089, F-092 shipped; F-075 superseded). "PLANNED /
-> IDEA" is the section where a feature was first registered, not its status: eleven of its rows have shipped and one
-> is superseded.
+> as planned), and again on 2026-10-12 after the lint (F-050, F-089, F-092 shipped; F-075 superseded) and after
+> step B5 (F-105 added). "PLANNED / IDEA" is the section where a feature was first registered, not its status:
+> eleven of its rows have shipped and one is superseded.
 
 | Domain | Total | implemented/documented | in-progress | planned | idea | superseded |
 |--------|-------|----------------------|-------------|---------|------|------------|
 | AUTH | 4 | 4 | 0 | 0 | 0 | 0 |
-| LAYOUT & SETTINGS | 7 | 7 | 0 | 0 | 0 | 0 |
+| LAYOUT & SETTINGS | 8 | 8 | 0 | 0 | 0 | 0 |
 | BROKERS | 7 | 7 | 0 | 0 | 0 | 0 |
 | FX | 9 | 9 | 0 | 0 | 0 | 0 |
 | ASSETS | 13 | 13 | 0 | 0 | 0 | 0 |
@@ -228,7 +229,7 @@
 | CALCULATIONS | 3 | 3 | 0 | 0 | 0 | 0 |
 | INFRASTRUCTURE | 16 | 16 | 0 | 0 | 0 | 0 |
 | PLANNED/IDEA (first registered) | 25 | 11 | 0 | 10 | 3 | 1 |
-| **TOTAL** | **104** | **89** | **1** | **10** | **3** | **1** |
+| **TOTAL** | **105** | **90** | **1** | **10** | **3** | **1** |
 
 ## Key source files
 

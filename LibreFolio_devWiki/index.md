@@ -11,7 +11,7 @@
 | Page | Domain | Features | Status |
 |------|--------|----------|--------|
 | [[domains/auth]] | AUTH | F-001–F-003, F-102 | stable |
-| [[domains/layout-settings]] | LAYOUT & SETTINGS | F-004–F-008, F-101, F-104 | stable |
+| [[domains/layout-settings]] | LAYOUT & SETTINGS | F-004–F-008, F-101, F-104, F-105 | stable |
 | [[domains/brokers]] | BROKERS | F-009–F-014, F-103 | stable |
 | [[domains/fx]] | FX (Foreign Exchange) | F-015–F-023 | stable |
 | [[domains/assets]] | ASSETS | F-024–F-036 | stable |
@@ -28,7 +28,7 @@
 
 | Page | Description |
 |------|-------------|
-| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (104 features across 12 domains, 2026-10-09) |
+| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (105 features across 12 domains, 2026-10-12) |
 
 ## Individual Feature Pages
 
@@ -43,6 +43,7 @@
 
 | Page | Title | Domain | Status |
 |------|-------|--------|--------|
+| [[features/F-105]] | Guided onboarding — Welcome setup, intro tour and contextual guides; versioned progress per flow, positions in the browser | Layout & Settings | documented |
 | [[features/F-100]] | Yield on Cost (YOC) per position — trailing-year ledger income per eligible unit over the residual average cost | Dashboard | documented |
 | [[features/F-101]] | Global Privacy Mode — mask at the formatter, sign and currency kept, device-scoped | Layout & Settings | documented |
 | [[features/F-102]] | Connection Security Indicator (+ login without account enumeration) | Auth | documented |
@@ -81,6 +82,12 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/onboarding-versioned-progress-per-flow]] | **J, onboarding.** One versioned row per user and flow, per-step rows for Import and Bulk; due while `pending` or older than the current version; `expected_version` and 409; `003` edited while unshipped, consolidated into `004` (`22fa0aed7`) | 2026-09-10 | onboarding, db, alembic, versioning |
+| [[decisions/onboarding-existing-users-seeded-skipped]] | **J, onboarding.** Accounts older than 1.2.0: Welcome `completed`, every guide and step `skipped` (`004`); the developer approved it on a paragraph that described the opposite — «an unvalidated decision that happens to be correct» | 2026-09-21 | onboarding, migration, grandfathering, process |
+| [[decisions/onboarding-guide-observes-never-acts]] | **J, onboarding.** A guide never clicks, fills or saves; the Import guide is wiring, not scripting, and hands `import.bulk` to Bulk, where Save All stays the user's; replays write no status; the shell is `inert` only during the intro tour | 2026-09-10 | onboarding, coachmark, import-wizard, ux |
+| [[decisions/onboarding-positions-in-browser-per-account]] | **J, Round 8.** Positions in `localStorage` per account, flow and version: resume at the step (OB-9), survive logout (point 14, reversed by the developer), close in every tab («teniamola») | 2026-09-24 | onboarding, localstorage, replay, cross-tab |
+| [[decisions/guide-text-never-announces-another-guide]] | **J, Round 8, point 12.** A step describes its section; five texts trimmed in four languages; `guideCopy.test.ts` (red first on 23 violations) with a justified `REGISTRY` | 2026-09-24 | onboarding, i18n, copy, gate |
+| [[decisions/automatic-popups-wait-for-guides]] | **J.** `DeferredAppPopups` holds the donation and update prompts while a guide or a modal is on screen (donation first); a requested update check opens at once (Q2, `64d78e244`) | 2026-09-11 | onboarding, popups, update-check, donation |
 | [[decisions/transfer-pair-same-asset-opposite-quantity]] | **P, plan 42, D1.** A TRANSFER pair is one asset in exactly opposite quantities: `_validate_linked_pair` (`pairAssetMismatch`, `pairQuantityMismatch`, in `Decimal`), `findPromoteMatch`, the banner and the selection bar (C-46) in exact decimals; CASH_TRANSFER and FX constraints in C-42 | 2026-10-10 | backend, frontend, transfer, promote, decimal |
 | [[decisions/promote-respects-asset-event-link]] | **P, plan 42, D2.** A promote that would produce a row linked to an event its type does not admit is refused (`eventTypeIncompatible`, `_promoted_state_issues`), never unlinked; the 💡 skips event-linked rows (`TXPromoteSuggestInput.asset_event_id`) | 2026-10-10 | backend, frontend, promote, asset-events, suggest |
 | [[decisions/transfer-auto-cost-from-sending-broker]] | **P, plan 40.** A TRANSFER's receiving side in Auto averages its partner's broker up to the partner's date, without the outgoing leg (`_auto_cost_source`, `d7c148564`, train 28): a whole position no longer gets 0, an updated or promoted transfer no longer averages the receiver; the date confirmed by the developer | 2026-10-09 | backend, wac, cost-basis, transfer, promote |
@@ -253,6 +260,9 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/guide-anchor-never-resolves]] | **J, Rounds 7–8.** A coachmark waited forever on an absent anchor, and a hidden 0×0 anchor pinned it at (0,0); now a 3 s stall with **Continue anyway** (`1982c254b`) and `isRendered()` (`f2abf9b47`); a stale `stalledStepId` fixed in the teardown | resolved | onboarding, coachmark, anchors, stall |
+| [[problems/coachmark-measured-mid-modal-transition]] | **J, Round 4.** The Import CTA was measured during `ModalBase`'s scale transition, and an unconditional `scrollIntoView()` hid it; motion root `.modal-content`, two identical frames, `scrollPolicy` | resolved | onboarding, geometry, modal, transitions |
+| [[problems/legacy-layout-gate-missed-runes-state]] | **J, Round 8.** The legacy `(app)` layout's `$:` gate did not track `appBootstrap.ready`: the requested page flashed 1–5 frames before the Welcome redirect; `toStore()` (`cc20b8288`) | resolved | svelte5, legacy-mode, layout, onboarding |
 | [[problems/bulk-cost-basis-compared-by-reference]] | **P, plan 42.** `fieldEq` compared `cost_basis_override` objects by reference since May: untouched rows with a manual cost looked modified and were sent as no-op updates; now `costBasisValue` + `exactDecimalEqual` | resolved | frontend, bulk-editor, cost-basis, equality |
 | [[problems/legacy-component-language-untracked]] | **P, plan 42 §8.1.** In a legacy component a store read inside a template-called helper compiles into `$.untrack`; the broker percentages read `$currentLanguage` in the template expression | resolved | frontend, svelte5, legacy-mode, i18n |
 | [[problems/promote-skipped-cost-basis-check]] | **P, plan 40.** `validate_cost_basis` skipped promoted rows, so a receiving side without a cost was saved and counted at zero; now `costBasisRequired` on the `create` or the `promote` operation (`d7c148564`) | resolved | backend, cost-basis, promote, validation |
@@ -399,6 +409,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/phase00-onboarding-2026-09]] | `Release_2/Phase_0/21_onboarding/` — workstream J: the foundation, Rounds 1–8 and the review dossier; fifteen flows, the developer's review of 2026-09-24, «Cosa resta aperto» | 2026-10-12 | phase0, onboarding, coachmark, settings, alembic |
 | [[sources/phase00-promote-pair-checks-2026-10]] | `Release_2/Phase_0/42_promotePairChecks/` — workstream P: promoted pairs (D1, D2), `fieldEq`, the 💡; the distribution editor; C-46…C-48; the localisation mini-lot | 2026-10-12 | phase0, promote, transfer, bulk-editor, i18n |
 | [[sources/phase00-transfer-cost-basis-2026-10]] | `Release_2/phases/40_transferCostBasis/` — workstream P: the cost of transfers in Auto and of promotes; archived after the 09/10 ingest | 2026-10-12 | phase0, wac, cost-basis, transfer, promote |
 | [[sources/phase00-import-wizard-broker-gate-2026-10]] | `Release_2/Phase_0/44_importWizardBrokerGate/` — workstream I: the wizard waits for the broker list (M-16); F-AI (b) into the backlog | 2026-10-12 | phase0, import-wizard, svelte5, testing |
@@ -525,6 +536,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Step B5 — the onboarding (J, folder 21).** F-105 registered: versioned progress per flow, existing users seeded `skipped`, the guide that never acts, positions in the browser, no text announcing a guide, the popup lane; the anchor stall, the mid-transition measure, the legacy layout gate | [[sources/phase00-onboarding-2026-09]] *(11 pages — 1 feature, 6 decisions, 3 problems, 1 source; see log)* |
 | 2026-10-12 | **Step B4 — plan 42 (P).** TRANSFER pairs that cancel, promotes that respect event links, `fieldEq` by value, the 💡's same-day window; a marker locale for hardcoded labels and a legacy-component trap | [[sources/phase00-promote-pair-checks-2026-10]] *(6 pages — 2 decisions, 2 problems, 1 concept, 1 source; see log)* |
 | 2026-10-12 | **Step B3 — plan 40 (P).** A transfer's receiving side in Auto takes the sending broker's average when the units left; a promote asks for a missing cost | [[sources/phase00-transfer-cost-basis-2026-10]] *(3 pages — 1 decision, 1 problem, 1 source; see log)* |
 | 2026-10-12 | **Step B2 — plan 44 (I, M-16).** The import wizard waits for the broker list; a counter that must not be reactive; F-AI (b) now a backlog row; plan 41's registry row refreshed | [[sources/phase00-import-wizard-broker-gate-2026-10]] *(2 pages — 1 problem, 1 source; see log)* |
