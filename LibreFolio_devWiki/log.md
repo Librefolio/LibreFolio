@@ -3180,3 +3180,10 @@ Base `6e3d1368c`. The four July rows (hashes that no longer resolve, old `Phase_
 the `phases/` path; three reports moved unchanged, `INDEX.md` edited. Eleven files never ingested, listed on
 [[sources/beta-testing-2026-08-05]]; their topics already have pages, so no new page — a content check of the ten plans
 stays a candidate for a later lint. Graph: not updated (P-6).
+
+## [2026-10-12] lint | Follow-up of the read-only lint — two open problems re-checked
+Base `4d0cedec7`. The coordinator's decisions on the lint: re-check the two stale open problems against today's E2E;
+M-20 waits for I's plan 48 (FileGrid and FilesTable will be C-63); the unchecked areas become C-64. An explore agent
+read the specs. **Updated**: [[problems/bulk-modal-sticky-z-index]] (not covered → open, re-test after 1.2, C-61),
+[[problems/datatable-column-resize-noop]] (resize proved on the Risk Lab L1° table, `f55b2e42a`; others untested → open,
+C-62). Graph: not updated (P-6).
