@@ -15,9 +15,11 @@
  * e2e/transactions/tx-import-broker-mismatch.spec.ts (M1 one target, M4 two).
  *
  * On text. `$lib/i18n` is replaced by a translator that renders a key with its values
- * (`key(name=value, …)`, names sorted), so a label is checked by the values it is asked to show — the
- * broker names this file passes in — never by a translation. Elements are found by test id; the
- * broker and plugin names are props, not translations.
+ * (`key(name=value, …)`, names sorted) and the bare key when it is asked for none, so a label is
+ * checked by the key and the values it is asked to show — the broker names this file passes in — never
+ * by a translation. Move is asked for none: its label is the bare key and names no broker — the chosen
+ * one is the card or the checked radio above it — and which broker it answers with is the id `onMove`
+ * receives. Elements are found by test id; the broker and plugin names are props, not translations.
  *
  * The icons. Every broker here has a default import plugin, as the wizard's brokers do, so BrokerIcon
  * asks for the plugin list (its icon fallback) and never for a broker: the list is answered empty,
@@ -106,6 +108,12 @@ function props(overrides: Partial<Props> = {}): Props {
 const byId = (id: string) => screen.getByTestId(`import-broker-mismatch-${id}`);
 const queryById = (id: string) => screen.queryByTestId(`import-broker-mismatch-${id}`);
 
+/** Move's label as the translator renders it when asked for no values: the bare key. */
+const MOVE_LABEL = 'importWizard.brokerMismatch.move';
+
+/** A button's label: its text, whitespace collapsed. The broker icon inside Move has no text. */
+const labelOf = (element: HTMLElement) => (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+
 /** The radio of one target in the radiogroup. */
 function radioOf(targetId: number): HTMLInputElement {
     return within(byId(`target-${targetId}`)).getByRole('radio') as HTMLInputElement;
@@ -168,7 +176,8 @@ describe('ImportBrokerMismatchModal — one broker whose default plugin reads th
         expect(queryById('targets'), 'no radiogroup for a single target').not.toBeInTheDocument();
         expect(queryById('no-target')).not.toBeInTheDocument();
         expect(queryById('no-reader')).not.toBeInTheDocument();
-        expect(byId('move'), 'Move names the target').toHaveTextContent(`broker=${FIRST.name}`);
+        expect(labelOf(byId('move')), 'Move is asked for its label with no values: it names no broker').toBe(MOVE_LABEL);
+        expect(byId('move'), 'the target is named by its card, not by Move').not.toHaveTextContent(FIRST.name);
 
         await fireEvent.click(byId('move'));
 
@@ -179,7 +188,7 @@ describe('ImportBrokerMismatchModal — one broker whose default plugin reads th
 });
 
 describe('ImportBrokerMismatchModal — several brokers whose default plugin reads the file', () => {
-    it('are a radiogroup, the first one chosen, with no single-target card', () => {
+    it('are a radiogroup, the first one chosen, with no single-target card', async () => {
         render(ImportBrokerMismatchModal, props({targets: [FIRST, SECOND]}));
         const group = byId('targets');
         expect(group).toBeVisible();
@@ -190,7 +199,12 @@ describe('ImportBrokerMismatchModal — several brokers whose default plugin rea
         expect(queryById('target'), 'no single-target card').not.toBeInTheDocument();
         expect(radioOf(FIRST.id), 'the first target is chosen until the user picks another').toBeChecked();
         expect(radioOf(SECOND.id)).not.toBeChecked();
-        expect(byId('move')).toHaveTextContent(`broker=${FIRST.name}`);
+        expect(labelOf(byId('move')), 'Move names no broker: the chosen one is the checked radio').toBe(MOVE_LABEL);
+        expect(byId('move')).not.toHaveTextContent(FIRST.name);
+
+        await fireEvent.click(byId('move'));
+
+        expect(onMove, 'Move answers with the target chosen by default: the first').toHaveBeenCalledExactlyOnceWith(FIRST.id);
     });
 
     it('Move answers with the broker the user chose: the second one', async () => {
@@ -200,7 +214,8 @@ describe('ImportBrokerMismatchModal — several brokers whose default plugin rea
 
         expect(radioOf(SECOND.id)).toBeChecked();
         expect(radioOf(FIRST.id)).not.toBeChecked();
-        expect(byId('move'), 'Move names the chosen broker').toHaveTextContent(`broker=${SECOND.name}`);
+        expect(labelOf(byId('move')), 'Move names no broker, not even the chosen one: which one it answers with is the id it calls back').toBe(MOVE_LABEL);
+        expect(byId('move')).not.toHaveTextContent(SECOND.name);
 
         await fireEvent.click(byId('move'));
 

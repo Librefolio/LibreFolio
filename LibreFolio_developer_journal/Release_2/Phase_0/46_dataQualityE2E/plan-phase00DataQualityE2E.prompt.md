@@ -1151,3 +1151,308 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   > cercando chiamate dirette a bcrypt, I/O su file, `shutil`, `subprocess` e `urlopen`. Ha trovato solo i tre punti di
   > V-16; l'`open` di `uploads.serve_file` gira già in `asyncio.to_thread`. La rassegna non scende nei servizi.
   > `user_service.reset_password` (`:205`, solo CLI) resta com'è.
+
+> Checkpoint V-16 committato dal coordinatore sul mio ramo: `a9e0fe4d9`, `0d6aee67c`, `3aabf0916`. È un commit
+> parziale: solo i 5 file, verificati blob per blob, mentre gli spec della 2b restano sporchi e intatti. Treno 66:
+> `dev_release2` = `b91d6d902`. Il mio ramo resta a `3aabf0916`, perché la worktree ha la 2b in corso. I treni 65 e 66
+> toccano solo wiki, CHANGELOG, la pipeline delle traduzioni e V-16 (12/10).
+
+### 12.8 Passo 2b, avanzamento (dopo V-16)
+
+- **Ordine della corsia**: le prove di A4 (b-tx-commit) e di A5/A6 (b-tx-seed); poi le verifiche di b-brokers,
+  b-tx-commit, b-tx-seed e b-v20; poi i gate di categoria.
+- ✅ **Una riga in più per la 2b** (coordinatore, 12/10; l'ha trovata W). In `frontend/playwright.config.ts:42-45` il
+  commento diceva «fullyParallel is off», mentre il valore è `true` (`:103`) e il commento accanto («On by default, and
+  earned…») lo conferma. Il resto della frase era giusto: il default di 1 worker esiste davvero, e il runner lo alza
+  esportando `E2E_WORKERS` (`_frontend_common.py:316-317`). Ora dice: «fullyParallel is on, but every test of a lane
+  shares one database and one backend, so raising the workers is a decision taken per run (the test runner's
+  `--workers` exports E2E_WORKERS), not a silent default». Prettier pulito.
+  > **⚠️ Fuori pista**: lo stesso blocco elenca il catalogo dei blocchi seriali (`:102`, «Currently: brokers/multi-user,
+  > asset-event-delete, tx-brim-import»), e l'elenco non è più vero. `asset-event-delete` seriale non è più. Mancano
+  > `files-destructive`, `fx-destructive` e il blocco «Saving» di `settings/scheduler.spec.ts`, aggiunto nella 2a. Lo
+  > allineo a fine 2b, quando sarà chiaro se `brokers/multi-user` resta seriale. È il terzo punto di V-17.
+- ✅ **A4, prova del danno** (12/10). b-tx-commit, spec invariati, `--workers 4`. Dopo ogni giro il DB letto in sola
+  lettura, confrontato col seed di P0: 76 righe, id 1-76.
+
+  | Giro | Spec | Esito | Id assegnati | Rimasti |
+  |---|---|---|---|---|
+  | P0 | `tx-wac-unit-toggle "toggle is visible"` (innocuo) | 1/1 | — | seed |
+  | P1 | `tx-commit-all-types` | 19/19 | 24 | **22** (19 su IB, 3 su Directa) |
+  | P2 | `transactions-modals` | 19/19 | 0 | 0 |
+  | P3 | `tx-wac-formmodal` | 10/10 | 3 | **3** (FM6: un BUY di 10 Apple e un TRANSFER IB→Directa) |
+  | P4 | `tx-wac-unit-toggle` | 4/4 | 1 | **1** (ADJUSTMENT +4 su Charles Schwab) |
+
+  - **26 transazioni rimaste a ogni giro** sui broker di `TEST_USER`. Nessuna riga del seed cancellata o modificata.
+  - Log: `/tmp/libreFolio_v_b_txcommit_p{0..4}_*.log`.
+  > **Note implementazione**:
+  > - T1 di `transactions-modals` committa davvero, ma va in rollback: sceglie il primo broker della tendina, Charles
+  >   Schwab, che non ha cassa, e la sua asserzione accetta il rollback. Oggi non lascia niente, ma lascerebbe una riga
+  >   appena quel broker potesse pagare;
+  > - T10 non cancella niente: la sua sonda su `confirm-modal-confirm` risponde sempre falso;
+  > - nei giri di una sola chiave `txHygiene` non è mai attivo, a nessun numero di worker: `LF_TX_HYGIENE` lo imposta
+  >   solo il giro consolidato `all` a 1 worker.
+- ✅ **A5 e A6, prova del danno** (12/10). b-tx-seed, spec invariati, `--workers 1`, il DB letto dopo ogni giro. Base:
+  76 transazioni, 11 eventi, 8 broker, 11 utenti. 43↔44 è la coppia `delete-safe`, 45↔46 la `delete-consume`.
+  - P0, Guard (innocuo) → base invariata.
+  - P1, C3 → **43 e 44 diventano due ADJUSTMENT scollegati** (−0,002 e +0,001), aggiornati durante il test. Gli id
+    non cambiano, quindi nemmeno `txHygiene` la rimetterebbe a posto: lui toglie solo id nuovi, o ripopola quando ne
+    manca uno. Il messaggio d'errore di `tx-bulk-suggest-ux` lo dice già.
+  - P2, TODO-B di `tx-paired-edit` → colpisce la coppia **`delete-consume`**, non la `delete-safe`. Le due descrizioni
+    diventano «E2E-paired-edit-<ts>», e `tx-delete` A2-confirm non la trova più, perché la cerca per descrizione
+    (`findRow(page, 'delete-consume', 'ETH')`).
+  - P3, A6 → **un DIVIDEND nuovo su Apple**, asset condiviso: `asset_events` 12, 1,50 USD, «E2E test event». Nessuna
+    transazione salvata.
+
+  Log: `/tmp/libreFolio_v_b_txseed_proof{0_baseline,1_c3,2_pairededit,3_eventpicker}.log`.
+- ✅ **A7, A7b, A7c: cura e verifica** (12/10). b-brokers; ha toccato solo `brokers/brokers.spec.ts`,
+  `brokers/multi-user.spec.ts`, `transactions/tx-import-resolution.spec.ts` (IWR-009) e
+  `transactions/tx-clone.spec.ts` (`:549`).
+  - **`brokers.spec.ts`**:
+    - «create broker with name» e «full broker CRUD flow» girano su un account usa-e-getta, preso da una fixture
+      locale. Nel teardown la fixture cancella i broker per id e poi l'account, anche dopo un rosso o un timeout;
+    - l'id viene dall'evento `broker.created`;
+    - «can open edit modal» e «can open delete dialog» passavano in silenzio su `if (count > 0)` e sul primo card.
+      Ora agiscono per id sul broker del seed «Interactive Brokers», letto via API, e non scrivono niente.
+  - **`multi-user.spec.ts`**: due account usa-e-getta, registrati in `beforeAll`, al posto di `TEST_USER` e
+    `TEST_USER_2`. `afterAll` cancella i broker per id e poi i due account. Il blocco resta `serial`, con la ragione
+    vera: contesti, account e id sono condivisi in ordine fra i due test.
+  - **IWR-009**: niente più `return`. Il test apre il wizard e lascia un CSV nel passo 1 (resta nel browser). Il
+    selettore diventa una precondizione asserita. Il broker è creato dal modale, confrontato con l'id dell'evento e
+    cancellato per id nel `finally`.
+  - **`tx-clone:549`**: usa il `withOwnedBroker` dello spec, che cancella prima il DEPOSIT e poi il broker per id,
+    anche dopo un rosso. La sonda davanti al FormModal è diventata un'asserzione.
+  - **Verifiche** (`--fresh-run`, a 1 e a 4 worker):
+
+    | Chiave | Esito |
+    |---|---|
+    | `front-broker list` | 9/9 e 9/9 |
+    | `front-user multi-user` | 2/2 e 2/2 (seriale) |
+    | `front-transaction tx-import-resolution` | 15/15 e 15/15 |
+    | `front-transaction tx-clone` | 8/8 e 8/8 |
+
+  - Dopo ogni giro il DB contiene solo il seed: 8 broker, 11 utenti, 76 transazioni, 30 accessi.
+  - Log: `/tmp/libreFolio_v_b_brokers_v{1..8}_*.log`.
+  - Prettier, tsc e `git diff --check` puliti.
+  > **⚠️ Fuori pista**: altre sonde rimaste negli stessi file, che b-brokers non ha toccato:
+  > - `tx-import-resolution`: `openImportWizard` usa un `.first()` senza filtro; IWR-007 e IWR-010 hanno `return`
+  >   condizionali; IWR-006b ha un controllo che ripiega su uno più debole;
+  > - `tx-clone`: righe scelte per posizione, classi CSS, `text=new`; il test «view-only» esce presto.
+  >
+  > Vanno nel backlog come V-21.
+- ⏸️ **STOP chiesto dallo sviluppatore** (12/10, 18:26, via coordinatore). Fermo al primo punto stabile, FROZEN fino a
+  «riparti». Nessun server acceso, porta 6175 libera. Nessun checkpoint della 2b: non era pronto.
+
+  **Stato esatto della 2b al momento dello stop:**
+
+  | Caso | Agente | Prova del danno | Cura nei file | Verifiche | Prossimo passo |
+  |---|---|---|---|---|---|
+  | A4 | b-tx-commit | ✅ 26 transazioni rimaste a giro | ✅ applicata nei 4 spec | **a metà**: V1-V2 `tx-commit-all-types` 19/19 e 19/19; V3-V4 `transactions-modals` 19/19 e 19/19; V5-V6 `tx-wac-formmodal` 10/10 e 10/10. **Da fare**: V7-V8 `tx-wac-unit-toggle` w1 e w4. V7 era partito alle 18:33:58, prima che lo STOP arrivasse all'agente; l'ho fermato io per PID, porta libera alle 18:34:09: non conta | i due giri mancanti, con la lettura del DB |
+  | A5, A6 | b-tx-seed | ✅ coppie 43↔44 e 45↔46 alterate, DIVIDEND su Apple | ✅ applicata nei 3 spec (prettier e tsc puliti) | **da fare**: V1-V6, cioè `tx-split-promote`, `tx-paired-edit`, `tx-event-picker` a 1 e a 4 worker | le sei verifiche |
+  | A7, A7b, A7c | b-brokers | ✅ | ✅ | ✅ V1-V8 verdi, DB pulito | nessuno |
+  | V-20 | b-v20 | evidenza nel gate della 2a e nel triage | ✅ applicata nei 3 spec (prettier e tsc puliti) | **da fare**: 7 giri, cioè una misura di `files "pdf preview"` e `auth`, `app-start-auth`, `files` a 1 e a 4 worker | i sette giri |
+  | Commento di `fullyParallel` | io | — | ✅ `playwright.config.ts:42-45` | prettier pulito | il catalogo seriale di `:102`, dopo la 2b |
+
+  **Da fare dopo le verifiche**:
+  - allineare il catalogo seriale di `playwright.config.ts:102`. Ora è chiaro che `multi-user` resta seriale: l'elenco
+    vero è `brokers/multi-user`, `files-destructive`, `fx-destructive`, `settings/scheduler` «Saving» e
+    `tx-brim-import`;
+  - nel backlog, V-20 ✅ e V-21, le sonde rimaste in `tx-import-resolution` e `tx-clone`;
+  - i gate a 4 worker: `front-transaction all`, `front-broker all`, `front-user all`, `front-utility all`,
+    `front-portfolio all`;
+  - il checkpoint 2b.
+
+  **Worktree**: 16 file sporchi. Sono i 14 spec della 2b, `frontend/playwright.config.ts` e questo piano. Il backlog
+  non è sporco, perché V-16 è già committato.
+- ▶️ **Riparti** (12/10, 19:24, coordinatore). Si riprende la 2b dal punto dello STOP. Stasera lo sviluppatore non c'è:
+  le domande per lui le annota il coordinatore.
+  > **Carico**: in parallelo, sulla corsia 6176, gira la run completa con coverage, quindi la macchina è carica. Le
+  > verifiche di isolamento a 4 worker restano obbligatorie. Un rosso che sa di carico (timeout, attesa scaduta) si
+  > rilancia da solo e a 1 worker prima di cercarne la causa, e il carico si registra qui.
+- ✅ **Catalogo seriale di `playwright.config.ts`** (12/10). La riga «Currently: …» (`:102-103`) ora dice
+  `brokers/multi-user, files-destructive, fx/fx-destructive, settings/scheduler («Saving»),
+  transactions/tx-brim-import`: sono i cinque `configure({mode: 'serial'})` che esistono davvero sotto `frontend/e2e`,
+  galleria compresa (grep). `asset-event-delete` non è più seriale: lo dice il suo stesso commento a `:96`.
+  `multi-user` resta seriale, con la ragione verificata da b-brokers. Prettier pulito. Chiude il terzo punto di V-17.
+- ✅ **A4, cura e verifica** (12/10). b-tx-commit; ha toccato solo i 4 spec (+158/−24).
+  - Ogni test che committa avvia `trackTransactionWrites` dopo il login e lo pulisce in `afterEach`, che gira anche dopo
+    un rosso. Ogni commit aspetta la risposta, così il tracker ha gli id prima della fine del test.
+  - **`tx-wac-formmodal` FM6** apriva la prima coppia sullo schermo, che poteva essere di un vicino o del seed. Ora apre
+    la coppia che ha creato: la rilegge per id, restringe la tabella con `id_min`/`id_max` e seleziona
+    `dt-row-checkbox-tx-<id>`. Spariscono il ciclo `.nth()`, la classe `tx-row-receiver` e il confronto sul testo.
+  - **`transactions-modals` T1** legge la risposta del commit; il rollback resta accettato.
+  - **Verifiche** (`--fresh-run`; dopo ogni giro tutti gli id assegnati sono stati cancellati, e nessuna riga del seed
+    toccata):
+
+    | Spec | w1 | w4 |
+    |---|---|---|
+    | `tx-commit-all-types` | 19/19 | 19/19 |
+    | `transactions-modals` | 19/19 | 19/19 |
+    | `tx-wac-formmodal` | 10/10 | 10/10 |
+    | `tx-wac-unit-toggle` | 4/4 | 4/4 |
+
+  - V7 e V8 sono girati con il carico della coverage sulla 6176 (load average 20-27 su 10 core), senza rossi.
+  - Prettier pulito; tsc offline exit 0.
+  - Log: `/tmp/libreFolio_v_b_txcommit_v{1..8}_*.log`.
+  > **⚠️ Fuori pista**, lasciati intatti e messi nel backlog (V-21):
+  > - **T10** di `transactions-modals` non prova niente: il delete della toolbar ora apre il workspace bulk, quindi la
+  >   sua sonda su `confirm-modal-confirm` risponde sempre falso. In più legge un contatore globale;
+  > - **T1** non mostra mai un commit riuscito: sceglie Charles Schwab, senza cassa, e il BUY va in rollback. Cambiare
+  >   il broker cambierebbe ciò che il test asserisce, quindi è una decisione;
+  > - restano violazioni nel codice non toccato:
+  >   - `.first()` senza filtro in T3/T9/T11 e sonde `isVisible().catch`;
+  >   - classi CSS in `tx-wac-unit-toggle` e in FM10, che usa anche `.nth(count-1)`;
+  >   - `.checkbox-btn` e `tr.row-deleted` in `tx-commit-all-types`, dove il test FX_CONVERSION accetta ancora
+  >     «nessun commit»;
+  > - un commento superato in `tx-commit-all-types` (`expectTransactionGone`) dice che gli id vengono riusati. Le
+  >   transazioni usano `AUTOINCREMENT` dal piano 34.
+- ✅ **A5 e A6, cura e verifica** (12/10). b-tx-seed; ha toccato solo i 3 spec.
+  - **C3** (`tx-split-promote`) e **TODO-B** (`tx-paired-edit`): ciascuno registra un account usa-e-getta con due broker
+    suoi. Via API finanzia il broker che manda e crea una coppia ETH collegata; ETH viene solo letto. Poi seleziona le
+    due metà per id (`dt-row-checkbox-<id>`, `data-state=checked`). Il `afterEach` cancella l'account, e con lui i broker
+    e le transazioni. Titoli invariati.
+  - **C3**: in più asserisce che la divisione è proprio di questa coppia.
+  - **TODO-B**: in più asserisce che ogni id aggiornato è della coppia e che il commit è accettato; aspetta la risposta,
+    non la richiesta.
+  - **A6** (`tx-event-picker`): l'evento va su un asset manuale creato dal test, non su Apple. Cancellarlo da Apple non
+    sarebbe bastato: l'API degli eventi, senza id, aggiorna sul posto l'evento con la stessa data e lo stesso tipo, e
+    avrebbe sovrascritto un dividendo del seed. Il default DIVIDEND si legge dall'icona 💰, non dalla parola tradotta.
+    Il `afterEach` cancella l'asset.
+  - **Verifiche** (`--fresh-run`):
+
+    | Chiave | w1 | w4 |
+    |---|---|---|
+    | `tx-split-promote` | 6/6 | 6/6 |
+    | `tx-paired-edit` | 4/4 | 4/4 |
+    | `tx-event-picker` | 5/5 | 5/5 |
+
+  - Il carico era alto per tutto il tempo (load average 16-55, la coverage sulla 6176), ma nessun rosso. Dopo ogni giro
+    il DB era tornato al seed: 43↔44 e 45↔46 intatte, 76/11/8/11/17. I contatori di SQLite confermano che i dati del
+    test sono stati creati e poi tolti.
+  - Prettier e tsc puliti. Log: `/tmp/libreFolio_v_b_txseed_verify{1..6}_*.log`.
+  > **⚠️ Fuori pista**, lasciati intatti:
+  > - gli helper della coppia sono copiati in due spec, perché le fixture erano in sola lettura;
+  > - sonde e classi CSS rimaste nei test non toccati (Bug 6, Bug 14, NR-1, Guard), e `pickAssetByName`, che se la sonda
+  >   manca clicca il primo asset della lista;
+  > - un commento sbagliato in `selectRow` («a paired row selects both halves»).
+  >
+  > Tutto nel backlog V-21.
+  >
+  > **Domanda sul prodotto**, letta nel codice e non osservata: «+ New event» potrebbe modificare in silenzio un evento
+  > manuale con la stessa data e lo stesso tipo, pur dicendo di averne creato uno. Va al coordinatore come V-22.
+- ✅ **V-20, cura e verifica** (12/10). b-v20; ha toccato solo `auth.spec.ts`, `layout/app-start-auth.spec.ts` e
+  `files.spec.ts`. Ogni attesa di 3 s sulla prima navigazione è diventata un'attesa su uno stato pubblicato, con un
+  limite esplicito:
+  - **`auth.spec.ts`**:
+    - `openLoginPage`: `login-page` visibile, 20 s, perché la pagina radice lo mostra solo dopo GET /auth/me;
+    - `expectLandedOnDashboard`: il path `/dashboard` (15 s), poi `dashboard-page` (10 s). `login()` torna appena il
+      form sparisce, mentre la radice è ancora su `/`; la vecchia regex accettava anche `/welcome?returnTo=%2Fdashboard`;
+    - `expectLandedOnWelcome`, per gli account col benvenuto da fare;
+    - `login-error` a 20 s;
+    - timeout del file a 60 s, perché `login()` da solo può usare 10 + 10 + 20 s;
+    - il test 5 ora aspetta l'atterraggio prima di controllare le assenze: prima passava senza provare niente.
+  - **`app-start-auth.spec.ts:190`**: prima lo stato del layout (`app-auth-checking` o `server-unreachable`, 30 s), poi
+    il poll sul gate con 10 s espliciti.
+  - **`files.spec.ts:854`**:
+    - `openStaticGridView` aspetta `files-page` con `data-busy=false`;
+    - il test ha 60 s;
+    - attese esplicite di 10 s sulla card d'errore e sulla chiusura;
+    - la pulizia passa in un `afterEach`, che ha un suo slot di tempo. Nel giro pieno il file `914c9ec0` era rimasto,
+      perché il timeout aveva tagliato il `finally`.
+  - Prove (`--fresh-run`), con un carico alto (load average 41-56) e nessun rosso:
+
+    | Comando | Esito |
+    |---|---|
+    | `--workers 4 files "pdf preview"` (misura) | 7/7 |
+    | `auth` w1 / w4 | 29/29 e 29/29 (la chiave prende anche `app-start-auth`) |
+    | `app-start-auth` w1 / w4 | 3/3 e 3/3 |
+    | `files` w1 / w4 | 28/28 e 28/28 |
+
+  - Prettier e tsc puliti. Log: `/tmp/libreFolio_v_b_v20_*.log`.
+  > **Note implementazione**: a 4 worker `auth` non ha incontrato lo stallo del ripopolamento (V-17). Con V-16 i primi
+  > login rispondono in circa 1 s. I limiti nuovi sono provati sotto carico alto, ma non contro uno stallo vero.
+  > **⚠️ Fuori pista**, lasciati intatti e messi nel backlog (V-21):
+  > - `logout()` della fixture usa ancora i 3 s di default;
+  > - gli altri test di File Preview: i PDF puliscono ancora in `finally` con 30 s, mentre markdown, immagine,
+  >   dettaglio, zoom e commenti non cancellano mai il loro upload;
+  > - la vista dei file non pubblica il modo griglia/lista: i test usano la classe `active`. Servirebbe `aria-pressed`
+  >   in `files/+page.svelte` (~`:704/707`);
+  > - a 4 worker le anteprime aperte dalla griglia aspettano il loro fetch 5,8-10,9 s, quelle dalla lista 0-0,2 s. È
+  >   plausibile una coda dietro le miniature, ma non è dimostrato.
+- ✅ **Catalogo seriale e gate di categoria della 2b** (12/10, eseguiti da me, `--fresh-run --workers 4`, uno alla
+  volta). Carico molto alto per la coverage sulla 6176: il load average registrato a inizio e fine di ogni gate è
+  andato da 39 a 94, su 10 core.
+
+  | Gate | E2E | Vitest | Load avg (1 min) inizio → fine |
+  |---|---|---|---|
+  | `front-transaction all` | 34 + **326/327** | 881/881 | 48,5 → 48,6 |
+  | `front-broker all` | 2 + 51, verdi | 53/53 | 48,6 → 79,3 |
+  | `front-user all` | 19/19 | 57/57 | 79,3 → 47,4 |
+  | `front-utility all` | **89/90** + **224/226** | 7018/7018 | 47,4 → 72,2 |
+  | `front-portfolio all` | 18 + 159, verdi | 1218/1218 | 72,2 → 94,0 |
+
+  Log: `/tmp/libreFolio_v_2b_gate_<categoria>.log`, riepilogo in `/tmp/libreFolio_v_2b_gates_summary.log`.
+  > **⚠️ Fuori pista: i 4 rossi.** Nessuno sta in un file toccato dalla 2b.
+  > - **`toolbar-width-sweep` `es`, dashboard e assetDetail**: è V-19, già noto e deterministico, assegnato a I.
+  > - **`onboarding-guides.spec.ts:297` T11 [mobile]**: attesa scaduta (15 s) in `completeWelcome`
+  >   (`fixtures/onboarding-accounts.ts:97`), con la pagina ancora su `/welcome?returnTo=…`. Rilanciato da solo a 1
+  >   worker (`--workers 1 front-utility onboarding-guides "T11 broker_page_guide"`, load 54,7 → 46,7): **2/2 verdi**,
+  >   desktop e mobile. Verdetto: **carico**.
+  > - **`tx-wac-bulk.spec.ts:415` WB5**: la cella WAC «auto» resta `empty` per 20 s invece di `ready`. Rilanciato da
+  >   solo a 1 worker (`--workers 1 front-transaction tx-wac-bulk "WB5"`, load 86,9 → 54,7): **di nuovo rosso**, 25,3 s.
+  >   Non è il carico, e non è la 2b: il giro è su una sola chiave con il seed fresco, e `tx-wac-bulk` non è toccato.
+  >   Il test prende per posizione la prima coppia «giver/receiver» del seed su IB o Directa. Le coppie più recenti
+  >   del seed sono le due ETH Coinbase→IB di ieri (`delete-safe`, `delete-consume`), poi AAPL IB→Hidden Admin Broker
+  >   (Asym-d, ricevente nascosto). Triage in corso, solo diagnosi (test-author `b-wb5`).
+  >
+  > Log dei rilanci: `/tmp/libreFolio_v_2b_rerun_{wb5,t11}.log`.
+- ✅ **WB5, triage** (12/10). Test-author `b-wb5`; diagnostica temporanea poi tolta, file identico a HEAD. Verdetto:
+  **assunzione**. Non è un difetto del prodotto.
+  - **La riga scelta**: WB5 prende per posizione `tx-41` → `tx-42`, cioè MSFT IB −2 → DEGIRO +2, seed «Asym-c,
+    OWNER↔VIEWER=view-only». Salta prima le coppie ETH, perché la riga che manda è su Coinbase, e la Asym-d, il cui
+    ricevente sul broker nascosto non arriva all'utente.
+  - **La risposta di validate**: `accessDenied` («EDITOR required for broker 2»), `wac_results: null`. Su DEGIRO
+    `e2e_test_user` è solo VIEWER, e `compute_wac_and_fx_issues` (`transaction_batch_stages.py:833`) non propone costi
+    per un batch con errori. Quindi `empty` è giusto, e il banner lo spiega.
+  - **Perché passava**: dal 14/08 (`9a254f812`) WB5 esige `ready`. Da allora passava solo clonando una coppia lasciata
+    da altri test: per esempio quella IB→Directa che WB4, prima di lui nello stesso file, committa e non cancella.
+    Oppure gli avanzi di `tx-commit-all-types`, che la cura di A4 ora pulisce.
+  - **Esiti per modalità**: da solo fallisce sempre; nel gate a 4 worker parte insieme a WB4 e fallisce; in sequenza
+    passava. **La pulizia della 2b l'ha smascherato**, quindi la cura entra nella 2b.
+  - **Cura in corso** (`b-wb5`, solo `tx-wac-bulk.spec.ts`):
+    - WB5 costruisce la sua coppia: broker e asset propri via API, come WB11; due ADJUSTMENT +10 a 100 e 200 EUR; un
+      TRANSFER collegato −4/+4 a una data fissa vecchia;
+    - la clona per id, e asserisce il valore esatto atteso, 150 EUR per unità;
+    - WB4 cancella ciò che committa.
+  - Log: `/tmp/libreFolio_v_wb5_diag1.log`.
+  > **⚠️ Fuori pista**, osservazioni sul prodotto da `b-wb5`, non curate:
+  > - nel bulk editor il ricevente DEGIRO compare come «To: —», perché `renderBrokerHtml` cerca il broker solo nella
+  >   lista del modale;
+  > - l'errore d'accesso compare sulla riga 1a, anche se riguarda il broker 2;
+  > - `frontend/test-results` e `.testLog` sono condivisi per worktree, non per corsia: un giro successivo ha cancellato
+  >   l'`error-context.md` di WB5.
+- ✅ **WB4 e WB5, cura e verifica** (12/10). `b-wb5`; ha toccato solo `tx-wac-bulk.spec.ts` (+195/−97, quasi tutto WB4
+  reindentato).
+  - **WB5**:
+    - crea via API due broker e un asset EUR propri. Su A salva due ADJUSTMENT +10 a 100 e 200 EUR, poi un TRANSFER
+      collegato A −4 → B +4 del 2024-01-04. Il ricevente ha un costo manuale di 175, così il 150 della copia è per
+      forza calcolato e non copiato;
+    - rilegge lotti, collegamento e costo, apre la tabella sugli id della coppia e verifica per id che la riga che
+      manda stia sopra a quella che riceve;
+    - clona per id e chiama `waitForWacResolved`;
+    - asserisce `ready` e le cifre `15000`, cioè 150,00 EUR per unità;
+    - `cleanupOwned` gira in `finally`.
+  - **WB4**: gira nello stesso involucro di pulizia. `commitBulkModal` registra gli id appena arriva la risposta del
+    commit, e li cancella in `finally`.
+  - **Prove**, file intero, `--fresh-run`:
+    - 1 worker: 11/11, load 32,5 → 28,0;
+    - 4 worker: 11/11, load 24,8 → 36,4.
+  - Dopo ogni giro il DB è tornato al seed; i contatori confermano che i dati del file sono stati creati e tolti.
+  - Prettier e tsc puliti. Log: `/tmp/libreFolio_v_wb5_cure_w{1,4}.log`.
+- ✅ **Gate `front-transaction all` rifatto dopo WB5** (12/10, `--fresh-run --workers 4`, load 37,2 → 40,9): E2E 34 (32
+  skippati) + **327/327**, Vitest 881/881 (`/tmp/libreFolio_v_2b_gate_front-transaction_v2.log`).
+- **Esito dei gate della 2b**:
+  - verdi: `front-transaction`, `front-broker`, `front-user` e `front-portfolio`;
+  - `front-utility`: verde a parte V-19 (`es`, deterministico, assegnato a I) e T11 [mobile], che è carico e da solo
+    a 1 worker è verde;
+  - il gate di utility è girato con le cure di V-20 già nella worktree: `auth`, `app-start-auth` e `files` sono verdi
+    anche nel giro consolidato.
