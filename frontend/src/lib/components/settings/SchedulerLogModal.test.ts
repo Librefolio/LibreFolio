@@ -27,7 +27,9 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable} from 'svelte/store';
 import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 
-vi.mock('$lib/i18n', () => ({_: readable((key: string) => key)}));
+// Partial on purpose: `$lib/stores/app/language`, reached through `formatFixed` → `uiLocale`, reads the
+// catalogue constants (`DEFAULT_LOCALE`, `SUPPORTED_LOCALES`, …) from this module. Only the translator is replaced.
+vi.mock('$lib/i18n', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/i18n')>()), _: readable((key: string) => key)}));
 vi.mock('$lib/api', () => ({zodiosApi: {axios: {get: vi.fn()}}}));
 vi.mock('$lib/utils/clipboard', () => ({writeExportToClipboard: vi.fn()}));
 vi.mock('$lib/stores/reference/currencyStore', () => ({

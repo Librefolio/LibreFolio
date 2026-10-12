@@ -16,6 +16,7 @@
     import {warningSentence} from '../warningSentence';
     import TornadoChart from './TornadoChart.svelte';
     import {formatReplayDate, formatReplayShare, replayCoverageWarning, replayExclusions, replayNothingLeft, replayOptions, replaySuggestion, tornadoRows, type ReplayExclusionGroup, type ReplayExclusions, type TornadoRow} from './scenarioHelpers';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     /**
      * L4 rung 1 — historical replay: real returns, from a real period.
@@ -271,7 +272,7 @@
             <p class="text-sm text-gray-700 dark:text-gray-200" data-testid="risk-replay-total">
                 {$t('risk.levels.l4.replayTotal', {
                     values: {
-                        percent: `${total < 0 ? '−' : '+'}${(Math.abs(total) * 100).toFixed(2)}%`,
+                        percent: `${total < 0 ? '−' : '+'}${formatPercent(Math.abs(total), {scale: 100, signed: false})}`,
                         amount: !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
                     },
                 })}

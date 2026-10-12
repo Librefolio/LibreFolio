@@ -10,6 +10,8 @@
     import {TrendingUp, TrendingDown} from 'lucide-svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import {_ as t} from '$lib/i18n';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     interface Props {
         /** Last exchange rate */
@@ -36,14 +38,14 @@
     <div class="flex items-center gap-3 {layoutMode === 'oneRow' ? 'px-3' : filtersStacked ? 'justify-around w-full' : 'justify-center'}" style={filtersStacked && maxWidth ? `max-width: ${maxWidth}px` : ''}>
         <!-- Left half: rate -->
         <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
-            {lastRate.toFixed(4)}
+            {formatFixed(lastRate, 4)}
         </span>
 
         <!-- Right half: delta % -->
         {#if deltaPercent !== null}
             <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
                 {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
-                {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
+                {formatPercent(deltaPercent)}
             </span>
         {/if}
     </div>
