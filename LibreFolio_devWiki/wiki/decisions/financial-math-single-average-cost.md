@@ -17,6 +17,9 @@ related:
   - concepts/3-pool-cash-model
   - concepts/holdings-performance-panel
   - problems/test-transaction-implied-constructor-mismatch
+  - decisions/financial-math-one-home
+  - decisions/utils-leaf-functions-only
+  - entities/native-cash
 ---
 
 # Decision: one average-cost function, in a new `financial_math` layer
@@ -63,7 +66,8 @@ cost (a TRANSFER/ADJUSTMENT-in without `cost_basis_override`): the engine entere
 **Placement.** The analysis proposed a single module, `backend/app/services/average_cost.py`. The developer asked for a
 service layer for financial calculations instead, starting with this function, with the others to be factored in
 later or created there directly; the coordinator named it `financial_math`. It is not in `backend/app/utils/financial/`
-because those helpers are pure, while this function calls the FX service itself.
+because those helpers are pure, while this function calls the FX service itself — the reasoning the developer made
+general on 2026-10-12 ([[decisions/utils-leaf-functions-only]]).
 
 ## Decision
 
@@ -79,6 +83,12 @@ The package docstring (`__init__.py`) states the rule:
 - **New financial calculations are born here.** The existing pure helpers in `backend/app/utils/financial/`
   (`roi_utils.py`, `valuation_utils.py`) move into the layer later, in a separate refactor — not as part of the work
   that created it.
+
+*Since then:* the layer's second module, `native_cash.py`, came with lot 41 F on 2026-10-11
+([[entities/native-cash]]); on 2026-10-12 workstream T moved `roi_utils` and `valuation_utils` (now `returns.py` and
+`valuation.py`) together with the engines, the price resolver and Yield on Cost, and amended the rule — it may read its
+own data at named points, it re-exports nothing ([[decisions/financial-math-one-home]]). `utils/financial/` no longer
+exists.
 
 The first rule is the structural answer to #32: the engine's cost depended on `fx_rate_map` keys loaded by
 `_preload_fx_rates`, a different method written for a different purpose, so the missing identity key was invisible
@@ -193,12 +203,15 @@ average cost comes from this one function.
 
 ### Known limits (outside P's scope)
 
-- The **FIFO lot** conversions in `lots_analysis_service.py` still fall back to the unconverted amount when a rate is
+- ~~The **FIFO lot** conversions in `lots_analysis_service.py` still fall back to the unconverted amount when a rate is
   missing — e.g. `fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost` in
-  `_build_value_history` and `_build_return_history`.
-- `oversold_movement_ids` is computed, but no caller surfaces it yet.
-- `roi_utils.py` and `valuation_utils.py` still live in `backend/app/utils/financial/` until the separate migration
-  into the layer.
+  `_build_value_history` and `_build_return_history`.~~ *Resolved 2026-10-11* by workstream T (B3a, `82c1d3ab9`, "no
+  native fallback on missing FX"): a lot amount without a rate is unavailable, never the native amount. Since T-1 the two
+  functions are `build_value_history()` and `build_return_history()` in `financial_math/lots/histories.py`.
+- `oversold_movement_ids` is computed, but no caller surfaces it yet (still true at `5d0585595`).
+- ~~`roi_utils.py` and `valuation_utils.py` still live in `backend/app/utils/financial/` until the separate migration
+  into the layer.~~ *Resolved 2026-10-12* by T-1: `financial_math/returns.py` and `financial_math/valuation.py`
+  ([[decisions/financial-math-one-home]]).
 
 ## Links
 
@@ -210,6 +223,9 @@ average cost comes from this one function.
 - [[concepts/absence-sentinel-vs-nullable-type]] — "unknown", "zero" and "rate missing" are three states, not one `None`
 - [[problems/test-transaction-implied-constructor-mismatch]] — the required `average_costs` parameter met the same
   per-file test constructions again
+- [[decisions/financial-math-one-home]] — T-1: the whole layer, its amended rule and its guard (2026-10-12)
+- [[decisions/utils-leaf-functions-only]] — D-P7: why a function that calls a service is not a utility
+- [[entities/native-cash]] — the layer's second module (lot 41 F)
 
 ## Source files
 
@@ -220,6 +236,8 @@ average cost comes from this one function.
 | Engine consumer (`build_cost_positions`, `DailyStateBuilder`, `RealizedSale`, `UnrealizedSplit`) | `backend/app/services/financial_math/portfolio/derived_views.py`, `backend/app/services/financial_math/portfolio/daily_state.py`, `backend/app/services/financial_math/portfolio/models.py` |
 | WAC facade, realized P&L, boundary costs, breakdown rows | `backend/app/services/portfolio_service.py` |
 | Lots WAC lines and gaps | `backend/app/services/lots_analysis_service.py` |
+| Lots WAC line math (since 2026-10-12) | `backend/app/services/financial_math/lots/average_cost_lines.py` |
+| Lot value and return histories, no native fallback (since 2026-10-11/12) | `backend/app/services/financial_math/lots/histories.py` |
 | Broker summary holdings cost | `backend/app/services/broker_service.py` |
 | FX service (`convert_bulk`) | `backend/app/services/fx.py` |
 | `MISSING_COST_BASIS`, `UnrealizedBreakdownRow` | `backend/app/schemas/portfolio.py` |

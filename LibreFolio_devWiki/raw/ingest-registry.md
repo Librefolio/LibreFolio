@@ -354,3 +354,21 @@ folder 13 read for its decision only (merge `b81b92fd1`). Paths are relative to 
 | `LibreFolio_developer_journal/Release_2/phases/39_autoCostNoPosition/plan-phase00AutoCostNoPosition.prompt.md` | `083ed26dc` | 2026-10-09 | [[sources/phase00-auto-cost-no-position-2026-10]], [[decisions/auto-cost-basis-zero-without-position]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/implementation/plan-phase00PacRoundingDirectionFix.prompt.md` | `083ed26dc` | 2026-10-09 | [[decisions/pac-rounding-against-the-plan]] — partial: folder 13 is still active; re-check before archiving |
 | `LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/plan-phase00PacRebalancerMathematicalCore.prompt.md` | `083ed26dc` | 2026-10-09 | [[decisions/pac-rounding-against-the-plan]] — §7.3 only (the no-arbitrage principle) |
+
+## 2026-10-12 — step 3: lot 41 F, T-1, the AI Export version rule, M's notes (base `5d0585595`, train 47)
+
+Step 3 of the historian, decided by the developer on 2026-10-12. Folders 41, 43 and 27 are still in `Phase_0/`. Hashes
+are each file's last commit at the base. Paths are relative to the repository root.
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/41_brokerPnlFlows/plan-phase00BrokerPnlFlows.prompt.md` | `f10fcd04a` | 2026-10-12 | [[sources/phase00-broker-pnl-flows-2026-10]], [[decisions/native-cash-daily-revaluation]], [[entities/native-cash]], [[problems/foreign-cash-never-revalued]], [[problems/dirty-days-ignore-fx-only-moves]], [[decisions/portfolio-pnl-series-contracts]] (§13) |
+| `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` | `25e358eb0` | 2026-10-12 | [[sources/phase00-financial-math-home-2026-10]], [[decisions/financial-math-one-home]], [[decisions/utils-leaf-functions-only]], [[problems/ai-export-reconciled-false-on-rounding-dust]], [[decisions/ai-export-version-bump-once-per-release]] — partial: §10 from «T-1» on, §1, §3, §4, §8; the folder is still active |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `e25eb913d` | 2026-10-12 | sections C, I, M and T (T-W1, T-R1, T-BU1+BU2) — read for status, not summarized |
+| `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/README.md` | `83c2ba377` | 2026-10-12 | [[problems/ai-export-reconciled-false-on-rounding-dust]] (C-53), [[decisions/ai-export-version-bump-once-per-release]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `62526ede4` | 2026-10-12 | [[sources/phase00-translation-round12-2026-10]], [[problems/playwright-probes-ignore-timeout]] — partial: §9.3, §10, §11; spot checks of §5.7–§6 for the notes below |
+| M's note `b12_devwiki_stamps_hide_stale_translations.md` (release-pipeline working files, outside the repository) | `untracked` | 2026-10-12 | [[problems/stamps-hide-stale-translations]], [[concepts/mkdocs-suffix-i18n]] |
+| M's note `b13_devwiki_anchors_from_render.md` (idem) | `untracked` | 2026-10-12 | [[decisions/docs-anchors-from-the-render]] |
+| M's note `b14_devwiki_raw_html_paths_in_translations.md` (idem) | `untracked` | 2026-10-12 | [[problems/raw-html-paths-in-translations]] |
+| M's note `b15_devwiki_fr_typography_hook.md` (idem) | `untracked` | 2026-10-12 | [[decisions/fr-typography-at-build-time]] |
+| The developer, via the coordinator, 2026-10-12: F-AI (b) after 1.2 with a typed code; the Scalable confirmation; the version rule; `utils/runtime/` | `untracked` | 2026-10-12 | [[decisions/native-cash-daily-revaluation]], [[decisions/ai-export-version-bump-once-per-release]], [[decisions/utils-leaf-functions-only]] |
