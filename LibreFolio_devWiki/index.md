@@ -295,6 +295,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/asset-events-lost-on-price-cache-hit]] | **Folder 05 (clean audit).** A price-cache hit returned early and skipped the request that also carried the events: «No data» on an asset with events; events-only fall-through (`b45f5afbb`) | resolved | frontend, assets, cache |
 | [[problems/spa-logout-cross-user-cache-leak]] | **Folder 01.** After an SPA logout stores kept the previous account's data; `ClientSessionState` resets them, scopes keys per user, drops stale responses (`5b9dddb45`) | resolved | frontend, auth, session |
 | [[problems/stale-version-file-shadows-git-describe]] | **Folder 09, R2.** A leftover `VERSION` is read before `git describe` and nothing removes it: the reported version freezes on a dev host; design defect, open | open | backend, version, docker |
 | [[problems/privacy-gate-blind-to-formatter-consumers]] | **Folder 09, P4-11.** The money-render gate missed a formatter's consumers: the Growth chart showed amounts in privacy mode; mask at the formatter (`804bc9903`) | resolved | privacy, charts, gate |
@@ -473,6 +474,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/phase00-clean-audit-2026-08]] | `Release_2/phases/05_cleanAudit/` — the August code-cleanliness audit: mostly healthy, the debt in a few places, remediation S1–S3, the full suite made runnable | 2026-10-12 | phase0, audit, cleanliness |
 | [[sources/phase00-feedback-jobs-2026-09]] | `Release_2/Phase_0/09_feedbackJobs/` — the September backlog in 16 sprints, each area mapped to the lot that delivered it; what is still open (P4-7, P4-9, P4-10, R2, §2.4, SP14, SP15) | 2026-10-12 | phase0, feedback, backlog |
 | [[sources/phase00-risk-integration-2026-09]] | `Release_2/Phase_0/02_riskfolioIntegration/` — Risk Analysis replanned and rebuilt (two rounds), paused until after 1.2 (D382); README ingested in step R0, the rest in R1–R6 | 2026-10-12 | phase0, risk, levels, lab |
 | [[sources/phase00-chart-axis-day-labels-2026-10]] | `Release_2/Phase_0/47_chartAxisDayLabels/` — workstream I: the day back on line-chart x-axes, localized labels, the stale P&L lines | 2026-10-12 | phase0, charts, echarts, workstream-i |
@@ -608,6 +610,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Historical folder H2 — `05_cleanAudit`.** The August audit summarised; one solved problem kept (events lost on a price-cache hit) | [[sources/phase00-clean-audit-2026-08]] *(2 pages — 1 source, 1 problem; see log)* |
 | 2026-10-12 | **Historical folder H1 — `01_signalMigration`.** Drift: four July rows re-baselined (path moved to `phases/`); gaps: indicator warm-up sizing, the SPA logout leak | *(2 pages — 1 decision, 1 problem; see log)* |
 | 2026-10-12 | **Folder 09, step F2 — the areas and the visual review; folder 09 covered.** No gap in the areas; R2 of the visual review filed as an open design defect | *(1 page — 1 problem; see log)* |
 | 2026-10-12 | **Folder 09, step F1 — the structural backlog and the static analysis.** Statuses checked on the code; two solved defects kept as problems | *(2 pages — 2 problems; see log)* |

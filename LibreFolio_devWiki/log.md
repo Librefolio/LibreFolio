@@ -3147,3 +3147,10 @@ on `8da24ef22` and the `phases/` path; 32 files were never ingested — mostly t
 AI Export pages already carry. Gaps found by an explore agent and checked in the code: **Created**
 [[decisions/signal-indicator-warmup-sizing]], [[problems/spa-logout-cross-user-cache-leak]]. **Updated**
 [[decisions/signal-backend-plugin-architecture]], [[features/F-001]]. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H2 — 05_cleanAudit
+Base `42fc4dd7f`. Source: `phases/05_cleanAudit/` (`8da24ef22`; never ingested), digested by an explore agent that
+grepped the wiki before naming a gap. **Created**: [[sources/phase00-clean-audit-2026-08]],
+[[problems/asset-events-lost-on-price-cache-hit]] (`b45f5afbb`; the journal cites, for the cause, a hash that does
+not resolve in this repository — `git log -S` points to `5b9dddb45`). **Updated**: [[concepts/test-isolation-classes]] (the
+first `test all` that could not pass). Graph: not updated (P-6).
