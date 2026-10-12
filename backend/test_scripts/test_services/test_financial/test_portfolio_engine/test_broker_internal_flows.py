@@ -55,6 +55,7 @@ from backend.app.services.portfolio_engine import (
 )
 from backend.app.services.price_resolver import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
+from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 
 A, B, C = 10, 20, 30
 ASSET = 100
@@ -136,7 +137,7 @@ def _mark_series_from(classified_txs, price_map, asset_currencies, quote_base_ma
 
 def _builder_kwargs(**overrides) -> dict:
     """The kwargs ``_builder`` passes to DailyStateBuilder: defaults, overrides, then the
-    mark series and average costs computed once (the aggregate guard reuses them)."""
+    mark series, average costs and native cash computed once (the aggregate guard reuses them)."""
     defaults = {
         "classified_txs": [],
         "in_transit_intervals": [],
@@ -167,6 +168,13 @@ def _builder_kwargs(**overrides) -> dict:
             target_currency=defaults["target_currency"],
             fx_rate_map=defaults["fx_rate_map"],
             split_linked_tx_ids=defaults.get("split_linked_tx_ids"),
+            date_to=defaults["date_to"],
+        )
+    if "native_cash" not in defaults:
+        defaults["native_cash"] = engine_native_cash(
+            defaults["classified_txs"],
+            target_currency=defaults["target_currency"],
+            fx_rate_map=defaults["fx_rate_map"],
             date_to=defaults["date_to"],
         )
     return defaults
@@ -548,10 +556,9 @@ class TestCashPairsBetweenBrokers:
         and P_A = +30, the whole FX gain. No capital moves on d1-d3.
         Today d4: P_A -900, P_B +930.
 
-        P on d2 is deliberately not pinned. The lot table says P_A(d2) = 10, but d2 is not
-        a dirty day (no transaction, flow or interval bound; an FX move alone does not
-        dirty a day), so the engine emits a copy of d1: P(d2) = 0 today and, because step
-        3b must not change any aggregate, after the fix too.
+        d2 is a USD rate-change day (.90 -> .91), and a rate change of a held foreign
+        currency makes the day dirty, so the value in transit follows it: P_A(d2) = +10,
+        as in the lot table.
         """
         classification, overrides = _case_03_foreign_cash_in_transit()
         assert _classifications(classification) == {1: "normal", 2: "linked_internal", 3: "linked_internal"}
@@ -563,12 +570,12 @@ class TestCashPairsBetweenBrokers:
         expected = {
             D0: {A: ("900", "0"), B: ("0", "0")},
             D1: {A: ("900", "0"), B: ("0", "0")},
-            D2: {A: ("900", None), B: ("0", "0")},
+            D2: {A: ("900", "10"), B: ("0", "0")},
             D3: {A: ("900", "20"), B: ("0", "0")},
             D4: {A: ("-30", "30"), B: ("930", "0")},
             D5: {A: ("-30", "30"), B: ("930", "0")},
         }
-        aggregate = {D0: ("900", "0"), D1: ("900", "0"), D2: ("900", None), D3: ("900", "20"), D4: ("900", "30"), D5: ("900", "30")}
+        aggregate = {D0: ("900", "0"), D1: ("900", "0"), D2: ("900", "10"), D3: ("900", "20"), D4: ("900", "30"), D5: ("900", "30")}
         problems = _line_problems(result, expected) + _aggregate_problems(result, aggregate) + _transit_problems(result, D1, D4, (A, B))
         assert not problems, "\n".join(problems)
         _assert_invariant_every_day(result.daily_states)
