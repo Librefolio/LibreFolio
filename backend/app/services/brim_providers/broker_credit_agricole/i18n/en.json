@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_credit_agricole": {
+      "description": "Import from Crédit Agricole exports (CSV or XLSX): the 'Lista Movimenti Deposito Titoli' securities movements (coupons, purchases, redemptions, maturities, succession transfers; balanced with automatic cash counter-entries) and the 'Lista Movimenti Conto' account movements (liquidity, fees, taxes and income as deposits/withdrawals). Assets are identified by name only (no ISIN).",
+      "name": "Crédit Agricole"
+    }
+  }
+}

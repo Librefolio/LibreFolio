@@ -1,0 +1,105 @@
+{
+  "fx": {
+    "title": "Tassi di Cambio",
+    "subtitle": "Visualizza e sincronizza i tassi di cambio",
+    "actions": {
+      "addPair": "Aggiungi Coppia"
+    },
+    "empty": {
+      "noPairsTitle": "Nessuna Coppia FX Configurata",
+      "noPairsDesc": "Aggiungi la tua prima coppia di valute per iniziare a monitorare i tassi di cambio.",
+      "addFirstPair": "Aggiungi Prima Coppia",
+      "noMatchesDesc": "Nessuna coppia corrisponde al filtro corrente."
+    },
+    "filter": {
+      "filterCurrency": "Filtra valuta",
+      "secondCurrency": "Seconda valuta",
+      "resetFilters": "Azzera filtri"
+    },
+    "addPair": {
+      "title": "Aggiungi Nuova Coppia FX",
+      "baseCurrency": "Valuta Base",
+      "quoteCurrency": "Valuta Quotata",
+      "providerDisabledHint": "Seleziona prima entrambe le valute",
+      "providerInfoBanner": "I provider recuperano automaticamente i tassi di cambio dalle banche centrali. Senza un provider, dovrai inserire i tassi manualmente.",
+      "noProviderWarning": "Nessun provider configurato. Dovrai inserire manualmente i tassi di cambio per ogni data.",
+      "createIntermediatePairs": "Crea anche le coppie intermedie",
+      "createIntermediatePairsHint": "Ogni passaggio delle catene selezionate verrà salvato come coppia autonoma con il suo provider, così da poterle sincronizzare indipendentemente.",
+      "titleEdit": "Modifica Provider Coppia",
+      "createFailed": "Creazione coppia FX fallita",
+      "createConflict": "Qualcun altro ha modificato questa rotta di conversione nello stesso momento. Non è stato salvato nulla: riprova.",
+      "alreadyExists": "Questa coppia esiste già — sincronizza o modificala dalla pagina FX."
+    },
+    "sync": {
+      "description": "Sincronizza i tassi di cambio dai provider configurati per l'intervallo di date selezionato.",
+      "synced": "Sincronizzati",
+      "start": "Avvia Sincronizzazione",
+      "pairsCount": "coppie",
+      "timeout": "Timeout",
+      "tooltipFetched": "Punti dati scaricati dal provider",
+      "tooltipChanged": "Punti dati effettivamente inseriti o aggiornati nel database",
+      "toastFailed": "{pair} sincronizzazione fallita",
+      "legBreakdown": "Dettaglio per tratta",
+      "legNoData": "0 date — nessun dato",
+      "legDates": "date",
+      "inProgress": "Sincronizzazione tassi FX…",
+      "timeoutAfter": "Timeout dopo {seconds} s",
+      "requestTimedOut": "La richiesta è scaduta dopo {seconds} s. Aumenta il timeout e riprova.",
+      "failed": "Sincronizzazione non riuscita",
+      "retryFailed": "{n, plural, one {Riprova quello non riuscito} other {Riprova i # non riusciti}}"
+    },
+    "route": {
+      "title": "Percorsi di Conversione",
+      "loading": "Caricamento percorsi...",
+      "directSection": "Conversione diretta (1 passo)",
+      "chainSection": "Conversione a catena",
+      "unusableSection": "Non utilizzabili",
+      "unusableHint": "Questi provider non hanno un percorso di conversione automatico per questa coppia di valute.",
+      "steps": "passi",
+      "noRoutesAvailable": "Nessun percorso di conversione automatico trovato per questa coppia. Puoi comunque salvare senza provider e inserire i tassi manualmente.",
+      "chainWarning": "Le catene richiedono che TUTTI i passaggi intermedi riescano durante il sync. Se un provider fallisce, l'intera catena fallisce per quella data.",
+      "searchPlaceholder": "Cerca provider, valute, paesi…",
+      "noSearchResults": "Nessun percorso corrisponde alla ricerca",
+      "addRoute": "Aggiungi percorso di conversione",
+      "hideRoutes": "Nascondi percorsi disponibili"
+    },
+    "deletePair": "Elimina coppia",
+    "deletePairTitle": "Elimina Coppia FX",
+    "deletePairQuestion": "Eliminare {pair}?",
+    "deletePairWarning": "Questo rimuoverà la configurazione dei provider e tutti i tassi di cambio storici. ⚠️",
+    "delete": {
+      "toastOk": "{pair} eliminata ({count} tassi rimossi)",
+      "toastFailed": "Impossibile eliminare {pair}",
+      "resultDeleted": "eliminata ({n} tassi)"
+    },
+    "rateNotAvailable": "Tasso non disponibile",
+    "rate": "Tasso",
+    "card": {
+      "manualOnly": "Coppia solo manuale",
+      "syncFromProvider": "Sincronizza i tassi dal provider"
+    },
+    "loadFailed": "Impossibile caricare le coppie FX"
+  },
+  "fxDetail": {
+    "editRates": "Modifica tassi",
+    "loadingRates": "Caricamento tassi...",
+    "noData": "Nessun tasso disponibile per questo intervallo.",
+    "syncRates": "Sincronizza tassi",
+    "backToList": "Torna alla lista FX",
+    "swapConfirmTitle": "Modifiche non salvate",
+    "swapConfirmMessage": "Hai modifiche non salvate nell'editor dei tassi. Invertire la direzione le cancellerà. Continuare?",
+    "noDataManual": "Nessun dato disponibile — inserire i tassi manualmente",
+    "insertManually": "Inserisci manualmente",
+    "syncDisabledManual": "Sync disabilitato — nessun provider configurato. Aggiungere un provider o inserire i tassi manualmente.",
+    "aiExport": "AI Export",
+    "syncFailed": "Sincronizzazione non riuscita: {error}",
+    "loadFailed": "Impossibile caricare i tassi",
+    "assetFallback": "Asset n. {id}",
+    "invalidRates": "{n, plural, one {# riga ha un tasso non valido} other {# righe hanno un tasso non valido}}: il tasso deve essere strettamente maggiore di zero (0 non è ammesso).",
+    "savedSummary": "Tassi FX: {details}",
+    "savedCount": "{n, plural, one {# salvato} other {# salvati}}",
+    "deletedCount": "{n, plural, one {# eliminato} other {# eliminati}}",
+    "skippedCount": "{n, plural, one {# ignorato (non valido)} other {# ignorati (non validi)}}",
+    "saveFailed": "Salvataggio dei tassi FX non riuscito: {error}"
+  }
+}

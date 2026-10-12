@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_delta": {
+      "description": "Importa le transazioni dagli export CSV di Delta. Supporto al meglio delle possibilità per compravendite in valuta fiat, trasferimenti di cripto, dividendi e rettifiche da cripto a cripto.",
+      "name": "Delta"
+    }
+  }
+}

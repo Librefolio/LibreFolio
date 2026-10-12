@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetRiskReturn": {
+        "name": "Risk and return by asset",
+        "description": "Volatility and expected annualised return of each asset and of the portfolio, on the current composition."
+      }
+    }
+  }
+}

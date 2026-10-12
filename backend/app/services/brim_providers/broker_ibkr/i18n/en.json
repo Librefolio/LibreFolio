@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_ibkr": {
+      "description": "Import trades from Interactive Brokers CSV export. Supports stocks, ETFs, and FX trades with commissions.",
+      "name": "Interactive Brokers"
+    }
+  }
+}

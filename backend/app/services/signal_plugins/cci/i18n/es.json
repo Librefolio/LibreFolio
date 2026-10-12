@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "cci": {
+      "name": "CCI",
+      "description": "Distancia respecto al precio medio",
+      "output": "CCI",
+      "oversold": "Sobreventa",
+      "overbought": "Sobrecompra",
+      "oversoldRegion": "Sobreventa",
+      "neutralRegion": "Neutral",
+      "overboughtRegion": "Sobrecompra"
+    }
+  }
+}

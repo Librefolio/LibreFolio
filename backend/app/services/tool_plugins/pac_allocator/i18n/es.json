@@ -1,0 +1,8 @@
+{
+  "tools": {
+    "pacAllocator": {
+      "name": "Asignador PAC",
+      "description": "Planifica las compras que acercan al máximo una nueva inversión a su asignación objetivo, en participaciones enteras o importes, sin enviar órdenes."
+    }
+  }
+}

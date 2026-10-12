@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "bollinger": {
+      "name": "Bande di Bollinger",
+      "description": "Volatilità attorno alla media mobile",
+      "bands": "Bande"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_bux": {
+      "description": "Importa las transacciones de la exportación CSV de BUX. Admite operaciones de compraventa, depósitos y retiradas SEPA, dividendos y comisiones.",
+      "name": "BUX"
+    }
+  }
+}

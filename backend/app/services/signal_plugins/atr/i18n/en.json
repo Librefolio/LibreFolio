@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "atr": {
+      "name": "ATR",
+      "description": "Absolute price volatility",
+      "output": "ATR"
+    }
+  }
+}

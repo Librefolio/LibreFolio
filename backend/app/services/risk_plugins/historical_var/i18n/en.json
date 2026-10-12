@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "historicalVar": {
+        "name": "Historical VaR / CVaR",
+        "description": "Historical loss estimates at the selected confidence and horizon."
+      }
+    }
+  }
+}

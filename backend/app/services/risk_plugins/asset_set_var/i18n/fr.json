@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetVar": {
+        "name": "Risque de queue par actif",
+        "description": "La perte atteinte par chaque actif sélectionné dans ses pires cas, estimée sur son propre historique."
+      }
+    }
+  }
+}

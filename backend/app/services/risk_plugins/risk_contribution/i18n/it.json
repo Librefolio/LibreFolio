@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "riskContribution": {
+        "name": "Contributo al rischio",
+        "description": "Contributi alla volatilità per asset sulla composizione corrente."
+      }
+    }
+  }
+}

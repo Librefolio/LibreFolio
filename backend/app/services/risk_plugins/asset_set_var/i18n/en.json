@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetVar": {
+        "name": "Per-asset tail risk",
+        "description": "The loss each selected asset reached in its worst outcomes, estimated from its own history."
+      }
+    }
+  }
+}

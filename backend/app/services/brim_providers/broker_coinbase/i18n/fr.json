@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_coinbase": {
+      "description": "Importe les transactions de l’export CSV de Coinbase. Prend en charge les achats et ventes de cryptos et les récompenses de staking.",
+      "name": "Coinbase"
+    }
+  }
+}

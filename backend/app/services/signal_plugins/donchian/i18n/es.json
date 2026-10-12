@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "donchian": {
+      "name": "Canales de Donchian",
+      "description": "Canal máximo-mínimo del período",
+      "channels": "Canales"
+    }
+  }
+}

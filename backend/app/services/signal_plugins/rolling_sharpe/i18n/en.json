@@ -1,0 +1,10 @@
+{
+  "signals": {
+    "riskRollingSharpe": {
+      "name": "Rolling Sharpe Ratio",
+      "description": "Annualized excess return per unit of sample volatility over a rolling window.",
+      "output": "Sharpe ratio",
+      "outputDescription": "Annualized mean daily excess return divided by sample volatility."
+    }
+  }
+}
