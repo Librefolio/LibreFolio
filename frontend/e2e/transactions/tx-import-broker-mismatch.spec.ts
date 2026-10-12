@@ -28,7 +28,15 @@
  *      wizard stays on the upload step, its drop zone open again.
  *   M4 the same file assigned to the broker account on an account with TWO overnight accounts: both are
  *      offered as a choice (`-targets`, one radio each, the first one chosen), the user picks the other
- *      one, and Move uploads the file there — not to the first one offered — and deletes the copy.
+ *      one, and Move uploads the file there — not to the first one offered — and deletes the copy. Move
+ *      names no broker: the chosen one is the checked entry above it, and where Move sends the file is
+ *      read from the upload it makes.
+ *   M5 the prompt's three answers — Remove, Keep, Move — in Italian and French (the longest labels), at
+ *      desktop width (1280 px) and on a 375 px phone: each label keeps to one line (none wraps inside
+ *      its button), and each button lies wholly inside the footer, so the modal's `overflow: hidden`
+ *      clips none. The footer may take two rows; a label may not. Measured in the page once nothing in
+ *      the prompt moves (`getAnimations`, `document.fonts`): the lines of a label are the distinct tops
+ *      of its text's client rects, the edges are bounding rects. Each language's file is removed again.
  *
  * Why M1 and M4 run on a disposable account. The fallback rule drops the generic-CSV brokers once a
  * broker of a specific plugin is offered, but *every* broker whose specific default plugin reads the file
@@ -37,7 +45,8 @@
  * "two") would depend on the schedule. The account is registered by the test
  * (fixtures/onboarding-accounts.ts, every onboarding flow skipped over the API so no guide covers the
  * wizard), owns exactly the brokers it creates — read back before the walk — and is deleted with them.
- * M2 and M3 assert nothing about the targets, so they run on the shared E2E user.
+ * M2, M3 and M5 assert nothing about the targets, so they run on the shared E2E user. M5's language is
+ * its browser context's own (localStorage), never the account's.
  *
  * Data. Every test creates its own brokers (unique names: `brokers.name` is uniquely indexed) before
  * the page loads, since the wizard reads the broker list once per session, and uploads a copy of
@@ -49,13 +58,13 @@
  * import-wizard-step1 / file-uploader / file-input / import-wizard-step1-broker-select /
  * search-select-option-<brokerId> / import-wizard-next [disabled] · import-broker-mismatch-modal / -intro /
  * -from / -reason / -target / -targets / -target-<brokerId> (a radio inside) / -no-target / -no-reader /
- * -counter / -move / -remove ·
+ * -counter / -footer / -remove / -keep / -move ·
  * import-wizard-step2 [data-busy] / import-wizard-broker-files-<brokerId> /
  * import-wizard-broker-toggle-<brokerId> / dt-row-checkbox-<fileId> [data-state].
  */
 
 import {expect, test, type APIRequestContext, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {optionsClosed} from '../fixtures/probe';
@@ -106,6 +115,11 @@ async function jsonFrom<T>(response: HttpResponse, purpose: string): Promise<T> 
 }
 
 const byNumber = (a: number, b: number) => a - b;
+
+/** A pattern matching any of `texts`, each taken literally: one reading checks them all. */
+function anyOf(texts: readonly string[]): RegExp {
+    return new RegExp(texts.map((text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'));
+}
 
 /**
  * Brokers of the signed-in account, each with its default import plugin, created in one request. Every id
@@ -236,6 +250,98 @@ async function continueAndUpload(page: Page, fileName: string, brokerId: number)
     const uploaded = await jsonFrom<UploadedInfo>(response, `upload ${fileName}`);
     expect(uploaded, `${fileName} lands on broker ${brokerId} under its own name`).toMatchObject({filename: fileName, target_broker_id: brokerId});
     return uploaded;
+}
+
+// ---------------------------------------------------------------------------
+// The answers' layout (M5)
+// ---------------------------------------------------------------------------
+
+/** The prompt's three answers, by the suffix of their test id: `import-broker-mismatch-<answer>`. */
+const ANSWERS = ['remove', 'keep', 'move'] as const;
+type Answer = (typeof ANSWERS)[number];
+/** The `desktop` project's own viewport, and a small phone's: the two widths the answers must hold at. */
+const DESKTOP = {width: 1280, height: 720};
+const PHONE = {width: 375, height: 812};
+/** Layout is sub-pixel: an edge this close to the footer's is on it, not past it. */
+const EDGE_TOLERANCE_PX = 0.5;
+/** Text fragments whose tops are this close sit on one line; a wrapped line starts a line-height lower. */
+const SAME_LINE_PX = 2;
+
+type Edges = {left: number; right: number};
+type AnswerGeometry = Edges & {answer: Answer; lines: number};
+type FooterGeometry = {footer: Edges; answers: AnswerGeometry[]};
+
+const px = (value: number) => value.toFixed(1);
+
+/** Resize the page and read the width back: what is measured next is laid out at `size.width`. */
+async function useViewport(page: Page, size: {width: number; height: number}): Promise<void> {
+    await page.setViewportSize(size);
+    await expect.poll(() => page.evaluate(() => window.innerWidth), {message: `the page is ${size.width} px wide`, timeout: UI_TIMEOUT}).toBe(size.width);
+}
+
+/**
+ * Wait until nothing in the prompt moves. It opens with Svelte's `scale` and `fade` transitions — Web Animations,
+ * cancelled once over — and its buttons carry a `transition: all` of their own: a rect read while a transform runs
+ * is not the one the user is left with, and neither is one read before the fonts have loaded. The dialog is the
+ * footer's own `role="dialog"` ancestor; an animation still to start counts as running.
+ */
+async function promptAtRest(footer: Locator, where: string): Promise<void> {
+    await expect
+        .poll(
+            () =>
+                footer.evaluate(async (element) => {
+                    await document.fonts.ready;
+                    const dialog = element.closest('[role="dialog"]');
+                    const running = dialog ? dialog.getAnimations({subtree: true}).filter((animation) => animation.playState === 'running').length : -1;
+                    return {dialog: dialog !== null, fonts: document.fonts.status, running};
+                }),
+            {message: `${where}: the prompt is at rest — no animation running in it, its fonts loaded`, timeout: UI_TIMEOUT},
+        )
+        .toEqual({dialog: true, fonts: 'loaded', running: 0});
+}
+
+/**
+ * The footer's horizontal edges and, for each answer, its own edges and the lines its label takes, read in one
+ * evaluation. The lines are the distinct tops of the client rects of the button's text — each text node trimmed
+ * to its visible characters; the broker icon is not text — so a label that wraps inside its button has rects on
+ * two tops or more, and a button with no label has none.
+ */
+async function measureAnswers(footer: Locator): Promise<FooterGeometry> {
+    return footer.evaluate(
+        (element, {answers, sameLinePx}) => {
+            const edgesOf = (target: Element) => {
+                const rect = target.getBoundingClientRect();
+                return {left: rect.left, right: rect.right};
+            };
+            const linesOf = (button: Element) => {
+                const tops: number[] = [];
+                const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+                for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                    const text = node.textContent ?? '';
+                    const start = text.length - text.trimStart().length;
+                    const end = text.trimEnd().length;
+                    if (end <= start) continue;
+                    const range = document.createRange();
+                    range.setStart(node, start);
+                    range.setEnd(node, end);
+                    for (const rect of Array.from(range.getClientRects())) {
+                        if (rect.width > 0 && rect.height > 0) tops.push(rect.top);
+                    }
+                }
+                tops.sort((a, b) => a - b);
+                return tops.filter((top, index) => index === 0 || top - tops[index - 1] > sameLinePx).length;
+            };
+            return {
+                footer: edgesOf(element),
+                answers: answers.map((answer) => {
+                    const button = element.querySelector(`[data-testid="import-broker-mismatch-${answer}"]`);
+                    if (!button) throw new Error(`import-broker-mismatch-${answer} is not in the footer`);
+                    return {answer, lines: linesOf(button), ...edgesOf(button)};
+                }),
+            };
+        },
+        {answers: ANSWERS, sameLinePx: SAME_LINE_PX},
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -446,8 +552,6 @@ test.describe('Import Wizard — a file its broker’s default import plugin can
 
         // ③ The first entry is chosen until the user picks another: the user picks the second one.
         const [firstOfferedId, pickedId] = offeredIds;
-        const picked = [overnightA, overnightB].find((broker) => broker.id === pickedId);
-        if (!picked) throw new Error(`The broker offered second (${pickedId}) is neither overnight account`);
         const firstRadio = choice.getByTestId(`import-broker-mismatch-target-${firstOfferedId}`).getByRole('radio');
         const pickedRadio = choice.getByTestId(`import-broker-mismatch-target-${pickedId}`).getByRole('radio');
         await expect(firstRadio, 'the broker offered first is chosen at first').toBeChecked();
@@ -456,8 +560,12 @@ test.describe('Import Wizard — a file its broker’s default import plugin can
         await expect(pickedRadio).toBeChecked();
         await expect(firstRadio, 'one target at a time').not.toBeChecked();
         const move = modal.getByTestId('import-broker-mismatch-move');
-        await expect(move, 'Move names the broker picked — data of this test, not a translation').toContainText(picked.name);
         await expect(move).toBeEnabled();
+        // Move names no broker: which one it answers with is the entry checked above, and where it sends the file
+        // is read from the upload it makes (④). The label is there — the presence that gives the absence its
+        // teeth — and in one reading it names none of this account's brokers.
+        await expect(move, 'Move has a label').toHaveText(/\S/);
+        await expect(move, 'Move names no broker — not the one picked, not the one offered first: the checked entry says which one it answers with').not.toContainText(anyOf([brokerAccount.name, overnightA.name, overnightB.name]));
 
         // ④ Move: the same file uploaded to the broker picked, in the same batch, then the copy on the broker account deleted.
         const [moveResponse, deleteResponse] = await Promise.all([responseTo(page, 'POST', UPLOAD_PATH, 'Move uploads the file to the broker picked'), responseTo(page, 'DELETE', `${FILES_PATH}/${uploaded.file_id}`, 'Move deletes the copy on the broker account'), move.click()]);
@@ -486,5 +594,67 @@ test.describe('Import Wizard — a file its broker’s default import plugin can
         ).toEqual([moved.file_id]);
         expect(await filesOn(page, firstOfferedId), 'the broker offered first holds nothing').toEqual([]);
         expect(await filesOn(page, brokerAccount.id), 'the broker account holds nothing').toEqual([]);
+    });
+
+    test('M5: the three answers stay on one line each, inside the prompt, in Italian and French, at desktop width and on a 375 px phone', async ({page}, testInfo) => {
+        test.setTimeout(180_000);
+        await login(page, TEST_USER);
+        // The overnight account is there so that the file has a target and Move is offered. How many targets this
+        // shared user has besides, and which one is chosen at first, is not this test's subject: Move names none.
+        const [brokerAccount] = await createOwnedBrokers(page, owned, [
+            {tag: 'broker account', defaultPlugin: SCALABLE_BROKER},
+            {tag: 'overnight account', defaultPlugin: SCALABLE_DEPOSIT},
+        ]);
+
+        // The longest labels. The language is this browser context's own (localStorage), set on the page.
+        for (const lang of ['it', 'fr'] as const) {
+            // ① A full load once the brokers exist (the wizard reads them once per session), at desktop width — where
+            // the header holds the language selector — then the language, then Continue uploads the file to the
+            // broker account, whose default plugin does not read it.
+            await goToTransactions(page);
+            await useViewport(page, DESKTOP);
+            await setLanguage(page, lang);
+            const step1 = await openImportWizard(page);
+            const fileName = `scalable-deposit-export-${uniqueSuffix()}.csv`;
+            await stageDepositFile(page, step1, fileName, brokerAccount.id);
+            const uploaded = await continueAndUpload(page, fileName, brokerAccount.id);
+            expect(uploaded.compatible_plugins ?? [], 'premise: the overnight account’s plugin reads the file — Move has a target').toContain(SCALABLE_DEPOSIT);
+            expect(uploaded.compatible_plugins ?? [], 'premise: the broker account’s plugin does not — the file is questioned').not.toContain(SCALABLE_BROKER);
+
+            const modal = page.getByTestId('import-broker-mismatch-modal');
+            await expect(modal, `${lang}: the file is questioned`).toBeVisible({timeout: STEP_TIMEOUT});
+            await expect(page.locator('html'), `premise: the prompt speaks ${lang}`).toHaveAttribute('lang', lang);
+            const footer = modal.getByTestId('import-broker-mismatch-footer');
+            await expect(footer).toBeVisible();
+            for (const answer of ANSWERS) {
+                await expect(footer.getByTestId(`import-broker-mismatch-${answer}`), `premise: ${lang}: ${answer} is offered`).toBeVisible();
+            }
+
+            // ② The same open prompt at desktop width, then on a phone — only the page is resized, nothing reopened.
+            // Every reading is asserted, softly: one run reports each language, width and answer that fails.
+            for (const size of [DESKTOP, PHONE]) {
+                const where = `${lang} @${size.width}px`;
+                await useViewport(page, size);
+                await promptAtRest(footer, where);
+                const geometry = await measureAnswers(footer);
+                await testInfo.attach(`broker-mismatch-footer-${lang}-${size.width}px.json`, {body: JSON.stringify(geometry, null, 1), contentType: 'application/json'});
+                const {left: footerLeft, right: footerRight} = geometry.footer;
+                for (const {answer, lines, left, right} of geometry.answers) {
+                    const evidence = `${where} ${answer}: lines=${lines}, button=[${px(left)},${px(right)}], footer=[${px(footerLeft)},${px(footerRight)}]`;
+                    expect.soft(lines, `${evidence} — the label keeps to one line`).toBe(1);
+                    expect.soft(left, `${evidence} — the button starts inside the footer`).toBeGreaterThanOrEqual(footerLeft - EDGE_TOLERANCE_PX);
+                    expect.soft(right, `${evidence} — the button ends inside the footer`).toBeLessThanOrEqual(footerRight + EDGE_TOLERANCE_PX);
+                }
+            }
+            await useViewport(page, DESKTOP);
+
+            // ③ Remove answers the prompt, as in M3: the file is deleted on the server and leaves the step-1 list.
+            const remove = footer.getByTestId('import-broker-mismatch-remove');
+            await expect(remove).toBeEnabled();
+            const [deleteResponse] = await Promise.all([responseTo(page, 'DELETE', `${FILES_PATH}/${uploaded.file_id}`, `${lang}: Remove deletes the uploaded file`), remove.click()]);
+            expect(await jsonFrom<DeleteResult>(deleteResponse, `remove ${fileName}`), `${lang}: the uploaded file is deleted`).toMatchObject({success: true, file_id: uploaded.file_id});
+            await expect(modal, `${lang}: Remove answers the question`).toHaveCount(0, {timeout: UI_TIMEOUT});
+            await expect(pendingRows(step1), `${lang}: the removed file leaves the step-1 list`).toHaveCount(0, {timeout: UI_TIMEOUT});
+        }
     });
 });

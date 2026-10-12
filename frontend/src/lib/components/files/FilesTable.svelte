@@ -27,6 +27,7 @@
     import {canPreviewFileData} from '$lib/utils/files/filePreview';
     import {getCachedPreview} from '$lib/stores/files/imagePreviewCache';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {writeTextToClipboard} from '$lib/utils/clipboard';
     import FileSetBadges from '$lib/components/files/FileSetBadges.svelte';
     import {getCachedPlugins, setCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
     import {fileSetBadges, setRequest, setsOfFiles, type FileSetBadgeContext, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
@@ -519,37 +520,6 @@
         return cols;
     }
 
-    // Helper to copy to clipboard with fallback
-    async function copyToClipboard(text: string): Promise<boolean> {
-        // Try modern clipboard API first
-        if (navigator.clipboard && window.isSecureContext) {
-            try {
-                await navigator.clipboard.writeText(text);
-                return true;
-            } catch (err) {
-                console.warn('Clipboard API failed:', err);
-            }
-        }
-
-        // Fallback for HTTP or older browsers
-        try {
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-9999px';
-            textArea.style.top = '-9999px';
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            const success = document.execCommand('copy');
-            document.body.removeChild(textArea);
-            return success;
-        } catch (err) {
-            console.error('Fallback copy failed:', err);
-            return false;
-        }
-    }
-
     // Row actions
     function getRowActions(): RowAction<FileData>[] {
         const actions: RowAction<FileData>[] = [];
@@ -571,12 +541,13 @@
                 onClick: async (file) => {
                     const staticFile = file as UploadedFile;
                     const url = staticFile.url;
-                    const success = await copyToClipboard(url);
-                    if (success) {
-                        toasts.success($t('common.copied') || 'Copied!');
-                    } else {
-                        toasts.error('Copy failed');
+                    try {
+                        await writeTextToClipboard(url);
+                    } catch {
+                        toasts.error($t('support.clipboardUnavailable'));
+                        return;
                     }
+                    toasts.success($t('common.copied') || 'Copied!');
                 },
             });
         }
