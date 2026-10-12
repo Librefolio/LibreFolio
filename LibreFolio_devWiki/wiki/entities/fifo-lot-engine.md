@@ -2,7 +2,8 @@
 title: "FIFO Lot Engine"
 category: entity
 type: service
-tags: [backend, fifo, lots, fee, tax, dividend, engine]
+updated: 2026-10-12
+tags: [backend, fifo, lots, fee, tax, dividend, engine, financial-math]
 related:
   - entities/lots-analysis-service
   - entities/portfolio-engine
@@ -10,6 +11,7 @@ related:
   - decisions/fifo-v4-cost-allocation-ladder
   - decisions/fifo-v4-engine-architecture
   - decisions/fifo-v4-gross-net-status-model
+  - decisions/financial-math-one-home
   - concepts/d1-income-eligibility-window
   - concepts/deterministic-cost-matching-ladder
   - concepts/fifo-lot-tracking
@@ -29,7 +31,16 @@ previously pointed at `transaction_service.py`, which is stale (see History belo
 
 ## Location
 
-`backend/app/services/fifo_lot_engine.py` (~1550 lines)
+`backend/app/services/financial_math/fifo/` (since 2026-10-12), three modules — imports flow models → eligibility →
+engine:
+
+- `models.py` (360 lines) — input and output types, dataclasses, the result, the `_require_*` validators;
+- `eligibility.py` (34) — `eligible_income_quantity()`;
+- `engine.py` (1 258) — `FifoLotEngine`, `run_fifo_lot_engine()` and the private helpers.
+
+Until 2026-10-12 one file, `backend/app/services/fifo_lot_engine.py` (~1550 lines; 1 604 before the move). Moved by
+T-1's rename commit (`1cc9cd8f5`, so `git log --follow` on `fifo/engine.py` keeps the history), then cut (`a57a43fbd`)
+— [[decisions/financial-math-one-home]].
 
 ## Key Interfaces
 
@@ -50,7 +61,8 @@ previously pointed at `transaction_service.py`, which is stale (see History belo
   value-weight, crossing trades split cost by close/open quantity ratio, unmatched pools become asset-orphan —
   see [[concepts/deterministic-cost-matching-ladder]] and [[decisions/fifo-v4-cost-allocation-ladder]].
 - **Currency model**: every `EconomicEvent` carries native **and** target amounts (Option B); the engine
-  compares in target currency but never resolves FX itself — the calling service does, via `_FxRateResolver`.
+  compares in target currency but never resolves FX itself — the calling service does, via `FxRateResolver`
+  (`financial_math/lots/conversions.py` since 2026-10-12; before, the service's private `_FxRateResolver`).
   The native pool is canonical; the target pool total is derived by converting the native pool exactly once
   per pool, never by summing already-converted per-event amounts.
 - **Gross math is untouched**: `original_cost`, `sale_proceeds`, `gross_income`, `open_value` etc. are never
@@ -81,12 +93,15 @@ previously pointed at `transaction_service.py`, which is stale (see History belo
 |------|--------|
 | v3 | Quantitative-only replay (open/closed lots, custody, quantity). No income/cost allocation. |
 | 2026-07 (v4/v5, commits `32c902e0`, `e252a022`) | Added economic pooling/allocation (D-1/broker-scoped income, deterministic FEE/TAX ladders, gross/net metrics, 3-state status, inline 3-level audit). Became the single canonical FIFO path — the old service-level income allocator was deleted. See [[sources/fifo-v4-fee-tax-integration]]. |
+| 2026-10-12 (`1cc9cd8f5`, `a57a43fbd`) | T-1: moved into the financial math layer as `financial_math/fifo/`, then cut into `models`, `eligibility`, `engine`; no behaviour change (`roi-fifo-utils` 652 before and after). See [[decisions/financial-math-one-home]]. |
 
 ## Source files
 
 | Role | Path |
 |------|------|
 | Engine | `backend/app/services/financial_math/fifo/engine.py` |
+| Types and results | `backend/app/services/financial_math/fifo/models.py` |
+| Income eligibility | `backend/app/services/financial_math/fifo/eligibility.py` |
 | Orchestration service (calls the engine) | `backend/app/services/lots_analysis_service.py` |
 | Public DTO | `backend/app/schemas/portfolio.py` |
 | Engine-level tests | `backend/test_scripts/test_services/test_financial/test_fifo_lot_engine.py` |

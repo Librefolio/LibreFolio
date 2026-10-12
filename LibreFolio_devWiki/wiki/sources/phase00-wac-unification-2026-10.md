@@ -51,7 +51,7 @@ fallback for Auto when the data is missing, and the user corrects that transacti
 "entering and leaving the field accepts the 0", was superseded) · P-2 WAC preview mislabels split rows, dead `add_at_wac` branch ·
 P-3 per-position contribution drops unconverted dividends/costs without a signal · P-4 IANA timezone database in the
 Docker image · P-5 migrate `roi_utils`/`valuation_utils` into `financial_math` (decision D1: "later we factor the
-others") · **P-6 the graph update for the 2026-10-07 pages — still pending: the graph has not been rebuilt since
+others"; ✅ closed on 2026-10-12 by T-1, `1cc9cd8f5` — [[decisions/financial-math-one-home]]) · **P-6 the graph update for the 2026-10-07 pages — still pending: the graph has not been rebuilt since
 2026-09-09** · P-7 close issues #32 and #35 at release · P-8 stale header comment in `tx-clone.spec.ts` · P-9 Black on two
 API test files.
 
