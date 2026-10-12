@@ -46,8 +46,10 @@
 import type {APIResponse, Route, TestInfo} from '@playwright/test';
 import {expect, type APIRequestContext, type Locator, type Page} from './playwright';
 import {waitForParseVerdict, waitForSettled} from './app-events';
+import {GALLERY_LOCALES} from './galleryLocale';
 import {OFFLINE_CURRENT_PRICES, OFFLINE_FX_PROVIDERS, type OfflineCurrentPrice} from './galleryOfflineData';
 import {deleteDisposableUser, prepareOnboardingAccount, type DisposableUser} from './onboarding-accounts';
+import type {Language} from './test-users';
 import {uniqueToken} from './unique';
 import {randomUUID} from 'crypto';
 import {mkdirSync, readFileSync, writeFileSync} from 'fs';
@@ -551,18 +553,26 @@ export function galleryOfflineGuard(page: Page): GalleryOfflineGuard {
  * The Assets list's live prices for its latest load, answered from the fixture and drawn. The poll is outside the page's
  * `data-busy` — it never holds the list back — so a list settled on `data-busy="false"` may still show the fixture's
  * assets without a price. Waits for a poll answered after `since` (`pricedPolls`, read before the load), then for every
- * card of a fixture asset on the page to show its figure, which the card prints with two decimals. Call it while the
- * cards stand still — before a search filters some away; in the table view, where no card is drawn, only the poll is
- * waited for (the rows print the figure in the language's format).
+ * card of a fixture asset on the page to show its figure. The card prints the price in the interface's locale (M-18),
+ * with two decimals, so the expected text is written by the browser's own Intl in the shot's locale
+ * (`GALLERY_LOCALES[lang]`), rounded first as the card rounds it; it must end with the locale's decimal mark and two
+ * digits, so a missing or English-only ICU fails there rather than as a wrong price. Call it
+ * while the cards stand still — before a search filters some away; in the table view, where no card is drawn, only the
+ * poll is waited for (the rows print the figure in the language's format).
  */
-export async function expectOfflinePricesDrawn(page: Page, since: number): Promise<void> {
+export async function expectOfflinePricesDrawn(page: Page, since: number, lang: Language): Promise<void> {
     const guard = galleryOfflineGuard(page);
+    const shotLocale = GALLERY_LOCALES[lang];
+    const decimalTail = lang === 'en' ? /\.\d{2}$/ : /,\d{2}$/;
     await expect.poll(() => guard.pricedPolls, {message: 'no live-price poll of this load of the Assets page was answered from the fixture', timeout: 20_000}).toBeGreaterThan(since);
     for (const [assetId, price] of guard.pricedAssets) {
         const card = page.getByTestId(`asset-card-${assetId}`);
         // The cards are drawn before the poll leaves (it asks for the ids of the loaded list): absent now is absent from this view.
         if ((await card.count()) === 0) continue;
-        await expect(card, `the card of "${price.displayName}" does not show its fixture price`).toContainText(Number(price.value).toFixed(2));
+        // Rounded by toFixed first, as formatFixed rounds it: Intl alone would round a half-way value its own way.
+        const expected = await page.evaluate(([value, locale]) => new Intl.NumberFormat(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(Number(value.toFixed(2))), [Number(price.value), shotLocale] as const);
+        expect(expected, `control: the ${shotLocale} figure of "${price.displayName}" does not end in the locale's decimal mark and two digits — the browser formats the shot's locale with its own ICU, so a missing or English-only ICU fails here, not as a wrong price`).toMatch(decimalTail);
+        await expect(card, `the card of "${price.displayName}" does not show its fixture price as ${shotLocale} writes it`).toContainText(expected);
     }
 }
 
