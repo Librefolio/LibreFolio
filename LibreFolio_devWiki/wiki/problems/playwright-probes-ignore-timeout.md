@@ -98,6 +98,7 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853
   neither releases «Next» early nor locks it.
 - The gallery line that depends on it, `waitForSettled(import-wizard-step1)` before the step-1 shot, came with batch 20
   of M (`51b581636`).
+- The defect and its fix in full: [[problems/import-wizard-next-before-brokers-loaded]].
 
 ## Still open (post-1.2 backlog, section M)
 
