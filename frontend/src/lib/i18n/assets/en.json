@@ -276,7 +276,8 @@
       "history": "History",
       "notTested": "Not tested",
       "totalTime": "Total",
-      "copyErrorDetail": "Copy error detail"
+      "copyErrorDetail": "Copy error detail",
+      "points": "{count, plural, one {{n} point} other {{n} points}}"
     },
     "identifiers": {
       "askProvider": "Ask Provider",
