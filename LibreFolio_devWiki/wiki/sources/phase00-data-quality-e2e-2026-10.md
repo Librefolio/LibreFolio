@@ -70,6 +70,13 @@ backlog gained V-21 (probes, forbidden selectors and undeleted uploads left in t
 change an existing event while saying it created one — a product question) and V-23 (the bulk editor hides the
 read-only broker and puts the access error on the wrong row); V-20 is closed.
 
+## The seven gaps of 1.2 (train 76, added 2026-10-13)
+
+§12.9: the seven gaps, each with its spec on real data — FX on cash (−175 EUR), Risk from a real query, account
+deletion, yield on cost, the PDF preview offline, the transfer in Auto (WAC 150), the PAC allocator —
+[[decisions/e2e-gaps-of-1-2-before-release]]. The files spec now deletes its uploads (`eb269ecde`); the backlog gained
+V-24 and V-25.
+
 ## Wiki pages created or updated
 
 - Created: [[decisions/data-quality-proved-on-real-data]], [[problems/open-panels-stale-after-fx-sync]].
