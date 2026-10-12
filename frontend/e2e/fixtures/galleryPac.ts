@@ -1,5 +1,5 @@
 /**
- * Gallery, Tools — the PAC allocator: one realistic draft per viewport, then the nine shots of its
+ * Gallery, Tools — the PAC allocator: one realistic draft per language and viewport, then the nine shots of its
  * page (mkdocs_src/docs/user/tools/pac-allocator/index.en.md, one placeholder per wizard step and
  * three for the result).
  *
@@ -10,9 +10,12 @@
  * does not touch it: the language store only sets the locale (stores/app/language.ts), the root
  * layout tears the app down for the first dictionary only (routes/+layout.svelte), and the Tool
  * Host remounts the renderer on a session change only (ToolHost.svelte, `{#key account.generation}`).
- * So {@link buildPacDraft} fills the draft once per test — once per viewport — and every
- * language and theme photographs the same draft. Leaving the page with a draft would ask to
- * confirm (`beforeNavigate`): the test never navigates away; the page closes with the test.
+ * The browser locale does: what the page has drawn keeps the locale it was drawn under
+ * (galleryLocale.ts). So each language opens the planner again and {@link buildPacDraft} fills the
+ * same draft there — once per language and viewport — and the language's two themes photograph it.
+ * Leaving the page with a dirty draft cancels the navigation (`beforeNavigate`); on a full load
+ * that raises the browser's leave-page dialog, which Playwright accepts when no dialog listener
+ * is registered, as in the gallery.
  *
  * What it holds ({@link PAC_SCENARIO}): valuation in EUR; liquidity copied from DEGIRO (EUR), a
  * new contribution in EUR and an external account in USD; DEGIRO (one order mode, EUR, by amount,
