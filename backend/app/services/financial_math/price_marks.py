@@ -28,7 +28,7 @@ Design contract:
   (which are themselves pure) can query it and "trust it blindly". Data acquisition (prices
   via the asset-source service, transactions via the transaction service, FX via the fx
   service) happens **once per calculation** in the async caller, which then feeds normalized
-  observations here. This mirrors the ``_FxRateResolver`` load-once / query-sync shape.
+  observations here. This mirrors the ``lots.conversions.FxRateResolver`` load-once / query-sync shape.
 * **Native currency, par scale — conversion belongs to the engine.** Every observation stays
   in its own *native* currency (the price's / trade's currency); each :class:`ResolvedMark`
   carries that ``currency`` so the consuming engine can convert to the reporting currency **at

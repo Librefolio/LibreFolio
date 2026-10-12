@@ -17,7 +17,7 @@ from datetime import date
 from decimal import Decimal
 
 from backend.app.services.financial_math.native_cash import CashMovement, NativeCash, cash_movement_from_transaction
-from backend.app.services.financial_math.portfolio.engine import ClassifiedTransaction
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
 
 FxRateMap = Mapping[tuple[str, str, date], Decimal]
 

@@ -5,14 +5,9 @@ from decimal import Decimal
 
 import pytest
 
-from backend.app.services.financial_math.fifo.engine import (
-    EconomicEvent,
-    FifoInputTransaction,
-    FragmentInterval,
-    ReferencePriceResolution,
-    eligible_income_quantity,
-    run_fifo_lot_engine,
-)
+from backend.app.services.financial_math.fifo.eligibility import eligible_income_quantity
+from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
+from backend.app.services.financial_math.fifo.models import EconomicEvent, FifoInputTransaction, FragmentInterval, ReferencePriceResolution
 
 ASSET_ID = 101
 

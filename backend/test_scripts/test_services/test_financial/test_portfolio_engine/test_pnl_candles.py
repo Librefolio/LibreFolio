@@ -60,14 +60,9 @@ from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Pr
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency as CurrencySchema
 from backend.app.schemas.portfolio import PnlCandleSeries, PortfolioReportQuery
-from backend.app.services.financial_math.portfolio.engine import (
-    ClassifiedTransaction,
-    DailyPortfolioState,
-    DailyStateBuilder,
-    DerivedViewsBuilder,
-    PortfolioCalculationResult,
-    ValuationSource,
-)
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyPortfolioState, PortfolioCalculationResult, ValuationSource
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.utils.datetime_utils import utcnow
@@ -775,13 +770,13 @@ class TestPortfolioBlobCacheIncludeCandlesSensitivity:
         portfolio_engine_module._portfolio_blob_cache.clear()
 
         build_calls = {"n": 0}
-        original_build = portfolio_engine_module.DailyStateBuilder.build
+        original_build = DailyStateBuilder.build
 
         def counting_build(builder_self):
             build_calls["n"] += 1
             return original_build(builder_self)
 
-        monkeypatch.setattr(portfolio_engine_module.DailyStateBuilder, "build", counting_build)
+        monkeypatch.setattr(DailyStateBuilder, "build", counting_build)
 
         engine = portfolio_engine_module.PortfolioCalculationEngine(session)
         date_to = date(2034, 1, 2)

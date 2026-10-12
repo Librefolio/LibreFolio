@@ -1,5 +1,5 @@
 """
-ROI Financial Utilities — pure math, no I/O.
+Returns: Simple ROI, TWRR, MWRR (XIRR) and annualization — pure math, no I/O.
 
 Provides TWRR, MWRR (XIRR), and Simple ROI calculations.
 

@@ -568,10 +568,10 @@ def services_brim_create_transaction(verbose: bool = False, test_names: list = N
 
 
 def services_financial_math(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the financial_math layer: average cost and native cash."""
-    print_section("Services: Financial Math (average cost, native cash)")
-    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py)")
-    print_info("Tests: compute_average_costs, cost_movement_from_transaction, determine_target_currency, compute_native_cash, cash_movement_from_transaction, effective_share, exchange_results")
+    """Test the financial_math layer: average cost, native cash, and the boundaries of the whole layer."""
+    print_section("Services: Financial Math (average cost, native cash, layer boundaries)")
+    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py; imports and packages of every module)")
+    print_info("Tests: compute_average_costs, cost_movement_from_transaction, determine_target_currency, compute_native_cash, cash_movement_from_transaction, effective_share, exchange_results, layer boundaries")
     print_info("Pure — convert_bulk is stubbed: no server, no DB")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_math/", test_names)
@@ -583,7 +583,7 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
     print_section("Services: ROI / FIFO / Portfolio Utils")
     print_info("Testing: backend/app/services/financial_math/returns.py")
     print_info("Testing: backend/app/services/portfolio_service.py (compute_wac_iterative, get_report)")
-    print_info("Tests: TWRR/MWRR/SimpleROI + series, FIFO lots (FifoLotEngine), price resolver, WAC")
+    print_info("Tests: TWRR/MWRR/SimpleROI + series, FIFO lots (FifoLotEngine), price marks, WAC")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/", test_names)
     return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
@@ -603,9 +603,9 @@ def services_portfolio_allocation_source(verbose: bool = False, test_names: list
 
 
 def services_lots_analysis_pure(verbose: bool = False, test_names: list = None) -> bool:
-    """Run the pure LotsAnalysisService builders (no DB, no server, no network)."""
+    """Run the pure lots-analysis builders (no DB, no server, no network)."""
     print_section("Services: Lots Analysis Pure Builders")
-    print_info("Testing: backend/app/services/lots_analysis_service.py (sync, argument-driven helpers)")
+    print_info("Testing: backend/app/services/financial_math/lots/ and lots_analysis_service.py (sync, argument-driven builders)")
     print_info("Tests: SHORT lots, estimated_mode, price-series gaps, ADJUSTMENT cost basis, transfer scope")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_lots_analysis_pure.py", test_names)
     return run_command(cmd, "Lots Analysis pure builder tests", verbose=verbose)
@@ -623,7 +623,7 @@ def services_asset_source_guards(verbose: bool = False, test_names: list = None)
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
     """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
     print_section("Services: Portfolio Engine vNext")
-    print_info("Testing: backend/app/services/financial_math/portfolio/engine.py (DailyStateBuilder)")
+    print_info("Testing: backend/app/services/financial_math/portfolio/daily_state.py (DailyStateBuilder)")
     print_info("Tests: inline WAC, last_buy_price fallback, 3-pool K/R/W, position snapshots, period accumulators, pre-frame/frame")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_portfolio_engine_vnext.py", test_names)
@@ -1067,12 +1067,13 @@ Note: No backend server required.
         "financial-math",
         services_financial_math,
         name="Financial Math",
-        desc="Average cost: movements, conversions through the FX service, diagnostics",
-        # PURE: the module's only I/O is convert_bulk, which every test replaces on
-        # the module with a double; the session handed to it is None or a sentinel.
+        desc="Average cost and native cash: movements, conversions through the FX service, diagnostics; boundaries of the whole layer",
+        # PURE: each module's only I/O is convert_bulk, which every test replaces on its
+        # module with a double; the session handed to it is None or a sentinel. The layer
+        # guard only parses source files.
         isolation="pure",
     )
-    add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price resolver")
+    add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price marks")
     add_test(
         cat,
         "portfolio-allocation-source",

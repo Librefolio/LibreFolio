@@ -1,0 +1,362 @@
+"""Portfolio engine data: classified transactions, daily position and portfolio states, contributions, and the calculation result."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import date as date_type
+from decimal import Decimal
+from enum import StrEnum
+from typing import Literal, Optional
+
+from backend.app.db.models import Transaction
+from backend.app.services.financial_math.average_cost import (
+    AverageCost,
+)
+from backend.app.services.financial_math.native_cash import NativeCash
+
+# =============================================================================
+# DATACLASSES — Internal runtime objects (not API DTOs)
+# =============================================================================
+
+
+ClassificationType = Literal[
+    "normal",
+    "linked_internal",
+    "linked_external_inflow",
+    "linked_external_outflow",
+    "ignored",
+]
+
+
+class ValuationSource(StrEnum):
+    MARKET_PRICE = "MARKET_PRICE"
+    LAST_TRADE_PRICE = "LAST_TRADE_PRICE"
+    MISSING = "MISSING"
+
+
+@dataclass(frozen=True, slots=True)
+class SplitRecord:
+    """Unique asset split used to restate historical unit-price references."""
+
+    event_id: int
+    asset_id: int
+    date: date_type
+    ratio: Decimal
+
+
+SplitHistory = tuple[SplitRecord, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ValuationResult:
+    """Immutable result of selecting and converting one position valuation."""
+
+    market_value: Decimal | None
+    source: ValuationSource
+    effective_unit_price: Decimal | None
+    effective_currency: str | None
+    reference_date: date_type | None
+    reference_unit_price: Decimal | None
+    reference_currency: str | None
+    split_adjusted: bool = False
+    stale: bool = False
+    missing_fx_pair: str | None = None
+    # G1b — synthetic P&L candles (plan §4.3). Only ever populated when the caller passed
+    # compute_ohlc=True AND the resolved mark is an exact MARKET day with a full OHLC triple
+    # (never for CARRIED/TRADE_AVG/MISSING) — same conversion pipeline as market_value, applied
+    # to open/high/low instead of close. None means "no intraday range known for this day";
+    # the candle composer's flat fallback is open=high=low=close=market_value, not a guess here.
+    market_value_open: Decimal | None = None
+    market_value_high: Decimal | None = None
+    market_value_low: Decimal | None = None
+
+
+@dataclass
+class ClassifiedTransaction:
+    """Transaction classified by the ScopeAwareTransactionClassifier."""
+
+    tx: Transaction
+    classification: ClassificationType
+    paired_tx: Optional[Transaction] = None
+    share: Decimal = Decimal("1")
+
+
+@dataclass
+class InTransitInterval:
+    """In-transit window for an internal linked pair with different dates.
+
+    Window is [start_date, end_date] inclusive, representing the half-open
+    convention [min(departure_date, arrival_date), max(departure_date, arrival_date))
+    from plan v2 §7.2:
+        start_date = min(departure_date, arrival_date)       # = departure_date (dep <= arr by construction)
+        end_date   = max(departure_date, arrival_date) - 1   # last day still "in transit"
+    The departure date itself is included (value leaves the source broker and
+    enters transit on the same day — no value-hole), the arrival date itself is
+    excluded (destination custody begins on arrival day, no double-count).
+    If start_date > end_date the interval is empty (same-day transfer only).
+    """
+
+    start_date: date_type  # min(departure_date, arrival_date) == departure_date
+    end_date: date_type  # max(departure_date, arrival_date) - 1
+    tx_type: Literal["cash", "asset"]
+    departure_leg: Transaction
+    arrival_leg: Transaction
+    share: Decimal
+    # For asset transfers:
+    asset_id: Optional[int] = None
+    cost_basis_amount: Optional[Decimal] = None  # Frozen per-unit CBO or WAC fallback
+    cost_basis_currency: Optional[str] = None
+
+
+@dataclass
+class ClassificationResult:
+    """Output of ScopeAwareTransactionClassifier.classify()."""
+
+    classified: list[ClassifiedTransaction] = field(default_factory=list)
+    in_transit_intervals: list[InTransitInterval] = field(default_factory=list)
+    external_cash_flows: list[tuple[date_type, int, Decimal, str]] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    def get_needed_paired_ids(self) -> set[int]:
+        """IDs of linked txs whose pair is not in the scope transaction set."""
+        return self._needed_paired_ids
+
+    _needed_paired_ids: set[int] = field(default_factory=set, repr=False)
+
+
+# =============================================================================
+# DAILY PORTFOLIO STATE — Core daily snapshot
+# =============================================================================
+
+# The stale-price threshold and the transaction-implied grace period live in
+# data_quality_thresholds, shared with the risk engine.
+
+
+@dataclass
+class DailyPositionState:
+    """Per-position daily state — the atomic building block of portfolio computation.
+
+    One instance per (broker_id, asset_id) per day with qty > 0.
+    Portfolio-level DailyPortfolioState is aggregated from these.
+    """
+
+    date: date_type
+    broker_id: int
+    asset_id: int
+    quantity: Decimal
+    valuation_effective_unit_price: Decimal | None
+    valuation_effective_currency: str | None
+    valuation_reference_date: date_type | None
+    valuation_reference_unit_price: Decimal | None
+    valuation_reference_currency: str | None
+    valuation_source: ValuationSource
+    valuation_split_adjusted: bool
+    valuation_stale: bool
+    missing_fx_pair: str | None
+    market_value: Decimal | None  # in target_currency
+    wac: Decimal | None  # per unit, in target_currency: historical average cost; None when the cost is incomplete
+    wac_currency: str  # target_currency
+    cost_basis: Decimal  # in target_currency: historical cost of the open quantity (known part)
+    unrealized_pnl: Decimal | None  # market_value - cost_basis (None if MV missing or cost incomplete)
+    asset_currency: str | None = None
+    wac_asset: Decimal | None = None  # per unit, in asset_currency; None when unknown
+    cost_complete: bool = True  # False: a rate or a cost basis is missing for part of the open quantity
+
+
+@dataclass(frozen=True, slots=True)
+class UnrealizedSplit:
+    """One asset currency's part of a day's unrealized gain or loss, split by cause.
+
+    For the positions in assets priced in currency A, reported in currency T, with r(t) the
+    rate A→T of the day, C_A and C_T their historical cost in A and in T:
+
+    * ``asset`` = MV − C_A × r(t): what the assets did in their own currency, at today's rate;
+    * ``fx`` = C_A × r(t) − C_T: what the exchange rate did to their cost;
+    * ``unsplit`` = MV − C_T of the positions that cannot be split that day (no market value,
+      no rate, or a cost incomplete in either currency).
+
+    The three add up to the positions' MV − C_T exactly; for A = T, ``fx`` is always zero.
+    """
+
+    asset: Decimal = Decimal("0")
+    fx: Decimal = Decimal("0")
+    unsplit: Decimal = Decimal("0")
+
+
+@dataclass(frozen=True, slots=True)
+class RealizedSale:
+    """A SELL replayed by the engine, with its proceeds and the historical cost it took from the pool.
+
+    Amounts are in the target currency and scaled by the owner's share of the broker.
+    ``proceeds`` is None when they could not be converted (the pair is in the result's
+    ``missing_fx``); ``cost_complete`` is False when the pool already lacked part of its cost.
+    """
+
+    transaction_id: int | None
+    asset_id: int
+    broker_id: int
+    date: date_type
+    quantity: Decimal
+    proceeds: Decimal | None
+    cost: Decimal
+    cost_complete: bool
+
+
+@dataclass
+class BrokerDailyContribution:
+    """One broker's additive slice of a given day's portfolio NAV/capital/P&L.
+
+    Built from the exact same Decimal components as the scope-aggregate
+    DailyPortfolioState fields (market value, cash, in-transit, external cash
+    flow) at the same accumulation sites, so summing this across all brokers
+    for a given day reproduces the aggregate exactly — never a residual/plug.
+    """
+
+    broker_id: int
+    nav_contribution: Decimal  # market_value_by_broker + cash_by_broker + in_transit_by_broker
+    capital_contribution: Decimal  # cumulative_ecf_by_broker (this broker's capital baseline)
+    pnl_contribution: Decimal  # nav_contribution - capital_contribution
+    # The in-transit part of nav_contribution. Internal, never exported: the broker card
+    # (PortfolioService.get_summary) adds it to market value and cash valued at its own date.
+    in_transit_contribution: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class PnlCandleContribution:
+    """One day's synthetic total-P&L candle (G1b, plan §4.3).
+
+    Composed as: offset = total_pnl - sum(asset_close); {open,high,low} = offset +
+    sum(asset_{open,high,low}); close = total_pnl exactly (by construction, never a
+    residual check — the offset absorbs cash/capital-baseline/realized/income/
+    in-transit/flat-fallback contributions that have no per-asset OHLC of their own).
+    Cross-asset high/low are explicitly synthetic/non-simultaneous (plan §3.3) — this
+    is a presentation candle, never an intraday series or a factual AI Export input.
+    """
+
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class AcquisitionFundingContribution:
+    """One day's aggregate BUY funding split (batch 2 follow-up — "new vs reinvested
+    liquidity", plan §5.2). Surfaces the engine's own already-existing per-BUY K/R-pool
+    draw (from_k/from_r — computed to update the running 3-pool balances, see the BUY
+    branch in build()) as a new daily output, summed across every BUY that day. Not
+    new business logic: from_new_capital + from_reinvested reproduces that day's total
+    BUY cash outflow exactly, by construction (the same amount_target already consumed
+    by the pool update, just also captured here instead of discarded)."""
+
+    from_new_capital: Decimal  # sum of from_k across the day's BUYs
+    from_reinvested: Decimal  # sum of from_r across the day's BUYs
+
+
+@dataclass
+class DailyPortfolioState:
+    """Complete daily portfolio state — the heart of the calculation engine."""
+
+    date: date_type
+    # Valuation
+    cash_value: Decimal
+    market_value: Decimal
+    broker_nav_value: Decimal
+    in_transit_cash_value: Decimal
+    in_transit_asset_market_value: Decimal
+    in_transit_market_value: Decimal
+    nav_value: Decimal
+    # Accounting
+    open_cost_basis: Decimal
+    in_transit_asset_cost_basis: Decimal
+    in_transit_book_value: Decimal
+    book_value: Decimal
+    unrealized_gain_loss: Decimal
+    # Performance inputs
+    external_cash_flow: Decimal
+    cumulative_external_cash_flow: Decimal  # Running total of deposits - withdrawals (net invested capital)
+    # Cash decomposition (Capital Baseline narrative: P&L = NAV - capital_baseline)
+    # capital_baseline = cumulative_external_cash_flow (alias, same value)
+    book_asset_like: Decimal  # open_cost_basis + in_transit_asset_cost_basis
+    cash_from_contributed_capital: Decimal  # min(cash_like, max(capital_baseline - book_asset_like, 0))
+    cash_from_generated_returns: Decimal  # cash_like - cash_from_contributed_capital
+    total_pnl: Decimal  # nav_value - capital_baseline
+    # Allocation
+    by_type: dict[str, Decimal] = field(default_factory=dict)
+    by_sector: dict[str, Decimal] = field(default_factory=dict)
+    by_geography: dict[str, Decimal] = field(default_factory=dict)
+    # Data quality
+    missing_price_asset_ids: set[int] = field(default_factory=set)
+    missing_fx_pairs: set[str] = field(default_factory=set)
+    stale_price_asset_ids: set[int] = field(default_factory=set)
+    transaction_implied_asset_ids: set[int] = field(default_factory=set)
+    nav_complete: bool = True
+    # G1a — per-broker additive NAV/capital/P&L slice (see BrokerDailyContribution)
+    broker_contributions: dict[int, BrokerDailyContribution] = field(default_factory=dict)
+    # G1b — synthetic P&L candle for this day (see PnlCandleContribution). None unless
+    # the engine was run with compute_candles=True AND the day's candle is composable
+    # (no MISSING held-asset valuation that day).
+    pnl_candle: PnlCandleContribution | None = None
+    # Batch 2 — new-vs-reinvested BUY funding split for this day (see
+    # AcquisitionFundingContribution). None unless the engine was run with
+    # compute_acquisition_funding=True AND at least one BUY happened this day (a
+    # genuine "no acquisition today" gap, never a zero-valued contribution).
+    acquisition_funding: AcquisitionFundingContribution | None = None
+    # Unrealized gain/loss of the held positions (market_value - open_cost_basis) by asset
+    # currency, split into asset and exchange-rate effect (see UnrealizedSplit).
+    unrealized_by_currency: dict[str, UnrealizedSplit] = field(default_factory=dict)
+
+
+# =============================================================================
+# PORTFOLIO CALCULATION RESULT
+# =============================================================================
+
+
+@dataclass
+class EngineEndState:
+    """Serialized accumulator state at end of a computation blob.
+
+    Used for forward cache extension: resume computation from this state
+    instead of recomputing from scratch.
+    """
+
+    cumulative_cash: Decimal
+    cumulative_ecf: Decimal
+    cumulative_qty: dict[tuple[int, int], Decimal]
+    wac_pool_qty: dict[tuple[int, int], Decimal]  # average-cost pool quantity
+    wac_pool_cost: dict[tuple[int, int], Decimal]  # average-cost pool cost, historical, in target currency
+    capital_pool: dict[int, Decimal]  # K per broker
+    returns_pool: dict[int, Decimal]  # R per broker
+    withdrawn_pool: Decimal  # W global
+    # G1a — per-broker mirrors of cumulative_cash/cumulative_ecf, so a future
+    # forward-cache resume carries broker attribution alongside the aggregate.
+    cumulative_cash_by_broker: dict[int, Decimal]
+    cumulative_ecf_by_broker: dict[int, Decimal]
+
+
+@dataclass
+class PortfolioCalculationResult:
+    """Complete result from the portfolio calculation engine."""
+
+    daily_states: list[DailyPortfolioState]
+    # Position snapshots for exposure + contribution views
+    position_states_start: list[DailyPositionState] = field(default_factory=list)
+    position_states_end: list[DailyPositionState] = field(default_factory=list)
+    # Every broker's cash in its own currencies (financial_math.native_cash): balances, values
+    # and the period flows by type and position. None when calculate() returns early, with
+    # no broker or no transaction in scope.
+    native_cash: NativeCash | None = None
+    # End state for cache forward extension
+    end_state: EngineEndState | None = None
+    # Metadata
+    scope_broker_ids: list[int] = field(default_factory=list)
+    target_currency: str = "EUR"
+    date_from: date_type = field(default_factory=date_type.today)
+    date_to: date_type = field(default_factory=date_type.today)
+    # Average cost of every (asset_id, broker_id) position replayed (financial_math.average_cost)
+    average_costs: dict[tuple[int, int], AverageCost] = field(default_factory=dict)
+    # SELLs replayed, in replay order, with proceeds and historical cost in target_currency
+    realized_sales: list[RealizedSale] = field(default_factory=list)
+    # Conversions a movement (cost, cash, external flow, in-transit cost) needed and could not
+    # get: pair "FROM/TO" -> dates. Valuation failures are per day in DailyPortfolioState.missing_fx_pairs.
+    missing_fx: dict[str, set[date_type]] = field(default_factory=dict)
