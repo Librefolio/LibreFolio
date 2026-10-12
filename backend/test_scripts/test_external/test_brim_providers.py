@@ -24,7 +24,6 @@ import ast
 import atexit
 import csv
 import io
-import json
 import re
 import shutil
 import tempfile
@@ -74,6 +73,7 @@ from backend.app.services.financial_math.portfolio.daily_state import DailyState
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.app.services.provider_registry import BRIMProviderRegistry
+from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
 # CONSTANTS & HELPERS
@@ -5978,19 +5978,20 @@ class TestWindows1252Invariance:
 # THE PLUGINS' NAME AND DESCRIPTION IN THE FOUR UI CATALOGUES
 # =============================================================================
 
-# The checkout this test file belongs to, found from the file itself: the catalogues are read next to it.
+# The checkout this test file belongs to, found from the file itself: the frontend sources below are read next to it.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_I18N_DIR = _REPO_ROOT / "frontend" / "src" / "lib" / "i18n"
 _TRANSLATED_LANGUAGES = ("it", "fr", "es")
 _UI_LANGUAGES = ("en", *_TRANSLATED_LANGUAGES)
 _PLUGIN_TEXT_FIELDS = ("name", "description")
 
 
 def _brim_plugin_texts(language: str) -> dict:
-    """The ``brimPlugins`` section of one UI catalogue: plugin code → ``{"name": …, "description": …}``."""
-    path = _I18N_DIR / f"{language}.json"
-    section = json.loads(path.read_text(encoding="utf-8")).get("brimPlugins")
-    assert isinstance(section, dict) and section, f"{path.relative_to(_REPO_ROOT)} has no brimPlugins section: every plugin would be shown in English"
+    """The ``brimPlugins`` section of one UI catalogue: plugin code → ``{"name": …, "description": …}``.
+
+    Merged from the catalogue's sources (``scripts/i18n_catalog.py``), never read from a build, and without the English
+    fallback the build ships: a text the language lacks is missing here, not the plugin's English under its name."""
+    section = load_catalog(language, fallback=False).get("brimPlugins")
+    assert isinstance(section, dict) and section, f"{language}.json has no brimPlugins section: every plugin would be shown in English"
     return section
 
 

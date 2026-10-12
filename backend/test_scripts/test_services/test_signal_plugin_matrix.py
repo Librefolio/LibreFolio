@@ -36,6 +36,7 @@ from backend.test_scripts.fixtures.signals.plugin_test_utils import (
     frame_to_points,
     load_signal_frames,
 )
+from scripts.i18n_catalog import load_catalog
 
 LEGACY_CODES = {
     "EMA",
@@ -251,7 +252,8 @@ EXPECTED_PARAM_UNITS = {
     "RISK_ROLLING_VOLATILITY": {"window": ("days", "signals.tooltips.riskWindow")},
     CALENDAR_CODE: {"window_days": ("days", "signals.tooltips.riskWindow")},
 }
-I18N_CATALOGS = {language: PROJECT_ROOT / "frontend" / "src" / "lib" / "i18n" / f"{language}.json" for language in ("en", "it", "fr", "es")}
+# The four UI catalogues, merged from their sources (scripts/i18n_catalog.py) without the English fallback.
+I18N_LANGUAGES = ("en", "it", "fr", "es")
 # A word unit is looked up as `signals.units.<suffix>`; a symbol (%, σ) is rendered as
 # itself by the parameter control when no such key exists.
 WORD_UNIT = re.compile(r"[a-z]+")
@@ -439,11 +441,11 @@ def test_every_param_tooltip_and_word_unit_is_translated_in_the_four_catalogs():
     keys = {tooltip for _suffix, tooltip in units if tooltip} | {f"signals.units.{suffix}" for suffix, _tooltip in units if suffix and WORD_UNIT.fullmatch(suffix)}
     # Premise: both word units and the moved tooltip are among the keys checked.
     assert {"signals.units.days", "signals.units.sessions", "chartSettings.tooltips.sessionPeriod"} <= keys
-    catalogs = {language: json.loads(path.read_text(encoding="utf-8")) for language, path in I18N_CATALOGS.items()}
+    catalogs = {language: load_catalog(language, fallback=False) for language in I18N_LANGUAGES}
 
     untranslated = {language: sorted(key for key in keys if not (isinstance(text := _translation(catalog, key), str) and text.strip())) for language, catalog in catalogs.items()}
 
-    assert untranslated == dict.fromkeys(I18N_CATALOGS, [])
+    assert untranslated == dict.fromkeys(I18N_LANGUAGES, [])
 
 
 def test_full_plan_aggregates_all_fields_and_max_warmup(neutral_points):
