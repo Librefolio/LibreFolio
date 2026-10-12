@@ -12,6 +12,8 @@ related:
   - features/F-048
   - features/F-049
   - features/F-083
+  - features/F-105
+  - decisions/onboarding-guide-observes-never-acts
 mkdocs: "developer/frontend/components/features/import-wizard.md"
 ---
 
@@ -196,6 +198,7 @@ transaction payload; the wizard never commits directly.
 | 2026-06-08 | v5 introduced a wide multi-file, multi-broker wizard and four numbered product stages. |
 | 2026-06-25 | Identifier handling and modal-layer problems were recorded for follow-up. |
 | 2026-09-09 | Group E reconciliation: full asset edit loading, omission/null-safe classification PATCH, parent-relative nested modals, explicit first-asset resolution, refreshed final duplicate checks, guarded bulk handoff, and stable E7/E8 bulk diagnostics/display ordering. |
+| 2026-09-14 | The contextual Import guide (`import_guide`, step-managed, [[features/F-105]]): the wizard reports its step (`startImportAt()`, then `setStep()`) and anchors each step's forward button; the hand-off to the editor (today `handOffToEditor()`, also reached from the gap-fix step since 2026-10-01) arms `import.bulk` in the bulk editor, where only **Save All** is highlighted and the user's save stays independent of **Finish guide** — [[decisions/onboarding-guide-observes-never-acts]]. The first-mount CTA was measured mid-transition until Round 4 — [[problems/coachmark-measured-mid-modal-transition]]. |
 | 2026-09-28 | Workstream K step 9: DB-colliding rows never default keepers (C1), resolver choices carried across rechecks (C2) — [[sources/phase00-taxonomy-select-2026-10]]. |
 
 ## Source files
