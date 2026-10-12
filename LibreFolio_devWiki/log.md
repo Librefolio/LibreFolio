@@ -2568,3 +2568,21 @@ Checks: `check_source_paths.py` — the same 11 missing paths before and after i
 [[features/F-078]] plus 10 generated artifacts a fresh worktree does not have; on the main checkout, per the
 coordinator, only `admin.py`); 2 931 paths cited, 163 more than before, all present; 0 broken wikilinks in the added
 text; every new page has at least three inbound links besides the index. Graph: not updated (P-6, after release 1.2).
+
+## [2026-10-12] update | BU1 — the utils/ paths after the typed folders
+Base `bdc078efc` (train 50): BU1 (`346b7e292`, journal `390ba7d9a`) moved `sector_fin_utils`, `geo_utils`,
+`identifier_utils`, `translation_utils` to `utils/asset/`, `currency_utils` to `utils/fx/currency.py`, and `version`,
+`network_utils`, `cache_utils` to `utils/runtime/`; `decimal_utils` stays until BU2. `check_source_paths.py` on the
+new base: 16 missing (28 occurrences), the baseline's 11 plus 5 moved modules cited by 11 «Source files» rows in 10
+pages — one of them [[decisions/utils-leaf-functions-only]], written by the step-3 ingest. All 11 repointed. Prose,
+with the T-W1 rule: 6 present-tense mentions in 5 pages changed ([[features/F-061]], [[features/F-102]],
+[[problems/babel-currency-symbol-locale]], [[problems/docker-system-info-missing-deps]], [[domains/calculations]]);
+symptoms, source summaries and the audit line of [[features/F-076]] left as written. The test files keep their names.
+[[decisions/utils-leaf-functions-only]] now records BU1 as delivered and BU2 as planned, with a near-miss from the
+journal: `utils/runtime/version.py` computed the project root with four `.parent` written for its old place, so the
+image would have read `/app/backend/VERSION` and shown version `unknown`; fixed in the same commit with
+`_project_root()` from the module's dotted name, two tests, and the lesson «in a rename, search the paths a file
+computes from its own location». The same note went into [[problems/docker-system-info-missing-deps]].
+Registry: plan 43 re-read at `390ba7d9a` (the BU1 record).
+Checks: `check_source_paths.py` back to the baseline set — 11 missing (17 occurrences) in the worktree, the same paths
+as before BU1; 0 broken wikilinks in the added text; `git diff --check` clean. Graph: not updated (P-6).

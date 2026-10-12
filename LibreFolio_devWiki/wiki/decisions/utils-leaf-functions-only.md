@@ -3,10 +3,12 @@ title: "utils/ holds leaf functions only; anything that calls services lives in 
 category: decision
 status: resolved
 date: 2026-10-12
+updated: 2026-10-12
 tags: [backend, architecture, layering, utils, financial-math, refactor, workstream-t, release-1.2]
 related:
   - decisions/financial-math-one-home
   - decisions/financial-math-single-average-cost
+  - problems/docker-system-info-missing-deps
   - sources/phase00-financial-math-home-2026-10
 ---
 
@@ -51,22 +53,37 @@ ordered layers that use one another.")
   import cycle", although it already imports `get_ttl_cache` from `cache_utils` at the top and `cache_utils` imports no
   service.
 
-### What follows in release 1.2 (planned, not yet in the code at `5d0585595`)
+### BU1 — delivered (2026-10-12, train 50)
 
-- **BU1** — subfolders by type inside `utils/`, renames only: `utils/asset/` (sector, geo, identifier, translation),
-  `utils/fx/` (currency), `utils/runtime/` (version, network, cache). The developer chose `runtime`; the `platform`
-  name in T's journal was the earlier proposal (coordinator, 2026-10-12).
-- **BU2** — the two exceptions to the leaf rule: the truncation of `decimal_utils` leaves `utils/` for
+- **One commit**, `346b7e292` ("refactor(utils): group utils into typed folders"), merged with train 50 (`bdc078efc`):
+  `utils/asset/{sector,geo,identifier,translation}.py`, `utils/fx/currency.py`, `utils/runtime/{version,network,cache}.py`.
+  `datetime_utils`, `json_utils` and `decimal_utils` stay at the root; no `_utils` suffix inside the folders; the three
+  new `__init__.py` hold only a docstring, and the root's docstring states the leaf rule and the map. The developer
+  chose `runtime`; `platform` in T's analysis was the earlier proposal (coordinator, 2026-10-12).
+- Imports rewritten in 32 files (of the 74 that import any `utils` module); `all-backend` 12 409 passed, 28 skipped,
+  0 failed, identical to the base in each of its 23 invocations.
+- **A near-miss the gates could not see.** `utils/runtime/version.py` computed the project root with four `.parent`,
+  written for its old place: after the move they reached `backend/`. In development nothing showed — no `VERSION`
+  file, and `git describe` finds the repository from a subfolder — but the image has no `.git`, so the app would have
+  read `/app/backend/VERSION` instead of `/app/VERSION` and reported version `unknown`. The coordinator found it while
+  verifying; the same commit carries the fix, `_project_root()` = `Path(__file__).resolve().parents[__name__.count(".")]`,
+  derived from the module's dotted name, with two red-first tests in `test_version.py`. **Lesson: in a rename, search
+  the paths a file computes from its own location (`__file__`, `parents`), not only its imports** — see
+  [[problems/docker-system-info-missing-deps]], the original version-in-Docker problem.
+
+### BU2 — planned (not in the code at `bdc078efc`)
+
+- The two exceptions to the leaf rule: the truncation of `decimal_utils` leaves `utils/` for
   `backend/app/db/precision.py` (`parse_decimal_value` stays), and the lazy `clear_cache` imports in `fx.py` go, once no
-  utils→services cycle remains.
-- **Method**, the same as T-1: first the exact grouping and the list of importers (76 files across the app, tests,
-  scripts and `dev.py`), then one commit of renames only and one for BU2, with the backend suite identical as the gate.
+  utils→services cycle remains — as does the lazy import of `version` in `config.py`, if no cycle needs it.
+- **Method**, the same as T-1: one commit of renames only (BU1, above), then one for BU2, with the backend suite
+  identical as the gate.
 
 ## Consequences
 
 - The layering question has one answer for every new helper: a function that calls a service is not a utility.
-- The devWiki's «Source files» rows that cite the renamed modules (10 rows in 9 pages at `5d0585595`) are realigned
-  after BU1 lands, by the historian.
+- The devWiki's «Source files» rows that cited the renamed modules — 11 rows in 10 pages, this one included — and 6
+  present-tense mentions in 5 pages were realigned by the historian on 2026-10-12, after BU1 entered the target.
 
 ## Links
 
@@ -81,6 +98,9 @@ ordered layers that use one another.")
 | The rule | `.github/instructions/backend.instructions.md` |
 | The exception: truncation importing `db.models` | `backend/app/utils/decimal_utils.py` |
 | The lazy `clear_cache` imports | `backend/app/services/fx.py` |
-| The cache helpers (no service import) | `backend/app/utils/cache_utils.py` |
+| The cache helpers (no service import) | `backend/app/utils/runtime/cache.py` |
+| BU1: the root's docstring (leaf rule and map) | `backend/app/utils/__init__.py` |
+| BU1: the project root from the module's dotted name | `backend/app/utils/runtime/version.py` |
+| BU1: the two tests of the near-miss | `backend/test_scripts/test_utilities/test_version.py` |
 | Plan (§P2.3, D-P7, BU1/BU2) | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` |
 | Backlog row T-BU1+BU2 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

@@ -61,5 +61,5 @@ Massive post-walkthrough bugfix round for the `/transactions` page. Identified 8
 | Currency format helper | `frontend/src/lib/utils/currency/currencyFormat.ts` |
 | Event type emoji helper | `frontend/src/lib/utils/transactions/eventTypes.ts` |
 | Broker icon helper | `frontend/src/lib/utils/broker/brokerHelpers.ts` |
-| Backend currency util | `backend/app/utils/currency_utils.py` |
+| Backend currency util | `backend/app/utils/fx/currency.py` |
 | Mock data | `backend/test_scripts/test_db/populate_mock_data.py` |
