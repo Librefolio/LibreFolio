@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "drawdownSummary": {
+        "name": "Riepilogo drawdown",
+        "description": "Episodi di drawdown corrente e massimo rispetto al picco, datati e con stato di recupero, dai rendimenti canonici dello scope selezionato."
+      }
+    }
+  }
+}

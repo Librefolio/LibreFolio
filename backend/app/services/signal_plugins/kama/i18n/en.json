@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "kama": {
+      "name": "KAMA",
+      "description": "Trend adapting to market noise",
+      "output": "KAMA"
+    }
+  }
+}

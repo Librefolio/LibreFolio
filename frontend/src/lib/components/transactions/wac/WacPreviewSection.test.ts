@@ -42,9 +42,23 @@
  * Storage. The shared `$app/environment` mock reports `browser: false`, so the privacy store
  * keeps the flag in memory and never touches `localStorage`; the component's own storage read
  * (the Total/Per-unit toggle) is try/catch-guarded and does not reach the table.
+ *
+ * The interface language (M-18 CP3a, last block). The quantity of each qualifying transaction is
+ * the backend's exact decimal string, shown through `formatDecimalForDisplay` — exact digits, cut at
+ * the eighth, trailing zeros dropped — but with a dot and no grouping in every language. The cure
+ * writes the same digits in the interface locale (`formatExactDecimal`): `1.234.567,12345678` in an
+ * Italian UI, and in an English one `1,234,567.12345678`, grouped from a thousand on — the new
+ * contract of English. The expected text is Intl's output for the interface locale, handed
+ * `formatDecimalForDisplay`'s digits as a string; no localized literal is typed. jsdom's browser is
+ * en-US: an English UI is written en-US, an Italian one bare `it`. The unit cost of the same rows
+ * already follows the interface language (the shared currency formatter, CP2): when the language is
+ * switched in place it is the in-component control that the switch reached the table, so a red
+ * after it is the quantity's own. The quantities below 1000 of the privacy cases read the same
+ * before and after the cure.
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
+import {waitLocale} from 'svelte-i18n';
 
 // The only request this graph makes is the currency catalogue (the currency store behind the
 // formatter, and the currency chip of the cost-basis input). It is answered here so every money
@@ -69,7 +83,9 @@ vi.mock('$lib/api', () => ({
 }));
 
 import {fireEvent, render, screen, setupI18n} from '$test/component';
+import {currentLanguage} from '$lib/stores/app/language';
 import {isPrivacyEnabled, setPrivacyEnabled, togglePrivacy} from '$lib/stores/app/privacyStore.svelte';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
 import {formatCurrencyAmountPlain, type CurrencyAmountFormatOptions} from '$lib/utils/currency/currencyFormat';
@@ -146,8 +162,7 @@ function externalResult() {
     };
 }
 
-function mount(): void {
-    const result = externalResult();
+function mount(result: ReturnType<typeof externalResult> = externalResult()): void {
     // `value` already equals the result's WAC, so the auto-fill effect has nothing to push.
     render(WacPreviewSection, {value: {...result.wac}, onChange: vi.fn(), mode: 'auto', testid: TESTID, externalResult: result});
 }
@@ -157,12 +172,12 @@ function table(): HTMLElement {
 }
 
 /** Open the qualifying table and assert it is open: the expand control is a toggle, so it is clicked only when the table is closed. */
-async function openQualifyingTable(): Promise<void> {
+async function openQualifyingTable(rows: ReadonlyArray<{tx_id: number}> = ROWS): Promise<void> {
     // Barrier: the expand control exists only once the external result has been adopted.
     const expand = await screen.findByTestId(`${TESTID}-show-qualifying`);
     if (!screen.queryByTestId(`${TESTID}-qualifying-table`)) await fireEvent.click(expand);
     expect(table(), 'the qualifying table is open').toBeInTheDocument();
-    for (const row of ROWS) rowOf(row.tx_id);
+    for (const row of rows) rowOf(row.tx_id);
 }
 
 /** The one body row whose first cell prints `txId`. */
@@ -275,5 +290,94 @@ describe('WacPreviewSection — qualifying table: unit cost and running WAC are 
 
         await togglePrivacyInPlace();
         expectUnitValuesPublic('on → off', false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// M-18 CP3a — the quantity column in the interface language
+// ---------------------------------------------------------------------------
+
+/**
+ * What Intl writes for the plain decimal `text` in `locale`, with exactly its own fraction digits. Intl is handed
+ * the string, which Intl.NumberFormat v3 reads as an exact decimal: no double in between.
+ */
+function intlExact(locale: string, text: string): string {
+    const fractionDigits = text.split('.')[1]?.length ?? 0;
+    return new Intl.NumberFormat(locale, {minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits}).format(text as Intl.StringNumericLiteral);
+}
+
+describe('WacPreviewSection — qualifying table: the quantity column in the interface language (M-18 CP3a)', () => {
+    type UiLanguage = 'en' | 'it';
+    /** The interface locale of each language: jsdom's browser is en-US. */
+    const LOCALE_OF: Readonly<Record<UiLanguage, string>> = {en: 'en-US', it: 'it'};
+
+    /** Quantities as the backend sends them: thousands with a ninth fraction digit the table cuts, a small fraction, trailing zeros. */
+    const DECIMAL_ROWS = [
+        {...SAME_CURRENCY, tx_id: 7201, quantity: '1234567.123456789'},
+        {...SAME_CURRENCY, tx_id: 7202, quantity: '0.00012345'},
+        {...SAME_CURRENCY, tx_id: 7203, quantity: '6.000000'},
+    ];
+
+    function decimalResult(): ReturnType<typeof externalResult> {
+        return {wac: {code: 'EUR', amount: SAME_CURRENCY.running_wac}, qualifying_txs: DECIMAL_ROWS.map((row) => structuredClone(row)), missing_pairs: []};
+    }
+
+    /** The quantity column as `locale` writes it: formatDecimalForDisplay's digits (the template's cut at eight), handed to Intl as a string. */
+    function quantitiesIn(locale: string): Record<number, string> {
+        return Object.fromEntries(DECIMAL_ROWS.map((row) => [row.tx_id, norm(intlExact(locale, formatDecimalForDisplay(row.quantity)))]));
+    }
+
+    function observedQuantities(): Record<number, string> {
+        return Object.fromEntries(DECIMAL_ROWS.map((row) => [row.tx_id, cellText(row.tx_id, 'quantity')]));
+    }
+
+    /** Change the UI language as LanguageSelector does, flush, and check the interface locale it gives. */
+    async function uiLanguage(lang: UiLanguage): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(uiLocale(), `control: a ${lang} UI on jsdom's en-US browser is written ${LOCALE_OF[lang]}`).toBe(LOCALE_OF[lang]);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('Italian UI: every quantity in Italian notation — formatDecimalForDisplay’s digits, cut at the eighth, never rounded', async () => {
+        await uiLanguage('it');
+        expect(formatDecimalForDisplay(DECIMAL_ROWS[0].quantity), 'control: the template cuts at the eighth digit, it does not round').toBe('1234567.12345678');
+        const italian = quantitiesIn('it');
+        expect(italian[7201], 'control: Italian writes the quantity otherwise than English').not.toBe(quantitiesIn('en-US')[7201]);
+        expect(italian[7201].replace(/\D/g, ''), 'control: and keeps its digits').toBe('123456712345678');
+
+        mount(decimalResult());
+        await openQualifyingTable(DECIMAL_ROWS);
+
+        expect(observedQuantities()).toEqual(italian);
+    });
+
+    it('follows a language switch in place: English (en-US, grouped from 1,000 on — the new contract) → Italian → English', async () => {
+        await uiLanguage('en');
+        mount(decimalResult());
+        await openQualifyingTable(DECIMAL_ROWS);
+        const unitCost = () => cellText(DECIMAL_ROWS[0].tx_id, 'unitCost');
+        const unitCostEnglish = plain(SAME_CURRENCY.unit_cost, 'EUR', {maxFraction: 2});
+        expect(unitCost(), 'control: the unit cost, written by the shared formatter in the English UI').toBe(unitCostEnglish);
+
+        expect(observedQuantities(), 'English UI: en-US notation').toEqual(quantitiesIn('en-US'));
+
+        await uiLanguage('it');
+        const unitCostItalian = plain(SAME_CURRENCY.unit_cost, 'EUR', {maxFraction: 2});
+        expect(unitCostItalian, 'control: Italian writes the unit cost otherwise').not.toBe(unitCostEnglish);
+        expect(unitCost(), 'control: the unit cost followed the switch, so the table was redrawn').toBe(unitCostItalian);
+
+        expect(observedQuantities(), 'switched to Italian in place').toEqual(quantitiesIn('it'));
+
+        await uiLanguage('en');
+        expect(unitCost(), 'control: the unit cost came back to English').toBe(unitCostEnglish);
+
+        expect(observedQuantities(), 'back to English in place').toEqual(quantitiesIn('en-US'));
     });
 });

@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "drawdownSummary": {
+        "name": "Drawdown summary",
+        "description": "Dated current and maximum peak-relative drawdown episodes with recovery status from the selected scope's canonical returns."
+      }
+    }
+  }
+}

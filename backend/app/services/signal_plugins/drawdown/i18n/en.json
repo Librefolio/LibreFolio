@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskDrawdown": {
+      "name": "Underwater Drawdown",
+      "description": "Tracks the percentage decline from each running price peak.",
+      "output": "Drawdown",
+      "outputDescription": "Price-only decline from the running peak; never above zero.",
+      "referencePeak": "Peak"
+    }
+  }
+}

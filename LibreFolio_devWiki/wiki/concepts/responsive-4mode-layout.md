@@ -87,9 +87,11 @@ asset detail's by up to 11.8 px (at 1210 px). Deterministic — red at one worke
 
 - **The rule**: a catalogue change that lengthens a toolbar label, in any language, re-runs the sweep
   (`./dev.py test front-utility toolbar-width-sweep`); a red re-measures that bar's thresholds as above.
-- **The cure, planned** (coordinator, 2026-10-12; workstream I's plan 48, not yet integrated): the `denseRow`
-  thresholds of the D5 calibration — the sweep's own name for it — raised from 950 to 990 on the Dashboard and from
-  850 to 890 on the asset detail.
+- **The cure, delivered** (`7f8febd9d`, workstream I's plan 48, train 72): the `denseRow` thresholds of the D5
+  calibration — the sweep's own name for it — raised from 950 to 990 on the Dashboard and from 850 to 890 on the asset
+  detail. The overflows above were only where the sweep's grid fell: the group needs 968 and 868.8 px, the thresholds
+  compare the bar's width, and the scrollbar gutter moved the red by 15 px —
+  [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]].
 
 ## History — the April 2026 model
 

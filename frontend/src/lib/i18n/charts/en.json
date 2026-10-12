@@ -1,0 +1,215 @@
+{
+  "chart": {
+    "tooltip": {
+      "stale": "Stale: {days} day(s) old",
+      "fxStale": "FX rate: {days}d old",
+      "percentNote": "% relative to range start date",
+      "upper": "Upper",
+      "lower": "Lower",
+      "weekRange": "Week {start} – {end}",
+      "monthLabel": "{month}",
+      "valueAt": "Value at {date}",
+      "eventsInPeriod": "Events in period:",
+      "partialBucket": "Partial: {days} of {total} days",
+      "currentBucket": "In progress: {days} of {total} days"
+    },
+    "resolution": {
+      "weekly": "Weekly",
+      "monthly": "Monthly"
+    },
+    "marketPrice": "Market Price",
+    "showPercentage": "Show percentage",
+    "showAbsolute": "Show absolute"
+  },
+  "chartSettings": {
+    "title": "Chart Settings",
+    "titleLocal": "Chart Settings (Local)",
+    "globalWarning": "These settings will override all per-card customizations.",
+    "baselineColors": "Baseline Colors",
+    "baselineColorsDesc": "Green above / Red below",
+    "areaFill": "Area Fill",
+    "areaFillDesc": "Gradient under line",
+    "gridLines": "Grid Lines",
+    "gridLinesDesc": "Horizontal dashed grid",
+    "staleGradient": "Stale Gradient",
+    "staleGradientDesc": "Fade old data",
+    "overlaySignals": "Overlay Signals",
+    "noSignals": "No overlay signals configured. Add one below.",
+    "style": {
+      "color": "Color",
+      "width": "Width",
+      "lineType": "Style"
+    },
+    "discardTitle": "Discard changes?",
+    "discardMessage": "You have unsaved changes in chart settings. Discard them?",
+    "discard": "Discard",
+    "removeSignal": "Remove signal",
+    "dataMissingBefore": "Data starts after chart range — first point at {date}. Try syncing to fetch earlier data.",
+    "badgePoints": "{n} price points loaded",
+    "badgeDividend": "{n} dividend events",
+    "badgeInterest": "{n} interest events",
+    "badgePriceAdjustment": "{n} price adjustment events",
+    "badgeMaturitySettlement": "{n} maturity/settlement events",
+    "badgeSplit": "{n} split events",
+    "previewDescGlobal": "Synthetic demo data — shows how aesthetics affect all charts",
+    "previewDescPair": "Live preview with actual pair data and overlay signals",
+    "categories": {
+      "indicator": "Technical Indicators",
+      "comparison": "Data Comparison",
+      "benchmark": "Synthetic Benchmarks"
+    },
+    "signals": {
+      "linear": "Linear Growth",
+      "compound": "Compound Growth",
+      "sine": "Sine Wave",
+      "fxPair": "FX Pair",
+      "linearDesc": "$y(t) = y_0 \\cdot (1 + r \\cdot t)$",
+      "compoundDesc": "$y(t) = y_0 \\cdot (1 + r)^t$",
+      "sineDesc": "$y(t) = A \\sin(2\\pi t / T) + y_0$",
+      "assetComparison": "Asset Comparison",
+      "assetComparisonFull": "Asset Price Overlay",
+      "assetComparisonDesc": "Overlay another asset's price on this chart for comparison",
+      "fxPairFull": "FX Rate Overlay",
+      "fxPairDesc": "Overlay an FX pair's rate on this chart for comparison"
+    },
+    "params": {
+      "annualRate": "Annual Rate",
+      "amplitude": "Amplitude",
+      "period": "Period",
+      "offset": "Offset",
+      "currencyPair": "Currency Pair",
+      "fastPeriod": "Fast Period",
+      "slowPeriod": "Slow Period",
+      "signalPeriod": "Signal Period",
+      "multiplier": "Multiplier",
+      "overbought": "Overbought",
+      "oversold": "Oversold",
+      "histogramScale": "Histogram Scale",
+      "riskFreeAnnualRate": "Risk-free annual rate",
+      "comparisonAsset": "Comparison asset",
+      "window": "Window",
+      "fullHistory": "Full history"
+    },
+    "yAxisScale": "Y-Axis Scale",
+    "yAxisScaleDesc": "Primary axis range control",
+    "yAxisInclude0": "Include 0",
+    "tooltips": {
+      "annualRate": "Annual growth rate in percent. Applied linearly or exponentially depending on the signal type.",
+      "amplitude": "Peak-to-peak oscillation range as percentage of the base value.",
+      "period": "Memory length of the filter in days. Higher values = smoother but slower response.",
+      "offset": "Vertical offset as percentage of the base value. Shifts the signal up or down.",
+      "emaPeriod": "Lookback window in sessions, the days with a quote. Maps to filter coefficient $\\alpha = 2/(N+1)$. Shorter = faster reaction, longer = smoother.",
+      "fastPeriod": "Short-term EMA lookback for the MACD fast line. Standard: 12 sessions. Lower values react faster to price changes.",
+      "slowPeriod": "Long-term EMA lookback for the MACD slow line. Standard: 26 sessions. Higher values capture the broader trend.",
+      "signalPeriod": "EMA smoothing applied to the MACD line. Standard: 9 sessions. Reduces noise in crossover signals.",
+      "multiplier": "Number of standard deviations ($k \\cdot \\sigma$). $k=2$ covers ~95% of values assuming normal distribution.",
+      "overbought": "Level above which the asset is considered overbought. Standard: 70. Values near 100 indicate strong buying pressure.",
+      "oversold": "Level below which the asset is considered oversold. Standard: 30. Values near 0 indicate strong selling pressure.",
+      "assetComparison": "Select an asset to overlay its price on this chart. In percentage mode, both curves start at 0%.",
+      "fxPair": "Select an FX pair to overlay its exchange rate on this chart. In percentage mode, both curves start at 0%.",
+      "sessionPeriod": "Lookback window in sessions, the days with a quote. Higher values = smoother but slower response."
+    },
+    "macdLineColor": "MACD Line Color",
+    "noDataAvailable": "No data available. Try syncing this asset/pair.",
+    "conversionFailed": "Currency conversion failed — data not shown (FX pair not configured)",
+    "backendPreviewRealTarget": "Technical indicator preview is available on a real asset or currency pair.",
+    "backendPreviewApply": "Backend indicator preview shows the last applied settings. Apply changes to update it.",
+    "backendPreviewUnavailable": "Backend indicator preview appears after this asset or pair loads signal results.",
+    "signalCatalogUnavailable": "The technical signal catalog is unavailable. Local comparisons and benchmarks remain available.",
+    "signalResultsUnavailable": "Technical signals could not be updated. Price data remains available.",
+    "signalProblems": {
+      "missingInputFields": "Missing required price fields: {fields}. Existing dates are not enough; sync with a provider that supplies these OHLCV values.",
+      "incompleteInputCoverage": "Required price fields are incomplete: {fields}. Usable points: {available}/{requested}.",
+      "insufficientHistory": "Not enough usable history for these parameters: {available} points available, {required} needed.",
+      "incompleteWarmup": "The signal is usable but not fully stabilized: {used}/{required} warm-up points available.",
+      "dataGaps": "The required history contains gaps: {missing} of {requested} points are missing ({coverage}% coverage).",
+      "missingEvents": "Missing required events: {events}.",
+      "incompatibleDomain": "This indicator is not compatible with this chart.",
+      "calculationFailed": "Signal calculation failed: {message}",
+      "resultMissing": "No backend result was returned for this signal. Retry the signal request.",
+      "partialResult": "This signal is only partially available with the current data.",
+      "unavailable": "This signal cannot be calculated with the available data.",
+      "partialContiguousSegment": "Signal calculated on the complete contiguous segment {start}–{end}. {excluded} loaded points were excluded because required dates or fields were incomplete. Complete input: {available}/{requested} ({coverage}%, including warm-up). Longest missing streak: {consecutive} points."
+    },
+    "axes": {
+      "exchangeRate": "Exchange-rate axis ({pair})",
+      "percentage": "Percentage axis",
+      "price": "Price axis ({currency})",
+      "signal": "{name} axis",
+      "volume": "Volume axis"
+    },
+    "yAxisAuto": "Auto"
+  },
+  "measure": {
+    "pending": "Start: {startDate} ({startValue}) — click chart for end point",
+    "empty": "No measures. Click the 📏 ruler icon on the chart to add a measurement.",
+    "active": "Active — click chart",
+    "table": {
+      "signal": "Signal",
+      "deltaAbs": "Δ Abs",
+      "deltaPct": "Δ %",
+      "annualized": "Δ%/yr"
+    },
+    "days": "{days}d"
+  },
+  "signals": {
+    "groups": {
+      "trend": "Trend",
+      "momentum": "Momentum",
+      "volatility": "Volatility",
+      "volume": "Volume",
+      "risk": "Risk"
+    },
+    "dataUsed": "Data",
+    "dataFields": {
+      "open": "Open",
+      "high": "High",
+      "low": "Low",
+      "close": "Close",
+      "volume": "Volume"
+    },
+    "selector": {
+      "searchPlaceholder": "Search indicators",
+      "noMatches": "No matching indicators"
+    },
+    "dataShownPerIndicator": "Required data is shown for each indicator",
+    "params": {
+      "dPeriod": "%D Period"
+    },
+    "tooltips": {
+      "stochRsiPeriod": "RSI and stochastic lookback period. It changes %K and therefore also the derived %D line.",
+      "dPeriod": "Smoothing period applied to %K to produce %D. It changes %D only.",
+      "riskWindow": "Number of prepared daily return observations in each rolling window.",
+      "riskFreeAnnualRate": "Annual effective risk-free rate used only to calculate Sharpe.",
+      "comparisonAsset": "Persisted asset used as the real comparison series for beta.",
+      "riskFullHistory": "Measure drawdown against the highest peak of the entire available history, not just the visible window. Disable for a faster, window-relative view."
+    },
+    "units": {
+      "days": "days",
+      "sessions": "sessions"
+    },
+    "visual": {
+      "components": "Components",
+      "zonesFor": "{component} zones",
+      "affects": "Affects"
+    },
+    "reference": {
+      "zero": "Zero"
+    },
+    "regions": {
+      "oversoldDescription": "Lower extreme below the configured threshold.",
+      "neutralDescription": "Central range between the configured thresholds.",
+      "overboughtDescription": "Upper extreme above the configured threshold."
+    },
+    "comparisonAsset": {
+      "placeholder": "Select comparison asset",
+      "loadError": "Assets could not be loaded."
+    },
+    "riskRollingReturn": {
+      "name": "Rolling Return",
+      "description": "Compounded price-only return over a rolling window.",
+      "output": "Return",
+      "outputDescription": "Compounded holding-period return, in percentage points."
+    }
+  }
+}

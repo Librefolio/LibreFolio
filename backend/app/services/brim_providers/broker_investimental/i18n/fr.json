@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_investimental": {
+      "description": "Importe les transactions exécutées définitives des journaux CSV de mise à jour des ordres d’Investimental. Les annulations, les demandes rejetées et les ordres non exécutés sont ignorés.",
+      "name": "Investimental"
+    }
+  }
+}

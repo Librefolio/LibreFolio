@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetRiskReturn": {
+        "name": "Rischio e rendimento per asset",
+        "description": "Volatilità annua contro rendimento atteso, un punto per ogni asset selezionato."
+      }
+    }
+  }
+}

@@ -38,7 +38,7 @@ But `AssetSourceError` exposes the field as `error_code`, not `code`. Reading
 ## Solution
 
 `e.code` → `e.error_code` in the two occurrences (commit landed in
-G-batch6, 2026-04-25, `c943f219`).
+G-batch6, 2026-04-25, `bf0234145`).
 
 ```python
 except AssetSourceError as e:

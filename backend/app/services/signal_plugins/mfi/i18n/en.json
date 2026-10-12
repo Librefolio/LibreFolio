@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "mfi": {
+      "name": "MFI",
+      "description": "Volume-weighted momentum",
+      "output": "MFI",
+      "oversold": "Oversold",
+      "overbought": "Overbought",
+      "oversoldRegion": "Oversold",
+      "neutralRegion": "Neutral",
+      "overboughtRegion": "Overbought"
+    }
+  }
+}

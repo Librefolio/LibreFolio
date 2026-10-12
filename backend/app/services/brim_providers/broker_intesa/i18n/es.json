@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_intesa": {
+      "description": "Importa las exportaciones de Intesa Sanpaolo (CSV o XLSX). Trata la lista de movimientos (cupones de bonos y comisiones de custodia; las filas de banca cotidiana no reconocidas se omiten) y la instantánea de la cartera (patrimonio), que se importa como un depósito de efectivo más un ajuste del coste por posición, para iniciar una cuenta con su historial.",
+      "name": "Intesa Sanpaolo"
+    }
+  }
+}

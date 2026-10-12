@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_relai": {
+      "description": "Importe les achats et ventes de Bitcoin de l’export CSV de Relai, y compris les frais en transactions séparées.",
+      "name": "Relai"
+    }
+  }
+}

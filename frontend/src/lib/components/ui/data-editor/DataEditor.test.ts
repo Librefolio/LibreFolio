@@ -15,8 +15,12 @@
  * component state and needs no browser or backend.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
-import {addMessages} from 'svelte-i18n';
+import {tick} from 'svelte';
+import {get} from 'svelte/store';
+import {addMessages, waitLocale} from 'svelte-i18n';
 import {render, screen, fireEvent, setupI18n, waitFor, within} from '$test/component';
+import {_ as translate} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 import DataEditor from './DataEditor.svelte';
 import type {ColumnDef, DataRow} from './DataEditorTypes';
 import CsvEditor from './CsvEditor.svelte';
@@ -917,5 +921,124 @@ describe('DataEditor — the status column is labelled from the catalogues (P, i
 
         const said = Object.fromEntries(STATUSES.map((status) => [status, {badge: badges[status], option: options[status]}]));
         expect(said).toEqual(Object.fromEntries(STATUSES.map((status) => [status, {badge: marked(statusKey(status)), option: expect.stringContaining(marked(statusKey(status)))}])));
+    });
+});
+
+/**
+ * M-17, M-18 CP2 — the date column and the numbers in the interface language.
+ *
+ * Every figure follows the UI language (the developer's rule of 2026-10-12), and the words around it come
+ * from the catalogue. The date column was written in a fixed language: the weekday beside each date
+ * (`toLocaleDateString('en-US', {weekday: 'short'})`, M-17), its header (`'Date'`) and the stale marker's
+ * title (`"N days stale"`); and the number of a readonly row in an editable number column went through
+ * `toLocaleString(undefined, …)`, the browser's notation. The cure: the weekday and the number in
+ * `uiLocale()`, the header `common.date`, the title `chart.tooltip.stale` with `days` = N. No key is added:
+ * the four catalogues have both.
+ *
+ * The visible `⚠️ Nd` badge is out of this lot — its «d» is English, backlog T-ST — and is never read.
+ *
+ * Expectations. The weekday and the number are Intl's output for the interface locale with the component's
+ * options, never typed; the header is read from the shipped catalogue; the title is produced by the app's
+ * own formatter — `$_('chart.tooltip.stale', {values: {days}})`, once the language's catalogue is loaded —
+ * never copied from the message, which may change. jsdom's browser is en-US, so the English UI keeps
+ * en-US. A cell is found by its header's position, as DataTable marks the header and not the cell.
+ *
+ * Language. `currentLanguage.set`, as LanguageSelector does (it also moves svelte-i18n), put back after
+ * each test.
+ */
+describe('DataEditor — the date column and the numbers in the interface language (M-17, M-18 CP2)', () => {
+    type UiLanguage = 'en' | 'it';
+    /** The interface locale of each language: jsdom's browser is en-US. */
+    const LOCALE_OF: Record<UiLanguage, string> = {en: 'en-US', it: 'it'};
+    const CATALOGUES = {en, it: itCatalogue};
+
+    /** A Monday, on a fresh row. */
+    const MONDAY = '2026-01-05';
+    /** A readonly row of the editable `rate` column, carrying RATE. */
+    const READONLY = '2026-01-06';
+    /** Thousands and four decimals: every separator of a notation shows. */
+    const RATE = 12345.6789;
+    /** A row five days behind its source. */
+    const STALE = '2026-01-02';
+    const STALE_DAYS = 5;
+
+    /** The weekday of `iso` as Intl writes it for `lang`, with the component's options. */
+    const weekdayIn = (lang: UiLanguage, iso = MONDAY): string => new Date(iso + 'T00:00:00Z').toLocaleDateString(LOCALE_OF[lang], {weekday: 'short', timeZone: 'UTC'});
+    /** RATE as Intl writes it for `lang`, with the component's options. */
+    const rateIn = (lang: UiLanguage): string => RATE.toLocaleString(LOCALE_OF[lang], {maximumFractionDigits: 4});
+    const squash = (text: string | null | undefined): string => (text ?? '').replace(/\s+/g, ' ').trim();
+
+    /** DataTable marks the header, not the cell: the header's position names the cell of a row. */
+    function cellOf(container: HTMLElement, rowId: string, columnId: string): Element {
+        const header = container.querySelector(`th[data-testid="dt-header-${columnId}"]`);
+        const tr = container.querySelector(`tr[data-row-id="${rowId}"]`);
+        if (!header?.parentElement || !tr) throw new Error(`no ${columnId} header, or no row ${rowId}`);
+        const cell = tr.children[[...header.parentElement.children].indexOf(header)];
+        if (cell?.tagName !== 'TD') throw new Error(`no ${columnId} cell in row ${rowId}`);
+        return cell;
+    }
+
+    /** A fresh Monday, a readonly row and a stale row; resolves once the three rows are drawn. */
+    async function mountRows(): Promise<HTMLElement> {
+        const {container} = mount([row(MONDAY, 1), row(READONLY, RATE, {readonly: true}), row(STALE, 1, {staleDays: STALE_DAYS})]);
+        await waitFor(() => [MONDAY, READONLY, STALE].forEach((rowId) => cellOf(container, rowId, 'date')));
+        return container;
+    }
+
+    /** Change the UI language as LanguageSelector does; the catalogue is loaded before the next step. */
+    async function uiLanguage(lang: UiLanguage): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        await tick();
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('English UI on an en-US browser (control): the weekday, the number and the header as today', async () => {
+        await uiLanguage('en');
+        const container = await mountRows();
+
+        expect(squash(cellOf(container, MONDAY, 'date').textContent)).toBe(`${MONDAY} ${weekdayIn('en')}`);
+        expect(squash(cellOf(container, READONLY, 'rate').textContent)).toBe(rateIn('en'));
+        expect(screen.getByTestId('dt-header-date').textContent?.trim()).toBe(CATALOGUES.en.common.date);
+    });
+
+    it('Italian UI: the weekday beside each date in Italian', async () => {
+        await uiLanguage('it');
+        expect(weekdayIn('it'), 'control: the Italian weekday differs from the English one').not.toBe(weekdayIn('en'));
+        const container = await mountRows();
+
+        expect(squash(cellOf(container, MONDAY, 'date').textContent)).toBe(`${MONDAY} ${weekdayIn('it')}`);
+    });
+
+    it('Italian UI: a readonly row writes its number in Italian notation', async () => {
+        await uiLanguage('it');
+        expect(rateIn('it'), 'control: the Italian notation differs from the English one').not.toBe(rateIn('en'));
+        const container = await mountRows();
+
+        expect(squash(cellOf(container, READONLY, 'rate').textContent)).toBe(rateIn('it'));
+    });
+
+    it('Italian UI: the date column is headed common.date', async () => {
+        await uiLanguage('it');
+        expect(CATALOGUES.it.common.date, 'control: the Italian header differs from the English one').not.toBe(CATALOGUES.en.common.date);
+        await mountRows();
+
+        expect(screen.getByTestId('dt-header-date').textContent?.trim()).toBe(CATALOGUES.it.common.date);
+    });
+
+    it.each(['en', 'it'] as const)('the stale marker’s title is chart.tooltip.stale of the UI language, its days the row’s (%s)', async (lang) => {
+        await uiLanguage(lang);
+        const expected = get(translate)('chart.tooltip.stale', {values: {days: STALE_DAYS}});
+        expect(expected, 'control: the formatter found the message in the catalogue').not.toBe('chart.tooltip.stale');
+        expect(expected, 'control: the formatter filled in the days').toContain(String(STALE_DAYS));
+        const container = await mountRows();
+
+        const titled = [...cellOf(container, STALE, 'date').querySelectorAll('[title]')];
+        expect(titled, 'the stale row’s date cell carries one titled marker').toHaveLength(1);
+        expect(titled[0].getAttribute('title')).toBe(expected);
     });
 });

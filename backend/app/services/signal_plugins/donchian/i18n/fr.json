@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "donchian": {
+      "name": "Canaux de Donchian",
+      "description": "Canal des extrêmes de la période",
+      "channels": "Canaux"
+    }
+  }
+}

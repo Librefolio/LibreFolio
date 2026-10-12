@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "stress": {
+        "name": "Test de résistance",
+        "description": "Applique des chocs hypothétiques ou rejoue une période historique."
+      }
+    }
+  }
+}

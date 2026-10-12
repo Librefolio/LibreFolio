@@ -1,4 +1,14 @@
-import {describe, it, expect} from 'vitest';
+import {afterEach, describe, it, expect, vi} from 'vitest';
+
+// M-18 CP2: the numbers of a message are written in the interface locale, the UI language regionalised by
+// the browser. Node's `navigator.language` follows the host's ICU locale, so it is pinned to en-US before any
+// import, as jsdom's always is: the English UI then writes en-US, today's text.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 import {resolveIssueMessage, translateFieldName, type ResolvableIssue, type ResolverContext} from './resolveValidationMessage';
 
 /**
@@ -188,6 +198,60 @@ describe('resolveIssueMessage — balance and currency formatting', () => {
         const t = makeT({'transactions.errors.E': 'cur={currency}'});
         // A numeric currency neither triggers formatCurrencyCodeHtml nor the balance+currency branch
         expect(resolveIssueMessage({code: 'E', params: {currency: 5}}, t)).toBe('cur=5');
+    });
+});
+
+/**
+ * M-18 CP2 — the numbers of a message in the interface language.
+ *
+ * Every figure follows the UI language (the developer's rule of 2026-10-12). An asset balance with no
+ * currency was written with `toLocaleString(undefined, …)` — the browser's notation — into a sentence the
+ * translator writes in the UI language: `12,345.678 📈` inside an Italian message. The cure writes it in
+ * `uiLocale()` with the same digits (no forced decimals, up to six); a cash balance goes through
+ * `formatCurrencyAmountPlain`, whose number follows the same source. Expectations are Intl's output with
+ * the module's own options, never typed, but for today's English text. The currency store is empty in a
+ * unit run, so a cash balance carries its code alone.
+ */
+describe('resolveIssueMessage — the numbers in the interface language (M-18 CP2)', () => {
+    const t = makeT({'transactions.errors.E': 'bal={balance}', 'transactions.errors.C': 'cash={formattedBalance}'});
+    /** An asset balance as the module writes it: no forced decimals, up to six. */
+    const balanceIn = (locale: string, value: number): string => new Intl.NumberFormat(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6}).format(value);
+    /** A cash balance's number: two decimals. */
+    const cashIn = (locale: string, value: number): string => new Intl.NumberFormat(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('English UI on an en-US browser (control): today’s text', async () => {
+        await uiLanguage('en');
+
+        expect(resolveIssueMessage({code: 'E', params: {balance: '12345.678'}}, t)).toBe('bal=12,345.678 📈');
+        expect(resolveIssueMessage({code: 'E', params: {balance: '-2.5'}}, t)).toBe('bal=-2.5 📉');
+        expect(resolveIssueMessage({code: 'C', params: {balance: '12345.5', currency: 'USD'}}, t)).toBe('cash=+12,345.50 USD');
+    });
+
+    it('Italian UI: an asset balance in Italian notation, without passing a locale', async () => {
+        await uiLanguage('it');
+        const up = balanceIn('it', 12345.678);
+        expect(up, 'control: the Italian notation differs from the English one').not.toBe(balanceIn('en-US', 12345.678));
+
+        expect(resolveIssueMessage({code: 'E', params: {balance: '12345.678'}}, t)).toBe(`bal=${up} 📈`);
+        expect(resolveIssueMessage({code: 'E', params: {balance: '-2.5'}}, t)).toBe(`bal=${balanceIn('it', -2.5)} 📉`);
+    });
+
+    it('Italian UI: a cash balance in Italian notation too, through the currency formatter', async () => {
+        await uiLanguage('it');
+        expect(cashIn('it', 12345.5), 'control: the Italian notation differs from the English one').not.toBe(cashIn('en-US', 12345.5));
+
+        expect(resolveIssueMessage({code: 'C', params: {balance: '12345.5', currency: 'USD'}}, t)).toBe(`cash=+${cashIn('it', 12345.5)} USD`);
     });
 });
 

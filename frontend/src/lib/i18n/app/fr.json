@@ -1,0 +1,102 @@
+{
+  "help": {
+    "helpAndSupport": "Aide et Support",
+    "faq": "FAQ",
+    "reportBug": "Signaler un Bug",
+    "buyMeACoffee": "Offrez-moi un Café",
+    "installApp": "Installer l'App",
+    "installAppIos": "Touchez Partager, puis \"Sur l'écran d'accueil\"",
+    "installAppDesktop": "Cherchez l'icône d'installation (⊕) dans la barre d'adresse",
+    "installAppAndroid": "HTTPS requis pour l'installation. Utilisez menu Chrome ⋮ → \"Ajouter à l'écran d'accueil\" comme raccourci"
+  },
+  "donationPopup": {
+    "title": "LibreFolio grandit grâce à des utilisateurs comme vous !",
+    "message": "Si vous appréciez le projet et l'utilisez régulièrement, envisagez un petit don pour soutenir son développement.",
+    "laterButton": "Plus tard",
+    "donationNote": "☕ Même le prix d'un café peut faire la différence."
+  },
+  "updateCheck": {
+    "title": "Nouvelle version disponible",
+    "message": "LibreFolio {latest} est disponible.",
+    "guideLink": "Comment mettre à jour",
+    "releaseLink": "Notes de version sur GitHub",
+    "laterButton": "Me le rappeler plus tard",
+    "skipVersion": "Ignorer cette version"
+  },
+  "changelog": {
+    "title": "Journal des modifications",
+    "viewRemote": "Voir sur GitHub",
+    "empty": "Aucun journal des modifications inclus dans cette build.",
+    "searchPlaceholder": "Rechercher dans le journal…",
+    "expandAll": "Tout déplier",
+    "collapseAll": "Tout replier",
+    "checkNow": "Vérifier les mises à jour",
+    "upToDate": "Vous utilisez la dernière version !",
+    "askAdmin": "Une version plus récente existe. Demandez à un administrateur de mettre à jour :",
+    "searchResults": "Résultats :",
+    "copyEmail": "Copier l'email",
+    "askAdminTitle": "Mise à jour disponible — contactez un administrateur",
+    "emailCopied": "Email copiée dans le presse-papiers",
+    "detectedRemoteVersion": "Version détectée en ligne : {version}",
+    "checkFailed": "Impossible de terminer la recherche de mises à jour. Réessayez.",
+    "noStableRelease": "Aucune version stable n’a été trouvée sur GitHub.",
+    "imagePending": "Une version stable plus récente a été détectée, mais son image Docker n’est pas encore disponible.",
+    "imageCheckFailed": "Une version stable plus récente a été détectée, mais son image Docker n’a pas pu être vérifiée. Réessayez.",
+    "adminLookupFailed": "Une mise à jour est disponible, mais la liste des administrateurs n’a pas pu être chargée.",
+    "notTranslated": "Pas encore traduit"
+  },
+  "support": {
+    "title": "Soutenir LibreFolio",
+    "description": "Offrez un café ou faites découvrir le projet.",
+    "shareDivider": "Ou partagez",
+    "shareOn": "Partager sur",
+    "share": {
+      "titleLabel": "Titre suggéré",
+      "x": {
+        "message": "Salut ! Je suis mes investissements avec LibreFolio et j'adore. Essaie-la aussi !",
+        "hint": "Le lien du projet est ajouté à la copie et au post. X s'ouvre dans un nouvel onglet."
+      },
+      "reddit": {
+        "title": "Je teste LibreFolio, un outil open source de suivi de portefeuille",
+        "message": "Je cherchais une façon plus simple de suivre mes investissements sans confier toutes les données de mon portefeuille à un service externe. Ces derniers jours, je teste LibreFolio et j'apprécie de tout retrouver au même endroit.\n\nC'est un logiciel open source pour organiser son portefeuille et en explorer les performances, tout en gardant le contrôle de ses données. Si cela peut vous être utile, jetez-y un œil !",
+        "hint": "Nous ouvrons un post texte avec un titre et un corps séparés. Si Reddit laisse le corps vide, collez le texte déjà copié."
+      },
+      "facebook": {
+        "message": "Ces derniers temps, j'utilise LibreFolio pour garder un œil sur mes investissements. J'aime retrouver toutes les informations au même endroit sans renoncer au contrôle de mes données.\n\nSi vous cherchez un outil de suivi de portefeuille open source qui vous laisse le contrôle de vos données, découvrez-le !",
+        "hint": "Facebook prépare uniquement l'aperçu du lien. Après l'ouverture, collez le texte copié dans le message de la publication.",
+        "afterCopy": "Texte et lien copiés. Collez le texte dans le message de votre publication Facebook."
+      },
+      "instagram": {
+        "message": "Un peu plus d'ordre dans mes investissements, sans laisser mes données ailleurs. Je teste LibreFolio, un outil open source de suivi de portefeuille.",
+        "hint": "Instagram ne peut pas préparer une publication à partir de ce lien. Après l'ouverture, choisissez Créer (+), sélectionnez une photo ou une vidéo, puis collez la légende copiée.",
+        "afterCopy": "Légende et lien copiés. Sur Instagram : Créer (+), choisir la photo/vidéo, puis coller la légende."
+      },
+      "tiktok": {
+        "message": "Mon nouvel allié pour suivre mon portefeuille : LibreFolio. Open source, avec mes données sous mon contrôle. Si vous aimez bidouiller, découvrez-le !",
+        "hint": "Nous ouvrons la page d'importation de TikTok ; connectez-vous si nécessaire. Sélectionnez votre vidéo, puis collez la légende copiée. Aucune vidéo ni aucun texte n'est envoyé automatiquement.",
+        "afterCopy": "Légende et lien copiés. Sur la page d'importation TikTok, sélectionnez la vidéo et collez la légende."
+      }
+    },
+    "shareMessageLabel": "Message suggéré",
+    "clipboardUnavailable": "Impossible de copier dans le presse-papiers. Autorise son accès et réessaie.",
+    "copyAndGo": "Copier et ouvrir",
+    "navigationFailed": "Texte et lien copiés, mais le réseau social n'a pas pu être ouvert. Autorise les fenêtres pop-up et réessaie."
+  },
+  "connectionSecurity": {
+    "level": {
+      "secure": "Connexion : sécurisée",
+      "local": "Connexion : réseau local",
+      "insecure": "Connexion : non sécurisée"
+    },
+    "reason": {
+      "https": "Chiffrée en HTTPS : votre navigateur considère cette connexion comme sécurisée.",
+      "localhost": "Vous êtes sur le serveur lui-même : le trafic ne quitte pas cet ordinateur.",
+      "vpn": "Chiffrée par le VPN (Tailscale) entre votre appareil et le serveur.",
+      "lan": "Réseau local sans chiffrement : toute personne sur le même réseau, par exemple le Wi-Fi, peut lire le trafic. Pour une sécurité maximale, utilisez l'adresse HTTPS aussi à la maison.",
+      "uncertain": "Incertaine : l'adresse que vous avez ouverte et la source que voit le serveur ne concordent pas, par exemple un nom public atteint par un DNS split ou un proxy local. Le trafic n'est pas chiffré : utilisez l'adresse HTTPS.",
+      "internet": "Non chiffrée sur Internet : les mots de passe et les données circulent en clair."
+    },
+    "cookieWarning": "Votre navigateur utilise HTTPS, mais le cookie de session n'est pas marqué Secure. Faites envoyer X-Forwarded-Proto par le reverse proxy (Nginx : proxy_set_header X-Forwarded-Proto $scheme;), ou remettez SESSION_COOKIE_SECURE sur auto s'il vaut never.",
+    "learnMore": "Comment se connecter en toute sécurité"
+  }
+}

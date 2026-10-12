@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_ibkr": {
+      "description": "Importe les opérations de l’export CSV d’Interactive Brokers. Prend en charge les actions, les ETF et les opérations de change, avec leurs commissions.",
+      "name": "Interactive Brokers"
+    }
+  }
+}

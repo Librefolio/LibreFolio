@@ -1,0 +1,10 @@
+{
+  "signals": {
+    "riskRollingSharpe": {
+      "name": "Ratio de Sharpe glissant",
+      "description": "Rendement excédentaire annualisé par unité de volatilité d’échantillon sur une fenêtre glissante.",
+      "output": "Ratio de Sharpe",
+      "outputDescription": "Rendement excédentaire quotidien moyen annualisé divisé par la volatilité d’échantillon."
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_saxo": {
+      "description": "Import Saxo CSV exports: equity trades, dividends, cash deposits/withdrawals and custody fees.",
+      "name": "Saxo"
+    }
+  }
+}

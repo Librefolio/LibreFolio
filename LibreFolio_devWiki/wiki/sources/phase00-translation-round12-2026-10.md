@@ -93,6 +93,17 @@ closed two items that had waited for the shared runner file and for T's CP1 of M
   `scheduled_investment/plugin.py` in the four languages (`18e872872`, after U-1); the rest of the round waits for
   I's batch 48, T's CP2 of M-18 and the CHANGELOG's [1.2.0] chapter.
 
+## Batches 30–32 (2026-10-12, added at the train-74 ingest)
+
+- **I2** (§19): the figures quoted in it/fr/es written as the interface writes them since M-18, by rules per page and
+  figure; `translate-validate` now accepts a localized percentage in a code span (`31b6063c4`); the preferences page
+  says that numbers and dates follow the interface language.
+- **I1** (§20): the wrong-broker modal's new labels ported; the CHANGELOG's lines of train 72 ported by hand and
+  stamped; the header of `galleryLocale.ts` rewritten after M-18 (`172211a89`) —
+  [[problems/gallery-price-guard-expected-tofixed-text]].
+- **I5 prepared** (§21): the gallery's shot of the security panel, which `parkPointer` exposes to the 30 s —
+  [[decisions/security-details-close-after-30-seconds]]; applied once T's CP3 is in the target.
+
 ## Not ingested
 
 - The rest of round 12 (batches 11–18: the pipeline runs, the label and register reviews, the glossary) — operational,
@@ -105,7 +116,7 @@ closed two items that had waited for the shared runner file and for T's CP1 of M
 
 | Role | Path |
 |------|------|
-| Journal of round 12 (§5.7–§5.9, §6, §9.3, §10, §11, §14–§18) | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` |
+| Journal of round 12 (§5.7–§5.9, §6, §9.3, §10, §11, §14–§21) | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` |
 | Backlog section M (M-2 … M-16) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
 | Translation pipeline and its cache | `mkdocs_src/aphra-pipeline/translate_docs.py` |
 | Translation validator | `mkdocs_src/aphra-pipeline/validate_translations.py` |

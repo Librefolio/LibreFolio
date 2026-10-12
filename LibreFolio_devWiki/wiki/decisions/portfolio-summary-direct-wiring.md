@@ -24,7 +24,7 @@ proposed a `DerivedViewsBuilder.build_summary()` method as the intended home for
 renaming the `net_worth` response field to `nav_value` to better reflect that it is sourced from the engine's
 NAV computation rather than a naive sum.
 
-By the time the Holdings/Performance refactor (commit `78aaa0a3`, 2026-07-06) closed out the remaining gaps,
+By the time the Holdings/Performance refactor (commit `13052a006`, 2026-07-06) closed out the remaining gaps,
 none of these three proposals were implemented as originally designed. This record captures why, so future
 ingests don't flag them as "incomplete" or regressions.
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {t, locale} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import OriginBadge from '../shared/OriginBadge.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
     import {formatExactFxRate, formatExactMoneyPlain, formatExactPricePlain, formatPlannerMoneyPlain, formatPlannerTimestamp, type CurrencyDigits} from '../format';
@@ -38,7 +38,7 @@
     }
 
     function provenanceWhen(row: PacProvenanceRow): string {
-        return formatPlannerTimestamp(row.kind === 'manual' ? row.entered_at : row.captured_at, $locale);
+        return formatPlannerTimestamp(row.kind === 'manual' ? row.entered_at : row.captured_at);
     }
 
     $effect(() => {

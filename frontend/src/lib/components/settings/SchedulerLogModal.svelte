@@ -20,6 +20,7 @@
     import {ChevronDown, ChevronRight, CheckCircle, XCircle, ClipboardList, X} from 'lucide-svelte';
     import {clearTimer} from '$lib/utils/core/clearTimer';
     import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Types matching backend JSONL format
@@ -220,7 +221,7 @@
 
     function formatTimestamp(iso: string): string {
         try {
-            return new Intl.DateTimeFormat(undefined, {
+            return new Intl.DateTimeFormat(uiLocale(), {
                 month: 'short',
                 day: 'numeric',
                 hour: '2-digit',

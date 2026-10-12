@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_scalable_deposit": {
+      "name": "Scalable Capital overnight account",
+      "description": "Import the Scalable Capital overnight account (Tagesgeld) from the LibreFolio exporter's file: interest with the tax withheld, deposits, withdrawals and transfers to the broker account."
+    }
+  }
+}

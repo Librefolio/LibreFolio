@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_investimental": {
+      "description": "Importa le transazioni eseguite definitive dai log CSV degli aggiornamenti degli ordini di Investimental. Annullamenti, richieste rifiutate e ordini non eseguiti vengono saltati.",
+      "name": "Investimental"
+    }
+  }
+}

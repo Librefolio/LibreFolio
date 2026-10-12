@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_fineco": {
+      "description": "Import transactions from FinecoBank 'Movimenti Dossier Titoli' CSV export. Supports both export layouts (with and without commissions), buys, sells, dividends, bond coupons, redemptions and capital increases. Amounts are imported verbatim in the currency reported by the broker (no FX conversion).",
+      "name": "Fineco"
+    }
+  }
+}

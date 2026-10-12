@@ -69,6 +69,9 @@
         type ExposureGroup,
         type HeatmapPoint,
     } from './correlationHelpers';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type Ordering = 'similarity' | 'name' | 'type' | 'sector' | 'region';
     type Distribution = Readonly<Record<string, number>>;
@@ -315,6 +318,8 @@
         void ordering;
         void layout;
         void dark;
+        // The coefficients are written in the interface locale: a language switch redraws them (M-18).
+        void uiLocale();
         if (container) void tick().then(render);
     });
 
@@ -354,8 +359,8 @@
         const shown = named.slice(0, EXPOSURE_TOP);
         const shownKeys = new Set(shown.map(([key]) => key));
         const rest = Math.round(entries.reduce((sum, [key, weight]) => (shownKeys.has(key) ? sum : sum + weight), 0) * 100);
-        const badges = shown.map(([key, weight]) => badgeHtml(entryParts(key, dimension), `${Math.round(weight * 100)}%`));
-        if (rest > 0) badges.push(badgeHtml(entryParts(OTHER_EXPOSURE, dimension), `${rest}%`));
+        const badges = shown.map(([key, weight]) => badgeHtml(entryParts(key, dimension), formatPercent(weight, {scale: 100, digits: 0, signed: false})));
+        if (rest > 0) badges.push(badgeHtml(entryParts(OTHER_EXPOSURE, dimension), formatPercent(rest, {digits: 0, signed: false})));
         return `<div style="margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-size:11px;font-weight:600;opacity:0.8;margin-right:4px">${escapeHtml(label)}</span>${badges.join('')}</div>`;
     }
 
@@ -484,9 +489,9 @@
                         // The reading first: it is what the cell means; the two assets follow, with their exposures.
                         const reading =
                             typeof value === 'number' && band
-                                ? `<div style="font-weight:600">ρ = ${value.toFixed(3)} · ${$t(`risk.assetSet.band.${band}`)}${value >= NEAR_IDENTICAL ? ` · ${$t('risk.assetSet.nearIdentical')}` : ''}</div>`
+                                ? `<div style="font-weight:600">ρ = ${formatFixed(value, 3)} · ${$t(`risk.assetSet.band.${band}`)}${value >= NEAR_IDENTICAL ? ` · ${$t('risk.assetSet.nearIdentical')}` : ''}</div>`
                                 : `<div style="font-weight:600">${$t(`risk.valueStatus.${item.status}`)}</div>`;
-                        const metadata = `<div style="opacity:0.75;margin-top:2px">${$t('risk.metadata.observations')}: ${item.observations} · ${$t('risk.metadata.coverage')}: ${(item.coverage * 100).toFixed(1)}%</div>`;
+                        const metadata = `<div style="opacity:0.75;margin-top:2px">${$t('risk.metadata.observations')}: ${formatFixed(item.observations, 0)} · ${$t('risk.metadata.coverage')}: ${formatPercent(item.coverage, {scale: 100, digits: 1, signed: false})}</div>`;
                         const assets = `<div style="margin-top:6px;padding-top:4px;border-top:1px solid rgba(148,163,184,0.35)">${assetBlock(item.rowAssetId)}${assetBlock(item.columnAssetId)}</div>`;
                         return `${reading}${metadata}${assets}`;
                     },
@@ -503,7 +508,7 @@
                             fontSize: AXIS_FONT_SIZE,
                             formatter: (params: {data?: (typeof data)[number]}) => {
                                 const value = params.data?.value?.[2];
-                                return typeof value === 'number' ? value.toFixed(2) : '—';
+                                return typeof value === 'number' ? formatFixed(value, 2) : '—';
                             },
                         },
                         // Hovered or picked from the ranking, the cell gets a bright border and a halo (the

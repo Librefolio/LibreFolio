@@ -14,6 +14,7 @@
     import {formatExactPercent} from '../format';
     import {exposureTooltipHtml, exposureTooltipText} from './exposureTooltip';
     import {chartPercent, type WeightRow} from './model';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Props {
         rows: readonly WeightRow[];
@@ -59,6 +60,8 @@
         const element = container;
         const next = option();
         void height;
+        // The figures on the bars are written in the interface locale: a language switch redraws them (M-18).
+        void uiLocale();
         if (!element) return;
         const generation = ++renderGeneration;
         tick().then(() => {
