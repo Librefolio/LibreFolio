@@ -39,6 +39,8 @@ The frontend keeps `SignalConfig` and all local style/view behavior. Backend cat
 How each plugin sizes its warm-up against the reference library: [[decisions/signal-indicator-warmup-sizing]]. The same
 migration commit isolated client sessions: [[problems/spa-logout-cross-user-cache-leak]].
 
+The July brainstorm that put the signals first in Release 2: [[sources/release2-ai-ideas-2026-07]].
+
 ## Source files
 
 | Role | Path |

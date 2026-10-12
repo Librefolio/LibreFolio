@@ -476,6 +476,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/release2-ai-ideas-2026-07]] | `Release_2/Ai_ideas/` — the July brainstorm: signals and risk in the backend first, an AI assistant through MCP later (deferred: `TODO_FUTURI.md`, QuarkAI) | 2026-10-12 | release2, ai, mcp, roadmap |
 | [[sources/phase00-clean-audit-2026-08]] | `Release_2/phases/05_cleanAudit/` — the August code-cleanliness audit: mostly healthy, the debt in a few places, remediation S1–S3, the full suite made runnable | 2026-10-12 | phase0, audit, cleanliness |
 | [[sources/phase00-feedback-jobs-2026-09]] | `Release_2/Phase_0/09_feedbackJobs/` — the September backlog in 16 sprints, each area mapped to the lot that delivered it; what is still open (P4-7, P4-9, P4-10, R2, §2.4, SP14, SP15) | 2026-10-12 | phase0, feedback, backlog |
 | [[sources/phase00-risk-integration-2026-09]] | `Release_2/Phase_0/02_riskfolioIntegration/` — Risk Analysis replanned and rebuilt (two rounds), paused until after 1.2 (D382); README ingested in step R0, the rest in R1–R6 | 2026-10-12 | phase0, risk, levels, lab |
@@ -612,6 +613,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-12 | **Historical folder H5 — `Ai_ideas`; the historical folders are covered.** The July brainstorm as a source page only; the MCP assistant pointed to `TODO_FUTURI.md` | [[sources/release2-ai-ideas-2026-07]] *(1 page — 1 source)* |
 | 2026-10-12 | **Historical folders H4 — `03_brokerImportRecovery`, `04_webSearchEngine`.** 03 already covered by the BRIM pages; 04's switch to `ddgs` filed as a decision | *(1 page — 1 decision; see log)* |
 | 2026-10-12 | **Historical folder H3 — `08_newCleanAndDocumentation_audit`.** The second clean audit, added to the first one's source; its P0-1 kept as a problem | *(1 page — 1 problem; see log)* |
 | 2026-10-12 | **Historical folder H2 — `05_cleanAudit`.** The August audit summarised; one solved problem kept (events lost on a price-cache hit) | [[sources/phase00-clean-audit-2026-08]] *(2 pages — 1 source, 1 problem; see log)* |
