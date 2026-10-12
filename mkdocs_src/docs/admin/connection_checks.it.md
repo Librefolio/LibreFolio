@@ -25,7 +25,7 @@ mobili.
    significa che LibreFolio non sa dell'HTTPS: vedi [Dietro un reverse proxy](#reverse-proxy).
 3. **Chiedi al server.** In una nuova scheda, apri `https://<your address>/api/v1/system/connection`:
    la risposta contiene `"cookie_secure":true` ([Il punto di vista del server](#server-view)).
-4. **Se vuoi, guarda il cookie.** Negli strumenti per sviluppatori del browser, il cookie `session`
+4. **Guarda il cookie.** Negli strumenti per sviluppatori del browser, il cookie `session`
    è marcato `Secure` ([Il cookie di sessione](#session-cookie)).
 5. **Da fuori, apri l'indirizzo HTTPS.** Sul telefono, con il Wi-Fi spento, la pagina si carica e,
    una volta fatto l'accesso, l'indicatore mostra 🟢 **Connessione: sicura**. Tieni Tailscale

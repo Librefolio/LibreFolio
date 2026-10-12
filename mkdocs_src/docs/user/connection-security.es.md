@@ -20,11 +20,23 @@ tu red doméstica.
 
 Lo que escribes está cifrado, o nunca sale del servidor.
 
-- ✅ **A favor:** nadie en el camino puede leerlo ni modificarlo, ni siquiera en un Wi-Fi público.
-- ⚠️ **En contra:** a través de Tailscale con una dirección `http://` sin cifrar, como
-  `http://100.110.x.x:6040`, tu navegador no [instalará LibreFolio como aplicación](pwa.md).
-- 👉 **Qué hacer:** nada, sigue usando esta dirección. Para la aplicación, pasa a una
-  [dirección HTTPS](#https-address).
+<div class="lf-pros-cons" markdown>
+
+| ✅ A favor | ⚠️ En contra |
+|:--|:--|
+| Nadie en el camino puede leerlo ni modificarlo, ni siquiera en un Wi-Fi público. | Nada, en cuanto al riesgo. |
+
+</div>
+
+!!! warning "📱 Tailscale con HTTP sin cifrar y la aplicación"
+
+    A través de Tailscale con una dirección `http://` sin cifrar, como `http://100.110.x.x:6040`,
+    tu navegador no [instalará LibreFolio como aplicación](pwa.md). Por eso una dirección HTTPS
+    sigue siendo mejor: en cuanto al riesgo, las dos son iguales, porque Tailscale también cifra el
+    tráfico.
+
+👉 **Qué hacer:** nada, sigue usando esta dirección. Para la aplicación, pasa a una
+[dirección HTTPS](#https-address).
 
 ??? info "🔍 Cuándo una conexión es segura"
 
@@ -47,10 +59,15 @@ Abriste LibreFolio por `http://` sin cifrar dentro de tu red doméstica o de ofi
 `http://192.168.1.100:6040`, la dirección que usan los demás dispositivos tras una
 [instalación](installation.md) estándar.
 
-- ✅ **A favor:** funciona sin configurar nada, y el tráfico se queda dentro de tu red.
-- ⚠️ **En contra:** nada está cifrado: cualquiera en la misma red, como un invitado en tu Wi-Fi,
-  podría leer el tráfico, contraseña incluida.
-- 👉 **Qué hacer:** usa la [dirección HTTPS](#https-address) también en casa.
+<div class="lf-pros-cons" markdown>
+
+| 🤷 Te conformas con | ⚠️ En contra |
+|:--|:--|
+| Una conexión que no necesita configuración, y cuyo tráfico se queda dentro de tu red. | Nada está cifrado: cualquiera en la misma red, como un invitado en tu Wi-Fi, podría leer el tráfico, contraseña incluida. |
+
+</div>
+
+👉 **Qué hacer:** usa la [dirección HTTPS](#https-address) también en casa.
 
 El mismo nivel aparece con un motivo que empieza por *Incierta* cuando LibreFolio no puede saber
 dónde estás realmente: el consejo no cambia.
@@ -82,12 +99,17 @@ Llegaste a LibreFolio por `http://` sin cifrar desde internet, por ejemplo a tra
 abierto en tu router. En un teléfono, un punto rojo en el botón del menú te avisa incluso con la
 barra lateral cerrada.
 
-- ✅ **A favor:** funciona desde cualquier lugar, sin nada que instalar.
-- ⚠️ **En contra:** las contraseñas y los datos viajan en texto claro por redes que no controlas:
-  cualquiera en el camino podría leerlos, o incluso modificarlos.
-- 👉 **Qué hacer:** evita esta dirección. Si gestionas el servidor, asigna a LibreFolio una
-  [dirección HTTPS](#https-address) y deja de exponer HTTP sin cifrar. Después cambia tu contraseña:
-  **Configuración** → [**Perfil**](settings/profile.md) → **Cambiar contraseña**.
+<div class="lf-pros-cons" markdown>
+
+| ✅ A favor | ⚠️ En contra |
+|:--|:--|
+| Nada. | Las contraseñas y los datos viajan en texto claro por redes que no controlas: cualquiera en el camino podría leerlos, o incluso modificarlos. |
+
+</div>
+
+👉 **Qué hacer:** evita esta dirección. Si gestionas el servidor, asigna a LibreFolio una
+[dirección HTTPS](#https-address) y deja de exponer HTTP sin cifrar. Después cambia tu contraseña:
+**Configuración** → [**Perfil**](settings/profile.md) → **Cambiar contraseña**.
 
 ??? info "🔍 Cuándo una conexión no es segura"
 
@@ -102,8 +124,8 @@ barra lateral cerrada.
 
 ## 🔒 Cómo conectarse de forma segura {: #https-address }
 
-Asigna a LibreFolio una dirección HTTPS, y después usa solo esa. Configurarla le corresponde a quien
-gestiona el servidor: si no eres tú, pídele la dirección.
+Asigna a LibreFolio una dirección HTTPS, y después usa solo esa. La configura quien gestiona el
+servidor, de una de estas dos formas:
 
 - **Tailscale**, sin abrir puertos en tu router: Tailscale Serve da una dirección HTTPS a los
   dispositivos de tu tailnet, y Funnel una dirección pública que no necesita Tailscale en tus
@@ -111,9 +133,13 @@ gestiona el servidor: si no eres tú, pídele la dirección.
 - **Un proxy inverso** con un certificado TLS, como Caddy, Traefik o Nginx: consulta
   [Docker avanzado](../admin/docker_advanced.md).
 
-Usa la dirección `https://` en todos los dispositivos, también en casa: guárdala en marcadores, y
-actualiza los marcadores antiguos y los accesos directos de la pantalla de inicio que todavía apuntan
-a `http://`. El indicador muestra entonces **Conexión: segura**.
+Después sigue algunas buenas costumbres:
+
+- usa la dirección `https://` en todos los dispositivos, también en casa;
+- guárdala en marcadores, y actualiza los marcadores antiguos y los accesos directos de la pantalla
+  de inicio que todavía apuntan a `http://`;
+- si no gestionas el servidor, pide la dirección a quien lo gestiona;
+- mira el indicador: debe mostrar **Conexión: segura**.
 
 Si gestionas el servidor, [Comprobar la seguridad de la conexión](../admin/connection_checks.md)
 explica cómo verificar el resultado.
@@ -122,19 +148,24 @@ explica cómo verificar el resultado.
 
 ## 🧭 Lo que el indicador no hace
 
-El indicador es un consejo, no un control: no bloquea nada. Describe la conexión que estás usando
-ahora mismo, así que el mismo LibreFolio puede mostrar **Conexión: segura** en tu portátil y
+El indicador describe la conexión que estás usando ahora mismo, y te aconseja. Hay tres cosas que
+no hace.
+
+**No bloquea nada.** Es un consejo, no un control. Y como describe la conexión del dispositivo que
+estás usando, el mismo LibreFolio puede mostrar **Conexión: segura** en tu portátil y
 **Conexión: no segura** en tu teléfono.
 
-Tampoco comprueba los certificados. Un certificado autofirmado que aceptaste en el navegador muestra
-**Conexión: segura**: el tráfico está cifrado, pero nadie garantiza que el servidor sea realmente el
+**No comprueba los certificados.** Un certificado autofirmado que aceptaste en el navegador muestra
+**Conexión: segura**. El tráfico está cifrado, pero nadie garantiza que el servidor sea realmente el
 tuyo.
 
-Y no siempre ve dónde estás. Cuando LibreFolio se ejecuta en Docker Desktop y se expone
+**No siempre ve dónde estás.** Cuando LibreFolio se ejecuta en Docker Desktop y se expone
 directamente, o está detrás de un proxy que no pasa tu dirección en `X-Forwarded-For`, el servidor
-ve a todos los visitantes como locales: HTTP sin cifrar desde internet muestra entonces
+ve a todos los visitantes como locales. HTTP sin cifrar desde internet muestra entonces
 **Conexión: red local**, como incierta, en lugar de **Conexión: no segura**. Docker Engine en Linux
-conserva tu dirección. En cualquier caso, el consejo es el mismo: usa la dirección HTTPS.
+conserva tu dirección.
+
+Muestre lo que muestre el indicador, el consejo es el mismo: usa la dirección HTTPS.
 
 ---
 
