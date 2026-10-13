@@ -157,6 +157,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 - Gli assi degli importi dei grafici Crescita e Performance non mostrano più due volte la stessa etichetta (`5.5k` visualizzata come `6k` accanto a un `6k` reale, `1.25M` visualizzata come `1.3M`), e un'estremità dell'asse posizionata automaticamente oltre i dati non viene più etichettata come se fosse un passo regolare. Il P&L totale del tooltip del grafico Crescita ora riporta `EUR -12.00` come gli altri importi, invece di `−EUR 12.00`.
 - Il grafico di confronto dei lotti non lascia più una striscia vuota a sinistra dei suoi importi, in modo particolarmente evidente sugli smartphone.
+- Con la risoluzione settimanale o mensile, la settimana o il mese non ancora concluso si legge correttamente sui grafici degli asset e dei tassi di cambio: i suoi eventi non scompaiono più, i loro marcatori stanno sul suo punto come gli altri, e il suo tooltip mostra il valore alla data del suo ultimo giorno con un prezzo, non più alla domenica o all'ultimo giorno del mese che deve ancora arrivare. Presente dalla v1.0.0.
 
 #### 📉 Analisi del rischio
 
