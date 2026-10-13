@@ -516,6 +516,153 @@ test.describe('Transactions', () => {
             await expect(banner).toBeHidden({timeout: 2_000});
         });
     });
+
+    // ===================================================================
+    // V-37 — what the form refuses on screen never reaches the server
+    // ===================================================================
+    // A field the form shows as refused must block the form, not be replaced in silence:
+    // behind a typed date the picker turns down, the form still holds the previous date;
+    // a BUY's -1 is sign-corrected to 1 before it is sent. While such a field is on
+    // screen the form is not «valid», nothing is validated or saved, and «Validate now»
+    // leads to the field instead. Each test owns its account, broker and deposit, commits
+    // nothing itself, and the block's `afterEach` deletes the account.
+    test.describe('A refused entry blocks the form', () => {
+        /**
+         * Every POST the page sends to the transactions validate and commit endpoints, body
+         * parsed, in order. A record, not a wait: armed before the form opens, it misses none,
+         * and the API calls the test makes itself (`page.request`) never reach it.
+         */
+        function recordTransactionPosts(page: Page): {validate: unknown[]; commit: unknown[]} {
+            const posts = {validate: [] as unknown[], commit: [] as unknown[]};
+            page.on('request', (req) => {
+                if (req.method() !== 'POST') return;
+                const path = new URL(req.url()).pathname;
+                const list = path === `${API}/transactions/validate` ? posts.validate : path === `${API}/transactions/commit` ? posts.commit : null;
+                if (!list) return;
+                let body: unknown;
+                try {
+                    body = req.postDataJSON();
+                } catch {
+                    // Kept raw: a body that does not parse is still a request that left.
+                    body = req.postData();
+                }
+                list.push(body);
+            });
+            return posts;
+        }
+
+        /** What each validate request asked about: the quantity of every create on `brokerId`, one array per request. */
+        function quantitiesPerRequest(bodies: unknown[], brokerId: number): unknown[][] {
+            return bodies.map((body) => ((body as {creates?: Array<{broker_id?: number; quantity?: unknown}>} | null)?.creates ?? []).filter((create) => create.broker_id === brokerId).map((create) => create.quantity));
+        }
+
+        /**
+         * On the account signed in on `page`: a broker of its own funded with 1000 EUR ten days
+         * back, and a BUY of `qty` Apple for 100 EUR entered in the form. Ends with the form open,
+         * its automatic run done — counter grown, form idle — and saying «valid».
+         */
+        async function openValidatedBuy(page: Page, tag: string, qty: string) {
+            const broker = await createOwnedBroker(page, tag, owned.brokerIds);
+            const [depositId] = await commitCreates(page, [{broker_id: broker.id, type: 'DEPOSIT', date: daysAgoIso(10), cash: {code: BUY_CASH_CODE, amount: '1000'}}], 'fund the owned broker');
+            // After the broker exists, so the page's broker list has it.
+            await goToTransactions(page);
+            const posts = recordTransactionPosts(page);
+            await openCreateFlow(page);
+            const root = page.getByTestId('tx-form-modal-root');
+            const runsAtOpen = await validateRuns(root);
+            await fillBuyTransaction(page, {broker: broker.name, asset: ASSET_NAME, qty});
+            await waitForValidateRun(root, runsAtOpen);
+            await expect(page.getByTestId('tx-form-valid-inline'), 'premise: the funded BUY validates on its own and says so').toBeVisible();
+            return {broker, depositId, posts, root};
+        }
+
+        for (const refused of [
+            {name: 'a future date', text: () => daysAgoIso(-30)},
+            {name: 'text that is not a date', text: () => '2026-13-45'},
+        ]) {
+            test(`a refused typed date blocks the form: ${refused.name}`, async ({page, request}, testInfo) => {
+                // The account goes through the real welcome flow before the form itself.
+                test.setTimeout(60_000);
+                await openOwnedAccount(page, request, owned, `v37d_${testInfo.project.name}`);
+                const {broker, depositId, posts, root} = await openValidatedBuy(page, 'v37d', '3');
+                const dateRoot = page.getByTestId('tx-form-date-wrap').getByTestId('single-date-picker-root');
+                // The field itself: clicking it opens a calendar whose year box is another input.
+                const dateInput = dateRoot.locator('input[type="text"]');
+                const validInline = page.getByTestId('tx-form-valid-inline');
+                const validateNow = page.getByTestId('tx-form-validate-now');
+                const text = refused.text();
+
+                // Typed and left: leaving the field is when the picker turns the text down.
+                const validatesAtEdit = posts.validate.length;
+                await dateInput.click();
+                await dateInput.fill(text);
+                await dateInput.press('Tab');
+                await expect(dateInput).not.toBeFocused();
+                await expect(dateRoot, `premise: the picker refuses ${text}`).toHaveAttribute('data-invalid', 'true');
+                await expect(dateInput, 'premise: the refused text stays on screen').toHaveValue(text);
+
+                // The form takes the refusal as its own: not «valid», Apply closed.
+                await expect(validInline, 'a refused date is on screen: the form must not call itself valid').toBeHidden({timeout: 5_000});
+                await expect(page.getByTestId('tx-form-save'), 'Apply must not take the previous date behind the refused text').toBeDisabled();
+
+                // «Validate now» keeps the state a complete form gives it, sends nothing, and leads to the field.
+                await expect(validateNow, 'Validate now is disabled only by an incomplete form').toBeEnabled();
+                const runsBeforeClick = await validateRuns(root);
+                await validateNow.click();
+                await expect(dateInput, 'Validate now leads to the refused date').toBeFocused();
+                await waitForSettled(root);
+                expect(await validateRuns(root), 'Validate now must not run a validation').toBe(runsBeforeClick);
+                expect(posts.validate.slice(validatesAtEdit), 'no validate request may leave after the refused date').toEqual([]);
+
+                // Nothing saved: no commit left the page, and the broker — this test's own — holds its deposit alone.
+                expect(posts.commit, 'nothing may be committed').toEqual([]);
+                expect(
+                    (await readTransactions(page, {broker_id: broker.id})).map((tx) => tx.id),
+                    'the broker holds its deposit and nothing else',
+                ).toEqual([depositId]);
+            });
+        }
+
+        test('quantity -1: no valid, no request, focus; a corrected quantity validates once', async ({page, request}, testInfo) => {
+            // The account goes through the real welcome flow before the form itself.
+            test.setTimeout(60_000);
+            await openOwnedAccount(page, request, owned, `v37q_${testInfo.project.name}`);
+            const {broker, posts, root} = await openValidatedBuy(page, 'v37q', '2');
+            const quantity = page.getByTestId('tx-form-quantity');
+            const validInline = page.getByTestId('tx-form-valid-inline');
+            const validateNow = page.getByTestId('tx-form-validate-now');
+
+            // A BUY's quantity must be positive: typed and left, -1 is refused on screen.
+            const validatesAtEdit = posts.validate.length;
+            await quantity.fill('-1');
+            await quantity.press('Tab');
+            await expect(quantity, 'premise: the form refuses -1 on a BUY').toHaveAttribute('aria-invalid', 'true');
+            await expect(quantity).not.toBeFocused();
+            // Whatever the edit set off has finished: a debounced run, if one was armed, went out and came back.
+            await waitForSettled(root);
+            const sentSinceEdit = JSON.stringify(quantitiesPerRequest(posts.validate.slice(validatesAtEdit), broker.id));
+            await expect(validInline, `quantity -1 is refused on screen: the form must not call itself valid (validate requests since the edit carried ${sentSinceEdit})`).toBeHidden({timeout: 5_000});
+            expect(quantitiesPerRequest(posts.validate.slice(validatesAtEdit), broker.id), 'no validate request may carry the refused quantity, not even sign-corrected to 1').toEqual([]);
+
+            // «Validate now» stays enabled (the form is complete), sends nothing, and leads to the field.
+            await expect(validateNow, 'Validate now is disabled only by an incomplete form').toBeEnabled();
+            const runsBeforeClick = await validateRuns(root);
+            await validateNow.click();
+            await expect(quantity, 'Validate now leads to the refused quantity').toBeFocused();
+            await waitForSettled(root);
+            expect(await validateRuns(root), 'Validate now must not run a validation').toBe(runsBeforeClick);
+
+            // Corrected to 3 — not back to 2, a draft the scheduler skips as validated within 10 s:
+            // one run, and the form is valid again.
+            const runsBeforeCorrection = await validateRuns(root);
+            await quantity.fill('3');
+            await quantity.press('Tab');
+            await waitForValidateRun(root, runsBeforeCorrection);
+            expect(await validateRuns(root), 'the corrected quantity is validated exactly once').toBe(runsBeforeCorrection + 1);
+            await expect(validInline, 'the corrected BUY is valid again').toBeVisible();
+            expect(quantitiesPerRequest(posts.validate.slice(validatesAtEdit), broker.id), 'since -1: one validate request, for 3, and none for 1').toEqual([['3']]);
+        });
+    });
 });
 
 test.describe('Transactions', () => {

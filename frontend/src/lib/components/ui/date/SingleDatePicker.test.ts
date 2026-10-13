@@ -445,3 +445,61 @@ describe('SingleDatePicker — arrow stepping', () => {
         expect(input.value).toBe(TOMORROW);
     });
 });
+
+describe('SingleDatePicker — onvaliditychange, the refusal reported to the form around it', () => {
+    /**
+     * `data-invalid` tells the user; the form around the picker needs the same fact as a value.
+     * While refused text is on screen the picker still holds the previous date, so a form that
+     * cannot see the refusal validates and saves a date nobody typed (V-37: a BUY was saved with
+     * today's date behind a red date field). `valid` is false exactly while the root shows
+     * `data-invalid="true"` — text the picker refuses, left by blur or Enter — and true otherwise.
+     * It is reported on mount and on every change; a picker that goes away while refusing reports
+     * valid once more, so a form is never left blocked by a field that is no longer there.
+     *
+     * `render` and `unmount` both flush Svelte synchronously, so the reports are read without waiting.
+     */
+    function setupReporting() {
+        const onvaliditychange = vi.fn();
+        const {unmount} = render(SingleDatePicker, {props: {value: PAST, onchange: vi.fn(), onvaliditychange, testid: TID}});
+        return {onvaliditychange, unmount, input: screen.getByTestId(TID) as HTMLInputElement, root: screen.getByTestId(`${TID}-root`)};
+    }
+
+    it('reports valid once on mount, and stays valid while refused text is still being typed', async () => {
+        const {onvaliditychange, input, root} = setupReporting();
+        expect(onvaliditychange).toHaveBeenCalledExactlyOnceWith({valid: true});
+
+        await type(input, isoOffset(30));
+        // Not left yet: the field is quiet, and so is the report.
+        expect(root).toHaveAttribute('data-invalid', 'false');
+        expect(onvaliditychange).toHaveBeenLastCalledWith({valid: true});
+    });
+
+    it('follows the refusal on screen: refused and left, accepted, refused again, and valid once more on unmount', async () => {
+        const {onvaliditychange, input, root, unmount} = setupReporting();
+
+        // A future date, left by blur.
+        await type(input, isoOffset(30));
+        await fireEvent.blur(input);
+        expect(root).toHaveAttribute('data-invalid', 'true');
+        expect(onvaliditychange).toHaveBeenLastCalledWith({valid: false});
+
+        // An accepted past date, left by blur.
+        await type(input, isoOffset(-33));
+        await fireEvent.blur(input);
+        expect(root).toHaveAttribute('data-invalid', 'false');
+        expect(onvaliditychange).toHaveBeenLastCalledWith({valid: true});
+
+        // Text that is not a date, left by Enter.
+        await fireEvent.focus(input);
+        await type(input, '2026-13-45');
+        await fireEvent.keyDown(input, {key: 'Enter'});
+        expect(root).toHaveAttribute('data-invalid', 'true');
+        expect(onvaliditychange).toHaveBeenLastCalledWith({valid: false});
+
+        // Gone while refusing: one report more, and it is valid.
+        const reportsBeforeUnmount = onvaliditychange.mock.calls.length;
+        unmount();
+        expect(onvaliditychange).toHaveBeenCalledTimes(reportsBeforeUnmount + 1);
+        expect(onvaliditychange).toHaveBeenLastCalledWith({valid: true});
+    });
+});

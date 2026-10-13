@@ -1638,3 +1638,65 @@ They are «da rifinire ma stabili», still to be polished but stable.
 >   `translate-diff` 642 of 642 clean.
 > - Strict build 0; `check-links` 95; review scripts: only the intended differences.
 > - `git diff --check` clean; ports 6158, 6168 and 6042 free.
+
+### 31. ✅ Batch 40: the risk API leaves beta, and the exporter's version — on `3d3cf811a`, 2026-10-13
+
+Batch 39 is in the target (train 94, `9c1750325`). Two coordinator edits of the [1.2.0] chapter, ported by hand
+(`release-pipeline/scripts/b40_changelog_lines.py`).
+
+**31.1 ✅ The two lines**
+> **Note implementazione**:
+> - **`4de042cfe`, `:289` (Risk Analysis is no longer marked beta):** «The risk API, `/api/v1/risk`, leaves beta too:
+>   from this release it changes only with a major version, except the simulation.»
+>   - It reuses the chapter's own words: the section's «esce dalla beta / quitte la bêta / sale de beta», and «versione
+>     major / version majeure / versión mayor».
+>   - `translate-validate` had flagged `/api/v1/risk` missing in all three languages, not only fr and es, together
+>     with the two stale pieces.
+> - **`3d3cf811a`, `:46` (Scalable Capital importers):** after the exporter's link, «(versione 1.0.1 o successiva) /
+>   (version 1.0.1 ou ultérieure) / (versión 1.0.1 o posterior)».
+
+**31.2 ✅ Gates** (`release-pipeline/scripts/b40_gates.sh`, 12:09–12:11, load 11–20; then 12:11–12:13)
+> - **Stamp:** `1.2.0/added` and `1.2.0/changed/risk-analysis-…`, 2 pieces × 3; the cache changed only there.
+> - **Dry-run:** empty.
+> - **Validation:** `translate-validate --hide-localized` 630 files 0/0, with no INFO left: no `inline-code-missing`,
+>   no `changelog-stale`. The CHANGELOG alone 3 files OK.
+> - **Docs:** `translate-diff` 642 of 642 clean; strict build 0; `check-links` 95.
+> - **Review scripts:** only the intended `:264` examples and the four quotes of old text.
+> - **The changelog's Vitest** (`src/lib/features/changelog/changelog.test.ts`, the `core-unit` file, run alone
+>   through `frontend/node_modules/.bin/vitest`): 189 passed.
+> - **`front-utility changelog-locale`** (1 worker, lane 6158): 2 passed.
+> - `git diff --check` clean; ports free.
+> - The coordinator's FREEZE-VENV (`uvicorn[standard]` into the shared venv) came after these runs. The manifest and
+>   this entry use only the system Python and git.
+
+### 32. ⏳ Batch 41: the form's two changelog lines and V's form line, then the final gallery — on `f8dbdddaf`, 2026-10-13 evening
+
+Batch 40 is in the target (train 96, `124c02a8a`). The coordinator fast-forwarded the worktree to `f8dbdddaf`; the
+batch's brief excludes any git write, the fast-forward included. The developer keeps the Mac awake for the night and
+has delegated the merges to the coordinator: the translations first, with their own checkpoint, then the full gallery.
+
+**32.1 ✅ The translations** (`release-pipeline/scripts/b41_ports.py`)
+> **Note implementazione**:
+> - **`f8dbdddaf`'s two 🐛 lines** in «📥 Imports and transaction editing» (`:98`–`:99`): the form no longer saves a
+>   date it has refused, and no longer says *valid* next to a field it shows in red, both «Present since v1.1.0».
+>   Inserted at the same place, so the chapter stays line-aligned.
+> - **V's `73a75650e`, `user/transactions/form.*.md:29`:** the form spots some mistakes by itself; until they are
+>   fixed nothing is checked, *valid* does not appear and **Apply** stays disabled.
+> - **UI names from the catalogue:**
+>   - *valid* is `transactions.validate.ok`: valido / valide / válido;
+>   - **Apply** is `common.apply`: Applica / Appliquer / Aplicar;
+>   - **⚡ Validate now** is `transactions.validate.now`: Verifica ora / Valider maintenant / Validar ahora.
+>   - **⚠️ Fuori pista:** the Italian form page said «Valida ora»; corrected on the line being rewritten.
+> - **The chapter's words:** modulo di transazione / formulaire de transaction / formulario de transacción. The exchange
+>   is the FX_CONVERSION type, cambio valuta / change de devises / cambio de divisas, lowercase in prose.
+>
+> **Gates** (`release-pipeline/scripts/b41_gates.sh`, 20:31–20:35, load 19–36):
+> - **Stamps:** `form.en.md`, 1 file × 3; then the CHANGELOG's `fixed/imports-and-transaction-editing`, 3 pieces. The
+>   cache changes in two stages, each only in its own entry.
+> - **Translations:** dry-run empty; `translate-validate --hide-localized` 630 files 0/0, no INFO; the CHANGELOG alone
+>   3 files OK; `translate-diff` 642 of 642 clean.
+> - **Docs:** strict build 0; `check-links` 95.
+> - **Tests:** the changelog's Vitest 189 passed; `front-utility changelog-locale` (1 worker, lane 6158) 2 passed.
+> - `git diff --check` clean; ports free.
+
+**32.2 ⏳ The final gallery** (on this tree, `LF_APP_VERSION=v1.2.0`): see below once it has run.
