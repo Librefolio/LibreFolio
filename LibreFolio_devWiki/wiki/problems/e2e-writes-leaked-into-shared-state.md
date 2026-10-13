@@ -105,6 +105,14 @@ came next — delivered in train 76 ([[decisions/e2e-gaps-of-1-2-before-release]
 and one test leaves a broker on purpose), 12 upload files left by an earlier run that the populate step does not
 clean, the rest of V-21 (probes and forbidden selectors, which leak nothing), V-17's two runner points, V-18.
 
+*Train 82*: V-25 is cured — `tx-delete` creates and deletes only its own rows, through the new fixture
+`frontend/e2e/fixtures/owned-pair.ts` (`5d5c7caed`); after a run it had left 73 transactions, 9 brokers and 18 assets
+against the seed's 76, 8 and 17. V-21 in part: the transaction specs lost their probes and fragile selectors
+(`e01289a65`), and files and logout wait on the page's state (`34fb7ca37`); T1, T4, T5/T8, T13, A6 and the B3 guard
+wait on questions to the developer. A finding: after midnight the seed holds more exchange rates (4 140), because
+the populate's ECB window follows the calendar — so the no-leak check now proves that no rate is written after the
+populate, instead of counting them. **Still open**: the rest of V-21, V-17's two runner points, V-18.
+
 ## Prevention
 
 - A test that writes shared state owns it: its own account, its own reserved pair, or a read-and-restore in `finally`;
