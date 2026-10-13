@@ -916,6 +916,84 @@ describe('TransactionFormModal — exact quantity contract', () => {
     });
 });
 
+describe('TransactionFormModal — a quantity the form refuses is never validated (V-37)', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        resetGuideState();
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(validMinimalTXTypesResponse);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        resetGuideState();
+    });
+
+    /**
+     * The automatic validate waits out the scheduler's debounce (500 ms by default); this is past it
+     * with room to spare, and far short of the 60 s idle run.
+     */
+    const PAST_THE_DEBOUNCE_MS = 5_000;
+
+    /** What each `validateTransactions` call from call `from` on asked about: the quantity of every create, one array per call. */
+    function validatedQuantitiesSince(from: number): unknown[][] {
+        return vi
+            .mocked(validateTransactions)
+            .mock.calls.slice(from)
+            .map(([payload]) => ((payload as unknown as {creates?: Array<{quantity?: unknown}>}).creates ?? []).map((create) => create.quantity));
+    }
+
+    it('BUY quantity -1: no automatic or manual validate, Validate now focuses the field, no valid; a corrected quantity validates once', async () => {
+        // Only the timers decide whether a run goes out, and only the scheduler sets them: faking
+        // setTimeout/clearTimeout from before the mount puts every debounce on a clock the test advances.
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+        try {
+            mount({mode: 'create', items: [txRow({quantity: '2'})], commitOnSave: false, onPushDraft: vi.fn()});
+            const quantity = await screen.findByTestId('tx-form-quantity');
+            const validateNow = screen.getByTestId('tx-form-validate-now');
+
+            // Before: the complete BUY of 2 validates on its own and says so.
+            await vi.advanceTimersByTimeAsync(PAST_THE_DEBOUNCE_MS);
+            expect(validatedQuantitiesSince(0), 'premise: the complete BUY validates on its own').toContainEqual(['2']);
+            expect(screen.getByTestId('tx-form-valid-inline')).toBeInTheDocument();
+
+            const callsAtEdit = vi.mocked(validateTransactions).mock.calls.length;
+            await fireEvent.input(quantity, {target: {value: '-1'}});
+            await tick();
+            expect(quantity, 'premise: the form refuses -1 on a BUY').toHaveAttribute('aria-invalid', 'true');
+            expect(screen.getByTestId('tx-form-save')).toBeDisabled();
+            expect(validateNow, 'Validate now is disabled only by an incomplete form').toBeEnabled();
+
+            // The automatic run has had every chance to go out.
+            await vi.advanceTimersByTimeAsync(PAST_THE_DEBOUNCE_MS);
+            expect(validatedQuantitiesSince(callsAtEdit), 'the refused quantity must not be validated, not even sign-corrected to 1').toEqual([]);
+            expect(screen.queryByTestId('tx-form-valid-inline')).toBeNull();
+
+            // Validate now sends nothing and takes the user to the field. A real click leaves the
+            // focus on the button; the handler is what may move it.
+            validateNow.focus();
+            expect(quantity).not.toHaveFocus();
+            await fireEvent.click(validateNow);
+            expect(quantity, 'Validate now leads to the refused quantity').toHaveFocus();
+            expect(validatedQuantitiesSince(callsAtEdit), 'Validate now must not send the refused quantity').toEqual([]);
+            await vi.advanceTimersByTimeAsync(PAST_THE_DEBOUNCE_MS);
+            expect(validatedQuantitiesSince(callsAtEdit)).toEqual([]);
+            expect(screen.queryByTestId('tx-form-valid-inline')).toBeNull();
+
+            // Corrected: validated once, and valid again.
+            await fireEvent.input(quantity, {target: {value: '3'}});
+            await vi.advanceTimersByTimeAsync(PAST_THE_DEBOUNCE_MS);
+            expect(validatedQuantitiesSince(callsAtEdit), 'the corrected quantity is validated, once').toEqual([['3']]);
+            expect(screen.getByTestId('tx-form-valid-inline')).toBeInTheDocument();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
+
 describe('TransactionFormModal — create guide lifecycle', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
