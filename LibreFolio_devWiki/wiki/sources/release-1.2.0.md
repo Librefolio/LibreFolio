@@ -59,10 +59,11 @@ with the commit or the train.
   the hidden half of a removed pair (V-29, [[problems/hidden-pair-half-survived-row-removal]]); `dev.py` unusable in
   the 1.1.0 image ([[problems/devpy-unusable-in-docker-image]]); the 1.1 images with a debug frontend
   ([[problems/release-images-shipped-debug-frontend]]); event markers lost in the last, open period at weekly or monthly
-  resolution, since v1.0.0 (R-5, [[problems/event-markers-lost-in-the-last-partial-period]] — its 🐛 line is proposed,
-  not yet in the chapter).
-- **🔄 Changed**: besides the three lines in the table, the figures of CVaR and Sharpe change on purpose, so they stay
-  in 🔄; ids are never reused after the database conversion; the server compresses its responses
+  resolution, since v1.0.0 (R-5, [[problems/event-markers-lost-in-the-last-partial-period]]; its 🐛 line, with the open
+  period's tooltip, is in the chapter since `fcc4ac96f` and `ef666fdee`).
+- **🔄 Changed**: besides the three lines in the table, the risk API, `/api/v1/risk`, leaves beta with the panels: from
+  1.2 it changes only with a major version, except the simulation (`4de042cfe`); the figures of CVaR and Sharpe change
+  on purpose, so they stay in 🔄; ids are never reused after the database conversion; the server compresses its responses
   ([[decisions/http-gzip-in-the-app]]).
 - **⚠️ Breaking changes (7)**: the cost fields of `GET /brokers/{id}/summary` and the amounts of
   `POST /portfolio/lots/analysis` can be empty; purchase cost and P&L change value for assets in another currency; the
@@ -72,7 +73,7 @@ with the commit or the train.
 
 ## Decisions of the cycle
 
-Sixty decision pages are dated between 2026-09-07 and 2026-10-13:
+Sixty-two decision pages are dated between 2026-09-07 and 2026-10-13:
 
 | Theme | Decisions |
 |---|---|
@@ -80,10 +81,10 @@ Sixty decision pages are dated between 2026-09-07 and 2026-10-13:
 | Tools and PAC (10) | [[decisions/tool-calculation-without-authority]], [[decisions/tool-contract-from-pydantic-compiled-renderer]], [[decisions/tool-item-runs-in-owned-process]], [[decisions/pac-draft-copies-from-owned-data]], [[decisions/pac-lexicographic-fixed-l2-objective]], [[decisions/pac-fx-one-rate-map-direct-conversions]], [[decisions/pac-p1-prototype-removed]], [[decisions/pac-scip-searches-exact-replay-certifies]], [[decisions/pac-contract-compacted-before-release]], [[decisions/pac-rounding-against-the-plan]] |
 | Onboarding (6) | [[decisions/onboarding-guide-observes-never-acts]], [[decisions/onboarding-versioned-progress-per-flow]], [[decisions/automatic-popups-wait-for-guides]], [[decisions/onboarding-existing-users-seeded-skipped]], [[decisions/guide-text-never-announces-another-guide]], [[decisions/onboarding-positions-in-browser-per-account]] |
 | Portfolio maths and cost (8) | [[decisions/yield-on-cost-definition]], [[decisions/portfolio-pnl-series-contracts]], [[decisions/financial-math-single-average-cost]], [[decisions/financial-math-one-home]], [[decisions/utils-leaf-functions-only]], [[decisions/native-cash-daily-revaluation]], [[decisions/auto-cost-basis-zero-without-position]], [[decisions/transfer-auto-cost-from-sending-broker]] |
-| Transactions, imports and assets (8) | [[decisions/transfer-pair-same-asset-opposite-quantity]], [[decisions/promote-respects-asset-event-link]], [[decisions/bulk-pairs-new-with-saved]], [[decisions/brim-report-sets]], [[decisions/scalable-two-accounts-two-plugins]], [[decisions/import-wizard-default-plugin-check]], [[decisions/broker-icon-order-dedicated-plugin-first]], [[decisions/asset-type-two-level-taxonomy]] |
+| Transactions, imports and assets (9) | [[decisions/transfer-pair-same-asset-opposite-quantity]], [[decisions/orphan-transfer-becomes-an-adjustment]], [[decisions/promote-respects-asset-event-link]], [[decisions/bulk-pairs-new-with-saved]], [[decisions/brim-report-sets]], [[decisions/scalable-two-accounts-two-plugins]], [[decisions/import-wizard-default-plugin-check]], [[decisions/broker-icon-order-dedicated-plugin-first]], [[decisions/asset-type-two-level-taxonomy]] |
 | Interface, privacy and security (7) | [[decisions/figures-in-the-interface-language]], [[decisions/privacy-mask-at-the-formatter]], [[decisions/html-escape-at-the-source]], [[decisions/connection-security-server-never-upgrades]], [[decisions/security-details-close-after-30-seconds]], [[decisions/clipboard-through-one-helper-with-a-gate]], [[decisions/pdf-preview-viewer-only-local-assets]] |
 | Plugins, translations and docs (5) | [[decisions/plugin-folders-and-split-i18n]], [[decisions/changelog-translated-by-chapter]], [[decisions/changelog-translated-by-heading-pieces]], [[decisions/fr-typography-at-build-time]], [[decisions/docs-anchors-from-the-render]] |
-| Release, tests and process (8) | [[decisions/gallery-is-a-release-gate-with-real-data]], [[decisions/release-image-tags-latest-light]], [[decisions/http-gzip-in-the-app]], [[decisions/user-docs-plain-dev-manual-technical]], [[decisions/e2e-gaps-of-1-2-before-release]], [[decisions/data-quality-proved-on-real-data]], [[decisions/ai-export-version-bump-once-per-release]], [[decisions/changelog-entry-rules]] |
+| Release, tests and process (9) | [[decisions/python-stays-on-3-13]], [[decisions/gallery-is-a-release-gate-with-real-data]], [[decisions/release-image-tags-latest-light]], [[decisions/http-gzip-in-the-app]], [[decisions/user-docs-plain-dev-manual-technical]], [[decisions/e2e-gaps-of-1-2-before-release]], [[decisions/data-quality-proved-on-real-data]], [[decisions/ai-export-version-bump-once-per-release]], [[decisions/changelog-entry-rules]] |
 
 ## What the release leaves open
 
@@ -102,6 +103,9 @@ Sixty decision pages are dated between 2026-09-07 and 2026-10-13:
 | [[problems/stale-version-file-shadows-git-describe]] | a leftover `VERSION` file on a development host | R2 |
 | [[problems/justetf-websocket-disconnect]], [[problems/tab-writes-after-the-look]] | workarounds in place | — |
 | [[problems/testid-grep-false-negative]] | recurs | — |
+
+Under observation, without a page: V-35, the FX page's aesthetics panel that stayed open once under load; instruments
+wait for the next red ([[sources/phase00-data-quality-e2e-2026-10]]).
 
 [[problems/release-shots-show-dirty-version]] is resolved in the code and waits for the first nightly after the push
 (M-25 stays in the backlog). *Resolved since the first draft* (train 87): [[problems/jscoverage-teardown-spends-the-test-budget]]

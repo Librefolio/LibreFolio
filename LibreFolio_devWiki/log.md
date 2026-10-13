@@ -3397,3 +3397,20 @@ width sweep in four languages, the phone pill): recorded here, and checked again
 pill test in `toolbar-width-sweep.spec.ts`, `3e5313d3e` after `v1.1.0`, the measures of plan 51. Also
 [[sources/release-1.2.0]] (two problems resolved, R-5 among the released defects, the gallery's group A corrected).
 Not filed: V-35, which has no record in the tree yet. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Trains 92–93, the coordinator's commits, C-60 and V-3 decided
+Base `9313f81ee`. **V** (train 92): V-36 closed (`fccf0bee1`, `setLanguage` waits for the dictionary) — recorded on
+[[problems/login-returns-before-the-app-has-started]]; V-35 under observation, with `aria-expanded` and a panel log
+(`a67f89661`, `84cdf6dbb`) — [[sources/phase00-data-quality-e2e-2026-10]]. **T** (train 93): the open period's
+tooltip (`341c77811`, `bucketSpanUpTo`) and T-EVW closed — [[problems/event-markers-lost-in-the-last-partial-period]]
+(its 🐛 line now in the chapter, `fcc4ac96f`, `ef666fdee`), [[sources/phase00-financial-math-home-2026-10]].
+**Coordinator**: the risk API stable from 1.2 except the simulation (`4de042cfe`) — [[features/F-110]],
+[[sources/release-1.2.0]]; V-8 and V-22 after 1.2; C-72, whose wiki part was this lot's to do:
+[[problems/svelte-template-branches-not-instrumented]] corrected — the empty `branchMap` was V8's, and `2e104b919`
+(2026-08-30, in 1.1.0) already counted the template's branches with istanbul; status accepted → resolved. The stash
+rule is in `.github/agents/release-coordinator.agent.md` (`6e1a2ef3e`): [[problems/git-merge-stash-failed-on-locked-index]]
+links it (ask the developer first) without copying its seven steps. **Created** [[decisions/python-stays-on-3-13]]
+(C-60; the 12/10 report as the baseline of the next comparison) and [[decisions/orphan-transfer-becomes-an-adjustment]]
+(V-3; not in the code, after 1.2), linked from [[decisions/single-docker-image]], [[features/F-062]] (whose
+dependency line was also corrected: the toolchain lives in the builder stage), [[decisions/transfer-pair-same-asset-opposite-quantity]]
+and [[decisions/data-quality-proved-on-real-data]]. Graph: not updated (P-6).

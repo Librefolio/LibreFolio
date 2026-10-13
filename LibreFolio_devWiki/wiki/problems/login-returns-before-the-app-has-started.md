@@ -38,9 +38,11 @@ Verified at one worker: six rounds, 102 of 102 green, the database back at the s
 ## Prevention
 
 A helper that signs in must return in the state its callers expect, the app on screen, not halfway there; otherwise
-every caller compensates on its own short budget, and under load one of them does not. The same family is still open
-for `setLanguage`, which waits the default 3 s for `<html lang>`: under load it gave the French toolbar sweep a red on
-2026-10-13 (M's lot 37, reported to the coordinator).
+every caller compensates on its own short budget, and under load one of them does not. The same family was open for
+`setLanguage`, which waited the default 3 s for `<html lang>` while the chosen dictionary, a chunk of about 290 KB,
+loaded: under load it gave the French toolbar sweep a red on 2026-10-13 (M's lot 37). V-36 closed it the same day
+(`fccf0bee1`, train 92): the three waits of `setLanguage` share a 15 s budget, a deadline and never a delay; with the
+dictionary held back 5 s the red was deterministic, and it is green with the cure.
 
 ## Source files
 
