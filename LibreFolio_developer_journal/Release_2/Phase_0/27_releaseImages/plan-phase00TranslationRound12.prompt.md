@@ -1775,3 +1775,43 @@ line (`10e646f79`). The coordinator fast-forwarded the worktree to it.
 > **Seen, not from batch 52** (identical in batch 41), passed to the coordinator:
 > - the allocation history's stack tops out near 75 %, not 100 %, by type, sector and geography;
 > - `brokers/detail` shows Charles Schwab empty over 3M, so it holds no broker Growth chart with data.
+
+### 34. ✅ Batch 43: the broker detail shot picks its broker by name (M-31) — on `0ae4a92cd`, 2026-10-13 evening
+
+Batch 42 is committed on this branch (`f0ad6726b`, `0ae4a92cd`) and goes into train 98; the coordinator passed M-30 to
+I. Gallery only, and no long runs: R's final coverage run is on 6176.
+
+**34.1 ✅ The test** (`frontend/e2e/gallery.spec.ts`, «broker detail - all languages and themes»)
+> **Note implementazione**:
+> - **The cause:** the test clicked the list's first card. The list is alphabetical, and Charles Schwab, first since it
+>   entered the mock data (`04ed6b16b`, 2026-06-09), has no transactions: the overview read 0.00 and «No data
+>   available». The shot and the brokers page that shows it are older than Schwab.
+> - **The fix:** `openBrokerCardByName(page, 'Interactive Brokers')`, the helper the info, positions and FIFO shots of
+>   the same page already use (with Coinbase), after `waitForNetworkSettled` as they do. The 1 s sleep before the cards
+>   and the `.first()` block go.
+> - **Why Interactive Brokers:** cash from deposits a year old and stocks bought in the last two months
+>   (`populate_mock_data.py`, dates relative to the day of the run), so the default 3-month window has data on any day.
+>   In the lane's DB: 35 transactions, 33 in the window.
+> - **Static checks:** Prettier clean; `tsc -p tsconfig.e2e.json` the 2 errors of HEAD, none new; `check-orphans`
+>   clean; `git diff --check` clean.
+
+**34.2 ✅ The group again** (report: `release-pipeline/runs/b43/B43_GALLERY_REPORT.md`)
+> **Note implementazione**:
+> - **Command:** `LF_APP_VERSION=v1.2.0 … dev.py mkdocs gallery --test-port 6158 --workers 2 --no-populate -f 'broker
+>   detail - all'`, on batch 42's debug bundle (`v1.2.0`; nothing under `frontend/src` changed since).
+> - **Result, 22:19–22:21, load 28 → 18:** **2 passed** (mobile 30.0 s, desktop 34.4 s); 16 screenshots.
+>
+> **By eye:**
+> - Interactive Brokers over 3M: the KPI cards filled, cash in EUR and USD;
+> - Growth with its lines, the last label whole («Oct 13», «13 oct.»);
+> - the allocation by type: Liquidity, Stock, Crypto.
+> - The 40 % badge is the admin's ownership share: the values are scaled by it, as `user/brokers/index` explains.
+>
+> **The logo:** the site's favicon (`broker_ibkr/plugin.py:119`), as in the list shot. Under decision A the shot shows
+> what the user sees, and the test does not fail on it.
+> - A pixel check (red in the icon's circle) finds it drawn in all 16 shots: 13.2 % desktop, 11.9 % mobile. Batch 41's
+>   Schwab briefcase gives 0 %.
+> - The `.ico` is small, so the logo looks soft when the phone enlarges it.
+>
+> **Seen, outside the scope:** `user/brokers/index.*.md:29` shows this shot under «Click **Create**», with the alt of
+> the edit form above it («Broker Edit Form», «Modulo di modifica broker», …). Backlog M-32.

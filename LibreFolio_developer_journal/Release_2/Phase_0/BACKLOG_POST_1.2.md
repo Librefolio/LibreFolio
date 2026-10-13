@@ -866,10 +866,18 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   lotto 42. Il grafico è uno stack al 100 % (`AllocationHistoryChart.svelte:2`, `max: 100` a `:802`): o una famiglia
   manca dallo stack, o i pesi non sommano a 100. È l'area dei grafici: da girare a chi la possiede. Scatti:
   `gallery/*/*/*/dashboard/allocation-{type,sector,geo}-history.png`. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «33.2».
-- **M-31 · Lo scatto `brokers/detail` mostra un broker vuoto** — basso; M (lotto 42), 13/10: il test prende la prima
-  card della lista (`frontend/e2e/gallery.spec.ts:3104`), oggi Charles Schwab, che sul periodo predefinito 3M è tutto
-  a 0,00, con «Nessun dato disponibile» in Crescita e Allocazione. Per mostrare i grafici del broker serve un broker
-  con dati nel periodo, scelto per nome. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «33.2».
+- ✅ **M-31 · Lo scatto `brokers/detail` mostra un broker vuoto** — chiusa nella 1.2, M (lotto 43, 13/10): il test
+  apre Interactive Brokers per nome (`openBrokerCardByName`, come gli altri scatti della pagina del broker), che ha
+  liquidità e titoli in tutta la finestra di 3 mesi; 16 scatti con Crescita e Allocazione piene. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
+  sezione «34». Era: basso; M (lotto 42), 13/10: il test prendeva la prima card della lista
+  (`frontend/e2e/gallery.spec.ts:3104`), Charles Schwab, tutto a 0,00 sul periodo predefinito 3M, con «Nessun dato
+  disponibile» in Crescita e Allocazione.
+- **M-32 · L'alt dello scatto del dettaglio nella pagina dei broker** — minimo; M (lotto 43), 13/10:
+  `mkdocs_src/docs/user/brokers/index.{en,it,fr,es}.md:29` mostra lo scatto `brokers/detail` sotto «Click **Create**»
+  con l'alt del modulo di modifica, copiato dall'immagine sopra: «Broker Edit Form», «Modulo di modifica broker»,
+  «Formulaire de modification du courtier», «Formulario de edición del bróker». Le pagine della galleria lo chiamano
+  «Broker Detail», «Dettaglio broker», «Détail du courtier», «Detalle del bróker». Da decidere insieme se il passo 3,
+  che parla della lista, debba mostrare il dettaglio. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «34.2».
 
 ## Q · Documentazione e onboarding (21, 32)
 
