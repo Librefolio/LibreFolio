@@ -18,13 +18,14 @@ pass.
 
 ## Root Cause
 
-The `jsCoverage` fixture collects the coverage in its teardown, and Playwright counts a fixture's teardown in the
-test's own timeout, 30 s; the fixture has no timeout of its own, so under load the collection eats the budget of the
-test it follows.
+The `jsCoverage` fixture collects the coverage in its teardown and has no `timeout` of its own. *Corrected on
+2026-10-13* (V, checked in Playwright 1.61's source): such a teardown does not count against the 30 s of the test's
+body, but against the after-hooks slot — also 30 s, and shared with `afterEach`. That is why R's failing durations
+read as the body plus 30 s. Under load, the collection runs that slot out.
 
 ## Status
 
-Open: workstream V cures it in its next lot (coordinator, 2026-10-13).
+Open: V-28 — a `timeout` on the fixture, which gives its teardown a slot of its own; workstream V's next lot.
 
 ## Source files
 

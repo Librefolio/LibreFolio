@@ -3336,3 +3336,12 @@ Base `273b188ea` (fast-forward). Sources: plan 46 §12.10, the backlog, the code
 part, the calendar-driven seed rates), [[concepts/test-isolation-classes]] (the owned-pair fixture),
 [[problems/login-returns-before-the-app-has-started]] (V-27 now in the backlog; V-26 closed), [[features/F-048]],
 [[sources/phase00-data-quality-e2e-2026-10]]. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Train 83 — the 1.2 CHANGELOG reviewed line by line; M's full gallery
+Base `9686ee1f2`. Sources: the chapter [1.2.0] after `60f734e08`, the summaries of T's and I's review reports (working
+files outside the repository), the backlog (`b2a21bb4a`), M's gallery report of I5 part two (outside the repository),
+V's correction on the jsCoverage teardown; the code checked for the WAC endpoint, the fixture and `data-dist-pct`.
+**Created** [[decisions/changelog-entry-rules]], [[problems/portfolio-wac-endpoint-answered-anyone]] (resolved),
+[[problems/schwab-favicon-blocked-by-orb]] (open). **Updated** [[problems/jscoverage-teardown-spends-the-test-budget]]
+(the teardown counts against the after-hooks slot, not the body; V-28), [[decisions/figures-in-the-interface-language]]
+(`data-dist-pct`). Graph: not updated (P-6).

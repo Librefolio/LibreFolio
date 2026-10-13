@@ -748,3 +748,9 @@ are each file's last commit at the base. Paths are relative to the repository ro
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` | `452978f2e` | 2026-10-13 | §12.10 → [[problems/hidden-pair-half-survived-row-removal]], [[problems/e2e-writes-leaked-into-shared-state]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `73d083e46` | 2026-10-13 | V-21, V-25, V-26, V-27, V-29 → the pages above |
+
+## 2026-10-13 — train 83, the CHANGELOG review and M's gallery (base `9686ee1f2`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `b2a21bb4a` | 2026-10-13 | C-70, C-71 → [[decisions/changelog-entry-rules]] |
