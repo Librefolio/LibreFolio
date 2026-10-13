@@ -10744,7 +10744,7 @@
     }
   },
   "CHANGELOG.md#1.2.0/fixed/sign-in-language-app-icons-and-small-screens": {
-    "md5": "dd7cee875a669b057cfdb5a16f35bf54",
+    "md5": "38ac4f08a21f69b43ea61b245bc0689a",
     "langs_done": [
       "es",
       "fr",
@@ -10765,7 +10765,7 @@
         "structural_issues": 0,
         "elapsed_s": 108.1,
         "index": 12,
-        "stamped_at": "2026-10-13T02:50:25.160200+00:00",
+        "stamped_at": "2026-10-13T04:15:17.752040+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -10779,7 +10779,7 @@
         "structural_issues": 0,
         "elapsed_s": 139.5,
         "index": 12,
-        "stamped_at": "2026-10-13T02:50:25.160200+00:00",
+        "stamped_at": "2026-10-13T04:15:17.752040+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -10793,7 +10793,7 @@
         "structural_issues": 0,
         "elapsed_s": 139.8,
         "index": 12,
-        "stamped_at": "2026-10-13T02:50:25.160200+00:00",
+        "stamped_at": "2026-10-13T04:15:17.752040+00:00",
         "stamped_by": "translate-stamp"
       }
     }
