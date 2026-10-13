@@ -12,10 +12,12 @@
  * evidence. The moment specs are consolidated into one invocation — which is the
  * whole point of the parallel runner — the leftovers become other specs' input.
  *
- * Measured instance: `tx-clone.spec.ts` commits a real cloned pair, picking "the
- * first paired giver row on editable brokers". That is the `delete-safe` ETH
- * TRANSFER. `tx-delete.spec.ts` then deletes that pair and asserts no
- * `delete-safe` ETH row survives — and finds the clone.
+ * Measured instance: `tx-clone.spec.ts` committed a real cloned pair, picking "the
+ * first paired giver row on editable brokers" — the `delete-safe` ETH TRANSFER.
+ * `tx-delete.spec.ts` then deleted that pair and asserted that no `delete-safe`
+ * ETH row survived — and found the clone. Both sides have been fixed: `tx-clone`
+ * commits only onto a broker or an account of its own and deletes what it
+ * commits, and since V-25 (13/10) `tx-delete` deletes only rows it creates.
  *
  * ## The rule
  *

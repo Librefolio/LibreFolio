@@ -1,7 +1,8 @@
-import {expect, test, type Page, type Request} from './fixtures/playwright';
+import {expect, test, type Locator, type Page, type Request} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
-import {waitForEvent, waitForSettled} from './fixtures/app-events';
+import {eventSeq, waitForEvent, waitForSettled} from './fixtures/app-events';
+import {findAcrossPages} from './fixtures/paging';
 import {optionsClosed} from './fixtures/probe';
 import {uniqueSuffix} from './fixtures/unique';
 import {readFileSync} from 'fs';
@@ -183,31 +184,74 @@ async function deleteOwnedBrokerAndFiles(page: Page, brokerId: number): Promise<
     expect(failures, 'cleanup removes the BRIM files and the broker this test created').toEqual([]);
 }
 
-async function openStaticListView(page: Page): Promise<void> {
-    await navigateTo(page, '/files?tab=static');
+/**
+ * Open `route` (the Files page, or one of its tabs) and end on the page loaded. navigateTo ends on hydration; on a full
+ * load the (app) layout then checks the session and loads the bootstrap before the page mounts, and the page loads its
+ * lists — seconds more under load. `files-page` publishes that load as data-busy, so whatever the caller reads next is
+ * read on a loaded page, not within the 3 s default.
+ */
+async function openFilesPage(page: Page, route = '/files'): Promise<void> {
+    await navigateTo(page, route);
+    await waitForSettled(page.getByTestId('files-page'));
+}
+
+/** The static tab of the Files page, loaded. */
+async function openStaticTab(page: Page): Promise<void> {
+    await openFilesPage(page, '/files?tab=static');
     await expect(page.getByTestId('files-tab-static')).toHaveAttribute('aria-selected', 'true');
+}
 
-    const hasViewToggle = await page
-        .getByTestId('view-mode-toggle')
-        .isVisible()
-        .catch(() => false);
+/** The BRIM tab of the Files page, loaded: its files, and the brokers its upload offers. */
+async function openBrimTab(page: Page): Promise<void> {
+    await openFilesPage(page, '/files?tab=brim');
+    await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');
+}
 
-    if (hasViewToggle) {
-        await page.getByTestId('view-mode-list').click();
-        await expect(page.getByTestId('view-mode-list')).toHaveClass(/active/);
-    }
+/** The view mode the page says it is in: `mode` pressed, the other one not. */
+async function expectViewMode(page: Page, mode: 'grid' | 'list'): Promise<void> {
+    const other = mode === 'grid' ? 'list' : 'grid';
+    await expect(page.getByTestId(`view-mode-${mode}`)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId(`view-mode-${other}`)).toHaveAttribute('aria-pressed', 'false');
+}
+
+/**
+ * Put the static tab in `mode`. The page draws the toggle only while the tab lists a file, so the caller owns one: a
+ * missing toggle is then a red, never a reason to skip the switch.
+ */
+async function selectViewMode(page: Page, mode: 'grid' | 'list'): Promise<void> {
+    await expect(page.getByTestId('view-mode-toggle')).toBeVisible({timeout: 8_000});
+    await page.getByTestId(`view-mode-${mode}`).click();
+    await expectViewMode(page, mode);
+}
+
+async function openStaticListView(page: Page): Promise<void> {
+    await openStaticTab(page);
+    await selectViewMode(page, 'list');
 }
 
 async function openStaticGridView(page: Page): Promise<void> {
-    await navigateTo(page, '/files?tab=static');
-    // navigateTo ends on hydration; on a full load the (app) layout then checks the session and loads the bootstrap
-    // before the page mounts, and the page loads its lists — seconds more under load. `files-page` publishes that load
-    // as data-busy, so the tab and the toggle below are read on a loaded page instead of within the 3 s default.
-    await waitForSettled(page.getByTestId('files-page'));
-    await expect(page.getByTestId('files-tab-static')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByTestId('view-mode-toggle')).toBeVisible({timeout: 8_000});
-    await page.getByTestId('view-mode-grid').click();
-    await expect(page.getByTestId('view-mode-grid')).toHaveClass(/active/);
+    await openStaticTab(page);
+    await selectViewMode(page, 'grid');
+}
+
+/**
+ * The row of `fileId` in a tab's table, found by walking its pages. Both lists come newest first, but a test asserts
+ * that the list holds its file, not where its neighbours' uploads leave it; a red names the pages searched.
+ */
+async function listRow(page: Page, type: 'static' | 'brim', fileId: string): Promise<Locator> {
+    const table = page.getByTestId(`files-table-${type}`);
+    // The walk reads each page at an instant: the rows are on screen first, or a table still drawing would read as a
+    // page without the file.
+    await expect(table.locator('tbody tr[data-row-id]').first(), `the ${type} table shows its files`).toBeVisible({timeout: 8_000});
+    const row = table.locator(`tbody tr[data-row-id="${fileId}"]`);
+    let pagesSearched = 0;
+    const foundOn = await findAcrossPages(table, async () => {
+        pagesSearched += 1;
+        return (await row.count()) > 0;
+    });
+    expect(foundOn, `file ${fileId} not found in ${pagesSearched} page(s) of the ${type} table`).not.toBeNull();
+    await expect(row).toBeVisible();
+    return row;
 }
 
 /**
@@ -243,12 +287,12 @@ test.describe('Files Page', () => {
 
     test.describe('Page Access and Navigation', () => {
         test('can access files page', async ({page}) => {
-            await navigateTo(page, '/files');
+            await openFilesPage(page);
             await expect(page.getByTestId('files-page')).toBeVisible();
         });
 
         test('shows both tabs', async ({page}) => {
-            await navigateTo(page, '/files');
+            await openFilesPage(page);
             await expect(page.getByTestId('files-tab-static')).toBeVisible();
             await expect(page.getByTestId('files-tab-brim')).toBeVisible();
         });
@@ -268,23 +312,27 @@ test.describe('Files Page', () => {
     });
 
     test.describe('URL Deep-Linking', () => {
+        // The page reads the tab from the URL when it mounts, behind the (app) layout's session check and bootstrap. It
+        // publishes its load as data-busy: a loaded page, not a quiet network, is what the tab is read on.
         test('URL filter tab=static opens static tab', async ({page}) => {
             await page.goto('/files?tab=static');
-            await page.waitForLoadState('networkidle');
+            await waitForSettled(page.getByTestId('files-page'));
             await expect(page.getByTestId('files-tab-static')).toHaveAttribute('aria-selected', 'true');
         });
 
         test('URL filter tab=brim opens BRIM tab', async ({page}) => {
             await page.goto('/files?tab=brim');
-            await page.waitForLoadState('networkidle');
+            await waitForSettled(page.getByTestId('files-page'));
             await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');
         });
     });
 
     test.describe('Static Files Tab', () => {
         test('shows files table for static resources', async ({page}) => {
-            await navigateTo(page, '/files');
+            await openFilesPage(page);
+            // Selecting a tab reloads its list, and the table leaves the page until the reload lands: awaited as well.
             await page.getByTestId('files-tab-static').click();
+            await waitForSettled(page.getByTestId('files-page'));
             // FilesTable wrapper has testid files-table-static
             await expect(page.getByTestId('files-table-static')).toBeVisible();
         });
@@ -313,41 +361,30 @@ test.describe('Files Page', () => {
         });
 
         test('view mode toggle shows when files exist', async ({page}) => {
-            await navigateTo(page, '/files');
-            await page.getByTestId('files-tab-static').click();
+            // The files that must exist are this test's own: one static file, deleted after it.
+            ownedStaticFiles.push(await uploadStaticFile(page, `view-toggle-${uniqueSuffix()}.md`, '# View toggle\n', 'text/markdown'));
+            await openStaticTab(page);
 
-            // Check if view mode toggle is visible (only shows when files exist)
-            const hasViewToggle = await page
-                .getByTestId('view-mode-toggle')
-                .isVisible()
-                .catch(() => false);
-
-            if (hasViewToggle) {
-                await expect(page.getByTestId('view-mode-grid')).toBeVisible();
-                await expect(page.getByTestId('view-mode-list')).toBeVisible();
-            }
-            // If no files, view toggle won't be shown - that's expected
+            await expect(page.getByTestId('view-mode-toggle')).toBeVisible({timeout: 8_000});
+            await expect(page.getByTestId('view-mode-grid')).toBeVisible();
+            await expect(page.getByTestId('view-mode-list')).toBeVisible();
         });
 
         test('can switch between grid and list view', async ({page}) => {
-            await navigateTo(page, '/files');
-            await page.getByTestId('files-tab-static').click();
+            // The toggle needs a file to list, and the views are told apart by this one: owned, deleted after the test.
+            const fileId = await uploadStaticFile(page, `view-switch-${uniqueSuffix()}.md`, '# View switch\n', 'text/markdown');
+            ownedStaticFiles.push(fileId);
+            await openStaticTab(page);
 
-            // Only test if view toggle exists (files present)
-            const hasViewToggle = await page
-                .getByTestId('view-mode-toggle')
-                .isVisible()
-                .catch(() => false);
+            // Grid: the file is a card, and the table is gone.
+            await selectViewMode(page, 'grid');
+            await expect(page.getByTestId(`file-grid-size-${fileId}`)).toBeVisible();
+            await expect(page.getByTestId('files-table-static')).toBeHidden();
 
-            if (hasViewToggle) {
-                // Click grid view
-                await page.getByTestId('view-mode-grid').click();
-                await expect(page.getByTestId('view-mode-grid')).toHaveClass(/active/);
-
-                // Click list view
-                await page.getByTestId('view-mode-list').click();
-                await expect(page.getByTestId('view-mode-list')).toHaveClass(/active/);
-            }
+            // List: the table is back, and the cards are gone.
+            await selectViewMode(page, 'list');
+            await expect(page.getByTestId('files-table-static')).toBeVisible();
+            await expect(page.getByTestId(`file-grid-size-${fileId}`)).toBeHidden();
         });
     });
 
@@ -367,8 +404,9 @@ test.describe('Files Page', () => {
 
     test.describe('File Upload', () => {
         test('can upload a file to static storage', async ({page}) => {
-            await navigateTo(page, '/files');
-            await page.getByTestId('files-tab-static').click();
+            // Settled first: the page's own load is then over, and the reload that follows the upload is the last word on
+            // the list — not a load still in flight that could land after it.
+            await openStaticTab(page);
 
             // Show uploader
             await page.getByTestId('upload-button').click();
@@ -376,52 +414,31 @@ test.describe('Files Page', () => {
 
             // Upload a test file from BRIM samples
             const testFilePath = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_simple.csv');
-            const fileInput = page.getByTestId('file-input');
-            await fileInput.setInputFiles(testFilePath);
+            await page.getByTestId('file-input').setInputFiles(testFilePath);
 
-            // Wait for file to appear in drop zone (selected)
-            await expect(page.locator('.file-item')).toBeVisible();
-            await expect(page.locator('.file-name')).toContainText('generic_simple.csv');
+            // Selected: the drop zone lists the file by name.
+            await expect(page.getByTestId('file-drop-zone')).toContainText('generic_simple.csv');
 
             // Click the upload submit button. Armed before the click (a response is an edge, not a state): the id it
-            // carries is the file this test deletes.
+            // carries is the file this test deletes, and the row it looks for below.
+            const since = await eventSeq(page);
             const uploadResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `${API}/uploads`, {timeout: 30_000});
             await page.getByTestId('file-upload-submit').click();
             const upload = await uploadResponse;
             expect(upload.ok(), `POST ${API}/uploads from the Files page: HTTP ${upload.status()}`).toBe(true);
-            ownedStaticFiles.push(((await upload.json()) as {file: {id: string}}).file.id);
+            const fileId = ((await upload.json()) as {file: {id: string}}).file.id;
+            ownedStaticFiles.push(fileId);
 
-            // The page now reports the upload (`file.uploaded`, no toast: the
-            // list itself is the user-visible proof). Waiting on the event is
-            // waiting on the thing, not on a duration.
-            await waitForEvent(page, 'file.uploaded', {timeout: 30_000});
+            // The page reports the upload once it has closed the uploader and reloaded the list (`file.uploaded`, no
+            // toast: the list itself is the user-visible proof). Waiting on the event is waiting on the thing, not on a
+            // duration.
+            await waitForEvent(page, 'file.uploaded', {since, timeout: 30_000});
+            await expect(page.getByTestId('file-uploader')).toBeHidden();
 
-            // The uploader should have cleared after successful upload
-            // or show a success state. Check if file-item is gone (cleared)
-            const fileItemGone = await page
-                .locator('.file-uploader .file-item')
-                .isHidden()
-                .catch(() => true);
-
-            // If file item is gone, upload likely succeeded
-            if (fileItemGone) {
-                // Search for the file using the search/filter
-                const searchInput = page.locator('input[placeholder*="Search"], input[type="search"]').first();
-                if (await searchInput.isVisible().catch(() => false)) {
-                    await searchInput.fill('generic_simple');
-                }
-
-                // Check that file appears in the files table
-                const fileRow = page.locator('text=generic_simple.csv');
-                const isVisible = await fileRow.isVisible().catch(() => false);
-
-                // If not found by text, check if we have any indication of success
-                if (!isVisible) {
-                    // Just verify the uploader worked - if we got here without errors, test passes
-                    // The file may be on another page or need refresh
-                    expect(fileItemGone).toBeTruthy();
-                }
-            }
+            // The list holds the file: its own row, by the id the server gave it.
+            await selectViewMode(page, 'list');
+            const row = await listRow(page, 'static', fileId);
+            await expect(row).toContainText('generic_simple.csv');
         });
 
         test('can select and clear files from uploader', async ({page}) => {
@@ -434,18 +451,20 @@ test.describe('Files Page', () => {
 
             // Select a file
             const testFilePath = path.resolve(__dirname, '../../backend/app/services/brim_providers/sample_reports/generic_dates.csv');
-            const fileInput = page.getByTestId('file-input');
-            await fileInput.setInputFiles(testFilePath);
+            await page.getByTestId('file-input').setInputFiles(testFilePath);
 
-            // Verify file appears in selection
-            await expect(page.locator('.file-item')).toBeVisible();
-            await expect(page.locator('.file-name')).toContainText('generic_dates.csv');
+            // Verify file appears in selection: the drop zone lists it by name.
+            const dropZone = page.getByTestId('file-drop-zone');
+            await expect(dropZone).toContainText('generic_dates.csv');
 
             // Clear the selection
             await page.getByTestId('file-clear').click();
 
-            // Verify file is cleared
-            await expect(page.locator('.file-item')).not.toBeVisible();
+            // Verify file is cleared: the actions left with the selection, and the drop zone — still on screen — no
+            // longer lists the file.
+            await expect(page.getByTestId('file-clear')).toBeHidden();
+            await expect(dropZone).toBeVisible();
+            await expect(dropZone).not.toContainText('generic_dates.csv');
         });
     });
 
@@ -480,9 +499,7 @@ test.describe('Files Page', () => {
             ownedBrokerId = brokerId;
 
             // Created before the page loads, so the page's broker list includes it.
-            await navigateTo(page, '/files?tab=brim');
-            await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');
-            await waitForSettled(page.getByTestId('files-page'));
+            await openBrimTab(page);
 
             await page.getByTestId('upload-button').click();
             const uploader = page.getByTestId('file-uploader');
@@ -533,9 +550,7 @@ test.describe('Files Page', () => {
             ownedBrokerId = brokerId;
 
             // Created before the page loads, so the page's broker list includes it.
-            await navigateTo(page, '/files?tab=brim');
-            await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');
-            await waitForSettled(page.getByTestId('files-page'));
+            await openBrimTab(page);
 
             await page.getByTestId('upload-button').click();
             const uploader = page.getByTestId('file-uploader');
@@ -591,8 +606,7 @@ test.describe('Files Page', () => {
 
             await openStaticListView(page);
 
-            const row = page.locator(`[data-row-id="${fileId}"]`);
-            await expect(row).toBeVisible({timeout: 8_000});
+            const row = await listRow(page, 'static', fileId);
             await row.dblclick();
 
             await waitForPreviewReady(page);
@@ -632,8 +646,7 @@ test.describe('Files Page', () => {
 
             await openStaticListView(page);
 
-            const row = page.locator(`[data-row-id="${fileId}"]`);
-            await expect(row).toBeVisible({timeout: 8_000});
+            const row = await listRow(page, 'static', fileId);
             await row.dblclick();
 
             await waitForPreviewReady(page);
@@ -900,11 +913,9 @@ test.describe('Files Page', () => {
             ownedBrokerId = brokerId;
             const fileId = await uploadBrimFile(page, brokerId, `preview-${Date.now()}.csv`, ['date,type,amount,currency', '2025-01-01,DEPOSIT,1000,EUR', '2025-01-03,WITHDRAWAL,-50,EUR', ''].join('\n'), 'text/csv');
 
-            await navigateTo(page, '/files?tab=brim');
-            await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');
+            await openBrimTab(page);
 
-            const row = page.locator(`[data-row-id="${fileId}"]`);
-            await expect(row).toBeVisible({timeout: 8_000});
+            const row = await listRow(page, 'brim', fileId);
             await row.dblclick();
 
             await waitForPreviewReady(page);

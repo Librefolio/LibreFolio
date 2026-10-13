@@ -41,6 +41,9 @@ const BROKER_OWNER_A = 'Interactive Brokers'; // OWNER
 const BROKER_OWNER_B = 'Directa SIM'; // EDITOR (avoid Coinbase — has pre-existing asset balance issues)
 const BROKER_EDITOR = 'Directa SIM'; // EDITOR
 
+/** An asset the mock contract guarantees, held at BROKER_OWNER_A (populate_mock_data.py). */
+const ASSET_NAME = 'Apple';
+
 // ---------------------------------------------------------------------------
 // Cleanup — whoever commits, cleans up
 // ---------------------------------------------------------------------------
@@ -97,6 +100,19 @@ function ownedMarker(prefix: string): string {
     return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 }
 
+/**
+ * Select one row of the main table by its id, ending on the checked state.
+ *
+ * The checkbox is a toggle, so it is clicked only when it is not already checked,
+ * and `data-state` — what the component says — is the proof, not a CSS class.
+ */
+async function selectTableRow(page: Page, txId: number) {
+    const checkbox = page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${txId}`);
+    await expect(checkbox).toBeVisible({timeout: 5_000});
+    if ((await checkbox.getAttribute('data-state')) !== 'checked') await checkbox.click();
+    await expect(checkbox).toHaveAttribute('data-state', 'checked');
+}
+
 /** Click a row's action via its kebab menu (row-actions-{id} → context-menu-action-{actionId}). */
 async function clickKebabRowAction(row: Locator, actionId: string) {
     const page = row.page();
@@ -133,19 +149,16 @@ async function selectType(page: Page, typeCode: string) {
     await optionListClosed(page);
 }
 
-/** Pick the first available broker (OWNER/EDITOR). */
-async function pickFirstBroker(page: Page) {
+/** Pick the OWNER broker of the mock contract, by name. */
+async function pickOwnerBroker(page: Page) {
     const brokerWrap = page.getByTestId('tx-form-broker-wrap');
     await brokerWrap.locator('button, [role="combobox"]').first().click();
-    // Prefer a known OWNER broker by visible text; fall back to first available
-    const knownOption = page.locator('[data-testid^="search-select-option-"]', {hasText: BROKER_OWNER_A});
-    if ((await knownOption.count()) > 0) {
-        await knownOption.first().click();
-    } else {
-        const option = page.locator('[data-testid^="search-select-option-"]').first();
-        await expect(option).toBeVisible({timeout: 2_000});
-        await option.click();
-    }
+    // Awaited, never counted: `count()` answers about one instant, so a list still
+    // opening read as "no such broker" and the old fallback clicked whatever option
+    // sorted first — a neighbour's broker, under concurrency.
+    const option = page.locator('[data-testid^="search-select-option-"]', {hasText: BROKER_OWNER_A}).first();
+    await expect(option).toBeVisible({timeout: 3_000});
+    await option.click();
     await optionListClosed(page);
 }
 
@@ -202,31 +215,20 @@ async function fillQuantity(page: Page, qty: string) {
     await expect(qtyInput).not.toHaveValue('');
 }
 
-/** Pick the first available asset in the asset selector. */
-async function pickFirstAsset(page: Page) {
-    const assetWrap = page.getByTestId('tx-form-asset-wrap');
-    await assetWrap.locator('button, [role="combobox"]').first().click();
-    // Pick the first available — asset choice doesn't matter for these tests
-    // (BUY/SELL use small qty, DIVIDEND/ADJUSTMENT are cash/qty only)
-    const option = page.locator('[data-testid^="search-select-option-"]').first();
-    await expect(option).toBeVisible({timeout: 2_000});
-    await option.click();
-    await optionListClosed(page);
-}
-
 /** Pick a specific asset by searching for its name (e.g. "Apple"). */
 async function pickAssetByName(page: Page, name: string) {
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
     await assetWrap.locator('button, [role="combobox"]').first().click();
-    // Type to filter
-    const searchInput = page.locator('[data-testid="tx-form-asset-wrap"] input[type="text"], [data-testid="tx-form-asset-wrap"] input[role="combobox"]').first();
-    if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
-        await searchInput.fill(name);
-        // The list is debounced; the named entry arriving *is* the settle.
-        await expect(page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first()).toBeVisible({timeout: 5_000});
-    }
-    const option = page.locator('[data-testid^="search-select-option-"]').first();
-    await expect(option).toBeVisible({timeout: 3_000});
+    // The asset select searches inline: its search box is the open trigger itself, so
+    // it is always there. (The old probe for it fell back to "the first asset" when it
+    // expired, and "the first asset" is whatever sorts first — a neighbour's, under
+    // concurrency. `pickFirstAsset` did that on purpose; it is gone for the same reason.)
+    const searchInput = page.getByTestId('tx-form-asset-search');
+    await expect(searchInput).toBeVisible({timeout: 3_000});
+    await searchInput.fill(name);
+    // The list is debounced; the named entry arriving *is* the settle.
+    const option = page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first();
+    await expect(option).toBeVisible({timeout: 5_000});
     await option.click();
     await optionListClosed(page);
 }
@@ -251,20 +253,27 @@ async function fillDescription(page: Page, text: string) {
 }
 
 /**
- * Assert a transaction is gone — identified by the description this test owns,
- * never by its ID.
+ * Assert a transaction is gone — by its ID, and by the description this test owns.
  *
- * These tables declare `INTEGER PRIMARY KEY` without `AUTOINCREMENT`, so in
- * SQLite that column *is* the rowid, and the highest rowid is handed straight
- * back to the next insert as soon as the row is deleted. A neighbouring worker
- * can therefore take the freed ID within milliseconds, and asserting that
- * `tr[data-row-id="tx-N"]` is absent would fail on somebody else's row while
- * ours had in fact been deleted correctly. An ID identifies a row only while
- * that row lives.
+ * Transaction ids are never reused: the table has carried `AUTOINCREMENT` since
+ * plan 34, so a deleted row's id is not handed to the next insert, and an id names
+ * one row for good. `?ids=<id>` coming back empty therefore proves that *this* row
+ * is gone. The marker is a second, independent witness that the row which
+ * disappeared was ours.
  */
 async function expectTransactionGone(page: Page, txId: number, marker: string) {
     // Authoritative check: ask the backend. `page.request` shares the browser
     // context's cookies, so this is the same authenticated session.
+    await expect
+        .poll(
+            async () => {
+                const resp = await page.request.get(`${API_BASE}/transactions?ids=${txId}`);
+                if (!resp.ok()) return -1;
+                return ((await resp.json()) as unknown[]).length;
+            },
+            {timeout: 10_000, message: `transaction ${txId} should no longer exist in the backend`},
+        )
+        .toBe(0);
     await expect
         .poll(
             async () => {
@@ -273,14 +282,16 @@ async function expectTransactionGone(page: Page, txId: number, marker: string) {
                 const rows = (await resp.json()) as Array<{description?: string | null}>;
                 return rows.filter((t) => t.description === marker).length;
             },
-            {timeout: 10_000, message: `transaction "${marker}" should no longer exist in the backend`},
+            {timeout: 10_000, message: `no transaction should still carry "${marker}"`},
         )
         .toBe(0);
 
     // And it must be gone from the table too: reload the view narrowed to that ID.
+    // Nothing else can hold that id, so the table must render its empty state — the
+    // presence barrier that keeps "no such row" from also meaning "not rendered yet".
     await goToTransactions(page, `?id_min=${txId}&id_max=${txId}`);
-    await expect(page.getByTestId('tx-table')).toBeVisible({timeout: 10_000});
-    await expect(page.getByTestId(`tx-desc-${txId}`).filter({hasText: marker})).toHaveCount(0);
+    await expect(page.getByTestId('tx-table').getByTestId('dt-empty')).toBeVisible({timeout: 10_000});
+    await expect(page.locator(`[data-testid="tx-table"] tr[data-row-id="tx-${txId}"]`)).toHaveCount(0);
 }
 
 /** Click "Apply" in FormModal to push draft to BulkModal. */
@@ -304,23 +315,22 @@ async function commitBulkModal(page: Page): Promise<{payload: CommitPayload; cre
     // Set up request interception BEFORE clicking
     const commitPromise = page.waitForRequest((req) => req.url().includes('/transactions/commit') && req.method() === 'POST', {timeout: 15_000});
     // The response carries the IDs the backend assigned — the only way for a
-    // test to know which rows it owns.
-    const responsePromise = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 15_000}).catch(() => null);
+    // test to know which rows it owns. It is required, not hoped for: when a
+    // missing answer meant "skip the check", a commit could go unverified and
+    // the test still pass.
+    const responsePromise = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 15_000});
 
     await commitBtn.click();
 
     const req = await commitPromise;
     const payload = req.postDataJSON() as CommitPayload;
 
-    const resp = await responsePromise;
-    const body = resp ? ((await resp.json().catch(() => null)) as CommitResponse | null) : null;
+    const body = (await (await responsePromise).json()) as CommitResponse;
     // A rolled-back batch still answers 200 and still reports the ids the rows
     // *would* have had, with per-item status "simulated". Only "success" rows
     // exist in the database.
-    if (body) {
-        expect(body.committed, `commit was rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
-    }
-    const createdIds = (body?.results ?? []).filter((r) => r.operation === 'create' && r.status === 'success').flatMap((r) => r.ids ?? []);
+    expect(body.committed, `commit was rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
+    const createdIds = (body.results ?? []).filter((r) => r.operation === 'create' && r.status === 'success').flatMap((r) => r.ids ?? []);
 
     // Wait for BulkModal to close (= commit succeeded)
     await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 10_000});
@@ -340,10 +350,10 @@ async function addBulkRow(page: Page) {
  */ async function createAndCommitStandalone(page: Page, opts: {type: string; needsAsset: boolean; needsQuantity: boolean; amount?: string; quantity?: string}) {
     await openCreateFlow(page);
     await selectType(page, opts.type);
-    await pickFirstBroker(page);
+    await pickOwnerBroker(page);
 
     if (opts.needsAsset) {
-        await pickFirstAsset(page);
+        await pickAssetByName(page, ASSET_NAME);
     }
     if (opts.needsQuantity) {
         await fillQuantity(page, opts.quantity ?? '1');
@@ -398,23 +408,23 @@ test.describe('Create + Commit — Standalone Types', () => {
         // committed together.
         await openCreateFlow(page);
         await selectType(page, 'DEPOSIT');
-        await pickFirstBroker(page);
+        await pickOwnerBroker(page);
         await fillCash(page, '1000');
         await applyFormModal(page);
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
         await addBulkRow(page);
         await selectType(page, 'BUY');
-        await pickFirstBroker(page);
-        await pickFirstAsset(page);
+        await pickOwnerBroker(page);
+        await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '5');
         await fillCash(page, '100');
         await applyFormModal(page);
 
         await addBulkRow(page);
         await selectType(page, 'SELL');
-        await pickFirstBroker(page);
-        await pickFirstAsset(page);
+        await pickOwnerBroker(page);
+        await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '1');
         await fillCash(page, '50');
         await applyFormModal(page);
@@ -459,7 +469,7 @@ test.describe('Create + Commit — Paired Types', () => {
         await deleteOwnCommits();
     });
 
-    test('FX_CONVERSION create → apply to BulkModal (dual form)', async ({page}) => {
+    test('FX_CONVERSION create → commit (dual form)', async ({page}) => {
         await openCreateFlow(page);
         await selectType(page, 'FX_CONVERSION');
 
@@ -467,7 +477,7 @@ test.describe('Create + Commit — Paired Types', () => {
         const dualTo = page.getByTestId('tx-form-dual-to');
         await expect(dualTo).toBeVisible({timeout: 3_000});
 
-        await pickFirstBroker(page);
+        await pickOwnerBroker(page);
         await fillCashFrom(page, '100');
         await fillCashTo(page, '90');
 
@@ -478,28 +488,16 @@ test.describe('Create + Commit — Paired Types', () => {
         await expect(bulkModal).toBeVisible({timeout: 5_000});
         await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
 
-        // Should have at least 1 row (paired shown as single row)
-        const bulkRows = bulkModal.locator('tbody tr[data-row-id]');
-        await expect(bulkRows.first()).toBeVisible({timeout: 3_000});
+        // The pair is staged (shown as a single row: its other leg rides hidden behind it)
+        await expect(bulkModal.locator('tbody tr[data-row-id]')).not.toHaveCount(0, {timeout: 3_000});
 
-        // Commit button should be enabled (= actionCount > 0)
-        const commitBtn = page.getByTestId('tx-bulk-commit');
-        await expect(commitBtn).toBeEnabled({timeout: 8_000});
-
-        // Intercept the commit POST — if the click triggers it
-        const responsePromise = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 10_000}).catch(() => null);
-
-        await commitBtn.click();
-        const resp = await responsePromise;
-
-        if (resp) {
-            // Commit POST was sent — verify response
-            const body = await resp.json();
-            expect(body.committed).toBe(true);
-        }
-        // If no response, the click didn't trigger the commit — this is a known issue
-        // with Svelte 5 event delegation in test environments. The form validation
-        // and BulkModal row creation are verified above.
+        // The commit itself is the subject. This test exists because the FX commit
+        // once crashed on its own answer (resp.results[0].ids[0]); the version that
+        // accepted "no commit happened" — blaming Svelte event delegation — could
+        // never have caught that again.
+        const {payload, createdIds} = await commitBulkModal(page);
+        expect((payload.creates as unknown[])?.length, 'the FX pair is sent as its two legs').toBe(2);
+        expect(createdIds, 'an FX_CONVERSION commit creates both legs').toHaveLength(2);
     });
 
     test('CASH_TRANSFER create → commit (dual brokers + shared cash)', async ({page}) => {
@@ -545,7 +543,7 @@ test.describe('Create + Commit — Paired Types', () => {
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_OWNER_B);
 
         // Fill shared asset + quantity (use Apple — known to be held at IB)
-        await pickAssetByName(page, 'Apple');
+        await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '1');
 
         await applyFormModal(page);
@@ -582,7 +580,7 @@ test.describe('Edit + Commit', () => {
         const marker = ownedMarker('E2E-EDIT');
         await openCreateFlow(page);
         await selectType(page, 'DEPOSIT');
-        await pickFirstBroker(page);
+        await pickOwnerBroker(page);
         await fillCash(page, '1');
         await fillDescription(page, marker);
         await applyFormModal(page);
@@ -593,8 +591,7 @@ test.describe('Edit + Commit', () => {
         const targetId = createdIds[0];
 
         await goToTransactionById(page, targetId);
-        const targetRow = page.locator(`tr[data-row-id="tx-${targetId}"]`);
-        await targetRow.locator('.checkbox-btn').click();
+        await selectTableRow(page, targetId);
 
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeEnabled({timeout: 5_000});
@@ -648,7 +645,7 @@ test.describe('Delete + Commit', () => {
         const marker = ownedMarker('E2E-BULKDEL');
         await openCreateFlow(page);
         await selectType(page, 'DEPOSIT');
-        await pickFirstBroker(page);
+        await pickOwnerBroker(page);
         await fillCash(page, '1');
         await fillDescription(page, marker);
         await applyFormModal(page);
@@ -664,7 +661,7 @@ test.describe('Delete + Commit', () => {
         const targetRow = page.locator(`tr[data-row-id="tx-${targetId}"]`);
         await expect(targetRow.getByTestId(`tx-desc-${targetId}`)).toHaveText(marker);
 
-        await targetRow.locator('.checkbox-btn').click();
+        await selectTableRow(page, targetId);
 
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeEnabled({timeout: 5_000});
@@ -672,13 +669,13 @@ test.describe('Delete + Commit', () => {
 
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
-        // BulkModal auto-opens FormModal — close it first
+        // A single-row edit always auto-opens the FormModal (the workspace's 'edit'
+        // intent): close it first. It is asserted, not probed — a probe that expired
+        // left the form opening on top of the kebab menu clicked below.
         const formModal = page.getByTestId('tx-form-modal');
-        if (await formModal.isVisible({timeout: 2_000}).catch(() => false)) {
-            const closeBtn = page.getByTestId('tx-form-close');
-            await closeBtn.click();
-            await expect(formModal).not.toBeVisible({timeout: 3_000});
-        }
+        await expect(formModal).toBeVisible({timeout: 5_000});
+        await page.getByTestId('tx-form-close').click();
+        await expect(formModal).not.toBeVisible({timeout: 3_000});
 
         // Mark for deletion. The BulkModal keys its rows by a client-side
         // `tempId`, not by the database id, so matching on the transaction id
@@ -686,7 +683,9 @@ test.describe('Delete + Commit', () => {
         // it.
         const bulkRows = page.locator('[data-testid="tx-bulk-body"] tr[data-row-id]');
         await expect(bulkRows, 'the modal must hold exactly the row we selected').toHaveCount(1, {timeout: 5_000});
-        await clickKebabRowAction(bulkRows.first(), 'mark-delete');
+        await clickKebabRowAction(bulkRows, 'mark-delete');
+        // The action staged a delete — the row's published status says so before the commit does.
+        await expect(bulkRows.getByTestId('tx-bulk-row-status')).toHaveAttribute('data-status', 'delete');
 
         const {payload} = await commitBulkModal(page);
         expect(payload.deletes as number[]).toContain(targetId);
@@ -701,7 +700,7 @@ test.describe('Delete + Commit', () => {
         const marker = ownedMarker('E2E-ROWDEL');
         await openCreateFlow(page);
         await selectType(page, 'DEPOSIT');
-        await pickFirstBroker(page);
+        await pickOwnerBroker(page);
         await fillCash(page, '1');
         await fillDescription(page, marker);
         await applyFormModal(page);
@@ -718,11 +717,14 @@ test.describe('Delete + Commit', () => {
         // Click the delete action via the row's kebab menu
         await clickKebabRowAction(targetRow, 'delete');
 
-        // The bulk workspace opens with exactly this row staged as a delete.
+        // The bulk workspace opens with exactly this row staged as a delete. The
+        // workspace publishes each row's status (`data-status` on its status cell):
+        // read what the component says, not the colour class it paints.
         const bulkModal = page.getByTestId('tx-bulk-modal');
         await expect(bulkModal).toBeVisible({timeout: 5_000});
-        await expect(bulkModal.locator('tbody tr[data-row-id]'), 'the workspace must stage exactly the row we deleted').toHaveCount(1, {timeout: 5_000});
-        await expect(bulkModal.locator('tbody tr.row-deleted')).toHaveCount(1);
+        const stagedRows = bulkModal.locator('tbody tr[data-row-id]');
+        await expect(stagedRows, 'the workspace must stage exactly the row we deleted').toHaveCount(1, {timeout: 5_000});
+        await expect(stagedRows.getByTestId('tx-bulk-row-status')).toHaveAttribute('data-status', 'delete');
 
         // Commit through the workspace: the payload must carry our id in deletes.
         const {payload} = await commitBulkModal(page);
@@ -756,7 +758,7 @@ test.describe('Cost Basis Override', () => {
         await pickBrokerInPanel(page, 'tx-form-dual-from', BROKER_OWNER_A);
         await pickBrokerInPanel(page, 'tx-form-dual-to', BROKER_OWNER_B);
 
-        await pickAssetByName(page, 'Apple');
+        await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '1');
 
         // Fill cost_basis_override (CompactCashCell — target the amount input inside)
@@ -784,25 +786,27 @@ test.describe('Cost Basis Override', () => {
         await selectType(page, 'ADJUSTMENT');
 
         // Pick broker and asset
-        await pickFirstBroker(page);
-        await pickFirstAsset(page);
+        await pickOwnerBroker(page);
+        await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '5');
 
         // Cost basis field should be visible inline for ADJUSTMENT (no toggle needed)
         const cbInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await expect(cbInput).toBeVisible({timeout: 3_000});
 
-        // Tooltip icon should be present (Info icon inside Tooltip wrapper)
-        const tooltipWrapper = page.locator('[data-testid="tx-form-cost-basis"]').locator('..').locator('..').locator('.tooltip-wrapper');
-        await expect(tooltipWrapper).toBeVisible({timeout: 2_000});
+        // The help tooltip's trigger — the info icon — published by WacPreviewSection as
+        // `<section testid>-help`: no CSS class, no walking up the DOM.
+        const help = page.getByTestId('tx-form-cost-basis-help');
+        await expect(help).toBeVisible({timeout: 2_000});
+        await expect(help.locator('svg')).toBeVisible();
     });
 
     test('ADJUSTMENT empty cost_basis → payload sends null (not empty object)', async ({page}) => {
         await openCreateFlow(page);
         await selectType(page, 'ADJUSTMENT');
 
-        await pickFirstBroker(page);
-        await pickFirstAsset(page);
+        await pickOwnerBroker(page);
+        await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '2');
 
         // Do NOT fill cost_basis — leave empty
@@ -827,8 +831,8 @@ test.describe('Cost Basis Override', () => {
         await openCreateFlow(page);
         await selectType(page, 'ADJUSTMENT');
 
-        await pickFirstBroker(page);
-        await pickFirstAsset(page);
+        await pickOwnerBroker(page);
+        await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '3');
 
         // Cost basis is inline for ADJUSTMENT — fill it directly
