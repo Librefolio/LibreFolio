@@ -21,6 +21,7 @@ vi.hoisted(() => {
 });
 
 import {waitLocale} from 'svelte-i18n';
+import type {RenderedSignal} from '$lib/charts/signals';
 import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
@@ -55,6 +56,7 @@ import {
     toDisplaySeries,
     type EventScatterContext,
 } from './priceChartHelpers';
+import {aggregateLineSeries, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
 
 /** Minimal daily point; overrides layer on top. */
 function pt(date: string, value: number, overrides: Partial<LineDataPoint> = {}): LineDataPoint {
@@ -1184,6 +1186,38 @@ function scatterCtx(dates: string[], values: number[], overrides: Partial<EventS
     };
 }
 
+/** Every calendar day from `start` to `end`, both included: the calendar-filled series the asset and FX pages chart. */
+function calendarDays(start: string, end: string): string[] {
+    const days: string[] = [];
+    const last = Date.parse(`${end}T00:00:00Z`);
+    for (let time = Date.parse(`${start}T00:00:00Z`); time <= last; time += 86_400_000) {
+        days.push(new Date(time).toISOString().slice(0, 10));
+    }
+    return days;
+}
+
+/**
+ * The scatter context PriceChartFull builds at a coarse resolution, from the real aggregation: the
+ * main line through `aggregateLineSeries`, overlays through `downsampleRenderedSignal` (keyed by the
+ * main line's render dates). So a partial bucket renders at its last data point, as on screen.
+ */
+function aggregatedScatterCtx(daily: LineDataPoint[], resolution: ChartResolution, overlays: RenderedSignal[] = []): EventScatterContext {
+    const resolvedLineData = aggregateLineSeries(daily, resolution);
+    const dates = resolvedLineData.map((point) => point.date);
+    const overlayDataByLabel = new Map<string, Map<string, number>>();
+    for (const overlay of overlays) {
+        const downsampled = downsampleRenderedSignal(overlay, resolution, resolvedLineData);
+        if (downsampled.data.length > 0) overlayDataByLabel.set(downsampled.label, new Map(downsampled.data.map((point) => [point.date, point.value])));
+    }
+    return {
+        dateIndexMap: new Map(dates.map((date, index) => [date, index])),
+        resolvedLineData,
+        overlayDataByLabel,
+        bucketInfoByDate: new Map(dates.map((date, index) => [date, getBucketInfo(resolvedLineData[index], resolution)])),
+        baseColor: '#123456',
+    };
+}
+
 describe('buildEventScatterGroups', () => {
     it('groups own-asset markers by type and colours them with the base colour', () => {
         const ctx = scatterCtx(['2024-01-01', '2024-01-02'], [10, 20]);
@@ -1260,6 +1294,67 @@ describe('buildEventScatterGroups', () => {
         const ctx = scatterCtx(['2024-01-07'], [42]);
         const groups = buildEventScatterGroups([evm('2024-06-05', 'DIVIDEND')], 'weekly', ctx);
         expect(groups).toHaveLength(0);
+    });
+
+    // R-5 (lot 51): an event bucket is keyed by its theoretical bucket end, while the aggregated line
+    // renders each bucket at its last data point. On a calendar-filled series a full bucket's two dates
+    // coincide; the last, partial one's never do (the default range ends today), and its markers vanished.
+
+    it('places an event of the last, partial week on the bar that week renders at (R-5, lot 51)', () => {
+        const ctx = aggregatedScatterCtx(dailyRun(calendarDays('2024-01-01', '2024-01-10')), 'weekly');
+        // Precondition: the open week (Mon 01-08..Wed 01-10) renders at 01-10; its bucket end, Sun 01-14, is no axis date.
+        expect([...ctx.dateIndexMap.keys()]).toEqual(['2024-01-07', '2024-01-10']);
+        const dividend = evm('2024-01-09', 'DIVIDEND');
+        const groups = buildEventScatterGroups([dividend], 'weekly', ctx);
+        expect(groups, 'the marker of the open week vanished').toHaveLength(1);
+        expect(groups[0].points).toEqual([{value: ['2024-01-10', 10], markers: [dividend], bucketInfo: {bucketStart: '2024-01-08', bucketEnd: '2024-01-14'}, bucketValue: 10}]);
+    });
+
+    it('places an event of the current, partial month on the bar that month renders at, beside a full month (R-5, lot 51)', () => {
+        const ctx = aggregatedScatterCtx(dailyRun(calendarDays('2024-01-01', '2024-02-13')), 'monthly');
+        // Precondition: January renders at its bucket end; the open February at its last data point, not at 02-29.
+        expect([...ctx.dateIndexMap.keys()]).toEqual(['2024-01-31', '2024-02-13']);
+        const january = evm('2024-01-15', 'DIVIDEND');
+        const february = evm('2024-02-10', 'DIVIDEND');
+        const groups = buildEventScatterGroups([january, february], 'monthly', ctx);
+        expect(groups).toHaveLength(1);
+        const pointAt = (date: string) => groups[0].points.find((point) => point.value[0] === date);
+        // Guard: a full month renders at its bucket end, so its marker has always been placed.
+        expect(pointAt('2024-01-31')).toEqual({value: ['2024-01-31', 31], markers: [january], bucketInfo: {bucketStart: '2024-01-01', bucketEnd: '2024-01-31'}, bucketValue: 31});
+        expect(pointAt('2024-02-13'), 'the marker of the open month vanished').toEqual({value: ['2024-02-13', 44], markers: [february], bucketInfo: {bucketStart: '2024-02-01', bucketEnd: '2024-02-29'}, bucketValue: 44});
+        expect(groups[0].points).toHaveLength(2);
+    });
+
+    it('places a comparison event of the open week on its overlay, at the bar that week renders at (R-5, lot 51)', () => {
+        // The FX page form: the pair has no events of its own, only those of the comparison asset.
+        const beta: RenderedSignal = {id: 'beta', label: 'Beta', data: calendarDays('2024-01-01', '2024-01-10').map((date, index) => pt(date, (index + 1) * 100)), color: '#ff0000', lineWidth: 1, lineType: 'solid', markerStart: null, markerEnd: null, aggregationProfile: 'last_with_range'};
+        const ctx = aggregatedScatterCtx(dailyRun(calendarDays('2024-01-01', '2024-01-10')), 'weekly', [beta]);
+        // Precondition: the downsampled overlay is keyed by the main line's render dates, with values of its own.
+        expect(ctx.overlayDataByLabel.get('Beta')).toEqual(
+            new Map([
+                ['2024-01-07', 700],
+                ['2024-01-10', 1000],
+            ]),
+        );
+        const event = evm('2024-01-08', 'DIVIDEND', {assetLabel: 'Beta', signalColor: '#ff0000'});
+        const groups = buildEventScatterGroups([event], 'weekly', ctx);
+        expect(groups, 'the comparison marker of the open week vanished').toHaveLength(1);
+        expect(groups[0]).toMatchObject({label: 'Beta DIVIDEND', color: '#ff0000', eventType: 'DIVIDEND'});
+        // On the overlay (1000), not on the main line (10).
+        expect(groups[0].points).toEqual([{value: ['2024-01-10', 1000], markers: [event], bucketInfo: {bucketStart: '2024-01-08', bucketEnd: '2024-01-14'}, bucketValue: 1000}]);
+    });
+
+    it('shows an event dated after the last data point on the bar of its open week, not one of a later week (R-5, lot 51)', () => {
+        // A bar stands for its whole period: the first partial bucket already carries events dated
+        // before its first data point, so the last one carries those dated after its last.
+        const ctx = aggregatedScatterCtx(dailyRun(calendarDays('2024-01-01', '2024-01-10')), 'weekly');
+        expect([...ctx.dateIndexMap.keys()]).toEqual(['2024-01-07', '2024-01-10']);
+        const friday = evm('2024-01-12', 'DIVIDEND');
+        const nextMonday = evm('2024-01-15', 'DIVIDEND');
+        const groups = buildEventScatterGroups([friday, nextMonday], 'weekly', ctx);
+        expect(groups, 'the marker of the open week vanished').toHaveLength(1);
+        // Guard: a week with no data point renders no bar, so its event stays off the chart (as off-axis days do).
+        expect(groups[0].points).toEqual([{value: ['2024-01-10', 10], markers: [friday], bucketInfo: {bucketStart: '2024-01-08', bucketEnd: '2024-01-14'}, bucketValue: 10}]);
     });
 });
 

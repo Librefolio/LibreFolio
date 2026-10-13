@@ -497,10 +497,20 @@ export interface EventScatterContext {
  * signal. A marker's Y value follows its overlay line when it belongs to one,
  * otherwise the main price at that date; a date the axis does not contain is
  * skipped. Coarser resolutions bucket the markers first and carry the whole
- * bucket on one point. Groups that placed nothing are dropped.
+ * bucket on one point, placed where the line renders that bucket: its last data
+ * point, which for the open week or month falls before the bucket's end. Groups
+ * that placed nothing are dropped.
  */
 export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResolution: ChartResolution, ctx: EventScatterContext): EventScatterGroup[] {
     const {dateIndexMap, resolvedLineData, overlayDataByLabel, bucketInfoByDate, baseColor} = ctx;
+
+    // Markers are keyed by their bucket's end date, the line by the date each bucket renders at.
+    const renderDateByBucketEnd = new Map<string, string>();
+    if (activeResolution !== 'daily') {
+        for (const point of resolvedLineData) {
+            renderDateByBucketEnd.set(point.bucketEnd ?? mapDateToBucket(point.date, activeResolution).bucketEnd, point.date);
+        }
+    }
 
     const grouped = new Map<string, {markers: EventMarker[]; color: string; label: string}>();
     for (const marker of eventMarkers) {
@@ -542,11 +552,12 @@ export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResol
             }
         } else {
             const bucketedMarkers = bucketEventMarkers(markers, activeResolution);
-            for (const [bucketDate, bucketEntries] of bucketedMarkers) {
-                const index = dateIndexMap.get(bucketDate);
+            for (const [bucketEnd, bucketEntries] of bucketedMarkers) {
+                const renderDate = renderDateByBucketEnd.get(bucketEnd) ?? bucketEnd;
+                const index = dateIndexMap.get(renderDate);
                 if (index === undefined) continue;
-                const yValue = resolveY(bucketEntries[0]?.assetLabel, bucketDate, index);
-                points.push({value: [bucketDate, yValue], markers: bucketEntries, bucketInfo: bucketInfoByDate.get(bucketDate) ?? mapDateToBucket(bucketDate, activeResolution), bucketValue: yValue});
+                const yValue = resolveY(bucketEntries[0]?.assetLabel, renderDate, index);
+                points.push({value: [renderDate, yValue], markers: bucketEntries, bucketInfo: bucketInfoByDate.get(renderDate) ?? mapDateToBucket(renderDate, activeResolution), bucketValue: yValue});
             }
         }
 

@@ -256,6 +256,12 @@ describe('canonical overlay axis and reference helpers', () => {
     const SHORT_X_AXIS_DATES = ['2026-01-01', '2026-01-02'] as const;
     const JANUARY_X_AXIS_DATES = Array.from({length: 31}, (_, index) => `2026-01-${String(index + 1).padStart(2, '0')}`);
     const GROWTH_TIME_AXIS_DATES = ['2025-09-01', '2026-09-01'] as const;
+    /**
+     * The edge alignment a compact policy gives a CATEGORY axis, and only its last label (R-2, lot 51): a centred anchor
+     * pushes that label half out of the chart, while the first one spills at most into the y-axis label column on its left,
+     * inside the chart, and is never cut.
+     */
+    const COMPACT_CATEGORY_END_ALIGNMENT = {alignMaxLabel: 'right'} as const;
 
     describe('responsive X-axis policy', () => {
         it('budgets the 315px Growth-like time axis separately from a category axis', () => {
@@ -362,6 +368,9 @@ describe('canonical overlay axis and reference helpers', () => {
             expect(applied.axisLabel).not.toHaveProperty('showMinLabel');
             expect(applied.axisLabel).not.toHaveProperty('showMaxLabel');
             expect(applied.axisLabel).not.toHaveProperty('rotate');
+            // R-2: the edge alignment is compact-only. A wide axis does not force its end labels, so its last drawn label may sit mid-axis.
+            expect(applied.axisLabel).not.toHaveProperty('alignMinLabel');
+            expect(applied.axisLabel).not.toHaveProperty('alignMaxLabel');
         });
 
         it.each([315, 337])('keeps the 48px time budget and one-year Growth-like SSR tick gaps within 50px at width %i', (width) => {
@@ -757,12 +766,39 @@ describe('canonical overlay axis and reference helpers', () => {
                 .replace(/&amp;/g, '&');
 
         /**
+         * The CSS font a `<text>` was laid out with. zrender writes either one `font:` shorthand or, when the label style
+         * names its parts (ECharts' does), `font-size`/`font-family`/… declarations: rebuilt here in zrender's own
+         * `makeFont` order (style, weight, size, family), so measuring the text matches its layout.
+         */
+        function svgTextFont(attributes: string): string | null {
+            const style = /\bstyle="([^"]*)"/.exec(attributes)?.[1] ?? '';
+            const declarations = new Map([...style.matchAll(/([a-z-]+)\s*:\s*([^;]+)/g)].map(([, property, value]): [string, string] => [property, value.trim()]));
+            const shorthand = declarations.get('font');
+            if (shorthand) return shorthand;
+            const size = declarations.get('font-size');
+            if (!size) return null;
+            return [declarations.get('font-style'), declarations.get('font-weight'), size, declarations.get('font-family') ?? 'sans-serif'].filter(Boolean).join(' ');
+        }
+
+        /**
+         * A drawn x-axis label: its text, where zrender placed it, the `text-anchor` its alignment became (left → start,
+         * center → middle, right → end) and the CSS font it was laid out with, as the `<text>` style carries it.
+         */
+        interface RenderedXAxisLabel {
+            text: string;
+            anchor: string | null;
+            font: string | null;
+            x: number;
+            y: number;
+        }
+
+        /**
          * The x-axis labels a real ECharts draws for `option`, left to right: every `<text>` of the
          * server-side SVG below the plot, empty ones dropped. A label `hideOverlap` hides is not
          * emitted at all, so the list is what a user reads. WHY no `useUTC`: no production chart
          * sets it, so ticks fall on local midnights, as on screen.
          */
-        function renderedXAxisLabels(option: echarts.EChartsCoreOption, width: number, height: number): string[] {
+        function renderedXAxisLabelElements(option: echarts.EChartsCoreOption, width: number, height: number): RenderedXAxisLabel[] {
             type GridRectReader = {getModel(): {getComponent(componentType: 'grid', index: 0): {coordinateSystem?: {getRect(): {y: number; height: number}}} | undefined}};
             const chart = echarts.init(null, undefined, {renderer: 'svg', ssr: true, width, height});
             try {
@@ -772,13 +808,22 @@ describe('canonical overlay axis and reference helpers', () => {
                 if (!plot) throw new Error('The rendered chart has no laid-out grid');
                 const plotBottom = plot.y + plot.height;
                 return [...svg.matchAll(/<text\b([^>]*)>([^<]*)<\/text>/g)]
-                    .map(([, attributes, text]) => ({text: decodeSvgText(text).trim(), ...svgTextPosition(attributes)}))
+                    .map(([, attributes, text]) => ({
+                        text: decodeSvgText(text).trim(),
+                        anchor: /\btext-anchor="([^"]*)"/.exec(attributes)?.[1] ?? null,
+                        font: svgTextFont(attributes),
+                        ...svgTextPosition(attributes),
+                    }))
                     .filter(({text, y}) => text !== '' && y > plotBottom)
-                    .sort((left, right) => left.x - right.x)
-                    .map(({text}) => text);
+                    .sort((left, right) => left.x - right.x);
             } finally {
                 chart.dispose();
             }
+        }
+
+        /** The texts of {@link renderedXAxisLabelElements}, left to right. */
+        function renderedXAxisLabels(option: echarts.EChartsCoreOption, width: number, height: number): string[] {
+            return renderedXAxisLabelElements(option, width, height).map(({text}) => text);
         }
 
         it('names the day on every compact time label of the Jul→Oct Growth screenshot, so no two neighbours repeat a month (plan 47, C1)', () => {
@@ -1233,7 +1278,8 @@ describe('canonical overlay axis and reference helpers', () => {
                     showMaxLabel: true,
                     rotate: 0,
                     formatter: expect.any(Function),
-                    ...(axisType === 'category' ? {interval: expect.any(Number)} : {}),
+                    // R-2 (lot 51): only a category axis ends its last label at its tick; a time axis keeps the centred anchor.
+                    ...(axisType === 'category' ? {interval: expect.any(Number), ...COMPACT_CATEGORY_END_ALIGNMENT} : {}),
                 },
             });
             expect(responsiveAxisLabel(policy).formatter).toBe(formatter);
@@ -1353,6 +1399,87 @@ describe('canonical overlay axis and reference helpers', () => {
                 )
                 .toEqual([]);
             expect.soft(consecutiveDuplicates(labels), rendered).toEqual([]);
+        });
+
+        it('aligns the last compact category label to the right of its tick, so it does not stick out of the chart (R-2)', () => {
+            const policy = buildResponsiveXAxisPolicy({width: 360, values: JANUARY_X_AXIS_DATES, locale: 'en-US', axisType: 'category'});
+
+            // Precondition: a phone width makes the policy compact, the mode that forces both end labels on.
+            expect(policy.compact).toBe(true);
+            expect(policy.axisLabel).toMatchObject({showMinLabel: true, showMaxLabel: true, ...COMPACT_CATEGORY_END_ALIGNMENT});
+            // The first label spills at most into the y-axis label column, inside the chart: aligning it would only hide more labels.
+            expect(policy.axisLabel).not.toHaveProperty('alignMinLabel');
+        });
+
+        it('keeps the edge alignment off a compact time policy, whose month and year ticks outrank its end labels (R-2 guard)', () => {
+            const policy = buildResponsiveXAxisPolicy({width: 360, values: JANUARY_X_AXIS_DATES, locale: 'en-US', axisType: 'time'});
+
+            // Precondition: compact, with the last label forced on.
+            expect(policy.compact).toBe(true);
+            expect(policy.axisLabel).toMatchObject({showMaxLabel: true});
+            // A time label is ranked by its tick level (z2 = 10 + level) before `hideOverlap`, and the forced end label only
+            // hides its immediate neighbour: pulled inwards, it would collide with a month or year tick and be the one hidden.
+            expect(policy.axisLabel).not.toHaveProperty('alignMinLabel');
+            expect(policy.axisLabel).not.toHaveProperty('alignMaxLabel');
+        });
+
+        it.each(['time', 'category'] as const)('keeps the edge alignment off a wide %s policy, whose last drawn label may sit mid-axis (R-2)', (axisType) => {
+            const policy = buildResponsiveXAxisPolicy({width: 1000, values: JANUARY_X_AXIS_DATES, locale: 'en-US', axisType});
+
+            expect(policy.compact).toBe(false);
+            expect(policy.axisLabel ?? {}).not.toHaveProperty('alignMinLabel');
+            expect(policy.axisLabel ?? {}).not.toHaveProperty('alignMaxLabel');
+        });
+
+        // Category only: its labels share one priority, so the forced last label always survives `hideOverlap`. On a time
+        // axis a month tick outranks the end label, so the policy leaves a time axis centred (the R-2 guard above).
+        it('keeps the first compact category label centred and ends the last at its tick on a 360px phone, both inside the chart (R-2)', () => {
+            // 90 daily points: the last label reads "Oct 13", which a centred anchor pushes half out of the chart ("Oct 1").
+            const width = 360;
+            const dates = isoDays('2026-07-16', '2026-10-13');
+            const policy = buildResponsiveXAxisPolicy({width, values: dates, locale: 'en-US', axisType: 'category'});
+            const labels = renderedXAxisLabelElements(
+                {
+                    animation: false,
+                    // LineChart's full-size grid: `containLabel` reserves the x labels' height and the y labels' width, but not
+                    // what the last x label spills past the 12px right margin.
+                    grid: {top: 20, right: computeRightMargin(0), bottom: 25, left: 10, containLabel: true},
+                    // As LineChart applies the policy: its formatter, then the compact-only keys.
+                    xAxis: {type: 'category', data: dates, axisLabel: {fontSize: 11, formatter: policy.formatter, ...policy.axisLabel}},
+                    // Its y labels too: they move the plot, and so the first x label, inwards. Numbers, so no end label can match one.
+                    yAxis: {type: 'value', scale: true},
+                    series: [{type: 'line', data: dates.map((_date, index) => 100 + index)}],
+                },
+                width,
+                240,
+            );
+            const rendered = `rendered: ${labels.map(({text, anchor}) => `${text} [${anchor}]`).join(' | ')}`;
+            // Found by text, not by position: the first and the last date of the data, as the policy names them.
+            const firstText = policy.formatter(dates[0]);
+            const lastText = policy.formatter(dates[dates.length - 1]);
+            const first = labels.filter(({text}) => text === firstText);
+            const last = labels.filter(({text}) => text === lastText);
+            // A label's horizontal extent: its anchor point, its anchor and the width ECharts' own measurer gives its font.
+            const extent = ({text, anchor, font, x}: RenderedXAxisLabel) => {
+                if (!font) throw new Error(`${rendered} — "${text}" carries no font to measure it with`);
+                const textWidth = echarts.format.getTextRect(text, font).width;
+                const left = anchor === 'end' ? x - textWidth : anchor === 'middle' ? x - textWidth / 2 : x;
+                const right = left + textWidth;
+                return {left, right, described: `"${text}" anchored ${anchor} at x=${x.toFixed(1)}, ${textWidth.toFixed(1)}px in "${font}": ${left.toFixed(1)}→${right.toFixed(1)}`};
+            };
+
+            // Preconditions: compact, two distinct end labels, each drawn exactly once.
+            expect(policy.compact).toBe(true);
+            expect(firstText).not.toBe(lastText);
+            expect(first, `${rendered} — the first date "${firstText}" is drawn once`).toHaveLength(1);
+            expect(last, `${rendered} — the last date "${lastText}" is drawn once`).toHaveLength(1);
+            const firstExtent = extent(first[0]);
+            const lastExtent = extent(last[0]);
+
+            expect.soft(first[0].anchor, `${rendered} — the first label stays centred on its tick`).toBe('middle');
+            expect.soft(last[0].anchor, `${rendered} — the last label ends at its tick`).toBe('end');
+            expect.soft(firstExtent.left, `${firstExtent.described} — the first label starts inside the chart`).toBeGreaterThanOrEqual(0);
+            expect.soft(lastExtent.right, `${lastExtent.described} — the last label ends inside the ${width}px chart`).toBeLessThanOrEqual(width);
         });
     });
 
