@@ -941,7 +941,7 @@
     "last_translated": "2026-10-10T00:03:32.770989+00:00"
   },
   "admin/cli_tools.en.md": {
-    "md5": "8fb3bbd223701fb5cb699dec2cb325d2",
+    "md5": "02fa5f95cdc41b8961ee6f4f16d7d161",
     "langs_done": [
       "es",
       "fr",
@@ -961,7 +961,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 241.3,
-        "stamped_at": "2026-10-13T02:20:31.524328+00:00",
+        "stamped_at": "2026-10-13T02:46:07.033441+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -974,7 +974,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 260.5,
-        "stamped_at": "2026-10-13T02:20:31.524328+00:00",
+        "stamped_at": "2026-10-13T02:46:07.033441+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -987,7 +987,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 199.9,
-        "stamped_at": "2026-10-13T02:20:31.524328+00:00",
+        "stamped_at": "2026-10-13T02:46:07.033441+00:00",
         "stamped_by": "translate-stamp"
       }
     }
