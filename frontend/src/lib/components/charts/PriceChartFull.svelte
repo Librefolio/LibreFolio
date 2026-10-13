@@ -53,6 +53,7 @@
     } from './priceChartHelpers';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
 
     // =========================================================================
     // Event Marker types and constants
@@ -339,16 +340,16 @@
 
     function buildTooltipHeader(date: string, currentResolution: ChartResolution, bucketInfo?: BucketInfo): string {
         if (currentResolution === 'daily') {
-            return `<strong>${date}</strong>`;
+            return `<strong>${formatDay(date)}</strong>`;
         }
 
         const info = bucketInfo ?? {bucketStart: date, bucketEnd: date};
 
         if (currentResolution === 'weekly') {
-            return `<strong>${$t('chart.tooltip.weekRange', {values: {start: info.bucketStart, end: info.bucketEnd}})}</strong>`;
+            return `<strong>${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</strong>`;
         }
 
-        return `<strong>${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</strong><br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: info.bucketEnd}})}</span>`;
+        return `<strong>${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</strong><br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</span>`;
     }
 
     function getResolvedSeries(currentResolution: ChartResolution): ResolvedDataCacheEntry {
@@ -775,7 +776,7 @@
 
         const formatEventEntry = (marker: EventMarker, eventColor: string, includeDate: boolean): string => {
             const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${eventColor};margin-right:4px;"></span>`;
-            let html = includeDate ? `<span style="font-size:11px;opacity:0.8">${marker.date}</span><br/>${dot}${marker.type}` : `${dot}${marker.type}`;
+            let html = includeDate ? `<span style="font-size:11px;opacity:0.8">${formatDay(marker.date)}</span><br/>${dot}${marker.type}` : `${dot}${marker.type}`;
 
             if (marker.value !== undefined) {
                 const isConverted = marker.originalValue !== undefined && marker.originalCurrency !== undefined;
@@ -786,7 +787,7 @@
                     html += `<br/><span style="font-size:10px;opacity:0.7">${$t('chart.tooltip.originalValue', {values: {value: formatFixed(marker.originalValue!, 4)}})}${origBadge}</span>`;
                     if (marker.fxRateDate) {
                         const backfillHint = marker.fxDaysBack && marker.fxDaysBack > 0 ? ` ${$t('chart.tooltip.fxDaysBack', {values: {days: formatFixed(marker.fxDaysBack, 0)}})}` : '';
-                        html += `<br/><span style="font-size:10px;opacity:0.6">${$t('chart.tooltip.fxRateDate', {values: {date: marker.fxRateDate}})}${backfillHint}</span>`;
+                        html += `<br/><span style="font-size:10px;opacity:0.6">${$t('chart.tooltip.fxRateDate', {values: {date: formatDay(marker.fxRateDate)}})}${backfillHint}</span>`;
                     }
                 }
             }
@@ -1014,19 +1015,19 @@
                         if (p.seriesName === mainSeriesName) {
                             const context = mainPointContext?.get(date);
                             if (context) {
-                                const referenceObservation = context.referencePriceDate && context.referencePriceDate !== context.referenceTargetDate ? ` · ${$t('chart.tooltip.valueAt', {values: {date: context.referencePriceDate}})}` : '';
-                                rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">↩ ${context.referenceTargetDate}${referenceObservation}</span>`;
+                                const referenceObservation = context.referencePriceDate && context.referencePriceDate !== context.referenceTargetDate ? ` · ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.referencePriceDate)}})}` : '';
+                                rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">↩ ${formatDay(context.referenceTargetDate)}${referenceObservation}</span>`;
                                 if (context.currentPriceDate !== date) {
-                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">📅 ${$t('chart.tooltip.valueAt', {values: {date: context.currentPriceDate}})}</span>`;
+                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">📅 ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.currentPriceDate)}})}</span>`;
                                 }
                                 if (context.currentFxDate || context.referenceFxDate) {
-                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">💱 ${context.currentFxDate ?? '—'} / ${context.referenceFxDate ?? '—'}</span>`;
+                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">💱 ${context.currentFxDate ? formatDay(context.currentFxDate) : '—'} / ${context.referenceFxDate ? formatDay(context.referenceFxDate) : '—'}</span>`;
                                 }
                             }
                         }
                         const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                         if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
-                            rowHtml += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: representativePoint.representativeDate}})})</span>`;
+                            rowHtml += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
                         }
                         if (isGhostRow) {
                             rowHtml = `<span style="opacity:0.7">${rowHtml}</span>`;
