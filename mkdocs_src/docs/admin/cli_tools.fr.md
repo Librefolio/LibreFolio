@@ -84,7 +84,7 @@ pipenv run ./dev.py user promote <username>
 pipenv run ./dev.py user demote <username>
 ```
 
-`demote` ne vérifie pas qu'un autre administrateur subsiste : s'il n'en reste aucun, promouvez à nouveau quelqu'un.
+`demote` refuse le dernier administrateur actif : il s'arrête avec l'erreur `User '<username>' is the last active administrator: promote another user first` et se termine avec `1`.
 
 ---
 

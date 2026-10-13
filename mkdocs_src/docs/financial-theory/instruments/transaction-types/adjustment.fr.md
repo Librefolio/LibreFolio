@@ -52,7 +52,7 @@ Un ajustement positif ne peut pas être enregistré sans coût de base : saisiss
     Le Forçage du coût de base correspond au coût moyen **par unité** de l'actif.
     Pour obtenir le coût total du bloc transféré, multipliez par la quantité :
 
-    $$\text{Coût total} = \text{PMP} \times \text{quantité}$$
+    $$\text{Coût total} = \text{PRU} \times \text{quantité}$$
 
 ### 🏦 Coût de base automatique sur les transferts et les amorçages
 
