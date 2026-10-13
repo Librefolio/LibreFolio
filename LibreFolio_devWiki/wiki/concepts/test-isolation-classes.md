@@ -159,6 +159,12 @@ category; and the automatic clean-ups run only at one worker. The cures of train
 account, a reserved MOCKFX pair, or global keys read and restored in `finally`, with writers of the same keys in
 sequence: [[problems/e2e-writes-leaked-into-shared-state]].
 
+## A fixture for tests that delete (2026-10-13)
+
+A transaction test that deletes owns what it deletes: `frontend/e2e/fixtures/owned-pair.ts` creates the pair for the
+test and removes it afterwards, so `tx-delete` no longer consumes seed rows (V-25) —
+[[problems/e2e-writes-leaked-into-shared-state]].
+
 ## Source files
 
 | Role | Path |

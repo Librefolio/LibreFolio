@@ -22,7 +22,9 @@ budget for the page it expects. It is the pattern workstream K fixed on 2026-10-
 
 ## Status
 
-Open: V-27, brought forward into 1.2 — workstream V cures it in its next lot (coordinator, 2026-10-13).
+Open: V-27 in `BACKLOG_POST_1.2.md`, written by V on 2026-10-13 — «`login()` ritorna appena sparisce il form, prima
+dell'arrivo». V-26 (`c1a42bf4a`, train 82) moved the auth and AI Export setups off the test's clock; the early return
+itself is still V-27.
 
 ## Source files
 
