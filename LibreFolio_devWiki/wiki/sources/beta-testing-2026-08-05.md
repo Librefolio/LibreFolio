@@ -105,6 +105,7 @@ findings above. Two are already covered
 remainder are step-by-step operational documents whose durable content is either
 already in the taxonomy or belongs to the feature pages. They are listed in
 `INDEX.md` with their P1-P8 status table.
+*Update (2026-10-13)*: the content check of the plans is below.
 
 ## Drift check (2026-10-12, historical folder H6)
 
@@ -115,6 +116,46 @@ Agricole trades, engine accounting and signals, frontend coverage, i18n and docs
 the test-runner migration, transactions UX). Their topics already have pages — for example
 [[decisions/credit-agricole-securities-only-cash-neutral-brim]] — and their delivery is mostly `0e07359b4`; a
 content-level check of each plan was not done in this step.
+
+## Content check of the plans (2026-10-13, C-64 last part)
+
+The ten plans and the F1–F17 classification were read in full against the wiki, and every gap was re-checked on
+today's code and on git history. Three pages contradicted the code and were corrected: [[features/F-083]] (parsing
+is concurrent, not sequential), [[concepts/txstore-pattern]] (a clone keeps its date) and
+[[entities/portfolio-engine]] (the blob cache key). The gaps worth a page:
+
+| Plan | Gap | Page |
+|---|---|---|
+| Asset identity (P3) | D1–D11: one asset per security, the quoted code leads, unify before repairing, merge | [[decisions/asset-identity-quoted-code-leads]] |
+| Asset identity (P3) | the merge's two foreign-key ordering traps | [[problems/asset-merge-cascade-deleted-the-migrated-events]] |
+| Crédit Agricole trades | B5-lite: the legs of a split add up to the row | [[decisions/import-row-split-legs-sum-to-the-row]] |
+| Engine accounting and signals | the quadratic FX error dedup under a full-history load | [[problems/fx-error-dedup-went-quadratic-under-full-history]] |
+| F1–F17 classification | F2: the caches ignored role and share; the first share fix | [[problems/portfolio-cache-ignored-role-and-share]] |
+| F1–F17 classification | F13: the 2 GB image | [[features/F-062]] |
+| Test-runner migration | D-3.3, «chi committa, ripulisce» | [[concepts/transaction-hygiene-fixture]] |
+| Test-runner migration | detour 15, a skipped category counted as passed | [[concepts/derived-test-inventory]] |
+
+The merge and the inactive-asset rule were added to [[features/F-024]], the two decisions linked from
+[[features/F-049]].
+
+**Recorded in the plans, not paged** — smaller findings, listed so they can be found; they were not re-verified here:
+
+- *import wizard*: the repair step limited to the fields that matter for duplicates (a WAC blocker kept «Next»
+  disabled); the duplicates step opening on database collisions too; the parse counters (W1, W3) and the
+  re-selection of importable rows (W7);
+- *Crédit Agricole trades, detours*: `/assets/all` returning only active assets (three lookups moved to
+  `/assets/query`, the FX pair page left as it was); the asymmetric sign rules; a reopened decided row that vanished;
+  fund redemptions arriving as bank transfers;
+- *i18n and docs assets*: the asset-download script failing the build on a hard failure; the gallery kept out of the
+  Docker build; the provider-error resolver;
+- *transactions UX*: the tooltip opening delay;
+- *F1–F17*: the date inputs exempted from the iOS zoom guard (F17); the changelog modal trapped by a `transform` on
+  the sidebar's `<nav>` (F12);
+- *test-runner migration*: setup once per scope; a half-dead server and a `fetch` without a timeout in
+  `globalSetup`; the scheduler's serial/parallel fixed point; `external_all` running 28 tests twice; the coverage
+  noise floor of the network providers; `.DS_Store` blocking a cleanup;
+- *frontend coverage*: the coverage arguments normalisation; a modal reopened on stale data; `not.toContain` on a
+  list of objects, true by construction.
 
 ## Source files
 
@@ -127,3 +168,4 @@ content-level check of each plan was not done in this step.
 | BRIM provider | `backend/app/services/brim_providers/broker_credit_agricole/plugin.py` |
 | Provider tests | `backend/test_scripts/test_external/test_brim_providers.py` |
 | mkdocs | `mkdocs_src/docs/developer/backend/brim/` |
+| Plans and F1–F17 classification | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/` |
