@@ -7,7 +7,7 @@ description: Che cos'è uno Strumento, quali strumenti sono disponibili oggi e c
 
 Uno **Strumento** è un calcolo a sé stante: fornisci i dati per una singola operazione ed esso restituisce un risultato o un errore strutturato. Non è un'istruzione per modificare il tuo portafoglio.
 
-La piattaforma degli Strumenti è **sperimentale**. Il catalogo attualmente offre esattamente
+La piattaforma degli Strumenti è **stabile** e ancora in fase di rifinitura. Il catalogo attualmente offre esattamente
 **uno** strumento:
 
 | Strumento | Cosa fa |

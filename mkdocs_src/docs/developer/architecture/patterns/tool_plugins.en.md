@@ -7,7 +7,7 @@ description: Atomic Tool contracts, multi-service packages, transactional discov
 
 Tools package an **atomic calculation** behind a typed, versioned contract. The caller supplies a complete scenario; the backend computes a result without obtaining portfolio data or authority on the caller's behalf.
 
-This capability is experimental, but its boundaries are integrated in current source: transport models, multi-service discovery, schema export and generated codecs, authenticated API routes, a per-process executor, worker/process-tree ownership, catalogue cards, per-service frontend routes, and compiled custom renderers. The bundled `PacAllocatorTool` currently exposes a single service, `pac_allocator`. Source integration still does **not** replace runtime evidence for every cancellation race or kernel-level descendant-cleanup scenario.
+This capability is stable and still being refined. Its boundaries are integrated in current source: transport models, multi-service discovery, schema export and generated codecs, authenticated API routes, a per-process executor, worker/process-tree ownership, catalogue cards, per-service frontend routes, and compiled custom renderers. The bundled `PacAllocatorTool` currently exposes a single service, `pac_allocator`. Source integration still does **not** replace runtime evidence for every cancellation race or kernel-level descendant-cleanup scenario.
 
 ## 🎯 Scope and authority
 

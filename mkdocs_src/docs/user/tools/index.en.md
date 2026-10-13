@@ -7,8 +7,8 @@ description: What a Tool is, the tools available today, and how to open one.
 
 A **Tool** is a standalone calculation: you supply the data for one operation, and it returns a result or a structured error. It is not an instruction to modify your portfolio.
 
-The Tool platform is **experimental**. The catalogue currently offers exactly
-**one** tool:
+The Tool platform is **stable** and still being refined. The catalogue
+currently offers exactly **one** tool:
 
 | Tool | What it does |
 |---|---|
