@@ -2,7 +2,7 @@
   "brimPlugins": {
     "broker_scalable_deposit": {
       "name": "Scalable Capital conto deposito",
-      "description": "Importa il conto deposito di Scalable Capital (Tagesgeld) dal file dell’esportatore LibreFolio: interessi con la ritenuta, depositi, prelievi e trasferimenti verso il conto broker."
+      "description": "Importa il conto deposito di Scalable Capital dal file dell’esportatore LibreFolio: interessi con la ritenuta, depositi, prelievi e trasferimenti verso il conto broker."
     }
   }
 }
