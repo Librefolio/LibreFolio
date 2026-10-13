@@ -4216,3 +4216,376 @@ describe('GrowthChart — the tooltip header writes its dates in the interface l
         expect(lines.join('\n')).not.toMatch(ISO_DAY);
     });
 });
+
+/**
+ * Plan 52, C3b: the cascade's running period sits on its last day with data.
+ *
+ * The defect, in the density cascade (Abs, %, P&L line; never the ladder, which owns Candles and Income). A weekly or
+ * monthly bucket is drawn at its CALENDAR end (the Sunday, the last day of the month), while `aggregateMetric` keys each
+ * aggregated value by the last day WITH DATA of its bucket. For a closed period the two are the same day. For the period
+ * still running they are not: the lookup misses, the point is null, the line stops one period early, the x axis ends on
+ * a day that has not happened yet, and the tooltip header names that day over a point with no value.
+ *
+ * The contract after the fix:
+ *   - A1, the point: a weekly or monthly bucket's point stands on the last history day inside it, with that day's
+ *     value. Its `bucketStart` and `bucketEnd` stay the calendar edges.
+ *   - A1, the header: the cascade header names the running bucket only up to that day.
+ *   - Z2, the zoom: the cascade reads and writes its window in TIME over the drawn x extent, which is how ECharts maps
+ *     a dataZoom percent on a time axis (pinned on the real ECharts in chartCoreHelpers.test.ts, plan 52 C3b).
+ *
+ * Fixtures, each ONE instance built once: a new `history` identity resets the chart's caches and its window. The fake
+ * chart is 1200 px wide, and the cascade climbs a tier over 1.3 buckets per px and comes back under 0.8.
+ *   - WEEKLY_RUNNING: 1702 consecutive days, Wed 2020-01-01..Wed 2024-08-28, 1.42 per px. Its 244 ISO weeks are 0.20
+ *     per px, so the cascade stays weekly. The last week, Mon 2024-08-26..Sun 09-01, is running: its last day with data
+ *     is Wed 08-28.
+ *   - MONTHLY_RUNNING: one Wednesday a week for 1700 weeks (1990-01-03..2022-07-27), plus every day of 2022-08-01..08-17.
+ *     1717 days and 1703 weeks are both over 1.3 per px and the 392 months are 0.33 per px, so the cascade climbs to
+ *     monthly and stays. The last month, August 2022, is running: its last day with data is Wed 08-17, and 08-31 is not
+ *     in the history.
+ *
+ * Expected on today's code: T1 and T2 (parts A and B) red, the defect itself. T3 and T4 (part C) green: today's weekly
+ * buckets are evenly spaced, so reading the window as a bucket index is reading it in time. They go red if A1 lands
+ * alone (the last weekly interval shrinks to three days) and green again once the window is read and written in time.
+ *
+ * Days are UTC day numbers, never local time. A series is found by the name the component gives it through its i18n
+ * key, as the Income cases do, never by its slot.
+ */
+describe('GrowthChart — the running period sits on its last day with data (plan 52, C3b)', {timeout: 30_000}, () => {
+    /** A cascade tier above the day. WHY a type: a running bucket is drawn at one of these two tiers, and a case tabled on another fails to compile. */
+    type Tier = 'weekly' | 'monthly';
+
+    /** A drawn cascade datum, `{value: [x, y], bucketStart, bucketEnd, resolution}`, its fields unknown. WHY unknown: a missing field must show in the diff, not be assumed. */
+    interface DrawnDatum {
+        value?: unknown;
+        bucketStart?: unknown;
+        bucketEnd?: unknown;
+        resolution?: unknown;
+    }
+
+    /** 1702 consecutive days. WHY so many: 1.42 days per px of the 1200 px fake sends the cascade to weeks, and the last week is cut on a Wednesday. */
+    const WEEKLY_RUNNING = buildLadderFixture(isoDays(2020, 0, 1, 1702));
+
+    /** One Wednesday a week for 1700 weeks. WHY: enough weeks to send the cascade past weekly, one day each. */
+    const WEDNESDAYS = isoDays(1990, 0, 3, 7 * 1700).filter((_day, index) => index % 7 === 0);
+    /** The Wednesdays, then every day of 2022-08-01..08-17. WHY: a month still running, its calendar end not in the history. */
+    const MONTHLY_RUNNING = buildLadderFixture([...new Set([...WEDNESDAYS, ...isoDays(2022, 7, 1, 17)])].sort());
+
+    /** Each fixture by tier: the history's last day, and the calendar edges of the running bucket that holds it. WHY one table: every case reads the same facts. */
+    const RUNNING = {
+        weekly: {fixture: WEEKLY_RUNNING, lastDay: '2024-08-28', start: '2024-08-26', end: '2024-09-01'},
+        monthly: {fixture: MONTHLY_RUNNING, lastDay: '2022-08-17', start: '2022-08-01', end: '2022-08-31'},
+    } as const;
+
+    /**
+     * The cascade views: the label key of the main line, how many series carry that name, and the value the history's
+     * day `index` has on it. WHY test-side: every value comes from `buildLadderFixture`'s formulas, never from the
+     * component.
+     */
+    const VIEWS = {
+        Abs: {mainKey: 'dashboard.navValue', mainCount: 1, valueAt: (index: number) => 11_000 + index * 100},
+        // `mwrr_cumulative` is written `(index · 0.0012).toFixed(6)` and drawn times 100, not rebased: day `index` reads `index · 0.12`.
+        '%': {mainKey: 'dashboard.mwrrCum', mainCount: 1, valueAt: (index: number) => index * 0.12},
+        // Two halves of the sign split carry the total P&L's name; every total is positive, so the value is in the positive one.
+        'P&L line': {mainKey: 'dashboard.totalPnl', mainCount: 2, valueAt: (index: number) => 500 + index * 100},
+    } as const;
+    /** A cascade view by name. WHY: the cases are tabled by view, and a name outside `VIEWS` fails to compile. */
+    type ViewName = keyof typeof VIEWS;
+
+    /** The UTC day number of an ISO day. WHY UTC: no time zone and no DST can move a day. */
+    const dayNumber = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
+
+    /** The ISO day a drawn datum stands on, its `value[0]`. WHY sliced: the day is what is compared, whatever instant the x may carry. */
+    function xOf(datum: unknown): string {
+        const value = (datum as DrawnDatum | null)?.value;
+        return Array.isArray(value) ? String(value[0]).slice(0, 10) : `no x in ${JSON.stringify(datum)}`;
+    }
+
+    /** The UTC day number a drawn datum stands on. WHY: the zoom cases map a percent to a day over the drawn x extent. */
+    const xDay = (datum: unknown) => dayNumber(xOf(datum));
+
+    /** The UTC days of the first and the last datum of a drawn series. WHY: a percent is read over the extent drawn, never an assumed one. */
+    function extentOf(data: readonly unknown[]): {x0: number; xN: number} {
+        return {x0: xDay(data[0]), xN: xDay(data[data.length - 1])};
+    }
+
+    /** The day a dataZoom percent stands for over an x extent. WHY: ECharts maps the percent linearly in time over the extent (Part D, chartCoreHelpers.test.ts). */
+    const dayAtPercent = (percent: number, {x0, xN}: {x0: number; xN: number}) => x0 + (percent / 100) * (xN - x0);
+
+    /** The percent a day stands for over an x extent, the inverse of `dayAtPercent`. WHY: the zoom cases choose their window in time. */
+    const percentAtDay = (day: number, {x0, xN}: {x0: number; xN: number}) => ((day - x0) / (xN - x0)) * 100;
+
+    /** A value rounded to 1e-6. WHY: the % value is a decimal string times 100 in binary floating point, and 1e-6 is far under its 0.12 step per day. */
+    const round6 = (value: number) => Math.round(value * 1e6) / 1e6;
+
+    /** The non-null values of drawn datums, each rounded to 1e-6. WHY non-null: the P&L line's two sign halves share every x, and only the half that holds the value is non-null there. */
+    const valuesOf = (data: readonly unknown[]) => data.map(pointValue).flatMap((value) => (value == null ? [] : [round6(value)]));
+
+    /** Asserts a mapped day is `expected` within 0.01 day. WHY 0.01: a window written on a bucket lands on its day, and the wrong bucket is a day or more away. */
+    function expectSameDay(actual: number, expected: number, what: string): void {
+        expect(Math.abs(actual - expected), `${what}: day ${actual} read, day ${expected} expected`).toBeLessThan(0.01);
+    }
+
+    /** How many ISO weeks, Monday to Sunday, `days` touch. WHY test-side: the weekly barrier counts the calendar, never the component's bucket module. */
+    function isoWeekCount(days: readonly string[]): number {
+        // Day 0, 1970-01-01, is a Thursday, so the Monday of day n is n - ((n + 3) mod 7).
+        return new Set(
+            days.map((iso) => {
+                const day = dayNumber(iso);
+                return day - ((((day + 3) % 7) + 7) % 7);
+            }),
+        ).size;
+    }
+
+    /** The series named after `labelKey`, as the component names them in today's language. WHY by name: a view's main line, never a slot. */
+    function seriesNamed(series: SeriesUpdate[], labelKey: string): SeriesUpdate[] {
+        return series.filter((entry) => entry.name === get(_)(labelKey));
+    }
+
+    /** Waits until every drawn series ends on the bucket starting on `lastStart`, at `resolution`, and returns them. WHY: the barrier of every case; series read before the cascade settles belong to another tier. */
+    async function settledSeries(resolution: 'daily' | Tier, lastStart: string): Promise<SeriesUpdate[]> {
+        return waitFor(
+            () => {
+                const series = renderedSeries();
+                expect(series.length, 'the chart draws series').toBeGreaterThan(0);
+                for (const entry of series) expect(entry.data[entry.data.length - 1], `the last datum of ${entry.name}`).toMatchObject({resolution, bucketStart: lastStart});
+                return series;
+            },
+            {timeout: 5_000},
+        );
+    }
+
+    /** The data of the one NAV line, once the cascade settles on `resolution` with its last bucket starting on `lastStart`. WHY: the zoom cases read the Abs main line. */
+    async function navData(resolution: 'daily' | Tier, lastStart: string): Promise<unknown[]> {
+        const nav = seriesNamed(await settledSeries(resolution, lastStart), 'dashboard.navValue');
+        expect(nav, 'one NAV line, by name').toHaveLength(1);
+        return nav[0].data;
+    }
+
+    /** The index of the drawn bucket that starts on `iso`. WHY: a bucket is found by its calendar edge, never by a hard-coded index. */
+    function bucketStarting(data: readonly unknown[], iso: string): number {
+        const index = data.findIndex((datum) => (datum as DrawnDatum | null)?.bucketStart === iso);
+        expect(index, `a drawn bucket starts on ${iso}`).toBeGreaterThanOrEqual(0);
+        return index;
+    }
+
+    /** The index of the drawn bucket whose calendar edges hold `iso`. WHY: the bucket around a date, found by its edges, never by a hard-coded index. */
+    function bucketHolding(data: readonly unknown[], iso: string): number {
+        const index = data.findIndex((datum) => {
+            const {bucketStart, bucketEnd} = (datum ?? {}) as DrawnDatum;
+            return typeof bucketStart === 'string' && typeof bucketEnd === 'string' && bucketStart <= iso && iso <= bucketEnd;
+        });
+        expect(index, `a drawn bucket holds ${iso}`).toBeGreaterThanOrEqual(0);
+        return index;
+    }
+
+    /** The window start, in percent, halfway in time between the points of buckets `k` and `k + 1`. WHY halfway: neither DST nor floating point decides which bucket the edge reads. */
+    function percentBetween(data: readonly unknown[], k: number): number {
+        return percentAtDay((xDay(data[k]) + xDay(data[k + 1])) / 2, extentOf(data));
+    }
+
+    /** A month as the month label writes it in `localeTag`: long month and year, read in UTC. WHY test-side: the oracle never comes from the product (copied from C2). */
+    function monthIn(iso: string, localeTag: string): string {
+        const [year, month, date] = iso.split('-').map(Number);
+        return new Intl.DateTimeFormat(localeTag, {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(Date.UTC(year, month - 1, date)));
+    }
+
+    /** A key's text in today's language, as a header line reads. WHY: never a translated literal, and a key that does not resolve fails here instead of matching itself (copied from C2). */
+    function keyText(key: string, values: Record<string, string>): string {
+        const text = htmlText(get(_)(key, {values}));
+        expect(text, `${key} does not resolve`).not.toBe(key);
+        return text;
+    }
+
+    /** The first `count` top-level lines of a tooltip, as read. WHY: the header and its "value at" line are each one top-level `<div>`, ahead of every row (copied from C2). */
+    function headerLines(html: string, count: number): string[] {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        return Array.from(host.children)
+            .filter((child) => child.tagName === 'DIV')
+            .slice(0, count)
+            .map((child) => child.textContent ?? '');
+    }
+
+    /** The tooltip of bucket `index`, as ECharts asks for it on a hover. WHY the latest full option: its formatter reads the live state (copied from C2). */
+    const tooltipAt = (index: number) => latestFullOption().tooltip.formatter([{dataIndex: index}]);
+
+    /** Mounts `fixture` and opens `view` the way a user does, proved pressed. WHY: every case reaches its view by one route, and the P&L submode is pressed, never assumed. */
+    async function openView(fixture: LadderFixture, view: ViewName): Promise<void> {
+        render(GrowthChart, {props: ladderProps(fixture)});
+        await waitForFrame(FRAME.abs);
+        if (view === '%') {
+            // Precondition: the fixture carries return series, so the % view can be reached.
+            expect(screen.getByTestId('growth-toggle-pct')).toBeEnabled();
+            const before = setOptionCount();
+            await fireEvent.click(screen.getByTestId('growth-toggle-pct'));
+            await fullOptionAfter(before);
+        } else if (view === 'P&L line') {
+            await fireEvent.click(screen.getByTestId('growth-toggle-pnl'));
+            await fireEvent.click(screen.getByTestId('growth-pnl-submode-line'));
+            await waitForFrame(FRAME.pnlLine);
+            expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-line']);
+        }
+        expect(pressedAmong(MODE_TOGGLES)).toEqual([{Abs: 'growth-toggle-eur', '%': 'growth-toggle-pct', 'P&L line': 'growth-toggle-pnl'}[view]]);
+    }
+
+    /** Runs `body` with `setTimeout` and `clearTimeout` faked, then gives the real timers back. WHY: the zoom's 200 ms debounce runs on the fake clock, and nothing here reads the date, so `Date` stays real. */
+    async function onFakeTimeouts(body: () => Promise<void>) {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+        try {
+            await body();
+        } finally {
+            vi.useRealTimers();
+        }
+    }
+
+    /** Zooms the way a user does, on the fake clock. WHY: ECharts' own state first, then the event, then well past the 200 ms debounce (copied from S7). */
+    async function zoomOnFakeClock(start: number, end: number) {
+        expect(chartInstances).toHaveLength(1);
+        chartInstances[0].setZoom(start, end);
+        chartInstances[0].emit('dataZoom');
+        await vi.advanceTimersByTimeAsync(1_000);
+        await tick();
+    }
+
+    /** One `dataZoom` entry, fields unknown. WHY: a missing or non-numeric edge must show in the diff, not be assumed (copied from S7). */
+    interface ZoomEntry {
+        start?: unknown;
+        end?: unknown;
+    }
+
+    /** The first entry of a `dataZoom`, object or array. WHY: `getZoomPercent()` reads `dataZoom[0]`, the window ECharts keeps (copied from S7). */
+    function firstZoomOf(raw: unknown): ZoomEntry | undefined {
+        return (Array.isArray(raw) ? raw[0] : raw) as ZoomEntry | undefined;
+    }
+
+    /** Waits for the first call after `since` that carries a `dataZoom`, and returns its first entry. WHY: the redraw barrier, without which the window could be read before the component writes it (copied from S7). */
+    async function firstZoomAfter(since: number): Promise<ZoomEntry | undefined> {
+        let found: ZoomEntry | undefined;
+        await waitFor(
+            () => {
+                expect(chartInstances).toHaveLength(1);
+                const call = chartInstances[0].setOptionCalls.slice(since).find((entry) => entry.option.dataZoom != null);
+                expect(call, `a setOption call carrying dataZoom after call ${since}`).toBeDefined();
+                found = firstZoomOf(call?.option.dataZoom);
+            },
+            {timeout: 5_000},
+        );
+        return found;
+    }
+
+    /** The numeric edges of a window the component wrote. WHY: a missing edge fails here, with the window in the message, instead of mapping NaN. */
+    function zoomEdges(zoom: ZoomEntry | undefined): {start: number; end: number} {
+        expect(typeof zoom?.start === 'number' && typeof zoom?.end === 'number', `a numeric window, got ${JSON.stringify(zoom)}`).toBe(true);
+        return {start: Number(zoom?.start), end: Number(zoom?.end)};
+    }
+
+    beforeAll(() => {
+        // WHY: every oracle below leans on the fixtures' arithmetic, so it is checked first: the last day of each sits inside its running bucket, before its calendar end.
+        for (const [tier, running] of Object.entries(RUNNING)) {
+            expect(running.fixture.history[running.fixture.history.length - 1].date, `${tier}: the last history day`).toBe(running.lastDay);
+            expect(running.start <= running.lastDay && running.lastDay < running.end, `${tier}: the last day is inside the running bucket, before its end`).toBe(true);
+        }
+        // The running week starts on a Monday: day 0, 1970-01-01, is a Thursday.
+        expect((dayNumber(RUNNING.weekly.start) + 3) % 7, 'weekly: the running bucket starts on a Monday').toBe(0);
+        // The running month's calendar end carries no data, so no lookup can find it by accident.
+        const endInHistory = MONTHLY_RUNNING.history.some(({date}) => date === RUNNING.monthly.end);
+        expect(endInHistory, 'monthly: the calendar end is not in the history').toBe(false);
+    });
+
+    it.each([
+        {tier: 'weekly', view: 'Abs'},
+        {tier: 'weekly', view: '%'},
+        {tier: 'weekly', view: 'P&L line'},
+        {tier: 'monthly', view: 'Abs'},
+        {tier: 'monthly', view: '%'},
+        {tier: 'monthly', view: 'P&L line'},
+    ] as const)('T1, $view, $tier: the running period is drawn on the last history day, with the value of that day', async ({tier, view}) => {
+        // WHY: A1. The running bucket stood on its calendar end, a day not yet lived, with no value: the line stopped a period early.
+        const running = RUNNING[tier];
+        await openView(running.fixture, view);
+        const series = await settledSeries(tier, running.start);
+        const main = seriesNamed(series, VIEWS[view].mainKey);
+        expect(main, `the ${view} main line, by name`).toHaveLength(VIEWS[view].mainCount);
+        const lasts = main.map((entry) => entry.data[entry.data.length - 1]);
+        const lastIndex = running.fixture.history.length - 1;
+
+        // Negative oracle: no series draws a day after the last day of the history.
+        expect.soft([...new Set(series.flatMap((entry) => entry.data.map(xOf)).filter((x) => x > running.lastDay))], 'drawn days after the last history day').toEqual([]);
+        // The point: on the last history day, with that day's value.
+        const drawn = {x: [...new Set(lasts.map(xOf))], values: valuesOf(lasts)};
+        expect.soft(drawn, 'the last point of the main line').toEqual({x: [running.lastDay], values: [round6(VIEWS[view].valueAt(lastIndex))]});
+        // The edges stay the calendar's.
+        for (const datum of lasts) expect.soft(datum, 'the last datum keeps the calendar edges').toMatchObject({bucketStart: running.start, bucketEnd: running.end, resolution: tier});
+    });
+
+    it.each([
+        {tier: 'weekly', view: 'Abs'},
+        {tier: 'weekly', view: '%'},
+        {tier: 'monthly', view: 'Abs'},
+    ] as const)('T2, $view, $tier: the tooltip header of the running period names it up to its last day with data', async ({tier, view}) => {
+        // WHY: A1's header. It named the calendar end, a day not yet lived, over a point with no value.
+        const running = RUNNING[tier];
+        await openView(running.fixture, view);
+        const main = seriesNamed(await settledSeries(tier, running.start), VIEWS[view].mainKey);
+        expect(main, `the ${view} main line, by name`).toHaveLength(1);
+        const last = bucketStarting(main[0].data, running.start);
+        expect(last, 'the running bucket is the last one drawn').toBe(main[0].data.length - 1);
+        const lines = headerLines(tooltipAt(last), 2);
+        const valueAt = keyText('chart.tooltip.valueAt', {date: uiDay(running.lastDay)});
+        const heading = tier === 'weekly' ? keyText('chart.tooltip.weekRange', {start: uiDay(running.start), end: uiDay(running.lastDay)}) : keyText('chart.tooltip.monthLabel', {month: monthIn(running.start, uiLocale())});
+
+        expect.soft(lines).toEqual([heading, valueAt]);
+        // Negative oracle: the calendar end, a day not yet lived, is nowhere in the header.
+        expect.soft(lines.join('\n'), 'the header names no day after the last one with data').not.toContain(uiDay(running.end));
+    });
+
+    it('T3, Abs, weekly → daily: a zoom-in window opens on the Monday of the week its left edge stands in', async () => {
+        // WHY: Z2, the reading side. A percent maps to time over the drawn extent: today 1701 evenly spaced days, so the
+        // halfway point (7k + 3.5) / 1701 reads index floor(… · 243) = k. With A1 alone the extent is 1697 days and the
+        // same instant reads floor((7k + 3.5) / 1697 · 243) = k + 1: the daily window would open a week late.
+        const running = RUNNING.weekly;
+        await openView(running.fixture, 'Abs');
+        const weekly = await navData('weekly', running.start);
+        // Fixture barrier: one drawn bucket per ISO week the history touches, counted on the calendar.
+        expect(weekly.length, 'one weekly bucket per ISO week of the history').toBe(isoWeekCount(running.fixture.history.map(({date}) => date)));
+        const k = bucketStarting(weekly, '2024-06-24');
+        expect(k, 'the week of Mon 2024-06-24 is the tenth bucket from the end').toBe(weekly.length - 10);
+
+        const since = setOptionCount();
+        await onFakeTimeouts(() => zoomOnFakeClock(percentBetween(weekly, k), 100));
+        const daily = await navData('daily', running.lastDay);
+        const zoom = zoomEdges(await firstZoomAfter(since));
+
+        expectSameDay(dayAtPercent(zoom.start, extentOf(daily)), dayNumber('2024-06-24'), 'window start');
+        expectSameDay(dayAtPercent(zoom.end, extentOf(daily)), dayNumber(running.lastDay), 'window end');
+    });
+
+    it('T4, Abs, daily → weekly: a zoom-out window starts and ends on the points of the weeks holding its edges', async () => {
+        // WHY: Z2, the writing side. Today the end is 240/243, over 1701 evenly spaced days day 1680, the point of the week
+        // of 2024-08-05. With A1 alone the extent is 1697 days: 240/243 · 1697 ≈ 1676.05, four days before that point,
+        // which then falls outside the window and is filtered away.
+        const running = RUNNING.weekly;
+        await openView(running.fixture, 'Abs');
+        const weekly = await navData('weekly', running.start);
+        await onFakeTimeouts(() => zoomOnFakeClock(percentBetween(weekly, bucketStarting(weekly, '2024-06-24')), 100));
+        const daily = await navData('daily', running.lastDay);
+        const dailyExtent = extentOf(daily);
+        // Precondition: the daily line spans the whole history, so 2020-02-20 is day 50 from its first day and 2024-08-07 day 1680.
+        expect([dailyExtent.x0, dailyExtent.xN], 'the daily extent').toEqual([dayNumber(running.fixture.history[0].date), dayNumber(running.lastDay)]);
+        expect([dayNumber('2020-02-20'), dayNumber('2024-08-07')], 'the two edge days').toEqual([dailyExtent.x0 + 50, dailyExtent.x0 + 1680]);
+
+        // Halfway between days 50 and 51, and between 1679 and 1680: the reader takes 2020-02-20..2024-08-07, 1631 days, 1.36 per px, over 1.3.
+        const since = setOptionCount();
+        await onFakeTimeouts(() => zoomOnFakeClock(percentAtDay(dailyExtent.x0 + 50.5, dailyExtent), percentAtDay(dailyExtent.x0 + 1679.5, dailyExtent)));
+        const back = await navData('weekly', running.start);
+        const zoom = zoomEdges(await firstZoomAfter(since));
+        const startDay = dayAtPercent(zoom.start, extentOf(back));
+        const endDay = dayAtPercent(zoom.end, extentOf(back));
+        const startPoint = xDay(back[bucketHolding(back, '2020-02-20')]);
+        const endPoint = xDay(back[bucketHolding(back, '2024-08-07')]);
+
+        expectSameDay(startDay, startPoint, 'window start, on the point of the week holding 2020-02-20');
+        expectSameDay(endDay, endPoint, 'window end, on the point of the week holding 2024-08-07');
+        expect(endPoint, 'the point of the week holding 2024-08-07 is inside the window').toBeLessThanOrEqual(endDay + 0.01);
+    });
+});

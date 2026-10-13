@@ -1949,8 +1949,9 @@ describe('canonical overlay axis and reference helpers', () => {
 
                 // Why (re-pin, S7): this copy follows the reader pinned above, ladder-aware guard and
                 // empty-bucket guard included, so the test does not exercise a reader that no longer
-                // exists. The entry here is a cascade one (`ladder: false`), so the reader's path is
-                // the widening floor/ceil that logicalRangeFromBuckets implements.
+                // exists. The entry here is a cascade one (`ladder: false`): the reader reads its window
+                // in time, which on these evenly spaced dates reduces to the widening floor/ceil that
+                // logicalRangeFromBuckets implements.
                 const logicalRangeFromActiveChart = (): GrowthLogicalRange | null => {
                     const entry = activeChartData;
                     if (!entry || (!entry.ladder && entry.resolution !== currentResolution)) return null;
@@ -5003,5 +5004,69 @@ describe('Y-axis labels in the interface language (M-18)', () => {
         expect(expected['0.1234'], 'French differs from English').not.toBe('0.1234');
 
         expect(ticks(secondaryAxisLabel(), [1234.56, ...SECONDARY_TICKS]), spelled(expected)).toEqual(expected);
+    });
+});
+
+/**
+ * Plan 52, C3b, Z2's premise: on a `time` axis, ECharts maps a dataZoom percent linearly in TIME over the data's x
+ * extent, not over the data indexes. GrowthChart's cascade keeps its window as such a percent; once the running bucket
+ * stands on its last day with data, its buckets are no longer evenly spaced, and the window must then be read and
+ * written in time. Real ECharts, SSR, as the axis cases above.
+ */
+describe('ECharts time-axis dataZoom: a percent is a position in time (plan 52, C3b)', () => {
+    it('an inside dataZoom at 50–100 % over unevenly spaced days opens halfway in time between the first and the last x, not halfway in index', () => {
+        // WHY: whether a percent counts time or indexes is ECharts' call, not ours, so the build the app ships is asked.
+        const DAY_MS = 86_400_000;
+        const first = Date.UTC(2024, 0, 7);
+        // Days 0, 7, 14 and 17: two week steps, then a three-day one, as a running week leaves the last interval.
+        const xs = [0, 7, 14, 17].map((day) => first + day * DAY_MS);
+        const x0 = xs[0];
+        const xN = xs[xs.length - 1];
+        const byTime = [x0 + 0.5 * (xN - x0), xN];
+        // Control: read as an index, 50 % is index 1.5 of 0..3, halfway between the 2nd and the 3rd x, another instant.
+        const byIndex = xs[1] + 0.5 * (xs[2] - xs[1]);
+        expect(Math.abs(byIndex - byTime[0]), 'control: the two readings are a day or more apart on these days').toBeGreaterThanOrEqual(DAY_MS);
+
+        /** The slice of ECharts' model this case reads: the window the time axis' scale is set to. WHY a type: `getModel()` is not in ECharts' public typings. */
+        type TimeScaleReader = {
+            getModel(): {
+                getComponent(
+                    componentType: 'xAxis',
+                    index: 0,
+                ): {
+                    axis: {
+                        scale: {
+                            getExtent(): [number, number];
+                        };
+                    };
+                };
+            };
+        };
+        const chart = echarts.init(null, undefined, {
+            renderer: 'svg',
+            ssr: true,
+            width: 640,
+            height: 240,
+        });
+        try {
+            chart.setOption({
+                useUTC: true,
+                animation: false,
+                xAxis: {type: 'time'},
+                yAxis: {type: 'value'},
+                // The shape `buildDataZoom` builds, at 50–100 %.
+                dataZoom: [{type: 'inside', xAxisIndex: [0], filterMode: 'filter', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: 50, end: 100}],
+                series: [{type: 'line', data: xs.map((x, index) => [x, index + 1])}],
+            });
+            // The scale's extent is the window the axis draws (ECharts 6 exposes it on the model's axis).
+            const [start, end] = (chart as unknown as TimeScaleReader).getModel().getComponent('xAxis', 0).axis.scale.getExtent();
+            expect(Math.abs(start - byTime[0]), `window start ${start}: halfway in time is ${byTime[0]}, halfway in index ${byIndex}`).toBeLessThan(1);
+            expect(Math.abs(end - byTime[1]), `window end ${end}: the last x is ${byTime[1]}`).toBeLessThan(1);
+            // Cross-check: the dataZoom component reports the same window as values.
+            const zoom = (chart.getOption() as {dataZoom?: Array<{startValue?: unknown; endValue?: unknown}>}).dataZoom?.[0];
+            expect([Math.abs(Number(zoom?.startValue) - byTime[0]) < 1, Math.abs(Number(zoom?.endValue) - byTime[1]) < 1], `dataZoom values ${zoom?.startValue}..${zoom?.endValue}`).toEqual([true, true]);
+        } finally {
+            chart.dispose();
+        }
     });
 });
