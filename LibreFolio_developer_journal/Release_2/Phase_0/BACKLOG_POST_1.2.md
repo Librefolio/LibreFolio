@@ -714,7 +714,12 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   per esempio «Sincronizar tasas» sul pulsante della pagina FX (`fxDetail.syncRates`) e altri valori di `fx.*`,
   `csvImport.*` e `transactions.wac.*`. Sono sorgenti di altre aree (`i18n/fx/`, …), da allineare al glossario
   con `dev.py i18n update`. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «27.1».
-- **M-29 · `runner_architecture.md` sbaglia ancora i worker** — basso; M (docs-writer, lotto 36), 13/10.
+  - **Lotto 37, 13/10:** elenco pronto, 56 valori da cambiare e 8 da tenere (tasso privo di rischio, d'interesse, di
+    crescita); si applica dopo il lotto di T. Dettagli: stesso journal, sezione «28.2».
+- ✅ **M-29 · `runner_architecture.md` sbaglia ancora i worker** — chiusa nella 1.2, M (lotto 37, 13/10): la sezione
+  «`--workers` reaches Playwright too» ora dice il tetto dei worker del browser e il backend condiviso dimensionato da
+  `--workers`. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione
+  «28.1». Era: basso; M (docs-writer, lotto 36), 13/10.
   - `:264` dice che si inietta `E2E_WORKERS=4`; oggi è al più metà dei core logici, ed è esportato solo sopra 1 e se
     non è già impostato (`scripts/test_runner/_common.py:90-131`).
   - `:267` e `:270` danno ⌊n/2⌋ worker del server; la configurazione usa `Math.ceil(E2E_WORKERS / 2)`,
