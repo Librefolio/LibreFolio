@@ -541,12 +541,14 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   porta già i suoi nomi per lingua (`geography_groups`), ma la tabella non li legge. Inoltre, se un impatto avesse i pesi
   senza `bucket_audit`, ogni bucket avrebbe peso 0 e la tabella sparirebbe; oggi il backend lo manda sempre. Dettagli:
   [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «T-SHK + T-CL».
-- **T-EVW · Il grafico dei prezzi forse perde gli eventi alla risoluzione settimanale o mensile** — da verificare; T,
-  13/10 (letto nel codice da test-author durante T-ISO, non visto nell'app). In `PriceChartFull` un evento si mette
-  sull'ultimo giorno di calendario del periodo, mentre il punto aggregato porta la data dell'ultimo dato. Senza punti nel
-  fine settimana l'evento non trova il suo punto e non si disegna. Il coordinatore lo fa verificare a runtime da V; chi
-  lo cura si decide dopo. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
-  sezione «T-ISO + T-FB».
+- ✅ **T-EVW · Il grafico dei prezzi forse perde gli eventi alla risoluzione settimanale o mensile** — chiusa nella 1.2:
+  è la R-5 del lotto 51 di I, confermata a runtime da V e curata da I in `1acd1bf10`, treno 91. Il tooltip dello stesso
+  punto, che diceva ancora «value at» la fine teorica del periodo, lo allinea T nel checkpoint «Il tooltip del periodo
+  in corso». Dettagli: [piano della 51](51_narrowFitFixes/plan-phase00NarrowFitFixes.prompt.md), sezione «R-5», e
+  [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «Il tooltip del periodo in
+  corso». Era: da verificare; T, 13/10 (letto nel codice da test-author durante T-ISO).
+  Il marcatore stava sulla fine teorica del periodo, il punto aggregato sull'ultimo dato: nell'ultimo periodo, ancora
+  aperto, l'evento non trovava il suo punto e non si disegnava.
 
 La voce di `TODO_FUTURI.md` sul riordino del codice si cancella a mano a mano.
 
