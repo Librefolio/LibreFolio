@@ -209,7 +209,8 @@
       "quoteBaseInteger": "Solo numeri interi",
       "currencyHelp": "Valuta in cui vengono salvati i prezzi dell'asset.",
       "currencyHelpLabel": "Informazioni sulla valuta dell’asset",
-      "nameRequired": "Inserisci il nome dell'asset per continuare."
+      "nameRequired": "Inserisci il nome dell'asset per continuare.",
+      "descriptionPlaceholder": "Breve descrizione dell'asset…"
     },
     "provider": {
       "assignment": "Assegnazione Provider",
