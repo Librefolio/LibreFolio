@@ -61,6 +61,8 @@ confirmed by a red test enters 1.2:
 - [[decisions/promote-respects-asset-event-link]] — the same lot's other rule
 - [[decisions/bulk-pairs-new-with-saved]] — the banner and «Merge all» these checks guard
 - [[decisions/cash-transfer-split-promote]] — promotes through the batch pipeline
+- [[decisions/orphan-transfer-becomes-an-adjustment]] — the other side of the rule: a TRANSFER whose pair was deleted
+  with its broker (V-3, decided 13/10, after 1.2)
 - Source: [[sources/phase00-promote-pair-checks-2026-10]]
 
 ## Source files

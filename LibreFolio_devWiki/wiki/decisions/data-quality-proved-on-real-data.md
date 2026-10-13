@@ -95,7 +95,8 @@ not collect it.
 - **Two observations, recorded, not changed**: a TRANSFER pair without cost moves the sender's FIFO lot with its cost
   and reports nothing, while the average cost treats the arrival as unknown — which is what feeds the banner and «—»,
   consistent with "a transfer carries its cost in `cost_basis_override`"; an orphan TRANSFER makes the lots analysis
-  `FAILED` (`TRANSFER_PAIR_MISSING`), while the Dashboard counts it as in-kind capital (V-3).
+  `FAILED` (`TRANSFER_PAIR_MISSING`), while the Dashboard counts it as in-kind capital (V-3). *Decided on 13/10*: an orphan TRANSFER
+  becomes a plain ADJUSTMENT — [[decisions/orphan-transfer-becomes-an-adjustment]] (after 1.2).
 - **Left after 1.2** (backlog section V): V-1 the same refresh gap after «Sync prices»; V-2 the lots panel publishes no
   `data-busy`; V-3 the orphan TRANSFER; V-4 E2 must be rebuilt if P-10 is closed; V-5 an outdated comment about the
   seed; V-6 the developer doc lists only part of the banner tests; V-7 the neighbour-spec red above.
