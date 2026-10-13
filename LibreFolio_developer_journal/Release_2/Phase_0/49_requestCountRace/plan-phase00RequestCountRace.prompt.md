@@ -139,6 +139,11 @@ La prova serve a vedere il rosso in modo deterministico, senza aspettare il cari
 - **La variante B**, un handler che registra dopo il suo primo `await`, o un handler con un nome: 16 casi LATE e 10 NAMED, tutti sicuri (`/tmp/libreFolio_i_l49_xspec_late.log`).
 - **Il test `log` di `asset-detail`** (`:8221-8227`, letto a `:8254`): è benigno. Lo documento qui e non lo tocco.
 - **Nessuna nota per altri proprietari**: le note per U e per M, se servissero, le gira il coordinatore.
+- **La scansione meccanica, dopo il lotto** (chiesta dal coordinatore, sulla revisione combinata `4334fb40d`, annotata nel lotto 50): **0 corse reali**.
+  - Il metodo: uno script in sola lettura cerca in tutte le spec E2E le attese di una richiesta (dirette, su una promessa, dentro un helper) e legge la finestra sincrona fra l'`await` e il successivo, dove l'handler di `page.route` non è ancora partito; segnala le letture di stato scritto dagli handler e gli `expect` sincroni. A parte, i casi LATE (l'handler scrive dopo il suo primo `await`) e FACTORY (l'handler è costruito da una chiamata).
+  - Il conto: 32 file, 94 attese di richiesta, **43 finestre segnalate, lette tutte a mano**; a mano anche i 29 LATE, i 2 FACTORY e il tracker di `risk-mocks.ts`. Nessuna lettura sincrona dipende da uno stato che l'handler non ha ancora scritto: si legge la richiesta stessa, oppure si legge dopo un poll o un'attesa sulla UI, oppure è una guardia che a fine test deve essere vuota (una scrittura tardiva lì può solo nascondere una violazione, mai dare un rosso).
+  - I limiti: la lettura è testuale (commenti e stringhe sbiancati) e non distingue gli scope, quindi segnala anche nomi omonimi e annotazioni di tipo; i LATE si vedono solo per gli handler dello stesso file; gli interni dei tracker della galleria (le fixture) non li ho letti a mano.
+  - I log: `/tmp/libreFolio_i_l49m_scan.py` e `…_scan.log` (le finestre), `…_wfr_sites.log` e `…_wfr_files.log` (le attese), `…_owners.log` (i proprietari).
 
 ## 6. Il debito di lint di `_frontend_broker.py` (voce 49-1)
 
