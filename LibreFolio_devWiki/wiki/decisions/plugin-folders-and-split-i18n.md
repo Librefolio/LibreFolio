@@ -1,5 +1,5 @@
 ---
-title: "Each plugin a folder with its own translations; the i18n catalogues split by subsystem (U-1 to U-4 delivered; U-5 to come)"
+title: "Each plugin a folder with its own translations; the i18n catalogues split by subsystem (U-1 to U-5 delivered; plan 45 closed)"
 category: decision
 status: accepted
 date: 2026-10-12
@@ -88,6 +88,19 @@ related:
 >
 > *Train 79*: the first keys added after U-3 — eight, with `dev.py i18n add` for T-EN — went by their prefix to the
 > `charts` and `assets` subsystems (`f31bd6cfd`).
+
+> **Update (train 80, 2026-10-13, at `cea8a478d`): U-5 is in, and plan 45 is closed** (`6a3b87d1c`). Its four
+> findings (§10):
+>
+> - a staleness probe whose `except Exception` turned an error into «no build needed» — «Found on the way», above;
+> - `all-backend` timing out at startup after a production build, while the server rebuilt in debug under load —
+>   [[problems/shared-server-rebuilt-the-frontend-past-its-startup-timeout]];
+> - a bash script edited while it ran — [[problems/editing-a-running-bash-script-corrupts-its-run]];
+> - moving a tracked file when a generated file takes its path: first `git rm --cached` of the old path, then the pure
+>   rename — the order U-2's checkpoint used for the four catalogues.
+>
+> Backlog: U-B5 is closed (its devWiki part was step D); U-B2 — the subsystems' sources beside their code — waits for
+> after 1.2.
 
 > **Planned, not in the code.** Decided on 2026-10-12; at `e7d698c4d` (train 56) nothing of it is implemented and
 > workstream U's plan (45) is not in the target yet. The decisions are quoted from the coordinator's diary, which is

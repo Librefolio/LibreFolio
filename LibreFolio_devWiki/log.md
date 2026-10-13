@@ -3312,3 +3312,13 @@ Base `b1a17b49b`. Sources: plan 43 («T-EN»), the backlog, the code of `f31bd6c
 **Updated** [[decisions/figures-in-the-interface-language]] (T-EN1, T-EN2 closed; `ChartSignal`'s tracked catalogue;
 T-ISO and T-FB for after 1.2), [[decisions/plugin-folders-and-split-i18n]] (the first `i18n add` after U-3, routed to
 `charts` and `assets`), [[features/F-008]]. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Train 80 — U-5 and plan 45 closed; M's batch 34 (the dirty version)
+Base `cea8a478d`. Sources: plan 45 §10 (U-5 and the detours of U-2 and U-3), M's journal of round 12 (batch 34), the
+backlog, the code of `741310647`, `428bf27d1` and `b816adc6c`. **Created**
+[[problems/shared-server-rebuilt-the-frontend-past-its-startup-timeout]] and
+[[problems/editing-a-running-bash-script-corrupts-its-run]]. **Updated** [[decisions/plugin-folders-and-split-i18n]]
+(U-1 to U-5 delivered, plan 45 closed, its four findings; U-B5 closed, U-B2 after 1.2),
+[[problems/release-shots-show-dirty-version]] (resolved in the code: `LF_APP_VERSION`, the tree checks, the icons by
+the logo's hash; to verify on the first nightly; M-25), [[sources/phase00-translation-round12-2026-10]]. Graph: not
+updated (P-6).
