@@ -3370,3 +3370,13 @@ exact end). **Created** [[decisions/asset-identity-quoted-code-leads]] (D1–D11
 [[sources/beta-testing-2026-08-05]] (the check, and the smaller findings listed but not paged). Found on the way: the
 [1.1.0] CHANGELOG line «Wizard rework» puts corrections before unification, while `v1.1.0` already had `assets`
 before `fix`. With this part, C-64 is complete. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | The release page of 1.2.0, in draft
+Base `2b1734e76`. **Created** [[sources/release-1.2.0]], status draft, «tag date: pending». From the verified chapter
+[1.2.0] of `CHANGELOG.md` (`60f734e08`: 25 ✨ with 27 sub-items, 149 🐛 in 13 groups, 32 🔄, 7 ⚠️), the feature pages
+that carry a 1.2.0 row (24, grouped by area), the 60 decision pages dated 2026-09-07 → 2026-10-13 (grouped by theme),
+the problem pages still open, workaround or recurring (14) with their backlog ids, and the checks already on record:
+R's full run ([[sources/r-full-run-coverage-2026-10-12]]) and M's full gallery of 2026-10-13 (242 passed, 9 failed,
+1 skipped). Left to fill at the tag: the tag date, R's final run, the gates and the gallery at the tagged commit, the
+first nightly after the push (M-25) and the final CHANGELOG counts. Inbound links from
+[[decisions/changelog-entry-rules]] and the R source page. Graph: not updated (P-6).
