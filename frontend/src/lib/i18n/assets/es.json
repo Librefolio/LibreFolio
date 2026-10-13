@@ -209,7 +209,8 @@
       "quoteBaseInteger": "Solo números enteros",
       "currencyHelp": "Divisa en la que se guardan los precios de este activo.",
       "currencyHelpLabel": "Información sobre la divisa del activo",
-      "nameRequired": "Introduce el nombre del activo para continuar."
+      "nameRequired": "Introduce el nombre del activo para continuar.",
+      "descriptionPlaceholder": "Breve descripción del activo…"
     },
     "provider": {
       "assignment": "Asignación de Proveedor",

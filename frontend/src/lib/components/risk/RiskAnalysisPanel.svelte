@@ -26,7 +26,6 @@
     import {getRiskDefinition, hasRiskCapability, type RiskAnalyticResult, type RiskScope} from '$lib/stores/risk/riskStore.svelte';
     import {createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
     import {riskDataQuality, riskMetadata, riskOutput, singleValue, type RiskDataQualityReport} from '$lib/risk/riskTypes';
-    import {sectorI18nKey} from '$lib/utils/assetTypes';
     import CorrelationHeatmap from './CorrelationHeatmap.svelte';
     import RiskBetaBanner from './RiskBetaBanner.svelte';
     import RiskResultFrame from './RiskResultFrame.svelte';
@@ -34,6 +33,7 @@
     import {numericArrows} from '$lib/actions/numericArrows';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import * as riskHelpers from './riskAnalysisHelpers';
+    import {stressBucketLabel as bucketLabel} from './stressBucketLabel';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     interface Props {
         scope: RiskScope;
@@ -356,12 +356,7 @@
 
     function stressBucketLabel(bucket: string, dimension: RiskScenarioDimension): string {
         void referenceLabelsVersion;
-        if (bucket === 'Other') return $t('common.other');
-        if (bucket === 'european_union') return $t('risk.stress.europeanUnion');
-        if (dimension === 'asset_class') return $t(`assets.types.${bucket}`);
-        if (dimension === 'sector') return `${getSectorEmoji(bucket)} ${$t(`sectors.${sectorI18nKey(bucket)}`)}`;
-        const country = getCountryInfo(bucket);
-        return `${country.flag_emoji} ${country.name}`;
+        return bucketLabel(bucket, dimension, {translate: $t, sectorEmoji: getSectorEmoji, country: getCountryInfo});
     }
 
     function stressImpactDimension(value: unknown): RiskScenarioDimension {

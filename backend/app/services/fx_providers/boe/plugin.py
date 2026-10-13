@@ -88,10 +88,10 @@ class BOEProvider(FXRateProvider):
     @property
     def description_i18n(self) -> dict[str, str]:
         return {
-            "en": "Bank of England — publishes daily spot exchange rates for 15 currencies against GBP. Updated each business day. One data point per day.",
-            "it": "Bank of England — pubblica tassi di cambio spot giornalieri per 15 valute contro GBP. Aggiornamento ogni giorno lavorativo. Un dato al giorno.",
-            "fr": "Banque d'Angleterre — publie des taux de change spot quotidiens pour 15 devises contre GBP. Mise à jour chaque jour ouvrable. Un point par jour.",
-            "es": "Banco de Inglaterra — publica tipos de cambio spot diarios para 15 monedas contra GBP. Actualizado cada día hábil. Un dato por día.",
+            "en": "Bank of England — daily spot exchange rates against GBP. LibreFolio's provider covers 15 currencies. Updated each business day. One data point per day.",
+            "it": "Bank of England — tassi di cambio spot giornalieri contro GBP. Il provider di LibreFolio copre 15 valute. Aggiornamento ogni giorno lavorativo. Un dato al giorno.",
+            "fr": "Banque d'Angleterre — taux de change spot quotidiens contre GBP. Le fournisseur de LibreFolio couvre 15 devises. Mise à jour chaque jour ouvrable. Un point par jour.",
+            "es": "Banco de Inglaterra — tipos de cambio spot diarios contra GBP. El proveedor de LibreFolio cubre 15 monedas. Actualizado cada día hábil. Un dato por día.",
         }
 
     @property

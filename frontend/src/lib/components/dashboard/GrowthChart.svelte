@@ -2156,8 +2156,8 @@
          * Format a number as currency: `EUR 1,234.56`, and with `signed` `EUR +5.00` or
          * `EUR -12.00`, the one form of every signed tooltip row (D23b).
          *
-         * The sign comes from the same `toLocaleString` call as the digits, so it is the one the
-         * browser locale writes (D23): `-` in the four UI languages, U+2212 in Swedish. `signed`
+         * The sign comes from the same `toLocaleString` call as the digits, in the interface locale
+         * (`uiLocale()`, D23): `-` in the four UI languages and their regions. `signed`
          * adds `+` to a gain and no sign to an amount that rounds to zero. As in
          * `formatCurrencyAmountPlain`, only the digits are masked; the currency and the sign stay
          * readable (D8).
