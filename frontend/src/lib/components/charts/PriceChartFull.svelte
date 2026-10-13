@@ -34,6 +34,7 @@
         buildDeltaHtml,
         buildEventScatterGroups,
         buildStaleTooltipHtml,
+        bucketSpanUpTo,
         computeGhostSeries,
         computeZoomWindow,
         countBuckets,
@@ -343,7 +344,8 @@
             return `<strong>${formatDay(date)}</strong>`;
         }
 
-        const info = bucketInfo ?? {bucketStart: date, bucketEnd: date};
+        // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
+        const info = bucketSpanUpTo(date, bucketInfo ?? {bucketStart: date, bucketEnd: date});
 
         if (currentResolution === 'weekly') {
             return `<strong>${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</strong>`;

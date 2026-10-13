@@ -33,6 +33,12 @@
  * Red today: each of those days is written as ISO (`2024-03-04`), in English too, where the house notation is
  * `Mar 4, 2024`.
  *
+ * The open week and month (after R-5, lot 51). A weekly or monthly point is dated by its bucket's last data point;
+ * in the period still open — a series that stops inside a week and a month, OPEN_DAYS — its tooltip must span up
+ * to that day, not to the bucket's theoretical end (`bucketSpanUpTo`). The last describe pins it on the axis
+ * tooltip, the candle's, and the tooltip of an event marker sitting on the point; the whole-period cases on
+ * WEEK_ENDS and MONTH_ENDS are the guard of what does not change.
+ *
  * How it is tested: the real component, with ECharts replaced by a recorder (the `GrowthChart.test.ts`
  * pattern: jsdom has no canvas, and pixels are not the subject). A tooltip is the formatter the component handed
  * ECharts, called with what ECharts hands it on a hover: the axis tooltip with the items under the pointer, an
@@ -40,8 +46,8 @@
  * `<template>`; a line is what `<br>` separates (the candles' header is the tooltip's first blocks). The event
  * fixtures carry neither a note nor a comparison asset, so the conversion lines are an entry's last two.
  * Resolution: it follows the density of points per pixel, so the recorder reports the plot's width — a wide plot
- * keeps a week and a half daily, a narrow one turns five weeks of calendar days weekly or monthly; each case
- * proves the resolution it drew at from the x-axis before reading a tooltip.
+ * keeps a week and a half daily, a narrow one turns five weeks of calendar days (or OPEN_DAYS' two and a half)
+ * weekly or monthly; each case proves the resolution it drew at from the x-axis before reading a tooltip.
  *
  * Also stubbed: layout — jsdom measures every box as 0×0 and the chart draws only into a non-empty one, so
  * `getBoundingClientRect` reports a panel-sized box.
@@ -176,7 +182,7 @@ const SAME_DAY: EventMarker = {
 
 /** A plot wide enough to stay daily: DATA's 8 points — or CALENDAR_DAYS' 35 — are far below 1.3 points a pixel. */
 const DAILY_PLOT_WIDTH = 1200;
-/** CALENDAR_DAYS over 10 px: 3.5 days a pixel turns it weekly, and its 5 weeks (0.5 a pixel) keep it there. */
+/** CALENDAR_DAYS over 10 px: 3.5 days a pixel turns it weekly, and its 5 weeks (0.5 a pixel) keep it there; OPEN_DAYS too (1.7 days, 0.3 weeks a pixel). */
 const WEEKLY_PLOT_WIDTH = 10;
 /** CALENDAR_DAYS over 3 px: even its 5 weeks are 1.7 a pixel, so it turns monthly and stays there. */
 const MONTHLY_PLOT_WIDTH = 3;
@@ -191,6 +197,23 @@ const CALENDAR_DAYS: LineDataPoint[] = Array.from({length: 35}, (_unused, index)
 /** CALENDAR_DAYS' x-axis drawn weekly — one point per week, on its last day — and monthly. */
 const WEEK_ENDS = ['2024-03-03', '2024-03-10', '2024-03-17', '2024-03-24', '2024-03-31'];
 const MONTH_ENDS = ['2024-02-29', '2024-03-31'];
+
+/**
+ * CALENDAR_DAYS cut on Wednesday 13 March 2024: a series that stops inside a week and inside a month, drawn as the
+ * read path draws one — every calendar day up to its last. Its last week (11–17 March) and its month are still
+ * open: their points sit on the 13th, while the buckets' theoretical ends are Sunday 17 and the 31st.
+ */
+const OPEN_LAST_DAY = '2024-03-13';
+const OPEN_DAYS: LineDataPoint[] = CALENDAR_DAYS.filter((point) => point.date <= OPEN_LAST_DAY);
+/** The Monday the open week starts on. */
+const OPEN_WEEK_MONDAY = '2024-03-11';
+/** OPEN_DAYS' x-axis drawn weekly and monthly: the open week's and the open month's points on its last day. */
+const OPEN_WEEK_ENDS = ['2024-03-03', '2024-03-10', OPEN_LAST_DAY];
+const OPEN_MONTH_ENDS = ['2024-02-29', OPEN_LAST_DAY];
+/** OPEN_DAYS over 2 px: its 3 weeks are 1.5 a pixel, so it turns monthly (over 3 px they are 1.0, and it stays weekly). */
+const OPEN_MONTHLY_PLOT_WIDTH = 2;
+/** A dividend on Tuesday 12 March, inside the open week and the open month: its marker sits on their point, the 13th (R-5). */
+const OPEN_DIVIDEND: EventMarker = {date: '2024-03-12', type: 'DIVIDEND', value: 1.5, currency: 'EUR', currencyFlag: '🇪🇺'};
 
 /** Two dividends in the first week of CALENDAR_DAYS (26 February – 3 March): one weekly point lists both. */
 const WEEK_DIVIDENDS: EventMarker[] = [
@@ -456,15 +479,20 @@ function lastBrackets(line: string | undefined): string | undefined {
     return /\(([^()]*)\)$/.exec(line ?? '')?.[1];
 }
 
-/** The tooltip of the one coarse point that lists `markers` — their period — from the formatter of the series that holds it. */
-async function periodTooltipOf(markers: EventMarker[]): Promise<string[]> {
+/** The one coarse point that lists `markers` — their period — with the day it sits on (`value[0]`) and its tooltip's lines, from the formatter of the series that holds it. */
+async function periodPointOf(markers: EventMarker[]): Promise<{day: string; lines: string[]}> {
     const days = markers.map((marker) => marker.date).join(',');
     await waitFor(() => expect(eventSeries().length, 'barrier: the chart drew its event series').toBeGreaterThan(0), {timeout: 5_000});
     for (const series of eventSeries()) {
         const point = series.data.find((candidate) => candidate.markers?.map((marker) => marker.date).join(',') === days);
-        if (point) return tooltipLines(series.tooltip.formatter({data: point}));
+        if (point) return {day: point.value[0], lines: tooltipLines(series.tooltip.formatter({data: point}))};
     }
     throw new Error(`No event point lists the period of ${days}: the chart is not at a coarser resolution, or the period's last day is not on its axis`);
+}
+
+/** The tooltip of the one coarse point that lists `markers` — their period. */
+async function periodTooltipOf(markers: EventMarker[]): Promise<string[]> {
+    return (await periodPointOf(markers)).lines;
 }
 
 /** The day each listed event is dated by: the line before each line that names an event of `type`. */
@@ -584,20 +612,20 @@ describe('PriceChartFull — every day its tooltips write, in the house notation
     });
 });
 
+/** CandlestickChart as PriceChartFull mounts it: `synthesizeDailyOHLC` of the daily data, aggregated at a coarser resolution. */
+function mountCandles(daily: LineDataPoint[], resolution: ChartResolution): void {
+    const candles = synthesizeDailyOHLC(daily);
+    render(CandlestickChart, {props: {data: resolution === 'daily' ? candles : aggregateOHLCV(candles, resolution), resolution, currency: 'EUR'}});
+}
+
+/** The candles' tooltip header with the pointer on `day`: its first `blocks` blocks — the day or the week, or the month over its valueAt. */
+function candleHeader(day: string, blocks: number): string[] {
+    const template = document.createElement('template');
+    template.innerHTML = axisTooltipHtml(day, [{seriesName: 'EUR', seriesType: 'candlestick', value: [0, 100, 101, 99, 102]}]);
+    return [...template.content.children].slice(0, blocks).map((block) => (block.textContent ?? '').replace(/[ \t\r\n]+/g, ' ').trim());
+}
+
 describe('CandlestickChart — the price chart’s candles: the tooltip’s header in the house notation (T-ISO)', () => {
-    /** CandlestickChart as PriceChartFull mounts it: `synthesizeDailyOHLC` of the daily data, aggregated at a coarser resolution. */
-    function mountCandles(daily: LineDataPoint[], resolution: ChartResolution): void {
-        const candles = synthesizeDailyOHLC(daily);
-        render(CandlestickChart, {props: {data: resolution === 'daily' ? candles : aggregateOHLCV(candles, resolution), resolution, currency: 'EUR'}});
-    }
-
-    /** The candles' tooltip header with the pointer on `day`: its first `blocks` blocks — the day or the week, or the month over its valueAt. */
-    function candleHeader(day: string, blocks: number): string[] {
-        const template = document.createElement('template');
-        template.innerHTML = axisTooltipHtml(day, [{seriesName: 'EUR', seriesType: 'candlestick', value: [0, 100, 101, 99, 102]}]);
-        return [...template.content.children].slice(0, blocks).map((block) => (block.textContent ?? '').replace(/[ \t\r\n]+/g, ' ').trim());
-    }
-
     it.each(LANGUAGES)('%s interface: a daily candle’s tooltip is headed by its day in the house notation', async (lang) => {
         const locale = await speak(lang);
         mountCandles(DATA, 'daily');
@@ -625,6 +653,87 @@ describe('CandlestickChart — the price chart’s candles: the tooltip’s head
         expect(candleHeader('2024-02-29', 2), `the candle’s «value at» day is not in the ${lang} interface’s notation: valueAt gets the ISO day (the month above it is localized already)`).toEqual([
             catalogue('chart.tooltip.monthLabel', {month: monthOf('2024-02-29', locale)}),
             catalogue('chart.tooltip.valueAt', {date: houseDay('2024-02-29', locale)}),
+        ]);
+    });
+});
+
+describe('the open week and month: a coarse tooltip spans up to the day its point sits on (after R-5)', () => {
+    /*
+     * A weekly or monthly point — a line point or a candle — is dated by its bucket's last data point, while
+     * `bucketEnd` keeps the bucket's theoretical end. In a whole period the two are one day (the whole-period cases
+     * above, on WEEK_ENDS and MONTH_ENDS, are the guard of what does not change). In the open one — the period still
+     * running, or a series that stops inside it, here OPEN_DAYS through Wednesday 13 March — the point sits on its
+     * last data day, and a header spanning to `bucketEnd` names Sunday 17 or the 31st: a day with no data, or still
+     * to come.
+     *
+     * The contract, after the cure (`bucketSpanUpTo`): every coarse header of such a point spans up to the point's
+     * own day — a weekly one is `chart.tooltip.weekRange` from the week's Monday to that day, a monthly one the
+     * same `chart.tooltip.monthLabel` over `chart.tooltip.valueAt` of that day — on the axis tooltip, on the
+     * candle's, and on the tooltip of an event marker sitting on the point (its scatter `value[0]`, R-5): the
+     * header and the point name the same day. Days in the house notation, words from the catalogue.
+     */
+
+    it.each(LANGUAGES)('%s interface: the open week’s point — its axis tooltip spans the week from its Monday up to the point’s own day, not to the Sunday', async (lang) => {
+        const locale = await speak(lang);
+        mountPriceChart({data: OPEN_DAYS}, WEEKLY_PLOT_WIDTH);
+        await drawnOver(OPEN_WEEK_ENDS, 'weekly');
+
+        const [header] = tooltipLines(axisTooltipHtml(OPEN_LAST_DAY, [{seriesName: 'EUR', value: 116}]));
+
+        expect(header, 'the open week’s header runs to its Sunday, a day with no data: weekRange must end on the point’s own day').toBe(catalogue('chart.tooltip.weekRange', {start: houseDay(OPEN_WEEK_MONDAY, locale), end: houseDay(OPEN_LAST_DAY, locale)}));
+    });
+
+    it.each(LANGUAGES)('%s interface: the open month’s point — its axis tooltip is its month over chart.tooltip.valueAt of the point’s own day, not of the month’s last day', async (lang) => {
+        const locale = await speak(lang);
+        mountPriceChart({data: OPEN_DAYS}, OPEN_MONTHLY_PLOT_WIDTH);
+        await drawnOver(OPEN_MONTH_ENDS, 'monthly');
+
+        const [month, valueAt] = tooltipLines(axisTooltipHtml(OPEN_LAST_DAY, [{seriesName: 'EUR', value: 116}]));
+
+        expect({month, valueAt}, 'the open month’s «value at» names its last day, a day with no data: it must name the point’s own day').toEqual({
+            month: catalogue('chart.tooltip.monthLabel', {month: monthOf(OPEN_LAST_DAY, locale)}),
+            valueAt: catalogue('chart.tooltip.valueAt', {date: houseDay(OPEN_LAST_DAY, locale)}),
+        });
+    });
+
+    it.each(LANGUAGES)('%s interface: an event of the open week (weekly) — its marker’s tooltip is headed by the week up to the day its point sits on', async (lang) => {
+        const locale = await speak(lang);
+        mountPriceChart({data: OPEN_DAYS, eventMarkers: [OPEN_DIVIDEND]}, WEEKLY_PLOT_WIDTH);
+        await drawnOver(OPEN_WEEK_ENDS, 'weekly');
+
+        const {day, lines} = await periodPointOf([OPEN_DIVIDEND]);
+        expect(day, 'barrier: the marker sits on the open week’s point, its last data day (R-5)').toBe(OPEN_LAST_DAY);
+
+        expect(lines[0], 'the marker’s header and the point it sits on name two different days: the week runs to its Sunday').toBe(catalogue('chart.tooltip.weekRange', {start: houseDay(OPEN_WEEK_MONDAY, locale), end: houseDay(day, locale)}));
+    });
+
+    it.each(LANGUAGES)('%s interface: an event of the open month (monthly) — its marker’s tooltip is its month over chart.tooltip.valueAt of the day its point sits on', async (lang) => {
+        const locale = await speak(lang);
+        mountPriceChart({data: OPEN_DAYS, eventMarkers: [OPEN_DIVIDEND]}, OPEN_MONTHLY_PLOT_WIDTH);
+        await drawnOver(OPEN_MONTH_ENDS, 'monthly');
+
+        const {day, lines} = await periodPointOf([OPEN_DIVIDEND]);
+        expect(day, 'barrier: the marker sits on the open month’s point, its last data day (R-5)').toBe(OPEN_LAST_DAY);
+
+        expect(lines.slice(0, 2), 'the marker’s header and the point it sits on name two different days: «value at» names the month’s last day').toEqual([catalogue('chart.tooltip.monthLabel', {month: monthOf(day, locale)}), catalogue('chart.tooltip.valueAt', {date: houseDay(day, locale)})]);
+    });
+
+    it.each(LANGUAGES)('%s interface: the open week’s candle is headed by the week from its Monday up to its own day', async (lang) => {
+        const locale = await speak(lang);
+        mountCandles(OPEN_DAYS, 'weekly');
+        await drawnOver(OPEN_WEEK_ENDS, 'weekly');
+
+        expect(candleHeader(OPEN_LAST_DAY, 1), 'the open week’s candle runs to its Sunday, a day with no data: weekRange must end on the candle’s own day').toEqual([catalogue('chart.tooltip.weekRange', {start: houseDay(OPEN_WEEK_MONDAY, locale), end: houseDay(OPEN_LAST_DAY, locale)})]);
+    });
+
+    it.each(LANGUAGES)('%s interface: the open month’s candle is its month over chart.tooltip.valueAt of its own day', async (lang) => {
+        const locale = await speak(lang);
+        mountCandles(OPEN_DAYS, 'monthly');
+        await drawnOver(OPEN_MONTH_ENDS, 'monthly');
+
+        expect(candleHeader(OPEN_LAST_DAY, 2), 'the open month’s candle names its last day, a day with no data: «value at» must name the candle’s own day').toEqual([
+            catalogue('chart.tooltip.monthLabel', {month: monthOf(OPEN_LAST_DAY, locale)}),
+            catalogue('chart.tooltip.valueAt', {date: houseDay(OPEN_LAST_DAY, locale)}),
         ]);
     });
 });
