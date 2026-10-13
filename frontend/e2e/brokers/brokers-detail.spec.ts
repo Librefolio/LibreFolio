@@ -44,18 +44,26 @@ async function clickRowAction(page: Page, row: Locator, actionId: string): Promi
 }
 
 /**
- * Helper: navigate to the first broker's detail page and wait for data to load.
- * Returns false if no brokers exist (test should be skipped).
- */
-/**
  * Opens the detail page of the first broker card on screen.
  *
  * The mock always ships seven brokers, so "no card appeared" is a failure and not a
  * reason to skip: returning a boolean here let every caller write `if (!ok) return`,
  * which marks a test green without testing anything.
+ *
+ * It starts from the broker list already on screen and does not navigate to it. The
+ * outer beforeEach (`ensureBrokerExists`) leaves the list landed, so navigating again
+ * repeated the whole list load — the brokers, plus a whole-portfolio report left in
+ * flight on the backend — for nothing, and under load that was time the test did not
+ * have (C-58). The list's address is therefore a precondition, asserted and not assumed:
+ * a caller that starts elsewhere navigates to /brokers first.
+ *
+ * The precondition checks the address, not the page, so it costs nothing on either
+ * path. A caller on the wrong page fails here with that message, within the default
+ * expect timeout; on the right page, the card assertion below verifies the list itself,
+ * and its message says what went wrong.
  */
 async function goToFirstBrokerDetail(page: Page): Promise<void> {
-    await navigateTo(page, '/brokers');
+    await expect(page, 'the broker list must be the current page — the outer beforeEach (ensureBrokerExists) leaves it landed; a caller that starts elsewhere navigates to /brokers first').toHaveURL(/\/brokers(?:[?#]|$)/);
 
     const brokerCards = page.locator('[data-testid^="broker-card-"]');
     await expect(brokerCards.first(), 'the mock always ships brokers — an empty list means the page never loaded').toBeVisible({timeout: 8_000});
@@ -80,9 +88,14 @@ const BROKER_WITH_HOLDINGS = 'Interactive Brokers';
  * FIFO panel: measured, **ten of the twenty-two tests in this file** were exiting that
  * way, which is why LotCustodyModal sat at 11.9% coverage while two tests appeared to
  * cover it.
+ *
+ * Like `goToFirstBrokerDetail`, it opens the broker from the list already on screen and
+ * asserts the list's address first: the outer beforeEach leaves it landed, and navigating
+ * again repeated the whole list load for nothing (C-58). The callers outside that
+ * describe start on the Dashboard and navigate to /brokers first.
  */
 async function goToBrokerWithHoldings(page: Page): Promise<void> {
-    await navigateTo(page, '/brokers');
+    await expect(page, 'the broker list must be the current page — the outer beforeEach (ensureBrokerExists) leaves it landed; a caller that starts elsewhere navigates to /brokers first').toHaveURL(/\/brokers(?:[?#]|$)/);
 
     const card = page.locator('[data-testid^="broker-card-"]').filter({hasText: BROKER_WITH_HOLDINGS});
     await expect(card.first(), `${BROKER_WITH_HOLDINGS} is the broker the mock gives positions to — check populate_mock_data.py`).toBeVisible({timeout: 8_000});
@@ -118,16 +131,14 @@ test.describe('Broker Detail Page', () => {
     });
 
     test('can navigate to broker detail by clicking card', async ({page}) => {
-        await navigateTo(page, '/brokers');
-
+        // On the list the beforeEach left landed. An `if (count > 0)` here counted the cards
+        // before the list arrived, found none and passed without clicking: assert, do not probe.
         const brokerCards = page.locator('[data-testid^="broker-card-"]');
-        const count = await brokerCards.count();
+        await expect(brokerCards.first(), 'the mock always ships brokers — an empty list means the page never loaded').toBeVisible({timeout: 8_000});
 
-        if (count > 0) {
-            await brokerCards.first().click();
-            await expect(page).toHaveURL(/\/brokers\/\d+/);
-            await expect(page.getByTestId('broker-detail-page')).toBeVisible();
-        }
+        await brokerCards.first().click();
+        await expect(page).toHaveURL(/\/brokers\/\d+/);
+        await expect(page.getByTestId('broker-detail-page')).toBeVisible();
     });
 
     test('broker detail page shows broker name', async ({page}) => {
@@ -254,6 +265,14 @@ test.describe('Broker Detail Page', () => {
     });
 
     test.describe('FIFO lots analysis panel (Posizioni tab)', () => {
+        // An explicit budget for the chain every test here walks: login, the broker list, the
+        // broker page, Posizioni, the lots panel with its table and charts, then menus and
+        // modals — the chain the axisBuilder and P&L blocks below already budget at 60 s. A
+        // describe's timeout runs from the start of the test, so it also covers the outer
+        // beforeEach (login and list); at the default 30 s it ran out under load (C-58). Only
+        // the timeout is set: the file's parallel mode is inherited unchanged.
+        test.describe.configure({timeout: 60_000});
+
         /** Locates rows in the Esposizione/Tabella view of PositionsPanel — data-row-id is the
          *  established convention for DataTable rows in this codebase (see transactions-table.spec.ts). */
         async function firstHoldingRow(page: Page) {
@@ -713,6 +732,8 @@ async function findAllOpenLotsAsset(page: Page, brokerId: number): Promise<AllOp
 
 /** Interactive Brokers' id, read back from the page the helper landed on, and the asset to use. */
 async function resolveAllOpenLotsAsset(page: Page): Promise<{brokerId: number; asset: AllOpenLotsAsset}> {
+    // Called right after login, on the Dashboard: the helper opens the broker from the list.
+    await navigateTo(page, '/brokers');
     await goToBrokerWithHoldings(page);
     const brokerId = Number(new URL(page.url()).pathname.split('/').filter(Boolean).pop());
     expect(Number.isFinite(brokerId), 'the detail URL carries the broker id').toBe(true);
@@ -1000,6 +1021,8 @@ async function brokerChartRenders(host: Locator): Promise<number> {
  * the URL resolved to.
  */
 async function openBrokerGrowthChart(page: Page): Promise<{chart: Locator; brokerId: number}> {
+    // The beforeEach leaves the page on the Dashboard: the helper opens the broker from the list.
+    await navigateTo(page, '/brokers');
     await goToBrokerWithHoldings(page);
 
     const brokerId = Number(new URL(page.url()).pathname.split('/').filter(Boolean).pop());
