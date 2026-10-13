@@ -609,6 +609,12 @@ const FAVICON_MARK = 'lf-gallery';
  * is touched. A URL that does not end in /favicon.ico (BOE's `favicon.svg?ver=…`) is left alone; the fragment, if any,
  * stays last, and a URL whose query ends in /favicon.ico gets `&lf-gallery` instead.
  *
+ * Reads give the URL back as the app wrote it: the `src` property and `getAttribute('src')` drop the query again. The
+ * broker icon tells which request answered by comparing the image's `src` attribute with its own URL
+ * (brokerIconChain.svelte.ts, `eventUrl`, since 12/10): read with the query, no load and no error was ever acknowledged,
+ * and every broker logo drawn from a favicon stayed on its fallback briefcase, in every shot. Read back plain, a favicon
+ * that loads is shown, and one the host refuses fails as it would for a user — the icon moves down its chain.
+ *
  * An init script applies from the next document on, so the outer beforeEach installs it before the first navigation.
  * {@link expectFaviconImagesLoading} checks it is in force at the end of each test.
  */
@@ -620,6 +626,15 @@ export async function keepFaviconImagesLoading(page: Page): Promise<void> {
             if (!/\/favicon\.ico$/i.test(head)) return url;
             return `${head}${head.includes('?') ? '&' : '?'}${mark}${url.slice(head.length)}`;
         };
+        // The inverse of `marked`: what the app wrote, for every read of an image's `src`.
+        const unmarked = (url: string): string => {
+            const hash = url.indexOf('#');
+            const head = hash < 0 ? url : url.slice(0, hash);
+            for (const separator of ['?', '&']) {
+                if (head.endsWith(`${separator}${mark}`) && /\/favicon\.ico$/i.test(head.slice(0, -(mark.length + 1)))) return `${head.slice(0, -(mark.length + 1))}${url.slice(head.length)}`;
+            }
+            return url;
+        };
         const src = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
         if (src?.get && src.set) {
             const {get, set} = src;
@@ -627,7 +642,7 @@ export async function keepFaviconImagesLoading(page: Page): Promise<void> {
                 configurable: true,
                 enumerable: src.enumerable,
                 get() {
-                    return get.call(this);
+                    return unmarked(get.call(this));
                 },
                 set(value: unknown) {
                     set.call(this, marked(String(value)));
@@ -637,6 +652,11 @@ export async function keepFaviconImagesLoading(page: Page): Promise<void> {
         const setAttribute = Element.prototype.setAttribute;
         Element.prototype.setAttribute = function (name: string, value: string): void {
             setAttribute.call(this, name, this instanceof HTMLImageElement && String(name).toLowerCase() === 'src' ? marked(String(value)) : value);
+        };
+        const getAttribute = Element.prototype.getAttribute;
+        Element.prototype.getAttribute = function (name: string): string | null {
+            const value = getAttribute.call(this, name);
+            return value !== null && this instanceof HTMLImageElement && String(name).toLowerCase() === 'src' ? unmarked(value) : value;
         };
         // Only the value of a `src` attribute: a text, or a link, that names /favicon.ico is not an image the page loads.
         const SRC_ATTRIBUTE = /(\bsrc\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
@@ -663,9 +683,10 @@ export async function keepFaviconImagesLoading(page: Page): Promise<void> {
 
 /**
  * {@link keepFaviconImagesLoading} is in force in the page's current document: an image given a URL ending in
- * /favicon.ico holds it with the gallery's query, set through `setAttribute` and through the `src` property. The
- * images belong to a document of their own, which has no window, so nothing loads. A page still on about:blank never
- * loaded a document for the script to run in; a closed page has none.
+ * /favicon.ico holds it with the gallery's query, set through `setAttribute` and through the `src` property, and reads
+ * it back as it was written, through `getAttribute` and the property. The stored value is read from the attribute node,
+ * which the fix leaves alone. The images belong to a document of their own, which has no window, so nothing loads. A
+ * page still on about:blank never loaded a document for the script to run in; a closed page has none.
  */
 export async function expectFaviconImagesLoading(page: Page): Promise<void> {
     if (page.isClosed() || page.url() === 'about:blank') return;
@@ -681,12 +702,12 @@ export async function expectFaviconImagesLoading(page: Page): Promise<void> {
                         byAttribute.setAttribute('src', url);
                         const byProperty = inert.createElement('img');
                         byProperty.src = url;
-                        return [byAttribute.getAttribute('src'), byProperty.getAttribute('src')];
+                        return [byAttribute.getAttributeNode('src')?.value ?? null, byProperty.getAttributeNode('src')?.value ?? null, byAttribute.getAttribute('src'), byProperty.getAttribute('src')];
                     }, probe)
                     .catch((error: Error) => [`unreadable: ${error.message}`]),
             {message: 'the favicon images fix is not in force on this page: keepFaviconImagesLoading must run before the first navigation', timeout: 5_000},
         )
-        .toEqual([`${probe}?${FAVICON_MARK}`, `${probe}?${FAVICON_MARK}`]);
+        .toEqual([`${probe}?${FAVICON_MARK}`, `${probe}?${FAVICON_MARK}`, probe, probe]);
 }
 
 // ---------------------------------------------------------------------------

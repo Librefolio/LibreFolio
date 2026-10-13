@@ -36,7 +36,7 @@ $$
 \mathrm{Other} = \mathrm{PnL}_{\text{period}} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Comme le coût de base conserve ses taux de change historiques (voir [Valeur comptable](book-value.md)), l'effet des taux de change sur les actifs étrangers fait partie de $\Delta\mathrm{UGL}$ et non de Other. Les liquidités détenues dans une autre devise sont un cas à part : la NAV et la valeur comptable les valorisent toutes deux au taux de chaque jour, de sorte que leur effet de change s'annule dans les plus/moins-values latentes et n'est pas dans $\Delta\mathrm{UGL}$. C'est la première partie de Other, l'[Effet de change sur les liquidités](#fx-on-cash) de chaque courtier $b$, que la vue Performance affiche par courtier :
+Comme le coût de base conserve ses taux de change historiques (voir [Valeur comptable](book-value.md)), l'effet des taux de change sur les actifs étrangers fait partie de $\Delta\mathrm{UGL}$ et non de Other. Les liquidités détenues dans une autre devise sont un cas à part : la NAV et la valeur comptable les valorisent toutes deux au taux de chaque jour, de sorte que leur effet de change s'annule dans les plus/moins-values latentes et n'est pas dans $\Delta\mathrm{UGL}$. C'est la première partie de Other, l'[Effet de change sur les liquidités](#fx-on-cash) de chaque courtier $b$, que la vue Période affiche par courtier :
 
 $$
 \mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
