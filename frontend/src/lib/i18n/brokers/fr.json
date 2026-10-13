@@ -12,7 +12,7 @@
     "portalUrl": "URL du Portail",
     "portalUrlPlaceholder": "https://portail-courtier.com",
     "iconUrl": "URL de l'Icône Personnalisée",
-    "iconUrlHint": "Si vide, utilisera le favicon du portail",
+    "iconUrlHint": "Si vide, l'icône du plugin d'import par défaut est utilisée, puis le favicon du portail. L'icône d'un plugin générique, comme Generic CSV, vient en dernier.",
     "defaultImportPlugin": "Plugin d'Import par Défaut",
     "defaultImportPluginHint": "Présélectionner ce parser lors de l'import des transactions",
     "selectPlugin": "Sélectionner un plugin...",

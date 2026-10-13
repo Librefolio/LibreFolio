@@ -189,7 +189,7 @@
     },
     "metrics": {
       "volatility": "Volatilité",
-      "maxDrawdown": "Repli maximal",
+      "maxDrawdown": "Perte maximale",
       "drawdownDuration": "Durée du repli",
       "sharpe": "Sharpe",
       "sortino": "Sortino",
