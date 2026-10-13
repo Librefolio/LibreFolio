@@ -61,11 +61,17 @@ rischio sulla 1.2».
   the catalogue through a formatter tracked like `uiLocale()`. The CHANGELOG lists them as a fix (`4e11c2f83`): the
   English texts were already in 1.1.
 - Left for after 1.2 (backlog): T-ST, T-ICU, T-COL, T-DEAD — plurals of stale days, ICU figures of a language without
-  region, collation, dead code — and two found with T-EN: T-ISO (observation dates still ISO in the price chart's
-  tooltips and in the probe) and T-FB (the English fallbacks of the comparison signals).
+  region, collation, dead code. Two more found with T-EN were first left for after 1.2, then pulled in by the
+  coordinator because the 🔄 line promises «chart axes and tooltips»: **T-ISO** (`2a17ae3af`, train 88) — the price,
+  candlestick and line charts' tooltip dates and the provider probe's dates through a new `formatDay`
+  (`formatAxisDate.ts`) — and **T-FB** (`03dba53f8`, train 88) — the comparison signals' fallbacks («Asset #N»,
+  «FX Pair») and the asset page's errors from the catalogue. The date fields of the date-range picker stay ISO, by
+  choice.
 - The developer guide explains the rule: `developer/frontend/i18n.md`, «Numbers, amounts and dates» (`133259913`).
 - A test hook that read the displayed figure follows the language too: `data-dist-pct` in
-  `ProviderComparisonModal.svelte` — found by M's full gallery run (2026-10-13), to be cured by T.
+  `ProviderComparisonModal.svelte` — found by M's full gallery run (2026-10-13), cured by T in `dfc4f9ccc` (train 85)
+  with a machine form for the attribute; the probe rows' `data-operation` (`8684d29fe`, train 90) followed the same
+  rule — [[problems/test-hooks-read-the-localized-text]].
 - A test that pins a figure as `toFixed` writes it breaks under the rule: the gallery's price guard went red in English
   on prices over 1,000, and since M's batch 28 (`e8d5a5668`, train 70) it expects the figure as the shot's locale
   writes it — [[problems/gallery-price-guard-expected-tofixed-text]].

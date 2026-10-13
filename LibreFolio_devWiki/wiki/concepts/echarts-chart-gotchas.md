@@ -26,6 +26,7 @@ September–October 2026) mistook for defects of its own, with the rule each one
 | A **partial update** (`notMerge: false`) merges series **by position** and never touches the legend's `data` | the P&L lines kept brokers removed from the filter, a new broker was not drawn, a swapped one sat under the old legend entry ([[problems/pnl-lines-kept-removed-brokers]]) | when the names of the series change (`seriesKey`), take the full rebuild (`e72b0b56e`) |
 | Default **axis labels** never receive the app's language | English months on time axes, ISO dates on category axes; compact axes printed the month on every tick ([[problems/line-chart-axes-lost-the-day]]) | every axis gets the policy's formatter, in the app's language, which reads ECharts 6's `{level}` (`4c05c1d85`, `8682f0bbd`) |
 | A **stacked** series with a null base stacks on the axis origin; `connectNulls` skips only the top points | a band fell to zero on every weekend ([[problems/echarts-stacked-band-null-base]]) | bridge the base and delta series between sessions, and keep them out of the tooltip (`840bdbc0d`) |
+| A compact axis's **last label is centred on its tick**, so on a phone it hangs half outside the chart. `alignMaxLabel: 'right'` pulls it in, and on a **category** axis, where every label has the same priority, `fixMinMaxLabelShow` then hides the inner neighbour. On a **time** axis ECharts 6 sorts the labels by tick level (`z2 = 10 + level`) before `hideOverlap`, and `fixMinMaxLabelShow` hides only the immediate neighbour: the month or year tick next to the edge wins, and the pulled-in edge label is the one hidden | «Oct 1…» cut at 360–390 px; simulated on the Growth chart's time axis, the alignment hid the last label in 181 cases instead of 60, and in 26 of the 48 where it had been whole | `alignMaxLabel: 'right'` in the compact policy of **category** axes only (`5d8e863bf`, I's lot 51); the time axes with `containLabel`, the Growth chart among them, still cut their last label on phones: a choice left to the coordinator |
 
 Two non-ECharts rules from the same rounds:
 
@@ -48,6 +49,8 @@ money (privacy) or user-visible translations (tooltip HTML).
 | Separator/label planner (`CANDLE_MIN_SLOT_PX`) | `frontend/src/lib/components/dashboard/growthLadderAxis.ts` |
 | Tooltip/catalogue HTML gate | `frontend/src/htmlInterpolation.gate.test.ts` |
 | Lots chart colours | `frontend/src/lib/components/brokers/lots/lotComparisonChartHelpers.ts` |
+| Compact and wide axis policies (`alignMaxLabel`) | `frontend/src/lib/components/charts/responsiveXAxis.ts` |
+| Lot 51, the simulation of the label rules | `LibreFolio_developer_journal/Release_2/Phase_0/51_narrowFitFixes/plan-phase00NarrowFitFixes.prompt.md` |
 | Round 4 decisions D1–D28 | `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsRound4-PostMergeReview.prompt.md` |
 | Income colours and axis labels | `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsIncomeColorsAxisLabels.prompt.md` |
 | Tooltip i18n escape | `LibreFolio_developer_journal/Release_2/phases/20_performanceCharts/plan-phase00PerformanceChartsBugfix-TooltipI18nEscape.prompt.md` |
