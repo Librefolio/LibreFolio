@@ -397,7 +397,7 @@
         "technical": {
           "day": "CVaR · 1 giorno",
           "month": "CVaR · 1 mese",
-          "worst": "Massimo drawdown",
+          "worst": "Drawdown massimo",
           "current": "Drawdown attuale"
         },
         "durationDays": "durata {days} giorni",
