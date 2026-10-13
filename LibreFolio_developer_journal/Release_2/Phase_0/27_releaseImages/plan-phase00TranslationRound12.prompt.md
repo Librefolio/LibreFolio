@@ -1638,3 +1638,33 @@ They are «da rifinire ma stabili», still to be polished but stable.
 >   `translate-diff` 642 of 642 clean.
 > - Strict build 0; `check-links` 95; review scripts: only the intended differences.
 > - `git diff --check` clean; ports 6158, 6168 and 6042 free.
+
+### 31. ✅ Batch 40: the risk API leaves beta, and the exporter's version — on `3d3cf811a`, 2026-10-13
+
+Batch 39 is in the target (train 94, `9c1750325`). Two coordinator edits of the [1.2.0] chapter, ported by hand
+(`release-pipeline/scripts/b40_changelog_lines.py`).
+
+**31.1 ✅ The two lines**
+> **Note implementazione**:
+> - **`4de042cfe`, `:289` (Risk Analysis is no longer marked beta):** «The risk API, `/api/v1/risk`, leaves beta too:
+>   from this release it changes only with a major version, except the simulation.»
+>   - It reuses the chapter's own words: the section's «esce dalla beta / quitte la bêta / sale de beta», and «versione
+>     major / version majeure / versión mayor».
+>   - `translate-validate` had flagged `/api/v1/risk` missing in all three languages, not only fr and es, together
+>     with the two stale pieces.
+> - **`3d3cf811a`, `:46` (Scalable Capital importers):** after the exporter's link, «(versione 1.0.1 o successiva) /
+>   (version 1.0.1 ou ultérieure) / (versión 1.0.1 o posterior)».
+
+**31.2 ✅ Gates** (`release-pipeline/scripts/b40_gates.sh`, 12:09–12:11, load 11–20; then 12:11–12:13)
+> - **Stamp:** `1.2.0/added` and `1.2.0/changed/risk-analysis-…`, 2 pieces × 3; the cache changed only there.
+> - **Dry-run:** empty.
+> - **Validation:** `translate-validate --hide-localized` 630 files 0/0, with no INFO left: no `inline-code-missing`,
+>   no `changelog-stale`. The CHANGELOG alone 3 files OK.
+> - **Docs:** `translate-diff` 642 of 642 clean; strict build 0; `check-links` 95.
+> - **Review scripts:** only the intended `:264` examples and the four quotes of old text.
+> - **The changelog's Vitest** (`src/lib/features/changelog/changelog.test.ts`, the `core-unit` file, run alone
+>   through `frontend/node_modules/.bin/vitest`): 189 passed.
+> - **`front-utility changelog-locale`** (1 worker, lane 6158): 2 passed.
+> - `git diff --check` clean; ports free.
+> - The coordinator's FREEZE-VENV (`uvicorn[standard]` into the shared venv) came after these runs. The manifest and
+>   this entry use only the system Python and git.
