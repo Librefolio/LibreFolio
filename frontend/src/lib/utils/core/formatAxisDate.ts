@@ -68,6 +68,16 @@ export function parseDisplayDate(value: number | string): Date | null {
     return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/**
+ * A calendar day, `YYYY-MM-DD`, as the interface writes a date in a tooltip or a detail line:
+ * `12 ott 2026`, `12 Oct 2026`, `12 oct. 2026` (M-18). Anything else comes back unchanged — a
+ * chart category that is not a day stays what it is, where `formatAxisDate` would read a bare
+ * number as a year.
+ */
+export function formatDay(value: string, locale: string = uiLocale()): string {
+    return DATE_ONLY.test(value) ? formatAxisDate(locale, value, true) : value;
+}
+
 export function formatAxisDate(locale: string | undefined, value: number | string, withYear = false): string {
     const date = parseDisplayDate(value);
     if (!date) return String(value);

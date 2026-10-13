@@ -38,6 +38,7 @@
     import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
 
     // =========================================================================
     // Props
@@ -187,17 +188,17 @@
 
     function buildTooltipHeader(date: string, bucketInfo?: {bucketStart: string; bucketEnd: string}): string {
         if (resolution === 'daily') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${(isDarkProp ?? document.documentElement.classList.contains('dark')) ? '#e2e8f0' : '#1f2937'}">${date}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${(isDarkProp ?? document.documentElement.classList.contains('dark')) ? '#e2e8f0' : '#1f2937'}">${formatDay(date)}</div>`;
         }
 
         const dark = isDarkProp ?? document.documentElement.classList.contains('dark');
         const info = bucketInfo ?? {bucketStart: date, bucketEnd: date};
 
         if (resolution === 'weekly') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.weekRange', {values: {start: info.bucketStart, end: info.bucketEnd}})}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</div>`;
         }
 
-        return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</div><div style="font-size:11px;margin-bottom:3px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: info.bucketEnd}})}</div>`;
+        return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</div><div style="font-size:11px;margin-bottom:3px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</div>`;
     }
 
     // =========================================================================

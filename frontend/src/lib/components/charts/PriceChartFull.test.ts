@@ -1,29 +1,47 @@
 // @vitest-environment jsdom
 /**
- * PriceChartFull — the conversion lines of an event tooltip in the interface language (T-EN1).
+ * PriceChartFull — its tooltips in the interface language: the conversion lines of an event (T-EN1), and every
+ * day a tooltip writes (T-ISO); with the header of its candles, `CandlestickChart` (T-ISO).
  *
- * An event paid in another currency than the one the chart shows (a dividend in dollars on a chart in euros)
- * is converted, and its tooltip says so in two lines: the original amount with its currency, and the date of
- * the FX rate used — with how many days that rate lags the event when it does. Their words are English
- * written in the component (`orig. …`, `fx @ …`, `(3d back)`) whatever the interface language; the original
- * amount is already written in the interface locale (M-18), the lag is not.
+ * T-EN1. An event paid in another currency than the one the chart shows (a dividend in dollars on a chart in
+ * euros) is converted, and its tooltip says so in two lines: the original amount with its currency, and the
+ * date of the FX rate used — with how many days that rate lags the event when it does.
+ * The contract: the original-amount line is `chart.tooltip.originalValue` around `formatFixed(value, 4)`,
+ * followed by the unchanged currency badge; the FX line is `chart.tooltip.fxRateDate` around the rate's day,
+ * then — only when the lag is positive — a space and `chart.tooltip.fxDaysBack` around `formatFixed(days, 0)`.
+ * The original-amount line reads `orig. …` in all four catalogues, so a marker locale — where each of the three
+ * keys reads as a marker of itself — is what proves that line comes from the catalogue.
+ * Those cases are about the WORDS: the day inside the FX line and the day heading the tooltip are compared with
+ * their notation set aside (`sansDay`, either ISO or the house notation), because how a day is written is
+ * T-ISO's, pinned in its own describe — so neither cure holds the other's tests hostage.
  *
- * The contract. The original-amount line is `chart.tooltip.originalValue` around `formatFixed(value, 4)`,
- * followed by the unchanged currency badge; the FX line is `chart.tooltip.fxRateDate` around the rate's date
- * (the raw ISO date: dates are out of scope), then — only when the lag is positive — a space and
- * `chart.tooltip.fxDaysBack` around `formatFixed(days, 0)`.
+ * T-ISO (M-18: every date the user reads is written in the interface language). The house notation of a day in a
+ * tooltip is the lot charts' one, `formatAxisDate(uiLocale(), day, true)`: Intl's numeric year, short month and
+ * numeric day of the calendar day — `4 mar 2024`, `4 mars 2024`, `Mar 4, 2024` (`houseDay`, the oracle, is Intl
+ * itself; a control case ties it to `formatAxisDate`). The contract, after the cure:
+ *   - the axis tooltip's header: a daily point is headed by its day; a weekly one by `chart.tooltip.weekRange`
+ *     around the week's first and last day; a monthly one by the month (already localized) over
+ *     `chart.tooltip.valueAt` around the month's last day;
+ *   - its rows: `chart.tooltip.valueAt` around a day (the reference price's, the current price's, an overlay
+ *     point's representative), the ↩ line's reference target day, the 💱 line's two FX days (`—` for a missing one);
+ *   - an event's tooltip: its heading day, the day of each event listed in an aggregated period, and the day
+ *     inside `chart.tooltip.fxRateDate`;
+ *   - `CandlestickChart` — PriceChartFull's candles, mounted directly with the props PriceChartFull hands it
+ *     (`synthesizeDailyOHLC`, aggregated by `aggregateOHLCV` at a coarser resolution) — heads its tooltip by the
+ *     same three rules.
+ * Every day is the house notation of the interface locale; every word around it is the catalogue's (`$_`).
+ * Red today: each of those days is written as ISO (`2024-03-04`), in English too, where the house notation is
+ * `Mar 4, 2024`.
  *
  * How it is tested: the real component, with ECharts replaced by a recorder (the `GrowthChart.test.ts`
- * pattern: jsdom has no canvas, and pixels are not the subject). The tooltip is the formatter of the scatter
- * series the component names `Events: <type>`, called with the very point that series holds for the event —
- * what ECharts hands it on a hover at the daily resolution — and its HTML is parsed inert in a `<template>`.
- * A line is what `<br>` separates, and the conversion lines are the event entry's last two: the fixture
- * events carry neither a note nor a comparison asset, which would follow them. Expected text is the
- * catalogue's own (`$_`) around figures Intl writes in the interface locale, never typed.
- *
- * Red today: in Italian and French the FX line reads `fx @ …` and `(3d back)`. The original-amount line reads
- * `orig. …` in all four catalogues, so no language can tell the catalogue from a literal there: a marker locale,
- * where each of the three keys reads as a marker of itself, is what proves the line comes from the catalogue.
+ * pattern: jsdom has no canvas, and pixels are not the subject). A tooltip is the formatter the component handed
+ * ECharts, called with what ECharts hands it on a hover: the axis tooltip with the items under the pointer, an
+ * event's with the very point its scatter series (`Events: <type>`) holds. Its HTML is parsed inert in a
+ * `<template>`; a line is what `<br>` separates (the candles' header is the tooltip's first blocks). The event
+ * fixtures carry neither a note nor a comparison asset, so the conversion lines are an entry's last two.
+ * Resolution: it follows the density of points per pixel, so the recorder reports the plot's width — a wide plot
+ * keeps a week and a half daily, a narrow one turns five weeks of calendar days weekly or monthly; each case
+ * proves the resolution it drew at from the x-axis before reading a tooltip.
  *
  * Also stubbed: layout — jsdom measures every box as 0×0 and the chart draws only into a non-empty one, so
  * `getBoundingClientRect` reports a panel-sized box.
@@ -36,9 +54,9 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest
  * The ECharts stand-in — a recorder, not a renderer — answering every call the chart and its helpers make on
  * an instance (`getZr()` for the pointer handlers, `getOption()` for the arrow markers, `getWidth()` for the
  * initial resolution), and keeping every `setOption` payload. `graphic.LinearGradient` is the main series'
- * area fill: kept as its arguments.
+ * area fill: kept as its arguments. `plot.width` is the width `getWidth()` reports: the resolution knob.
  */
-const {chartInstances, echartsModule} = vi.hoisted(() => {
+const {chartInstances, echartsModule, plot} = vi.hoisted(() => {
     interface FakeChart {
         setOptionCalls: Array<{option: Record<string, unknown>}>;
         setOption: (option: Record<string, unknown>) => void;
@@ -58,6 +76,8 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
     }
 
     const chartInstances: FakeChart[] = [];
+    /** The plot's width in px, as `getWidth()` reports it; set per case before mounting (see `beforeEach`). */
+    const plot = {width: 1200};
 
     function createFakeChart(dom: unknown): FakeChart {
         let merged: Record<string, unknown> = {};
@@ -69,8 +89,9 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
                 merged = {...merged, ...option};
             },
             getOption: () => merged,
-            // A week and a half of daily points over 1200 px keeps the chart at 'daily': one event, one point.
-            getWidth: () => 1200,
+            // The density of points per pixel decides the resolution: a week and a half of daily points over
+            // 1200 px keeps the chart at 'daily' (one event, one point); a narrow plot turns it weekly or monthly.
+            getWidth: () => plot.width,
             getHeight: () => 400,
             getDom: () => dom,
             getZr: () => ({on: () => {}, off: () => {}}),
@@ -96,19 +117,25 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         }
     }
 
-    return {chartInstances, echartsModule: {init: (dom: unknown) => createFakeChart(dom), graphic: {LinearGradient}}};
+    return {chartInstances, plot, echartsModule: {init: (dom: unknown) => createFakeChart(dom), graphic: {LinearGradient}}};
 });
 
 vi.mock('echarts', () => echartsModule);
 
+import type {ComponentProps} from 'svelte';
 import {get} from 'svelte/store';
 import {addMessages, waitLocale} from 'svelte-i18n';
 import {cleanup, render, setupI18n, waitFor} from '$test/component';
 import {_} from '$lib/i18n';
+import type {RenderedSignal} from '$lib/charts/signals';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
+import CandlestickChart from './CandlestickChart.svelte';
 import type {LineDataPoint} from './LineChart.svelte';
 import PriceChartFull, {type EventMarker} from './PriceChartFull.svelte';
+import {synthesizeDailyOHLC, type CalendarReturnPointContext} from './priceChartHelpers';
+import {aggregateOHLCV, type ChartResolution} from './timeSeriesAggregation';
 
 type UiLanguage = 'en' | 'it' | 'fr';
 const LANGUAGES = ['it', 'fr'] as const;
@@ -145,6 +172,57 @@ const SAME_DAY: EventMarker = {
     originalCurrencyFlag: '🇺🇸',
     fxRateDate: '2024-03-06',
     fxDaysBack: 0,
+};
+
+/** A plot wide enough to stay daily: DATA's 8 points — or CALENDAR_DAYS' 35 — are far below 1.3 points a pixel. */
+const DAILY_PLOT_WIDTH = 1200;
+/** CALENDAR_DAYS over 10 px: 3.5 days a pixel turns it weekly, and its 5 weeks (0.5 a pixel) keep it there. */
+const WEEKLY_PLOT_WIDTH = 10;
+/** CALENDAR_DAYS over 3 px: even its 5 weeks are 1.7 a pixel, so it turns monthly and stays there. */
+const MONTHLY_PLOT_WIDTH = 3;
+
+/**
+ * Every calendar day from Monday 26 February to Sunday 31 March 2024: five whole weeks, the end of February and
+ * all of March. A point on every day — weekends included — puts each week's and each month's last day on the
+ * axis, which is where the chart places a period's events.
+ */
+const CALENDAR_DAYS: LineDataPoint[] = Array.from({length: 35}, (_unused, index) => ({date: new Date(Date.UTC(2024, 1, 26 + index)).toISOString().slice(0, 10), value: 100 + index}));
+
+/** CALENDAR_DAYS' x-axis drawn weekly — one point per week, on its last day — and monthly. */
+const WEEK_ENDS = ['2024-03-03', '2024-03-10', '2024-03-17', '2024-03-24', '2024-03-31'];
+const MONTH_ENDS = ['2024-02-29', '2024-03-31'];
+
+/** Two dividends in the first week of CALENDAR_DAYS (26 February – 3 March): one weekly point lists both. */
+const WEEK_DIVIDENDS: EventMarker[] = [
+    {date: '2024-02-27', type: 'DIVIDEND', value: 1.25, currency: 'EUR', currencyFlag: '🇪🇺'},
+    {date: '2024-02-29', type: 'DIVIDEND', value: 2.5, currency: 'EUR', currencyFlag: '🇪🇺'},
+];
+
+/**
+ * The calendar return's context of Monday 4 March 2024: a year back is Saturday 4 March 2023, priced on the
+ * Friday before; today's price is Friday's too, converted at Friday's rate; the year-back rate is missing.
+ */
+const CALENDAR_CONTEXT: CalendarReturnPointContext = {
+    status: 'available',
+    referenceTargetDate: '2023-03-04',
+    referencePriceDate: '2023-03-03',
+    currentPriceDate: '2024-03-01',
+    currentFxDate: '2024-03-01',
+    referenceFxDate: null,
+};
+
+/** An overlay whose point of Monday 4 March stands for Friday's observation: its row says so with chart.tooltip.valueAt. */
+const PEER: RenderedSignal = {
+    id: 'peer',
+    label: 'Peer',
+    data: [{date: '2024-03-04', value: 1.5, representativeDate: '2024-03-01'}],
+    color: '#ff7f0e',
+    lineWidth: 1,
+    lineType: 'solid',
+    markerStart: null,
+    markerEnd: null,
+    yAxisIndex: 0,
+    aggregationProfile: 'last_with_range',
 };
 
 type Formatter = (params: unknown) => string;
@@ -204,12 +282,43 @@ function fixed(value: number, digits: number, locale: string): string {
     return new Intl.NumberFormat(locale, {minimumFractionDigits: digits, maximumFractionDigits: digits}).format(value);
 }
 
-/** The two conversion lines of `marker`'s tooltip, as the catalogue and Intl write them in `locale`. */
+/**
+ * The calendar day `iso` (`YYYY-MM-DD`) in the house notation of a tooltip day, as Intl writes it in `locale`:
+ * numeric year, short month, numeric day — `4 mar 2024`, `4 mars 2024`, `Mar 4, 2024`. The oracle of every
+ * T-ISO expectation, never a typed date; the control case below ties it to the lot charts' `formatAxisDate`.
+ */
+function houseDay(iso: string, locale: string): string {
+    const [year, month, day] = iso.split('-').map(Number);
+    return new Intl.DateTimeFormat(locale, {year: 'numeric', month: 'short', day: 'numeric'}).format(new Date(year, month - 1, day));
+}
+
+/** The month of the day `iso` as Intl writes it in `locale` — `febbraio 2024`: the monthly header's first line, localized already. */
+function monthOf(iso: string, locale: string): string {
+    return new Intl.DateTimeFormat(locale, {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${iso}T00:00:00Z`));
+}
+
+/** Where a day stands in a T-EN1 line once its notation is set aside. */
+const DAY = '⟨day⟩';
+
+/**
+ * `line` with the day `iso` replaced by `DAY`, whether written as ISO or in the house notation of the interface
+ * locale. T-EN1's cases are about the words around a day; how the day itself is written is T-ISO's (below).
+ */
+function sansDay(line: string, iso: string): string {
+    return line.split(houseDay(iso, uiLocale())).join(DAY).split(iso).join(DAY);
+}
+
+/** The two conversion lines of `marker`'s tooltip, as the catalogue and Intl write them in `locale` — the rate's day set aside (`DAY`). */
 function conversionLines(marker: EventMarker, locale: string): string[] {
     const original = `${catalogue('chart.tooltip.originalValue', {value: fixed(marker.originalValue!, 4, locale)})} (${marker.originalCurrencyFlag} ${marker.originalCurrency})`;
-    const rateDate = catalogue('chart.tooltip.fxRateDate', {date: marker.fxRateDate!});
+    const rateDate = catalogue('chart.tooltip.fxRateDate', {date: DAY});
     const lag = marker.fxDaysBack! > 0 ? ` ${catalogue('chart.tooltip.fxDaysBack', {days: fixed(marker.fxDaysBack!, 0, locale)})}` : '';
     return [original, `${rateDate}${lag}`];
+}
+
+/** The conversion lines of `marker`'s tooltip as the chart wrote them — its last two — with the rate's day set aside. */
+function writtenConversionLines(lines: string[], marker: EventMarker): string[] {
+    return lines.slice(-2).map((line) => sansDay(line, marker.fxRateDate!));
 }
 
 /** Lines with their no-break spaces spelled out, so a failure tells U+00A0 and U+202F from a space. */
@@ -233,7 +342,7 @@ function mountChart(): void {
 async function bothTooltips(): Promise<{backfilled: string[]; sameDay: string[]}> {
     const backfilled = await tooltipOf(BACKFILLED);
     const sameDay = await tooltipOf(SAME_DAY);
-    expect([backfilled[0], sameDay[0]], 'barrier: each tooltip is the daily one of its event, headed by its date').toEqual([BACKFILLED.date, SAME_DAY.date]);
+    expect([sansDay(backfilled[0], BACKFILLED.date), sansDay(sameDay[0], SAME_DAY.date)], 'barrier: each tooltip is the daily one of its event, headed by its day (in either notation: how the day is written is T-ISO’s)').toEqual([DAY, DAY]);
     return {backfilled, sameDay};
 }
 
@@ -243,6 +352,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
     chartInstances.length = 0;
+    plot.width = DAILY_PLOT_WIDTH;
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 400, width: 800, height: 400, toJSON: () => ({})} as DOMRect);
 });
 
@@ -263,7 +373,7 @@ describe('PriceChartFull — a converted event’s tooltip in the interface lang
 
         const {backfilled, sameDay} = await bothTooltips();
 
-        expect({backfilled: spelled(backfilled.slice(-2)), sameDay: spelled(sameDay.slice(-2))}, `the conversion lines are not in the ${lang} interface's words: the component writes «orig.», «fx @» and «d back» in English`).toEqual({
+        expect({backfilled: spelled(writtenConversionLines(backfilled, BACKFILLED)), sameDay: spelled(writtenConversionLines(sameDay, SAME_DAY))}, `the conversion lines are not in the ${lang} interface's words: the component writes «orig.», «fx @» and «d back» in English`).toEqual({
             backfilled: spelled(conversionLines(BACKFILLED, locale)),
             sameDay: spelled(conversionLines(SAME_DAY, locale)),
         });
@@ -285,22 +395,236 @@ describe('PriceChartFull — a converted event’s tooltip in the interface lang
 
         const {backfilled, sameDay} = await bothTooltips();
 
-        expect({backfilled: backfilled.slice(-2), sameDay: sameDay.slice(-2)}, 'a conversion line is not read from its key: the component still writes it').toEqual({
+        expect({backfilled: writtenConversionLines(backfilled, BACKFILLED), sameDay: writtenConversionLines(sameDay, SAME_DAY)}, 'a conversion line is not read from its key: the component still writes it').toEqual({
             backfilled: conversionLines(BACKFILLED, locale),
             sameDay: conversionLines(SAME_DAY, locale),
         });
     });
 
-    it('English interface: the conversion lines read exactly as they do today — the English catalogue around figures in the interface notation (guard)', async () => {
+    it('English interface: the conversion lines read exactly as they do today — the English catalogue around figures in the interface notation, the rate’s day aside (guard)', async () => {
         const locale = await speak('en');
         expect(locale, 'control: an English interface on jsdom’s en-US browser writes en-US').toBe('en-US');
         mountChart();
 
         const {backfilled, sameDay} = await bothTooltips();
 
-        expect({backfilled: backfilled.slice(-2), sameDay: sameDay.slice(-2)}, 'the English conversion lines moved').toEqual({
+        expect({backfilled: writtenConversionLines(backfilled, BACKFILLED), sameDay: writtenConversionLines(sameDay, SAME_DAY)}, 'the English conversion lines moved').toEqual({
             backfilled: conversionLines(BACKFILLED, locale),
             sameDay: conversionLines(SAME_DAY, locale),
         });
+    });
+});
+
+// =========================================================================
+// T-ISO — every day a tooltip writes, in the house notation of the interface locale
+// =========================================================================
+
+/** What ECharts hands an axis tooltip for one series under the pointer. */
+interface AxisItem {
+    seriesName: string;
+    value: number | number[];
+    seriesType?: string;
+}
+
+/** The option of the last full draw: the last `setOption` that carries the axis tooltip. */
+function lastDraw(): Record<string, unknown> {
+    const calls = chartInstances.at(-1)?.setOptionCalls ?? [];
+    const draw = [...calls].reverse().find((call) => typeof (call.option.tooltip as {formatter?: unknown} | undefined)?.formatter === 'function');
+    return draw?.option ?? {};
+}
+
+/** The days on the last draw's x-axis: one per bucket, so they tell the resolution it drew at. */
+function axisDays(): string[] {
+    const xAxis = lastDraw().xAxis;
+    const axis = (Array.isArray(xAxis) ? xAxis[0] : xAxis) as {data?: string[]} | undefined;
+    return axis?.data ?? [];
+}
+
+/** Waits for the last draw's x-axis to hold `days`: the barrier that the chart drew at the resolution a case reads. */
+async function drawnOver(days: string[], resolution: ChartResolution): Promise<void> {
+    await waitFor(() => expect(axisDays(), `barrier: the chart drew ${resolution}, one point per bucket`).toEqual(days), {timeout: 5_000});
+}
+
+/** The axis tooltip's HTML with the pointer on `day` over `items`, from the formatter the chart handed ECharts. */
+function axisTooltipHtml(day: string, items: AxisItem[]): string {
+    const formatter = (lastDraw().tooltip as {formatter: Formatter}).formatter;
+    return formatter(items.map((item) => ({axisValue: day, seriesType: 'line', color: '#2563eb', ...item})));
+}
+
+/** What a line says in its last brackets — `(…)` closing it — or undefined when it closes on none. */
+function lastBrackets(line: string | undefined): string | undefined {
+    return /\(([^()]*)\)$/.exec(line ?? '')?.[1];
+}
+
+/** The tooltip of the one coarse point that lists `markers` — their period — from the formatter of the series that holds it. */
+async function periodTooltipOf(markers: EventMarker[]): Promise<string[]> {
+    const days = markers.map((marker) => marker.date).join(',');
+    await waitFor(() => expect(eventSeries().length, 'barrier: the chart drew its event series').toBeGreaterThan(0), {timeout: 5_000});
+    for (const series of eventSeries()) {
+        const point = series.data.find((candidate) => candidate.markers?.map((marker) => marker.date).join(',') === days);
+        if (point) return tooltipLines(series.tooltip.formatter({data: point}));
+    }
+    throw new Error(`No event point lists the period of ${days}: the chart is not at a coarser resolution, or the period's last day is not on its axis`);
+}
+
+/** The day each listed event is dated by: the line before each line that names an event of `type`. */
+function eventDaysIn(lines: string[], type: string): string[] {
+    return lines.flatMap((line, index) => (index > 0 && line === type ? [lines[index - 1]] : []));
+}
+
+/** PriceChartFull over `props` (DATA in euros by default), in the current interface language, on a plot `width` px wide. */
+function mountPriceChart(props: Partial<ComponentProps<typeof PriceChartFull>>, width = DAILY_PLOT_WIDTH): void {
+    plot.width = width;
+    render(PriceChartFull, {props: {data: DATA, currency: 'EUR', ...props}});
+}
+
+describe('PriceChartFull — every day its tooltips write, in the house notation of the interface locale (T-ISO)', () => {
+    it('control: the oracle writes a day as the lot charts’ tooltips do — formatAxisDate(locale, day, true) — and never as ISO, in it, fr and en-US', () => {
+        const written = ['it', 'fr', 'en-US'].flatMap((locale) => ['2024-03-04', '2024-02-29', '2023-03-03'].map((day) => ({locale, day, oracle: houseDay(day, locale), lots: formatAxisDate(locale, day, true)})));
+
+        expect(
+            written.filter(({oracle, lots}) => oracle !== lots),
+            'the oracle and the lot charts’ formatter disagree',
+        ).toEqual([]);
+        expect(
+            written.filter(({oracle, day}) => oracle === day),
+            'a locale writes a day as ISO: no red could tell the cure',
+        ).toEqual([]);
+    });
+
+    it.each(['it', 'fr', 'en'] as const)('%s interface: a daily point’s axis tooltip is headed by its day in the house notation', async (lang) => {
+        const locale = await speak(lang);
+        mountPriceChart({});
+        await drawnOver(
+            DATA.map((point) => point.date),
+            'daily',
+        );
+
+        const [header] = tooltipLines(axisTooltipHtml('2024-03-04', [{seriesName: 'EUR', value: 105}]));
+
+        expect(header, `the daily header is not the day in the ${lang} interface’s notation (${locale}): the tooltip writes the ISO day`).toBe(houseDay('2024-03-04', locale));
+    });
+
+    it.each(LANGUAGES)('%s interface: a weekly point’s axis tooltip is headed by chart.tooltip.weekRange around the week’s first and last day in the house notation', async (lang) => {
+        const locale = await speak(lang);
+        mountPriceChart({data: CALENDAR_DAYS}, WEEKLY_PLOT_WIDTH);
+        await drawnOver(WEEK_ENDS, 'weekly');
+
+        const [header] = tooltipLines(axisTooltipHtml('2024-03-03', [{seriesName: 'EUR', value: 106}]));
+
+        expect(header, `the week is not bounded by days in the ${lang} interface’s notation: weekRange gets the ISO days`).toBe(catalogue('chart.tooltip.weekRange', {start: houseDay('2024-02-26', locale), end: houseDay('2024-03-03', locale)}));
+    });
+
+    it.each(LANGUAGES)('%s interface: a monthly point’s axis tooltip is headed by its month, over chart.tooltip.valueAt around the month’s last day in the house notation', async (lang) => {
+        const locale = await speak(lang);
+        mountPriceChart({data: CALENDAR_DAYS}, MONTHLY_PLOT_WIDTH);
+        await drawnOver(MONTH_ENDS, 'monthly');
+
+        const [month, valueAt] = tooltipLines(axisTooltipHtml('2024-02-29', [{seriesName: 'EUR', value: 103}]));
+
+        expect({month, valueAt}, `the month’s «value at» day is not in the ${lang} interface’s notation: valueAt gets the ISO day (the month above it is localized already)`).toEqual({
+            month: catalogue('chart.tooltip.monthLabel', {month: monthOf('2024-02-29', locale)}),
+            valueAt: catalogue('chart.tooltip.valueAt', {date: houseDay('2024-02-29', locale)}),
+        });
+    });
+
+    it.each(LANGUAGES)('%s interface: the calendar return’s rows — ↩ the reference day · valueAt its price’s day, 📅 valueAt the current price’s day, 💱 the two FX days with — for a missing one — and an overlay’s valueAt its representative day: every day in the house notation', async (lang) => {
+        const locale = await speak(lang);
+        // As the asset page draws the calendar return: percentages, no delta, the context of each point.
+        mountPriceChart({valueUnit: 'percentage', showMainDelta: false, mainPointContext: new Map([['2024-03-04', CALENDAR_CONTEXT]]), overlaySignals: [PEER]});
+        await drawnOver(
+            DATA.map((point) => point.date),
+            'daily',
+        );
+
+        const lines = tooltipLines(
+            axisTooltipHtml('2024-03-04', [
+                {seriesName: 'EUR', value: 4},
+                {seriesName: PEER.label, value: 1.5},
+            ]),
+        );
+
+        expect(
+            {
+                reference: lines.find((line) => line.startsWith('↩')),
+                currentPrice: lines.find((line) => line.startsWith('📅')),
+                fx: lines.find((line) => line.startsWith('💱')),
+                representative: lastBrackets(lines.find((line) => line.startsWith(`${PEER.label}:`))),
+            },
+            `the rows’ days are not in the ${lang} interface’s notation: ↩, 📅, 💱 and the overlay’s «value at» write ISO days`,
+        ).toEqual({
+            reference: `↩ ${houseDay('2023-03-04', locale)} · ${catalogue('chart.tooltip.valueAt', {date: houseDay('2023-03-03', locale)})}`,
+            currentPrice: `📅 ${catalogue('chart.tooltip.valueAt', {date: houseDay('2024-03-01', locale)})}`,
+            fx: `💱 ${houseDay('2024-03-01', locale)} / —`,
+            representative: catalogue('chart.tooltip.valueAt', {date: houseDay('2024-03-01', locale)}),
+        });
+    });
+
+    it.each(LANGUAGES)('%s interface: a daily event’s tooltip is headed by its day, and its FX line is chart.tooltip.fxRateDate around the rate’s day — both in the house notation', async (lang) => {
+        const locale = await speak(lang);
+        mountPriceChart({eventMarkers: [BACKFILLED]});
+
+        const lines = await tooltipOf(BACKFILLED);
+
+        expect({heading: lines[0], fx: lines.at(-1)}, `the event’s days are not in the ${lang} interface’s notation: its heading and fxRateDate write ISO days`).toEqual({
+            heading: houseDay(BACKFILLED.date, locale),
+            fx: `${catalogue('chart.tooltip.fxRateDate', {date: houseDay(BACKFILLED.fxRateDate!, locale)})} ${catalogue('chart.tooltip.fxDaysBack', {days: fixed(BACKFILLED.fxDaysBack!, 0, locale)})}`,
+        });
+    });
+
+    it.each(LANGUAGES)('%s interface: a weekly event tooltip lists the events of its period, each dated in the house notation', async (lang) => {
+        const locale = await speak(lang);
+        mountPriceChart({data: CALENDAR_DAYS, eventMarkers: WEEK_DIVIDENDS}, WEEKLY_PLOT_WIDTH);
+        await drawnOver(WEEK_ENDS, 'weekly');
+
+        const lines = await periodTooltipOf(WEEK_DIVIDENDS);
+        expect(lines, 'barrier: the tooltip lists the events of its period').toContain(catalogue('chart.tooltip.eventsInPeriod', {}));
+
+        expect(eventDaysIn(lines, 'DIVIDEND'), `the period’s events are not dated in the ${lang} interface’s notation: each entry writes its ISO day`).toEqual(WEEK_DIVIDENDS.map((marker) => houseDay(marker.date, locale)));
+    });
+});
+
+describe('CandlestickChart — the price chart’s candles: the tooltip’s header in the house notation (T-ISO)', () => {
+    /** CandlestickChart as PriceChartFull mounts it: `synthesizeDailyOHLC` of the daily data, aggregated at a coarser resolution. */
+    function mountCandles(daily: LineDataPoint[], resolution: ChartResolution): void {
+        const candles = synthesizeDailyOHLC(daily);
+        render(CandlestickChart, {props: {data: resolution === 'daily' ? candles : aggregateOHLCV(candles, resolution), resolution, currency: 'EUR'}});
+    }
+
+    /** The candles' tooltip header with the pointer on `day`: its first `blocks` blocks — the day or the week, or the month over its valueAt. */
+    function candleHeader(day: string, blocks: number): string[] {
+        const template = document.createElement('template');
+        template.innerHTML = axisTooltipHtml(day, [{seriesName: 'EUR', seriesType: 'candlestick', value: [0, 100, 101, 99, 102]}]);
+        return [...template.content.children].slice(0, blocks).map((block) => (block.textContent ?? '').replace(/[ \t\r\n]+/g, ' ').trim());
+    }
+
+    it.each(LANGUAGES)('%s interface: a daily candle’s tooltip is headed by its day in the house notation', async (lang) => {
+        const locale = await speak(lang);
+        mountCandles(DATA, 'daily');
+        await drawnOver(
+            DATA.map((point) => point.date),
+            'daily',
+        );
+
+        expect(candleHeader('2024-03-04', 1), `the candle’s day is not in the ${lang} interface’s notation: the header writes the ISO day`).toEqual([houseDay('2024-03-04', locale)]);
+    });
+
+    it.each(LANGUAGES)('%s interface: a weekly candle’s tooltip is headed by chart.tooltip.weekRange around the week’s first and last day in the house notation', async (lang) => {
+        const locale = await speak(lang);
+        mountCandles(CALENDAR_DAYS, 'weekly');
+        await drawnOver(WEEK_ENDS, 'weekly');
+
+        expect(candleHeader('2024-03-03', 1), `the candle’s week is not bounded by days in the ${lang} interface’s notation: weekRange gets the ISO days`).toEqual([catalogue('chart.tooltip.weekRange', {start: houseDay('2024-02-26', locale), end: houseDay('2024-03-03', locale)})]);
+    });
+
+    it.each(LANGUAGES)('%s interface: a monthly candle’s tooltip is headed by its month, over chart.tooltip.valueAt around the month’s last day in the house notation', async (lang) => {
+        const locale = await speak(lang);
+        mountCandles(CALENDAR_DAYS, 'monthly');
+        await drawnOver(MONTH_ENDS, 'monthly');
+
+        expect(candleHeader('2024-02-29', 2), `the candle’s «value at» day is not in the ${lang} interface’s notation: valueAt gets the ISO day (the month above it is localized already)`).toEqual([
+            catalogue('chart.tooltip.monthLabel', {month: monthOf('2024-02-29', locale)}),
+            catalogue('chart.tooltip.valueAt', {date: houseDay('2024-02-29', locale)}),
+        ]);
     });
 });
