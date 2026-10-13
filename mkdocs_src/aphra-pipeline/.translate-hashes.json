@@ -463,7 +463,7 @@
     }
   },
   "user/brokers/index.en.md": {
-    "md5": "c4f188b70455bb112897c67fe0e93488",
+    "md5": "1d0ef7d1c98c7634f3438e1642bfafa3",
     "langs_done": [
       "es",
       "fr",
@@ -483,7 +483,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 237.3,
-        "stamped_at": "2026-10-12T02:45:01.880986+00:00",
+        "stamped_at": "2026-10-13T02:45:49.670582+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -498,7 +498,7 @@
         "elapsed_s": 222.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=69, translated=70 (Δ+1)\n  L109: src=1 trn=2\n    EN: The Brokers page, the **Add Broker** form and the broker page each have a short contextual guide: replay them from [Sett\n    TR: La page **Courtiers**, le formulaire **Ajouter un courtier** et la page du courtier disposent chacun d'un bref guide con\n\nSOURCE_OUTLINE (for reference):\n  # 🏦 Brokers\n    ## ➕ Create a broker\n    ## ✏️ Edit or delete a broker\n    ## 🗂️ Inside a broker\n    ## 📈 Overview tab\n    ## 🔍 Positions tab\n    ## 📑 In this section",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-12T02:45:01.880986+00:00",
+        "stamped_at": "2026-10-13T02:45:49.670582+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -511,7 +511,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 260.4,
-        "stamped_at": "2026-10-12T02:45:01.880986+00:00",
+        "stamped_at": "2026-10-13T02:45:49.670582+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -1307,7 +1307,7 @@
     }
   },
   "gallery/desktop.en.md": {
-    "md5": "13e3e42fdf3b60e2d6e6947dd8fa6dad",
+    "md5": "7cd49d23cc1ab40cdd3c3586abbcdf80",
     "langs_done": [
       "es",
       "fr",
@@ -1326,7 +1326,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 326.3,
-        "stamped_at": "2026-10-10T09:59:46.279548+00:00",
+        "stamped_at": "2026-10-13T02:45:34.302846+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -1339,7 +1339,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 348.5,
-        "stamped_at": "2026-10-10T09:59:46.279548+00:00",
+        "stamped_at": "2026-10-13T02:45:34.302846+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -1352,14 +1352,14 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 293.1,
-        "stamped_at": "2026-10-10T09:59:46.279548+00:00",
+        "stamped_at": "2026-10-13T02:45:34.302846+00:00",
         "stamped_by": "translate-stamp"
       }
     },
     "last_translated": "2026-10-10T07:49:11.086759+00:00"
   },
   "gallery/mobile.en.md": {
-    "md5": "50cbadb14e8447aed1cb365f36eba2a8",
+    "md5": "bd77fa67c3e1a377dbea6ccbeead3eb4",
     "langs_done": [
       "es",
       "fr",
@@ -1378,7 +1378,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 318.7,
-        "stamped_at": "2026-10-10T09:59:48.828461+00:00",
+        "stamped_at": "2026-10-13T02:45:41.106310+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -1391,7 +1391,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 274.3,
-        "stamped_at": "2026-10-10T09:59:48.828461+00:00",
+        "stamped_at": "2026-10-13T02:45:41.106310+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -1404,7 +1404,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 291.0,
-        "stamped_at": "2026-10-10T09:59:48.828461+00:00",
+        "stamped_at": "2026-10-13T02:45:41.106310+00:00",
         "stamped_by": "translate-stamp"
       }
     },
@@ -6610,7 +6610,7 @@
     }
   },
   "user/dashboard/positions.en.md": {
-    "md5": "004b8c55190d5cce55b5b1e14ad01ef0",
+    "md5": "bd22b078c74b5748ddc4444058bf3aad",
     "langs_done": [
       "es",
       "fr",
@@ -6630,7 +6630,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 228.0,
-        "stamped_at": "2026-10-12T02:45:09.994294+00:00",
+        "stamped_at": "2026-10-13T02:45:58.698889+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6643,7 +6643,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 368.9,
-        "stamped_at": "2026-10-12T02:45:09.994294+00:00",
+        "stamped_at": "2026-10-13T02:45:58.698889+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6656,7 +6656,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 311.0,
-        "stamped_at": "2026-10-12T02:45:09.994294+00:00",
+        "stamped_at": "2026-10-13T02:45:58.698889+00:00",
         "stamped_by": "translate-stamp"
       }
     }

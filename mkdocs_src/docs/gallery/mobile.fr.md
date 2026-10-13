@@ -128,13 +128,13 @@ Allocation par type, secteur et zone géographique — instantané actuel ou év
 
 ### 📋 Positions
 
-Basculez entre Positions et Performance, puis comparez les données en vue tableau ou carte — agrégées sur l'ensemble de votre portefeuille.
+Basculez entre Portefeuille et Période, puis comparez les données en vue tableau ou carte — agrégées sur l'ensemble de votre portefeuille.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-mobile-11" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Positions / Tableau" alt="Positions — Tableau des positions">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Positions / Carte" alt="Positions — Carte des positions">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Performance / Tableau" alt="Positions — Tableau de performance">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Performance / Carte" alt="Positions — Carte de performance">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Portefeuille / Tableau" alt="Positions — Tableau du portefeuille">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portefeuille / Carte" alt="Positions — Carte du portefeuille">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Période / Tableau" alt="Positions — Tableau de la période">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Période / Carte" alt="Positions — Carte de la période">
 </div>
 
 ### 💸 Onglet Transactions
@@ -531,13 +531,13 @@ Gérez la copropriété et les rôles d'accès avec la modale de partage, optimi
 
 ### 📊 Positions du courtier
 
-Les bascules tactiles Positions et Performance permutent entre les vues tableau et carte sur mobile.
+Le sélecteur Portefeuille / Période change la vue ; les icônes Tableau / Carte l'affichent en tableau ou en graphique.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-mobile-8" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Positions / Tableau" alt="Positions du courtier — Tableau des positions">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Positions / Carte" alt="Positions du courtier — Carte des positions">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Performance / Tableau" alt="Positions du courtier — Tableau de performance">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Performance / Carte" alt="Positions du courtier — Carte de performance">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Portefeuille / Tableau" alt="Positions du courtier — Tableau du portefeuille">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portefeuille / Carte" alt="Positions du courtier — Carte du portefeuille">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Période / Tableau" alt="Positions du courtier — Tableau de la période">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Période / Carte" alt="Positions du courtier — Carte de la période">
 </div>
 
 ### ℹ️ Informations sur le courtier
