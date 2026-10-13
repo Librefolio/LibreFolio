@@ -25,9 +25,12 @@
  *
  * Offline and read-only. Every origin but the app's is refused, and POST /assets/prices/current — which /assets polls
  * on load and every 30 s, asking the live providers and writing today's row on shared seeded assets — is answered
- * empty, as in toolbar-width-sweep.spec.ts. TEST_USER only reads and is grandfathered completed on every onboarding
- * flow (populate_mock_data), read back over the API, so no welcome redirect or tour moves the page. The one session
- * state a test changes is its own browser context's cookie jar. Routes are removed after each test.
+ * empty, as in toolbar-width-sweep.spec.ts. The 401 test also answers GET /fx/providers/routes with zero pairs: /assets
+ * fetches its FX pairs' rates without awaiting them, outside its data-busy, and that wave would otherwise still be
+ * calling the backend when the test clears the cookies, so its 401 could come before /brokers'. TEST_USER only reads
+ * and is grandfathered completed on every onboarding flow (populate_mock_data), read back over the API, so no welcome
+ * redirect or tour moves the page. The one session state a test changes is its own browser context's cookie jar. Routes
+ * are removed after each test.
  *
  * Desktop project (the runner's default); the 401 test opens the off-canvas sidebar first when run on mobile.
  */
@@ -263,6 +266,11 @@ test.describe('App start: only a 401 signs out, and the login keeps the page (K 
     test('a 401 in the middle of a session goes to the login carrying the page it happened on', async ({page, context}, testInfo) => {
         await signIn(page);
         await expectNoOnboardingDue(page);
+        // /assets loads its FX pairs' rates (GET /fx/providers/routes, then one POST /fx/currencies/convert per pair)
+        // without awaiting them, once its two load waves are in — so outside the data-busy awaited below, and still in
+        // flight when the cookies go: a convert answering 401 there would send the login to /assets ahead of /brokers.
+        // Zero pairs, answered here, and that wave never reaches the backend; the cookie clear and /brokers' 401 stay real.
+        await page.route('**/api/v1/fx/providers/routes', (route) => (route.request().method() === 'GET' ? route.fulfill({json: {items: []}}) : route.fallback()));
         await navigateTo(page, '/assets');
         await expectAssetsReady(page);
         // Mark the running app: the login must come from inside it — the 401 interceptor — not from a fresh start.
