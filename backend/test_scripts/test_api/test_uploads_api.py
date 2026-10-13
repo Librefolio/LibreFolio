@@ -23,7 +23,6 @@ import pytest
 
 from backend.app.api.v1 import uploads as uploads_api
 from backend.app.config import get_settings
-from backend.app.services.brim_providers.broker_schwab.plugin import SchwabBrokerProvider
 from backend.app.services.provider_registry import BRIMProviderRegistry
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
@@ -139,7 +138,7 @@ def media_type(response: httpx.Response) -> str:
 async def bundled_icon_problem(client: httpx.AsyncClient, code: str, icon_url: str) -> str | None:
     """GET a BRIM plugin's bundled icon on the test server; what is wrong with the answer (status, image type of the file, its bytes), or None.
 
-    ``icon_url`` must start with ``BRIM_STATIC_PREFIX``: the request goes to the test server, never to a broker's site."""
+    ``icon_url`` must start with ``BRIM_STATIC_PREFIX``: the request goes to the test server, never to a third party."""
     asset_path = uploads_api.PLUGIN_STATIC_DIRS["brim"] / icon_url.removeprefix(BRIM_STATIC_PREFIX)
     expected_type = mimetypes.guess_type(asset_path.name)[0] or ""
     response = await client.get(f"{SERVER_BASE}{icon_url}", timeout=TIMEOUT)
@@ -764,33 +763,11 @@ class TestPluginStatic:
             print_success("✓ Served existing plugin asset")
 
     @pytest.mark.asyncio
-    async def test_plugin_static_serves_schwab_icon(self, test_server):
-        """UPLOAD-010B: Charles Schwab's plugin icon is its logo bundled with the plugins, served as a PNG (45_pluginModules, U-6).
-
-        Since 13/10 Chromium blocks the favicon www.schwab.com serves (ERR_BLOCKED_BY_ORB), so the icon must be a file of the BRIM
-        static folder. That is asserted before any request: this test never asks anything of the broker's site."""
-        print_section("UPLOAD-010B: Plugin static serves Schwab's bundled icon")
-
-        icon_url = SchwabBrokerProvider().icon_url
-        assert icon_url and icon_url.startswith(BRIM_STATIC_PREFIX), f"broker_schwab's icon_url {icon_url!r} is not a file of the BRIM static folder ({BRIM_STATIC_PREFIX}...): nothing is requested"
-        asset_path = uploads_api.PLUGIN_STATIC_DIRS["brim"] / icon_url.removeprefix(BRIM_STATIC_PREFIX)
-
-        async with httpx.AsyncClient() as client:
-            await create_user_and_login(client)
-            response = await client.get(f"{SERVER_BASE}{icon_url}", timeout=TIMEOUT)
-
-            assert response.status_code == 200, f"GET {icon_url}: {response.status_code} {response.text[:200]}"
-            assert media_type(response) == "image/png", f"GET {icon_url}: content-type {response.headers.get('content-type')!r}"
-            assert response.content == asset_path.read_bytes(), f"GET {icon_url}: {len(response.content)} bytes that are not the file {asset_path}"
-
-            print_success("✓ Schwab's bundled icon served as a PNG")
-
-    @pytest.mark.asyncio
     async def test_plugin_static_serves_every_bundled_brim_icon(self, test_server):
         """UPLOAD-010C: Every BRIM plugin whose icon_url is a file of the static folder gets it served: 200, the image type of the file, its bytes.
 
-        The plugins as GET /brokers/import/plugins lists them: Scalable's two since 37_brimScalable, Schwab's since U-6. Only icons under
-        BRIM_STATIC_PREFIX are requested, and only from the test server."""
+        The plugins as GET /brokers/import/plugins lists them: Scalable's two since 37_brimScalable. Only icons under BRIM_STATIC_PREFIX are
+        requested, and only from the test server."""
         print_section("UPLOAD-010C: Plugin static serves every bundled BRIM icon")
 
         icons = {info.code: info.icon_url for info in BRIMProviderRegistry.list_plugin_info() if (info.icon_url or "").startswith(BRIM_STATIC_PREFIX)}
