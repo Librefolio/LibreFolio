@@ -46,6 +46,7 @@ import {
     formatMonthLabel,
     formatTruncatedGhostLabel,
     getBucketInfo,
+    bucketSpanUpTo,
     getVisibleDailyPoints,
     resolveActivePointIndex,
     resolveZoomBounds,
@@ -54,6 +55,7 @@ import {
     synthesizeDailyOHLC,
     toAbsoluteValue,
     toDisplaySeries,
+    type BucketInfo,
     type EventScatterContext,
 } from './priceChartHelpers';
 import {aggregateLineSeries, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
@@ -828,6 +830,62 @@ describe('getBucketInfo', () => {
         const point = {date: '2024-01-03', value: 10, bucketStart: 20240101 as unknown as string};
         const info = getBucketInfo(point as LineDataPoint, 'weekly');
         expect(info).toEqual({bucketStart: '2024-01-01', bucketEnd: '2024-01-03'});
+    });
+});
+
+// ===========================================================================
+// bucketSpanUpTo — the span a coarse point's tooltip header names
+// ===========================================================================
+
+describe('bucketSpanUpTo', () => {
+    /*
+     * A weekly or monthly point is dated by its bucket's last data point (`aggregateLineSeries`,
+     * `aggregateOHLCV`), while `bucketEnd` keeps the bucket's theoretical end: the Sunday, the month's last
+     * day. In a whole bucket the two are one day; in the open one — the week or month still running, a series
+     * that stops inside a period — the point sits on its last data day, and a header spanning to `bucketEnd`
+     * names a day with no data, or one still to come.
+     *
+     * The contract: `bucketSpanUpTo(date, info)` is the span up to the point's own day. When
+     * `info.bucketStart <= date < info.bucketEnd` (ISO string order) it is `{bucketStart, bucketEnd: date}`;
+     * otherwise `info` as it is — a whole bucket (the point on its end), a date outside the bucket, or no day
+     * at all. Pure: the bucket it is given is left untouched.
+     */
+
+    /** The ISO week of Monday 11 March 2024, Sunday 17 included. */
+    const WEEK: BucketInfo = {bucketStart: '2024-03-11', bucketEnd: '2024-03-17'};
+    /** March 2024, the 31st included. */
+    const MONTH: BucketInfo = {bucketStart: '2024-03-01', bucketEnd: '2024-03-31'};
+
+    /** The helper, once a barrier has proved `priceChartHelpers` exports it, next to `getBucketInfo`. */
+    function spanUpTo(date: string, info: BucketInfo): BucketInfo {
+        expect(bucketSpanUpTo, 'barrier: priceChartHelpers exports bucketSpanUpTo').toBeTypeOf('function');
+        return bucketSpanUpTo(date, info);
+    }
+
+    it.each([
+        {name: 'open week, last data on Wed 13', date: '2024-03-13', info: WEEK, span: {bucketStart: '2024-03-11', bucketEnd: '2024-03-13'}},
+        {name: 'open month, last data on the 13th', date: '2024-03-13', info: MONTH, span: {bucketStart: '2024-03-01', bucketEnd: '2024-03-13'}},
+        {name: 'point on its first day: one day', date: '2024-03-11', info: WEEK, span: {bucketStart: '2024-03-11', bucketEnd: '2024-03-11'}},
+    ])('ends the span on the point’s own day — $name', ({date, info, span}) => {
+        expect(spanUpTo(date, info)).toEqual(span);
+    });
+
+    it.each([
+        {name: 'whole week, point on Sunday 17', date: '2024-03-17', info: WEEK},
+        {name: 'whole month, point on the 31st', date: '2024-03-31', info: MONTH},
+        {name: 'a date before the bucket', date: '2024-03-10', info: WEEK},
+        {name: 'a date after the bucket', date: '2024-03-18', info: WEEK},
+        {name: 'no day at all', date: '', info: WEEK},
+    ])('keeps the bucket as it is — $name', ({date, info}) => {
+        expect(spanUpTo(date, info)).toEqual(info);
+    });
+
+    it('leaves the bucket it is given untouched', () => {
+        const info: BucketInfo = {...WEEK};
+
+        spanUpTo('2024-03-13', info);
+
+        expect(info, 'bucketSpanUpTo mutated the bucket it was given').toEqual(WEEK);
     });
 });
 

@@ -241,6 +241,17 @@ export function getBucketInfo(point: LineDataPoint, currentResolution: ChartReso
 }
 
 /**
+ * The span an aggregated point's tooltip names: its bucket from the first day up to the point's own day,
+ * the last day with data that the line or the candle renders the bucket at. A whole week or month ends on
+ * its bucket end, because the read path fills every calendar day; the one still running, or a series that
+ * stops inside it, ends on its last data point, not on a day without data or still to come. A date outside
+ * the bucket, or no day at all, leaves the bucket whole.
+ */
+export function bucketSpanUpTo(date: string, info: BucketInfo): BucketInfo {
+    return ISO_DATE_PATTERN.test(date) && date >= info.bucketStart && date < info.bucketEnd ? {bucketStart: info.bucketStart, bucketEnd: date} : info;
+}
+
+/**
  * Fill in OHLC for a line series that may only carry `value`. Open borrows the
  * previous point's close (the first point opens at its own close); high/low
  * default to the open/close envelope. `value` is normalized to close so the two

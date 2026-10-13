@@ -31,7 +31,7 @@
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
     import {downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
-    import {formatMonthLabel, getBucketInfo} from './priceChartHelpers';
+    import {bucketSpanUpTo, formatMonthLabel, getBucketInfo} from './priceChartHelpers';
     import {buildCandleSeriesData, computePercentageBase, formatCandlePrice, formatVolume, hasRenderableVolume, isBullishBar, parseCandleTooltipValue} from './candlestickChartHelpers';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {truncateName} from '$lib/utils/text';
@@ -192,7 +192,8 @@
         }
 
         const dark = isDarkProp ?? document.documentElement.classList.contains('dark');
-        const info = bucketInfo ?? {bucketStart: date, bucketEnd: date};
+        // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
+        const info = bucketSpanUpTo(date, bucketInfo ?? {bucketStart: date, bucketEnd: date});
 
         if (resolution === 'weekly') {
             return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</div>`;
