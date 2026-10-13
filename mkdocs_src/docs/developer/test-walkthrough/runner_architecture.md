@@ -228,10 +228,12 @@ and those are precisely the ones that get forgotten.
 
 !!! example "The bug this rule was written from"
 
-    `tx-clone.spec.ts` clones "the first paired giver row on editable brokers" and commits it for
-    real. That row is the `delete-safe` ETH transfer. `tx-delete.spec.ts` then deletes that pair and
-    asserts nothing matching survives — and found the clone. Neither test was wrong; the implicit
-    contract between them was.
+    `tx-clone.spec.ts` cloned "the first paired giver row on editable brokers" and committed it for
+    real. That row was the `delete-safe` ETH transfer. `tx-delete.spec.ts` then deleted that pair and
+    asserted nothing matching survived — and found the clone. Neither test was wrong; the implicit
+    contract between them was. Both sides have since been fixed: `tx-clone` commits only onto a
+    broker or an account of its own and deletes what it commits, and `tx-delete` deletes only rows
+    it creates.
 
 #### `--workers` reaches Playwright too
 
@@ -557,10 +559,12 @@ per worker, two calls per file).
 
 !!! danger "Per file, not per test — and the difference is measurable"
 
-    Cleaning after every *test* looks tidier and is wrong. Specs are written sequentially:
-    `tx-commit-all-types` commits a BUY and then sells part of it, `tx-delete` creates a pair in one
-    test and deletes it in the next. Wiping between tests breaks those chains — tried on the full
-    `transactions/` directory, it turned three reds into five.
+    Cleaning after every *test* looks tidier and is wrong. When this was measured, specs were written
+    sequentially: `tx-commit-all-types` committed a BUY and then sold part of it, `tx-delete` created
+    a pair in one test and deleted it in the next. Wiping between tests broke those chains — tried on
+    the full `transactions/` directory, it turned three reds into five. Neither spec chains any more
+    (`tx-commit-all-types` funds each SELL inside its own batch, and `tx-delete` deletes only rows it
+    creates), but state may still accumulate inside a file, and the cleanup must not be what breaks it.
 
     What consolidation removed was the *inter-file* reset: before it, every spec file ran in its own
     process against a freshly populated database. So that is the invariant to restore, and no more
@@ -574,18 +578,19 @@ worse than the defect being cured.
 
 #### The rollback has to work in both directions
 
-Deleting what a spec *added* is only half the invariant. `tx-delete` **destroys** mock rows — that is
-its job — and no API call can bring back a row with its original id and its original half of a linked
-pair. What follows is a failure that never names the culprit:
+Deleting what a spec *added* is only half the invariant. A spec that **destroys** mock rows —
+`tx-delete` did, until its confirm tests moved to rows they create on a disposable account — cannot
+be repaired that way: no API call can bring back a row with its original id and its original half of
+a linked pair. What followed was a failure that never named the culprit:
 
-| | `tx-picker-pagination` alone, fresh database | `tx-picker-pagination` on the database the suite leaves behind |
+| | `tx-picker-pagination` alone, fresh database | `tx-picker-pagination` on the database the suite left behind |
 |---|---|---|
 | Outcome | **5 passed** | **4 failed** |
 
-With fewer rows in the table, the spec's first two checkbox clicks land on a *linked pair*; the bulk
-modal treats it as a single entity and opens a form modal by itself; four tests then time out
-clicking a button behind that modal's backdrop. The error talks about a `tx-form-modal` intercepting
-pointer events and says nothing about `tx-delete`, two files earlier in alphabetical order. It is the
+With fewer rows in the table, the spec's first two checkbox clicks landed on a *linked pair*; the bulk
+modal treated it as a single entity and opened a form modal by itself; four tests then timed out
+clicking a button behind that modal's backdrop. The error talked about a `tx-form-modal` intercepting
+pointer events and said nothing about `tx-delete`, which had run earlier in the same pass. It is the
 same family as row inflation, mirrored: **row deflation**.
 
 So `restore()` compares the id set against the opening snapshot. If even one baseline id has gone

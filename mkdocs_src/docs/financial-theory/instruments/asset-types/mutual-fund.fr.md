@@ -29,7 +29,7 @@ Un **fonds commun de placement** est un véhicule d'investissement géré profes
 ## 📐 Calcul du NAV
 
 $$
-\text{VNI} = \frac{\text{Actifs Totaux} - \text{Passifs Totaux}}{\text{Nombre de parts en circulation}}
+\text{NAV} = \frac{\text{Actifs Totaux} - \text{Passifs Totaux}}{\text{Nombre de parts en circulation}}
 $$
 
 Contrairement aux ETF, les fonds communs de placement ne s'échangent qu'au NAV de fin de journée — vous ne pouvez pas acheter ou vendre aux prix intrajournaliers.
