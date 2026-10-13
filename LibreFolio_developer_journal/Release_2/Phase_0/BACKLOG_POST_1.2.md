@@ -498,23 +498,34 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   mai chiamata. Da togliere, oppure, se una colonna adotta `relative`, da scrivere con `Intl.RelativeTimeFormat` nella
   lingua dell'interfaccia. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «10», M-18 CP3.
-- **T-ISO · Le date d'osservazione restano ISO nei tooltip del grafico dei prezzi e nella sonda** — basso; T, 13/10
-  (trovato con T-EN1; dopo la 1.2, per decisione del coordinatore). Con M-18 le date seguono la lingua
-  dell'interfaccia, ma alcune date d'osservazione si leggono ancora `2024-03-01`.
+- ✅ **T-ISO · Le date d'osservazione restano ISO nei tooltip del grafico dei prezzi e nella sonda** — chiusa nella
+  1.2 da T, checkpoint T-ISO + T-FB del 13/10: il coordinatore l'ha anticipata, perché la riga 🔄 «Numbers and dates
+  follow the interface language everywhere» promette anche i tooltip. Le date passano da `formatDay`
+  (`utils/core/formatAxisDate.ts`), nella lingua dell'interfaccia. Il lotto copre anche le intestazioni dei tooltip di
+  `PriceChartFull`, `CandlestickChart` e `LineChart`, e la tabella che compare al passaggio sulla sonda
+  (`providerProbe.ts`). Il `date_range` si legge senza cambiare l'API, perché il backend lo scrive sempre
+  `inizio → fine`. Il commit lo scrive il coordinatore all'integrazione. Era: basso; T, 13/10 (trovato con T-EN1).
+  Con M-18 le date seguono la lingua dell'interfaccia, ma alcune date d'osservazione si leggevano ancora `2024-03-01`.
   - In `components/charts/PriceChartFull.svelte`: il segnaposto `{date}` di `chart.tooltip.valueAt` (`:1017`, `:1020`,
     `:1029`), le righe `↩` (`:1018`) e `💱` (`:1023`) del riferimento, la data dell'evento nei periodi aggregati
     (`:778`) e quella del cambio (`chart.tooltip.fxRateDate`, `:789`).
   - In `components/assets/ProviderAssignmentSection.svelte`: la data del prezzo corrente (`:335`) e l'intervallo dello
     storico, `date_range`, che arriva dal backend come una stringa sola (`:355`).
 
-  Da fare: le date con `formatDateTime`/`formatAxisDate` nella lingua della UI; `date_range` va prima esposto come due
-  date. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «T-EN — analisi».
-- **T-FB · I ripieghi inglesi dei segnali di confronto** — minimo; T, 13/10 (trovato con T-EN2; dopo la 1.2, per
-  decisione del coordinatore). Se l'asset di confronto non c'è più, l'etichetta dice `Asset #N` o `Asset`
+  Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «T-EN — analisi» e
+  «T-ISO + T-FB».
+- ✅ **T-FB · I ripieghi inglesi dei segnali di confronto** — chiusa nella 1.2 da T, checkpoint T-ISO + T-FB del 13/10,
+  per decisione del coordinatore. «Asset #N» ha ora una chiave sola, `chartSettings.signals.assetFallback`. Prima
+  era `fxDetail.assetFallback`, che è stata tolta. I segnali la leggono con `ChartSignal.text`, le due pagine con `$t`.
+  «Asset» e «FX Pair» vengono dal catalogo (`common.asset`, `chartSettings.signals.fxPair`). Nello stesso lotto sono
+  entrati i tre errori della pagina dell'asset («Asset #N not found», «Failed to load asset info», «Failed to load
+  prices»), ora chiavi `assetDetail.*`, e «Other» nelle regole dello stress in it, fr ed es. Il commit lo scrive il
+  coordinatore all'integrazione. Era: minimo; T, 13/10 (trovato con T-EN2).
+  Se l'asset di confronto non c'era più, l'etichetta diceva `Asset #N` o `Asset`
   (`charts/signals/AssetComparisonSignal.ts:173-174`, e `routes/(app)/assets/[id]/+page.svelte:690`, `:871`, `:895`,
-  `:1004`, `:1274`). Una coppia vuota dice `FX Pair` (`charts/signals/FxPairSignal.ts:94`). Si vede solo con una
-  configurazione salvata che punta a un asset cancellato. Da fare: chiavi nel catalogo, lette con `ChartSignal.text`
-  (T-EN2). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «T-EN — analisi».
+  `:1004`, `:1274`). Una coppia vuota diceva `FX Pair` (`charts/signals/FxPairSignal.ts:94`). Si vedeva solo con una
+  configurazione salvata che punta a un asset cancellato. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezioni «T-EN — analisi» e «T-ISO + T-FB».
 - **T-CAT · Due rese delle categorie: tipi, settori e paesi** — minimo; T, 13/10 (trovato con T-SHK). Lo shock del
   rischio scrive i bucket con `components/risk/stressBucketLabel.ts`, il PAC le categorie di esposizione con
   `exposureCategoryLabel` (`features/tools/pac-allocator/planner/categoryLabels.svelte.ts`). Le regole sono le stesse:
@@ -525,6 +536,12 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   porta già i suoi nomi per lingua (`geography_groups`), ma la tabella non li legge. Inoltre, se un impatto avesse i pesi
   senza `bucket_audit`, ogni bucket avrebbe peso 0 e la tabella sparirebbe; oggi il backend lo manda sempre. Dettagli:
   [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «T-SHK + T-CL».
+- **T-EVW · Il grafico dei prezzi forse perde gli eventi alla risoluzione settimanale o mensile** — da verificare; T,
+  13/10 (letto nel codice da test-author durante T-ISO, non visto nell'app). In `PriceChartFull` un evento si mette
+  sull'ultimo giorno di calendario del periodo, mentre il punto aggregato porta la data dell'ultimo dato. Senza punti nel
+  fine settimana l'evento non trova il suo punto e non si disegna. Il coordinatore lo fa verificare a runtime da V; chi
+  lo cura si decide dopo. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezione «T-ISO + T-FB».
 
 La voce di `TODO_FUTURI.md` sul riordino del codice si cancella a mano a mano.
 
