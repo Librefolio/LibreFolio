@@ -676,6 +676,19 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
     quando è diversa.
 
   Dettagli: [piano ReleaseGallery](27_releaseImages/plan-phase00ReleaseGallery.prompt.md), passo «30».
+- **M-26 · Due pagine della doc dicono ancora cose vecchie sui test e sulla CLI** — basso; M (docs-writer, lotto 35),
+  13/10, fuori dal perimetro del punto 2.
+  - `developer/test-walkthrough/runner_architecture.md:205-227` importa `deleteTransactionsCreatedSince`, che non
+    esiste più, e consiglia la pulizia per differenza di id che `db-cleanup.ts` chiama non sicura; `:573` non dice che
+    serve anche `E2E_WORKERS` ≤ 1.
+  - `admin/cli_tools.*.md:70-77` non dice che anche `deactivate` rifiuta l'ultimo amministratore attivo.
+
+  Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «26.2».
+- **M-27 · La scheda Posizioni si chiama ancora «Performance» in alcune pagine** — basso; M (docs-writer, lotto 35),
+  13/10. Il selettore dice «Portafoglio / Periodo»; il lotto 35 ha corretto solo le 5 «Performance view» chieste.
+  Restano la sezione e i titoli degli scatti di `user/dashboard/positions.*.md` e `user/brokers/index.*.md`, le pagine
+  della galleria («Holdings and Performance») e due pagine developer. Dettagli: [journal del giro
+  12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «26.2».
 
 ## Q · Documentazione e onboarding (21, 32)
 

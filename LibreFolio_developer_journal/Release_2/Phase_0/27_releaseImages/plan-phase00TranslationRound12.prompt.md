@@ -1167,3 +1167,180 @@ Base `b1a17b49b`, fast-forwarded from `e501b9615` for this line. The rest of bat
 
 **24.2 ✅ Gates** — the combined-revision gates of batch 34 (ReleaseGallery plan, step 30): CHANGELOG alone 3 files
 OK, 0 localized; `translate-validate` 630 files 0/0; strict build 0; `check-links` 95.
+
+### 25. ✅ I5 part two: the full gallery with `LF_APP_VERSION=v1.2.0` — on `cea8a478d` (train 80), 2026-10-13 02:09–03:31
+
+> **Note implementazione**: the run (full report in `release-pipeline/runs/i5p2/I5P2_REPORT.md`).
+> - The tree was clean.
+> - The frontend was pre-built in debug mode with `LF_APP_VERSION=v1.2.0`: the bundle holds `v1.2.0`, not
+>   `v1.1.0-1528-gcea8a478d`.
+> - Command: `mkdocs gallery --test-port 6158 --workers 2`.
+> - **Result: 242 passed, 9 failed, 1 skipped by design, in 1.4 h.**
+>
+> **By eye:**
+> - `v1.2.0` in the sidebar and in the mobile drawer;
+> - M-18 in fr (`+4 788,01 €`, `-4,04 %`) and es (`+3785,94 €`);
+> - the security details open.
+>
+> The T-EN labels are in no gallery shot: no synthetic benchmark is added, the tooltip shows only on hover, the probe is
+> aborted offline. The coordinator decided no probe: the component tests are enough.
+>
+> **The 9 reds, triaged:**
+> - **A, Files ×4: environment.** www.schwab.com answers Chromium with a 498-byte HTML bot check, which Chromium blocks
+>   (ORB); curl gets the icon. The tests passed on 12/10 in CI and locally.
+> - **B, provider compare ×2: defect** in a test hook since `5b2aad5c4`. `data-dist-pct` follows the UI language; T
+>   restores it.
+> - **C, create modal es/dark: assumption (the clock).** It waited 500 ms; the providers' chips came after the fit.
+> - **D, mobile auth ×2: assumption (the clock).** `openLoginPage` gave the boot 3 s, and the splash was still on
+>   screen.
+>
+> Also found:
+> - an English placeholder hard-coded in `AssetModal.svelte:1949` (to T);
+> - the DU/AU dates stay ISO, on purpose.
+
+### 26. ✅ Batch 35: the [1.2.0] chapter again, five doc fixes, the gallery's waits — on `b2a21bb4a`, 2026-10-13 (checkpoint 04:25)
+
+Base `b2a21bb4a`: fast-forwarded from `cea8a478d`, with `60f734e08`, the coordinator's line-by-line rewrite of the
+[1.2.0] chapter (+132 −140).
+
+**26.1 ✅ The [1.2.0] chapter through the pipeline** (the coordinator: by the pipeline, chapter by chapter, then the
+stamp)
+> **Note implementazione**: the dry-run planned 18 pieces ×3, about 262K tokens per language: every piece changed,
+> and some headings were renamed. The run is `translate --file CHANGELOG.md --workers 6`, started 03:40.
+>
+> **The run:** 03:40–04:00, 54 of 54 translated, 0 failed. Only the [1.2.0] chapter changed (lines 10–319, still
+> line-aligned with the English). No API key in the log: the 12 `sk-` matches are `risk-analysis`.
+>
+> **The review** (`release-pipeline/scripts/b35_changelog_review.py`, plus two new checks):
+> - `b35_label_lines.py`: every **bold** or *italic* span of the English that is a catalogue value must appear on
+>   the same line of the translation as that key's value. The batch 25 check paired only the bold spans.
+> - `b35_struct_check.py`: per line, the bold and code markers, the link targets, the inline code and the numbers
+>   outside code.
+>
+> **The pipeline undid what the earlier reviews had fixed**, and missed the UI's names:
+> - the toolbar labels, e.g. *Sinc. selezione / Sync. sélection / Sinc. selección*, and *Sinc. Tutto*;
+> - the four risk questions and the two asset-set questions;
+> - *What if…?* left in English in Italian;
+> - the asset types, the report-set menus, *Updated* left in English in French and Spanish;
+> - the T-EN labels (*Composto, Sinusoidale / Composé, Sinusoïdal / Seno*);
+> - the M-18 examples: the French amount with a plain space, and the zero as `0.00%`.
+>
+> **136 fixes**, each on one line and matched exactly once (`b35_changelog_fix.py`). The values come from the
+> generated catalogues.
+> - `--check` applies the fixes to the pipeline's raw output (`runs/b35/pipeline_raw/`) and finds the worktree
+>   identical.
+> - Two choices differ from the files before:
+>   - **The paths** are now the UI's, segment by segment: **Impostazioni › Amministrazione › Impostazioni globali /
+>     Paramètres › Administration › Paramètres globaux / Configuración › Administración › Configuración global**. The
+>     English now starts with *Settings ›*, and `settings.admin` is *Amministrazione / Administration*: «Admin» in
+>     Italian and French was the earlier files' word, not the UI's. Also *Impostazioni › Informazioni* (not
+>     «Informazioni su») and *Diagnóstico de plugins*.
+>   - **The data-quality buttons** (`dataQuality.cta.*`) read *Sincronizza / Synchroniser / Sincronizar* for prices
+>     and for rates alike, as the earlier files had them. Where the English names both (`:295`), the translation says
+>     «its **Sincronizza** buttons, for prices and for rates».
+> - Case-only differences are left as they are, like the batch 25 check (*Salva tutto* for *Salva Tutto*).
+> - The Danske Bank line (`:45`) uses the docs' words: *segnalazione / l'issue / incidencia*.
+> - Glossary: French «conversions de devise» again, and «benchmarks synthétiques» on `:225`.
+>
+> **After the fixes:**
+> - labels differing 0;
+> - 19 glossary hits, all in the sense the rule allows (*aperçu* is the preview, *tasa* the risk-free rate) or
+>   quoting the old names;
+> - the structure check differs only where intended: the `:263` examples, and `:295` with one bold fewer;
+> - `translate-validate --file CHANGELOG.md` 3 files OK, 0/0.
+>
+> **The stamp** (after the gallery run, 04:20): `translate-stamp --file CHANGELOG.md` stamped 0 pieces, because the
+> pipeline had already recorded every piece's English md5. The cache after the run is C1's version; it differs from
+> `HEAD` only in CHANGELOG entries.
+
+**26.2 ✅ Five doc fixes**
+> **Note implementazione**:
+> - **(e) done, by hand, translations only, so no stamp:**
+>   - `adjustment.fr.md:55` PMP → PRU;
+>   - `adjustment.es.md:55` PMP → PMC;
+>   - `mutual-fund.fr.md:32` VNI → NAV.
+>
+>   The prose already used the new terms.
+> - **(a)–(d):** the English goes to docs-writer; the translations of (b)–(d) by hand, then the stamps, after the
+>   pipeline.
+>
+> **(a)–(d) done.** docs-writer edited the six English pages and checked each claim against the code; I ported
+> (b)–(d) into it/fr/es by hand.
+> - **(a) `developer/test-walkthrough/runner_architecture.md`, English only:**
+>   - the clone/delete example (`:231`) and the «per file» warning (`:562`) are told in the past, with what changed
+>     since;
+>   - the rollback section (`:581`) says `tx-delete` destroyed seed rows until its confirm tests moved to rows they
+>     create on a disposable account;
+>   - «two files earlier in alphabetical order» was never true and is gone.
+>   - **⚠️ Fuori pista:** the brief named `fixtures/owned-pair.ts`. `tx-delete.spec.ts` does not use it: it has its own
+>     helpers on `fixtures/onboarding-accounts.ts`; `owned-pair.ts` serves `tx-clone`, `tx-paired-edit` and
+>     `tx-split-promote`. The page does not name it.
+> - **(b) `admin/cli_tools.*.md:87`:** `demote` refuses the last active administrator, with the CLI's error (English
+>   in every language, as the CLI prints it), and exits with `1` (`user_service.py:282-283`, `user_cli.py:165-176`).
+> - **(c) «Performance view» → «Period view»**, the tab's label (`dashboard.performanceTab`: *Periodo / Période /
+>   Periodo*). Five places per language: `kpi-cards :39`, dashboard `index :70 :76 :81` (`:64 :70 :75` in Spanish),
+>   `period-pnl :39`. The anchor `positions.md#performance` stays: its heading was not renamed.
+> - **(d) `danske-bank.*.md:5`:** «please open a new issue and mention #26», as in the CHANGELOG; #26 is closed since
+>   08/10.
+>
+> **Found outside the brief, not edited** (docs-writer; backlog M-26 and M-27):
+> - **`runner_architecture.md`:**
+>   - `:205-227` imports `deleteTransactionsCreatedSince`, which no longer exists (now `trackTransactionWrites`,
+>     `db-cleanup.ts:79-140`);
+>   - its «delete what appeared after» advice is what `db-cleanup.ts:27-44` now calls unsafe;
+>   - `:573` omits that the cleanup also needs `E2E_WORKERS` ≤ 1 (`playwright.ts:133`).
+> - **`cli_tools.en.md:70-77`:** `deactivate` also refuses the last active administrator (`user_service.py:239-240`),
+>   and the page does not say so.
+> - **The Positions tab is still «Performance» in places**, while its switch reads «Portfolio / Period»:
+>   - `positions.en.md:6, :20, :78`, and the screenshot titles at `:12-13` and `user/brokers/index.en.md:94-95`;
+>   - the gallery pages («Holdings and Performance»);
+>   - `developer/frontend/state/domain-state.md:114` and `pages/index.md:114`.
+
+**26.3 ✅ The gallery** (A, C, D approved; the waits)
+> **Note implementazione**:
+> - **A, the cause is ours.** The app shows its fallback, never a broken image: `BrokerIcon` keeps its `<img>` at
+>   `opacity-0` with the briefcase on top until the load is acknowledged.
+>   - Since `2412c3fe4` (12/10) the icon acknowledges a load or an error only when the image's `getAttribute('src')`
+>     equals its own URL.
+>   - The gallery's favicon fix writes the URL with `?lf-gallery`, so in the gallery no load and no error was ever
+>     acknowledged. Every broker logo drawn from a favicon stayed a briefcase, in every shot: `brokers/list` shows 8
+>     briefcases, where the published 1.1 gallery shows the logos. Schwab's refused favicon never moved down its
+>     chain.
+>   - **The cure:** `keepFaviconImagesLoading` (`galleryReportSets.ts`) gives the URL back unmarked on read (the
+>     `src` getter and `getAttribute('src')`), while the stored attribute keeps the mark.
+>   - `expectFaviconImagesLoading` now reads the stored value from the attribute node, and also checks that the read
+>     is plain.
+>   - The external route stays as it is.
+> - **C:** the create modal waits for the providers' chips (`[data-testid^="asset-search-provider-"]`) and the dialog's
+>   images instead of 500 ms.
+> - **D:** `openLoginPage` waits 30 s, like the gallery's other waits for the login page.
+> - **The waits:** V's cure, `waitForSettled(transactions-page, 20 s)` before `tx-table`, at **15** sites in 14 tests
+>   (the coordinator counted 13: one more at `:2643`–`:3615`, and one in «Asset create modal from import wizard»).
+>
+> Prettier is clean; `tsc` e2e has the 2 errors of the base, none new.
+>
+> **The run** (the coordinator: only the touched tests, 1 worker, port 6158):
+> - command: `mkdocs gallery --test-port 6158 --data-dir /tmp/librefolio-r2-m --no-populate --workers 1`, with
+>   `LF_APP_VERSION=v1.2.0`; the filter takes the Auth pages, the two Files tests, the two create-modal tests and the
+>   transaction and import tests that hold the 15 waits;
+> - 03:47–04:20, load 27.5 → 10;
+> - **42 passed** (21 tests × desktop and mobile), 0 failed, in 32.0 min (`runs/b35/b35_gallery_targeted.log`).
+>
+> **By eye:** `files/brim-tab` shows the logos again (Coinbase, eToro, Directa, DEGIRO, Interactive Brokers).
+> Schwab, whose favicon Chromium refuses, falls down its chain to the plugin's generic icon. The other favicon logos
+> (`brokers/list` and the rest) come back with the full gallery, item 4.
+
+**26.4 ✅ Gates** (`release-pipeline/scripts/b35_final_gates.sh`, 04:20–04:23, load 10–25; logs in
+`release-pipeline/runs/b35/`)
+> - **Stamps:** `CHANGELOG.md` 0 pieces (above); the five translated English pages, 1 file each: `cli_tools`,
+>   `kpi-cards`, dashboard `index`, `period-pnl`, `danske-bank`. `runner_architecture.md` has no translations.
+> - **Dry-run:** empty, for the pages and the CHANGELOG.
+> - **Validation:** `translate-validate --hide-localized` 630 files 0/0; the CHANGELOG alone 3 files OK, 0/0.
+> - **`translate-diff`:** 642 of 642 clean.
+> - **Build:** strict, 0; tracked icons unchanged. **Links:** `check-links` 95 valid.
+> - **Frontend:** Prettier clean on the two e2e files; `tsc -p tsconfig.e2e.json` the 2 errors of the base
+>   (`onboarding-tour.spec.ts`, `src/lib/types/files.ts`).
+> - **Review scripts:** labels differing 0; the four remaining line misses quote the old text on purpose (`:215`
+>   *Weight %*, `:264` *AI Export*); the pipeline's output plus the 136 fixes gives the worktree.
+> - **`git diff --check`:** clean. Privacy scan of the added lines: no address, path, key or account number.
+> - **Ports:** 6158, 6168 and 6042 free.
