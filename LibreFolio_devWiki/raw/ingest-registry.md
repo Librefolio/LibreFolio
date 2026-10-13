@@ -799,3 +799,15 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/research-python-3.15-20261012.md` | `426d9e1b7` | 2026-10-13 | [[decisions/python-stays-on-3-13]] (the baseline) |
 | `.github/agents/release-coordinator.agent.md` | `6e1a2ef3e` | 2026-10-13 | [[problems/git-merge-stash-failed-on-locked-index]] |
 | `CHANGELOG.md` | `4de042cfe` | 2026-10-13 | R-5's line, the risk API → [[sources/release-1.2.0]] |
+
+## 2026-10-14 — trains 94–99 (base `bae15c3cf`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md` | `a2182a5db` | 2026-10-14 | U-6, U-6b → [[problems/schwab-favicon-blocked-by-orb]], [[decisions/scalable-two-accounts-two-plugins]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `dd4d3e830` | 2026-10-14 | batches 39–42, final gallery → [[sources/phase00-translation-round12-2026-10]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` | `0822066ab` | 2026-10-14 | T1, T4, V-37, V-38 → [[problems/transaction-form-saved-a-refused-date]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md` | `e2aac137d` | 2026-10-14 | lot 52 → [[concepts/echarts-chart-gotchas]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/53_pacTests/plan-phase00PacTests.prompt.md` | `96ae2f31a` | 2026-10-14 | T-PAC → [[features/F-107]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md` | `3e99e65b6` | 2026-10-14 | I-M30 → [[problems/gallery-fixture-normalizer-scaled-ratios]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `bae15c3cf` | 2026-10-14 | C-59, C-73…C-76, U-B3, U-B8, U-B9, M-30…M-32, V-37b, V-38 → the pages above |

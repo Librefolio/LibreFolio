@@ -3414,3 +3414,20 @@ links it (ask the developer first) without copying its seven steps. **Created** 
 (V-3; not in the code, after 1.2), linked from [[decisions/single-docker-image]], [[features/F-062]] (whose
 dependency line was also corrected: the toolchain lives in the builder stage), [[decisions/transfer-pair-same-asset-opposite-quantity]]
 and [[decisions/data-quality-proved-on-real-data]]. Graph: not updated (P-6).
+
+## [2026-10-14] ingest | Trains 94–99 and the coordinator's commits
+Base `bae15c3cf`; four read-only digests, every claim re-checked on the code and on git. **C-59** (`ce09c6ac4`):
+uvicorn's extras in the lock — [[decisions/single-docker-image]], [[decisions/python-stays-on-3-13]]. **U-6/U-6b**:
+the bundled Schwab logo undone by the developer — [[problems/schwab-favicon-blocked-by-orb]] now *accepted*, with his
+hypothesis (our bursts of requests); Scalable without exporter 1.0.0 and D4 «Tagesgeld» on
+[[decisions/scalable-two-accounts-two-plugins]]. **V** (trains 94–96): created [[problems/transaction-form-saved-a-refused-date]]
+(V-37, since v1.1.0; V-37b after 1.2); T1, T4, V-38 on [[sources/phase00-data-quality-e2e-2026-10]]. **I, lot 52**:
+three rows in [[concepts/echarts-chart-gotchas]] (`containLabel` and the unrounded time extent, `outerBounds` before
+`hideOverlap` — a3, not (a) — and `dataZoom` linear in time, Z2); the running period on every chart on
+[[problems/event-markers-lost-in-the-last-partial-period]]. **I-M30, plan 54**: created
+[[problems/gallery-fixture-normalizer-scaled-ratios]] — no numbers, no detail of the scale; linked from
+[[concepts/ci-release-pipeline]] and [[decisions/gallery-is-a-release-gate-with-real-data]]. **T-PAC, plan 53**:
+[[features/F-107]] and [[decisions/pac-rounding-against-the-plan]] (the margin is in the computation). **M**: batches
+39–42 and the final gallery on [[sources/phase00-translation-round12-2026-10]]; [[features/F-106]] (Tools stable).
+**The dirty version** verified on pipeline run 77 — [[problems/release-shots-show-dirty-version]]. And
+[[sources/release-1.2.0]]. Graph: not updated (P-6).

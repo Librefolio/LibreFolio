@@ -51,6 +51,8 @@ The report also lists the steps of a move: `python_version` in the `Pipfile`, ev
 - Today the `Pipfile` pins `python_version = "3.13"` and the five stages of the `Dockerfile` start from
   `python:3.13-slim`; nothing changes in 1.2 or after it until a comparison shows a gain worth the move.
 - 3.13 is in its security phase: patches only, from source, until October 2029.
+- The report also found the `Dockerfile` installing `uvicorn[standard]` unpinned, outside the lock; that is closed:
+  the extras are in the lock since `ce09c6ac4` (C-59) — [[decisions/single-docker-image]].
 
 ## Source files
 

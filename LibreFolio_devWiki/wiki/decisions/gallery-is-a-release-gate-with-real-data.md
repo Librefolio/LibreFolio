@@ -75,6 +75,8 @@ Then the rules for the new scenarios, approved for groups 3–7 of the repairs:
   other run fails ([[concepts/ci-release-pipeline]], «Release gates and nightly tolerance»).
 - A full run during the repairs (step 18, 2026-10-08/09, two workers): 243 passed, 1 skipped, in 1.1 h, 2,796 PNGs.
 - Every shot depends only on the test database and the fixtures, never on the day's network or on another test.
+- A real capture still needs care where it is rescaled: the dashboard fixture's normalizer once scaled ratios
+  as if they were amounts — [[problems/gallery-fixture-normalizer-scaled-ratios]] (I-M30).
 - Two traps of Playwright 1.61 surfaced along the way: images ending in `/favicon.ico` aborted by any route
   ([[problems/playwright-favicon-aborted-by-routes]]), and probes that ignore their timeout
   ([[problems/playwright-probes-ignore-timeout]]).
