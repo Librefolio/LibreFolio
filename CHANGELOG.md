@@ -88,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 📥 Imports and transaction editing
 
+- **Removing a new pair from the bulk editor no longer asks to discard changes.** Marking a new transfer for deletion, or removing it with **Delete selected**, left its hidden other half behind; it was never saved, but closing the emptied editor asked whether to discard changes. Present since v1.1.0.
 - Editing an asset from the import wizard now loads its complete saved metadata. Saving unrelated fields preserves descriptions and sector/geographic distributions; explicit clears remain possible.
 - Currency-change confirmations and nested asset dialogs remain reachable above the wizard. Price and linked-transaction warnings now display their counts and dates correctly.
 - Manual FX conversions no longer remain incomplete because of a hidden destination broker. Separate leg dates, exact decimal amounts and balance/sign validation are preserved.
