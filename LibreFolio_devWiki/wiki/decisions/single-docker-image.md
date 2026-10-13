@@ -31,6 +31,10 @@ LibreFolio needs a self-hosted deployment model that is simple to run for non-te
 - Base image: `python:3.13-slim` — the version stays until a jump brings significant advantages:
   [[decisions/python-stays-on-3-13]]
 - Single `CMD`: `uvicorn backend.app.main:app --host 0.0.0.0 --port 6040`
+- The image installs only the locked requirements. Until `ce09c6ac4` (2026-10-13, backlog C-59) it added
+  `uvicorn[standard]` unpinned after them, so `uvloop`, `httptools` and `watchfiles` came at whatever version was
+  current on build day, while development and tests ran without them; the extras are now in the `Pipfile` and the
+  lock (`uvicorn = {extras = ["standard"], version = "==0.52.4"}`), the same server stack everywhere
 - `EXPOSE 6040` (prod) and `6041` (test mode)
 - Volume mount: `/app/backend/data/prod/` for SQLite + uploaded files
 - FastAPI routes: `/api/v1/*` for API, `/*` for static SvelteKit SPA

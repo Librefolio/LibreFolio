@@ -58,7 +58,9 @@ The developer's decisions of 2026-10-09 (plan 37, §1):
   gross with FEE and TAX legs; DIVIDEND and INTEREST are `amount` + `tax`, with a TAX leg. The exporter 1.0.0 wrote the
   web app's amount, fee included; **1.0.1** (commit `6672084`, tag `v1.0.1`, released by the developer) writes the
   market valuation, and the plugin warns on a 1.0.0 file (`scalable_fee_in_amount`). No amount is recomputed: only
-  sums of values found in the file.
+  sums of values found in the file. *Update (2026-10-13, U-6, `a6d1754ed`)*: the developer dropped exporter 1.0.0 —
+  the `scalable_fee_in_amount` notice, its branch and its catalogue keys are gone, every exporter trade books its FEE
+  and TAX legs, and the CHANGELOG line names the exporter version the importers need, 1.0.1 or later (`3d3cf811a`).
 - **Notices, not guesses** — twelve coded notices, each with the file's rows: orders not executed, open partial
   orders, unknown fees and taxes, reversals, rows not imported (security transfers, corporate actions), cash booked by
   its sign, tax refunds, internal transfers to pair, several overnight accounts, the 1.0.0 fee, net dividends,
@@ -79,8 +81,9 @@ The developer's decisions of 2026-10-09 (plan 37, §1):
   plugin nostro, toglierei l'alpha». The user page was rewritten around «How to export» (opened by the PRIME-only
   lead, the installation in a fold-out panel), «What is imported» moved to a developer page, and both rows of the
   providers list read «✅ Stable» (M, batch 21, `ff2cf5b3d`, train 55).
-- Open: no real samples yet of sales, dividends, reversals, crypto or security transfers (the exporter's recap, §6);
-  the word *Tagesgeld* stays in the developer list and in the overnight plugin's description.
+- Open: no real samples yet of sales, dividends, reversals, crypto or security transfers (the exporter's recap, §6).
+  The word *Tagesgeld* left the overnight plugin's description, its English fallback and its docstrings on 2026-10-13
+  (D4, `a6d1754ed`).
 
 ## Links
 
