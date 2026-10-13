@@ -6,6 +6,8 @@
     import {currencyStoreVersion, ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type YieldOnCostStatus = 'available' | 'no_income' | 'unavailable';
     type YieldOnCostReason = 'insufficient_history' | 'income_without_eligible_quantity' | 'replay_inconsistent' | 'invalid_split' | 'missing_fx' | 'missing_wac' | 'non_positive_wac';
@@ -72,7 +74,7 @@
     }
 
     function formatDate(value: string): string {
-        return formatAxisDate($currentLanguage, value, true);
+        return formatAxisDate(uiLocale(), value, true);
     }
 
     function formatCurrencyCode(code: string): string {
@@ -97,7 +99,7 @@
     }
 
     function availableTooltip(provenance: Provenance, value: number): string {
-        const lines = [`${label('dashboard.yieldOnCostValue', 'Yield on Cost')}: ${(value * 100).toFixed(2)}%`];
+        const lines = [`${label('dashboard.yieldOnCostValue', 'Yield on Cost')}: ${formatPercent(value, {scale: 100, signed: false})}`];
         if (provenance.gross_income_per_unit) {
             lines.push(`${label('dashboard.yieldOnCostGrossPerUnit', 'Gross income per unit')}: ${formatCurrencyAmountPlain(Number(provenance.gross_income_per_unit.amount), provenance.gross_income_per_unit.code, {minFraction: 0, maxFraction: 6})}`);
         }
@@ -131,7 +133,7 @@
     }
 
     let numericValue = $derived(Number(result.value));
-    let availableText = $derived(`${(numericValue * 100).toFixed(2)}%`);
+    let availableText = $derived(formatPercent(numericValue, {scale: 100, signed: false}));
 </script>
 
 {#if result.status === 'available'}

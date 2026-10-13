@@ -7,6 +7,7 @@
  */
 import {computeFxConversionInfo} from '$lib/utils/currency/fxConversionHelper';
 import {formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
+import {formatFixed} from '$lib/utils/core/formatFixed';
 
 /** Two lines, "From:" and "To:", with labels padded to the longer one. */
 export function renderFromToHtml(fromHtml: string, toHtml: string, labels: {from: string; to: string}): string {
@@ -21,5 +22,5 @@ export function renderImpliedRateHtml(from: {code: string; amount: number}, to: 
     if (from.code === to.code) return '';
     const info = computeFxConversionInfo(from.amount, from.code, to.amount, to.code);
     if (!info) return '';
-    return `<span class="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400" data-testid="import-tx-pair-rate">${formatCurrencyCodeHtml(info.base)}<span>→</span>${formatCurrencyCodeHtml(info.quote)}<span class="font-mono">@ ${info.impliedRate.toFixed(4)}</span></span>`;
+    return `<span class="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400" data-testid="import-tx-pair-rate">${formatCurrencyCodeHtml(info.base)}<span>→</span>${formatCurrencyCodeHtml(info.quote)}<span class="font-mono">@ ${formatFixed(info.impliedRate, 4)}</span></span>`;
 }

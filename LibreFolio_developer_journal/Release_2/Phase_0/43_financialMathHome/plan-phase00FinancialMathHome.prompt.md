@@ -2022,7 +2022,7 @@ Passi:
 > - Niente `translate-stamp`: it, fr ed es li traduce M. Il debito: la prima frase e il paragrafo nuovo, fra le due liste.
 > - Effetto sul rendering: il paragrafo separa le due liste, che prima uscivano fuse in una sola.
 
-### Checkpoint CL 🧊 (2026-10-12) — FROZEN, in attesa del coordinatore
+### Checkpoint CL ✅ (2026-10-12) — committato dal coordinatore, treno 60
 - Base `37304d716`. 11 file modificati e 1 nuovo, `e2e/layout/changelog-locale.spec.ts`.
 - Quattro commit proposti:
   1. `feat(changelog)`: il codice, i test e il blocco del runner;
@@ -2030,3 +2030,1359 @@ Passi:
   3. `docs(user)`: `about.en.md`;
   4. `docs(journal)`: questo piano.
 - Niente CHANGELOG. Il `CHANGELOG.it.md` sintetico è stato cancellato.
+
+### Treno 60 (coordinatore, 2026-10-12)
+- Il CHANGELOG localizzato è committato sul ramo di T: `8f67f89de`, `ee8a19384`, `b02bf6c54`, `fba291f53` (albero `7d4b685304f4`). Entra nel treno 60.
+
+### M-18 — i numeri scritti con `toFixed`: analisi (2026-10-12) — superata dalla nuova regola qui sotto
+> **Richiesta**: dal developer, via coordinatore, testuale: «T prende M-18 in parallelo: I resta sulla rifinitura UI».
+> - Le fonti: il giro 12 di M, §11 (`27_releaseImages/plan-phase00TranslationRound12.prompt.md:658`, `:663`).
+> - Base `fba291f53`, corsia 6164.
+
+**Lo stato verificato**:
+- Nel frontend ci sono 138 `toFixed`, fuori dai test.
+- `formatPercent` (`utils/core/formatPercent.ts:71`) ha già l'opzione `locale`; senza, stampa la forma fissa `12.50%`. Ci sono 51 chiamate senza `locale`, in 16 file, che quindi stampano il punto: per esempio il «−10.7%» del laboratorio rischio. Altre 12 passano `$currentLanguage`.
+- **Due regole convivono per la locale dei numeri.**
+  - La locale della macchina: gli importi (`currencyFormat.ts:39`, `:61`, `toLocaleString(undefined…)`), le date (`formatDateTime.ts:16-18`) e gli assi dei lotti. Quest'ultima la scrive `lotChartShared.ts:85-90`: «the machine locale, which is what both charts deliberately use for numbers (as opposed to `$currentLanguage`, which they use for words)».
+  - La lingua della UI: le 12 chiamate di `formatPercent` con `$currentLanguage` (`DistributionEditor`, `BrokerSharingPanel`, `BrokerCard`, la pagina del broker) e il PAC.
+- I test seguono la macchina, cioè en-US qui e in CI. `currencyFormat.test.ts:39` calcola l'atteso con lo stesso `toLocaleString(undefined…)`.
+- Con Intl, en-US resta com'è (`14.07%`) salvo il raggruppamento da 1 000 % in su. Le altre lingue:
+  - it: `14,07%`;
+  - fr: `14,07 %`, con uno spazio stretto;
+  - es: `14,07 %`.
+
+**L'inventario**: script `/tmp/libreFolio_m18_classify.py`, dati `/tmp/libreFolio_m18_inventory.json`. «ᶠᵖ» = chiamata a `formatPercent` senza `locale`; «†» = file nato dopo la 1.1.
+### Percentuali — 99 punti, 46 file
+- `components/assets/AssetCard.svelte`: 236
+- `components/assets/AssetPriceSummary.svelte`: 117
+- `components/assets/ProviderComparisonModal.svelte`: 228
+- `components/brokers/lots/LotComparisonChart.svelte`: 642ᶠᵖ,859ᶠᵖ
+- `components/brokers/lots/LotCustodyModal.svelte`: 353ᶠᵖ,358ᶠᵖ,389ᶠᵖ,401ᶠᵖ
+- `components/brokers/lots/LotWacPriceChart.svelte`: 1047ᶠᵖ,1473ᶠᵖ,1608
+- `components/brokers/lots/UnifiedLotsTable.svelte`: 216ᶠᵖ
+- `components/brokers/lots/unifiedLotsTableHelpers.ts`: 88ᶠᵖ
+- `components/charts/GeographyMap.svelte`: 292
+- `components/charts/LineChart.svelte`: 673
+- `components/charts/MeasurePanel.svelte`: 296,303,308
+- `components/charts/ScatterChart.svelte` †: 110ᶠᵖ,151ᶠᵖ
+- `components/charts/SemiDonutChart.svelte`: 236,251
+- `components/charts/candlestickChartHelpers.ts`: 92
+- `components/charts/chartCoreHelpers.ts`: 87
+- `components/charts/echartsTooltipHelpers.ts`: 94,126
+- `components/charts/priceChartHelpers.ts`: 573,578
+- `components/dashboard/AllocationHistoryChart.svelte`: 597
+- `components/dashboard/ContributionTable.svelte`: 188
+- `components/dashboard/ExposureTable.svelte`: 143,363
+- `components/dashboard/ExposureTreemap.svelte`: 591,598
+- `components/dashboard/GrowthChart.svelte`: 2113,2314
+- `components/dashboard/KpiCard.svelte`: 70
+- `components/dashboard/KpiSection.svelte`: 252,253,254,255,268,299ᶠᵖ,351ᶠᵖ
+- `components/dashboard/YieldOnCostCell.svelte` †: 100,134
+- `components/fx/FxCard.svelte`: 224
+- `components/fx/FxPriceSummary.svelte`: 46
+- `components/fx/FxTable.svelte`: 122
+- `components/risk/AssetRiskScenariosView.svelte`: 56
+- `components/risk/AssetSetLossComparisonSection.svelte` †: 107ᶠᵖ,112ᶠᵖ
+- `components/risk/CorrelationHeatmap.svelte`: 489
+- `components/risk/RiskAnalysisPanel.svelte`: 654ᶠᵖ,655ᶠᵖ,677ᶠᵖ,678ᶠᵖ,688ᶠᵖ,699ᶠᵖ,700ᶠᵖ,733ᶠᵖ,734ᶠᵖ,817ᶠᵖ,835ᶠᵖ,836ᶠᵖ,871ᶠᵖ,873ᶠᵖ,874ᶠᵖ,948ᶠᵖ,1063ᶠᵖ,1064ᶠᵖ,1065ᶠᵖ,1074ᶠᵖ,1075ᶠᵖ,1076ᶠᵖ,1077ᶠᵖ
+- `components/risk/RiskResultFrame.svelte`: 43
+- `components/risk/RiskReturnLevel.svelte` †: 107ᶠᵖ,112ᶠᵖ
+- `components/risk/levels/L1HowMuchItHurts.svelte` †: 91ᶠᵖ
+- `components/risk/levels/L2Diversification.svelte` †: 197ᶠᵖ,224ᶠᵖ
+- `components/risk/levels/RiskLevelSection.svelte` †: 249
+- `components/risk/levels/RiskLevelsPanel.svelte` †: 312,313
+- `components/risk/levels/l1/UnderwaterChart.svelte` †: 50ᶠᵖ
+- `components/risk/levels/l1/l1Helpers.ts` †: 195ᶠᵖ
+- `components/risk/levels/l4/L4Replay.svelte` †: 274
+- `components/risk/levels/l4/L4Shock.svelte` †: 164,175
+- `components/risk/levels/l4/L4Simulation.svelte` †: 143,218
+- `components/risk/levels/shareFormat.ts` †: 25ᶠᵖ,27ᶠᵖ,31ᶠᵖ
+- `features/tools/pac-allocator/planner/format.ts` †: 225ᶠᵖ,233ᶠᵖ
+- `utils/currency/fxConversionHelper.ts`: 126
+
+### Byte — 3 punti, 1 file
+- `utils/files/upload.ts`: 57,58,59
+
+### Durate — 5 punti, 4 file
+- `components/assets/ProviderAssignmentSection.svelte`: 585,616
+- `components/settings/CachePanel.svelte`: 92
+- `components/settings/SchedulerLogModal.svelte`: 235
+- `utils/sync/syncHelpers.ts`: 110
+
+### Altri decimali mostrati — 56 punti, 29 file
+- `components/assets/AssetCard.svelte`: 223,230
+- `components/assets/AssetPriceSummary.svelte`: 96,109
+- `components/assets/AssetTable.svelte`: 115
+- `components/assets/ProviderAssignmentSection.svelte`: 333
+- `components/assets/providerProbe.ts`: 115,126
+- `components/charts/CandlestickChart.svelte`: 513
+- `components/charts/LineChart.svelte`: 675,676,677,757,768
+- `components/charts/MeasurePanel.svelte`: 297,298,530
+- `components/charts/PriceChartFull.svelte`: 782,785,850,1011
+- `components/charts/candlestickChartHelpers.ts`: 93,94,95,100
+- `components/charts/chartCoreHelpers.ts`: 89,90,91,264,265,266
+- `components/dashboard/KpiSection.svelte`: 138
+- `components/fx/FxCard.svelte`: 219
+- `components/fx/FxPriceSummary.svelte`: 39
+- `components/fx/FxTable.svelte`: 116,188
+- `components/risk/AssetRiskScenariosView.svelte`: 57
+- `components/risk/CorrelationHeatmap.svelte`: 487,506
+- `components/risk/CorrelationPairsList.svelte` †: 91
+- `components/risk/RiskResultFrame.svelte`: 48
+- `components/risk/levels/RiskLevelSection.svelte` †: 255
+- `components/risk/riskAnalysisHelpers.ts`: 142
+- `components/transactions/events/AssetEventPicker.svelte`: 179
+- `components/transactions/events/EventCreateMiniModal.svelte`: 157
+- `components/transactions/modals/ImportWizardModal.svelte`: 2345
+- `components/transactions/modals/TransactionBulkModal.svelte`: 1908,1913,3432
+- `components/transactions/modals/TransactionFormModal.svelte`: 1701
+- `components/transactions/wac/WacPreviewSection.svelte`: 314,567,588
+- `utils/currency/fxConversionHelper.ts`: 116,118
+- `utils/transactions/pairCellHtml.ts` †: 24
+
+### Interni (restano) — 26 punti, 17 file
+- `components/assets/scheduleSerialization.ts`: 119,127
+- `components/charts/geographyMapHelpers.ts`: 38,71
+- `components/risk/levels/l1/l1Helpers.ts` †: 35,196
+- `components/risk/levels/l4/L4Shock.svelte` †: 144
+- `components/risk/levels/l4/TornadoChart.svelte` †: 89
+- `components/risk/levels/shareFormat.ts` †: 30
+- `components/transactions/events/EventCreateMiniModal.svelte`: 76,86
+- `components/transactions/modals/ImportWizardModal.svelte`: 1648,1782
+- `components/ui/TweenedValue.svelte`: 17,56
+- `components/ui/input/DistributionEditor.svelte`: 193,277,386
+- `components/ui/media/ImageEditModal.svelte`: 419
+- `features/tools/pac-allocator/planner/result/model.ts` †: 152
+- `features/tools/pac-allocator/planner/steps/AssetEditor.svelte` †: 102
+- `utils/core/formatPercent.ts`: 78
+- `utils/core/parseDecimalInput.ts`: 110
+- `utils/transactions/importDedup.ts`: 180
+- `utils/transactions/splitRowCharges.ts`: 72,86
+
+Correzioni al conteggio automatico:
+- `KpiSection.svelte:138` (`absRoiPct`) è una percentuale, perché la riga `:382` la stampa con «%».
+- In `UnifiedLotsTable.svelte` la chiamata vera è a `:89`, `sharedFormatPercent(value, {scale: 100})`. La riga `:216` usa l'alias.
+
+**La proposta**:
+1. **La locale dei numeri**: quella della macchina, come gli importi e le date. Così una percentuale non si scontra con l'importo che ha accanto («+4788,01 €» / «14,07%»), qualunque sia la coppia fra browser e lingua della UI.
+2. **Un punto solo per la regola**: `utils/core/numberLocale.ts` → `numberLocale()`, che oggi restituisce `undefined`, cioè la macchina.
+   - I test lo mockano a `fr` o `it` per i rossi.
+   - Se un giorno la regola diventa la lingua della UI, si cambia lì.
+3. **`formatPercent`**: senza `locale` usa `numberLocale()` e localizza.
+   - Le 51 chiamate senza `locale` si correggono senza toccarle. Fra queste c'è `UnifiedLotsTable.svelte:89`, quindi il file di I non si tocca.
+   - La forma fissa non serve a nessun export: l'unico clipboard dei lotti copia l'id.
+4. **`formatFixed(value, digits, {signed, locale})`**: un file nuovo in `utils/core/`, cioè il `toFixed` localizzato. Lo usano i byte, le durate e gli altri decimali.
+5. **Le 48 percentuali scritte a mano** passano a `formatPercent`, con `scale`, `digits`, `signed` e `suffix` del sito. Il segno `−` (U+2212) del rischio si tiene.
+6. **I byte**: `formatBytes` usa `formatFixed`, con le etichette di oggi. **Le durate**: `formatFixed` più il simbolo di oggi (`s`, `h`). Nessuna chiave i18n nuova.
+7. **Gli interni restano**: 26 punti, fra input, chiavi, payload, CSS, confronti e dati numerici dei grafici.
+
+**Da decidere**:
+- (a) La macchina, come consiglio, oppure la lingua della UI. La seconda vorrebbe dire cambiare anche importi e date: fuori portata.
+- (b) Le 12 chiamate con `$currentLanguage`: allinearle alla regola (consiglio) oppure lasciarle.
+- (c) Gli altri decimali (56) adesso, come consiglio, perché nella stessa card il tasso e la variazione % si scontrerebbero; oppure dopo la 1.2.
+- (d) Anche `currencyFormat.ts:39`, `:61` passa per `numberLocale()`: nessun cambio di comportamento, una sola fonte.
+
+**I test** (test-author, prima i rossi):
+- Unità (node): `formatFixed`; il default di `formatPercent` con `numberLocale` mockato; `formatBytes`; `formatElapsed`.
+- Componenti (jsdom), uno per famiglia, con `numberLocale` = `fr` o `it`:
+  - percentuali: `KpiSection`;
+  - byte: una cella di dimensione;
+  - durate: `SyncResultRow`;
+  - altri decimali: `FxCard`.
+- Da aggiornare: `formatPercent.test.ts`, che oggi fissa la forma senza locale.
+
+**La stima**: circa 1 giorno; 4–5 h in meno se gli altri decimali vanno dopo la 1.2.
+
+**I conflitti**:
+- `UnifiedLotsTable.svelte`: nessuna riga, grazie al punto 3.
+- `KpiSection.svelte`: le righe `:138`, `:252-255`, `:268`, `:382`, non la `:304` di V.
+- I cataloghi: nessuna chiave nuova.
+- La galleria di M: le percentuali in it, fr ed es cambiano negli scatti.
+
+**Il CHANGELOG 🐛**: i punti che c'erano nella 1.1.
+- In 1.1: la dashboard (KPI, esposizione, contributi, crescita, allocazione), i grafici di prezzo, linea e candele con la misura, asset e FX (card, tabelle, riepiloghi), i lotti (custodia, grafici WAC e confronto, tabella), le transazioni (WAC, cambio, modali), le dimensioni dei file, il registro dello scheduler e le durate dei sync, la cache, il pannello di analisi del rischio e la heatmap delle correlazioni.
+- Nati nella 1.2: i livelli di rischio L1–L4, lo scatter, lo Yield on Cost e il PAC.
+
+### M-18 — nuova regola: la lingua della UI per tutto (developer, 2026-10-12)
+> **Decisione** del developer, testuale: «Lingua della UI per tutto, importi e date compresi: lavoro più grande, con più rischio sulla 1.2».
+> - Del coordinatore: (b) le 12 chiamate con `$currentLanguage` passano dalla fonte unica; (c) i 56 decimali si fanno adesso; (d) `currencyFormat` passa dalla fonte unica.
+> - **Analisi rifatta, senza codice**, letta sul target `55304116f` con `git grep` in sola lettura: il target ha 12 file del frontend che mancano alla mia base (`responsiveXAxis.ts`, i grafici). Script `/tmp/libreFolio_m18b_grep.sh`.
+
+**1. La fonte unica**: `uiLocale()`, in un modulo `.svelte.ts` che legge `currentLanguage` con `fromStore`, così è reattiva.
+- **La mappa**: lingua della UI L, tag principale del browser B (`navigator.language`).
+  - Se la lingua di B è L, si usa B, con la sua regione.
+  - Altrimenti si usa il default di L: `it`, `fr`, `es`, e per l'inglese **`en-GB`** (proposta).
+  - Si guarda solo il tag principale: Chrome mette `en-US` come lingua secondaria a quasi tutti, e un italiano con la UI inglese finirebbe nelle convenzioni americane.
+- **Le conseguenze sulle date**, provate con Node:
+  - `en` da solo equivale a en-US: `10/12/2026`, `Oct 12, 2026`, `2:05 PM`;
+  - en-GB: `12/10/2026`, `12 Oct 2026`, `14:05`;
+  - i numeri sono identici nei due casi.
+- **Le regioni contano anche per i numeri**:
+  - it-CH `4788.01` (col punto);
+  - fr-CH `4'788,01`;
+  - es-MX `4,788.01`;
+  - fr-CA ha le date `2026-10-12`.
+- **La galleria** (`GALLERY_LOCALES`: en-US, it-IT, fr-FR, es-ES) dà lo stesso risultato della lingua da sola: importi e date negli scatti non cambiano.
+- **Il segno meno** è ASCII in tutte e quattro le lingue e nelle loro regioni comuni. U+2212 compare solo in locale che non sono della UI, come lo svedese.
+
+**2. La reattività**
+- Con i formattatori che leggono `uiLocale()` per default, ogni chiamata fatta in un template, in un `$derived` o in un `$effect` segue il cambio di lingua senza toccare il sito: le 52+13 di `currencyFormat`, le 64 di `formatPercent` e le altre. Il badge della quota (`brokers-detail.spec.ts:1644`, `:1655`) funziona già così.
+- **Dove la lettura va resa esplicita**:
+  - **I grafici**: l'effect che costruisce le opzioni deve leggere la locale, perché i formatter di ECharts girano fuori dal tracciamento.
+    - Cinque grafici oggi non dipendono da nessuna lingua: `AllocationPieChart`, `GeographyMap`, `ScatterChart`†, `SemiDonutChart`, `ExposureBars`†.
+    - Gli altri 12 leggono `$currentLanguage` o `$locale`: passano a `uiLocale()`, e per ognuno va verificato che la lettura stia dentro l'effect.
+  - **Le stringhe costruite in un callback asincrono e salvate in `$state`** restano nella lingua di quel momento. Sono transitorie: il dettaglio della sonda (`ProviderAssignmentSection:333`) e i toast.
+- Nessun `$:` legacy e nessuno store Svelte 4 formatta numeri o date: ho cercato, sono 0.
+
+**3. L'inventario esteso** (†: nato nella 1.2)
+- **Importi**:
+  - `currencyFormat.ts:39`, `:61`, con 65 chiamate in 27 file che non si toccano;
+  - 15 `toLocaleString(undefined…)` o `Intl.NumberFormat(undefined…)`: `LotGanttChart:283`, `ExposureTable:153`, `GrowthChart:2130`, `:2166`, `KpiSection:347`, `PerformanceChart:175`, `:188`, `:194`, `DataTableColumnFilter:170`, `:171`, `FixFlaggedStep:426`, `txDisplayHelpers:20`, `DataEditor:205`, `planner/format.ts`†`:254`, `resolveValidationMessage:193`;
+  - senza argomenti: `RiskAnalysisPanel:122`.
+- **Date**:
+  - `formatDateTime.ts`, 3 chiamate;
+  - 9 siti con `undefined`: `SchedulerLogModal:222`, `dataTableLogic:328`, `:344`, `AssetEventPicker:188`, `EventCreateMiniModal:155`, `ImportWizardModal:3773`, `TransactionBulkModal:1900`, `:1901`, `importReportSets`†`:287`, la pagina del broker `:443`;
+  - 5 senza argomenti: `dataTableLogic:326`, `:342`, `GlobalSettingsTab:726` («Last updated:», M-17), `:755`, la pagina dell'asset `:3524`;
+  - fissi: `DataEditor:106` (`'en-US'`, i giorni della settimana) e `DateRangePicker:1109` (`'en'`, M-17).
+- **Siti già nella lingua della UI, da far passare dalla fonte**: 27.
+  - assi: `formatAxisDate` (5 chiamate), `formatAxisNumber` (3);
+  - lotti: `lotComparisonChartHelpers:206`, `:222`, `lotGanttChartHelpers:105`, `unifiedLotsTableHelpers:63`;
+  - grafici: `priceChartHelpers:216`, `responsiveXAxis`†`:48`, `growthLadderAxis`†`:169`, `GrowthChart:1356`;
+  - rischio: `eligibility`†`:124`, `TornadoChart`†`:63`, `scenarioHelpers`†`:384`, `:389`, `riskAnalysisHelpers:166`;
+  - `ProfileTab:23`;
+  - PAC e Tool: `planner/format`†`:286`, `:304`, `KpiCards`†`:115-118`, `BackendTimingBar`†`:79-80`, `ToolDiagnosticsPanel`†`:65`, `ToolExecutionMetrics`†`:37`;
+  - `aiExportOptions:81`;
+  - `LotComparisonChart:229`, `:235`, `:384`, `LotCustodyModal:68`, `LotGanttChart:258`, `AllocationHistoryChart:548`.
+- **Assi**: `lotChartShared.ts:85-98`, dove la regola «numeri dalla macchina» va riscritta; `responsiveXAxis`†, che nomina già i giorni nella lingua dell'app, passa dalla fonte; le cifre degli assi della famiglia N, cioè `chartCoreHelpers`, `LineChart`, `PriceChartFull` e `Candlestick`.
+- **Il prompt dell'AI Export**: nessuna formattazione con la locale. `snapshotDataRenderer:226` usa `'en'` solo per leggere le cifre minori di una valuta, e resta così. I byte del prompt non cambiano; li sorvegliano `promptRenderer.test` e la sonda.
+- **PDF ed export**: nel frontend non ce ne sono. Il backup è binario, e i clipboard copiano id, URL, il prompt e le info di sistema.
+- **I date picker**:
+  - i nomi dei mesi e dei giorni vengono dalle chiavi i18n e vanno bene;
+  - `DateRangePicker:1109` passa dalla fonte (sovrapposizione con M-17);
+  - gli `<input type="date">` nativi (`RiskAnalysisPanel:902`, `:906`) seguono il browser: è un limite noto.
+- **Le famiglie della prima analisi** restano tutte: percentuali (48 a mano, 51 di default, 12 con `$currentLanguage`), byte (3), durate (5), altri decimali (56), interni (26).
+- **Documentazione da riscrivere**: `lotChartShared.ts:85-90`, `formatDateTime.ts:16-18` e `L2Diversification.svelte:211`, che chiama questo «a known debt».
+
+**4. I test**
+- **Da rifare**:
+  - `formatPercent.test.ts`, 34 asserzioni: senza `locale` la forma non è più fissa;
+  - `GrowthChart.test.ts`: il contratto D23/D23b «la locale del browser», con `inLocale` che modifica `Number.prototype.toLocaleString`, diventa quello della UI;
+  - `currencyFormat.test.ts` calcola l'atteso con `undefined`: va calcolato con la fonte. In inglese l'esito è identico.
+- **Restano validi**:
+  - i 2 E2E del badge: `fr` col browser en-US dà `fr` da solo, come `$currentLanguage` oggi;
+  - `growthLadderAxis.test` e `TornadoChart.test`, che usano locale esplicite;
+  - il prezzo live di `asset-detail`, la cui describe è in inglese;
+  - gli altri E2E che passano a it, fr o es, che non asseriscono numeri né date.
+- **La galleria**: importi e date non cambiano. Percentuali, byte, durate e decimali sì, in it, fr ed es.
+- **Rossi nuovi**:
+  - la mappa;
+  - uno per famiglia, in it o fr col browser en-US: percentuali, byte, durate, decimali, importi, date, assi;
+  - la reattività: un test di componente, e un E2E della dashboard da en a it che controlla importo e percentuale di un KPI.
+
+**5. Stima, rischi e taglio**
+- **CP1**, circa 1 giorno: la fonte, poi percentuali, byte, durate e i decimali fuori dai grafici.
+- **CP2**, circa 1,5 giorni: importi, date, assi, il ridisegno dei grafici, le cifre dei grafici e i contratti dei test.
+- **Rischi**:
+  - l'ampiezza: circa 400 siti, toccati per lo più attraverso i default;
+  - la scelta per l'inglese (en-US o en-GB);
+  - qualche grafico che non si ridisegna;
+  - i contratti D23 di GrowthChart e dei lotti, cioè il piano 47 di I;
+  - un cambio visibile per chi ha browser e UI diversi, ed è voluto;
+  - gli input data nativi.
+
+#### M-18 — aggiunta: M-17 passa a T, e i file di I (coordinatore, 2026-10-12)
+- **M-17** (🐛, c'era già nella 1.1.0) entra nel perimetro.
+  - `DateRangePicker.svelte:1109`: il `'en'` fisso passa a `uiLocale()`.
+  - `GlobalSettingsTab.svelte:726`: «Last updated:» diventa `{$_('common.updated')}:`. La chiave esiste in tutti e 4 i cataloghi («Updated», «Aggiornato», «Mis à jour», «Actualizado»): nessuna chiave nuova.
+  - Le date di `GlobalSettingsTab.svelte:726` e `:755` passano dalla fonte.
+  - `DataEditor.svelte:106`: il giorno della settimana, oggi `'en-US'`, passa dalla fonte.
+  - Le altre date trovate da I erano già nell'inventario esteso.
+- **I file di I** (per circa 2 giorni) e le mie righe, lette sul target:
+  - `ConnectionSecurityIndicator`, `utils/clipboard.ts`, `AboutTab`, `AskAdminModal`, `FilesTable`: nessuna riga mia.
+  - `BrokerIcon`, `brokerIconChain` e `ImportBrokerMismatchModal` non esistono sul target: sono file nuovi di I, nessuna riga mia.
+  - `FilePreviewModal:123` (`formatBytes`), `FileGrid:73` (`formatDateTime`) e `:177` (`formatBytes`), `UnifiedLotsTable` (`formatCurrencyAmountPlain` e `formatPercent`): passano dai default dei formattatori, **senza modifiche**.
+  - `ProviderAssignmentSection`: le righe **`:333`** (prezzo), **`:585`** e **`:616`** (durate). Le sposto nel CP2, su una base che contiene il cambio di I a `:591-596`.
+- **Così il CP1 non tocca nessun file di I.**
+- **M-17 nel CP2**, con le altre date. Se lo vuoi prima, può entrare nel CP1: i suoi 3 file non sono di I.
+- **CHANGELOG**: la riga 🐛 di I, «The date range picker and the settings dates follow the app's language», si può fondere con la 🐛 di M-18; più una riga 🔄 per chi ha browser e UI in lingue diverse.
+
+### M-18 CP1 — via libera (coordinatore, 2026-10-12)
+- **Decisioni**: l'inglese senza regione ripiega su `en-GB` (developer); si usa solo il tag principale del browser (coordinatore); M-17 e `ProviderAssignmentSection` vanno nel CP2.
+- Base `55304116f`: il coordinatore mi ha fatto avanzare in fast-forward; il piano è rimasto modificato. Il CP1 non tocca nessun file di I.
+- **Note di I**, recepite:
+  - in un componente **legacy** la lettura dentro un helper è untracked (wiki `problems/legacy-component-language-untracked`);
+  - `formatBytes` ha le unità con `get(_)`;
+  - test: si monta in `en`, poi `currentLanguage.set('it')`, e l'atteso si calcola con `Intl`.
+- **Il disegno del CP1**:
+  1. `stores/app/uiLocale.ts`:
+     - `resolveUiLocale(lingua, tagBrowser)` è pura. Se la lingua coincide si tiene il tag; altrimenti `en` → `en-GB`, e le altre lingue restano da sole;
+     - `uiLocaleStore` = `derived(currentLanguage, …)` serve ai template **legacy** (`$uiLocaleStore`);
+     - `uiLocale()` = `fromStore(uiLocaleStore).current` serve al codice runes e ai default dei formattatori.
+  2. `utils/core/formatFixed.ts`: `formatFixed(value, digits, {signed, locale = uiLocale()})`, cioè il `toFixed` localizzato.
+  3. `formatPercent`: `locale = uiLocale()` per default; il `%` passa da `Intl`, le altre unità da `formatFixed`. La forma fissa non c'è più.
+  4. `formatBytes(bytes, translate, locale = uiLocale())` e le durate passano da `formatFixed`.
+  5. Le 12 chiamate con `$currentLanguage`:
+     - nei componenti runes (`DistributionEditor` ×4, `BrokerSharingPanel` ×6) si toglie l'argomento;
+     - in quelli legacy (`BrokerCard`, la pagina del broker) diventa `$uiLocaleStore`.
+  6. I `formatBytes` nei legacy (`FileUploader`, `FileEditModal`, la pagina `files`) ricevono `$_` e `$uiLocaleStore` nel template.
+  7. I 70 `toFixed` del CP1, in 35 file, passano a `formatPercent` o `formatFixed`.
+- Chiesta al coordinatore l'assegnazione di `_frontend_utility.py`, solo per aggiungere i Vitest nuovi alle liste.
+
+#### M-18 CP1 — blocco ambiente (2026-10-12, 17:23)
+> **⚠️ Fuori pista (ambiente, non codice)**: il `brew upgrade` del developer ha rotto `node` (`dyld: Library not loaded: libsimdjson.33.dylib`).
+> - Per ordine del coordinatore, niente comandi frontend nuovi; un rosso con quell'errore è dell'ambiente.
+> - Ho detto a test-author di fermare i comandi e di riferire quali rossi ha già visto prima del guasto.
+> - La cura (`/tmp/libreFolio_m18_cp1_apply.py`, 42 file, e `/tmp/libreFolio_m18_cp1_core.py`) è pronta e la prova a secco è passata, ma **non l'applico** finché ogni rosso non è stato visto rosso.
+> - Nota dal coordinatore: T-SG e T-DI sono già nella mia sezione del backlog (`bf831ef10`). Non vanno duplicate; le voci nuove vanno in fondo.
+
+#### M-18 CP1 passo 1 — i rossi ✅ (2026-10-12)
+> **Note implementazione** (test-author): tutti i rossi visti rossi su `node` sano (v26.11.1), in sequenza fra le 17:41 e le 17:46. Log in `/tmp/libreFolio_m18_reds_final_*.log`.
+> - **Runner**:
+>   - `front-utility core-unit`: 7 rossi (`formatPercent.test.ts`), 3 767 passed;
+>   - `front-utility component-unit`: 4 rossi (`KpiSection` ×2, `SyncResultRow` ×2), 2 994 passed;
+>   - `front-portfolio risk-frame-component`: 2 rossi (`RiskResultFrame`), 18 passed.
+> - **File nuovi**, con `node_modules/.bin/vitest run`: 34 rossi e 2 controlli verdi. I file sono `stores/app/uiLocale.test.ts`, `utils/core/__tests__/formatFixed.test.ts` e `utils/files/upload.test.ts` (node), e `components/ui/media/FileEditModal.test.ts` (jsdom, legacy).
+> - **I motivi**:
+>   - la forma inglese fissa (`'+12.50%'` invece di `'+12,50 %'`; `'1234.50%'` invece di `'1,234.50%'`);
+>   - i moduli mancanti;
+>   - nessun aggiornamento quando la lingua cambia sul posto.
+> - **Indicazioni per la cura**:
+>   - per il `%`, pre-arrotondare come `toFixed`: altrimenti `formatPercent(1.2345, {digits: 3})` dà `+1.235%`;
+>   - nei template legacy servono **sia** `$_` **sia** `$uiLocaleStore`, perché il catalogo francese arriva dopo il cambio di lingua;
+>   - `KpiSection.test.ts:212` (`'+20000.00%'`) va aggiornato al raggruppamento.
+>
+> **⚠️ Fuori pista**: nella finestra del guasto è fallita una sola corsa, `component-unit` alle 17:21:30, per `dyld`. È stata ripetuta.
+
+#### M-18 CP1 passi 2–4 — cura, verdi, E2E ✅ (2026-10-12)
+> **Note implementazione**:
+> - **La cura**:
+>   - `/tmp/libreFolio_m18_cp1_core.py`: i moduli nuovi `stores/app/uiLocale.ts` e `utils/core/formatFixed.ts`; `formatPercent` con `locale = uiLocale()`;
+>   - `/tmp/libreFolio_m18_cp1_apply.py`: 42 file, cioè i 70 `toFixed`, le 12 chiamate con `$currentLanguage` e i `formatBytes` legacy con `$t`/`$_` e `$uiLocaleStore`.
+>   - Dopo la cura restano solo i `toFixed` interni del CP1: `L4Shock:145`, `EventCreateMiniModal:77,87` e `ImportWizardModal:1649,1783`.
+>   - Nessun file di I toccato.
+> - **Runner**: in `_frontend_utility.py`, core-unit + `formatFixed.test.ts`, `uiLocale.test.ts`, `upload.test.ts`; component-unit + `FileEditModal.test.ts`, `FileUploader.test.ts`.
+> - **Verdi** (6164, in sequenza): 19 azioni Vitest, circa 10 930 test.
+>   - core-unit 124 file, **3 825**; component-unit 114 file, **3 006**; risk-frame-component 20.
+>   - Più le altre 16 azioni Vitest di ai-export, asset, broker, fx, portfolio, transaction, user e onboarding, tutte verdi.
+>   - `check-orphans` pulito. `dev.py front check`: 0 errori e 0 avvisi. Prettier pulito su tutti i file.
+> - **E2E** (6164):
+>   - il badge della quota in `brokers-detail`: 2 passed (in francese all'apertura, e passando in francese sul posto);
+>   - `asset-classification`: 4 passed;
+>   - `tx-import-asset-inspector`: 5 passed.
+> - **Sovrapposizioni**: il target è ora a `0c8412745` (treno 67) e ha cambiato 418 file, nessuno dei miei. Non aggiunge `toFixed`, non passa `$currentLanguage` a `formatPercent` e non ha mock parziali nuovi di `$lib/i18n`.
+>
+> **⚠️ Fuori pista**:
+> - **Arrotondamento**: Intl arrotonda il decimale più corto che rilegge il valore (`1.45` → `1.5`), mentre `toFixed` arrotonda il valore stesso (`1.4`). Quindi `formatFixed` e `formatPercent` pre-arrotondano con `toFixed`. Per il `%` serve anche a evitare lo spostamento dato da `/100` (`1.2345` a tre cifre).
+> - **Negativo minuscolo**: resta `-0.00` / `-0.00%`, come con `toFixed` (`formatPercent.test.ts:65`). Ho tolto un `|| 0`.
+> - **Riparazioni di test** (test-author):
+>   - il registro di `moneyRenderSites`: due snippet riscritti;
+>   - il mock di `$lib/i18n` in `SchedulerLogModal.test.ts`, ora parziale con `importOriginal`;
+>   - `MeasurePanel.test.ts:346` → `'1,000.0000'`;
+>   - `KpiSection.test.ts:212` → `'+20,000.00%'`;
+>   - le descrizioni di `formatPercent.test.ts:166` e `:212`.
+> - **`FileUploader.test.ts`** è arrivato dopo la cura. Per vederlo rosso ho tolto per poco `$t, $uiLocaleStore` da `FileUploader.svelte:242`: i 2 test del cambio sul posto sono falliti, il controllo e il montaggio in italiano no. Poi ho rimesso la riga e verificato.
+> - **Il segno sullo zero**: le percentuali e i decimali scritti a mano mettevano `+` anche sullo zero (`+0.00%`). Ora seguono la regola condivisa di `formatPercent`: niente segno sullo zero. Nessun test del CP1 lo fissava. I rischi del livello L4 tengono il loro `−`/`+`.
+
+### Checkpoint M-18 CP1 🧊 (2026-10-12) — inviato dopo «riparti» (19:24), FROZEN fino al commit
+- Base `55304116f`. 52 file modificati e 7 nuovi; nessuno è di I.
+- Due commit proposti:
+  1. `fix(i18n): write figures in the interface language`: codice, test e righe del runner (`/tmp/libreFolio_commit_t_m18cp1_1.txt`);
+  2. `docs(journal): record M-18 CP1`: questo piano (`/tmp/libreFolio_commit_t_m18cp1_2.txt`).
+- I testi del CHANGELOG li scrive il coordinatore all'integrazione; le proposte sono nel messaggio.
+- **Trovato rileggendo, per il CP2** (⚠️ scarto dalla regola del developer):
+  - con un browser il cui tag primario è un `en` nudo, `resolveUiLocale` (`uiLocale.ts:42`) tiene `en`, e `en` scrive le date all'americana (10/12/2026, 2:05 PM). La regola dice: inglese senza regione → `en-GB`;
+  - nel CP1 non si vede: per numeri, percentuali, byte e durate `en`, `en-GB` ed `en-US` scrivono uguale;
+  - **cura, primo passo del CP2**, col suo rosso via test-author: tenere il tag del browser solo se porta una regione.
+- Restano per il CP2:
+  - importi, date e assi, con il ridisegno dei grafici;
+  - M-17;
+  - `ProviderAssignmentSection` (`:333`, `:352`, `:585`, `:616`);
+  - le cifre dei grafici;
+  - la regola in `lotChartShared.ts:85-90`, `formatDateTime.ts:16-18` e `L2Diversification.svelte:211`.
+
+### ⏸️ STOP del developer (2026-10-12) — FROZEN fino a «riparti»
+- **Fatto**:
+  - il CP1 è completo e verde (§M-18 CP1, passi 2–4);
+  - dopo il passo 4, altri tre E2E sulla 6164, tutti verdi: `front-portfolio risk` 38 passed, `front-portfolio risk-lab` 44 passed, `front-transaction tx-fx-implied-rate` 3 passed (log `/tmp/libreFolio_t1_m18cp1e2e2_*`);
+  - il materiale del checkpoint, in `/tmp`: il manifest (`libreFolio_m18cp1_manifest.final.txt`, 59 blob) e i due messaggi di commit (`libreFolio_commit_t_m18cp1_{1,2}.txt`, ASCII).
+- **A metà**:
+  - il checkpoint CP1 non è stato inviato al coordinatore;
+  - il blob del piano nel manifest è vecchio: questa nota cambia il file, quindi va ricalcolato prima dell'invio.
+- **Trovato, da decidere** (il file non è mio):
+  - la guardia `frontend/e2e/fixtures/galleryReportSets.ts:565` (`expectOfflinePricesDrawn`, scatto «Asset list page» della galleria) si aspetta sulla card il prezzo scritto con `Number(price.value).toFixed(2)`;
+  - con il CP1 la card lo scrive con `formatFixed`, nella lingua della UI. Quindi la guardia diventa rossa:
+    - in it, fr ed es sempre;
+    - in inglese per i prezzi da 1 000 in su (`4116.60` → `4,116.60`, `10956.03` → `10,956.03`).
+  - Le altre E2E che fissano cifre usano valori sotto 1 000 con la UI inglese e il browser en-US, quindi non cambiano.
+  - **Cura proposta**, una riga. Due strade:
+    - confrontare le sole cifre (`replace(/\D/g, '')`), come fa già `tx-import-degiro.spec.ts:583-584`;
+    - oppure formattare il prezzo atteso con `GALLERY_LOCALES[lang]`.
+  - La docstring di `galleryLocale.ts:4-7` («the app formats with it wherever it passes no locale») invecchia con il CP2: la aggiorna M.
+- **Prossimo passo, dopo «riparti»**:
+  1. ricalcolare il blob del piano nel manifest e inviare il checkpoint CP1, con le proposte per il CHANGELOG e la guardia della galleria;
+  2. restare FROZEN fino all'integrazione;
+  3. poi il CP2.
+- **Stato**:
+  - nessun server; porta 6164 libera; nessun sotto-agente in volo;
+  - worktree con 59 voci (52 file modificati, 7 nuovi), nessuno di I.
+- **▶️ Riparti** (2026-10-12 19:24, coordinatore):
+  - il checkpoint CP1 parte subito, col blob del piano ricalcolato;
+  - poi FROZEN sul CP1 fino al commit, quindi il CP2;
+  - la run completa con coverage del coordinatore gira sulla 6176: se un mio E2E scade, prima lo rilancio da solo, poi indago.
+
+### M-18 CP2 — via (coordinatore, 2026-10-12 sera)
+- **Base**: `a5653f9ef` (treno 68, il CP1 è dentro: `5b2aad5c4`, `d00c06685`). Worktree pulita, porta 6164 libera.
+- **Dal coordinatore**:
+  - galleria: proposta A, passata a M con la docstring di `galleryLocale.ts:4-7`;
+  - CHANGELOG: una sola volta, col CP2;
+  - il primo passo è `en` senza regione → `en-GB`, col suo rosso;
+  - `ProviderAssignmentSection` per ultimo, dopo il cambio di I (`:591-596`, non ancora nel target);
+  - `_frontend_utility.py` passa a M: registrazioni solo chiedendo.
+- **Inventario riverificato** sulla base (script in sola lettura `/tmp/libreFolio_m18cp2_inv.py`):
+  - dopo la mia base, il target ha toccato un solo file del perimetro, `AboutTab` (una riga, di I);
+  - `currencyFormat`: 65 chiamate, 61 in componenti runes e 4 in `.ts` chiamati da runes, nessuna legacy;
+  - `formatDateTime`: un solo chiamante legacy, la pagina `files` (`:686`);
+  - altri legacy con date: `ProfileTab:480` (passa già `$currentLanguage`) e la pagina del broker (`:783`, `:800`).
+
+#### Disegno del CP2
+1. **`uiLocale.ts:42`**: il tag del browser si tiene solo se ha la lingua della UI **e una regione** (`Intl.Locale(tag).region`). `en` o `en-Latn` → `en-GB`; `es-419` resta.
+2. **Importi**:
+   - `currencyFormat`: opzione `locale`, per default `uiLocale()`;
+   - i 15 `toLocaleString(undefined…)`/`Intl.NumberFormat(undefined…)` passano dalla fonte;
+   - `RiskAnalysisPanel:122` diventa un `$derived`.
+3. **Date**:
+   - `formatDateTime(value, locale = uiLocale())`; la pagina `files` passa `$uiLocaleStore`;
+   - i 9 siti con `undefined` e i 5 senza argomenti passano dalla fonte;
+   - la pagina del broker: `formatDate(str, locale)`, con `$uiLocaleStore` dal template;
+   - `ProfileTab:480`: `$uiLocaleStore`.
+4. **M-17**:
+   - `DateRangePicker:1109` passa dalla fonte;
+   - `GlobalSettingsTab:726` → `{$_('common.updated')}:` più la data dalla fonte; `:755` uguale;
+   - `DataEditor:106` (il giorno della settimana) e `:205` passano dalla fonte.
+5. **I siti nella lingua della UI** (`$currentLanguage`, `$locale`, `language`, `tag`) passano dalla fonte:
+   - gli helper con `locale?` prendono il default `uiLocale()`: `formatAxisNumber`, `formatAxis{Percent,Currency,Amount}`, `formatQuantity`, `formatLotQuantity*`, `formatMonthLabel`, `dayFormatter`, `formatPlanner*`, `buildResponsiveXAxisPolicy`, `formatAxisDate`;
+   - le chiamate che passano la lingua la tolgono (runes) o passano `uiLocale()`;
+   - `UnifiedLotsTable` (di I) non passa nessuna locale: segue la fonte senza essere toccato.
+6. **Restano sulla lingua** (testo, non cifre):
+   - `ensureCountriesLoaded($currentLanguage)`;
+   - `GeographyMap language=` (i nomi dei paesi);
+   - `localizedScenarioText`, `replayOptions`, `shockOptions`;
+   - `nameComparator`;
+   - `Intl.ListFormat` (`AssetSetRiskReturnSection:161`);
+   - la lingua della risposta dell'AI Export.
+7. **AI Export**:
+   - `AiExportMenu:330` passa `uiLocale()`;
+   - il messaggio «copiato» (`ui.ts:97-105`) oggi scrive token e byte nella forma della lingua della **risposta**, dentro una frase nella lingua della UI: passa dalla fonte;
+   - il prompt non cambia di un byte.
+8. **Le cifre dei grafici** (famiglia N, circa 45 `toFixed`): `chartCoreHelpers`, `LineChart`, `candlestickChartHelpers`, `priceChartHelpers`, `PriceChartFull`, `CandlestickChart`, `SemiDonutChart` (anche `'{b}: {c}%'`), `GeographyMap` (`visualMap`), `AllocationHistoryChart`, `ExposureTreemap`, `GrowthChart`, `LotWacPriceChart`, `CorrelationHeatmap`, `echartsTooltipHelpers`, il default di `TweenedValue`.
+   - Regole: `formatPercent` / `formatFixed`; zero senza `+`; `candlestick` tiene «almeno un decimale» sotto 1.
+9. **Il ridisegno**:
+   - ogni effetto che chiama `setOption` legge `uiLocale()`;
+   - `void $currentLanguage` → `void uiLocale()`, con la stessa tempistica, perché lo store deriva dalla lingua;
+   - lo aggiungono `AllocationPieChart`, `ScatterChart`, `SemiDonutChart`, `GeographyMap`, `ExposureBars` e `CorrelationHeatmap`.
+10. **Commenti da riscrivere**: `lotChartShared.ts:85-90`, `formatDateTime.ts:16-18`, `formatAxisDate.ts:8-10`, `LotWacPriceChart.svelte:293`, `L2Diversification.svelte:211`, `GrowthChart.svelte:742`, `l1Helpers.ts:35`.
+11. **Fuori**:
+    - `formatDecimalForDisplay` e gli `<input type="date">` nativi: sono input, localizzarli chiede di localizzare anche la lettura; T-DI;
+    - il fuso orario (`GlobalSettingsTab:105`, `:108`);
+    - le cifre minori di una valuta lette con `'en'` (`snapshotDataRenderer:226`, `planner/format:36`).
+- **Domanda al coordinatore**: `DataEditor:154` (`'Date'`) e `:180` (`title="N days stale"`) sono testo inglese scritto a mano, accanto al giorno della settimana di M-17. Le chiavi esistono già (`common.date`, `chart.tooltip.stale`). Entrano nel CP2?
+
+- **Risposte del coordinatore** (2026-10-12 sera):
+  - `DataEditor:154` (`'Date'` → `common.date`) e `:180` (il titolo → `chart.tooltip.stale`) **entrano nel CP2**, rosso prima, zero chiavi nuove.
+  - Verifica di `chart.tooltip.stale`: lo stesso `{days}` nelle 4 lingue, ma nessun plurale ICU («day(s)», «giorno/i», «jour(s)», «día(s)»), come i tooltip di `CandlestickChart:520` e `LineChart:777`. Il badge `⚠️ {N}d` ha una «d» inglese.
+  - **Scelta (A)**: il titolo usa la chiave com'è, nessun catalogo toccato. Il plurale vero e la «d» sono la voce **T-ST** del backlog, scritta in fondo alla mia sezione.
+- **Rossi in corso**, tre test-author in parallelo su file distinti, ognuno lancia solo vitest sui propri file:
+  - A: `uiLocale.test.ts`;
+  - B: importi, date, M-17 (11 file);
+  - C: grafici, assi, ridisegno, contratti D23 e `+0.00%` (10 file).
+
+#### Passi
+1. 🔴 `en` senza regione → 🟢 (test-author A, `uiLocale.test.ts`).
+2. 🔴 importi, date, M-17 (test-author B) e grafici, assi, ridisegno, contratti (test-author C): solo file esistenti, già registrati.
+3. Cura, nell'ordine 2–10 del disegno.
+4. Verdi: le 19 azioni Vitest del CP1, `check-orphans`, `front check`, Prettier; poi gli E2E che cambiano lingua.
+5. `ProviderAssignmentSection` (`:333`, `:585`, `:616`), se il cambio di I è entrato.
+6. Checkpoint, coi testi del CHANGELOG (🐛 finale e 🔄), poi FROZEN.
+
+#### M-18 CP2 passo 1 — `en` senza regione → `en-GB` ✅ (2026-10-12)
+> **Note implementazione**:
+> - **Rosso** (test-author A, `uiLocale.test.ts`), visto rosso anche da me con `node_modules/.bin/vitest run src/lib/stores/app/uiLocale.test.ts`: 3 rossi, 28 verdi.
+>   - `(en, en) → en-GB`: `expected 'en' to be 'en-GB'`;
+>   - `(en, en-Latn) → en-GB`: `expected 'en-Latn' to be 'en-GB'`;
+>   - con il browser `en` nudo, entrambe le forme danno `{store: 'en', getter: 'en'}`.
+>   - Le guardie restano verdi: `(es, es-419)`, `(it, it)`, `(fr, fr)`.
+> - **Cura** (`uiLocale.ts`, `resolveUiLocale`): il tag del browser si tiene solo se `new Intl.Locale(tag)` ha la lingua della UI **e** una `region`. Docstring aggiornata: un browser senza regione prende il default della lingua.
+> - **Verde**: 31/31; Prettier pulito.
+
+#### M-18 CP2 — cura preparata, non applicata (2026-10-12 sera)
+> **Note implementazione**:
+> - **Script** `/tmp/libreFolio_m18_cp2_apply.py`. Ogni sostituzione verifica quante volte compare; `--dry-run` non scrive niente e mette il diff in `/tmp/libreFolio_m18_cp2_dry.diff`.
+>   - Dry-run: **294 operazioni su 78 file**, tutte col conteggio atteso.
+>   - Toglie 14 import `currentLanguage` e 14 `locale` rimasti senza uso: 13 file del PAC e dei Tools, più `GrowthChart`.
+>   - Prima di applicarlo, ogni rosso dev'essere visto rosso.
+> - **Rossi in corso**: A ✅ (passo 1); B (importi, date, M-17); C (grafici, assi, ridisegno, D23); **D**:
+>   - il messaggio «copiato» dell'AI Export (`aiExportUi.test.ts`), che cambia contratto: le cifre seguono la UI, non la lingua della risposta;
+>   - le date del PAC;
+>   - i default di `riskAnalysisHelpers` e degli helper dei lotti;
+>   - `TornadoChart` col browser `it-CH`.
+> - **Fuori perimetro, trovati**:
+>   - `PriceChartFull.svelte:785-788` ha testo inglese scritto a mano nel tooltip: «orig.», «Nd back», «fx @»;
+>   - `dataTableLogic.ts:341` (`${days}d ago`) sta in un ramo che nessuna colonna usa;
+>   - `files/+page.svelte:685` (`formatDate`) è codice morto.
+> - **`GeographyMap`** si ridisegna già al cambio di lingua: il suo effetto sul prop `language` (`:111-116`) richiama `renderChart`. Basta il `formatPercent` nel `visualMap`.
+> - **E2E da rilanciare dopo la cura**:
+>   - `front-utility toolbar-width-sweep`: i campi del `DateRangePicker` in fr/it/es cambiano larghezza;
+>   - `front-asset asset-mobile-layout`, `front-fx fx-editor`, `front-asset asset-detail`, `front-broker detail`, `front-utility files-uploader`, `front-transaction transactions-modals`, `front-portfolio dashboard`.
+>   - Nessun E2E fissa `+0.00%` o cifre da 1 000 in su senza separatore.
+> - **Doc** (docs-writer, solo EN, dopo la cura): `developer/frontend/i18n.md` (la regola delle cifre) e la tabella degli store in `developer/frontend/state/app-state.md` (`uiLocale`).
+
+#### M-18 CP2 passo 2 — i rossi ✅ (2026-10-12 sera)
+> **Note implementazione**: tutti visti rossi anche da me, con vitest diretto sui soli file dei rossi (fuori dalla corsia), ognuno su un'asserzione:
+> - **B**: 33 rossi in 11 file: importi, `KpiSection`, date, `dataTableLogic`, `SchedulerLogModal`, `ProfileTab` (legacy, browser `it-IT`), M-17 (`DateRangePicker`, `GlobalSettingsTab`, `DataEditor`: giorno della settimana, intestazione, titolo del badge `stale`);
+> - **C**: 40 rossi in 10 file:
+>   - assi `chartCoreHelpers`, `candlestick`, `priceChart`, `lotChartShared`, tooltip;
+>   - `PerformanceChart` e `GrowthChart`, dove D23 ora forza `uiLocale` in `sv-SE` con un mock al posto del prototipo patchato;
+>   - `ExposureTable`;
+>   - il ridisegno di `AllocationPieChart` e `ScatterChart`;
+> - **D**: 13 rossi in 6 file: il messaggio «copiato» dell'AI Export, le date del PAC, `riskAnalysisHelpers`, gli helper dei lotti, `TornadoChart` con `it-CH`.
+>
+> **⚠️ Fuori pista**: C ha trovato percentuali stampate grezze (`${value}%`), fuori dall'inventario costruito su `toFixed`/`toLocale*`/`Intl`. Un grep dedicato ne trova 25:
+> - **sono cifre**: la torta (`:445`, `:447`, `:450`, `:515`), `geographyMapHelpers:142`, `chartSignalsHelpers:49`, l'asse di `AllocationHistoryChart:771` e i badge di `CorrelationHeatmap:357-358`;
+> - **non lo sono**: CSS (`hsl`, raggi, gap), il prompt dell'AI Export (neutro per costruzione), e le etichette inglesi dei segnali what-if (`Linear`/`Compound`/`Sine`), che sono testo fuori perimetro.
+>
+> **Cura**: un'opzione **`trim`** di `formatPercent`, dove `digits` diventa il massimo, così le cifre restano quelle di oggi (`44.5%`, `44%`).
+>
+> C ha segnalato anche un bug possibile: con la dipendenza dalla lingua, la scorciatoia «solo dati» della torta terrebbe la mappa dei nomi della legenda della lingua di prima. Cura: ricostruzione completa al cambio di lingua (`lastLocale`), come al cambio di tema.
+>
+> **Rossi in corso** (C, secondo turno): `formatPercent.test` (`trim`), `AllocationPieChart.test` (percentuali e legenda), `geographyMapHelpers.test`, `chartSignalsHelpers.test`, `AllocationHistoryChart.test`. Cura pronta: `/tmp/libreFolio_m18_cp2_apply2.py`, dry-run con 19 operazioni su 6 file.
+
+#### M-18 CP2 passo 3 — la cura, primo blocco ✅ (2026-10-12 sera)
+> **Note implementazione**:
+> - `/tmp/libreFolio_m18_cp2_apply.py`: 294 operazioni su 78 file, più `uiLocale.ts` del passo 1. Prettier: nessun cambio.
+> - **Verde** dei file dei rossi, vitest diretto: 27 file, **1 714 verdi**, 1 rosso.
+>   - Il rosso è un test che legge il sorgente: `chartCoreHelpers.test.ts:2138` fissa `locale: $locale ?? undefined` di `GrowthChart`, da rifissare a `uiLocale()`. Va a test-author.
+> - **Da riparare**: il registro dei siti monetari (`moneyRenderSites.test.ts:218`) è indicizzato sullo snippet `${Number(value).toFixed(4)}…` di `PriceChartFull`, ora `formatFixed`. Va a test-author, dopo le 19 azioni.
+> - **In corso**:
+>   - le 19 azioni Vitest del CP1 sulla 6164 (log `/tmp/libreFolio_t1_m18cp2g1_*`);
+>   - docs-writer su `developer/frontend/i18n.md` e `state/app-state.md`.
+> **⚠️ Fuori pista (2026-10-12 20:38, coordinatore)**: «non toccare le pagine della doc (`mkdocs_src/`)». Dopo il CP2, M allinea le cifre della doc (`preferences`, `kpi-cards`, `positions`, `brokers/index`) e aggiunge in `preferences` una frase sulla regola.
+> - docs-writer era già partito sulle due pagine developer. Gli ho mandato lo STOP; alle 20:38 non aveva ancora scritto niente in `mkdocs_src/`.
+> - Il testo che produce lo salvo in `/tmp` come proposta, e le pagine tornano come in HEAD.
+> - **Nel CP2 consegno**: l'elenco dei formati visibili che cambiano (importi, percentuali, date, assi), con un esempio per lingua, come riferimento per M.
+
+#### M-18 CP2 passo 4a — le 19 azioni Vitest dopo il primo blocco (2026-10-12 sera)
+> **Esito** (6164, in sequenza; log `/tmp/libreFolio_t1_m18cp2g1_*`): 15 azioni verdi su 19.
+> - Verdi: component-unit **3 041**, growth-chart-memo 141, broker 53, fx 138, risk-* (248, 20, 102, 13, …), store, tx, user, onboarding.
+> - Rossi:
+>   - core-unit, 3: il gate `htmlInterpolation`, due falsi positivi su `LineChart:771`; il registro di `moneyRenderSites`, 2;
+>   - ai-export e asset-unit, 1 ciascuna: il contratto sul sorgente in `chartCoreHelpers.test.ts:2138`;
+>   - allocation-unit, 3: i rossi nuovi di C sulla torta, attesi.
+> - **Il gate HTML**: si fida di `x[k].toFixed(n)` (`NUMERIC_FORMATS`) ma non della forma funzione `formatFixed(x[k], n)`.
+>   - Cura nel gate, via test-author E: `formatFixed` e `formatPercent` col numero come primo argomento rendono numeri, come `toFixed`; più l'auto-test del gate.
+>   - Il registro dei siti monetari prende lo snippet nuovo di `PriceChartFull`; il contratto di `GrowthChart` si rifissa a `uiLocale()`.
+>
+> **⚠️ Fuori pista**:
+> - **C, secondo turno**: 13 rossi nuovi, visti rossi anche da me (117 verdi). I due rossi della torta del primo turno, il ridisegno e l'importo, ora passano col primo blocco.
+> - **C ha trovato un altro sito**: `problemCount` (`chartSignalsHelpers.ts:31-33`, `String(value)`) passa conteggi e copertura ai messaggi dei segnali.
+>   - Cura: `formatFixed(value, 1, {trim: true})`. In inglese un conteggio da 1 000 in su si scrive raggruppato.
+>   - Rosso chiesto a C. La cura è nel passo 2: `/tmp/libreFolio_m18_cp2_apply2.py`, 21 operazioni su 6 file.
+> - **Il target è andato avanti**: `e37770d5e` (treno 70). L'unico file in comune è `BACKLOG_POST_1.2.md`, in sezioni diverse. M ha già applicato la proposta A della galleria (`e8d5a5668`). `ProviderAssignmentSection` di I non è ancora entrato.
+> - **Il riferimento per M** (formati visibili per lingua): `/tmp/libreFolio_m18cp2_examples.txt`, calcolato con Intl.
+
+#### M-18 CP2 passo 5 — seconda parte della cura, decisioni (2026-10-12 sera)
+> **Note implementazione**:
+> - **Rossi del secondo giro di C**, visti rossi anche da me: 16. Sono 13 su `formatPercent({trim})`, le percentuali e la legenda della torta, la mappa, la copertura dei segnali e l'asse di `AllocationHistoryChart`; più 3 su `problemCount`.
+> - **Cura** `/tmp/libreFolio_m18_cp2_apply2.py`: 22 operazioni su 6 file.
+>   - `formatPercent({trim})`;
+>   - le percentuali grezze;
+>   - `problemCount` con `formatFixed(…, 1, {trim: true})`;
+>   - la torta ricostruita per intero al cambio di lingua (`lastLocale`);
+>   - nel commento di `formatPercent`, lo spazio francese prima di `%`: è U+00A0, non U+202F (segnalato da docs-writer).
+> - **Verde**: i 5 file, 136/136; Prettier pulito; `dev.py front check` con 0 errori e 0 avvisi.
+>
+> **Decisioni del coordinatore** (2026-10-12, sera):
+> 1. Le percentuali grezze e la torta ricostruita **nel CP2** ✅.
+> 2. I **decimali esatti** (`formatDecimalForDisplay`, 15 punti di sola lettura) vanno nel **CP3**, subito dopo il CP2: è un formattatore nuovo che passa la stringa a Intl senza passare da un float. Fa parte della 1.2.
+> 3. Le **due pagine developer** (`developer/frontend/i18n.md`, `state/app-state.md`, solo EN) le scrivo io nel CP3 con docs-writer, partendo da `/tmp/libreFolio_m18cp2_devdocs_proposal.patch`. Devono coprire la regola completa, decimali compresi. U-4 toccherà `i18n.md` dopo. Lo stop valeva solo per le pagine utente di M.
+> 4. **T-ICU** nel backlog, scritta nel CP2: le cifre dentro i messaggi ICU (`{x, number, percent}`, il `#` dei 74 plurali) seguono la lingua senza regione.
+> 5. Il **CHANGELOG** lo scrive il coordinatore una volta sola, dopo il CP3. Nell'handoff del CP2: i formati visibili per lingua. Nel CP3: i decimali.
+>
+> **Ancora aperto per il CP2**: le riparazioni di E (il gate HTML, il registro monetario, il contratto di `GrowthChart`), poi le 19 azioni, `check-orphans` e gli E2E. `ProviderAssignmentSection` aspetta ancora I e, se non entra prima, va nel CP3.
+> **Triage di `front-utility toolbar-width-sweep`** (skill `test-triage`, verdetto **ambiente/soglie, preesistente: V-19**):
+> - **I rossi**: 2, solo in spagnolo. In denseRow il gruppo delle azioni («Exportación IA …») esce dalla barra.
+>   - `assetDetail · es`: +6,8 / +16,8 / +4,8 / +14,8 px a vw 1200 / 1190 / 930 / 920;
+>   - `dashboard · es`: +6,0 / +16,0 / +14,0 px a vw 1300 / 1290 / 1020;
+>   - 13 passed.
+> - **Ipotesi scartate**: §1 la forma della risposta non c'entra, è geometria; §2 non sono attese a tempo; §3 l'asset è creato dal test e la scatola che esce è il gruppo delle azioni, testo tradotto.
+> - **Dal coordinatore**: è **V-19** (`BACKLOG_POST_1.2.md:763`), deterministico anche a 1 worker, visto da V sulla stessa base.
+>   - Causa: il cambio dei termini `7c66234a7` («Exportación IA»), già nel treno 68.
+>   - Le date spagnole, più corte, spostano gli stessi rossi di circa 20 px.
+>   - La cura è nel lotto 48 di I (C5, soglie denseRow). **Non li tocco.** Chi entra per secondo rilancia la sweep sulla revisione combinata.
+
+#### M-18 CP2 passo 6 — riparazioni ed E2E (2026-10-12 sera)
+> **Note implementazione**:
+> - **Riparazioni** (test-author E), ognuna verde sul suo file:
+>   - `htmlInterpolation.gate.test.ts`: `NUMERIC_FORMAT_CALLS = {formatFixed, formatPercent}` col solo primo argomento, fidato come `x[k].toFixed(n)`. L'auto-test del gate copre i casi «non segnalato» e «ancora segnalato», e la prova che il gate morde (tre modifiche temporanee, ripristinate).
+>   - `moneyRenderSites.test.ts`: lo snippet nuovo di `PriceChartFull`, stesso stato, più una frase nel `why`.
+>   - `chartCoreHelpers.test.ts:2138`: rifissato su `locale: uiLocale(),`.
+> - **E2E** (6164, in sequenza; log `/tmp/libreFolio_t1_m18cp2e2e_*`):
+>
+>   | azione | esito |
+>   |---|---|
+>   | `toolbar-width-sweep` | 13 passed, 2 failed: solo `es`, V-19, preesistente (triage sopra) |
+>   | `asset-mobile-layout` | 21 passed |
+>   | `fx-editor` | 4 passed |
+>   | `broker detail` | 37 passed |
+>   | `files-uploader` | 8 passed |
+>   | `transactions-modals` | 19 passed |
+>   | `asset-classification` | 4 passed |
+>   | `dashboard` | 27 passed |
+>   | `risk` | 38 passed |
+>   | `risk-lab` | 44 passed |
+>   | `asset-detail` | 32 passed |
+
+### Checkpoint M-18 CP2 🧊 (2026-10-12 sera) — FROZEN, in attesa del coordinatore
+- **Base**: `a5653f9ef` (treno 68). **Target**: `e37770d5e` (treno 70). In comune solo `BACKLOG_POST_1.2.md`, in sezioni diverse: C-61..C-64 del coordinatore, T-ST e T-ICU in fondo alla sezione T.
+- **Delta**: 119 file modificati (82 di prodotto, 35 di test, il piano e il backlog). Nessun file nuovo, niente in stage.
+- **I rossi visti rossi**: 105. A 3, B 33, C 40 + 16, D 13.
+- **Riparazioni**: il gate HTML, il registro dei siti monetari, e due contratti sul sorgente (`GrowthChart`, la torta).
+- **Verdi**:
+  - le 19 azioni Vitest, 11 069 test;
+  - `check-orphans`;
+  - `front check` con 0 errori e 0 avvisi;
+  - Prettier e `git diff --check`;
+  - E2E, 11 azioni: tutte verdi tranne i 2 rossi preesistenti di V-19 (sweep `es`).
+- **Commit proposti** (ASCII):
+  1. `fix(i18n): amounts and dates in the UI language`: il prodotto e i test (`/tmp/libreFolio_commit_t_m18cp2_1.txt`);
+  2. `docs(journal): record M-18 CP2`: il piano e il backlog (`/tmp/libreFolio_commit_t_m18cp2_2.txt`).
+- **Per M**: il riferimento dei formati visibili per lingua è nel messaggio di checkpoint (calcolato con Intl, `/tmp/libreFolio_m18cp2_examples.txt`).
+- **CP3**:
+  - i decimali esatti (`formatDecimalForDisplay`, 15 punti di sola lettura);
+  - le due pagine developer, con docs-writer, partendo da `/tmp/libreFolio_m18cp2_devdocs_proposal.patch`;
+  - `ProviderAssignmentSection` (`:333`, `:585`, `:616`), se entra il cambio di I.
+
+### M-18 CP3a — via (coordinatore, 2026-10-12 21:44)
+- **Base**: `64a3ddccc`, cioè il CP2 committato (`ff7c96fd0`, 117 file, e `64a3ddccc`, il journal). Worktree pulita. Il coordinatore non mi porta ancora il target.
+- **Sequenza**:
+  1. **CP3a** sulla mia base: i decimali esatti, le 2 pagine developer dalla patch, e le due righe già sbagliate di `app-state.md`;
+  2. il treno 72 porta il lotto 48 di I (con `ProviderAssignmentSection`) e la 2b di V; poi checkpoint del CP3a, e il coordinatore mi porta il target (U-2, I e V);
+  3. **CP3b**: `ProviderAssignmentSection` e **una sola validazione della revisione combinata** (CP2 + CP3 + U-2 + I + V), compresa `toolbar-width-sweep`, che con la cura di I deve uscire verde anche in es; poi il treno 73.
+- I punti 1–4 dei trovati fuori perimetro diventano voci T-* nel backlog: **T-EN1, T-EN2, T-COL, T-DEAD**, scritte. Nessuna chiave nuova: U sta dividendo i cataloghi.
+
+#### Disegno del CP3a
+- **`formatExactDecimal(value, {minFrac = 0, maxFrac = 8, locale = uiLocale()})`** in `formatFixed.ts`, accanto al `toFixed` localizzato. I test vanno nel file esistente, quindi nessuna registrazione nel runner.
+  - Le cifre sono quelle di `formatDecimalForDisplay`: taglio, zeri finali via, padding.
+  - Intl le scrive ricevendo la **stringa**: decimale esatto (`Intl.StringNumericLiteral`, lib `esnext`). Provato con Node: `12345678901234.123456789012` esce intero.
+- **I 12 punti di sola lettura**:
+  - PAC: `planner/format.ts:161`, `:174`, `:212`;
+  - `LotWacPriceChart:489`, `:1360`;
+  - `LotCustodyModal:77`, `:144`, `:160`, `:191`;
+  - `WacPreviewSection:554`, `AssetEventPicker:453`, `GapFixStep:72`.
+- **Restano a `formatDecimalForDisplay`**, perché sono input o logica: `ExactDecimalInput`, `ExactQuantityInput`, il buffer di `CompactCashCell`, `pluralCount` (`:188`) e il confronto di `WacPreviewSection:296-297`.
+- **Cura pronta**: `/tmp/libreFolio_m18_cp3_apply.py`, dry-run con 18 operazioni su 7 file.
+- **Rossi** (test-author F): `formatFixed.test.ts`, `planner/format.test.ts`, `WacPreviewSection.test.ts`, `GapFixStep.test.ts`.
+- **Doc** (docs-writer, solo EN, dopo la cura):
+  - la patch `/tmp/libreFolio_m18cp2_devdocs_proposal.patch`, estesa ai decimali esatti;
+  - in `app-state.md`, la riga Language («Reacts to changes in the Settings store», falsa) e la frase sull'adattatore del PAC («not in the source tree yet», il file esiste).
+
+#### M-18 CP3a passi 1–2 — rossi e cura ✅ (2026-10-12 sera)
+> **Note implementazione**:
+> - **Rossi** (test-author F): 53. Li ho visti rossi anche io, con vitest diretto: 130 verdi.
+>   - `formatFixed.test.ts`: 38;
+>   - `planner/format.test.ts`: 11, compresa una riga di contratto (il conteggio del solutore, che in inglese ora si raggruppa: `≈1,234.57`);
+>   - `WacPreviewSection.test.ts`: 2;
+>   - `GapFixStep.test.ts`: 2.
+>   - F ha provato con sostituti temporanei, poi rimossi, che dopo la cura vanno verdi. Ha fissato anche il raggruppamento di default di Intl: niente `useGrouping: true`, perché it ed es non raggruppano le 4 cifre.
+> - **Cura**: `/tmp/libreFolio_m18_cp3_apply.py`, 18 operazioni su 7 file. `formatExactDecimal` in `formatFixed.ts`, più i 12 punti di sola lettura. Prettier: nessun cambio.
+> - **Verde**: i 4 file passano, 155 + 28.
+>   - **⚠️ Fuori pista**: alla prima corsa `GapFixStep.test.ts` è andato in timeout nel suo hook di caricamento (60 s, `:138`), col carico della macchina a 47–50, prima di ogni asserzione. Verdetto: **ambiente** (CPU contesa da altre sessioni). Rilanciato da solo: 28/28. F l'aveva visto anche lui, col carico intorno a 98.
+> - **Doc**: ho riapplicato la patch con `patch -p1` (121 righe). docs-writer, riaperto, la estende ai decimali esatti e ai gate, aggiunge T-ICU e corregge le due righe di `app-state.md`.
+> - **Gate in corso**: le 19 azioni e `check-orphans` sulla 6164 (log `/tmp/libreFolio_t1_m18cp3g1_*`).
+
+#### M-18 CP3a passi 3–4 — doc e gate ✅ (2026-10-12 sera)
+> **Note implementazione**:
+> - **Doc** (docs-writer, solo EN):
+>   - `developer/frontend/i18n.md`, +132: la sezione `#ui-locale` con la regola, la mappa, i formattatori (`formatExactDecimal` compreso), cosa non usare, la reattività, le eccezioni (con T-ICU) e i gate;
+>   - `state/app-state.md`, +18/−6: la riga dello store `uiLocale`; la riga Language corretta (nessuno ascolta lo store delle impostazioni; la lingua la mettono l'auth al login, Preferences e Welcome dopo la scrittura, o il selettore); il paragrafo dell'adattatore del PAC al presente, allineato al codice.
+>   - `dev.py mkdocs build` verde (solo l'avviso solito di Material); `check-links` con 95 link validi.
+> - **⚠️ Fuori pista**:
+>   - **L'esempio di T-ICU era sbagliato**: l'unico percento non ha decimali, quindi it e it-CH scrivono entrambi `13%`. Ora c'è es-MX: `1234` contro `1,234`, e `13 %` contro `13%`, provato con Node.
+>   - **Il gate HTML non si fida di `formatExactDecimal`, ed è giusto**: per un valore che non è un decimale restituisce l'ingresso com'è, quindi può portare testo.
+> - **Gate** (6164; log `/tmp/libreFolio_t1_m18cp3g1_*`):
+>   - le 19 azioni Vitest, **11 124 test** (core-unit 3 943, component-unit 3 043, tx 887);
+>   - `check-orphans` pulito;
+>   - `front check` con 0 errori e 0 avvisi;
+>   - Prettier e `diff --check` puliti.
+> - **Sovrapposizione col target** `0071b9703`, che non contiene ancora il CP2. Vera sovrapposizione rispetto alla base `a5653f9ef`:
+>   - `BACKLOG_POST_1.2.md`, in sezioni diverse;
+>   - la pagina dell'asset, toccata da I (`7f8febd9d`, toolbar spagnola) e dal CP2 (una data e un import), in pezzi diversi. Simulazione del coordinatore: pulita.
+
+### Checkpoint M-18 CP3a 🧊 (2026-10-12 sera) — FROZEN, in attesa del coordinatore
+- **Base**: `64a3ddccc` (CP2 sul ramo). **Delta**: 15 file modificati: 7 di prodotto, 4 di test, 2 pagine developer, il piano e il backlog. Nessun file nuovo.
+- **Commit proposti** (ASCII), in `/tmp/libreFolio_commit_t_m18cp3a_{1,2,3}.txt`:
+  1. `fix(i18n): exact decimals in the UI language`: prodotto e test;
+  2. `docs(dev): figures in the interface language`: le 2 pagine;
+  3. `docs(journal): record M-18 CP3a`: il piano e il backlog.
+- **Poi il CP3b**, sul target: `ProviderAssignmentSection` (`:333`, `:585`, `:616`, sulla base che contiene il cambio di I) e la validazione combinata unica, compresa la sweep anche in es.
+
+### M-18 CP3b — via (coordinatore, 2026-10-12 22:39)
+- **Il CP3a è committato**: `c17d39d5a` (11 file), `133259913` (le 2 pagine developer), `052b9f8bd` (journal).
+- **Il target del treno 72 è fuso sul ramo**: HEAD `c272d93b4`, merge pulito. Contiene U-2, il lotto 48 di I (clipboard, `ProviderAssignmentSection`) e la 2b di V.
+  - U-2: i cataloghi sono `src/lib/i18n/base/<lang>.json`. `src/lib/i18n/<lang>.json` è generato dagli hook (`predev`, `prebuild`, `precheck`, il `globalSetup` di Vitest) e non è più tracciato.
+  - `package.json` aggiunge solo gli hook: nessuna dipendenza nuova, niente `npm ci`.
+  - Niente chiavi nuove.
+- **I siti di `ProviderAssignmentSection`** (runes; `testResults = $derived.by(buildTestResults)`, quindi reattivo):
+  - `:334`: il prezzo della sonda, `formatFixed(…, 2)`;
+  - `:354`: il conteggio dello storico, `formatFixed(…, 0)`. La parola «points» resta in inglese ed è finita in T-EN1;
+  - `:586` e `:618`: le durate in secondi, `formatFixed(…, 2)`.
+- **Cura pronta**: `/tmp/libreFolio_m18_cp3b_apply.py`, dry-run con 5 operazioni. Rossi: test-author G su `ProviderAssignmentSection.test.ts`.
+- **La validazione combinata unica**, dopo la cura, sulla 6164:
+  - `check-orphans`, `front check`, le 19 Vitest;
+  - `toolbar-width-sweep`, che deve dare 15/15, anche in es;
+  - gli E2E del CP2: broker detail, risk-lab, risk, asset-detail, dashboard, asset-mobile-layout, transactions-modals, files-uploader, fx-editor, asset-classification;
+  - più `connection-security` e `support-copy-and-go` (chiesti dal coordinatore) e `settings`, che aggiungo io perché il CP2 ha toccato `GlobalSettingsTab`.
+
+#### M-18 CP3b passi 1–2 — rossi e cura ✅ (2026-10-12 sera)
+> **Note implementazione**:
+> - **Rossi** (test-author G, `ProviderAssignmentSection.test.ts`): 4. Li ho visti rossi anche io; i 26 esistenti restano verdi.
+>   - italiano due volte (prezzo `1234,50` e `12.345,50`, conteggio `12.345`, tempi `1,23s`, totale `2,47s`);
+>   - il cambio di lingua sul posto en → it → en;
+>   - la guardia inglese, col contratto nuovo `12,345`.
+> - **Cura**: `/tmp/libreFolio_m18_cp3b_apply.py`, 5 operazioni. Verde: 30/30.
+> - **`front check` sulla revisione combinata**: 0 errori e 0 avvisi; prima gira l'hook dei cataloghi di U-2.
+> - **Validazione combinata in corso** (log `/tmp/libreFolio_t1_m18cp3bv_*`).
+
+#### M-18 CP3b passo 3 — la validazione combinata unica ✅ (2026-10-12 notte)
+> **Revisione**: `c272d93b4` (CP2 + CP3a + il target del treno 72: U-2, il lotto 48 di I, la 2b di V) più la cura del CP3b. Corsia 6164, 34 azioni in una sola corsa, tutte `exit=0` (log `/tmp/libreFolio_t1_m18cp3bv_*`).
+> - `check-orphans` pulito; `front check` con 0 errori e 0 avvisi.
+> - **Vitest**: 19 azioni, **11 309 test**. Tra queste core-unit 4 090, component-unit 3 077, tx 887, ai-export 433, asset 762, risk-levels 493 + 248.
+> - **`toolbar-width-sweep`: 15/15, anche in es**, con la cura di I (C5). I 2 rossi di V-19 non ci sono più.
+> - **E2E**:
+>
+>   | azione | passed |
+>   |---|---|
+>   | broker detail | 37 |
+>   | risk-lab | 44 |
+>   | risk | 38 |
+>   | asset-detail | 32 |
+>   | dashboard | 27 |
+>   | asset-mobile-layout | 21 |
+>   | transactions-modals | 19 |
+>   | files-uploader | 8 |
+>   | fx-editor | 4 |
+>   | asset-classification | 4 |
+>   | connection-security | 8 |
+>   | support-copy-and-go | 16 |
+>   | settings | 45 |
+>
+> - **Dopo la validazione il target si è mosso**: `bcd502912` porta i treni 73 (M, W) e 74 (U-3, il catalogo diviso per sottosistema e per plugin).
+>   - Delle mie modifiche (CP2 + CP3) tocca solo `BACKLOG_POST_1.2.md`.
+>   - Con U-3 le chiavi cambiano file sorgente (`chart.tooltip.stale` sta ora in `i18n/charts/`), ma il catalogo generato `src/lib/i18n/<lang>.json` resta allo stesso percorso, quello che importano 7 dei miei test.
+>   - La validazione sopra **non contiene U-3**.
+
+### Checkpoint M-18 CP3b 🧊 (2026-10-12 notte) — FROZEN, in attesa del coordinatore
+- **Base**: `c272d93b4`. **Delta**: 4 file: `ProviderAssignmentSection.svelte` e il suo test, il piano, il backlog (T-EN1 con «points»).
+- **Commit proposti**:
+  1. `fix(i18n): probe figures in the UI language` (`/tmp/libreFolio_commit_t_m18cp3b_1.txt`);
+  2. `docs(journal): record M-18 CP3b` (`/tmp/libreFolio_commit_t_m18cp3b_2.txt`).
+- **Per il CHANGELOG del coordinatore**: M-18 è completo. Le cifre di ogni tipo (percentuali, decimali, byte, durate, importi, date, assi, decimali esatti) seguono la lingua dell'interfaccia; M-17 è risolto. Le voci aperte di backlog sono T-DI, T-ST, T-ICU, T-EN1, T-EN2, T-COL e T-DEAD.
+
+### T-EN1 + T-EN2 — via (coordinatore, 2026-10-12 23:54)
+- **Base**: HEAD `104ba23d0` = target `dev_release2` (treno 75: il CP2 e il CP3 di M-18 sono dentro), worktree pulita. Corsia 6164.
+- **Mandato**: le chiavi con `dev.py i18n add`, che sceglie la sorgente giusta (dopo lo split di U-3); il controllo con `dev.py i18n where`; prima i rossi, via test-author; il gate `utils gate-plugin-i18n-ownership` resta verde; `toolbar-width-sweep` non serve, salvo un'etichetta che allarghi una barra. Restano dopo la 1.2: T-ICU, T-COL, T-DEAD, T-DI, T-ST. La galleria di M aspetta questo lotto.
+
+#### T-EN — analisi (2026-10-12 notte)
+**I siti** (riverificati su `104ba23d0`):
+- **T-EN1, il tooltip degli eventi del grafico dei prezzi**. `PriceChartFull.svelte:776-792` (`formatEventEntry`): quando il valore dell'evento è convertito, scrive in ogni lingua:
+  - «orig.» (`:786`);
+  - «(Nd back)» (`:788`);
+  - «fx @» (`:789`).
+- **T-EN1, la sonda dello storico**. `ProviderAssignmentSection.svelte:354` scrive «points». È anche sbagliata al singolare: «1 points».
+- **T-EN2, le etichette dei segnali what-if**: `LinearSignal.ts:75`, `CompoundSignal.ts:97`, `SineSignal.ts:87`.
+  - `getLabel()` diventa `RenderedSignal.label` (`ChartSignal.ts:408`), cioè il nome della serie nella legenda e nel tooltip.
+  - Le parole sono inglesi; le cifre sono stampate grezze (`${rate}%`, `${per}d`).
+  - Chi la chiama: i `$derived` delle sovrapposizioni, in 4 pagine (`assets/[id]`, `assets`, `fx/[pair]`, `fx`) e nell'anteprima di `ChartSettingsModal`. Tutti in modalità runes.
+
+**Le chiavi**, 7. La sorgente è quella indicata da `where`.
+
+| chiave | sorgente | en | it | fr | es |
+|---|---|---|---|---|---|
+| `chart.tooltip.originalValue` | `i18n/charts/` | `orig. {value}` | `orig. {value}` | `orig. {value}` | `orig. {value}` |
+| `chart.tooltip.fxRateDate` | `i18n/charts/` | `fx @ {date}` | `cambio al {date}` | `change au {date}` | `cambio al {date}` |
+| `chart.tooltip.fxDaysBack` | `i18n/charts/` | `({days}d back)` | `({days}g prima)` | `({days}j avant)` | `({days}d antes)` |
+| `chartSettings.signals.linearLabel` | `i18n/charts/` | `Linear {rate}/yr` | `Lineare {rate}/anno` | `Linéaire {rate}/an` | `Lineal {rate}/año` |
+| `chartSettings.signals.compoundLabel` | `i18n/charts/` | `Compound {rate}/yr` | `Composta {rate}/anno` | `Composée {rate}/an` | `Compuesto {rate}/año` |
+| `chartSettings.signals.sineLabel` | `i18n/charts/` | `Sine ±{amplitude} / {period}d` | `Sinusoide ±{amplitude} / {period}g` | `Sinusoïde ±{amplitude} / {period}j` | `Sinusoide ±{amplitude} / {period}d` |
+| `assets.probe.points` | `i18n/assets/` | `{count, plural, one {{n} point} other {{n} points}}` | `… one {{n} punto} other {{n} punti}` | `… one {{n} point} many {{n} points} other {{n} points}` | `… one {{n} punto} other {{n} puntos}` |
+
+**Le scelte**:
+- **Le cifre entrano già scritte**, da `formatPercent` e `formatFixed` nella lingua della UI.
+  - Un segnaposto semplice `{x}` stampa `String(value)`, quindi la cifra la scrive il formattatore di M-18, non ICU: nessun nuovo caso T-ICU.
+  - Il conteggio della sonda usa la forma dei `stepUnits` del PAC: `count` sceglie il plurale, `{n}` porta la cifra scritta.
+  - Il francese ha un ramo `many` uguale a `other`: un testo ICU identico in due cataloghi terrebbe le regole del primo che lo compila (cache di svelte-i18n, gate `catalogIcuLocale.test.ts`).
+- **L'inglese resta com'è**: le stesse parole.
+  - Cambiano solo i tassi e i periodi da 1 000 in su, ora raggruppati (`1,000%/yr`, `3,650d`), che è il contratto di M-18.
+  - E il singolare «1 point».
+  - «orig.» è la stessa abbreviazione nelle 4 lingue, ma con la chiave si può tradurre.
+- **Le parole delle etichette nei segnali**: un traduttore tracciato in `ChartSignal`, `fromStore(_)`, lo stesso modello di `uiLocale()`.
+  - Letto dentro il `$derived` che disegna le sovrapposizioni, è tracciato. Al cambio di lingua l'etichetta si riscrive, insieme alle cifre (`formatPercent` legge `uiLocale()`).
+  - Non cambiano le firme di `render`, `renderMulti` e `getLabel`, e i 5 chiamanti non si toccano.
+  - **Costo**: i test che chiamano `getLabel()` o `render()` senza i18n devono avviarlo (`setupI18n`). Sono `syntheticSignals`, `registry` e `localSignalRegression`.
+  - **L'alternativa scartata**: passare `$t` come parametro, come `backendRenderer` e `translateOr`. Avrebbe toccato 6 classi e 5 chiamanti, fra cui la pagina dell'asset e le pagine FX, che altri workstream toccano spesso.
+
+**Trovati fuori perimetro** (al coordinatore):
+- **Q1**: l'editor dei parametri dei 3 segnali what-if scrive il suffisso grezzo (`ChartSignalsSection.svelte:612`): «%/yr» e «days» in ogni lingua.
+  - I segnali del backend lo traducono già con `signals.units.*` (`SignalParamControl.svelte:39-44`; `signals.units.days` c'è nelle 4 lingue).
+  - **Proposta**:
+    - la stessa ricerca nel ramo locale;
+    - `suffix: 'percentPerYear'` nei 2 descrittori, che diventano gettoni come quelli del backend;
+    - 1 chiave, `signals.units.percentPerYear`.
+- **F1**: le date d'osservazione ISO grezze.
+  - Nei tooltip del grafico dei prezzi: `valueAt`, `↩`, `💱`, la data dell'evento a `:778`, `fxRateDate`.
+  - Nella sonda: `cpDate`, `date_range`.
+  - M-18 le ha lasciate ISO. Proposta: una voce di backlog.
+- **F2**: i ripieghi inglesi `Asset #N` e `Asset` (`AssetComparisonSignal.ts:169-174`, `assets/[id]/+page.svelte:870`, `:893`) e `FX Pair` (`FxPairSignal.ts:94`). Si vedono solo se l'asset di confronto manca. Proposta: backlog.
+
+**I passi**:
+1. le 7 chiavi, poi `where`, `i18n check` e `i18n build`;
+2. i rossi, via test-author;
+3. la cura;
+4. i gate:
+   - `i18n check`;
+   - `utils gate-plugin-i18n-ownership`, `gate-i18n-usage`, `gate-i18n-catalog`;
+   - `front-utility core-unit` e `component-unit`, `front-asset asset-unit`;
+   - `check-orphans`, `front check`.
+
+**Le decisioni del coordinatore** (2026-10-13, 00:0x):
+1. **Q1 sì**: il suffisso dell'editor dei what-if, con la chiave `signals.units.percentPerYear` (en `%/yr`, it `%/anno`, fr `%/an`, es `%/año`) e i descrittori a gettone. Le chiavi diventano 8.
+2. **Nessuna sovrapposizione su `PriceChartFull.svelte`**: il lotto 49 di I tocca solo `asset-detail.spec.ts`.
+3. **F1 e F2 diventano voci T-\*** nella mia sezione del backlog, scritte nel journal di questo lotto. Non si fanno ora.
+
+#### T-EN passo 1 — le 8 chiavi ✅ (2026-10-13)
+> **Note implementazione**: `/tmp/libreFolio_ten_keys.sh`, 8 volte `dev.py i18n add`.
+> - 7 chiavi in `i18n/charts/` e `assets.probe.points` in `i18n/assets/`, nelle 4 lingue. `where` le conferma tutte e 8.
+> - `dev.py i18n check`: 4 359 chiavi in modalità stretta.
+> - Il diff è fatto solo di aggiunte (8 file sorgente, una virgola per blocco).
+
+#### T-EN passo 2 — i rossi ✅ (2026-10-13)
+> **Note implementazione**: test-author H ha scritto 16 rossi e 6 guardie. Li ho visti rossi anche io: `vitest run` sugli 8 file toccati dà 16 falliti e 134 verdi (log `/tmp/libreFolio_ten_reds_before.log`). Ogni rosso fallisce sull'asserzione finale e per il motivo giusto: inglese, o un'etichetta che non si riscrive.
+>
+> **I rossi**:
+>
+> | file | rossi | cosa legge |
+> |---|---|---|
+> | `syntheticSignals.test.ts` | 6 | in it e fr: le etichette con tasso, offset con segno, ampiezza e periodo; i default; la stessa etichetta passata da `renderMulti` |
+> | `syntheticSignals.languageSwitch.test.ts` (nuovo, jsdom) | 2 | l'etichetta letta in un effetto (`recordReads`) si riscrive al cambio di lingua sul posto, en → it e en → fr |
+> | `ChartSignalsSection.test.ts` | 2 | le unità dell'editor in it e fr |
+> | `PriceChartFull.test.ts` (nuovo, jsdom; ECharts registrato) | 3 | le tre righe della conversione in it e fr; un caso con una locale di marcatori, che prova che ogni riga viene dalla sua chiave (`orig.` è uguale nelle 4 lingue) |
+> | `ProviderAssignmentSection.test.ts` | 3 | «12.345 punti» in italiano; «1 point» al singolare in inglese e in francese |
+>
+> - **Le guardie**:
+>   - le etichette inglesi sotto 1 000;
+>   - `%` resta `%`;
+>   - le righe inglesi del tooltip;
+>   - «12,345 points»;
+>   - `catalogIcuLocale.test.ts`.
+> - **Avviano i18n in inglese** (`beforeAll(setupI18n('en'))`): `registry.test.ts`, `localSignalRegression.test.ts` e `syntheticSignals.test.ts`. Senza, dopo la cura, svelte-i18n solleverebbe un errore.
+> - **Nel runner** (`_frontend_utility.py`), solo le 2 righe dei file nuovi:
+>   - `syntheticSignals.languageSwitch.test.ts` in `front_utility_unit`, accanto a `signalLabel.test.ts`, anch'esso jsdom;
+>   - `PriceChartFull.test.ts` in `front_component_unit`.
+> - **Le note di test-author**:
+>   - il test del cambio di lingua morde solo al primo passaggio: la precondizione è che il catalogo di arrivo non sia ancora caricato;
+>   - lo sfasamento di 3 giorni si scrive uguale in ogni lingua, quindi non distingue `formatFixed` dalla cifra grezza;
+>   - da 1 000 in su l'inglese raggruppa (`1,000%/yr`, `3,650d`): è già nella mia analisi.
+> - **⚠️ Fuori pista**: nei titoli dei test le etichette T-EN1 e T-EN2 sono scambiate per la sonda e per i segnali. Le correggo con test-author dopo la cura.
+
+#### T-EN passo 3 — la cura ✅ (2026-10-13)
+> **Note implementazione**: `/tmp/libreFolio_ten_apply.py`, 15 operazioni su 7 file, provate prima a secco. Gli 8 file di test passano 150/150 (log `/tmp/libreFolio_ten_after.log`).
+>
+> **Cosa cambia, file per file**:
+> - **`ChartSignal.ts`**:
+>   - `protected static text(key, values)`, il catalogo letto con `fromStore(_)`. Il lettore nasce alla prima etichetta, così un modulo che non etichetta nessun segnale non tocca svelte-i18n: serve ai test che sostituiscono `$lib/i18n` per intero.
+>   - Il commento di `suffix`: ora è un gettone tradotto con `signals.units.<gettone>`, come l'`x-suffix` del backend.
+> - **`LinearSignal.ts`, `CompoundSignal.ts`, `SineSignal.ts`**:
+>   - `getLabel()` passa dal catalogo, con le cifre di `formatPercent` (`signed: false, trim: true`; l'offset col segno) e di `formatFixed(…, 2, {trim: true})`;
+>   - `annualRate.suffix` diventa `'percentPerYear'`.
+> - **`ChartSignalsSection.svelte:613`**: il ramo locale scrive `translateOr($t, 'signals.units.' + suffix, suffix)`, cioè lo stesso esito del ramo backend (`SignalParamControl`).
+> - **`PriceChartFull.svelte:786-789`**: le tre righe vengono da `chart.tooltip.*`; i giorni di sfasamento sono scritti con `formatFixed(…, 0)`.
+> - **`ProviderAssignmentSection.svelte:354-355`**: `assets.probe.points`, con `count` per il plurale e `n` per la cifra.
+>
+> **Backlog**:
+> - T-EN1 e T-EN2 sono marcate ✅; il commit lo aggiunge il coordinatore.
+> - Le voci nuove T-ISO (F1) e T-FB (F2) sono in fondo alla sezione T.
+
+#### T-EN passo 4 — i gate ✅ (2026-10-13)
+> **Note implementazione**:
+> - **Etichette dei test**: test-author ha corretto quelle scambiate (T-EN1 per la sonda, T-EN2 per i segnali). Ancora 150/150.
+> - **Corsia 6164**, 8 azioni in sequenza, tutte `exit=0` (log `/tmp/libreFolio_t1_tenv_*`):
+>
+>   | azione | risultato |
+>   |---|---|
+>   | `utils gate-plugin-i18n-ownership` (R1–R4) | 45 |
+>   | `utils gate-i18n-usage` | 195 |
+>   | `utils gate-i18n-catalog` | 176 |
+>   | `front-utility core-unit` | 4 099 |
+>   | `front-utility component-unit` | 3 090 |
+>   | `front-asset asset-unit` | 762 |
+>   | `check-orphans` | pulito |
+>   | `front-asset asset-detail` (E2E, prova a runtime della pagina coi grafici e i segnali) | 32 |
+>
+>   Alla fine la porta 6164 è libera.
+> - **Statici e catalogo**:
+>   - `dev.py front check`: 0 errori, 0 avvisi; Prettier pulito sui file toccati.
+>   - `dev.py i18n check`: 4 359 chiavi in modalità stretta.
+> - **`dev.py i18n audit`**:
+>   - 0 chiavi morte e 0 traduzioni mancanti.
+>   - Le chiavi nuove risultano usate, tranne `signals.units.percentPerYear`, che è «non verificata». È il limite noto della skill: chi costruisce la chiave è `ChartSignalsSection`, mentre il gettone sta in `LinearSignal.ts`, a due import di distanza, come per `chartSettings.params.amplitude`.
+>   - «Non verificata» non vuol dire morta, e nessun gate la conta.
+> - **v1.1.0**: le quattro scritte inglesi c'erano già. Per il CHANGELOG serve quindi una riga 🐛.
+
+### Checkpoint T-EN 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
+- **Base**: `104ba23d0`. **Delta**: 23 file modificati più 2 nuovi, 25 in tutto.
+- **Commit proposti**:
+  1. `/tmp/libreFolio_commit_t_ten_1.txt`, `fix(i18n): chart and probe texts in UI language`: codice, test, cataloghi, runner;
+  2. `/tmp/libreFolio_commit_t_ten_2.txt`, `docs(journal): record T-EN1 and T-EN2`: il piano e il backlog.
+
+### T-SHK + T-CL — via (coordinatore, 2026-10-13 03:15)
+- **Base**: `273b188ea` (treno 82), pulita. Corsia 6164.
+- **Carico**: finché il coordinatore non dà il «via», solo spec singole a 1 worker, perché gira la galleria di M.
+- **Mandato**:
+  1. **D5, la tabella dello shock** (README della 02, «Difetti noti»): etichette leggibili al posto degli id dei bucket; la prima colonna col nome della dimensione; i gruppi a peso zero non diventano righe, nel frontend, senza cambiare l'API.
+  2. **D8**: il drawdown massimo allineato nei cataloghi fr e it.
+  3. **D14**: il suggerimento della favicon, la descrizione del provider BoE, il commento di `fmtCurrency`.
+- **Regole**: prima un'analisi breve, poi si parte senza aspettare. Ci si ferma solo per un cambio di API o di backend, o per una scelta di prodotto che non è nel mandato. Test via test-author, rossi prima.
+
+#### T-SHK — analisi (2026-10-13)
+**Le superfici** (verificate su `273b188ea`):
+- `levels/l4/L4Shock.svelte`:
+  - `rowLabel` (`:100-106`) restituisce `row.bucketId` grezzo;
+  - anche l'editor del dettaglio scrive l'id grezzo (`:136-148`: testo, `title`, `aria-label`). È lo stesso difetto e lo curo insieme;
+  - `data-bucket-id` resta.
+- `levels/l4/TornadoChart.svelte:101`: la prima colonna ha sempre `risk.levels.l4.table.asset`. Il componente è condiviso col replay, che deve tenere «Asset».
+- `levels/l4/scenarioHelpers.ts:164-176` (`tornadoRows`): un bucket con peso 0 diventa una riga a 0,0 %. Il peso è `bucketShares`, cioè la stessa colonna *Weight* che il lettore vede.
+- **La resa del pannello legacy**: `RiskAnalysisPanel.svelte:357-365` (`stressBucketLabel`):
+  - `Other` → `common.other`;
+  - `european_union` → `risk.stress.europeanUnion`;
+  - una classe → `assets.types.<TIPO>`;
+  - un settore → emoji + `sectors.<chiave>`;
+  - un paese → bandiera + nome. I dati di riferimento si caricano per lingua (`ensureCountriesLoaded`, `ensureSectorsLoaded`).
+- **Il nome della dimensione esiste già**: `risk.stress.dimensions.{asset_class,sector,geography}` nelle 4 lingue («Asset class», «Sector», «Geography»). Nessuna chiave nuova.
+
+**La cura scelta**:
+1. **Una resa sola.** `stressBucketLabel(bucket, dimension, words)` diventa una funzione pura in `components/risk/riskAnalysisHelpers.ts`, col vocabolario iniettato (traduttore, emoji del settore, paese).
+   - Il pannello legacy la chiama, e la sua funzione locale diventa una riga; L4Shock la usa per le righe e per l'editor del dettaglio.
+   - Un codice senza traduzione (tipo o settore sconosciuto) o un paese sconosciuto si scrive com'è, mai come chiave del catalogo: è la stessa regola di `exposureCategoryLabel` del PAC.
+2. **L4Shock**:
+   - `rowLabel` diventa una funzione `$derived`: si riscrive al cambio di lingua e quando arrivano i dati di riferimento (un contatore, come nel pannello legacy);
+   - la dimensione è quella della risposta (`stressImpactDimension(output.dimension, …)`).
+3. **`TornadoChart`**:
+   - una prop facoltativa `nameHeader`; senza, resta «Asset» (il replay non cambia), e L4Shock passa `risk.stress.dimensions.<dimensione>`;
+   - `columns` legge `label` e `nameHeader` dentro il `$derived`, così un'etichetta nuova ridisegna la tabella.
+4. **`tornadoRows`**: nel ramo dei bucket, con i pesi noti (`shares !== null`), un bucket a peso 0 non diventa riga. Senza pesi il ramo è già vuoto (`contribution_return` è `null`). L'API non cambia.
+
+**Le scelte notate**:
+- l'ordine dell'editor del dettaglio resta quello degli id;
+- un portafoglio senza nessun bucket posseduto non mostra la tabella (`rows.length === 0`, il comportamento di oggi), ma il totale resta;
+- la seconda resa delle categorie, `exposureCategoryLabel` del PAC, va in una voce di backlog: unirle è un riordino dopo la 1.2.
+
+**I test (test-author)**:
+- **Rossi**:
+  - `scenarioHelpers.test.ts`: niente riga a peso 0, con le guardie per i bucket posseduti, il ramo per asset e lo scope senza pesi;
+  - `L4Shock.test.ts`, nuovo (jsdom, controller vero con `setResult('stress', …)`, come `L4Replay.test.ts`): le etichette di classi, settori, paesi, `Other` e `european_union` dal catalogo e dai dati di riferimento, in it o fr; l'intestazione; l'editor del dettaglio; il cambio di lingua sul posto;
+  - `TornadoChart.test.ts`: la guardia del default «Asset» per il replay.
+- **E2E**: `front-portfolio risk` (shock con lo stub) a 1 worker, dopo la cura.
+
+#### T-CL — analisi (2026-10-13)
+**D8, il drawdown massimo**:
+- Le chiavi sono `risk.metrics.maxDrawdown` (pannello legacy, `:192`) e `risk.levels.l1.technical.worst` (L1, `:400`).
+- Oggi: it «Drawdown massimo» contro «Massimo drawdown»; fr «Repli maximal» contro «Perte maximale». In en ed es sono già uguali.
+- **Il termine del glossario**: `cd0b404d2` fissa «repli» per *drawdown*, ma la tabella del glossario (`mkdocs_src/aphra-pipeline/glossaries/glossary.json`) dà per *maximum drawdown* it «drawdown massimo» e fr «perte maximale». La doc usa questi due 40 e 45 volte, gli altri due zero.
+- **Cura**: it `risk.levels.l1.technical.worst` → «Drawdown massimo»; fr `risk.metrics.maxDrawdown` → «Perte maximale», con `dev.py i18n update`.
+- **Rosso**: un test di catalogo, «le due etichette del drawdown massimo coincidono in ogni lingua».
+
+**D14** (testi e commenti, senza test rossi; il comportamento è coperto altrove):
+- **`brokers.iconUrlHint`** (`brokers/*.json:15`) diventa l'ordine reale di `brokerIconChain.svelte.ts:88-106`: icona personale, poi quella del plugin di import predefinito (se non è generico), poi la favicon del portale, poi l'icona di un plugin generico. Con `dev.py i18n update`.
+- **BoE** (`fx_providers/boe/plugin.py:91-94`, `description_i18n` in linea; i plugin FX non hanno frammenti i18n): «il provider di LibreFolio copre 15 valute». Solo il testo: l'API non cambia.
+- **`GrowthChart.svelte`** (commento di `fmtCurrency`, ~`:2156`): il segno viene da `uiLocale()`, non dalla locale del browser. Ho verificato su Node: `-` (U+002D) in en-GB, en-US, it, fr, es e nelle loro regioni.
+
+#### T-SHK + T-CL — tre aggiunte (coordinatore, 2026-10-13 03:39, dalla galleria completa di M)
+1. **Priorità alta, blocca il tag.** `ProviderComparisonModal`: `data-dist-pct` è la stringa mostrata e, da `5b2aad5c4` (M-18 CP1), segue la lingua (`100,00%`). La galleria (`e2e/fixtures/galleryProviderCompare.ts:309`) si aspetta `'100.00%'` e diventa rossa su desktop e mobile.
+   - **Cura**: il nome dell'attributo non cambia. `formatDistribution` dà a ogni voce `pct` (mostrato, localizzato) e `hook` (`(v×100).toFixed(2)%`, uguale in ogni lingua), e l'attributo legge `hook`.
+   - È l'aggancio stabile che `ProviderComparisonModal.test.ts:38` documenta: né la galleria né i test vanno cambiati.
+   - Rosso prima, in it o fr.
+2. **`AssetModal.svelte:1949`**: il placeholder «Brief description of the asset…» è scritto fisso. Chiave nuova `assets.modal.descriptionPlaceholder` (`where` → `i18n/assets/`), con `dev.py i18n add`. Rosso prima.
+3. **I campi DU/AU del `DateRangePicker` in ISO**: è una scelta, non un residuo.
+   - Tutte le toolbar di pagina usano `compact`, e `displayDate` restituisce l'ISO apposta (`DateRangePicker.svelte:1108`, «fits narrow cells»), già nella v1.1.0.
+   - Non si tocca: risposta data al coordinatore.
+- **Ordine**:
+  1. i rossi del primo giro (D5, D8) visti rossi;
+  2. lo script del catalogo (`/tmp/libreFolio_shk_i18n.sh`: D8, la favicon, la chiave del placeholder);
+  3. i rossi delle aggiunte 1 e 2;
+  4. la cura del codice (`/tmp/libreFolio_shk_apply.py`, 21 operazioni su 8 file più un file nuovo, provata a secco).
+- **Carico**: la galleria è finita; io resto a spec singole sulla 6164.
+
+#### T-SHK + T-CL passo 1 — i rossi del primo giro e il catalogo ✅ (2026-10-13)
+> **Note implementazione**: test-author I ha scritto 19 rossi; li ho visti rossi anch'io, un file alla volta a 1 worker (log `/tmp/libreFolio_shk_red_*.log`).
+>
+> | file | rossi | verdi |
+> |---|---|---|
+> | `scenarioHelpers.test.ts` | 2 | 59 |
+> | `L4Shock.test.ts` (nuovo, jsdom) | 16 | 5 |
+> | `TornadoChart.test.ts` (3 guardie nuove: «Asset» senza la prop) | 0 | 27 |
+> | `riskGlossary.test.ts` (nuovo) | 1 | 3 |
+>
+> - **Cosa leggono i rossi di `L4Shock`**: le etichette di classi, settori e paesi; il codice sconosciuto scritto com'è; l'intestazione della dimensione; i bucket non posseduti; l'editor del dettaglio; il cambio di lingua.
+> - **Nel runner**, una riga per file nuovo:
+>   - `L4Shock.test.ts` in `front_portfolio_risk_levels_component` (`_frontend_portfolio.py`);
+>   - `riskGlossary.test.ts` in `front_utility_unit` (`_frontend_utility.py`).
+> - **Le note di test-author, accettate**:
+>   - il blocco dello shock carica da sé i nomi dei paesi per lingua;
+>   - con pesi ma senza `bucket_audit` la tabella sparirebbe, ma oggi il backend lo manda sempre;
+>   - un gruppo geografico definito dall'host, diverso da `european_union`, resta un id grezzo.
+>
+>   Questi ultimi due sono limiti noti, da scrivere nel checkpoint.
+> - **Il catalogo** (`/tmp/libreFolio_shk_i18n.sh`, `dev.py i18n update/add`, log `/tmp/libreFolio_shk_i18n.log`):
+>   - it `risk.levels.l1.technical.worst` → «Drawdown massimo»; fr `risk.metrics.maxDrawdown` → «Perte maximale»;
+>   - `brokers.iconUrlHint` nelle 4 lingue;
+>   - la chiave nuova `assets.modal.descriptionPlaceholder`;
+>   - `i18n check`: 4 360 chiavi in modalità stretta; diff di 10 file sorgente.
+> - **In corso**: i rossi delle aggiunte 1 e 2, dallo stesso test-author.
+
+#### T-SHK + T-CL passo 2 — i rossi delle aggiunte e la cura ✅ (2026-10-13)
+> **Note implementazione**:
+> - **Rossi del secondo giro** (stesso test-author), visti rossi da me:
+>   - `ProviderComparisonModal.test.ts`: 2 rossi, it `60,00%` e fr `60,00 %` contro `60.00%`; più le guardie del testo localizzato. 22 verdi;
+>   - `AssetModal.test.ts`: 2 rossi, il placeholder inglese in it e fr; più la guardia inglese. 30 verdi.
+> - **Cura**: `/tmp/libreFolio_shk_apply.py --apply`, 21 operazioni su 8 file, più il file nuovo `components/risk/stressBucketLabel.ts`.
+> - **Verde, file per file a 1 worker**:
+>
+>   | file | test |
+>   |---|---|
+>   | `scenarioHelpers` | 61/61 |
+>   | `L4Shock` | 21/21 |
+>   | `TornadoChart` | 27/27 |
+>   | `riskGlossary` | 4/4 |
+>   | `ProviderComparisonModal` | 24/24 |
+>   | `AssetModal` | 32/32 |
+>
+> - **I vicini**: `riskAnalysisHelpers` 96, `stressBuckets` 5, `riskPanelController` 102, `RiskResultFrame` 20, `RiskCardGrid` 7, `L4Replay` 40.
+> - **I gate che leggono i sorgenti**: `htmlInterpolation` 26, `htmlSink` 7, `moneyRenderSites` 6, `catalogIcuLocale` 17. Tutti verdi.
+
+#### T-SHK + T-CL passo 3 — i gate ✅ (2026-10-13)
+> **Note implementazione** (corsia 6164, un'azione alla volta, E2E a 1 worker; log `/tmp/libreFolio_t1_shkv_*`):
+>
+> | controllo | risultato |
+> |---|---|
+> | `utils gate-plugin-i18n-ownership` | 45 |
+> | `utils gate-i18n-usage` | 195 |
+> | `utils gate-i18n-catalog` | 176 |
+> | `check-orphans` | pulito |
+> | E2E `front-portfolio risk` (lo shock con lo stub) | 38/38 |
+> | E2E `front-portfolio risk-asset-detail` (il pannello legacy) | 5/5 |
+> | E2E `front-transaction tx-import-asset-inspector` (il dialogo dell'asset) | 5/5 |
+>
+> - `dev.py front check`: 0 errori, 0 avvisi; Prettier pulito.
+> - `ruff` e `black --check` puliti su `boe/plugin.py`.
+> - `dev.py i18n audit`: 0 chiavi morte e 0 traduzioni mancanti; le «non verificate» restano le 4 di prima.
+> - Porta 6164 libera.
+> - **Backlog**: T-CAT (due rese delle categorie: PAC e rischio) e T-GRP (i gruppi geografici dell'host, e il limite dei pesi senza `bucket_audit`).
+> - **README della 02**: la voce «L4, la tabella dello shock» di «Difetti noti» è marcata risolta.
+> - **CHANGELOG**: la tabella dello shock è nata nella 1.2, quindi niente 🐛 a parte. Le correzioni entrano nella riga che la descrive (L316 a `273b188ea`).
+>   - Il placeholder della descrizione c'era già nella v1.1.0: vale una riga 🐛 minima, oppure si unisce alle righe «follow your language».
+>   - D8 rende vera L263 («drawdown is named the same way»).
+
+### Checkpoint T-SHK + T-CL 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
+- **Base**: `273b188ea`.
+- **Commit proposti**:
+  1. `/tmp/libreFolio_commit_t_shk_1.txt`, `fix(assets): stable dist hook, translated hint`;
+  2. `/tmp/libreFolio_commit_t_shk_2.txt`, `fix(risk): name shock buckets, hide unheld ones`;
+  3. `/tmp/libreFolio_commit_t_shk_3.txt`, `fix(i18n): one drawdown term, real icon order`;
+  4. `/tmp/libreFolio_commit_t_shk_4.txt`, `docs(journal): record T-SHK and T-CL`.
+- I file per commit sono nel manifest `/tmp/libreFolio_shk_manifest.txt`.
+
+### T-ISO + T-FB — via (coordinatore, 2026-10-13 04:34)
+- **Il lotto T-SHK + T-CL è integrato**: `dfc4f9ccc`…`c424562f5`, treno 85; `dev_release2` = `fadf43b01` = la mia HEAD, pulita. «Perte maximale» va bene.
+- **Mandato**. Il coordinatore cambia la decisione di prima: la riga 🔄 «Numbers and dates follow the interface language everywhere» promette «chart axes and tooltips».
+  1. **T-ISO, parte frontend**:
+     - le date del tooltip del grafico dei prezzi, cioè il `{date}` di `chart.tooltip.valueAt`, le righe ↩ e 💱, l'evento nei periodi aggregati e `fxRateDate`;
+     - la data del prezzo corrente nella sonda;
+     - il `date_range` della sonda, solo se il formato del backend è un contratto leggibile senza cambiare l'API, altrimenti diventa T-ISO-b.
+  2. **T-FB**: «Asset #N», «Asset» e «FX Pair», dal catalogo con `ChartSignal.text`.
+  3. **«Other» nelle regole dello stress** (`risk/*.json:245-246`), allineato al nome tradotto che lo shock scrive dopo T-SHK.
+- **Regole**: analisi breve e poi via; ci si ferma per un cambio di API; rossi prima, via test-author; spec singole a 1 worker sulla 6164; checkpoint FROZEN col manifest. Gli scatti dei tooltip non contano per la galleria finale, lo shock sì.
+
+#### T-ISO + T-FB — analisi (2026-10-13)
+**T-ISO, le superfici** (su `fadf43b01`; il formattatore è quello delle date dei tooltip dei lotti: `formatAxisDate(uiLocale(), iso, true)`, cioè `12 ott 2026`, `12 Oct 2026`, `12 oct. 2026`):
+- **`PriceChartFull.svelte`**:
+  - le righe dell'elenco del coordinatore: `formatEventEntry` (`:778`, la data dell'evento nei periodi aggregati), `fxRateDate` (`:789`), `valueAt` (`:1017`, `:1020`, `:1029`), ↩ (`:1018`), 💱 (`:1023`).
+  - **Anche l'intestazione del tooltip** (`buildTooltipHeader`, `:340-352`): il giorno è ISO, la settimana ha `weekRange` con due ISO, il mese ha `valueAt` in ISO. È la data più visibile del tooltip e la promessa del 🔄 la copre: la includo.
+- **Stessa famiglia, stesso difetto**: la includo e lo dico al coordinatore.
+  - `CandlestickChart.svelte:188-201`, l'intestazione: è il grafico a candele della stessa pagina, montato da `PriceChartFull`.
+  - `LineChart.svelte:710` (intestazione) e `:763` (`valueAt`): lo usano `PriceChartCompact`, l'anteprima di `ChartSettingsModal` e i grafici del rischio (`UnderwaterChart`, `L4Simulation`, il pannello legacy).
+  - `formatAxisDate` restituisce il valore così com'è se non è una data, quindi un asse che non è fatto di date resta com'era.
+- **`ProviderAssignmentSection.svelte`**: la data del prezzo corrente (`:335`, `cpDate`).
+  - **Il `date_range` entra**. Il backend lo costruisce sempre nello stesso modo, `f"{min(dates)} → {max(dates)}"` (`asset_sources/provider_management.py:389`), e lo schema lo descrive «start → end» (`schemas/provider.py:377`). Lo leggo con una regex stretta, due ISO separati da « → », e scrivo le due date; se non corrisponde resta com'è.
+  - L'API non cambia.
+
+**T-FB, i ripieghi** (le chiavi esistono già):
+- **In `ChartSignal`** (`ChartSignal.text`):
+  - `AssetComparisonSignal.ts:173-174`: «Asset #N» → la chiave del ripiego numerato, «Asset» → `common.asset` («Asset», «Actif», «Activo»);
+  - `FxPairSignal.ts:94`: «FX Pair» → `chartSettings.signals.fxPair` («Coppia FX», «Paire FX», «Par FX»).
+- **«Asset #{id}» esiste già come `fxDetail.assetFallback`** (en «Asset #{id}», it «Asset n. {id}», fr «Actif n° {id}», es «Activo n.º {id}»), usata dalla pagina FX per lo stesso scopo. Una chiave sola per un significato:
+  - la porto in `chartSettings.signals.assetFallback`, con gli stessi testi;
+  - la pagina FX passa alla chiave nuova (`fx/[pair]/+page.svelte:381`, `:438`), e `fxDetail.assetFallback` si toglie con `dev.py i18n add/remove`.
+- **La pagina dell'asset** (`assets/[id]/+page.svelte`):
+  - `:871` non scrive più «Asset #N» in `_assetDisplayName`: lascia il campo vuoto e il nome lo dà `AssetComparisonSignal`, cioè una fonte sola;
+  - `:690` e `:1004` (gli eventi dell'asset di confronto) e `:895` (il rendimento di calendario) usano `$t('chartSettings.signals.assetFallback', …)`.
+- **Fuori perimetro, da segnalare**: `:1274` è solo un log di debug; `:1585` è l'errore di pagina «Asset #N not found», non un segnale.
+
+**«Other» nelle regole dello stress**: in it, fr ed es il nome del bucket resta inglese in tre testi.
+- `risk.stress.rules.other`: «Fallback Other», «Repli Other» → it «Ripiego su Altro», fr «Repli sur Autre», es «Por defecto: Otro».
+- `risk.stress.rules.missing_metadata_other` → «… → Altro / Autre / Otro».
+- **In più**: la frase `risk.stress.missingMetadataOther` (`:235`, «…trattato come Other al 100%»), stesso difetto.
+- I testi nuovi si costruiscono dai valori attuali, sostituendo solo «Other», così gli spazi insecabili restano. Con `dev.py i18n update`.
+
+**I test (test-author)**:
+- **Rossi in it o fr**:
+  - `PriceChartFull.test.ts`: intestazione giornaliera, settimanale e mensile; `valueAt`; ↩ e 💱; la data dell'evento; `fxRateDate`;
+  - le intestazioni di `CandlestickChart` e `LineChart`, se si montano a costo ragionevole;
+  - `ProviderAssignmentSection.test.ts`: `cpDate` e `date_range` col formato vero del backend, più la guardia di una stringa che non corrisponde;
+  - `comparisonSignals.test.ts`: i tre ripieghi dal catalogo; i test inglesi esistenti avviano i18n;
+  - `riskGlossary.test.ts`: nessun «Other» inglese nei tre testi it, fr, es.
+- **E2E a 1 worker dopo la cura**: `asset-detail`, `fx-detail` o `fx-editor`, `risk-asset-detail`.
+
+**Le decisioni del coordinatore** (2026-10-13, 04:4x): approvati tutti e quattro gli allargamenti.
+- **Aggiunti al lotto**: «Asset #N not found» (`assets/[id]/+page.svelte:1585`), poi `'Failed to load asset info'` (`:1589`) e `'Failed to load prices'` (`:1830`).
+- **Il lotto è chiuso.** Altri ripieghi inglesi vanno nel backlog, salvo quelli coperti dalla promessa «everywhere» della riga 🔄.
+- **I test da far girare in più**: per `LineChart`, `risk-levels-component` e un E2E del rischio.
+- **Precisazione mia**: `dev.py i18n move` cambia la sorgente ma non il nome di una chiave, quindi la rinomina è `i18n add` + `i18n remove`.
+
+#### T-ISO + T-FB — la preparazione (2026-10-13)
+> **Note implementazione**:
+> - **La chiave condivisa**: `chartSettings.signals.assetFallback` aggiunta in `charts/`, con i testi esatti di `fxDetail.assetFallback` (`/tmp/libreFolio_tiso_addkey.sh`).
+> - **La cura del codice**: `/tmp/libreFolio_tiso_apply.py`, 35 operazioni su 9 file, provata a secco.
+>   - In `utils/core/formatAxisDate.ts` nasce `formatDay(value)`: un giorno `YYYY-MM-DD` scritto come in tutti i tooltip, `12 ott 2026`; qualunque altro valore torna com'è.
+>   - Il «com'è» conta: `formatAxisDate` leggerebbe come anno un numero nudo (`new Date("30")`), e `LineChart` ha anche categorie che non sono date.
+> - **Il catalogo**:
+>   - `/tmp/libreFolio_tiso_i18n_a.sh`: le tre «Other» e le tre chiavi `assetDetail.{notFound,loadFailed,pricesLoadFailed}`;
+>   - `/tmp/libreFolio_tiso_i18n_b.sh`: `i18n remove fxDetail.assetFallback`, solo dopo la cura (si ferma se qualcuno la legge ancora).
+> - **I rossi**: in corso, da test-author J (con l'aggiunta dei due «Failed to load»).
+
+#### T-ISO + T-FB passo 1 — i rossi ✅ (2026-10-13)
+> **Note implementazione**: test-author J ha scritto 32 rossi; li ho visti rossi anche io, un file alla volta (log `/tmp/libreFolio_tiso_red_*.log`).
+>
+> | file | rossi | verdi |
+> |---|---|---|
+> | `PriceChartFull.test.ts` (anche `CandlestickChart` a candele) | 19 | 5 |
+> | `LineChart.test.ts` (nuovo, jsdom) | 2 | 1 |
+> | `ProviderAssignmentSection.test.ts` | 4 | 36 |
+> | `comparisonSignals.test.ts` (avvia i18n) | 2 | 27 |
+> | `comparisonSignalPages.test.ts` (nuovo, contratto dei sorgenti delle due pagine) | 4 | 5 |
+> | `riskGlossary.test.ts` | 1 | 7 |
+>
+> - **Nel runner**, `_frontend_utility.py`: `LineChart.test.ts` in `front_component_unit`, `comparisonSignalPages.test.ts` in `front_utility_unit`.
+> - **Le note di test-author**:
+>   - i casi di T-EN1 mascherano ora il giorno;
+>   - `:1274` (il log di debug) è l'unico «Asset #» ammesso, con un motivo scritto;
+>   - `common.asset` è «Asset» anche in italiano, quindi solo il francese distingue quel ripiego.
+> - **Catalogo, parte a** (`/tmp/libreFolio_tiso_i18n_a.sh`): le tre «Other» in it, fr, es; le chiavi `assetDetail.{notFound,loadFailed,pricesLoadFailed}`. `i18n check`: 4 364 chiavi in modalità stretta.
+> - **Aggiunta approvata dal coordinatore**: il tooltip della sonda (`providerProbe.ts:103-130`) ha due date con `formatDay` e «Close» con `dataEditor.col.close`, già nel catalogo base; nessuna chiave nuova. Rosso in corso; 5 operazioni in più nello script della cura.
+> - **Backlog «da verificare»**: gli eventi persi alla risoluzione settimanale o mensile in `PriceChartFull`. Il coordinatore lo fa verificare a runtime da V.
+
+#### T-ISO + T-FB passo 2 — la cura ✅ (2026-10-13)
+> **Note implementazione**:
+> - **I rossi della sonda** (`providerProbe.test.ts`): 4, visti rossi (`/tmp/libreFolio_tiso_red_providerProbe.log`). In tutto 36 rossi.
+> - **La cura**: `/tmp/libreFolio_tiso_apply.py --apply`, 41 operazioni su 10 file, provata prima a secco.
+>   - **`formatDay`** in `utils/core/formatAxisDate.ts`.
+>   - **I tooltip** di `PriceChartFull`, `CandlestickChart` e `LineChart`: le intestazioni di giorno, settimana e mese; `valueAt`; ↩ e 💱; l'evento nei periodi aggregati; `fxRateDate`.
+>     - Le date ISO restano le chiavi delle mappe (`mainPointContext`, `overlayPointMeta`, `bucketInfoByDate`): si formattano solo quando si scrivono.
+>   - **La sonda**:
+>     - `cpDate`;
+>     - `probeDateRange()`, con una regex stretta su `inizio → fine`; una stringa diversa resta com'è;
+>     - nella tabella al passaggio (`providerProbe.ts`), le date con `formatDay` e «Close» da `dataEditor.col.close`.
+>   - **I ripieghi**:
+>     - i segnali li leggono con `ChartSignal.text`;
+>     - le due pagine usano `chartSettings.signals.assetFallback`;
+>     - la pagina dell'asset non scrive più «Asset #N» in `_assetDisplayName` (`:880`): il nome lo dà il segnale.
+>   - **I tre errori della pagina dell'asset** vengono dal catalogo; il banner passa `{id}` a `$t`.
+> - **Catalogo, parte b** (`/tmp/libreFolio_tiso_i18n_b.sh`): `i18n remove fxDetail.assetFallback`, dopo la cura, quando nessuno la leggeva più.
+> - **Verdi dopo la cura**: i 7 file del lotto (`/tmp/libreFolio_tiso_green_*.log`).
+>
+> **⚠️ Fuori pista**:
+> - **`front check`** ha trovato 1 errore: `h.date_range` è tipato `string | (string | null)[]`. Cura: `probeDateRange(String(h.date_range))` (`/tmp/libreFolio_tiso_fix2.py`).
+> - **`i18n audit`** dava per morte le tre chiavi `assetDetail.{notFound,loadFailed,pricesLoadFailed}`. L'audit conta solo una chiave scritta intera, e in `'_i18n:assetDetail.notFound'` non lo è.
+>   - Cura: un helper della pagina, `catalogueError(key)`, restituisce `` `_i18n:${key}` ``. Ogni errore del banner passa da lì con la chiave intera, compresi i due `noData` che c'erano già.
+>   - test-author J ha riallineato `comparisonSignalPages.test.ts` a questa forma (11 verdi). Ha anche provato che i suoi controlli falliscono sulla pagina di HEAD.
+
+#### T-ISO + T-FB passo 3 — i gate ✅ (2026-10-13)
+> **Note implementazione** (spec singole, 1 worker, corsia 6164):
+> - **Vitest del lotto**, dopo l'ultima modifica: `comparisonSignalPages` 11, `ProviderAssignmentSection` 40, `providerProbe` 27, `PriceChartFull` 24, `LineChart` 3, `comparisonSignals` 29, `riskGlossary` 8 (`/tmp/libreFolio_tiso_final_*.log`).
+> - **I vicini**, dopo la cura (`/tmp/libreFolio_tiso_nb_*.log`):
+>   - i 9 file di `risk-levels-component` (272);
+>   - `chartCoreHelpers` 178, `priceChartHelpers` 135, `echartsTooltipHelpers` 47, `candlestickChartHelpers` 39, `registry` 19, `syntheticSignals` 48, `formatAxisDate` 15;
+>   - le guardie `htmlInterpolation` 26, `htmlSink` 7, `moneyRenderSites` 6, `catalogIcuLocale` 17.
+> - **Statici**:
+>   - `front check`: 0 errori, 0 avvisi;
+>   - Prettier pulito sui 32 file del frontend toccati;
+>   - `i18n audit`: 0 chiavi inutilizzate;
+>   - `i18n check`: 4 363 chiavi, in modalità stretta;
+>   - `git diff --check` pulito.
+> - **Backend**: `utils gate-plugin-i18n-ownership` 45, `gate-i18n-usage` 195, `gate-i18n-catalog` 176. `check-orphans` pulito: 361 test del frontend e 262 del backend raggiungibili.
+> - **E2E**: `front-asset asset-detail` 32, `front-fx fx-detail` 17, `front-portfolio risk` 38, `front-portfolio risk-asset-detail` 5. Porta 6164 libera.
+> - **Backlog**: T-ISO e T-FB marcate ✅.
+
+### Checkpoint T-ISO + T-FB 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
+- **Base**: `fadf43b01`.
+- **Commit proposti**:
+  1. `/tmp/libreFolio_commit_t_iso_1.txt`, `fix(charts): tooltip dates follow the UI language`;
+  2. `/tmp/libreFolio_commit_t_iso_2.txt`, `fix(signals): catalogue fallbacks, page errors`;
+  3. `/tmp/libreFolio_commit_t_iso_3.txt`, `fix(i18n): translated Other in stress rules`;
+  4. `/tmp/libreFolio_commit_t_iso_4.txt`, `docs(journal): record T-ISO and T-FB`.
+- **I file per commit** sono nel manifest `/tmp/libreFolio_tiso_manifest.txt`.
+- **Il runner va nel commit 2**, perché registra anche il file nuovo di quel commit. Fra il commit 1 e il 2, `LineChart.test.ts` resta un orfano.
+
+### T-ISO, la riparazione di `component-unit` — via (coordinatore, 2026-10-13 06:08)
+- **T-ISO + T-FB è integrato**: treno 88, `dev_release2` = `50886d1ca` = la mia HEAD, pulita.
+- **I gate del treno**: 8 rossi in `front-utility component-unit`, tutti in `AssetModal.providerLifecycle.test.ts`. `expectResults` (`:424-440`) riconosce la riga dello storico dal `date_range` grezzo nel testo, e dopo T-ISO quel testo è formattato.
+- **Mandato**:
+  - un aggancio sulle righe `provider-test-result` che non dipende dalla lingua, usato dal test al posto del testo;
+  - poi `component-unit` intera e gli altri file che leggono il testo della sonda;
+  - checkpoint FROZEN. È il primo della coda: blocca la galleria finale.
+
+#### La riparazione — analisi (2026-10-13)
+- **Riprodotti**: 8 rossi su 41, tutti alla stessa riga, `:434` (`historyRows` vuoto). Log: `/tmp/libreFolio_tdr_red0_lifecycle.log`.
+- **Perché i gate di T-ISO non l'hanno visto**: al passo 3 ho fatto girare i file del lotto e i vicini dei grafici e del rischio, non `component-unit` intera. Il ciclo di vita dell'AssetModal legge il testo della sonda da fuori dal componente.
+- **La cura**: ogni riga pubblica `data-operation`, e il testo resta nella lingua della UI.
+  - I valori sono `current_price` e `history`, i nomi delle operazioni del backend (`ProbeOperation`, `schemas/provider.py:319-324`): gli stessi che la richiesta manda in `operations`.
+  - La riga che dice che la chiamata stessa è fallita (`probe.error`) pubblica `probe`.
+  - **Perché non il `date_range` grezzo**: nei fixture l'intervallo è sempre lo stesso; le risposte si distinguono dal prezzo. Al test serve sapere quale riga è quale, e `data-operation` lo dice per tutte e due. Così si controlla anche lo stato della riga del prezzo corrente, non più solo quando il caso passa un prezzo.
+- **Chi altro legge la sonda** (grep di `provider-test-result`, `→`, `as_of_date`, `points_count` e dell'endpoint):
+  - `ProviderAssignmentSection.test.ts`: legge cifre e giorni per struttura, con gli attesi scritti da `Intl`, ed è verde. Due commenti dicono che dentro la riga non si pubblica niente di più fine (`:20`, `:459`): con l'aggancio non è più vero, si correggono.
+  - `providerProbe.test.ts` (il tooltip, funzioni pure) e `providerProbeState.test.ts` (lo stato, non disegna): non leggono le righe.
+  - **E2E**:
+    - `asset-modal.spec.ts` guarda solo `data-status`;
+    - `tx-import-asset-inspector.spec.ts` e la fixture della galleria `galleryProviderCompare.ts` mandano risposte finte ma non leggono il testo.
+- **I test, da test-author J, rossi prima della cura**:
+  - `expectResults` riconosce le righe da `data-operation`;
+  - in `ProviderAssignmentSection.test.ts` si fissa il contratto dell'aggancio: successo pieno, fallimenti morbidi, la chiamata che fallisce.
+- **I gate**:
+  - i due file;
+  - `front-utility component-unit` intera e `providerProbe.test.ts`;
+  - `front check` e Prettier;
+  - l'E2E `front-asset asset-modal`, che passa dalla sonda.
+
+#### La riparazione, passo 1 — i rossi ✅ (2026-10-13)
+> **Note implementazione**: test-author J ha scritto 11 rossi, che ho visto rossi anche io, un file alla volta (`/tmp/libreFolio_tdr_red_*.log`). Falliscono tutti solo perché l'attributo manca: gli stati che leggono sono giusti.
+> - **`AssetModal.providerLifecycle.test.ts`**: 8 rossi e 33 verdi.
+>   - `expectResults` tiene firma e chiamate, e riconosce le righe da `data-operation`: esattamente `current_price` e `history`.
+>   - Lo storico è `success`, il prezzo corrente ha lo stato che resta, e il prezzo si controlla sulla sua riga.
+>   - In più una premessa: `statuses` contiene `success`, perché lo storico dei fixture riesce sempre.
+> - **`ProviderAssignmentSection.test.ts`**: 3 rossi e 37 verdi. Il contratto dell'aggancio: successo pieno, fallimenti morbidi, `probe` per la chiamata che fallisce. Corretti i due commenti, `:20` e il paragrafo «Handles».
+
+#### La riparazione, passo 2 — la cura ✅ (2026-10-13)
+> **Note implementazione**: `/tmp/libreFolio_tdr_apply.py --apply`, 5 operazioni su `ProviderAssignmentSection.svelte`, provata prima a secco.
+> - `TestResult` ha `operation`;
+> - le tre righe la valorizzano: `probe`, `current_price`, `history`;
+> - il `div` della riga pubblica `data-operation`.
+>
+> **Verdi** (`/tmp/libreFolio_tdr_green_*.log`): `AssetModal.providerLifecycle` 41, `ProviderAssignmentSection` 40, `providerProbe` 27, `providerProbeState` 237.
+
+#### La riparazione, passo 3 — i gate ✅ (2026-10-13)
+> **Note implementazione** (corsia 6164, un comando alla volta):
+> - **`front-utility component-unit` intera**: 117 file, 3 130 test, tutti verdi (`/tmp/libreFolio_t1_tdr_front-utility_component-unit.log`).
+> - **`providerProbe.test.ts`** (sta in `front-utility core-unit`): 27.
+> - **Statici**:
+>   - `front check`: 0 errori, 0 avvisi;
+>   - Prettier pulito sui 3 file;
+>   - `git diff --check` pulito.
+> - **E2E**: `front-asset asset-modal` 17, l'unico che passa dalla sonda (legge solo `data-status`). `check-orphans` pulito: nessun file nuovo.
+> - **Porta 6164 libera.**
+
+### Checkpoint della riparazione 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
+- **Base**: `50886d1ca`.
+- **Commit proposti**:
+  1. `/tmp/libreFolio_commit_t_iso_r1.txt`, `fix(assets): probe rows name their operation`: il componente e i due spec;
+  2. `/tmp/libreFolio_commit_t_iso_r2.txt`, `docs(journal): record the T-ISO probe repair`: piano 43 e backlog.
+- **I file per commit** sono nel manifest `/tmp/libreFolio_tdr_manifest.txt`.
+
+### Il tooltip del periodo in corso — via (coordinatore, 2026-10-13 06:42)
+- **Base**: treno 91, `dev_release2` = `fa6299689` = la mia HEAD, pulita. Dentro c'è il lotto 51 di I. La sua R-5 (`1acd1bf10`) mette il marcatore di un evento dell'ultimo periodo parziale, settimanale o mensile, sull'ultima data con un dato.
+- **Il difetto, segnalato da I** (piano della 51, §R-5, «un fratello»): il tooltip di quel punto dice ancora «value at» la fine teorica del periodo (`PriceChartFull.svelte:348-352`). Le due date non coincidono.
+- **Mandato**:
+  - il tooltip del punto aggregato nomina la data del suo ultimo dato, oppure l'intervallo vero se il formato ha un intervallo, con `formatDay`;
+  - rossi prima della cura, via test-author;
+  - poi `front-asset asset-detail` e `front-fx fx-detail`;
+  - dire se il difetto c'era nella `v1.1.0`, e in quel caso la riga 🐛;
+  - checkpoint FROZEN col manifest.
+
+#### Il periodo in corso — analisi (2026-10-13)
+- **Il meccanismo**:
+  - `aggregateLineSeries` e `aggregateOHLCV` (`timeSeriesAggregation.ts:168-182`, `:215-263`) datano ogni punto aggregato col suo ultimo dato. La fine teorica (la domenica, l'ultimo del mese) resta solo in `bucketEnd`.
+  - I due tooltip di `PriceChartFull` passano a `buildTooltipHeader` la data del punto e il `bucketInfo` teorico:
+    - il tooltip dell'asse (`:921-923`);
+    - quello del marcatore d'evento (`:846-849`), con la data del punto dopo la R-5.
+  - La testata usa `bucketEnd`: per la settimana è la fine di `weekRange`, per il mese la data di `valueAt`.
+  - `CandlestickChart` (`:189-201`) fa lo stesso con la candela, che sta all'ultimo dato.
+- **Dove si vede**: la lettura dei prezzi riempie ogni giorno di calendario (`asset_sources/core.py:297-299`). Il cambio arriva da `/fx/currencies/convert`, che dà un risultato per ogni giorno chiesto. Quindi nei periodi pieni l'ultimo dato è la fine teorica e non cambia niente. Il difetto sta solo:
+  - nell'ultimo periodo, ancora aperto (oggi 13/10: «value at 31 ott 2026», un giorno che deve ancora venire; la settimana «12 ott – 18 ott» per un punto del 13);
+  - in una serie che si ferma dentro il periodo (un intervallo scelto che finisce a metà mese).
+- **La `v1.1.0`**: c'era già, con la stessa aggregazione e la stessa testata (`git show v1.1.0:…/PriceChartFull.svelte:314-326`, `CandlestickChart.svelte:181-184`). **Vuole una riga 🐛**, che si può unire a quella della R-5 di I.
+- **La cura**:
+  - una funzione pura in `priceChartHelpers.ts`, accanto a `getBucketInfo`: `bucketSpanUpTo(date, info)`. Restituisce il periodo dal suo primo giorno fino alla data del punto quando questa cade prima della fine; altrimenti il periodo intero, anche per una data fuori dal periodo;
+  - la usano le due testate, di `PriceChartFull` e di `CandlestickChart`:
+    - la settimana va dall'inizio all'ultimo dato;
+    - il mese resta col suo nome, con «value at» l'ultimo dato.
+  - L'inizio resta il primo giorno di calendario del periodo.
+  - Nessuna chiave nuova, nessun cambio di API.
+- **La stessa famiglia, fuori dal mandato: solo segnalati, non toccati**:
+  - `brokers/lots/LotComparisonChart.svelte:391-415`: lo stesso difetto del periodo aperto. Il punto sta a `point.date` (`:309-314`), «value at» e la fine della settimana usano `bucketEnd`. C'era già nella `v1.1.0`.
+  - `dashboard/GrowthChart.svelte:1384-1407` e `dashboard/AllocationHistoryChart.svelte:557-566`: il periodo aperto è già giusto. GrowthChart dice «In progress: 6 of 31 days» e mette in «value at» l'ultimo giorno con un dato; AllocationHistory usa `row.date`. Però scrivono i giorni ISO grezzi (`2026-10-01 → 2026-10-31`). `GrowthChart.test.ts:2171-2189` lo fissa. Contraddice la riga 🔄 «everywhere», che promette anche i tooltip: va detto al coordinatore.
+- **I test (test-author J), rossi prima della cura**:
+  - `priceChartHelpers.test.ts`: la funzione nuova;
+  - `PriceChartFull.test.ts`: in più lingue, una serie di giorni di calendario che finisce dentro la settimana o il mese. Si controllano la testata dell'asse sul punto aperto, il marcatore d'evento nel periodo aperto, e le candele aperte. I casi dei periodi pieni restano la guardia di ciò che non cambia.
+- **I gate**:
+  - i due file, poi `front-utility core-unit` e `component-unit`;
+  - `front check` e Prettier;
+  - gli E2E `front-asset asset-detail` e `front-fx fx-detail`.
+- **Aggiunta del coordinatore (06:53)**: chiudere T-EVW nel backlog, col rimando, perché è la R-5 di I (`1acd1bf10`, treno 91), confermata a runtime da V.
+  > **Note implementazione**: T-EVW ✅ nella sezione T del backlog, coi rimandi al piano della 51 (sezione «R-5») e a questa sezione.
+
+#### Il periodo in corso, passo 1 — i rossi ✅ (2026-10-13)
+> **Note implementazione**: test-author J ha scritto 21 rossi, tutti sui casi nuovi. Li ho visti rossi anch'io, un file alla volta (`/tmp/libreFolio_tbk_red_*.log`).
+> - **`priceChartHelpers.test.ts`**: 9 rossi, 139 verdi. `describe('bucketSpanUpTo')` copre:
+>   - settimana e mese aperti, il punto sul primo giorno;
+>   - settimana e mese interi, una data prima, una dopo, `''`;
+>   - la purezza.
+>
+>   Falliscono tutti sulla barriera dell'export mancante.
+> - **`PriceChartFull.test.ts`**: 12 rossi, 24 verdi, in it e fr. I casi sono la settimana e il mese aperti, sul tooltip dell'asse, del marcatore d'evento e della candela.
+>   - **I fixture**: `OPEN_DAYS` (i giorni di calendario fino a mercoledì 13/3/2024), `OPEN_MONTHLY_PLOT_WIDTH = 2`, `OPEN_DIVIDEND` del 12/3.
+>   - **Ricevuto → atteso**: «Settimana 11 mar 2024 – 17 mar 2024» → «… – 13 mar 2024», «Valore al 31 mar 2024» → «Valore al 13 mar 2024».
+>   - **Il marcatore**: una barriera prova che sta sul punto del 13 (la R-5 di I), e l'atteso si calcola da quel giorno.
+>   - **I periodi interi** (`WEEK_ENDS`, `MONTH_ENDS`) restano la guardia di ciò che non cambia.
+>   - **Riordino interno**: `mountCandles` e `candleHeader` passano a livello di file; `periodTooltipOf` delega a `periodPointOf`.
+
+#### Il periodo in corso, passo 2 — la cura ✅ (2026-10-13)
+> **Note implementazione**: `/tmp/libreFolio_tbk_apply.py --apply`, 5 operazioni su 3 file, provata prima a secco.
+> - `bucketSpanUpTo` in `priceChartHelpers.ts`, dopo `getBucketInfo`. Chiede anche che la data sia un giorno ISO (`ISO_DATE_PATTERN`).
+> - Le testate di `PriceChartFull` e di `CandlestickChart` la applicano a data del punto e `bucketInfo`.
+>
+> **Verdi** (`/tmp/libreFolio_tbk_green_*.log`): `priceChartHelpers` 148, `PriceChartFull` 36, `LineChart` 3, `candlestickChartHelpers` 39.
+
+#### Il periodo in corso, passo 3 — i gate ✅ (2026-10-13)
+> **Note implementazione** (corsia 6164, un comando alla volta):
+> - **`front-utility core-unit`**: 128 file, 4 140 test; **`component-unit`**: 117 file, 3 142 test. Tutti verdi (`/tmp/libreFolio_t1_tbk_front-utility_*.log`).
+> - **Statici**:
+>   - `front check`: 0 errori, 0 avvisi;
+>   - Prettier pulito sui 5 file;
+>   - `git diff --check` pulito.
+> - **E2E**: `front-asset asset-detail` 32, `front-fx fx-detail` 17. `check-orphans` pulito.
+> - **Porta 6164 libera.**
+> - **Riga 🐛 proposta**, da unire a quella della R-5 di I nel blocco `#### 📈 Charts`: vedi il checkpoint.
+
+### Checkpoint del periodo in corso 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
+- **Base**: `fa6299689`.
+- **Commit proposti**:
+  1. `/tmp/libreFolio_commit_t_bkt_1.txt`, `fix(charts): open period tooltip ends on its day`: l'helper, le due testate, i due spec;
+  2. `/tmp/libreFolio_commit_t_bkt_2.txt`, `docs(journal): record the open period tooltip`: piano 43 e backlog (T-EVW ✅).
+- **I file per commit** sono nel manifest `/tmp/libreFolio_tbk_manifest.txt`.

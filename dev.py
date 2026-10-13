@@ -17,6 +17,7 @@ Autocompletion setup:
 
 import argparse
 import hashlib
+import json
 import os
 import platform
 import re
@@ -47,6 +48,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 os.chdir(PROJECT_ROOT)
 
 import scripts.docs_links as docs_links
+import scripts.i18n_catalog as i18n_catalog
 from scripts.cli_base import (
     Colors,
     check_server_running,
@@ -621,6 +623,12 @@ def cmd_fe_build(args):
     if sync_result != 0:
         print_error("API sync failed - aborting build")
         return sync_result
+
+    # The translation catalogue the app loads (src/lib/i18n/<lang>.json) is generated from its sources;
+    # svelte-check below reads it before npm's own prebuild hook would run.
+    if i18n_catalog.build(quiet=True) != 0:
+        print_error("Translation catalogue could not be generated - aborting build")
+        return 1
 
     # Generate favicon from logo before build
     generate_favicon()
@@ -1947,7 +1955,7 @@ def cmd_dead_code(args):
         if not (frontend_dir / "node_modules" / "knip").exists():
             print_warning("  knip not installed — run './dev.py install' or 'npm install' in frontend/")
         else:
-            failed = _run_knip(frontend_dir, exclude) or failed
+            failed = _run_knip_on_generated_catalogue(frontend_dir, exclude) or failed
 
     return 1 if failed else 0
 
@@ -1978,6 +1986,14 @@ def _extract_json(text):
             except json.JSONDecodeError:
                 continue
     return None
+
+
+def _run_knip_on_generated_catalogue(frontend_dir, exclude):
+    """knip resolves the imports of the generated src/lib/i18n/<lang>.json: write them first, or it reports false findings."""
+    if i18n_catalog.build(quiet=True) != 0:
+        print_error("  translation catalogue could not be generated - knip skipped")
+        return True
+    return _run_knip(frontend_dir, exclude)
 
 
 def _run_knip(frontend_dir, exclude):
@@ -2051,7 +2067,8 @@ def cmd_install(args):
     print()
 
     print(Colors.info("[2/4] Installing root project tools..."))
-    result = run_command_live(["npm", "install"])
+    # `npm ci`, like the frontend below: it installs the lockfile as committed and never rewrites it.
+    result = run_command_live(["npm", "ci"])
     if result != 0:
         print_error("Failed to install root npm dependencies")
         return result
@@ -2171,20 +2188,64 @@ def auto_build_mkdocs():
         pass
 
 
+#: Where dev.py records the source of each generated icon set and the recipe that drew it. The icons are
+#: regenerated only when either changes: Pillow does not write the same PNG bytes on every platform, so
+#: regenerating unchanged icons on another machine rewrote tracked files — on the release runner, enough for
+#: `git describe --dirty` to mark the app's version. Delete an entry (or the file) to force a regeneration.
+GENERATED_ICONS_RECORD = PROJECT_ROOT / "frontend" / "generated-icons.json"
+#: Bump when generate_favicon() changes what it draws.
+FAVICON_RECIPE = 1
+#: Bump when generate_pwa_icons() changes what it draws.
+PWA_ICONS_RECIPE = 1
+
+
+def _icon_set_record(source: Path, recipe: int) -> dict:
+    """What GENERATED_ICONS_RECORD holds for an icon set drawn from ``source`` by ``recipe``."""
+    return {"recipe": recipe, "sha256": hashlib.sha256(source.read_bytes()).hexdigest(), "source": source.relative_to(PROJECT_ROOT).as_posix()}
+
+
+def _read_generated_icons_record() -> dict:
+    try:
+        record = json.loads(GENERATED_ICONS_RECORD.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return record if isinstance(record, dict) else {}
+
+
+def _icon_set_up_to_date(key: str, source: Path, recipe: int, outputs: list[Path]) -> bool:
+    """Every output exists, and the record names this source's bytes and this recipe."""
+    return all(path.exists() for path in outputs) and _read_generated_icons_record().get(key) == _icon_set_record(source, recipe)
+
+
+def _record_icon_set(key: str, source: Path, recipe: int) -> None:
+    record = _read_generated_icons_record()
+    record["_about"] = "Written by dev.py (generate_favicon, generate_pwa_icons): each icon set is regenerated only when its source's sha256 or its recipe changes."
+    record[key] = _icon_set_record(source, recipe)
+    GENERATED_ICONS_RECORD.write_text(json.dumps(record, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 def generate_favicon():
-    """Generate a square 48x48 favicon from logo.png (logo is non-square 765x944)."""
-    from PIL import Image
+    """Generate a square 48x48 favicon from logo.png (logo is non-square 765x944).
+
+    Only when logo.png or FAVICON_RECIPE changed since the last generation (GENERATED_ICONS_RECORD).
+    """
     src = PROJECT_ROOT / "frontend" / "static" / "logo.png"
     dst = PROJECT_ROOT / "frontend" / "static" / "favicon.png"
     if not src.exists():
         print_warning("logo.png not found, skipping favicon generation")
         return
+    if _icon_set_up_to_date("favicon", src, FAVICON_RECIPE, [dst]):
+        print(Colors.info("ℹ️  favicon.png is up to date (logo.png unchanged)"))
+        return
+    from PIL import Image
+
     img = Image.open(src)
     w, h = img.size
     size = max(w, h)
     square = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     square.paste(img, ((size - w) // 2, (size - h) // 2))
     square.resize((48, 48), Image.LANCZOS).save(dst)
+    _record_icon_set("favicon", src, FAVICON_RECIPE)
     print_success(f"favicon.png generated (48×48 from {w}×{h} logo)")
 
 
@@ -2201,14 +2262,21 @@ def generate_pwa_icons():
     black. The logo is resized premultiplied (RGBa), so its transparent black pixels do not
     bleed a dark fringe into the edge, and composited with alpha_composite, which keeps the
     canvas opaque (paste with a mask blends the alpha channel too).
-    """
-    from PIL import Image
 
+    Only when logo_square.png or PWA_ICONS_RECIPE changed since the last generation
+    (GENERATED_ICONS_RECORD).
+    """
     src = PROJECT_ROOT / "frontend" / "static" / "logo_square.png"
     icons_dir = PROJECT_ROOT / "frontend" / "static" / "icons"
     if not src.exists():
         print_warning("logo_square.png not found, skipping PWA icon generation")
         return
+    outputs = [icons_dir / f"icon-{size}.png" for size in (192, 512)] + [icons_dir / f"icon-maskable-{size}.png" for size in (192, 512)] + [icons_dir / "apple-touch-icon.png"]
+    if _icon_set_up_to_date("pwa-icons", src, PWA_ICONS_RECIPE, outputs):
+        print(Colors.info("ℹ️  PWA icons are up to date (logo_square.png unchanged)"))
+        return
+    from PIL import Image
+
     icons_dir.mkdir(parents=True, exist_ok=True)
     logo = Image.open(src).convert("RGBA")
     w, h = logo.size
@@ -2234,6 +2302,7 @@ def generate_pwa_icons():
         maskable_side = int(target_size * maskable_reach / logo_reach)
         compose(target_size, beige, maskable_side).save(icons_dir / f"icon-maskable-{target_size}.png", optimize=True)
     compose(180, white, round(180 * any_logo_ratio)).save(icons_dir / "apple-touch-icon.png", optimize=True)
+    _record_icon_set("pwa-icons", src, PWA_ICONS_RECIPE)
     print_success(f"PWA icons generated (any 192/512, maskable 192/512, apple-touch 180 from {w}×{h} logo_square)")
 
 

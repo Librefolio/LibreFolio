@@ -119,6 +119,6 @@ To prove that a label is not hardcoded, mount the component in a marker locale, 
 | Identity precedent — `data-error-key` | `frontend/src/lib/components/brokers/BrokerSharingPanel.svelte` (L379) |
 | Converted assertions | `frontend/src/lib/components/brokers/BrokerSharingPanel.test.ts` |
 | Catalogue-comparison precedent | `frontend/src/lib/utils/files/imageCrop.test.ts` |
-| English catalogue | `frontend/src/lib/i18n/en.json` |
+| English catalogue | `frontend/src/lib/i18n/base/en.json` |
 | Rule as stated for the test author | `.github/agents/test-author.agent.md` — rule 5 |
 | Playwright-side rule | `LibreFolio_devWiki/wiki/concepts/e2e-data-testid-rule.md` |

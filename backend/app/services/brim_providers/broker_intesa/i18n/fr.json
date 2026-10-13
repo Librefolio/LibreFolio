@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_intesa": {
+      "description": "Importe les exports d’Intesa Sanpaolo (CSV ou XLSX). Traite la liste des mouvements (coupons obligataires et droits de garde ; les lignes bancaires courantes non reconnues sont ignorées) et l’instantané du portefeuille (patrimonio), importé comme un dépôt d’espèces plus un ajustement du prix de revient par position, pour amorcer un compte avec son historique.",
+      "name": "Intesa Sanpaolo"
+    }
+  }
+}

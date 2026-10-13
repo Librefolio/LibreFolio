@@ -67,6 +67,7 @@
     import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -437,10 +438,11 @@
         await loadOverview();
     }
 
-    function formatDate(dateStr: unknown): string {
+    // In the interface locale (M-18): the template passes `$uiLocaleStore`, read there so it is tracked.
+    function formatDate(dateStr: unknown, locale: string): string {
         const str = safeString(dateStr);
         if (!str) return '-';
-        return new Date(str).toLocaleDateString(undefined, {
+        return new Date(str).toLocaleDateString(locale, {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
@@ -479,7 +481,7 @@
                             data-testid="broker-quota-badge"
                         >
                             {#if broker.user_share_percentage != null}
-                                <span class="text-xs font-medium">{formatSharePercentage(broker.user_share_percentage, $currentLanguage)}</span>
+                                <span class="text-xs font-medium">{formatSharePercentage(broker.user_share_percentage, $uiLocaleStore)}</span>
                             {/if}
                             {#if role === 'OWNER'}<Crown size={13} />{:else if role === 'EDITOR'}<Pencil size={13} />{:else}<Eye size={13} />{/if}
                         </span>
@@ -779,7 +781,7 @@
                         {#if safeString(broker.opened_at)}
                             <div class="flex justify-between">
                                 <span class="text-gray-500 dark:text-gray-400">{$_('brokers.openedAt')}</span>
-                                <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.opened_at)}</span>
+                                <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.opened_at, $uiLocaleStore)}</span>
                             </div>
                         {/if}
                         <div class="flex justify-between">
@@ -796,7 +798,7 @@
                         </div>
                         <div class="flex justify-between border-t border-gray-100 dark:border-slate-700 pt-2 mt-2">
                             <span class="text-gray-500 dark:text-gray-400">{$_('brokers.createdInSystem')}</span>
-                            <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.created_at)}</span>
+                            <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.created_at, $uiLocaleStore)}</span>
                         </div>
                     </div>
 

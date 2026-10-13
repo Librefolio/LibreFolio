@@ -1,6 +1,6 @@
 ---
 name: devpy-i18n
-description: "Use this skill when the user needs to manage frontend translations (i18n): audit keys, add/remove/update translations, search for keys or values, check for duplicates, or understand the i18n namespace structure."
+description: "Use this skill when the user needs to manage frontend translations (i18n): audit keys, add/remove/update translations, find which source file holds a key (base, subsystem folders, plugin i18n fragments), build or check the generated catalogue, move/split keys between sources, absorb a branch's catalogue changes, search for keys or values, check for duplicates, or understand the i18n namespace structure."
 ---
 
 # i18n Management (Frontend Translations)
@@ -8,17 +8,19 @@ description: "Use this skill when the user needs to manage frontend translations
 ## Commands
 
 ```bash
-./dev.py i18n audit                          # Full audit report
+./dev.py i18n audit                          # Full audit report (reads the sources, checks them strictly)
 ./dev.py i18n audit --duplicates             # Show duplicate values
 ./dev.py i18n audit --format xlsx            # Export as Excel
 ./dev.py i18n audit --format md              # Export as Markdown
 
+./dev.py i18n where "ns.key"                 # The source file that holds a key, or the one `add` would use
 ./dev.py i18n add "ns.key" --en "English" --it "Italiano" --fr "Français" --es "Español"
-./dev.py i18n remove "ns.key"                # Remove key from all languages
+./dev.py i18n add "brimPlugins.broker_x.name" --en … --it … --fr … --es … --into brim_providers/broker_x
+./dev.py i18n remove "ns.key"                # Remove key from all languages and sources
 ./dev.py i18n remove "ns.key" -f             # Force (no confirmation)
-./dev.py i18n update "ns.key" --it "Nuovo"   # Update single language
+./dev.py i18n update "ns.key" --it "Nuovo"   # Update single language, in the key's source
 
-./dev.py i18n search "query"                 # Search in values (all languages)
+./dev.py i18n search "query"                 # Search in values (all languages); shows each key's Source
 ./dev.py i18n search "query" -k              # Search in key names only
 ./dev.py i18n search "query" -v              # Verbose (show all languages)
 ./dev.py i18n search "query" -l it           # Search only in Italian
@@ -27,27 +29,67 @@ description: "Use this skill when the user needs to manage frontend translations
 ./dev.py i18n tree common                    # Tree under "common" namespace
 ./dev.py i18n tree --counts                  # Show key counts per namespace
 ./dev.py i18n tree -d                        # Show duplicates in tree
+
+./dev.py i18n build                          # Regenerate src/lib/i18n/<lang>.json from the sources
+./dev.py i18n check                          # Validate the sources, strictly (four languages, one owner per key)
+./dev.py i18n check --against REV            # …and prove the catalogue equal, key by key, to a git revision
+./dev.py i18n move "ns.prefix" --into SOURCE # Move a subtree, in every language, to base / a subsystem / <family>/<plugin>
+./dev.py i18n split                          # Put every key where its declared prefix says (re-runnable)
+./dev.py i18n absorb --base REV --theirs REV [--prefer ours|theirs]   # Replay a branch's key changes (old layout)
 ```
 
-## Translation Files
+Every command that writes edits the **sources** and regenerates the catalogue by itself.
 
-- Location: `frontend/src/lib/i18n/{en,it,fr,es}.json`
-- Library: svelte-i18n
-- Languages: EN (primary), IT, FR, ES
-- ~4 150 keys per language after the Release 2 audit (2026-10: 4 356 → 4 152; 192 dead keys removed,
-  five condensations C1-C5). Read the live number from `./dev.py i18n audit`, never from here.
+## The Catalogue: Sources and the Generated File
+
+- **Generated, never edited**: `frontend/src/lib/i18n/{en,it,fr,es}.json` is built by `scripts/i18n_catalog.py`
+  (stdlib, Python 3.9+, since the npm hooks run it with the system `python3`), ignored by git and read-only, with a
+  `.generated` sha256 stamp. A hand edit stops the next build: move the change to its source (`where` tells which).
+  It is written by `./dev.py front build`, the npm pre-hooks of `dev`/`build`/`build:debug`/`check`/`check:watch`
+  (`frontend/scripts/i18n-catalog-build.mjs`, also `npm run i18n:build`), Vitest's `globalSetup`, `./dev.py lint
+  --dead-code` and the AI Export probe. A running `npm run dev` does not see a hand edit of a source until
+  `./dev.py i18n build` (the CLI commands rebuild by themselves).
+- **Sources**:
+  - `frontend/src/lib/i18n/base/<lang>.json` — the generic vocabulary (`common`, `datePicker`, `csvImport`,
+    `dataEditor`, `sectors`, `table`, …): it owns every key nobody else claims;
+  - `frontend/src/lib/i18n/<subsystem>/<lang>.json` — one folder per subsystem (`pacAllocator`, `risk`,
+    `importWizard`, `assets`, `brokers`, `transactions`, `onboarding`, `settings`, `aiExport`, `charts`, `dashboard`,
+    `tools`, `fx`, `files`, `app`, `auth`, `dataQuality`), whose `prefixes.txt` declares the key prefixes it owns;
+  - `backend/app/services/<family>/<plugin>/i18n/<lang>.json` — a plugin's own texts, with absolute keys
+    (`{"brimPlugins": {"broker_x": {"name": …}}}`): BRIM names and descriptions, signal and risk-analytic texts,
+    an asset provider's `providerParams`, a tool's name and description.
+- **Ownership**: a plugin owns exactly the keys its fragment holds; otherwise the subsystem with the **longest
+  declared prefix**; otherwise `base`. A key in two sources, a string in one and a branch in another, or a key outside
+  the folder its prefix names is an error. Keys several plugins share (`signals.reference.*`,
+  `signals.riskRollingReturn.*`) and the `risk.warnings.*` vocabulary stay in their subsystem.
+- **Languages**: EN is mandatory. In a build a translation a source lacks falls back to English with a warning;
+  `./dev.py i18n check`, the audit and the gates fail on it. Backend tests read the catalogue with
+  `scripts.i18n_catalog.load_catalog(lang, fallback=False)`, never from a frontend build.
+- **Branches on an older layout** (one `<lang>.json`, or `base/` before the split): keep our side of the catalogue in
+  the merge, then `./dev.py i18n absorb --base <merge-base> --theirs <their commit>` and `check --against <their
+  commit>`. A value both sides changed is a conflict: listed, nothing written, unless `--prefer ours|theirs`.
+- Library: svelte-i18n. Languages: EN (primary), IT, FR, ES. Read the live key count from `./dev.py i18n audit`.
+
+## Gates
+
+- `./dev.py test … utils gate-i18n-catalog` — the library's rules, both ways, and the repository's sources (strict
+  merge, four languages, generator format, ignore rules).
+- `./dev.py test … utils gate-plugin-i18n-ownership` — read from the registries: every plugin's keys live in its own
+  `i18n/` fragment, and no fragment holds another plugin's or a shared key (R1–R4).
+- `./dev.py test … utils gate-i18n-usage` — the audit's *used / dead / not verified* classifier (below).
 
 ## Locale File Format — canonical form is `indent=2`
 
-The canonical serialization is the one `./dev.py i18n` produces:
-**`indent=2`, `ensure_ascii=False`** (accented characters stay literal), trailing newline.
-Prettier is configured to agree with it byte-for-byte:
+The canonical serialization is the one `./dev.py i18n` (`scripts/i18n_catalog.py`) produces, for every source and
+for the generated catalogue: **`indent=2`, `ensure_ascii=False`** (accented characters stay literal), trailing
+newline; each source keeps its own key order in each language. The gate `utils gate-i18n-catalog` fails on a source in
+any other form. Prettier is configured to agree with it byte-for-byte on the sources under `src/`:
 
 - `frontend/.prettierrc` has a `*.json` override setting `tabWidth: 2` (the global
   `tabWidth` is 4, which is correct for `.ts`/`.svelte` but wrong for these files).
 - `frontend/package.json` includes `json` in the `format`/`format:check` globs, so
-  `./dev.py front format` and `./dev.py front check` actually cover the locale files.
-  (`src/lib/api/openapi.json` is excluded via `.prettierignore`.)
+  `./dev.py front format` and `./dev.py front check` actually cover the locale sources.
+  (`src/lib/api/openapi.json` and the generated `src/lib/i18n/*.json` are excluded via `.prettierignore`.)
 
 **Why this matters**: before this alignment, `.json` was not in the format glob at all,
 so the locale files were never checked by Prettier. Anyone editing them by hand — rather
@@ -60,11 +102,12 @@ few keys. Aligning Prettier to the tool means both paths converge on one form.
 the diff size and key parity:
 
 ```bash
-git --no-pager diff --stat -- 'frontend/src/lib/i18n/*.json'   # should be small
+git --no-pager diff --stat -- frontend/src/lib/i18n 'backend/app/services/*/*/i18n'   # should be small
+./dev.py i18n check                                                                  # strict: same keys in 4 languages
 ```
 
-A key removed from some languages but not others is worse than an unused key — always
-verify all four locales end up with the same key set.
+A key removed from some languages but not others is worse than an unused key — `./dev.py i18n check` (and the audit)
+fail on it, source by source.
 
 ## Key Naming Conventions
 
@@ -168,6 +211,11 @@ dotted f-string head: then the audit sees it with no tool change.
 
 ## Rules for New Keys
 
+0. **Let the tool place it**: `./dev.py i18n where <key>` names the source a new key goes to, and `./dev.py i18n add`
+   writes it there. A plugin's own texts go in its fragment (`--into <family>/<plugin>`): under a branch only plugins
+   hold (`brimPlugins.<new>`, `risk.analytics.<new>`, `assets.providerParams.<new>`) `add` refuses to guess and asks
+   for `--into`. A new top-level namespace lands in `base` with a notice: keep it there only if it is generic,
+   otherwise `--into <subsystem>` (or create the subsystem's folder with its `prefixes.txt`).
 1. **Search first**: check if the value already exists under `common.*`
 2. **Generic values** → use `common.*`
 3. **Feature-specific** → use the feature namespace

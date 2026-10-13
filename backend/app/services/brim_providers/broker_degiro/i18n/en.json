@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_degiro": {
+      "description": "Import DEGIRO's Account Statement (CSV) in any language: trades, fees, dividends, taxes, interest, deposits, withdrawals and currency conversions, each in its own currency.",
+      "name": "DEGIRO"
+    }
+  }
+}

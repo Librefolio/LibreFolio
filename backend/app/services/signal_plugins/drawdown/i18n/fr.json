@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskDrawdown": {
+      "name": "Repli depuis le sommet",
+      "description": "Suit le repli en pourcentage depuis chaque sommet progressif du prix.",
+      "output": "Repli",
+      "outputDescription": "Repli du prix depuis le sommet progressif, hors flux ; jamais supérieur à zéro.",
+      "referencePeak": "Sommet"
+    }
+  }
+}

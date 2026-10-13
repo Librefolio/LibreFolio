@@ -95,6 +95,15 @@ is the same failure mode as the silently-lost coverage
 ([[problems/e2e-python-coverage-lost-above-two-workers]]) and the half-wired
 environment variable ([[problems/env-var-injection-point-duplicated]]).
 
+The runner itself nearly did it once (test-runner migration, detour 15, `78a0103ae`). A guard,
+`nothing_left_to_run()`, skips a category's serial pass when the consolidated pass already ran every action; its
+first version simply returned `True`, so a skipped category counted as **passed**. With `--no-fail-fast` the run
+printed `✘ front-transaction tx-wac-mode` and, twenty lines below, «🎉 ALL FRONTEND TESTS PASSED! 🎉». The exit code
+was right (1), but a summary that contradicts the exit code is worse than none. The cure: `consolidated_verdict()`
+reports what the pass actually found, and `_SKIP_ACTIONS` and `_FAILED_ACTIONS` stay two separate sets in
+`scripts/test_runner/_common.py`, because they answer two questions — «was it already run?» and «did it pass?».
+Merging them is exactly how a red becomes green.
+
 ## Fixed cost, measured
 
 The reason consolidation is worth the isolation work at all:

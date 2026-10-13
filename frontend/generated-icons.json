@@ -1,0 +1,13 @@
+{
+  "_about": "Written by dev.py (generate_favicon, generate_pwa_icons): each icon set is regenerated only when its source's sha256 or its recipe changes.",
+  "favicon": {
+    "recipe": 1,
+    "sha256": "c18aa2ba86431011ef85a1f2773e4b5f488cfa168505f0cc7036510f2a8c6afe",
+    "source": "frontend/static/logo.png"
+  },
+  "pwa-icons": {
+    "recipe": 1,
+    "sha256": "128d9b04189fac76633c445ea07a6b72dae476941dac79e82a1ecbf6e5da58b2",
+    "source": "frontend/static/logo_square.png"
+  }
+}

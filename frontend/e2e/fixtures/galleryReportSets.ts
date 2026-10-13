@@ -46,8 +46,10 @@
 import type {APIResponse, Route, TestInfo} from '@playwright/test';
 import {expect, type APIRequestContext, type Locator, type Page} from './playwright';
 import {waitForParseVerdict, waitForSettled} from './app-events';
+import {GALLERY_LOCALES} from './galleryLocale';
 import {OFFLINE_CURRENT_PRICES, OFFLINE_FX_PROVIDERS, type OfflineCurrentPrice} from './galleryOfflineData';
 import {deleteDisposableUser, prepareOnboardingAccount, type DisposableUser} from './onboarding-accounts';
+import type {Language} from './test-users';
 import {uniqueToken} from './unique';
 import {randomUUID} from 'crypto';
 import {mkdirSync, readFileSync, writeFileSync} from 'fs';
@@ -551,18 +553,26 @@ export function galleryOfflineGuard(page: Page): GalleryOfflineGuard {
  * The Assets list's live prices for its latest load, answered from the fixture and drawn. The poll is outside the page's
  * `data-busy` — it never holds the list back — so a list settled on `data-busy="false"` may still show the fixture's
  * assets without a price. Waits for a poll answered after `since` (`pricedPolls`, read before the load), then for every
- * card of a fixture asset on the page to show its figure, which the card prints with two decimals. Call it while the
- * cards stand still — before a search filters some away; in the table view, where no card is drawn, only the poll is
- * waited for (the rows print the figure in the language's format).
+ * card of a fixture asset on the page to show its figure. The card prints the price in the interface's locale (M-18),
+ * with two decimals, so the expected text is written by the browser's own Intl in the shot's locale
+ * (`GALLERY_LOCALES[lang]`), rounded first as the card rounds it; it must end with the locale's decimal mark and two
+ * digits, so a missing or English-only ICU fails there rather than as a wrong price. Call it
+ * while the cards stand still — before a search filters some away; in the table view, where no card is drawn, only the
+ * poll is waited for (the rows print the figure in the language's format).
  */
-export async function expectOfflinePricesDrawn(page: Page, since: number): Promise<void> {
+export async function expectOfflinePricesDrawn(page: Page, since: number, lang: Language): Promise<void> {
     const guard = galleryOfflineGuard(page);
+    const shotLocale = GALLERY_LOCALES[lang];
+    const decimalTail = lang === 'en' ? /\.\d{2}$/ : /,\d{2}$/;
     await expect.poll(() => guard.pricedPolls, {message: 'no live-price poll of this load of the Assets page was answered from the fixture', timeout: 20_000}).toBeGreaterThan(since);
     for (const [assetId, price] of guard.pricedAssets) {
         const card = page.getByTestId(`asset-card-${assetId}`);
         // The cards are drawn before the poll leaves (it asks for the ids of the loaded list): absent now is absent from this view.
         if ((await card.count()) === 0) continue;
-        await expect(card, `the card of "${price.displayName}" does not show its fixture price`).toContainText(Number(price.value).toFixed(2));
+        // Rounded by toFixed first, as formatFixed rounds it: Intl alone would round a half-way value its own way.
+        const expected = await page.evaluate(([value, locale]) => new Intl.NumberFormat(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(Number(value.toFixed(2))), [Number(price.value), shotLocale] as const);
+        expect(expected, `control: the ${shotLocale} figure of "${price.displayName}" does not end in the locale's decimal mark and two digits — the browser formats the shot's locale with its own ICU, so a missing or English-only ICU fails here, not as a wrong price`).toMatch(decimalTail);
+        await expect(card, `the card of "${price.displayName}" does not show its fixture price as ${shotLocale} writes it`).toContainText(expected);
     }
 }
 
@@ -599,6 +609,12 @@ const FAVICON_MARK = 'lf-gallery';
  * is touched. A URL that does not end in /favicon.ico (BOE's `favicon.svg?ver=…`) is left alone; the fragment, if any,
  * stays last, and a URL whose query ends in /favicon.ico gets `&lf-gallery` instead.
  *
+ * Reads give the URL back as the app wrote it: the `src` property and `getAttribute('src')` drop the query again. The
+ * broker icon tells which request answered by comparing the image's `src` attribute with its own URL
+ * (brokerIconChain.svelte.ts, `eventUrl`, since 12/10): read with the query, no load and no error was ever acknowledged,
+ * and every broker logo drawn from a favicon stayed on its fallback briefcase, in every shot. Read back plain, a favicon
+ * that loads is shown, and one the host refuses fails as it would for a user — the icon moves down its chain.
+ *
  * An init script applies from the next document on, so the outer beforeEach installs it before the first navigation.
  * {@link expectFaviconImagesLoading} checks it is in force at the end of each test.
  */
@@ -610,6 +626,15 @@ export async function keepFaviconImagesLoading(page: Page): Promise<void> {
             if (!/\/favicon\.ico$/i.test(head)) return url;
             return `${head}${head.includes('?') ? '&' : '?'}${mark}${url.slice(head.length)}`;
         };
+        // The inverse of `marked`: what the app wrote, for every read of an image's `src`.
+        const unmarked = (url: string): string => {
+            const hash = url.indexOf('#');
+            const head = hash < 0 ? url : url.slice(0, hash);
+            for (const separator of ['?', '&']) {
+                if (head.endsWith(`${separator}${mark}`) && /\/favicon\.ico$/i.test(head.slice(0, -(mark.length + 1)))) return `${head.slice(0, -(mark.length + 1))}${url.slice(head.length)}`;
+            }
+            return url;
+        };
         const src = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
         if (src?.get && src.set) {
             const {get, set} = src;
@@ -617,7 +642,7 @@ export async function keepFaviconImagesLoading(page: Page): Promise<void> {
                 configurable: true,
                 enumerable: src.enumerable,
                 get() {
-                    return get.call(this);
+                    return unmarked(get.call(this));
                 },
                 set(value: unknown) {
                     set.call(this, marked(String(value)));
@@ -627,6 +652,11 @@ export async function keepFaviconImagesLoading(page: Page): Promise<void> {
         const setAttribute = Element.prototype.setAttribute;
         Element.prototype.setAttribute = function (name: string, value: string): void {
             setAttribute.call(this, name, this instanceof HTMLImageElement && String(name).toLowerCase() === 'src' ? marked(String(value)) : value);
+        };
+        const getAttribute = Element.prototype.getAttribute;
+        Element.prototype.getAttribute = function (name: string): string | null {
+            const value = getAttribute.call(this, name);
+            return value !== null && this instanceof HTMLImageElement && String(name).toLowerCase() === 'src' ? unmarked(value) : value;
         };
         // Only the value of a `src` attribute: a text, or a link, that names /favicon.ico is not an image the page loads.
         const SRC_ATTRIBUTE = /(\bsrc\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
@@ -653,9 +683,10 @@ export async function keepFaviconImagesLoading(page: Page): Promise<void> {
 
 /**
  * {@link keepFaviconImagesLoading} is in force in the page's current document: an image given a URL ending in
- * /favicon.ico holds it with the gallery's query, set through `setAttribute` and through the `src` property. The
- * images belong to a document of their own, which has no window, so nothing loads. A page still on about:blank never
- * loaded a document for the script to run in; a closed page has none.
+ * /favicon.ico holds it with the gallery's query, set through `setAttribute` and through the `src` property, and reads
+ * it back as it was written, through `getAttribute` and the property. The stored value is read from the attribute node,
+ * which the fix leaves alone. The images belong to a document of their own, which has no window, so nothing loads. A
+ * page still on about:blank never loaded a document for the script to run in; a closed page has none.
  */
 export async function expectFaviconImagesLoading(page: Page): Promise<void> {
     if (page.isClosed() || page.url() === 'about:blank') return;
@@ -671,12 +702,12 @@ export async function expectFaviconImagesLoading(page: Page): Promise<void> {
                         byAttribute.setAttribute('src', url);
                         const byProperty = inert.createElement('img');
                         byProperty.src = url;
-                        return [byAttribute.getAttribute('src'), byProperty.getAttribute('src')];
+                        return [byAttribute.getAttributeNode('src')?.value ?? null, byProperty.getAttributeNode('src')?.value ?? null, byAttribute.getAttribute('src'), byProperty.getAttribute('src')];
                     }, probe)
                     .catch((error: Error) => [`unreadable: ${error.message}`]),
             {message: 'the favicon images fix is not in force on this page: keepFaviconImagesLoading must run before the first navigation', timeout: 5_000},
         )
-        .toEqual([`${probe}?${FAVICON_MARK}`, `${probe}?${FAVICON_MARK}`]);
+        .toEqual([`${probe}?${FAVICON_MARK}`, `${probe}?${FAVICON_MARK}`, probe, probe]);
 }
 
 // ---------------------------------------------------------------------------

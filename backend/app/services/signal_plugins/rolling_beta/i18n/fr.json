@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskRollingBeta": {
+      "name": "Bêta glissant",
+      "description": "Sensibilité glissante à un actif réel de comparaison sur un calendrier commun des rendements.",
+      "output": "Bêta",
+      "outputDescription": "Covariance d’échantillon divisée par la variance d’échantillon de l’actif de comparaison.",
+      "referenceOne": "Sensibilité un pour un"
+    }
+  }
+}

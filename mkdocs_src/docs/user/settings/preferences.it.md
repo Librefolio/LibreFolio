@@ -8,7 +8,7 @@ La scheda **Preferenze** controlla **come l'app appare e si comporta per te** �
 
 | Impostazione | Categoria | Descrizione |
 |---------|----------|-------------|
-| **Lingua** | 🌍 Visualizzazione | Lingua dell'interfaccia — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Si applica non appena la salvi |
+| **Lingua** | 🌍 Visualizzazione | Lingua dell'interfaccia — 🇬🇧 English, 🇮🇹 Italiano, 🇫🇷 Français, 🇪🇸 Español. Si applica non appena la salvi, e decide anche come si scrivono numeri e date |
 | **Valuta Predefinita** | 💰 Valuta | La tua valuta di base. La Dashboard, la pagina Broker e la pagina di ogni broker, e la scheda **Correlazione** della pagina Asset si aprono in questa valuta, e anche l'AI Export di una coppia FX la utilizza; una valuta che scegli nella Dashboard rimane per la sessione. Viene inoltre proposta quando crei qualcosa di nuovo — un asset, il primo saldo di cassa di un nuovo broker, un piano PAC. Questo menu elenca tutte le valute |
 | **Tema** | 🎨 Aspetto | ☀️ Chiaro / 🌙 Scuro / 🖥️ Auto (segue il tuo sistema operativo) |
 
@@ -20,6 +20,14 @@ article table:first-of-type td:nth-child(-n + 2) {
     min-width: 11rem;
 }
 </style>
+
+!!! info "🌍 Numeri e date seguono la lingua dell'interfaccia"
+
+    Importi, percentuali e date si scrivono come li scrive la lingua dell'interfaccia: per esempio `14.788,01` e
+    `12 ott 2026` in italiano, `14 788,01` e `12 oct. 2026` in francese, `14.788,01` e `12 oct 2026` in spagnolo. Il browser
+    aggiunge solo la sua regione, e solo se usa la stessa lingua: in inglese, un browser impostato sull'inglese
+    americano scrive `14,788.01` e `Oct 12, 2026`, e un browser in un'altra lingua riceve il formato britannico,
+    `14,788.01` e `12 Oct 2026`.
 
 Scegli una categoria nella barra laterale — su un telefono, nel menu **Categoria** — per mostrare solo le sue impostazioni;
 **Tutte le Impostazioni** mostra tutto.
@@ -116,9 +124,9 @@ il segno, quindi un guadagno si legge ancora come un guadagno e una perdita come
 
 | Normalmente | Con la modalità privacy |
 |---|---|
-| `1,234.56 € 🇪🇺 EUR` | `••• € 🇪🇺 EUR` |
-| `-1,234.56 € 🇪🇺 EUR` | `-••• € 🇪🇺 EUR` |
-| `€1,234.56` o `1.234,56 €` | `€•••` o `••• €` |
+| `1234,56 € 🇪🇺 EUR` | `••• € 🇪🇺 EUR` |
+| `-1234,56 € 🇪🇺 EUR` | `-••• € 🇪🇺 EUR` |
+| `€1,234.56` o `1234,56 €` | `€•••` o `••• €` |
 | `—` (nessun valore) | `—` |
 
 `•••` sono sempre gli stessi tre punti — anche il **K** o il **M** di una cifra abbreviata spariscono — quindi

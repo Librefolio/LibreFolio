@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_generic_csv": {
+      "name": "CSV générique",
+      "description": "Importe les transactions d’un fichier CSV générique. Détecte les colonnes à partir des noms de l’en-tête. Prend en charge divers formats de date et de nombre."
+    }
+  }
+}

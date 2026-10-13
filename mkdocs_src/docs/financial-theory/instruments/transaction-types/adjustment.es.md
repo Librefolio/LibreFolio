@@ -52,7 +52,7 @@ Un ajuste positivo no se puede guardar sin un coste base: introduce uno, o elige
     La Anulación del coste base es el costo promedio **por una sola unidad** del activo.
     Para obtener el costo total del bloque transferido, multiplica por la cantidad:
 
-    $$\text{Costo total} = \text{PMP} \times \text{cantidad}$$
+    $$\text{Costo total} = \text{PMC} \times \text{cantidad}$$
 
 ### 🏦 Coste base automático en transferencias y cargas iniciales
 

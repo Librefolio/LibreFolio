@@ -27,7 +27,7 @@ Combien d'argent vos investissements ont-ils généré sur la période sélectio
 **Indicateurs affichés**
 
 - **P&L période** — le grand nombre : $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net flows}$, les flux nets étant le capital que vous avez déplacé vers l'intérieur ou vers l'extérieur → [P&L période](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
-- **La ligne en dessous** — par exemple `+91.31 € (+16.36%)` : de combien votre P&L total a évolué depuis hier (panneau ci-dessous)
+- **La ligne en dessous** — par exemple `+91,31 € (+16,36 %)` : de combien votre P&L total a évolué depuis hier (panneau ci-dessous)
 - **Variation non réalisée** — comment la plus-value ou moins-value latente de vos positions a évolué sur la période, effet de change inclus → [Valeur comptable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 - **Ventes** — la plus-value ou moins-value réalisée des ventes de la période, par rapport au prix de revient unitaire des unités vendues → [Prix de revient unitaire (PRU)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Dividendes et intérêts** — dividendes, coupons et intérêts P2P reçus → [Dividendes et intérêts](../../financial-theory/instruments/transaction-types/dividend-interest.md)
@@ -36,7 +36,7 @@ Combien d'argent vos investissements ont-ils généré sur la période sélectio
 **Comment la lire**
 
 - **Le vert est un gain, le rouge une perte** — et un dépôt ou un retrait n'est ni l'un ni l'autre.
-- **Les quatre lignes expliquent le grand nombre.** Ce qu'elles ne peuvent pas voir va dans la [vue Performance](positions.md#performance) : l'effet des taux de change sur les liquidités que vous détenez dans une autre devise y apparaît comme **Effet de change sur les liquidités**, une ligne pour chaque courtier dont les taux ont fait bouger les liquidités, et le reste — comme des actifs passant d'un de vos courtiers à un autre le premier ou le dernier jour — comme **Autre / résidu de réconciliation**.
+- **Les quatre lignes expliquent le grand nombre.** Ce qu'elles ne peuvent pas voir va dans la [vue Période](positions.md#performance) : l'effet des taux de change sur les liquidités que vous détenez dans une autre devise y apparaît comme **Effet de change sur les liquidités**, une ligne pour chaque courtier dont les taux ont fait bouger les liquidités, et le reste — comme des actifs passant d'un de vos courtiers à un autre le premier ou le dernier jour — comme **Autre / résidu de réconciliation**.
 - **La barre la plus longue** est la ligne qui a le plus fait bouger votre résultat.
 
 ??? info "📏 La ligne sous le grand nombre — comment elle est calculée"
@@ -47,8 +47,8 @@ Combien d'argent vos investissements ont-ils généré sur la période sélectio
     \Delta = \text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}} \qquad \text{percentage} = \frac{\Delta}{\left|\text{Total P}\&\text{L}_{\text{yesterday}}\right|} \times 100
     $$
 
-    - **Le signe et la couleur suivent la variation**, même lorsque le P&L total est une perte : de `-558.10 €` à `-466.79 €`, la ligne affiche `+91.31 € (+16.36%)` — votre perte a diminué de 16,36 %.
-    - **Il faut deux jours d'historique** ; le pourcentage est omis lorsque le P&L total d'hier est exactement nul, et un jour sans variation affiche `0.00%`.
+    - **Le signe et la couleur suivent la variation**, même lorsque le P&L total est une perte : de `-558,10 €` à `-466,79 €`, la ligne affiche `+91,31 € (+16,36 %)` — votre perte a diminué de 16,36 %.
+    - **Il faut deux jours d'historique** ; le pourcentage est omis lorsque le P&L total d'hier est exactement nul, et un jour sans variation affiche `0,00 %`.
 
 ### 💱 Variation non réalisée par devise {: #unrealized-change-by-currency }
 
@@ -85,7 +85,7 @@ Il y a une ligne 📈 pour chaque devise, euro inclus, et une ligne 💱 pour ch
 **Indicateurs affichés**
 
 - **Effet timing** — le grand nombre, en points de pourcentage (pp) : $\text{MWRR}_{\text{cumulative}} - \text{TWRR}$ → [Effet timing](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)
-- **Le pourcentage en dessous** — par exemple `+0.35%` : la variation d'aujourd'hui de votre P&L total, rapportée à la valeur nette d'hier (panneau ci-dessous)
+- **Le pourcentage en dessous** — par exemple `+0,35 %` : la variation d'aujourd'hui de votre P&L total, rapportée à la valeur nette d'hier (panneau ci-dessous)
 - **ROI** — le gain de la période rapporté au capital investi → [ROI simple](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)
 - **TWRR** — la performance de vos choix d'actifs, quel que soit le timing de vos dépôts → [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)
 - **MWRR cumulatif** et **MWRR annualisé** — votre rendement personnel, timing des dépôts inclus, sur la période et en taux annuel → [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)
@@ -120,7 +120,7 @@ Que vaut votre portefeuille à la fin de la période, et qu'a-t-il gagné depuis
 **Indicateurs affichés**
 
 - **Valeur nette** — le grand nombre : les titres à leur valeur de marché, plus les liquidités, plus tout ce qui est en transit entre vos courtiers → [NAV / Valeur nette](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
-- **La ligne en dessous** — par exemple `+12,450.30 (+24.85%)` : votre **P&L total** depuis le début et, entre parenthèses, votre **ROI depuis le début** → [Capital versé et P&L total](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
+- **La ligne en dessous** — par exemple `+12 450,30 (+24,85 %)` : votre **P&L total** depuis le début et, entre parenthèses, votre **ROI depuis le début** → [Capital versé et P&L total](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 - **Valeur de marché** — ce que valent les actifs que vous détenez aux prix du marché → [NAV / Valeur nette](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
 - **Coût d'achat** — ce que vous ont coûté les positions que vous détenez encore, chaque achat au taux de change de sa propre date → [Valeur comptable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 - **Liquidités** — les liquidités chez vos courtiers ; survolez-les pour séparer le capital que vous avez déposé des rendements que vous avez générés → [Poches de liquidités](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)

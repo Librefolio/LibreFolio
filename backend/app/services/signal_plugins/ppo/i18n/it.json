@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "ppo": {
+      "name": "PPO",
+      "description": "Momentum percentuale tra medie",
+      "line": "PPO",
+      "lineDescription": "Differenza percentuale tra media veloce e lenta.",
+      "signal": "Linea segnale",
+      "signalDescription": "Smussamento EMA della linea PPO.",
+      "histogram": "Istogramma",
+      "histogramDescription": "Distanza tra PPO e linea segnale."
+    }
+  }
+}

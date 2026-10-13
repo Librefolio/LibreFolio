@@ -3,21 +3,21 @@
 L'onglet **Positions** montre ce que vous détenez, ce que chaque position a rapporté au cours de la période et, à un clic, les lots FIFO derrière chaque position. La page de chaque courtier possède le même onglet pour ce courtier uniquement, avec les mêmes paramètres de tableau.
 
 - 📋 **[Positions](#holdings)** — ce que vous possédez à la date de fin
-- 📈 **[Performance](#performance)** — ce que chaque position a rapporté au cours de la période
+- 📈 **[Période](#performance)** — ce que chaque position a rapporté au cours de la période
 - 🔬 **[Analyse des lots FIFO](#fifo-lots-analysis)** — les lots derrière une position
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Positions (Tableau)" alt="Vue tableau des positions">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Positions (Carte / Treemap)" alt="Vue carte / treemap des positions">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Performance (Tableau)" alt="Vue tableau de la performance">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Performance (Carte / Graphique)" alt="Vue carte / graphique de la performance">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Portefeuille (Tableau)" alt="Vue tableau du portefeuille">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portefeuille (Carte / Treemap)" alt="Vue carte / treemap du portefeuille">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Période (Tableau)" alt="Vue tableau de la période">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Période (Carte / Graphique)" alt="Vue carte / graphique de la période">
 </div>
 
 ---
 
 ## 🎛️ Choisir une vue
 
-- **Portefeuille / Période** bascule entre [Positions](#holdings) et [Performance](#performance) ; **Tableau / Carte** (les deux icônes) entre un tableau et un graphique.
+- **[Portefeuille](#holdings) / [Période](#performance)** bascule entre ce que vous détenez et ce que chaque position a rapporté ; **Tableau / Carte** (les deux icônes) entre un tableau et un graphique.
 - **L'icône en forme d'œil** (dans Tableau) affiche, masque ou réordonne les colonnes ; **Réinitialiser la disposition** les restaure. **Voir tout →** ouvre la page des actifs.
 - **Pour approfondir une position**, ouvrez son menu **⋮** dans un tableau, ou faites un clic droit dessus dans n'importe quelle vue : **Analyser les lots** ouvre l'[Analyse des lots FIFO](#fifo-lots-analysis) ci-dessous, **Voir l'actif** la page de l'actif.
 
@@ -65,7 +65,7 @@ Combien de revenu chaque unité vous verse-t-elle, par rapport à ce qu'elle a c
 - **Une valeur par actif et par courtier**, sur l'année qui se termine à la date de fin : déplacer la date de début ne la change pas.
 - **Brut, pas après impôt** : les transactions distinctes d'impôts et de frais ne sont pas soustraites.
 - **Survolez une valeur** pour voir le revenu par unité, la période et les taux de change utilisés — chaque paiement au taux de sa propre date.
-- **`0.00%`** signifie un revenu enregistré à zéro ; un simple **`-`** signifie aucun revenu au cours de la dernière année.
+- **`0,00 %`** signifie un revenu enregistré à zéro ; un simple **`-`** signifie aucun revenu au cours de la dernière année.
 
 🔗 **Théorie** : [Rendement sur coût](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) — les règles exactes, et en quoi le YOC diffère du rendement du dividende ou du CAGR
 
@@ -75,7 +75,7 @@ Combien de revenu chaque unité vous verse-t-elle, par rapport à ce qu'elle a c
 
 ---
 
-## 📈 Performance — ce que chaque position a rapporté {: #performance }
+## 📈 Période — ce que chaque position a rapporté {: #performance }
 
 Quelles positions ont gagné ou perdu de l'argent au cours de la période, et comment ? **Période** liste chaque position de la période, ouverte ou fermée depuis, les plus fortes variations en premier. LibreFolio le calcule la première fois que vous l'ouvrez, cela peut donc prendre un moment.
 

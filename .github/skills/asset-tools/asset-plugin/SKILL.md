@@ -14,8 +14,9 @@ description: "Use this skill when creating, extending, or reviewing a LibreFolio
 An asset provider plugin teaches LibreFolio to **price one data source**: fetch an asset's
 **current value** and its **historical values**, and — optionally — **search** for it,
 **enrich its metadata**, and **resolve it from a URL**. It lives in
-`backend/app/services/asset_source_providers/` (one file per source), extends
-`AssetSourceProvider`, and is auto-discovered via `@register_provider(AssetProviderRegistry)`.
+`backend/app/services/asset_source_providers/<name>/` (one folder per source: `plugin.py` holds
+the code, `i18n/` its own UI texts), extends `AssetSourceProvider`, and is auto-discovered via
+`@register_provider(AssetProviderRegistry)`.
 
 Think of it as a **faithful adapter** to an external quote source (Yahoo, justETF, Borsa
 Italiana, a scraped page, …): it maps that source's data into LibreFolio's standard value and
@@ -58,13 +59,15 @@ engine — those live in the core.
 
 ## 🛠️ Rough shape of the work
 
-1. Create `backend/app/services/asset_source_providers/my_provider.py`, extend
-   `AssetSourceProvider`, decorate with `@register_provider(AssetProviderRegistry)`.
+1. Create the folder `backend/app/services/asset_source_providers/my_provider/`: `__init__.py`
+   (docstring only, no re-export) and `plugin.py`, which extends `AssetSourceProvider` and is
+   decorated with `@register_provider(AssetProviderRegistry)`. Import and patch from `….my_provider.plugin`.
 2. Implement the **required** members: `provider_code`, `display_name`, `get_current_value`,
    `get_history_value`, and `test_search_query` (return `None` if the source has no search).
 3. Add **optional** capability as needed: `search`, `fetch_asset_metadata`, `params_schema`
-   (+ the dynamic form it drives), `resolvable_url_domains` + `resolve_url`, and the
-   `supports_history` / volume properties.
+   (+ the dynamic form it drives, whose labels — `assets.providerParams.my_provider.*` — go in
+   the provider's own `i18n/` with `./dev.py i18n add … --into asset_source_providers/my_provider`),
+   `resolvable_url_domains` + `resolve_url`, and the `supports_history` / volume properties.
 4. Drop a provider **icon** in `backend/app/services/asset_source_providers/static/`.
 5. Verify with the **probe** dry-run (it bypasses the caches), add a provider test under
    `backend/test_scripts/`, and add a docs page. After any change to `params_schema` or other
@@ -88,7 +91,8 @@ worked examples — **always read the developer guide**, which is the source of 
   (base class, thread isolation, the 5-cache table, provider inventory)
 - **Reference code** — `backend/app/services/asset_source.py`
   (base class `AssetSourceProvider` + the manager/orchestration), and the providers
-  `yahoo_finance.py`, `justetf.py`, `borsa_italiana.py`, `css_scraper.py`.
+  `yahoo_finance/plugin.py`, `justetf/plugin.py`, `borsa_italiana/plugin.py` (with its `i18n/`),
+  `css_scraper/plugin.py`.
 
 Do not rely on this page for method signatures or exact conventions — they can change; the
 developer guide is kept up to date.

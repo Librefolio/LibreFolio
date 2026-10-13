@@ -1,0 +1,104 @@
+{
+  "fx": {
+    "title": "FX Rates",
+    "subtitle": "View and sync exchange rates",
+    "actions": {
+      "addPair": "Add Pair"
+    },
+    "empty": {
+      "noPairsTitle": "No FX Pairs Configured",
+      "noPairsDesc": "Add your first currency pair to start tracking exchange rates.",
+      "addFirstPair": "Add First Pair",
+      "noMatchesDesc": "No pairs match the current filter."
+    },
+    "filter": {
+      "filterCurrency": "Filter currency",
+      "secondCurrency": "Second currency",
+      "resetFilters": "Reset filters"
+    },
+    "addPair": {
+      "title": "Add New Currency Pair",
+      "baseCurrency": "Base Currency",
+      "quoteCurrency": "Quote Currency",
+      "providerDisabledHint": "Select both currencies first",
+      "providerInfoBanner": "Providers automatically fetch exchange rates from central banks. Without a provider, you will need to insert rates manually.",
+      "noProviderWarning": "No provider configured. You will need to manually insert exchange rates for each date.",
+      "createIntermediatePairs": "Also create intermediate pairs",
+      "createIntermediatePairsHint": "Each step of the selected chain routes will be saved as a standalone pair with its provider, so they can be synced independently.",
+      "titleEdit": "Edit Pair Providers",
+      "createFailed": "Failed to create FX pair",
+      "createConflict": "Someone else changed this conversion route at the same time. Nothing was saved — please try again.",
+      "alreadyExists": "This pair already exists — sync or edit it from the FX page."
+    },
+    "sync": {
+      "description": "Synchronize exchange rates from configured providers for the selected date range.",
+      "synced": "Synced",
+      "start": "Start Sync",
+      "pairsCount": "pairs",
+      "timeout": "Timeout",
+      "tooltipFetched": "Rate data points downloaded from the provider",
+      "tooltipChanged": "Data points actually inserted or updated in the database",
+      "toastFailed": "{pair} sync failed",
+      "legBreakdown": "Per-leg breakdown",
+      "legNoData": "0 dates — no data",
+      "legDates": "dates",
+      "inProgress": "Syncing FX rates…",
+      "timeoutAfter": "Timeout after {seconds}s",
+      "requestTimedOut": "Request timed out after {seconds}s. Increase the timeout and retry.",
+      "failed": "Sync failed",
+      "retryFailed": "Retry {n} failed"
+    },
+    "route": {
+      "title": "Conversion Routes",
+      "loading": "Loading routes...",
+      "directSection": "Direct conversion (1 step)",
+      "chainSection": "Chain conversion",
+      "unusableSection": "Not usable",
+      "unusableHint": "These providers have no automatic conversion path for this currency pair.",
+      "steps": "steps",
+      "noRoutesAvailable": "No automatic conversion routes found for this currency pair. You can still save without a provider and insert rates manually.",
+      "chainWarning": "Chain routes require ALL intermediate steps to succeed during sync. If any provider fails, the entire chain fails for that date.",
+      "searchPlaceholder": "Search providers, currencies, countries…",
+      "noSearchResults": "No routes match the search query",
+      "addRoute": "Add conversion route",
+      "hideRoutes": "Hide available routes"
+    },
+    "deletePair": "Delete pair",
+    "deletePairTitle": "Delete FX Pair",
+    "deletePairQuestion": "Delete {pair}?",
+    "deletePairWarning": "This will remove the provider configuration and all historical exchange rates. ⚠️",
+    "delete": {
+      "toastOk": "{pair} deleted ({count} rates removed)",
+      "toastFailed": "Failed to delete {pair}",
+      "resultDeleted": "deleted ({n} rates)"
+    },
+    "rateNotAvailable": "Rate not available",
+    "rate": "Rate",
+    "card": {
+      "manualOnly": "Manual-only pair",
+      "syncFromProvider": "Sync rates from provider"
+    },
+    "loadFailed": "Failed to load FX pairs"
+  },
+  "fxDetail": {
+    "editRates": "Edit Rates",
+    "loadingRates": "Loading rates...",
+    "noData": "No rate data available for this range.",
+    "syncRates": "Sync Rates",
+    "backToList": "Back to FX list",
+    "swapConfirmTitle": "Unsaved changes",
+    "swapConfirmMessage": "You have unsaved changes in the rate editor. Swapping direction will discard them. Continue?",
+    "noDataManual": "No data available — insert rates manually",
+    "insertManually": "Insert Manually",
+    "syncDisabledManual": "Sync disabled — no provider configured. Add a provider or insert rates manually.",
+    "aiExport": "AI Export",
+    "syncFailed": "Sync failed: {error}",
+    "loadFailed": "Failed to load rates",
+    "invalidRates": "{n, plural, one {# row has an invalid rate} other {# rows have an invalid rate}}: a rate must be strictly greater than zero (0 is not allowed).",
+    "savedSummary": "FX rates: {details}",
+    "savedCount": "{n} saved",
+    "deletedCount": "{n} deleted",
+    "skippedCount": "{n} skipped (invalid)",
+    "saveFailed": "FX save failed: {error}"
+  }
+}

@@ -4,7 +4,8 @@
  * T4 (2026-09): the dedicated TransactionDeleteModal no longer exists. A
  * single-row delete now routes through the bulk workspace
  * (`bulkIntent = {action: 'delete', txIds: [row.id]}`), which:
- *   - pre-marks the staged row(s) for deletion (`tr.row-deleted`),
+ *   - pre-marks the staged row(s) for deletion (the row's status cell,
+ *     `tx-bulk-row-status` with `data-status="delete"`),
  *   - auto-includes a linked partner when it is in the store
  *     (resolveInitialRows) and collapses the pair into one row,
  *   - shows the split hint (`tx-bulk-split-hint`) when a paired delete is
@@ -34,23 +35,36 @@
  *   D1-D8 covered by tx-broker-access.spec.ts + transactions-table.spec.ts
  *
  * Prerequisites: backend test mode (port 6041), mock data populated.
- * Mock data contract: populate_mock_data.py creates:
- *   - "delete-safe" tagged TX: DEPOSIT on IB, FEE on Directa, TRANSFER ETH IB↔Coinbase
- *   - "delete-consume" tagged TX: a SECOND paired TRANSFER ETH IB↔Coinbase, single-use,
- *     which A2-confirm destroys. The "delete-safe" pair must survive: A2 asserts it does,
- *     and tx-bulk-suggest-ux / tx-crud-full / tx-split-promote all read it.
+ * Mock data contract — read here, never written: populate_mock_data.py creates
+ *   - "delete-safe" tagged TX: the DEPOSIT on IB and the TRANSFER ETH IB↔Coinbase pair,
+ *     which A1 and A2 stage for deletion and cancel. The pair must survive: A2 asserts
+ *     it does, and tx-bulk-suggest-ux / tx-crud-full / tx-split-promote all read it.
  *   - "access-test" tagged TX: Asym-a (IB↔Directa), Asym-b (IB↔Coinbase),
  *     Asym-c (IB↔DEGIRO=viewer), Asym-d (IB↔Hidden)
+ *
+ * The three tests that commit touch no mock row and leave nothing behind:
+ *   - A1-confirm and A2-confirm delete rows of their own — a funded FEE, a linked
+ *     TRANSFER pair — on a disposable account (brokers it owns; the seeded Ethereum,
+ *     only read), and delete the account afterwards, its brokers and every row on
+ *     them included. They used to consume the seed's "[delete-safe] Platform fee"
+ *     FEE and its "delete-consume" pair, so the database never returned to the seed;
+ *     nothing here reads those rows any more.
+ *   - A1-error refuses a delete on a broker and an asset of its own (TEST_USER), and
+ *     deletes its rows, then the broker, then the asset, by id.
  */
-import {expect, test, type Locator, type Page} from '../fixtures/playwright';
+import {randomUUID} from 'crypto';
+import {expect, test, type APIRequestContext, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {appears} from '../fixtures/probe';
 import {maximisePageSize} from '../fixtures/paging';
 import {uniqueSuffix} from '../fixtures/unique';
+import {daysAgoIso} from '../fixtures/dates';
+import {createOwnedBroker, deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 
-test.setTimeout(25_000);
+// 45 s: login and the 20 s transactions-page gate share this budget; the old 25 s left the test no time under load.
+test.setTimeout(45_000);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -58,10 +72,10 @@ test.setTimeout(25_000);
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions?page_size=200');
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
     // The table being VISIBLE is not the table being LOADED: it renders empty
     // and fills in. The page publishes data-busy, so wait on that instead.
-    await waitForSettled(page.getByTestId('transactions-page'));
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /** Find a row whose text content contains ALL given substrings. Returns null if not found. */
@@ -105,9 +119,12 @@ function bulkRows(page: Page): Locator {
     return page.locator('[data-testid="tx-bulk-body"] tr[data-row-id]');
 }
 
-/** The staged rows that are marked for deletion. */
+/**
+ * The staged rows that are marked for deletion, read from the state each row publishes
+ * in its status cell — never from the tint class that paints it.
+ */
 function bulkDeletedRows(page: Page): Locator {
-    return page.locator('[data-testid="tx-bulk-body"] tr.row-deleted');
+    return bulkRows(page).filter({has: page.locator('[data-testid="tx-bulk-row-status"][data-status="delete"]')});
 }
 
 /**
@@ -145,13 +162,214 @@ async function countVisibleActions(row: Locator): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
+// Owned data — for the three tests that commit
+// ---------------------------------------------------------------------------
+
+const API = '/api/v1';
+
+type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
+type CommitBody = {committed: boolean; issues?: unknown[]; results?: Array<{operation: string; index: number; ids: number[]}>};
+type TxRead = {id: number; related_transaction_id?: number | null};
+/** What a -confirm test created, recorded the moment it exists so the cleanup finds all of it. */
+type OwnedAccount = {user: DisposableUser | null; brokerIds: number[]};
+/** A standalone FEE and the deposit that funds it, on the account's one broker. */
+type OwnedFee = {feeId: number; depositId: number};
+/** A saved asset TRANSFER between the account's two brokers (`fromId` sends), and the rows that funded the sender. */
+type OwnedPair = {fromId: number; toId: number; fundingIds: number[]};
+/** What A1-error creates as TEST_USER — its rows, its broker, its asset — recorded the moment each id exists. */
+type OwnedRows = {transactionIds: number[]; brokerIds: number[]; assetIds: number[]};
+
+async function jsonFrom<T>(response: HttpResponse, purpose: string): Promise<T> {
+    expect(response.ok(), `${purpose}: HTTP ${response.status()} ${await response.text()}`).toBe(true);
+    return (await response.json()) as T;
+}
+
+/** Commit `creates` as one batch; returns the id of each create, in request order. */
+async function commitCreates(page: Page, creates: Array<Record<string, unknown>>, purpose: string): Promise<number[]> {
+    const body = await jsonFrom<CommitBody>(await page.request.post(`${API}/transactions/commit`, {data: {creates}}), purpose);
+    expect(body.committed, `${purpose}: rolled back — ${JSON.stringify(body.issues ?? [])}`).toBe(true);
+    return creates.map((_, index) => {
+        const id = body.results?.find((item) => item.operation === 'create' && item.index === index)?.ids[0];
+        if (typeof id !== 'number') throw new Error(`${purpose}: the commit returned no id for create #${index} — ${JSON.stringify(body.results)}`);
+        return id;
+    });
+}
+
+/** The transactions among `ids` that the server still has — asked by id, never counted by text. */
+async function readTransactions(page: Page, ids: number[]): Promise<TxRead[]> {
+    return jsonFrom<TxRead[]>(await page.request.get(`${API}/transactions?${ids.map((id) => `ids=${id}`).join('&')}`), `read transactions ${ids.join(', ')}`);
+}
+
+function sortedIds(ids: number[]): number[] {
+    return [...ids].sort((a, b) => a - b);
+}
+
+/** The seeded asset with this exact ticker — read, never assumed. */
+async function seededAssetId(page: Page, ticker: string): Promise<number> {
+    const assets = await jsonFrom<Array<{id: number}>>(await page.request.get(`${API}/assets/query?ticker=${encodeURIComponent(ticker)}`), `look up the ${ticker} asset`);
+    if (assets.length !== 1) throw new Error(`Expected exactly one asset with ticker ${ticker}, found ${assets.length} — check populate_mock_data.py`);
+    return assets[0].id;
+}
+
+/** A disposable account, through the real welcome, with no guide left due to compete for the overlay. */
+async function openAccount(page: Page, request: APIRequestContext, owned: OwnedAccount, tag: string): Promise<void> {
+    owned.user = await registerDisposableUser(request, tag);
+    await prepareOnboardingAccount(page, owned.user, []);
+}
+
+/**
+ * A disposable account holding one standalone FEE on a broker it owns.
+ *
+ * Why not the seeded "[delete-safe] Platform fee": a committed delete is final — no API
+ * call brings a row back with its id — so the seed's FEE was single-use, and after every
+ * run the database no longer matched the seed. Rows on an account of its own are
+ * invisible to every other spec, and deleting its broker takes them all.
+ *
+ * The broker is funded first, so neither creating the FEE nor deleting it goes anywhere
+ * near a balance limit.
+ */
+async function openAccountWithFee(page: Page, request: APIRequestContext, owned: OwnedAccount, tag: string): Promise<OwnedFee> {
+    await openAccount(page, request, owned, tag);
+    const broker = await createOwnedBroker(page, tag, owned.brokerIds);
+    const [depositId, feeId] = await commitCreates(
+        page,
+        [
+            {broker_id: broker.id, type: 'DEPOSIT', date: daysAgoIso(3), cash: {code: 'EUR', amount: '100'}, description: `Funding ${tag}`},
+            {broker_id: broker.id, type: 'FEE', date: daysAgoIso(2), cash: {code: 'EUR', amount: '-5.50'}, description: `Platform fee ${tag}`},
+        ],
+        'commit the funded FEE',
+    );
+
+    // The premise, read back rather than inferred: the FEE is saved, and stands alone.
+    const saved = (await readTransactions(page, [feeId])).map((tx) => [tx.id, tx.related_transaction_id ?? null]);
+    expect(saved, 'premise: A1-confirm is about a standalone row').toEqual([[feeId, null]]);
+    return {feeId, depositId};
+}
+
+/**
+ * A disposable account holding one saved asset TRANSFER between two brokers it owns.
+ *
+ * Why not the seeded "delete-consume" pair: same reason as the FEE above — it was
+ * single-use by construction, and the database never returned to the seed.
+ *
+ * The sender is funded first — a deposit, then a buy — so neither the transfer nor its
+ * deletion takes a balance below zero. The asset is the seeded Ethereum, which this test
+ * only reads.
+ */
+async function openAccountWithPair(page: Page, request: APIRequestContext, owned: OwnedAccount, tag: string): Promise<OwnedPair> {
+    await openAccount(page, request, owned, tag);
+    const giver = await createOwnedBroker(page, `${tag}-from`, owned.brokerIds);
+    const receiver = await createOwnedBroker(page, `${tag}-to`, owned.brokerIds);
+    const assetId = await seededAssetId(page, 'ETH-USD');
+
+    const fundingIds = await commitCreates(
+        page,
+        [
+            {broker_id: giver.id, type: 'DEPOSIT', date: daysAgoIso(10), cash: {code: 'USD', amount: '100'}},
+            {broker_id: giver.id, asset_id: assetId, type: 'BUY', date: daysAgoIso(9), quantity: '0.01', cash: {code: 'USD', amount: '-30'}},
+        ],
+        'fund the giver broker',
+    );
+
+    const linkUuid = randomUUID();
+    const description = `Owned pair ${tag}`;
+    const [fromId, toId] = await commitCreates(
+        page,
+        [
+            {broker_id: giver.id, asset_id: assetId, type: 'TRANSFER', date: daysAgoIso(5), quantity: '-0.001', link_uuid: linkUuid, description},
+            {broker_id: receiver.id, asset_id: assetId, type: 'TRANSFER', date: daysAgoIso(5), quantity: '0.001', link_uuid: linkUuid, description, cost_basis_mode: 'auto'},
+        ],
+        'commit the owned TRANSFER pair',
+    );
+
+    // The premise, read back rather than inferred: the two halves point at each other.
+    const halves = await readTransactions(page, [fromId, toId]);
+    const linkOf = new Map(halves.map((tx) => [tx.id, tx.related_transaction_id ?? null] as const));
+    expect([linkOf.get(fromId), linkOf.get(toId)], 'premise: the two halves of the owned pair are linked to each other').toEqual([toId, fromId]);
+    return {fromId, toId, fundingIds};
+}
+
+/**
+ * Leave the page, then delete the account: its brokers first — `force` takes their
+ * transactions with them, whatever the test left of them — and the account last.
+ * Only what this test recorded.
+ */
+async function cleanupAccount(page: Page, request: APIRequestContext, owned: OwnedAccount): Promise<void> {
+    const user = owned.user;
+    if (!user) return; // nothing was created: brokers only ever exist under the account
+    try {
+        // Unmount the page first, so nothing on it reloads the rows while they go.
+        await page.goto('about:blank');
+    } finally {
+        await deleteDisposableUser(request, user, owned.brokerIds);
+    }
+}
+
+function noOwnedRows(): OwnedRows {
+    return {transactionIds: [], brokerIds: [], assetIds: []};
+}
+
+/**
+ * Delete exactly what was recorded, in the only order the backend accepts: the rows
+ * first (the +5 and the −5 net to zero, so the batch is legal), then the broker
+ * (`force` takes whatever a failed run left on it), then the asset, which the backend
+ * refuses to delete while a transaction still points at it. Every step is tried
+ * whatever the previous one did, and every failure is named.
+ */
+async function cleanupOwnedRows(page: Page, owned: OwnedRows): Promise<void> {
+    if (owned.transactionIds.length + owned.brokerIds.length + owned.assetIds.length === 0) return;
+    const failures: string[] = [];
+    const attempt = async (label: string, action: () => Promise<void>) => {
+        try {
+            await action();
+        } catch (error) {
+            failures.push(`${label}: ${String(error)}`);
+        }
+    };
+    // Leave the page first: a workspace still open on the rows goes with it, unsaved.
+    await attempt('leave the page', async () => {
+        await page.goto('about:blank');
+    });
+    if (owned.transactionIds.length > 0) {
+        await attempt(`transactions ${owned.transactionIds.join(', ')}`, async () => {
+            const body = await jsonFrom<CommitBody>(await page.request.post(`${API}/transactions/commit`, {data: {deletes: owned.transactionIds}}), 'delete the owned rows');
+            expect(body.committed, `the owned rows must delete together: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
+        });
+    }
+    for (const brokerId of owned.brokerIds) {
+        await attempt(`broker ${brokerId}`, async () => {
+            const body = await jsonFrom<{results: Array<{id: number; success: boolean}>}>(await page.request.delete(`${API}/brokers?ids=${brokerId}&force=true`), 'delete the owned broker');
+            expect(body.results.find((item) => item.id === brokerId)?.success, `broker ${brokerId}: ${JSON.stringify(body.results)}`).toBe(true);
+        });
+    }
+    for (const assetId of owned.assetIds) {
+        await attempt(`asset ${assetId}`, async () => {
+            const body = await jsonFrom<{results: Array<{asset_id: number; success: boolean}>}>(await page.request.delete(`${API}/assets?asset_ids=${assetId}`), 'delete the owned asset');
+            expect(body.results.find((item) => item.asset_id === assetId)?.success, `asset ${assetId}: ${JSON.stringify(body.results)}`).toBe(true);
+        });
+    }
+    expect(failures, 'cleanup must delete every row, broker and asset this test created').toEqual([]);
+}
+
+// ---------------------------------------------------------------------------
 // Part A — single-row delete through the bulk workspace (T4)
 // ---------------------------------------------------------------------------
 
 test.describe('Single-row delete via bulk workspace (T4)', () => {
+    // Only A1-error writes in this block; the others read the seed and record nothing.
+    let ownedRows: OwnedRows = noOwnedRows();
+
     test.beforeEach(async ({page}) => {
+        ownedRows = noOwnedRows();
         await login(page, TEST_USER);
         await goToTransactions(page);
+    });
+
+    // afterEach, not `finally`: it runs after a timeout too, while the page can still
+    // reach the API, and an error of its own is reported beside the test's instead of
+    // replacing it.
+    test.afterEach(async ({page}) => {
+        await cleanupOwnedRows(page, ownedRows);
     });
 
     // === A1: standalone delete ===
@@ -164,7 +382,7 @@ test.describe('Single-row delete via bulk workspace (T4)', () => {
 
         // Exactly the one row we picked is staged, and it is staged as a DELETE.
         // (Row ids in the workspace are fresh client-side tempIds, so identity is
-        // asserted by count + status class, not by cross-referencing the tx id.)
+        // asserted by count + row status, not by cross-referencing the tx id.)
         await expect(bulkRows(page)).toHaveCount(1);
         await expect(bulkDeletedRows(page)).toHaveCount(1);
         // No linked partner on this row → no split hint.
@@ -176,30 +394,6 @@ test.describe('Single-row delete via bulk workspace (T4)', () => {
         await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 5_000});
         const rowStill = await findRow(page, 'delete-safe', 'Small deposit');
         expect(rowStill).not.toBeNull();
-    });
-
-    test('A1-confirm: standalone delete — commit removes the row', async ({page}) => {
-        // Use the delete-safe FEE (won't cause balance issues)
-        const row = await findRow(page, 'delete-safe', 'Platform fee');
-        expect(row, 'delete-safe FEE row not found — check populate_mock_data.py').toBeTruthy();
-        const rowId = await row!.getAttribute('data-row-id');
-
-        await openDeleteWorkspace(row!);
-        await expect(bulkDeletedRows(page)).toHaveCount(1);
-
-        const {payload, committed} = await commitDeleteWorkspace(page);
-        expect(committed, 'the delete commit must not roll back').toBe(true);
-        // The wire carries exactly the transaction we picked — the DOM row id is
-        // `tx-<id>`, the payload speaks transaction ids.
-        const txId = Number(rowId!.replace(/^(?:tx|ghost)-/, ''));
-        expect(payload.deletes ?? []).toEqual([txId]);
-
-        await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 10_000});
-
-        // Row gone. Asserting on findRow()'s result directly is asserting "not there
-        // YET": it scans once and does not retry. Assert on the row's own id instead —
-        // toHaveCount retries, is exact, and does not re-read every row in the table.
-        await expect(page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${rowId}"]`)).toHaveCount(0);
     });
 
     // === A2: paired delete — partner auto-included, pair collapsed ===
@@ -224,60 +418,6 @@ test.describe('Single-row delete via bulk workspace (T4)', () => {
         await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 5_000});
         const rowStill = await findRow(page, 'delete-safe', 'ETH');
         expect(rowStill).not.toBeNull();
-    });
-
-    test('A2-confirm: paired delete — commit removes both halves', async ({page}) => {
-        // Deliberately NOT the "delete-safe" pair A2 uses. This one is destructive, and
-        // the mock ships a second pair for exactly that: tagged `delete-consume`, single
-        // use, described without the "delete-safe" substring so the finders elsewhere
-        // never land on it. Sharing one pair with A2 meant racing it under fullyParallel
-        // and leaving every later spec without a paired row.
-        const row = await findRow(page, 'delete-consume', 'ETH');
-        expect(row, 'delete-consume TRANSFER ETH row not found — run ./dev.py test db populate --force --clean; it is single-use and A2-confirm eats it').toBeTruthy();
-        const rowId = await row!.getAttribute('data-row-id');
-
-        // The table does not publish the link between two halves, so the sibling is read
-        // from the server before acting: `related_transaction_id` is bidirectional (see
-        // TXReadItem), so one GET names both halves of *this* pair. The DOM id is not the
-        // transaction id — TransactionsTable prefixes it (`tx-` / `ghost-` for the
-        // receiver half) to keep the two id-spaces apart in DataTable's selection state.
-        const txId = Number(rowId!.replace(/^(?:tx|ghost)-/, ''));
-        expect(Number.isInteger(txId), `row id ${rowId} does not carry a transaction id`).toBeTruthy();
-        const before = await page.request.get(`/api/v1/transactions?ids=${txId}`);
-        expect(before.ok(), `the row under test must be readable before it is deleted (HTTP ${before.status()})`).toBeTruthy();
-        const [item] = (await before.json()) as Array<{id: number; related_transaction_id: number | null}>;
-        expect(item?.related_transaction_id, 'A2-confirm is about a *paired* row; this one is not linked').toBeTruthy();
-        const pairQuery = `ids=${item.id}&ids=${item.related_transaction_id}`;
-
-        await openDeleteWorkspace(row!);
-
-        // Both halves staged through one collapsed row: the commit payload must
-        // name BOTH transaction ids, or the backend pair guard
-        // (pairDeleteIncomplete) would refuse the batch.
-        const {payload, committed} = await commitDeleteWorkspace(page);
-        expect(committed, `the paired delete commit must not roll back (deletes=${JSON.stringify(payload.deletes ?? [])})`).toBe(true);
-        expect(new Set(payload.deletes ?? [])).toEqual(new Set([item.id, item.related_transaction_id]));
-
-        await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 10_000});
-
-        // Both halves gone from the table — see the note above on why this asserts
-        // on the id.
-        await expect(page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${rowId}"]`)).toHaveCount(0);
-
-        // Asked of the server, about these two ids, instead of counting every row whose
-        // text matches. That count was a global total this test never created: it read
-        // "no row in the world says delete-safe ETH", and `tx-clone` legitimately commits
-        // a clone of that pair and removes it in its own afterEach — so between those two
-        // moments the shared table holds two extra matching rows. The poll sampled inside
-        // that window and failed with 2 received, in a run where the delete had worked
-        // perfectly. Neighbours are allowed to add rows; the subject here is the pair this
-        // test deleted, and only the server can answer that without guessing.
-        await expect
-            .poll(async () => ((await (await page.request.get(`/api/v1/transactions?${pairQuery}`)).json()) as unknown[]).length, {
-                message: 'both halves of the deleted pair must be gone from the server',
-                timeout: 8_000,
-            })
-            .toBe(0);
     });
 
     // === A4/A5: Guard — delete hidden on VIEWER/hidden broker paired ===
@@ -319,82 +459,176 @@ test.describe('Single-row delete via bulk workspace (T4)', () => {
         // a fresh broker (no shorting) + a fresh asset + an ADJUSTMENT pair
         // (+5 then −5, net zero). Deleting the +5 alone drives the asset balance
         // to −5, which the backend refuses — deterministically, whoever else runs.
+        //
+        // Each id is recorded the moment it exists, and the afterEach deletes exactly
+        // those — the rows, then the broker, then the asset — whatever happens here.
         const suffix = uniqueSuffix();
-        const brokerResp = await page.request.post('/api/v1/brokers', {data: [{name: `T4-delref-${suffix}`}]});
-        expect(brokerResp.ok(), `broker setup failed (HTTP ${brokerResp.status()})`).toBeTruthy();
-        const brokerId = (await brokerResp.json()).results[0].broker_id as number;
+        const marker = `T4-delref-${suffix}`;
+        const brokers = await jsonFrom<{results: Array<{name: string; success: boolean; broker_id: number | null; message?: string}>}>(await page.request.post(`${API}/brokers`, {data: [{name: marker}]}), 'broker setup');
+        const broker = brokers.results.find((item) => item.name === marker);
+        if (!broker?.success || typeof broker.broker_id !== 'number') throw new Error(`broker setup refused: ${broker?.message ?? JSON.stringify(brokers.results)}`);
+        const brokerId = broker.broker_id;
+        ownedRows.brokerIds.push(brokerId);
 
         // POST /assets is bulk-only: a list in, per-item results out (201).
-        const assetResp = await page.request.post('/api/v1/assets', {
-            data: [{display_name: `T4-delref-asset-${suffix}`, asset_type: 'STOCK', currency: 'EUR'}],
-        });
+        const assetName = `T4-delref-asset-${suffix}`;
+        const assetResp = await page.request.post(`${API}/assets`, {data: [{display_name: assetName, asset_type: 'STOCK', currency: 'EUR'}]});
         expect(assetResp.status(), `asset setup failed (HTTP ${assetResp.status()})`).toBe(201);
-        const assetResults = (await assetResp.json()).results as Array<{asset_id: number; success: boolean; message?: string}>;
-        expect(assetResults[0]?.success, `asset setup refused: ${assetResults[0]?.message ?? 'unknown'}`).toBe(true);
-        const assetId = assetResults[0].asset_id;
+        const assetResults = (await assetResp.json()).results as Array<{asset_id: number | null; display_name: string; success: boolean; message?: string}>;
+        const asset = assetResults.find((item) => item.display_name === assetName);
+        if (!asset?.success || typeof asset.asset_id !== 'number') throw new Error(`asset setup refused: ${asset?.message ?? JSON.stringify(assetResults)}`);
+        const assetId = asset.asset_id;
+        ownedRows.assetIds.push(assetId);
 
-        const marker = `T4-delref-${suffix}`;
-        const createResp = await page.request.post('/api/v1/transactions/commit', {
-            data: {
-                creates: [
-                    // ADJUSTMENT with qty>0 requires an explicit cost basis.
-                    {broker_id: brokerId, asset_id: assetId, type: 'ADJUSTMENT', date: '2025-01-10', quantity: '5', cost_basis_override: {code: 'EUR', amount: '10'}, description: marker},
-                    // The counterpart's description must NOT contain the marker —
-                    // findRow matches by inclusion, and the row under test is the +5.
-                    {broker_id: brokerId, asset_id: assetId, type: 'ADJUSTMENT', date: '2025-01-11', quantity: '-5', description: `counterpart-${suffix}`},
-                ],
-            },
-        });
-        expect(createResp.ok(), `transaction setup failed (HTTP ${createResp.status()})`).toBeTruthy();
-        const createBody = await createResp.json();
-        expect(createBody.committed, `setup commit rolled back: ${JSON.stringify(createBody.issues ?? [])}`).toBe(true);
-        const createdIds = (createBody.results as Array<{ids?: number[]}>).flatMap((r) => r.ids ?? []);
-        expect(createdIds).toHaveLength(2);
+        const [plusId, minusId] = await commitCreates(
+            page,
+            [
+                // ADJUSTMENT with qty>0 requires an explicit cost basis.
+                {broker_id: brokerId, asset_id: assetId, type: 'ADJUSTMENT', date: '2025-01-10', quantity: '5', cost_basis_override: {code: 'EUR', amount: '10'}, description: marker},
+                // The counterpart's description must NOT contain the marker —
+                // findRow matches by inclusion, and the row under test is the +5.
+                {broker_id: brokerId, asset_id: assetId, type: 'ADJUSTMENT', date: '2025-01-11', quantity: '-5', description: `counterpart-${suffix}`},
+            ],
+            'create the +5/−5 ADJUSTMENTs',
+        );
+        ownedRows.transactionIds.push(plusId, minusId);
 
-        try {
-            // Re-navigate with an id filter — navigating to the URL the page is
-            // already on is a client-side no-op that reloads nothing, and the two
-            // rows were created AFTER the page first loaded. The id filter makes
-            // the URL (and the fetched set) genuinely new.
-            await navigateTo(page, `/transactions?page_size=200&id_min=${createdIds[0]}&id_max=${createdIds[0]}`);
-            await waitForSettled(page.getByTestId('transactions-page'));
-            // Address the row by its own id, not by text: the broker and asset
-            // names carry the suffix too, so a text search matches the
-            // counterpart row as well (and date order would pick the −5 — whose
-            // deletion is legal — every time).
-            const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="tx-${createdIds[0]}"]`);
-            await expect(row, 'the +5 ADJUSTMENT this test just created is not in the table').toBeVisible({timeout: 8_000});
+        // Re-navigate with an id filter — navigating to the URL the page is
+        // already on is a client-side no-op that reloads nothing, and the two
+        // rows were created AFTER the page first loaded. The id filter makes
+        // the URL (and the fetched set) genuinely new.
+        await navigateTo(page, `/transactions?page_size=200&id_min=${plusId}&id_max=${plusId}`);
+        await waitForSettled(page.getByTestId('transactions-page'));
+        // Address the row by its own id, not by text: the broker and asset
+        // names carry the suffix too, so a text search matches the
+        // counterpart row as well (and date order would pick the −5 — whose
+        // deletion is legal — every time).
+        const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="tx-${plusId}"]`);
+        await expect(row, 'the +5 ADJUSTMENT this test just created is not in the table').toBeVisible({timeout: 8_000});
 
-            const modal = await openDeleteWorkspace(row);
-            await expect(bulkDeletedRows(page)).toHaveCount(1);
+        const modal = await openDeleteWorkspace(row);
+        // Exactly the row we picked is staged (the page loaded nothing else), and it
+        // is staged as a DELETE; the wire below says which row that is.
+        await expect(bulkRows(page)).toHaveCount(1);
+        await expect(bulkDeletedRows(page)).toHaveCount(1);
 
-            // Commit → the server refuses (asset balance would go negative) → the
-            // workspace stays open and reports the issue inline. Assert the
-            // banner and that it carries at least one issue — never its text,
-            // which is localized.
-            const {payload, committed} = await commitDeleteWorkspace(page);
-            expect(payload.deletes ?? [], 'the wire must name the +5 row, not its counterpart').toEqual([createdIds[0]]);
-            expect(committed, 'a delete that would drive the asset balance negative must roll back').toBe(false);
+        // Commit → the server refuses (asset balance would go negative) → the
+        // workspace stays open and reports the issue inline. Assert the
+        // banner and that it carries at least one issue — never its text,
+        // which is localized.
+        const {payload, committed} = await commitDeleteWorkspace(page);
+        expect(payload.deletes ?? [], 'the wire must name the +5 row, not its counterpart').toEqual([plusId]);
+        expect(committed, 'a delete that would drive the asset balance negative must roll back').toBe(false);
 
-            await expect(modal).toBeVisible();
-            const banner = modal.getByTestId('tx-bulk-error');
-            await expect(banner).toBeVisible({timeout: 5_000});
-            // The refusal is a balance issue, and balance issues render in their
-            // own list inside the banner (no per-item testid — the banner is the
-            // testid anchor; the <li> proves an issue actually rendered).
-            await expect(banner.locator('ul li').first(), 'the refusal must be itemized inline, not just a bare banner').toBeVisible();
+        await expect(modal).toBeVisible();
+        const banner = modal.getByTestId('tx-bulk-error');
+        await expect(banner).toBeVisible({timeout: 5_000});
+        // The refusal is a balance issue (`balanceAssetNegative`), and balance
+        // issues render as items of their own inside the banner: one of them
+        // proves the refusal was itemized, not just announced.
+        await expect(banner.getByTestId('tx-bulk-balance-issue').first(), 'the refusal must be itemized inline, not just a bare banner').toBeVisible();
 
-            // Cancel closes (the staged delete is the *initial* state here, so no
-            // discard confirmation interposes).
-            await modal.getByTestId('tx-bulk-cancel').click();
-            await expect(modal).not.toBeVisible({timeout: 5_000});
-        } finally {
-            // Restore what this test wrote: both ADJUSTMENTs together net to zero,
-            // so the batch delete is legal. The empty broker and the asset stay —
-            // inert reference data with a unique name, as every API-level test
-            // leaves them.
-            await page.request.post('/api/v1/transactions/commit', {data: {deletes: createdIds}});
+        // Cancel closes (the staged delete is the *initial* state here, so no
+        // discard confirmation interposes).
+        await modal.getByTestId('tx-bulk-cancel').click();
+        await expect(modal).not.toBeVisible({timeout: 5_000});
+    });
+});
+
+// ---------------------------------------------------------------------------
+// A1-confirm and A2-confirm — the deletes that commit, on rows of their own
+// ---------------------------------------------------------------------------
+
+// Same title as the block above, so the tests keep their full names. A block of its own
+// because the TEST_USER login above must not run for them: each signs in as the
+// disposable account that owns its rows.
+test.describe('Single-row delete via bulk workspace (T4)', () => {
+    let owned: OwnedAccount = {user: null, brokerIds: []};
+
+    test.beforeEach(() => {
+        owned = {user: null, brokerIds: []};
+    });
+
+    // afterEach, not `finally`: it runs after a timeout too, and an error of its own is
+    // reported beside the test's instead of replacing it.
+    test.afterEach(async ({page, request}) => {
+        await cleanupAccount(page, request, owned);
+    });
+
+    // === A1-confirm: standalone delete, committed ===
+
+    test('A1-confirm: standalone delete — commit removes the row', async ({page, request}, testInfo) => {
+        // The account goes through the real welcome flow before the delete itself.
+        test.setTimeout(60_000);
+        const fee = await openAccountWithFee(page, request, owned, `txdel_a1_${testInfo.project.name}`);
+        await goToTransactions(page);
+
+        // The row under test, by the id this test created: not by text, not by position.
+        const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="tx-${fee.feeId}"]`);
+        await expect(row, 'the FEE this test just created is not in the table').toBeVisible({timeout: 8_000});
+
+        await openDeleteWorkspace(row);
+        // Exactly the one row we picked is staged — a standalone row brings no
+        // partner — and it is staged as a DELETE.
+        await expect(bulkRows(page)).toHaveCount(1);
+        await expect(bulkDeletedRows(page)).toHaveCount(1);
+
+        const {payload, committed} = await commitDeleteWorkspace(page);
+        expect(committed, 'the delete commit must not roll back').toBe(true);
+        // The wire carries exactly the transaction we picked.
+        expect(payload.deletes ?? []).toEqual([fee.feeId]);
+
+        await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 10_000});
+
+        // Row gone, asserted on its own id: toHaveCount retries, is exact, and does not
+        // re-read every row in the table.
+        await expect(row).toHaveCount(0, {timeout: 8_000});
+
+        // And gone on the server — that row and no other: the deposit that funds it was
+        // staged by nobody, and must still be there.
+        const left = (await readTransactions(page, [fee.depositId, fee.feeId])).map((tx) => tx.id);
+        expect(left, 'the commit deletes the FEE and nothing else').toEqual([fee.depositId]);
+    });
+
+    // === A2-confirm: paired delete, committed ===
+
+    test('A2-confirm: paired delete — commit removes both halves', async ({page, request}, testInfo) => {
+        // The account goes through the real welcome flow before the delete itself.
+        test.setTimeout(60_000);
+        const pair = await openAccountWithPair(page, request, owned, `txdel_a2_${testInfo.project.name}`);
+        await goToTransactions(page);
+
+        // The row under test is the sending half, by id. The workspace auto-includes a
+        // partner only when the page has loaded it, so the receiving half must be there too.
+        const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="tx-${pair.fromId}"]`);
+        await expect(row, 'the sending half of the pair this test just created is not in the table').toBeVisible({timeout: 8_000});
+        await expect(page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="tx-${pair.toId}"]`), 'premise: the receiving half is loaded too').toBeVisible();
+
+        await openDeleteWorkspace(row);
+        // The partner is auto-included and the pair collapses: ONE staged row,
+        // staged as a DELETE.
+        await expect(bulkRows(page)).toHaveCount(1);
+        await expect(bulkDeletedRows(page)).toHaveCount(1);
+
+        // Both halves staged through one collapsed row: the commit payload must
+        // name BOTH transaction ids, or the backend pair guard
+        // (pairDeleteIncomplete) would refuse the batch.
+        const {payload, committed} = await commitDeleteWorkspace(page);
+        expect(committed, `the paired delete commit must not roll back (deletes=${JSON.stringify(payload.deletes ?? [])})`).toBe(true);
+        expect(sortedIds(payload.deletes ?? [])).toEqual(sortedIds([pair.fromId, pair.toId]));
+
+        await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 10_000});
+
+        // Both halves gone from the table, in either form a half can take there
+        // (`ghost-` is a partner rendered outside the loaded set).
+        for (const id of [pair.fromId, pair.toId]) {
+            await expect(page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="tx-${id}"], [data-testid="tx-table"] tbody tr[data-row-id="ghost-${id}"]`)).toHaveCount(0, {timeout: 8_000});
         }
+
+        // And on the server, asked about these ids: both halves gone, and the rows that
+        // funded the sender — staged by nobody — still there.
+        const left = (await readTransactions(page, [...pair.fundingIds, pair.fromId, pair.toId])).map((tx) => tx.id);
+        expect(sortedIds(left), 'the commit deletes the pair and nothing else').toEqual(sortedIds(pair.fundingIds));
     });
 });
 

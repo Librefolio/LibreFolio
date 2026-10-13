@@ -112,6 +112,7 @@
     import {buildTransactionsFiltersUrl} from '../../transactions/filterState';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -165,10 +166,18 @@
     const activeAssetSyncRequests = new Map<number, number>();
     let syncingComparisonAssetIds = $state<Set<number>>(new Set());
 
+    /**
+     * An error the banner words from the catalogue. The key is written whole at each call, so the
+     * catalogue audit sees it; the banner below translates it, with this asset's id as `{id}`.
+     */
+    function catalogueError(key: string): string {
+        return `_i18n:${key}`;
+    }
+
     /** Reactively resolved error message — translates i18n keys when language changes */
     let errorMessage = $derived.by(() => {
         if (!error) return null;
-        return error.startsWith('_i18n:') ? $t(error.slice(6)) : error;
+        return error.startsWith('_i18n:') ? $t(error.slice(6), {values: {id: String(data.assetId)}}) : error;
     });
 
     // Date range — global store is source of truth (resolve min/max sentinels for API)
@@ -686,7 +695,7 @@
                     const asset = allAssets.find((candidate) => candidate.id === assetId);
                     return {
                         values,
-                        forAsset: asset?.display_name ?? `Asset #${assetId}`,
+                        forAsset: asset?.display_name ?? $t('chartSettings.signals.assetFallback', {values: {id: String(assetId)}}),
                         forAssetIconUrl: asset?.icon_url,
                         forAssetType: asset?.asset_type,
                     };
@@ -867,7 +876,8 @@
                 const targetId = Number(cfg.params.assetId);
                 if (!targetId || targetId === data.assetId) continue;
                 const targetAsset = allAssets.find((a) => a.id === targetId);
-                instance.params._assetDisplayName = targetAsset?.display_name ?? `Asset #${targetId}`;
+                // An asset that is gone gets its name from the signal itself: one fallback, in the catalogue.
+                instance.params._assetDisplayName = targetAsset?.display_name;
                 if (!instance.params._resolvedData) continue;
             }
 
@@ -891,7 +901,7 @@
             const target = allAssets.find((asset) => asset.id === assetId);
             rendered.push({
                 id: `${config.id}:calendar-return`,
-                label: target?.display_name ?? String(config.params._assetDisplayName ?? `Asset #${assetId}`),
+                label: target?.display_name ?? String(config.params._assetDisplayName ?? $t('chartSettings.signals.assetFallback', {values: {id: String(assetId)}})),
                 data: view.points,
                 color: config.style.color,
                 lineWidth: config.style.lineWidth,
@@ -1000,7 +1010,7 @@
         // Comparison asset events
         for (const [aid, evts] of comparisonEvents) {
             const targetAsset = allAssets.find((a) => a.id === aid);
-            const label = targetAsset?.display_name ?? `Asset #${aid}`;
+            const label = targetAsset?.display_name ?? $t('chartSettings.signals.assetFallback', {values: {id: String(aid)}});
             // Find signal color for this comparison asset
             const sigColor = overlaySignals.find((s) => s.label === label)?.color;
             for (const ev of evts) {
@@ -1581,11 +1591,11 @@
                 assetInfo = asset as AssetDetail;
                 if (!displayCurrency) displayCurrency = asset.currency;
             } else {
-                error = `Asset #${data.assetId} not found`;
+                error = catalogueError('assetDetail.notFound');
             }
         } catch (e: any) {
             console.error('Failed to load asset info:', e);
-            error = e?.message || 'Failed to load asset info';
+            error = e?.message || catalogueError('assetDetail.loadFailed');
         }
     }
 
@@ -1707,7 +1717,7 @@
                     backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
                 }));
                 if (chartData.length === 0 && !error) {
-                    error = '_i18n:assetDetail.noData';
+                    error = catalogueError('assetDetail.noData');
                 } else {
                     error = null;
                 }
@@ -1811,7 +1821,7 @@
                 }
             }
             if (chartData.length === 0 && !error) {
-                error = '_i18n:assetDetail.noData';
+                error = catalogueError('assetDetail.noData');
             }
             resolveMaxStartFromChartData();
         } catch (e: any) {
@@ -1826,7 +1836,7 @@
                     calendarComparisonFxFailures = new Set();
                 }
             }
-            if (chartData.length === 0) error = e?.message || 'Failed to load prices';
+            if (chartData.length === 0) error = e?.message || catalogueError('assetDetail.pricesLoadFailed');
             if (propagateError) throw e;
         } finally {
             if (requestIsCurrent()) {
@@ -2770,7 +2780,7 @@
     <!--               [ actions ── 2×2   ]  (narrowest tier — Round 12 removed iconOnly)     -->
     <!-- ======================================================================= -->
     <PageToolbar
-        thresholds={{oneRow: 1215, denseRow: 850, stackFilters: 510, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}}
+        thresholds={{oneRow: 1215, denseRow: 890, stackFilters: 510, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}}
         tabs={assetDetailTabs}
         {activeTab}
         ontabchange={handleAssetDetailTabChange}
@@ -3521,7 +3531,7 @@
                                     <span class="font-mono text-gray-500 dark:text-gray-400">{providerAssignment.identifier} ({providerAssignment.identifier_type})</span>
                                     {#if providerAssignment.last_fetch_at}
                                         <span class="text-xs text-gray-400 dark:text-gray-500">
-                                            {$t('assets.provider.lastFetch')}: {new Date(String(providerAssignment.last_fetch_at)).toLocaleDateString()}
+                                            {$t('assets.provider.lastFetch')}: {new Date(String(providerAssignment.last_fetch_at)).toLocaleDateString(uiLocale())}
                                         </span>
                                     {:else}
                                         <span class="text-xs text-gray-400 dark:text-gray-500">{$t('assets.provider.neverFetched')}</span>

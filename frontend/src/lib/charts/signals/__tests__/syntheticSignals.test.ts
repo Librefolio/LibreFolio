@@ -1,5 +1,11 @@
-import {describe, expect, it} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it} from 'vitest';
+import {get} from 'svelte/store';
+import {waitLocale} from 'svelte-i18n';
 
+import {setupI18n} from '$test/component';
+import {_} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {ChartSignal, type SignalStyle} from '../ChartSignal';
 import {CompoundSignal} from '../CompoundSignal';
 import {LinearSignal} from '../LinearSignal';
@@ -13,7 +19,23 @@ import {SineSignal} from '../SineSignal';
  * of the right length. This file pins the numbers and the decisions around them:
  * how a percentage view is derived, what happens on an empty or flat chart, and
  * what each signal calls itself in the legend.
+ *
+ * What a signal calls itself comes from the catalogue (T-EN2), so the file boots
+ * svelte-i18n in English below. The English labels the cases pin as literals are
+ * the guards of that change: the English catalogue must word them exactly as they
+ * always read. The other languages are the last describe's, and that a label
+ * follows a switch made in place is `syntheticSignals.languageSwitch.test.ts`'s.
  */
+
+/**
+ * svelte-i18n throws when it formats a message before it is initialised, and the
+ * labels are formatted messages: boot it once for the whole file, in English, the
+ * app's fallback. The cases that speak another language switch the interface
+ * language themselves and put English back.
+ */
+beforeAll(async () => {
+    await setupI18n('en');
+});
 
 const style: SignalStyle = {
     color: '#3b82f6',
@@ -488,5 +510,129 @@ describe('SineSignal', () => {
     it('names itself by amplitude and period', () => {
         expect(new SineSignal('sine', style, {amplitude: 10, period: 4}).getLabel()).toBe('Sine ±10% / 4d');
         expect(new SineSignal('sine', style, {}).getLabel()).toBe('Sine ±15% / 45d');
+    });
+});
+
+describe('Synthetic benchmark labels in the interface language (T-EN2)', () => {
+    /*
+     * A benchmark names itself in the chart's legend and tooltip, and today it does so in English written in
+     * its class, with its figures as JavaScript prints them: `Linear 2.5%/yr +0.5%` whatever the interface
+     * language.
+     *
+     * The contract. The words are the catalogue's — `chartSettings.signals.linearLabel` and `compoundLabel`
+     * around `{rate}`, `sineLabel` around `{amplitude}` and `{period}` — and the figures are written in the
+     * interface locale (`uiLocale()`): the rate and the amplitude through `formatPercent(…, {signed: false,
+     * trim: true})`, the period through `formatFixed(…, 2, {trim: true})`, and a non-zero offset, after a
+     * space, through `formatPercent(…, {trim: true})`, which keeps its sign. The defaults do not move (rate 2,
+     * rate 8, amplitude 15 every 45 days, offset 0), and `render()` — so `renderMulti()` — hands the chart the
+     * same label.
+     *
+     * Every expectation is the catalogue's own text (`$_`) around figures Intl writes in the interface locale,
+     * never a typed translation. The figures are chosen so that their notation differs from English (2.5,
+     * 7.25, 12.5, 45.5): a label that translated its words but kept JavaScript's figures would still be red.
+     *
+     * Red today: in Italian and in French every label reads as it does in English.
+     */
+    const LANGUAGES = ['it', 'fr'] as const;
+    type UiLanguage = 'en' | (typeof LANGUAGES)[number];
+
+    /** The benchmarks the cases name, with figures whose notation differs from English. */
+    const SIGNALS = {
+        linear: () => new LinearSignal('linear', style, {annualRate: 2.5, offset: 0.5}),
+        linearWithoutOffset: () => new LinearSignal('linear', style, {annualRate: 2.5, offset: 0}),
+        compound: () => new CompoundSignal('compound', style, {annualRate: 7.25, offset: -1.5}),
+        sine: () => new SineSignal('sine', style, {amplitude: 12.5, period: 45.5, offset: 0}),
+    };
+    type Labels = Record<keyof typeof SIGNALS, string>;
+
+    /** Switch the interface language in place, as the language selector does; answer the locale it now writes figures in. */
+    async function speak(lang: UiLanguage): Promise<string> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        const locale = uiLocale();
+        expect(new Intl.Locale(locale).language, `control: the interface locale follows the ${lang} interface`).toBe(lang);
+        return locale;
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every case of the file.
+        await speak('en');
+    });
+
+    /** A catalogue message with its values, as the interface language words it. */
+    function catalogue(key: string, values: Record<string, string>): string {
+        return get(_)(key, {values});
+    }
+
+    /** `value` percent as Intl writes it in `locale`: up to two decimals, none trailing; `signed` puts a `+` before a positive one. */
+    function percent(value: number, locale: string, {signed = false} = {}): string {
+        const text = new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 2}).format(value / 100);
+        return signed && value > 0 ? `+${text}` : text;
+    }
+
+    /** `value` as Intl writes it in `locale`: up to two decimals, none trailing. */
+    function decimal(value: number, locale: string): string {
+        return new Intl.NumberFormat(locale, {minimumFractionDigits: 0, maximumFractionDigits: 2}).format(value);
+    }
+
+    /** The labels of `SIGNALS` as the catalogue and Intl write them in `locale`. */
+    function expectedLabels(locale: string): Labels {
+        return {
+            linear: `${catalogue('chartSettings.signals.linearLabel', {rate: percent(2.5, locale)})} ${percent(0.5, locale, {signed: true})}`,
+            linearWithoutOffset: catalogue('chartSettings.signals.linearLabel', {rate: percent(2.5, locale)}),
+            compound: `${catalogue('chartSettings.signals.compoundLabel', {rate: percent(7.25, locale)})} ${percent(-1.5, locale, {signed: true})}`,
+            sine: catalogue('chartSettings.signals.sineLabel', {amplitude: percent(12.5, locale), period: decimal(45.5, locale)}),
+        };
+    }
+
+    /** The labels the signals of `SIGNALS` give themselves. */
+    function writtenLabels(): Labels {
+        return Object.fromEntries(Object.entries(SIGNALS).map(([name, make]) => [name, make().getLabel()])) as Labels;
+    }
+
+    /** Each label with its no-break spaces spelled out, so a failure tells U+00A0 and U+202F from a space. */
+    function spelled(labels: Record<string, string>): Record<string, string> {
+        return Object.fromEntries(Object.entries(labels).map(([name, label]) => [name, label.replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`)]));
+    }
+
+    it.each(LANGUAGES)('%s interface: Linear, Compound and Sine are named by the catalogue, with the rate, a signed offset, the amplitude and the period in the interface notation', async (lang) => {
+        const locale = await speak(lang);
+        expect(percent(2.5, locale), 'premise: a percentage is written another way than in English').not.toBe(percent(2.5, 'en-US'));
+        expect(decimal(45.5, locale), 'premise: a period is written another way than in English').not.toBe(decimal(45.5, 'en-US'));
+
+        expect(spelled(writtenLabels()), `the labels are not in the ${lang} interface's words and notation: the classes write English around JavaScript's figures`).toEqual(spelled(expectedLabels(locale)));
+    });
+
+    it.each(LANGUAGES)('%s interface: the declared defaults — Linear 2, Compound 8, Sine 15 every 45 days — are named by the catalogue too', async (lang) => {
+        const locale = await speak(lang);
+
+        const written = {
+            linear: new LinearSignal('linear', style, {}).getLabel(),
+            compound: new CompoundSignal('compound', style, {}).getLabel(),
+            sine: new SineSignal('sine', style, {}).getLabel(),
+        };
+
+        expect(spelled(written), `the default labels are not in the ${lang} interface's words`).toEqual(
+            spelled({
+                linear: catalogue('chartSettings.signals.linearLabel', {rate: percent(2, locale)}),
+                compound: catalogue('chartSettings.signals.compoundLabel', {rate: percent(8, locale)}),
+                sine: catalogue('chartSettings.signals.sineLabel', {amplitude: percent(15, locale), period: decimal(45, locale)}),
+            }),
+        );
+    });
+
+    it.each(LANGUAGES)('%s interface: renderMulti hands the chart the same label', async (lang) => {
+        const locale = await speak(lang);
+
+        const [rendered] = SIGNALS.linear().renderMulti(YEAR, 'absolute');
+        expect(rendered, 'barrier: a year of chart renders one series').toBeDefined();
+
+        expect(spelled({label: rendered.label}), `the rendered series is not labelled in the ${lang} interface's words and notation`).toEqual(spelled({label: expectedLabels(locale).linear}));
+    });
+
+    it('English interface: the same signals read exactly as they do today — the English catalogue around figures in the interface notation (guard)', async () => {
+        const locale = await speak('en');
+
+        expect(spelled(writtenLabels()), 'the English labels moved').toEqual(spelled(expectedLabels(locale)));
     });
 });

@@ -12,8 +12,9 @@ description: "Use this skill when creating, extending, or reviewing a LibreFolio
 ## 🎯 What a signal plugin is
 
 A signal plugin teaches LibreFolio **one technical indicator** (SMA, RSI, Bollinger Bands,
-rolling drawdown, …). It lives in `backend/app/services/signal_plugins/` (one file per
-indicator), extends `SignalPlugin` (`signal_plugins/base.py`), and is auto-discovered via
+rolling drawdown, …). It lives in `backend/app/services/signal_plugins/<code>/` (one folder per
+indicator: `plugin.py` holds the code, `i18n/` its `signals.<ns>.*` texts), extends `SignalPlugin`
+(`signal_plugins/base.py`), and is auto-discovered via
 `@register_plugin(SignalPluginRegistry)`.
 
 It is a **pure, declarative calculator**: it declares its parameters, required data, outputs
@@ -46,11 +47,14 @@ results; the frontend renders the declaration without indicator-specific code.
 
 ## 🛠️ Rough shape of the work
 
-1. Create `backend/app/services/signal_plugins/my_signal.py`, extend `SignalPlugin`, decorate
-   with `@register_plugin(SignalPluginRegistry)`.
+1. Create the folder `backend/app/services/signal_plugins/my_signal/`: `__init__.py` (docstring
+   only, no re-export) and `plugin.py`, which extends `SignalPlugin` and is decorated with
+   `@register_plugin(SignalPluginRegistry)`. Import and patch from `….my_signal.plugin`.
 2. Declare the members (code, versions, keys, parameters, inputs, outputs, domains, AI
    temporal rules), then implement `warmup_requirement()` and `compute()`.
-3. Add the EN/IT/FR/ES UI keys and the English financial-theory page named by `docs_path`.
+3. Add the EN/IT/FR/ES UI keys in the plugin's own `i18n/`
+   (`./dev.py i18n add signals.<ns>.… --into signal_plugins/my_signal`; a key several indicators
+   share stays in the `charts` subsystem) and the English financial-theory page named by `docs_path`.
 4. Add numerical and parity tests, and update the registry pins in
    `backend/test_scripts/test_services/test_signal_plugin_matrix.py`.
 5. Run the signal service, catalog and frontend gates, then `./dev.py api sync` when the
@@ -68,7 +72,7 @@ This skill is intentionally **high-level and durable**. For the precise, current
 - **Instructions** — `.github/instructions/backend-signals.instructions.md` (backend) and
   `.github/instructions/frontend-signals.instructions.md` (frontend renderer)
 - **Reference code** — `backend/app/services/signal_plugins/base.py` and simple plugins such
-  as `sma.py` and `rsi.py`; the runtime in `signal_service.py`.
+  as `sma/plugin.py` and `rsi/plugin.py`; the runtime in `signal_service.py`.
 
 Do not rely on this page for method signatures or exact conventions — they can change; the
 developer guide is kept up to date.

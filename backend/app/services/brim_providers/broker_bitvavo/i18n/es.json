@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_bitvavo": {
+      "description": "Importa las transacciones de la exportación CSV de Bitvavo. Admite compras y ventas de cripto, recompensas de staking, depósitos y retiradas de efectivo y ajustes de saldos cripto.",
+      "name": "Bitvavo"
+    }
+  }
+}

@@ -10,10 +10,11 @@
 -->
 <script lang="ts">
     import {ChartBarStacked} from 'lucide-svelte';
-    import {locale, t} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import type {ToolItemMetrics} from '$lib/features/tools/contracts';
     import HelpTip from '../shared/HelpTip.svelte';
     import {HINT} from '../ui';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Props {
         metrics: ToolItemMetrics;
@@ -76,8 +77,8 @@
     });
 
     const formats = $derived({
-        ms: new Intl.NumberFormat($locale ?? 'en', {maximumFractionDigits: 0}),
-        share: new Intl.NumberFormat($locale ?? 'en', {style: 'percent', maximumFractionDigits: 1}),
+        ms: new Intl.NumberFormat(uiLocale(), {maximumFractionDigits: 0}),
+        share: new Intl.NumberFormat(uiLocale(), {style: 'percent', maximumFractionDigits: 1}),
     });
 
     let pointed = $state<string | null>(null);

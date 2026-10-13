@@ -28,11 +28,13 @@ const COVERAGE_ON = process.env.COVERAGE_JS === '1';
  * Is the build under test instrumented by `vite-plugin-istanbul`?
  *
  * The sentinel is written by `_ensure_frontend_build()`; timestamps cannot tell
- * the two *kinds* of build apart. When it is there, `window.__coverage__` will
- * carry richer data than V8 for every file, so V8 is not started at all — it is
- * not merely redundant, it is expensive: its payloads carry sources and
- * sourcemaps, and accumulating them across a consolidated category is what
- * reached 8 GB and killed the worker.
+ * the two *kinds* of build apart. Collecting does not depend on it: the
+ * teardown reads `window.__coverage__` from whatever page carries one. It only
+ * decides how an empty collection is read. On an instrumented build, a test
+ * whose pages carry no counters (it opened no app page, or they had closed)
+ * simply has nothing to add; on a plain build every collection is empty, and
+ * `warnUninstrumentedOnce()` says so instead of letting a report of zero pass
+ * for a measurement.
  */
 const INSTRUMENTED_BUILD = (() => {
     if (!COVERAGE_ON) return false;
@@ -45,6 +47,23 @@ const INSTRUMENTED_BUILD = (() => {
 
 /** Where each test drops its slice of `window.__coverage__`. */
 const E2E_COVERAGE_DIR = fileURLToPath(new URL('../../coverage-js/e2e-raw', import.meta.url));
+
+/**
+ * The JS coverage collection's own time budget. Collecting is not the test's work: once the test is over, the
+ * `jsCoverage` teardown reads `window.__coverage__` from every page (about 17 MB of JSON per test on the
+ * instrumented build), serialises it and writes it. A fixture without a `timeout` has its teardown charged to the
+ * slot Playwright gives the test's after-hooks — the test timeout again, 30 s, shared with every `afterEach` and
+ * every other teardown — and under load the collection overran it: 15 reds «Tearing down "jsCoverage" exceeded the
+ * test timeout of 30000ms» in R's coverage run (12/10, load 45–112), after 40–49 s, on tests that pass in 11–19 s
+ * alone, collection included. With a `timeout`, Playwright gives the fixture a slot of its own, shared only by its
+ * setup (a bare `use()`) and its teardown: the test's budget stays the test's, and a slow collection fails as
+ * «Fixture "jsCoverage" timeout of 120000ms exceeded during teardown», naming the collection rather than a slow
+ * test. 120 s is four times the 30 s it overran — the only measurement under load, and a censored one — and still
+ * short enough for a hung `page.evaluate` to fail rather than hold the worker. Unconditional on purpose: without
+ * COVERAGE_JS the teardown returns at once, the slot can never fire, and every run exercises the registration the
+ * coverage run relies on.
+ */
+const JS_COVERAGE_TIMEOUT_MS = 120_000;
 
 let coverageSeq = 0;
 let warnedUninstrumented = false;
@@ -79,11 +98,14 @@ function warnUninstrumentedOnce(): void {
  *
  * ### The granularity is per spec file, not per test — and that is the whole point
  *
- * Cleaning after every *test* looks tidier and is wrong. Specs are written
- * sequentially: `tx-commit-all-types` commits a BUY and then sells part of it,
- * `tx-delete` creates a pair in one test and deletes it in the next. Wiping
- * between tests breaks those chains, and measurably did: it turned three reds
- * into five.
+ * Cleaning after every *test* looks tidier and is wrong. When this was measured,
+ * specs were written sequentially: `tx-commit-all-types` committed a BUY and
+ * then sold part of it, `tx-delete` created a pair in one test and deleted it in
+ * the next. Wiping between tests broke those chains, and measurably did: it
+ * turned three reds into five. Neither chains any more: `tx-commit-all-types`
+ * funds each SELL inside its own batch, and `tx-delete` stopped at V-25 (13/10)
+ * — its confirm tests now delete rows they create. State may still accumulate
+ * inside a file, though, and this net must not be the thing that breaks it.
  *
  * What consolidation actually removed was the *inter-file* reset — before it,
  * every spec file ran in its own process against a freshly populated database.
@@ -94,11 +116,14 @@ function warnUninstrumentedOnce(): void {
  * ### The rollback has to work in both directions
  *
  * Deleting the rows a file added is the cheap half. A file that *destroys* mock
- * rows — `tx-delete` does, by design — cannot be repaired that way, because no
- * API call brings back a row with its original id and its original half of a
- * linked pair. When the baseline ids are no longer all there, the database is
- * repopulated instead. It costs about ten seconds and, measured over the whole
- * `transactions/` directory, happens once.
+ * rows — `tx-delete` did, until V-25 (13/10): its confirm tests now delete rows
+ * they create — cannot be repaired that way, because no API call brings back a
+ * row with its original id and its original half of a linked pair. When the
+ * baseline ids are no longer all there, the database is repopulated instead. It
+ * costs about ten seconds and, measured over the whole `transactions/`
+ * directory, fired once — for `tx-delete`, whose rows were the only seed rows
+ * the 12/10 category gate found missing. Since V-25 no spec there triggers it;
+ * it remains the guard for the next file that does.
  *
  * Runs only under `LF_TX_HYGIENE=1`, set by the consolidated pass, so a
  * single-spec run behaves exactly as before.
@@ -175,13 +200,15 @@ async function dropSince(api: APIRequestContext, before: Set<number>): Promise<v
 /**
  * Restore the mock data wholesale.
  *
- * Deleting what a file added is only half the invariant. `tx-delete` *destroys*
- * mock rows and never puts them back, and no API call can resurrect a row with
- * its original id and its original half of a linked pair. Measured: after that
- * file, `tx-picker-pagination` picks two rows that turn out to be one pair, the
- * BulkModal auto-opens a FormModal for the single entity, and four tests then
- * time out clicking a button behind the modal's backdrop — 5/5 green on a fresh
- * database, 4 red on the one the suite leaves behind.
+ * Deleting what a file added is only half the invariant. A file that *destroys*
+ * mock rows and never puts them back cannot be undone through the API: no call
+ * resurrects a row with its original id and its original half of a linked pair.
+ * `tx-delete` did, until V-25 (13/10): its confirm tests now delete rows they
+ * create. Measured while it still did: after that file, `tx-picker-pagination`
+ * picked two rows that turned out to be one pair, the BulkModal auto-opened a
+ * FormModal for the single entity, and four tests then timed out clicking a
+ * button behind the modal's backdrop — 5/5 green on a fresh database, 4 red on
+ * the one the suite left behind.
  *
  * So a file that removed shared rows gets the only faithful repair there is.
  * `populate_mock_data` recreates the E2E users itself; the global settings it
@@ -291,11 +318,15 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: H
             await use();
 
             // The build carries its own istanbul counters, so collecting is a
-            // read of `window.__coverage__` — already in source coordinates,
-            // with a branch map for every `{#if}` of every template. Nothing
-            // has to be mapped back through the bundle, which is why there is
-            // no monocart here any more: resolving V8 ranges to sources was its
-            // entire job, and instrumenting the build removed the job.
+            // read of `window.__coverage__`, keyed by source file, with a
+            // branch map for every `{#if}` of every template. Nothing is
+            // mapped back through the bundle here: `vite-plugin-istanbul`
+            // instruments after the transform, so each entry counts positions
+            // in the transformed code and carries its own map back to the
+            // source, which `js-coverage-report.js` follows when it merges.
+            // That is also why there is no monocart here any more: resolving
+            // V8 ranges to sources was its entire job, and instrumenting the
+            // build removed the job.
             const entries = (
                 await Promise.all(
                     context.pages().map(async (page) => {
@@ -317,7 +348,7 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: H
             // One file per test rather than an in-process accumulator. The
             // accumulator is what used to die: it retained every payload —
             // sources and sourcemaps included — and over the 25 spec files a
-            // consolidated category now runs in a single worker it reached 8 GB
+            // consolidated category then ran in a single worker it reached 8 GB
             // and took the worker with it, reported against whichever test
             // happened to be running. Writing and forgetting is O(1) in memory,
             // and the merge is somebody else's problem: `js-coverage-report.js`.
@@ -329,7 +360,7 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: H
                 console.warn('[coverage-js] raccolta non riuscita:', e);
             }
         },
-        {scope: 'test', auto: true},
+        {scope: 'test', auto: true, timeout: JS_COVERAGE_TIMEOUT_MS},
     ],
 });
 

@@ -36,12 +36,17 @@
  * assertion below is therefore paired, against the *same* value, with one that
  * the locale-formatted amount is absent.
  *
- * Locale: `toLocaleString(undefined, …)` follows the host process, so the
- * expected amount is built with the same call rather than frozen as
- * `1,234.50` — a literal would turn a de-DE runner into a red. What is pinned
- * is the composition (which parts, in which order, with which separators),
- * which is what this module is responsible for. The *masked* expectations are
- * exact strings, because a placeholder has no locale.
+ * Locale (M-18 CP2): the number is written in the interface locale — the UI
+ * language, regionalised by the browser (`uiLocale()`) — unless the caller
+ * passes `locale`; it no longer follows the host process. Node's
+ * `navigator.language` follows the host's ICU locale, so it is pinned to en-US
+ * before any import, as jsdom's always is: under the English UI the interface
+ * locale is en-US, and the expected amount is built by Intl for en-US rather
+ * than frozen as `1,234.50`. What is pinned in the privacy blocks is the
+ * composition (which parts, in which order, with which separators), which is
+ * what this module is responsible for; the notation is the last block's
+ * subject. The *masked* expectations are exact strings, because a placeholder
+ * has no locale.
  *
  * `getCurrencyInfo` reaches a session cache that is empty in a unit run (it
  * would fall back to `symbol === code`, `flag === '🏳️'`, and both are dropped
@@ -50,11 +55,17 @@
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import * as currencyStore from '$lib/stores/reference/currencyStore';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 
-import {formatCurrencyAmountHtml, formatCurrencyAmountPlain, formatCurrencyCodeHtml} from './currencyFormat';
+import {formatCurrencyAmountHtml, formatCurrencyAmountPlain, formatCurrencyCodeHtml, type CurrencyAmountFormatOptions} from './currencyFormat';
 
 const AMOUNT = 1234.5;
 
@@ -62,12 +73,17 @@ const AMOUNT = 1234.5;
 const USD: currencyStore.CurrencyInfo = {code: 'USD', name: 'US Dollar', symbol: '$', flag_emoji: '🇺🇸', country_codes: ['US'], country_names: ['United States']};
 /** A code whose symbol *is* the code and whose flag is the placeholder one: both get dropped. */
 const XAU: currencyStore.CurrencyInfo = {code: 'XAU', name: 'Gold', symbol: 'XAU', flag_emoji: '🏳️', country_codes: [], country_names: []};
+/** The currency of the notation block: a real symbol and a real flag, like USD. */
+const EUR: currencyStore.CurrencyInfo = {code: 'EUR', name: 'Euro', symbol: '€', flag_emoji: '🇪🇺', country_codes: [], country_names: []};
 
-const CURRENCIES: Record<string, currencyStore.CurrencyInfo> = {USD, XAU};
+const CURRENCIES: Record<string, currencyStore.CurrencyInfo> = {USD, XAU, EUR};
 
-/** The amount exactly as the formatter renders it on this host's locale. */
-function localAmount(value: number, fraction = 2): string {
-    return Math.abs(value).toLocaleString(undefined, {minimumFractionDigits: fraction, maximumFractionDigits: fraction});
+/** The interface locale of every block but the last: the English UI on the en-US browser stubbed above. */
+const UI_LOCALE = 'en-US';
+
+/** The amount exactly as the formatter writes it in `locale` — by default the interface locale of these tests. */
+function localAmount(value: number, fraction = 2, locale = UI_LOCALE): string {
+    return new Intl.NumberFormat(locale, {minimumFractionDigits: fraction, maximumFractionDigits: fraction}).format(Math.abs(value));
 }
 
 beforeEach(() => {
@@ -325,5 +341,126 @@ describe('formatCurrencyCodeHtml', () => {
 
         expect(html).toBe('<span class="currency-symbol">$</span> <span class="emoji-flag">🇺🇸</span> <span class="currency-code">USD</span>');
         expect(html).not.toContain(PRIVACY_PLACEHOLDER);
+    });
+});
+
+/**
+ * M-18 CP2 — the amount in the interface language.
+ *
+ * Numbers follow the UI language (the developer's rule of 2026-10-12). Both formatters wrote the
+ * number with `toLocaleString(undefined, …)` — the browser's locale — so an Italian UI on an English
+ * browser read `14,788.01` beside percentages CP1 already writes the Italian way. The cure:
+ *
+ *     CurrencyAmountFormatOptions.locale?: string        // defaults to uiLocale()
+ *
+ * the number is written in the interface locale unless the caller passes `locale`; the sign, the
+ * symbol, the flag, the code and the mask do not move, and zero still carries no sign.
+ *
+ * Expectations. Localized digits come from `Intl.NumberFormat` in this runtime, never typed: French
+ * puts U+202F between thousands, and which space ICU uses has changed between releases. English is
+ * typed where it is today's exact text — the browser is en-US, so the English UI keeps en-US notation.
+ * Each locale case also checks that its notation differs from English, or it would prove nothing.
+ *
+ * `locale` is passed through `WithLocale`, the options plus the field the cure adds, so the file
+ * type-checks before and after it.
+ *
+ * Language. `currentLanguage.set`, as LanguageSelector does, and back to English after each test.
+ */
+describe('currencyFormat — the number in the interface language (M-18 CP2)', () => {
+    type UiLanguage = 'en' | 'it' | 'fr';
+    type WithLocale = CurrencyAmountFormatOptions & {locale?: string};
+
+    /** Thousands and decimals: every separator of a notation shows. */
+    const VALUE = 14788.01;
+    /** Today's English text of VALUE. */
+    const ENGLISH = '14,788.01';
+
+    const EUR_SUFFIX = '€ 🇪🇺 EUR';
+    const EUR_HTML_SUFFIX = '<span class="currency-symbol">€</span> <span class="emoji-flag">🇪🇺</span> <span class="currency-code">EUR</span>';
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: UiLanguage): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    /** `text` with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(text: string): string {
+        return text.replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('English UI on an en-US browser (control): today’s exact text, 14,788.01', async () => {
+        await uiLanguage('en');
+
+        expect(localAmount(VALUE), 'control: Intl writes today’s English').toBe(ENGLISH);
+        expect(formatCurrencyAmountPlain(VALUE, 'EUR')).toBe(`${ENGLISH} ${EUR_SUFFIX}`);
+        expect(formatCurrencyAmountHtml(VALUE, 'EUR')).toBe(`<span class="currency-amount">${ENGLISH}</span> ${EUR_HTML_SUFFIX}`);
+    });
+
+    it.each(['it', 'fr'] as const)('%s UI: the number in that language’s notation, without passing a locale — plain and HTML', async (lang) => {
+        await uiLanguage(lang);
+        const expected = localAmount(VALUE, 2, lang);
+        expect(expected, `control: ${lang} notation differs from English`).not.toBe(ENGLISH);
+
+        const plain = formatCurrencyAmountPlain(VALUE, 'EUR');
+        const html = formatCurrencyAmountHtml(VALUE, 'EUR');
+
+        expect(plain, `plain: ${spelled(expected)}`).toContain(expected);
+        expect(plain).toBe(`${expected} ${EUR_SUFFIX}`);
+        expect(html, `HTML, inside the currency-amount span: ${spelled(expected)}`).toContain(`<span class="currency-amount">${expected}</span>`);
+        expect(html).toBe(`<span class="currency-amount">${expected}</span> ${EUR_HTML_SUFFIX}`);
+    });
+
+    it('Italian UI: the sign and the fraction options keep their meaning, only the notation moves', async () => {
+        await uiLanguage('it');
+        const italian = localAmount(VALUE, 2, 'it');
+        const fourDigits = new Intl.NumberFormat('it', {minimumFractionDigits: 0, maximumFractionDigits: 4}).format(12345.6789);
+
+        expect(formatCurrencyAmountPlain(VALUE, 'EUR', {showSign: true}), 'a gain').toBe(`+${italian} ${EUR_SUFFIX}`);
+        expect(formatCurrencyAmountPlain(-VALUE, 'EUR', {showSign: true}), 'a loss').toBe(`-${italian} ${EUR_SUFFIX}`);
+        expect(formatCurrencyAmountHtml(-VALUE, 'EUR', {showSign: true}), 'a loss, HTML').toBe(`<span class="currency-amount">-${italian}</span> ${EUR_HTML_SUFFIX}`);
+        // Zero carries no sign (CP1), in Italian notation.
+        expect(formatCurrencyAmountPlain(0, 'EUR', {showSign: true}), 'zero, unsigned').toBe(`${localAmount(0, 2, 'it')} ${EUR_SUFFIX}`);
+        expect(formatCurrencyAmountPlain(12345.6789, 'EUR', {minFraction: 0, maxFraction: 4}), 'up to four decimals').toBe(`${fourDigits} ${EUR_SUFFIX}`);
+    });
+
+    it('an explicit locale wins over the UI language: {locale: "fr"} writes French digits in an Italian UI', async () => {
+        await uiLanguage('it');
+        const french = localAmount(VALUE, 2, 'fr');
+        expect(french, 'control: French differs from Italian').not.toBe(localAmount(VALUE, 2, 'it'));
+        const FR: WithLocale = {locale: 'fr'};
+        const EN_US: WithLocale = {locale: 'en-US'};
+
+        expect(formatCurrencyAmountPlain(VALUE, 'EUR', FR), spelled(french)).toBe(`${french} ${EUR_SUFFIX}`);
+        expect(formatCurrencyAmountHtml(VALUE, 'EUR', FR), spelled(french)).toBe(`<span class="currency-amount">${french}</span> ${EUR_HTML_SUFFIX}`);
+        expect(formatCurrencyAmountPlain(VALUE, 'EUR', EN_US), 'and today’s English, on demand').toBe(`${ENGLISH} ${EUR_SUFFIX}`);
+    });
+
+    it('follows the UI language from one call to the next: it → fr → en', async () => {
+        const written: Record<string, string> = {};
+        for (const lang of ['it', 'fr', 'en'] as const) {
+            await uiLanguage(lang);
+            written[lang] = formatCurrencyAmountPlain(VALUE, 'EUR');
+        }
+
+        expect(written).toEqual({
+            it: `${localAmount(VALUE, 2, 'it')} ${EUR_SUFFIX}`,
+            fr: `${localAmount(VALUE, 2, 'fr')} ${EUR_SUFFIX}`,
+            en: `${ENGLISH} ${EUR_SUFFIX}`,
+        });
+    });
+
+    it('privacy hides the number in any notation: the Italian mask is the English one (control)', async () => {
+        await uiLanguage('it');
+        setPrivacyEnabled(true);
+
+        expect(formatCurrencyAmountPlain(VALUE, 'EUR')).toBe(`${PRIVACY_PLACEHOLDER} ${EUR_SUFFIX}`);
+        expect(formatCurrencyAmountPlain(-VALUE, 'EUR', {showSign: true})).toBe(`-${PRIVACY_PLACEHOLDER} ${EUR_SUFFIX}`);
+        expect(formatCurrencyAmountHtml(VALUE, 'EUR')).toBe(`<span class="currency-amount">${PRIVACY_PLACEHOLDER}</span> ${EUR_HTML_SUFFIX}`);
     });
 });

@@ -8,7 +8,7 @@ Un **broker** è uno dei tuoi conti — presso un'agenzia di intermediazione, un
 
 La pagina **Broker** mostra una scheda per broker, con il suo valore (**NAV**) nella valuta scelta in **Valuta** nella parte superiore della pagina. Fai clic su una scheda per aprire il broker.
 
-**Gain/Loss** è il NAV meno il capitale entrato nel broker: i tuoi depositi meno i prelievi, più il costo dei titoli che hai portato senza liquidità, più quanto hai spostato dagli altri tuoi broker meno quanto hai spostato verso di essi, ogni movimento valutato nel giorno in cui è arrivato. Così spostare denaro o titoli fra due dei tuoi broker non è un guadagno su una scheda e una perdita sull'altra, e finché un trasferimento è in transito il suo valore resta sulla scheda del broker che lo ha inviato. La liquidità detenuta in un'altra valuta è valutata all'ultimo tasso di cambio, quindi l'effetto del cambio su di essa entra nel Gain/Loss, non nel capitale. La percentuale tra parentesi è il guadagno su quel capitale: mostra 0.00% quando quel capitale è zero o negativo, per esempio quando il broker ha inviato più di quanto ha ricevuto. → [Trasferimenti interni](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
+**Gain/Loss** è il NAV meno il capitale entrato nel broker: i tuoi depositi meno i prelievi, più il costo dei titoli che hai portato senza liquidità, più quanto hai spostato dagli altri tuoi broker meno quanto hai spostato verso di essi, ogni movimento valutato nel giorno in cui è arrivato. Così spostare denaro o titoli fra due dei tuoi broker non è un guadagno su una scheda e una perdita sull'altra, e finché un trasferimento è in transito il suo valore resta sulla scheda del broker che lo ha inviato. La liquidità detenuta in un'altra valuta è valutata all'ultimo tasso di cambio, quindi l'effetto del cambio su di essa entra nel Gain/Loss, non nel capitale. La percentuale tra parentesi è il guadagno su quel capitale: mostra 0,00% quando quel capitale è zero o negativo, per esempio quando il broker ha inviato più di quanto ha ricevuto. → [Trasferimenti interni](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
 
 !!! note "I broker condivisi mostrano la tua quota"
 
@@ -89,10 +89,10 @@ Tornando a un broker che hai già aperto, vengono mostrate subito le sue ultime 
 La scheda **Posizioni** elenca ciò che detieni presso questo broker, nello stesso pannello delle [Posizioni della Dashboard](../dashboard/positions.md):
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-positions" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Posizioni (Tabella)" alt="Vista tabella posizioni broker">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Posizioni (Mappa / Treemap)" alt="Vista mappa posizioni broker">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Performance (Tabella)" alt="Vista tabella performance broker">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Performance (Mappa / Grafico)" alt="Vista mappa performance broker">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Portafoglio (Tabella)" alt="Vista tabella portafoglio broker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portafoglio (Mappa / Treemap)" alt="Vista mappa portafoglio broker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Periodo (Tabella)" alt="Vista tabella periodo broker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Periodo (Mappa / Grafico)" alt="Vista mappa periodo broker">
 </div>
 
 - **Portafoglio** mostra le tue posizioni (quantità, valore, peso); **Periodo** mostra i guadagni e le perdite di ogni posizione sulle date selezionate. Entrambi sono disponibili come **Tabella** o **Mappa**.

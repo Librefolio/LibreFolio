@@ -106,6 +106,8 @@
     import {onboardingGuide, type ImportGuideStepId} from '$lib/features/onboarding/onboardingGuide.svelte';
 
     import type {TransactionCreateItem, BrimFile, BrimParseResponse, BrimPlugin, BrimSetCombineResponse, BrimSetPreview, FilePreviewResponse} from '$lib/types';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Props
@@ -2101,7 +2103,7 @@
                     if (mt.duplicateStatus === 'likely') {
                         return {
                             type: 'html',
-                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 cursor-pointer"><span class="sm:hidden">⚠</span><span class="hidden sm:inline">${$t('importWizard.status.likelyDup')}</span></span>`,
+                            html: `<span data-duplicate-status="likely" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 cursor-pointer"><span class="sm:hidden">⚠</span><span class="hidden sm:inline">${$t('importWizard.status.likelyDup')}</span></span>`,
                             tooltip: {text: $t('importWizard.compareModal.openHint'), position: 'top', maxWidth: '260px'},
                             onClick: () => openBadgeCompare(mt),
                             testId: `import-wizard-compare-${mt.index}`,
@@ -2110,7 +2112,7 @@
                     if (mt.duplicateStatus === 'pending_duplicate') {
                         return {
                             type: 'html',
-                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-orange-100 text-orange-800 ring-1 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-700 cursor-pointer"><span class="sm:hidden">⧉</span><span class="hidden sm:inline">${$t('importWizard.status.pendingDuplicate')}</span></span>`,
+                            html: `<span data-duplicate-status="pending_duplicate" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-orange-100 text-orange-800 ring-1 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-700 cursor-pointer"><span class="sm:hidden">⧉</span><span class="hidden sm:inline">${$t('importWizard.status.pendingDuplicate')}</span></span>`,
                             tooltip: {text: $t('importWizard.status.tooltip.pendingDuplicate'), position: 'top', maxWidth: '300px'},
                             onClick: () => openBadgeCompare(mt),
                             testId: `import-wizard-compare-${mt.index}`,
@@ -2119,7 +2121,7 @@
                     if (mt.duplicateStatus === 'pending_possible_duplicate') {
                         return {
                             type: 'html',
-                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:ring-yellow-700 cursor-pointer"><span class="sm:hidden">≈</span><span class="hidden sm:inline">${$t('importWizard.status.possiblePendingDuplicate')}</span></span>`,
+                            html: `<span data-duplicate-status="pending_possible_duplicate" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:ring-yellow-700 cursor-pointer"><span class="sm:hidden">≈</span><span class="hidden sm:inline">${$t('importWizard.status.possiblePendingDuplicate')}</span></span>`,
                             tooltip: {text: $t('importWizard.status.tooltip.possiblePendingDuplicate'), position: 'top', maxWidth: '300px'},
                             onClick: () => openBadgeCompare(mt),
                             testId: `import-wizard-compare-${mt.index}`,
@@ -2128,7 +2130,7 @@
                     if (mt.duplicateStatus === 'possible') {
                         return {
                             type: 'html',
-                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 cursor-pointer"><span class="sm:hidden">ℹ</span><span class="hidden sm:inline">${$t('importWizard.status.possibleDup')}</span></span>`,
+                            html: `<span data-duplicate-status="possible" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 cursor-pointer"><span class="sm:hidden">ℹ</span><span class="hidden sm:inline">${$t('importWizard.status.possibleDup')}</span></span>`,
                             tooltip: {text: $t('importWizard.compareModal.openHint'), position: 'top', maxWidth: '260px'},
                             onClick: () => openBadgeCompare(mt),
                             testId: `import-wizard-compare-${mt.index}`,
@@ -2342,7 +2344,7 @@ ${arrow}<span>${label}</span></span>`,
                     const q = mt.tx.quantity;
                     if (!q || q === '0') return {type: 'html', html: '<span class="text-gray-400">—</span>'};
                     const n = parseFloat(q);
-                    const formatted = isNaN(n) ? q : parseFloat(n.toFixed(8)).toString();
+                    const formatted = isNaN(n) ? q : formatFixed(n, 8, {trim: true});
                     return {type: 'html', html: `<span class="font-mono text-sm">${formatted}</span>`};
                 },
             },
@@ -3770,7 +3772,7 @@ ${arrow}<span>${label}</span></span>`,
         const day = String(iso).slice(0, 10);
         const [year, month, date] = day.split('-').map(Number);
         if (!year || !month || !date) return day;
-        return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(undefined, {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
+        return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(uiLocale(), {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
     }
 
     function setRowLabel(set: ReportSetGroup, fileCount: number): string {

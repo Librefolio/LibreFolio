@@ -17,7 +17,10 @@
  * No translated text is asserted; `kpi-total-pnl-delta` and `kpi-returns` are
  * the structural anchors.
  */
-import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {flushSync, tick} from 'svelte';
+import {get} from 'svelte/store';
+import {locale, waitLocale} from 'svelte-i18n';
 
 vi.mock('$lib/api', () => ({
     zodiosApi: new Proxy(
@@ -31,9 +34,12 @@ vi.mock('$lib/api', () => ({
 }));
 
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import enCatalogue from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
 // Namespace import on purpose: the hydration context (page cache, phase 1) is read by name below, so
 // the F5 and V2 cases keep running while `TweenedValue.svelte` does not export it yet.
 import * as Tweened from '$lib/components/ui/TweenedValue.svelte';
+import {currentLanguage} from '$lib/stores/app/language';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import KpiSection from './KpiSection.svelte';
@@ -205,7 +211,9 @@ describe('KpiSection — daily change percentage (V2)', () => {
             renderDay({totalPnl: '0.005'}, {totalPnl: '1.005'});
             await dayLine();
 
-            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+20000.00%');
+            // Above a thousand percent the share is grouped the way the UI locale writes it (M-18): en-US here,
+            // jsdom's browser under the English UI.
+            expect(screen.getByTestId('kpi-pnl-delta-day-pct').textContent?.trim()).toBe('+20,000.00%');
         });
     });
 
@@ -536,5 +544,282 @@ describe('KpiSection — Returns card: a missing return reads «—», never 0 (
 
             await expectReturnsCard({twrrCum: EM_DASH, mwrrCum: EM_DASH, mwrrAnn: '30.00%', timing: EM_DASH, timingLabel: ''});
         });
+    });
+});
+
+/**
+ * M-18 CP1: the KPI percentages in the UI language.
+ *
+ * Numbers follow the UI language (the developer's rule of 2026-10-12). The Returns card prints its bars
+ * with a template literal around `toFixed(2)` (`fmtPct`: ROI, TWRR, MWRR), the Net Worth card its absolute
+ * ROI the same way (`absRoiPct`), so a French reader gets `50.00%` where French writes `50,00 %`. The two
+ * daily-change shares go through `formatPercent` without a `locale`, which until now meant the fixed
+ * English shape. The cure: the formatters' locale defaults to `uiLocale()`, and the hand-written sites go
+ * through them; same digits and same signs — no `+` where today's text has none — only the notation moves.
+ *
+ * Fixture. The file's summary: ROI 50%, TWRR 40%, absolute ROI 5%. A day whose total P&L rises from
+ * -558.10 to -466.79 on a NAV of 10 000: Card 1's share of yesterday's |P&L| and Card 2's share of
+ * yesterday's NAV, both signed, both mirrored from the card's own arithmetic rather than restated.
+ *
+ * Expectations. French strings come from `Intl.NumberFormat('fr', {style: 'percent', …})` in this runtime,
+ * never typed: Node puts U+00A0 before the `%`, a browser may put U+202F. English is today's exact text,
+ * typed: jsdom's browser is en-US, so the English UI keeps en-US notation.
+ *
+ * Language. Switched as LanguageSelector does — `currentLanguage.set`, which also drives svelte-i18n — with
+ * both dictionaries loaded first. KpiSection is a runes component, so its template, and TweenedValue's
+ * `format` call inside each bar, track whatever the formatter reads: the in-place test is what proves the
+ * default is read reactively, not merely right at mount. The bars tween; the page cache's hydration context
+ * puts every figure at its value on the first frame, so no read waits on an animation.
+ *
+ * Selection. By `data-testid`; the absolute ROI is the bracketed figure inside `kpi-total-pnl-delta`, beside
+ * an amount whose notation is not this block's subject and is not read. Timing effect (`… pp`) is left alone
+ * too. Nothing here reads translated text.
+ */
+describe('KpiSection — percentages in the UI language (M-18)', () => {
+    const hydration = Tweened as unknown as {TWEEN_HYDRATION_CONTEXT?: unknown};
+
+    /** Yesterday's and today's total P&L, and the NAV both days. */
+    const PREV_TOTAL_PNL = '-558.10';
+    const LAST_TOTAL_PNL = '-466.79';
+    const NAV = '10000';
+
+    /** The card's arithmetic: the day change as a share of |base|, in percent. */
+    const dayChange = Number(LAST_TOTAL_PNL) - Number(PREV_TOTAL_PNL);
+    const SHARE_OF_PNL = (dayChange / Math.abs(Number(PREV_TOTAL_PNL))) * 100;
+    const SHARE_OF_NAV = (dayChange / Math.abs(Number(NAV))) * 100;
+
+    type Reading = {roi: string; twrr: string; dayVsPnl: string; dayVsNav: string; absoluteRoi: string};
+
+    /** Today's English text, exactly. */
+    const ENGLISH: Reading = {roi: '50.00%', twrr: '40.00%', dayVsPnl: '+16.36%', dayVsNav: '+0.91%', absoluteRoi: '(+5.00%)'};
+
+    /** French notation, two digits, of a fraction. */
+    const french = (fraction: number): string => new Intl.NumberFormat('fr', {style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2}).format(fraction);
+    const FRENCH: Reading = {
+        roi: french(Number(summary().simple_roi_percent)),
+        twrr: french(Number(summary().twrr_percent)),
+        dayVsPnl: `+${french(SHARE_OF_PNL / 100)}`,
+        dayVsNav: `+${french(SHARE_OF_NAV / 100)}`,
+        absoluteRoi: `(+${french(Number(summary().total_gain_loss_percent))})`,
+    };
+
+    /** `text` with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    function historyPoint(date: string, totalPnl: string) {
+        return {
+            date,
+            cash_value: EUR('500'),
+            market_value: EUR('10000'),
+            nav_value: EUR(NAV),
+            capital_baseline: EUR('10000'),
+            book_asset_like: EUR('10000'),
+            cash_from_contributed_capital: EUR('400'),
+            cash_from_generated_returns: EUR('100'),
+            total_pnl: EUR(totalPnl),
+        };
+    }
+
+    /** The KPI row with yesterday and today in its history, every figure at its value on the first frame. */
+    function mountKpis(): void {
+        expect(hydration.TWEEN_HYDRATION_CONTEXT, 'control: TweenedValue exports its hydration context').toBeDefined();
+        render(KpiSection, {
+            props: {summary: summary(), history: [historyPoint('2026-10-05', PREV_TOTAL_PNL), historyPoint('2026-10-06', LAST_TOTAL_PNL)], loading: false, displayCurrency: 'EUR'},
+            context: new Map([[hydration.TWEEN_HYDRATION_CONTEXT, () => true]]),
+        });
+    }
+
+    /** Every percentage of this block, as the reader sees it. Trimmed only: a no-break space inside is the notation. */
+    function readPercentages(): Reading {
+        const text = (testId: string): string => (screen.getByTestId(testId).textContent ?? '').trim();
+        const bracketed = (screen.getByTestId('kpi-total-pnl-delta').textContent ?? '').match(/\([^()]*%\)/);
+        return {
+            roi: text('kpi-return-roi-value'),
+            twrr: text('kpi-return-twrr-cum-value'),
+            dayVsPnl: text('kpi-pnl-delta-day-pct'),
+            dayVsNav: text('kpi-returns-delta-pct'),
+            absoluteRoi: bracketed ? bracketed[0] : '(no bracketed percentage)',
+        };
+    }
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: 'en' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; French joins it, so a switch never waits on a loader.
+        await waitLocale('fr');
+        // Control: this runtime has French ICU data, so every French figure differs from today's text.
+        for (const key of Object.keys(ENGLISH) as Array<keyof Reading>) {
+            expect(FRENCH[key], `${key}: French notation differs from English`).not.toBe(ENGLISH[key]);
+        }
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('English UI (control): every percentage prints exactly today’s text', () => {
+        mountKpis();
+
+        expect(readPercentages()).toEqual(ENGLISH);
+    });
+
+    it('mounted with the UI in French: every percentage in French notation', async () => {
+        await switchLanguage('fr');
+        mountKpis();
+
+        expect(readPercentages(), `French notation, ${spelled(FRENCH)}`).toEqual(FRENCH);
+    });
+
+    it('follows an in-place switch of the UI language, en → fr → en', async () => {
+        mountKpis();
+        expect(readPercentages(), 'en, mount — today’s text').toEqual(ENGLISH);
+
+        await switchLanguage('fr');
+        expect(readPercentages(), `en → fr in place — French notation, ${spelled(FRENCH)}`).toEqual(FRENCH);
+
+        await switchLanguage('en');
+        expect(readPercentages(), 'fr → en in place — today’s text again').toEqual(ENGLISH);
+    });
+});
+
+/**
+ * M-18 CP2: the KPI amounts and the timing effect in the UI language.
+ *
+ * Amounts follow the UI language like the percentages of CP1 (the developer's rule of 2026-10-12). Every
+ * money figure of the row goes through `formatCurrencyAmountPlain`, which wrote its number with
+ * `toLocaleString(undefined, …)` — the browser's notation, never the UI's. Timing effect
+ * (`kpi-timing-effect-value`, `mwrr_cum − twrr` in percentage points) is written by hand in the template
+ * the same way, and puts a `+` before every value not below zero, zero included. The cure: the
+ * formatter's number defaults to `uiLocale()`, the timing effect takes its number from the same source,
+ * and zero carries no sign (CP1's rule); the unit stays `dashboard.pp`.
+ *
+ * Fixture. The file's summary: net worth 10 500 EUR; TWRR 40% and MWRR cumulative 45%, a timing effect of
+ * +5 pp; and a variant with both returns at 40%, a timing effect of exactly zero.
+ *
+ * Subjects. Card 3's hero (`kpi-net-worth` → `kpi-value`), the net worth through
+ * `formatCurrencyAmountPlain(…, 'EUR')`: no currency cache is loaded here, so the amount is followed by
+ * its code alone, a composition the English control pins on today's exact text. Timing effect, read
+ * whole: sign and number, then the unit read from the shipped catalogue of the step's language.
+ *
+ * Expectations. Italian digits come from `Intl.NumberFormat('it', …)` in this runtime, never typed;
+ * English is today's exact text, typed — jsdom's browser is en-US, so the English UI keeps en-US notation.
+ *
+ * Language. Switched as LanguageSelector does — `currentLanguage.set` — with both catalogues loaded first.
+ * KpiSection is a runes component: the in-place test is what proves the figures read the UI language
+ * reactively, not merely right at mount. The page cache's hydration context puts every figure at its
+ * value on the first frame, so no read waits on an animation.
+ */
+describe('KpiSection — amounts and the timing effect in the UI language (M-18 CP2)', () => {
+    const hydration = Tweened as unknown as {TWEEN_HYDRATION_CONTEXT?: unknown};
+    type UiLanguage = 'en' | 'it';
+    /** The interface locale of each language here: jsdom's browser is en-US. */
+    const LOCALE_OF: Record<UiLanguage, string> = {en: 'en-US', it: 'it'};
+    const CATALOGUES = {en: enCatalogue, it: itCatalogue};
+
+    const NET_WORTH = Number(summary().net_worth.amount);
+    /** mwrr_cumulative − twrr of the file's summary, in percentage points: 45 − 40. */
+    const TIMING_PP = 5;
+
+    type Reading = {netWorth: string; timing: string};
+
+    /** Today's English text, exactly. */
+    const ENGLISH: Reading = {netWorth: '10,500.00 EUR', timing: '+5.00 pp'};
+
+    /** Two decimals, in `locale`'s notation. */
+    const twoDecimals = (locale: string, value: number): string => new Intl.NumberFormat(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
+    /** The unit of the timing effect, as the shipped catalogue of `lang` writes it. */
+    const ppIn = (lang: UiLanguage): string => CATALOGUES[lang].dashboard.pp;
+    /** What the two figures read in `lang`. */
+    const readingIn = (lang: UiLanguage): Reading => ({
+        netWorth: `${twoDecimals(LOCALE_OF[lang], NET_WORTH)} EUR`,
+        timing: `+${twoDecimals(LOCALE_OF[lang], TIMING_PP)} ${ppIn(lang)}`,
+    });
+    const ITALIAN = readingIn('it');
+
+    const netWorthHero = (): HTMLElement => within(screen.getByTestId('kpi-net-worth')).getByTestId('kpi-value');
+    const timingEffect = (): HTMLElement => within(screen.getByTestId('kpi-returns')).getByTestId('kpi-timing-effect-value');
+    /** Trimmed only: a no-break space inside is the notation. */
+    const shown = (element: HTMLElement): string => (element.textContent ?? '').trim();
+    const readFigures = (): Reading => ({netWorth: shown(netWorthHero()), timing: shown(timingEffect())});
+
+    /** The KPI row, every figure at its value on the first frame. */
+    function mountKpis(overrides: Partial<ReturnType<typeof summary>> = {}): void {
+        expect(hydration.TWEEN_HYDRATION_CONTEXT, 'control: TweenedValue exports its hydration context').toBeDefined();
+        render(KpiSection, {
+            props: {summary: {...summary(), ...overrides}, history: [], loading: false, displayCurrency: 'EUR'},
+            context: new Map([[hydration.TWEEN_HYDRATION_CONTEXT, () => true]]),
+        });
+    }
+
+    /** Change the UI language as LanguageSelector does, then flush. The controls name the layer if the language did not move. */
+    async function switchLanguage(lang: UiLanguage): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; Italian joins it, so a switch never waits on a loader.
+        await waitLocale('it');
+        // Controls: today's English is what Intl writes for en-US, and this runtime has Italian ICU data.
+        expect(readingIn('en'), 'English, from Intl and the catalogue').toEqual(ENGLISH);
+        expect(ITALIAN.netWorth, 'the Italian net worth differs from English').not.toBe(ENGLISH.netWorth);
+        expect(ITALIAN.timing, 'the Italian timing effect differs from English').not.toBe(ENGLISH.timing);
+    });
+
+    beforeEach(() => {
+        // A masked amount has no notation: privacy is module-level state, off for this block.
+        setPrivacyEnabled(false);
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('English UI (control): the net worth and the timing effect print exactly today’s text', () => {
+        mountKpis();
+
+        expect(readFigures()).toEqual(ENGLISH);
+    });
+
+    it('mounted with the UI in Italian: the net worth and the timing effect in Italian notation', async () => {
+        await switchLanguage('it');
+        mountKpis();
+
+        expect(readFigures()).toEqual(ITALIAN);
+    });
+
+    it('follows an in-place switch of the UI language, en → it → en', async () => {
+        mountKpis();
+        expect(readFigures(), 'en, mount — today’s text').toEqual(ENGLISH);
+
+        await switchLanguage('it');
+        expect(readFigures(), 'en → it in place — Italian notation').toEqual(ITALIAN);
+
+        await switchLanguage('en');
+        expect(readFigures(), 'it → en in place — today’s text again').toEqual(ENGLISH);
+    });
+
+    it.each(['en', 'it'] as const)('a timing effect of exactly zero carries no sign (%s)', async (lang) => {
+        await switchLanguage(lang);
+        // Both returns at 40%: mwrr_cum − twrr is exactly 0.
+        mountKpis({twrr_percent: '0.40', mwrr_cumulative_percent: '0.40'});
+
+        expect(shown(timingEffect())).toBe(`${twoDecimals(LOCALE_OF[lang], 0)} ${ppIn(lang)}`);
     });
 });

@@ -261,8 +261,8 @@ test.describe('Starting currency: the Default Currency of the user (R2 / N)', ()
     test.beforeEach(async ({page}) => {
         reads = await stubDefaultCurrencies(page);
         await login(page, TEST_USER);
-        // `login` returns as the login card hides, while its bootstrap is still reading the settings through the stub.
-        // The app shell is the end of that bootstrap: past it no read of the login is left to land in a test's tally.
+        // `login` returns once the app has arrived — the app shell, the end of its bootstrap, which read the settings
+        // through the stub — so no read of the login is left to land in a test's tally. The wait below pins that landing.
         await expect(page.getByTestId('app-shell'), 'the app did not start on the stubbed settings after the login').toBeVisible({timeout: PAGE_TIMEOUT});
         // The login lands on a live Dashboard that is already asking for its report. Unloaded before any test loads its
         // page, so that nothing it still has in flight can pass for the request of the page under test.

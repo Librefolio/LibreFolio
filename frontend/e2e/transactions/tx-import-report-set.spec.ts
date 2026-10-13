@@ -487,8 +487,8 @@ function uploadNamed(uploaded: UploadedInfo[], filename: string): UploadedInfo {
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
     await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /** The wizard is open, on step 1, settled. */

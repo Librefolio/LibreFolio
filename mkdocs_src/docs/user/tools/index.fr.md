@@ -7,7 +7,7 @@ description: Ce qu'est un Outil, les outils disponibles aujourd'hui, et comment 
 
 Un **Outil** est un calcul autonome : vous fournissez les données d'une opération, et il renvoie un résultat ou une erreur structurée. Ce n'est pas une instruction visant à modifier votre portefeuille.
 
-La plateforme Outils est **expérimentale**. Le catalogue ne propose actuellement qu'**un seul**
+La plateforme Outils est **stable** et encore en cours de perfectionnement. Le catalogue ne propose actuellement qu'**un seul**
 outil :
 
 | Outil | Ce qu'il fait |

@@ -77,11 +77,11 @@ via `CHANGED_POINTS_PAYLOAD_CAP`). Semantics:
 
 Backend implementation in `backend/app/schemas/refresh.py` + `backend/app/services/asset_source.py`.
 Frontend's live-poll now merges the polled point directly into the chart store
-without triggering a full series reload (commit `ddb1fcfb` — "silent-sync detour
+without triggering a full series reload (commit `93a88be2c` — "silent-sync detour
 removed"). The previous "silent sync" pattern compared the provider fetch with the
 freshly-written DB row and produced spurious `changed_points=None`.
 
-### 4.g — #9 ErasableNumberCell `null` semantics (commit `83328b6b`)
+### 4.g — #9 ErasableNumberCell `null` semantics (commit `c64217c95`)
 
 `ErasableNumberCell` was rendering "0" instead of the empty placeholder when a
 draft value was cleared. Fix: declare the draft as `$state<number | null>` (not
@@ -115,7 +115,7 @@ Full backend test coverage for Phase 07 Part 3. Scope after audit:
 
 Trigger: a full coverage run after G-batch5 closed showed **8 production functions
 still at 0% coverage** despite contracts shipped. G-batch6 added 17 tests in three
-new files (commit `c943f219`):
+new files (commit `bf0234145`):
 
 | Test file | Area | Tests |
 |-----------|------|-------|
@@ -137,7 +137,7 @@ errors as **HTTP 500** instead of the intended 404.
 - **Filed as**: [[problems/assets-wipe-error-attr-mismatch]]
 - **Test that caught it**: `test_market_data_wipe.py::test_wipe_unknown_asset_returns_404`
 
-## G-batch7 — Audit-driven gap-fill (2026-04-25, commit `a61b0dfa`)
+## G-batch7 — Audit-driven gap-fill (2026-04-25, commit `4ddf7797a`)
 
 After G-batch6, an audit identified 6 partially-covered production hotspots worth
 covering (high value/cost ratio). 22 new tests added across 6 suites, taking

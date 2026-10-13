@@ -14,6 +14,14 @@ import {todayIso} from '../fixtures/dates';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxPage, openAddPairModal, selectCurrency} from './fx-helpers';
 
+/**
+ * Budget for a client-side navigation to land. SvelteKit first fetches the route's chunks from the test
+ * backend and runs its load, then changes the URL and mounts the page: a round trip plus a mount, not a
+ * localhost assertion. The 3 s expect default lost that race under load (R, 12/10: `fx-detail-page` still
+ * absent 3 s after the card click, the list on screen); 15 s is what `goToFxDetailPage` gives the same page.
+ */
+const NAVIGATION_TIMEOUT_MS = 15_000;
+
 test.describe('FX Add Pair Modal', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
@@ -216,8 +224,9 @@ test.describe('FX Add Pair Modal', () => {
                             await expect.poll(() => initialListReads.length).toBe(1);
                             enteringDetail = true;
                             await page.getByTestId(`fx-card-${slug}`).click();
+                            // The navigation has landed when the detail publishes the pair it mounted for.
+                            await expect(detail).toHaveAttribute('data-chart-pair', slug, {timeout: NAVIGATION_TIMEOUT_MS});
                             await expect(detail).toBeVisible();
-                            await expect(detail).toHaveAttribute('data-chart-pair', slug);
                             await expect.poll(() => initialDetailReads.length).toBe(1);
                             await expect(detail).toHaveAttribute('data-busy', 'true');
                             await expect(detail).toHaveAttribute('data-chart-last-rate', '');
@@ -233,7 +242,7 @@ test.describe('FX Add Pair Modal', () => {
                             // A native SPA navigation unmounts the host, not the
                             // browser runtime holding the detached sync request.
                             await page.getByTestId('sidebar-user-avatar').click();
-                            await expect(page.getByTestId('settings-page')).toBeVisible();
+                            await expect(page.getByTestId('settings-page')).toBeVisible({timeout: NAVIGATION_TIMEOUT_MS});
                             await expect(fxPage).toBeHidden();
                         }
                         const readsBefore = rateReads.length;
@@ -281,11 +290,11 @@ test.describe('FX Add Pair Modal', () => {
                                 // conversion may repair an overwritten cached value.
                                 const readsBeforeReentry = rateReads.length;
                                 await detail.getByTestId('fx-detail-back-btn').click();
-                                await expect(fxPage).toBeVisible();
+                                await expect(fxPage).toBeVisible({timeout: NAVIGATION_TIMEOUT_MS});
                                 await expect(fxPage).toHaveAttribute('data-busy', 'false');
                                 await page.getByTestId(`fx-card-${slug}`).click();
+                                await expect(detail).toHaveAttribute('data-chart-pair', slug, {timeout: NAVIGATION_TIMEOUT_MS});
                                 await expect(detail).toBeVisible();
-                                await expect(detail).toHaveAttribute('data-chart-pair', slug);
                                 await expect(detail).toHaveAttribute('data-chart-last-rate', '0.85');
                                 await expect(detail).toHaveAttribute('data-busy', 'false');
                                 expect(rateReads).toHaveLength(readsBeforeReentry);
@@ -315,7 +324,8 @@ test.describe('FX Add Pair Modal', () => {
                         // race proves refresh without relying on another click.
                         // Do not make cache re-entry race a toast expiry timer.
                         await link.click();
-                        await expect(page).toHaveURL(new RegExp(`/fx/${slug}(?:\\?|$)`));
+                        // SvelteKit changes the URL once the route has loaded, so this is the navigation's wait.
+                        await expect(page).toHaveURL(new RegExp(`/fx/${slug}(?:\\?|$)`), {timeout: NAVIGATION_TIMEOUT_MS});
                         await expect(page.getByTestId('fx-detail-page')).toBeVisible();
                     }
                 } finally {

@@ -40,6 +40,7 @@ from backend.app.services.ai_export.temporal.policy import (  # noqa: E402
     BucketingPolicy,
 )
 from backend.app.services.auth_service import hash_password, verify_password  # noqa: E402
+from scripts.i18n_catalog import build as build_i18n_catalog  # noqa: E402
 
 DEFAULT_SOURCE_DB = PROJECT_ROOT / "backend" / "data" / "prod" / "sqlite" / "app.db"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "LibreFolio_developer_journal" / "Release_2" / "Phase_0" / "01_signalMigration" / "02_aiExport" / "real_prompt_probe"
@@ -1997,6 +1998,9 @@ class FrontendBridge:
     def __enter__(self) -> FrontendBridge:
         if not self.script_path.exists():
             raise ProbeError(f"Frontend bridge not found: {self.script_path}")
+        # The bridge reads src/lib/i18n/<locale>.json, the catalogue the UI ships, generated from its sources.
+        if build_i18n_catalog(quiet=True) != 0:
+            raise ProbeError("Frontend translation catalogue could not be generated (problems above)")
         self.process = subprocess.Popen(
             ["node", "--no-deprecation", str(self.script_path)],
             cwd=PROJECT_ROOT,

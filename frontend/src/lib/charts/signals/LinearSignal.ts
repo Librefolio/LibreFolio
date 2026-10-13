@@ -13,6 +13,7 @@
 
 import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 
 export class LinearSignal extends ChartSignal {
     static override signalType = 'linear';
@@ -30,7 +31,7 @@ export class LinearSignal extends ChartSignal {
             min: -100,
             max: 1000,
             step: 0.5,
-            suffix: '%/yr',
+            suffix: 'percentPerYear',
             tooltip: 'chartSettings.tooltips.annualRate',
         },
         {
@@ -65,13 +66,13 @@ export class LinearSignal extends ChartSignal {
     }
 
     getLabel(): string {
-        const rate = this.params.annualRate ?? 2;
+        const rate = Number(this.params.annualRate ?? 2);
         const offset = Number(this.params.offset ?? 0);
+        const label = ChartSignal.text('chartSettings.signals.linearLabel', {rate: formatPercent(rate, {signed: false, trim: true})});
         // The sign travels with the number: a hard-coded `+` in front of a
         // negative offset reads as `+-5%`, which users reported. The
         // descriptor allows `min: -100`, so a benchmark below the start is a
         // legitimate thing to draw.
-        const offsetStr = offset !== 0 ? ` ${offset > 0 ? '+' : ''}${offset}%` : '';
-        return `Linear ${rate}%/yr${offsetStr}`;
+        return offset !== 0 ? `${label} ${formatPercent(offset, {trim: true})}` : label;
     }
 }

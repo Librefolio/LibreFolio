@@ -1285,6 +1285,10 @@
             <!-- In oneColumn (phones) the four filters share each row instead of keeping their
                  176/160 px: two of them no longer fit side by side below a ~314 px bar. -->
             {@const filterWidthClass = layoutMode === 'oneColumn' ? 'flex-1 min-w-0' : 'w-44 min-w-[160px]'}
+            <!-- The Active/Inactive pill never goes below its two labels: where half the row is
+                 too narrow for them (Spanish below ~370 px, English and French at 320–330 px), it
+                 takes its own width and Search gives up the rest. -->
+            {@const pillWidthClass = layoutMode === 'oneColumn' ? 'flex-1 min-w-max' : 'w-44 min-w-[160px]'}
             <!-- DateRangePicker. Round 14 bugfix: this wrapper is `contents` (exits the box
                  model — data-testid stays queryable, it's just a DOM attribute) rather than
                  `flex flex-1 ...` — DateRangePicker's own root ALREADY self-applies
@@ -1335,8 +1339,10 @@
                              no filter client-side). Only-one pressed → filter to that state.
                              Round 15: fixed w-44 (matches Search above and the Currency filter
                              below, once swapped) + flex-1 buttons so the pill splits evenly and
-                             lines up as a column with Row 2 in every language. -->
-                        <div class="flex {filterWidthClass} rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="assets-active-filter">
+                             lines up as a column with Row 2 in every language. On phones
+                             (oneColumn) it shares the row with Search and keeps that column only
+                             while its labels fit half the row (lot 51, R-1). -->
+                        <div class="flex {pillWidthClass} rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="assets-active-filter">
                             <button
                                 type="button"
                                 class="flex-1 px-3 py-1.5 text-xs font-medium border-r border-gray-200 dark:border-slate-600 transition-colors whitespace-nowrap

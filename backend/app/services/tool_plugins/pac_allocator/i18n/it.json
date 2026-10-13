@@ -1,0 +1,8 @@
+{
+  "tools": {
+    "pacAllocator": {
+      "name": "Allocatore PAC",
+      "description": "Pianifica gli acquisti che portano un nuovo investimento il più vicino possibile all'allocazione obiettivo, in quote intere o importi, senza inviare ordini."
+    }
+  }
+}

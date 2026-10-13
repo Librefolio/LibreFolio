@@ -482,6 +482,93 @@ describe('ChartSignalsSection — allowed signal types', () => {
     });
 });
 
+describe('ChartSignalsSection — the units of a local benchmark’s parameters are worded by the catalogue (T-EN2)', () => {
+    /*
+     * The section draws the numeric controls of the local benchmarks (Linear, Compound, Sine) in a branch of
+     * its own, and writes there each descriptor's `suffix` as it is: `%/yr` and `days` whatever the interface
+     * language. The backend branch (`SignalParamControl`) already words its unit through
+     * `signals.units.<suffix>`, keeping the raw suffix when the catalogue has no such key.
+     *
+     * The contract: the local branch words its unit the same way, and the descriptors carry tokens —
+     * Linear's and Compound's `annualRate` the token `percentPerYear`, Sine's `period` the token `days`
+     * (as today); `%` names no key and stays `%`. The descriptors are the registry's own: no definitions are
+     * passed, so the section reads `getRegisteredSignalTypes()`. A unit is a word, not a figure, so the
+     * catalogue alone decides it: the language is switched through svelte-i18n, as in the rest of this file.
+     *
+     * Handles: a control is `signal-param-<signal id>-<param key>`, and its unit is the element right after
+     * its number input. The expected words are the catalogue's (`$_`), never typed.
+     *
+     * Red today: in Italian and in French the rate reads `%/yr` and the period `days`.
+     */
+    const LANGUAGES = ['it', 'fr'] as const;
+    const benchmarkStyle: SignalConfig['style'] = {color: '#3b82f6', lineWidth: 1, lineType: 'dashed', markerStart: null, markerEnd: null};
+    /** One card per local benchmark, each on its declared defaults. */
+    const BENCHMARKS: SignalConfig[] = [
+        {id: 'bench-linear', signalType: 'linear', params: {annualRate: 2, offset: 0}, style: benchmarkStyle},
+        {id: 'bench-compound', signalType: 'compound', params: {annualRate: 8, offset: 0}, style: benchmarkStyle},
+        {id: 'bench-sine', signalType: 'sine', params: {amplitude: 15, period: 45, offset: 0}, style: benchmarkStyle},
+    ];
+
+    afterEach(async () => {
+        await setupI18n('en');
+    });
+
+    /** Mount the three benchmark cards in `lang`. */
+    async function mountBenchmarks(lang: 'en' | (typeof LANGUAGES)[number]): Promise<void> {
+        await setupI18n(lang);
+        render(ChartSignalsSection, {signals: BENCHMARKS});
+        for (const {id} of BENCHMARKS) expect(screen.getByTestId(`signal-card-${id}`), `barrier: the card ${id} is drawn`).toBeInTheDocument();
+    }
+
+    /** The unit written after the number input of the `key` control of the card `signalId`. */
+    function unitOf(signalId: string, key: string): string | null {
+        const control = screen.getByTestId(`signal-param-${signalId}-${key}`);
+        const inputs = control.querySelectorAll('input[type="number"]');
+        expect(inputs, `the ${key} control of ${signalId} holds one number input`).toHaveLength(1);
+        return inputs[0].nextElementSibling?.textContent?.trim() ?? null;
+    }
+
+    /** A unit as the catalogue words it, after checking the catalogue has it: a missing key would read as the key itself. */
+    function unitWord(key: string): string {
+        const word = get(t)(key);
+        expect(word, `premise: the catalogue has ${key}`).not.toBe(key);
+        return word;
+    }
+
+    it.each(LANGUAGES)('%s interface: the annual rate of Linear and Compound reads signals.units.percentPerYear, the period of Sine signals.units.days', async (lang) => {
+        await mountBenchmarks(lang);
+        const perYear = unitWord('signals.units.percentPerYear');
+        const days = unitWord('signals.units.days');
+
+        expect({linearRate: unitOf('bench-linear', 'annualRate'), compoundRate: unitOf('bench-compound', 'annualRate'), sinePeriod: unitOf('bench-sine', 'period')}, `the units are not the ${lang} catalogue's: the local branch writes the descriptor's raw suffix`).toEqual({
+            linearRate: perYear,
+            compoundRate: perYear,
+            sinePeriod: days,
+        });
+    });
+
+    it.each(LANGUAGES)('%s interface: a percentage names no catalogue key and stays % (guard)', async (lang) => {
+        await mountBenchmarks(lang);
+
+        expect({
+            linearOffset: unitOf('bench-linear', 'offset'),
+            compoundOffset: unitOf('bench-compound', 'offset'),
+            sineAmplitude: unitOf('bench-sine', 'amplitude'),
+            sineOffset: unitOf('bench-sine', 'offset'),
+        }).toEqual({linearOffset: '%', compoundOffset: '%', sineAmplitude: '%', sineOffset: '%'});
+    });
+
+    it('English interface: the rate and the period read as they do today, the English catalogue’s words (guard)', async () => {
+        await mountBenchmarks('en');
+
+        expect({linearRate: unitOf('bench-linear', 'annualRate'), compoundRate: unitOf('bench-compound', 'annualRate'), sinePeriod: unitOf('bench-sine', 'period')}).toEqual({
+            linearRate: unitWord('signals.units.percentPerYear'),
+            compoundRate: unitWord('signals.units.percentPerYear'),
+            sinePeriod: unitWord('signals.units.days'),
+        });
+    });
+});
+
 function mountCustomAestheticBounds() {
     const onchange = vi.fn();
     render(ChartAestheticsSection, {

@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_fineco": {
+      "description": "Importa le transazioni dall’export CSV «Movimenti Dossier Titoli» di FinecoBank. Supporta entrambi i formati di export (con e senza commissioni), acquisti, vendite, dividendi, cedole, rimborsi e aumenti di capitale. Gli importi sono importati tali e quali, nella valuta indicata dal broker (senza conversione di cambio).",
+      "name": "Fineco"
+    }
+  }
+}

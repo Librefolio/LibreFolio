@@ -390,7 +390,8 @@ test.describe('Gallery Screenshots', () => {
          */
         async function openLoginPage(page: Page, lang?: Language): Promise<void> {
             await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            // The app's first load (the splash, then the catalogue) took more than 3 s on a loaded machine's phone.
+            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 30_000});
             if (lang) await expect(page.locator('html'), 'the language survived the load').toHaveAttribute('lang', lang);
             await freezeAnimations(page);
         }
@@ -1663,6 +1664,22 @@ test.describe('Gallery Screenshots', () => {
             expect(guard.catalogueReads, `the offline guard did not answer a provider catalogue read made under ${new URL(page.url()).origin}`).toBeGreaterThan(reads);
         }
 
+        /**
+         * Rest the pointer on the open details' own right padding: on the indicator, whose pointer holds the details' 30 s
+         * countdown (ConnectionSecurityIndicator, plan 48 C3), and on nothing that reacts to it — the toggle has a hover
+         * background, the link a hover colour, the reason a title. parkPointer's right edge would leave the indicator and
+         * start the countdown before the shot. Ends on the spot being the details themselves, and on no tooltip shown.
+         */
+        async function restPointerOnDetails(page: Page, details: Locator): Promise<void> {
+            const box = await details.boundingBox();
+            if (!box) throw new Error('the details are not on screen');
+            const spot = {x: Math.floor(box.x + box.width) - 4, y: Math.round(box.y + box.height / 2)};
+            await page.mouse.move(spot.x, spot.y);
+            const onDetails = await details.evaluate((element, {x, y}) => document.elementFromPoint(x, y) === element, spot);
+            expect(onDetails, 'the pointer rests on the details themselves, not on the reason, the link or anything over them').toBe(true);
+            await expect(page.getByTestId('tooltip-content'), 'a tooltip lies over the shot').toHaveCount(0);
+        }
+
         test('connection indicator on a local network - all languages and themes', async ({page, baseURL}, testInfo) => {
             const viewport = getViewport(testInfo);
             const lane = laneOrigin(baseURL);
@@ -1719,11 +1736,14 @@ test.describe('Gallery Screenshots', () => {
                 await canvasStill(page.getByTestId('growth-chart'), 'the growth chart');
                 await imagesSettled(page.getByTestId('app-shell'));
                 await waitForMotionSettled(page.getByTestId('app-shell'), 'the page');
-                await parkPointer(page);
+                // The pointer stays on the indicator, so the details' countdown never starts before the shot.
+                await restPointerOnDetails(page, details);
                 await expectNoToast(page);
                 await expect(line, 'the whole line is on screen: the level, the reason and the link').toBeInViewport({ratio: 1});
                 await expectUncovered(link, 'the How to connect securely link');
                 await screenshot(page, viewport, lang, theme, 'security', 'connection-indicator');
+                // Nothing reopens the details without a click: open now, so open in the picture.
+                await expect(toggle, 'the details stayed open through the shot').toHaveAttribute('aria-expanded', 'true');
 
                 // The next combination's language and theme are set from the header, which the open drawer covers: it closes
                 // as a user closes it, by picking the page it shows.
@@ -2621,6 +2641,7 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/transactions');
+                await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                 await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                 await waitForNetworkSettled(page);
                 await freezeAnimations(page);
@@ -2637,6 +2658,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
@@ -2739,6 +2761,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     // Open Add form ONCE for this combo
@@ -2776,6 +2799,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
@@ -2819,6 +2843,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
@@ -2870,6 +2895,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
@@ -2918,6 +2944,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions?types=WITHDRAWAL,DEPOSIT&page_size=50');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await waitForNetworkSettled(page);
                     await page.waitForTimeout(1500); // Wait for type store to load
@@ -2993,6 +3020,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
@@ -3290,6 +3318,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
@@ -3325,6 +3354,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     // Open ImportWizardModal
@@ -3366,6 +3396,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     // Open ImportWizardModal
@@ -3439,6 +3470,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     await page.getByTestId('tx-import-button').click();
@@ -3514,6 +3546,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await waitForNetworkSettled(page);
                     await freezeAnimations(page);
@@ -3593,6 +3626,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     try {
@@ -4778,7 +4812,7 @@ test.describe('Gallery Screenshots', () => {
                 await selectOneYearDateRange(page);
                 await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                 // The live prices are not part of the list's data-busy: wait for this load's, drawn on the cards.
-                await expectOfflinePricesDrawn(page, polled);
+                await expectOfflinePricesDrawn(page, polled, lang);
                 await freezeAnimations(page);
                 await page.waitForTimeout(1500);
                 await screenshot(page, viewport, lang, theme, 'assets', 'list');
@@ -4795,7 +4829,7 @@ test.describe('Gallery Screenshots', () => {
                     await goToAssetsPage(page);
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
-                    await expectOfflinePricesDrawn(page, polled);
+                    await expectOfflinePricesDrawn(page, polled, lang);
                     await freezeAnimations(page);
 
                     // Switch to table view
@@ -4823,7 +4857,7 @@ test.describe('Gallery Screenshots', () => {
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
                     // Before the search, while every card stands still: the ETFs it keeps show the fixture's prices.
-                    await expectOfflinePricesDrawn(page, polled);
+                    await expectOfflinePricesDrawn(page, polled, lang);
                     await freezeAnimations(page);
 
                     // Type search text
@@ -5562,7 +5596,11 @@ test.describe('Gallery Screenshots', () => {
                     // Open create modal
                     await page.getByTestId('assets-add-button').click();
                     await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
-                    await page.waitForTimeout(500);
+                    // The search providers' chips come with the catalogue, after the form: a fit measured before them
+                    // left their row (32 px) hidden in the dialog's body.
+                    const createModal = page.getByTestId('asset-modal');
+                    await expect(createModal.locator('[data-testid^="asset-search-provider-"]').first(), 'the search providers never arrived').toBeVisible({timeout: 15_000});
+                    await imagesSettled(createModal);
                     // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the body is the form's box.
                     if (viewport === 'desktop') await fitScreenToDialog(page, page.getByTestId('asset-modal'), `desktop/${lang}/${theme}/assets/create-modal`, {body: page.getByTestId('asset-modal-form').locator('..')});
                     await screenshot(page, viewport, lang, theme, 'assets', 'create-modal');
@@ -5743,6 +5781,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     // Open wizard from transactions import button

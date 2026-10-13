@@ -150,7 +150,7 @@
         {/if}
     </div>
 
-    <div class="modal-footer">
+    <div class="modal-footer" data-testid="import-broker-mismatch-footer">
         <button type="button" class="btn btn-danger-outline" onclick={onRemove} disabled={busy} data-testid="import-broker-mismatch-remove">
             {$t('importWizard.brokerMismatch.remove')}
         </button>
@@ -161,7 +161,7 @@
         {#if selectedTarget}
             <button type="button" class="btn btn-primary" onclick={() => selectedTarget && onMove(selectedTarget.id)} disabled={busy} data-testid="import-broker-mismatch-move">
                 <BrokerIcon brokerId={selectedTarget.id} iconUrl={selectedTarget.iconUrl} portalUrl={selectedTarget.portalUrl} pluginCode={selectedTarget.pluginCode} altText="" size={18} />
-                {$t('importWizard.brokerMismatch.move', {values: {broker: selectedTarget.name}})}
+                {$t('importWizard.brokerMismatch.move')}
             </button>
         {/if}
     </div>
@@ -382,8 +382,11 @@
         white-space: nowrap;
     }
 
+    /* Narrow screens: a button that does not fit moves to the next line, right-aligned; none is cut or wrapped inside. */
     .modal-footer {
         display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
         align-items: center;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
@@ -409,6 +412,7 @@
         border: 1px solid transparent;
         cursor: pointer;
         transition: all 0.15s;
+        white-space: nowrap;
     }
 
     .btn:disabled {

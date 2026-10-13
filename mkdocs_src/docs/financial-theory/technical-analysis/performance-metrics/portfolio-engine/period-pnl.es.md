@@ -36,7 +36,7 @@ $$
 \mathrm{Other} = \mathrm{PnL}_{\text{período}} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Como el coste base conserva sus tipos de cambio históricos (véase [Valor contable](book-value.md)), el efecto de los tipos de cambio sobre los activos extranjeros forma parte de $\Delta\mathrm{UGL}$, no de Other. El efectivo mantenido en otra divisa es distinto: el NAV y el Valor contable lo valoran ambos al tipo de cambio de cada día, por lo que su efecto cambiario se anula en el P&L no realizado y no está en $\Delta\mathrm{UGL}$. Es la primera parte de Other, el [Efecto del tipo de cambio sobre el efectivo](#fx-on-cash) de cada bróker $b$, que la vista Rendimiento muestra por bróker:
+Como el coste base conserva sus tipos de cambio históricos (véase [Valor contable](book-value.md)), el efecto de los tipos de cambio sobre los activos extranjeros forma parte de $\Delta\mathrm{UGL}$, no de Other. El efectivo mantenido en otra divisa es distinto: el NAV y el Valor contable lo valoran ambos al tipo de cambio de cada día, por lo que su efecto cambiario se anula en el P&L no realizado y no está en $\Delta\mathrm{UGL}$. Es la primera parte de Other, el [Efecto del tipo de cambio sobre el efectivo](#fx-on-cash) de cada bróker $b$, que la vista Periodo muestra por bróker:
 
 $$
 \mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}

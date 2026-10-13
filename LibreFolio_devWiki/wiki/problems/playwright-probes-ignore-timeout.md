@@ -78,6 +78,9 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853
   - **The guard**: an init script stamps each document with the locale it began under (`stampDocumentLocale`), and
     `expectDrawnUnder(page, lang)` — in `screenshot()` and `shootFiles()`, the only two screenshot calls — fails a shot
     whose page was drawn under another locale, or carries no stamp.
+  - *Update (train 78)*: the override moves only `Intl`'s fallback locale and `Accept-Language`; `navigator.language`,
+    which `uiLocale()` reads since M-18, stays en-US — backlog M-24 (low), written into the header of
+    `galleryLocale.ts` (`1e4a3ecd5`).
   - The 13 tests that shoot a page prepared once (3 auth pages, 2 PAC, 8 Files) now redraw it in each language.
   - **The trap**: `@playwright/test` gives every context `locale: 'en-US'`, and Chromium then refuses a second override
     («Another locale override is already in effect»). `test.use({locale: undefined})` falls back to that default; the
@@ -110,10 +113,12 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `d956853
 ## Planned in release 1.2 (assigned to I)
 
 - **M-17**, found by M-14 — the coordinator's decision, after M-16: two UI strings fixed in English — the date range
-  picker formats with `'en'`, and «Last updated:» in the global settings.
+  picker formats with `'en'`, and «Last updated:» in the global settings. *Resolved in M-18's CP2 (`ff7c96fd0`, train 75).*
 - **M-18**, found by M-14 — the developer's decision of 2026-10-12, after the UI refinement: numbers built with
   `toFixed(n)` never meet a locale and keep the dot in every language — percentages (about 50 lines in some 30 files),
-  file sizes, durations — so a shot reads «+4788,01 €» next to «14.07%». A known limit stays after it (T's analysis,
+  file sizes, durations — so a shot reads «+4788,01 €» next to «14.07%». *Update (train 68)*: moved to T, with the
+  developer's rule «Lingua della UI per tutto» — CP1 delivered (`5b2aad5c4`); CP2 and CP3 delivered in trains 75–76, M-18 closed —
+  [[decisions/figures-in-the-interface-language]]. A known limit stays after it (T's analysis,
   backlog T-DI): a native `<input type="date">` is drawn by the browser in the browser's language
   (`RiskAnalysisPanel.svelte`); only a date picker of the app's own would follow the UI.
 

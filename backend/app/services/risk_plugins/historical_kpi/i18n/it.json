@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "historicalKpi": {
+        "name": "Metriche di rischio storiche",
+        "description": "Volatilità storica, drawdown, Sharpe e Sortino dai rendimenti canonici dello scope selezionato."
+      }
+    }
+  }
+}

@@ -21,9 +21,12 @@
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import ScheduledInvestmentEditor from './ScheduledInvestmentEditor.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {writeTextToClipboard} from '$lib/utils/clipboard';
     import {getCurrencyInfo, currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {isSoftProbeFailure, summarizeProbeError, formatCurrencyForTooltip, buildProbeTooltipHtml} from './providerProbe';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {resolveProviderError} from './resolveProviderError';
     import {createProviderProbeState, providerConfigurationKey, type ProviderConfiguration, type ProviderProbeState} from './providerProbeState.svelte';
     import {safeScalar, safeString} from '$lib/types/common';
@@ -63,6 +66,11 @@
 
     interface TestResult {
         success: boolean;
+        /**
+         * The part of the probe this row reports, published as `data-operation`: the backend's operation
+         * (`current_price`, `history`), or `probe` when the call itself failed.
+         */
+        operation: 'current_price' | 'history' | 'probe';
         /** Display status: success, error, or warning (not supported) */
         status?: 'success' | 'error' | 'warning';
         label: string;
@@ -307,11 +315,21 @@
         if (await probe.run('manual')) emitChange();
     }
 
+    /**
+     * The history's period as the interface writes dates. The backend always sends `start → end`
+     * with two ISO days (`provider_management.py`, `ProbeHistoryResult.date_range`); anything else
+     * is shown as it came.
+     */
+    function probeDateRange(range: string): string {
+        const days = /^(\d{4}-\d{2}-\d{2}) → (\d{4}-\d{2}-\d{2})$/.exec(range);
+        return days ? `${formatDay(days[1])} → ${formatDay(days[2])}` : range;
+    }
+
     function buildTestResults(): TestResult[] {
         if (probe.source !== 'manual') return [];
         if (probe.error) {
             const detail = extractErrorMessage(probe.error, $t('common.errorOccurred'));
-            return [{success: false, status: 'error', label: $t('common.error'), detail, summary: summarizeProbeError(detail), execution_time_ms: 0}];
+            return [{success: false, operation: 'probe', status: 'error', label: $t('common.error'), detail, summary: summarizeProbeError(detail), execution_time_ms: 0}];
         }
         const response = probe.response;
         if (!response) return [];
@@ -330,9 +348,10 @@
             // I3: failures resolve code+details to a localized message; the
             // raw English `error` stays as fallback for unmapped codes.
             const cpError = cp.success ? null : resolveProviderError({error: safeString(cp.error), error_code: safeString(cp.error_code), error_details: safeScalar(cp.error_details)}, $t);
-            const detail = cp.success ? `${Number(cpValue).toFixed(2)} ${ccyLabel}${cpDate ? ` (${cpDate})` : ''}` : (cpError ?? undefined);
+            const detail = cp.success ? `${formatFixed(Number(cpValue), 2)} ${ccyLabel}${cpDate ? ` (${formatDay(cpDate)})` : ''}` : (cpError ?? undefined);
             items.push({
                 success: cp.success,
+                operation: 'current_price',
                 status: cp.success ? 'success' : isSoftProbeFailure(safeString(cp.error) ?? undefined, safeString(cp.error_code)) ? 'warning' : 'error',
                 label: $t('common.currentPrice'),
                 detail,
@@ -349,9 +368,11 @@
             const h = history;
             const ccyLabel = formatCurrencyForTooltip(displayCurrency || undefined);
             const hError = h.success ? null : resolveProviderError({error: safeString(h.error), error_code: safeString(h.error_code), error_details: safeScalar(h.error_details)}, $t);
-            const detail = h.success ? `${h.points_count} points${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${h.date_range}` : ''}` : (hError ?? undefined);
+            const pointCount = Number(h.points_count);
+            const detail = h.success ? `${$t('assets.probe.points', {values: {count: pointCount, n: formatFixed(pointCount, 0)}})}${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${probeDateRange(String(h.date_range))}` : ''}` : (hError ?? undefined);
             items.push({
                 success: h.success,
+                operation: 'history',
                 status: h.success ? 'success' : isSoftProbeFailure(safeString(h.error) ?? undefined, safeString(h.error_code)) ? 'warning' : 'error',
                 label: $t('assets.probe.history'),
                 detail,
@@ -565,11 +586,11 @@
                         <Tooltip
                             html={(() => {
                                 void $currencyStoreVersion;
-                                return buildProbeTooltipHtml(result, {date: $t('common.date'), currentPrice: $t('common.currentPrice')});
+                                return buildProbeTooltipHtml(result, {date: $t('common.date'), currentPrice: $t('common.currentPrice'), close: $t('dataEditor.col.close')});
                             })()}
                             position="top"
                         >
-                            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm" data-testid="provider-test-result" data-status={result.status}>
+                            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm" data-testid="provider-test-result" data-operation={result.operation} data-status={result.status}>
                                 {#if result.status === 'warning'}
                                     <AlertTriangle size={14} class="text-amber-500 shrink-0 self-center" />
                                 {:else if result.success}
@@ -582,18 +603,19 @@
                                     {result.summary ?? result.detail ?? '—'}
                                 </span>
                                 <span class="text-xs text-gray-400 shrink-0">
-                                    ({(result.execution_time_ms / 1000).toFixed(2)}s)
+                                    ({formatFixed(result.execution_time_ms / 1000, 2)}s)
                                 </span>
                                 {#if result.status === 'error' && result.detail}
                                     <button
                                         type="button"
                                         class="ml-auto shrink-0 p-0.5 text-gray-400 hover:text-blue-500 transition-colors"
-                                        title="Copy error detail"
+                                        data-testid="provider-test-result-copy"
+                                        title={$t('assets.probe.copyErrorDetail')}
                                         onclick={async (e) => {
                                             e.stopPropagation();
                                             try {
-                                                await navigator.clipboard.writeText(result.detail ?? '');
-                                                toasts.info('Copied to clipboard');
+                                                await writeTextToClipboard(result.detail ?? '');
+                                                toasts.info($t('common.copiedToClipboard'));
                                             } catch {
                                                 /* clipboard not available */
                                             }
@@ -613,7 +635,7 @@
                     {/if}
                     {#if testResults.length > 0 && testStatus !== 'testing'}
                         <div class="text-xs text-gray-400 dark:text-gray-500 pt-1">
-                            {$t('assets.probe.totalTime')}: {(totalExecutionMs / 1000).toFixed(2)}s
+                            {$t('assets.probe.totalTime')}: {formatFixed(totalExecutionMs / 1000, 2)}s
                         </div>
                     {/if}
                 </div>

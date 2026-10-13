@@ -8,15 +8,28 @@
  * a bad clamp would hide.
  *
  * The month label is asserted with an explicit locale so the expected string is
- * deterministic regardless of the machine's locale.
+ * deterministic regardless of the machine's locale; without one it follows the
+ * interface language (M-18), pinned in the last describe, which also writes the
+ * tooltip delta in French.
  */
-import {describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 
+// The interface locale is the UI language regionalised by `navigator.language` (M-18). Node's tag
+// follows the host's ICU locale, so it is pinned to en-US — jsdom's own — before any import.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
+import type {RenderedSignal} from '$lib/charts/signals';
 import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
 import es from '$lib/i18n/es.json';
+import {currentLanguage} from '$lib/stores/app/language';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import type {LineDataPoint} from './LineChart.svelte';
 import type {EventMarker} from './PriceChartFull.svelte';
 import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from './calendarReturnWindow';
@@ -33,6 +46,7 @@ import {
     formatMonthLabel,
     formatTruncatedGhostLabel,
     getBucketInfo,
+    bucketSpanUpTo,
     getVisibleDailyPoints,
     resolveActivePointIndex,
     resolveZoomBounds,
@@ -41,8 +55,10 @@ import {
     synthesizeDailyOHLC,
     toAbsoluteValue,
     toDisplaySeries,
+    type BucketInfo,
     type EventScatterContext,
 } from './priceChartHelpers';
+import {aggregateLineSeries, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
 
 /** Minimal daily point; overrides layer on top. */
 function pt(date: string, value: number, overrides: Partial<LineDataPoint> = {}): LineDataPoint {
@@ -817,6 +833,62 @@ describe('getBucketInfo', () => {
     });
 });
 
+// ===========================================================================
+// bucketSpanUpTo — the span a coarse point's tooltip header names
+// ===========================================================================
+
+describe('bucketSpanUpTo', () => {
+    /*
+     * A weekly or monthly point is dated by its bucket's last data point (`aggregateLineSeries`,
+     * `aggregateOHLCV`), while `bucketEnd` keeps the bucket's theoretical end: the Sunday, the month's last
+     * day. In a whole bucket the two are one day; in the open one — the week or month still running, a series
+     * that stops inside a period — the point sits on its last data day, and a header spanning to `bucketEnd`
+     * names a day with no data, or one still to come.
+     *
+     * The contract: `bucketSpanUpTo(date, info)` is the span up to the point's own day. When
+     * `info.bucketStart <= date < info.bucketEnd` (ISO string order) it is `{bucketStart, bucketEnd: date}`;
+     * otherwise `info` as it is — a whole bucket (the point on its end), a date outside the bucket, or no day
+     * at all. Pure: the bucket it is given is left untouched.
+     */
+
+    /** The ISO week of Monday 11 March 2024, Sunday 17 included. */
+    const WEEK: BucketInfo = {bucketStart: '2024-03-11', bucketEnd: '2024-03-17'};
+    /** March 2024, the 31st included. */
+    const MONTH: BucketInfo = {bucketStart: '2024-03-01', bucketEnd: '2024-03-31'};
+
+    /** The helper, once a barrier has proved `priceChartHelpers` exports it, next to `getBucketInfo`. */
+    function spanUpTo(date: string, info: BucketInfo): BucketInfo {
+        expect(bucketSpanUpTo, 'barrier: priceChartHelpers exports bucketSpanUpTo').toBeTypeOf('function');
+        return bucketSpanUpTo(date, info);
+    }
+
+    it.each([
+        {name: 'open week, last data on Wed 13', date: '2024-03-13', info: WEEK, span: {bucketStart: '2024-03-11', bucketEnd: '2024-03-13'}},
+        {name: 'open month, last data on the 13th', date: '2024-03-13', info: MONTH, span: {bucketStart: '2024-03-01', bucketEnd: '2024-03-13'}},
+        {name: 'point on its first day: one day', date: '2024-03-11', info: WEEK, span: {bucketStart: '2024-03-11', bucketEnd: '2024-03-11'}},
+    ])('ends the span on the point’s own day — $name', ({date, info, span}) => {
+        expect(spanUpTo(date, info)).toEqual(span);
+    });
+
+    it.each([
+        {name: 'whole week, point on Sunday 17', date: '2024-03-17', info: WEEK},
+        {name: 'whole month, point on the 31st', date: '2024-03-31', info: MONTH},
+        {name: 'a date before the bucket', date: '2024-03-10', info: WEEK},
+        {name: 'a date after the bucket', date: '2024-03-18', info: WEEK},
+        {name: 'no day at all', date: '', info: WEEK},
+    ])('keeps the bucket as it is — $name', ({date, info}) => {
+        expect(spanUpTo(date, info)).toEqual(info);
+    });
+
+    it('leaves the bucket it is given untouched', () => {
+        const info: BucketInfo = {...WEEK};
+
+        spanUpTo('2024-03-13', info);
+
+        expect(info, 'bucketSpanUpTo mutated the bucket it was given').toEqual(WEEK);
+    });
+});
+
 describe('synthesizeDailyOHLC', () => {
     it('opens the first point at its own close and boxes high/low to the envelope', () => {
         const [first] = synthesizeDailyOHLC([pt('2024-01-01', 10)]);
@@ -1172,6 +1244,38 @@ function scatterCtx(dates: string[], values: number[], overrides: Partial<EventS
     };
 }
 
+/** Every calendar day from `start` to `end`, both included: the calendar-filled series the asset and FX pages chart. */
+function calendarDays(start: string, end: string): string[] {
+    const days: string[] = [];
+    const last = Date.parse(`${end}T00:00:00Z`);
+    for (let time = Date.parse(`${start}T00:00:00Z`); time <= last; time += 86_400_000) {
+        days.push(new Date(time).toISOString().slice(0, 10));
+    }
+    return days;
+}
+
+/**
+ * The scatter context PriceChartFull builds at a coarse resolution, from the real aggregation: the
+ * main line through `aggregateLineSeries`, overlays through `downsampleRenderedSignal` (keyed by the
+ * main line's render dates). So a partial bucket renders at its last data point, as on screen.
+ */
+function aggregatedScatterCtx(daily: LineDataPoint[], resolution: ChartResolution, overlays: RenderedSignal[] = []): EventScatterContext {
+    const resolvedLineData = aggregateLineSeries(daily, resolution);
+    const dates = resolvedLineData.map((point) => point.date);
+    const overlayDataByLabel = new Map<string, Map<string, number>>();
+    for (const overlay of overlays) {
+        const downsampled = downsampleRenderedSignal(overlay, resolution, resolvedLineData);
+        if (downsampled.data.length > 0) overlayDataByLabel.set(downsampled.label, new Map(downsampled.data.map((point) => [point.date, point.value])));
+    }
+    return {
+        dateIndexMap: new Map(dates.map((date, index) => [date, index])),
+        resolvedLineData,
+        overlayDataByLabel,
+        bucketInfoByDate: new Map(dates.map((date, index) => [date, getBucketInfo(resolvedLineData[index], resolution)])),
+        baseColor: '#123456',
+    };
+}
+
 describe('buildEventScatterGroups', () => {
     it('groups own-asset markers by type and colours them with the base colour', () => {
         const ctx = scatterCtx(['2024-01-01', '2024-01-02'], [10, 20]);
@@ -1249,6 +1353,67 @@ describe('buildEventScatterGroups', () => {
         const groups = buildEventScatterGroups([evm('2024-06-05', 'DIVIDEND')], 'weekly', ctx);
         expect(groups).toHaveLength(0);
     });
+
+    // R-5 (lot 51): an event bucket is keyed by its theoretical bucket end, while the aggregated line
+    // renders each bucket at its last data point. On a calendar-filled series a full bucket's two dates
+    // coincide; the last, partial one's never do (the default range ends today), and its markers vanished.
+
+    it('places an event of the last, partial week on the bar that week renders at (R-5, lot 51)', () => {
+        const ctx = aggregatedScatterCtx(dailyRun(calendarDays('2024-01-01', '2024-01-10')), 'weekly');
+        // Precondition: the open week (Mon 01-08..Wed 01-10) renders at 01-10; its bucket end, Sun 01-14, is no axis date.
+        expect([...ctx.dateIndexMap.keys()]).toEqual(['2024-01-07', '2024-01-10']);
+        const dividend = evm('2024-01-09', 'DIVIDEND');
+        const groups = buildEventScatterGroups([dividend], 'weekly', ctx);
+        expect(groups, 'the marker of the open week vanished').toHaveLength(1);
+        expect(groups[0].points).toEqual([{value: ['2024-01-10', 10], markers: [dividend], bucketInfo: {bucketStart: '2024-01-08', bucketEnd: '2024-01-14'}, bucketValue: 10}]);
+    });
+
+    it('places an event of the current, partial month on the bar that month renders at, beside a full month (R-5, lot 51)', () => {
+        const ctx = aggregatedScatterCtx(dailyRun(calendarDays('2024-01-01', '2024-02-13')), 'monthly');
+        // Precondition: January renders at its bucket end; the open February at its last data point, not at 02-29.
+        expect([...ctx.dateIndexMap.keys()]).toEqual(['2024-01-31', '2024-02-13']);
+        const january = evm('2024-01-15', 'DIVIDEND');
+        const february = evm('2024-02-10', 'DIVIDEND');
+        const groups = buildEventScatterGroups([january, february], 'monthly', ctx);
+        expect(groups).toHaveLength(1);
+        const pointAt = (date: string) => groups[0].points.find((point) => point.value[0] === date);
+        // Guard: a full month renders at its bucket end, so its marker has always been placed.
+        expect(pointAt('2024-01-31')).toEqual({value: ['2024-01-31', 31], markers: [january], bucketInfo: {bucketStart: '2024-01-01', bucketEnd: '2024-01-31'}, bucketValue: 31});
+        expect(pointAt('2024-02-13'), 'the marker of the open month vanished').toEqual({value: ['2024-02-13', 44], markers: [february], bucketInfo: {bucketStart: '2024-02-01', bucketEnd: '2024-02-29'}, bucketValue: 44});
+        expect(groups[0].points).toHaveLength(2);
+    });
+
+    it('places a comparison event of the open week on its overlay, at the bar that week renders at (R-5, lot 51)', () => {
+        // The FX page form: the pair has no events of its own, only those of the comparison asset.
+        const beta: RenderedSignal = {id: 'beta', label: 'Beta', data: calendarDays('2024-01-01', '2024-01-10').map((date, index) => pt(date, (index + 1) * 100)), color: '#ff0000', lineWidth: 1, lineType: 'solid', markerStart: null, markerEnd: null, aggregationProfile: 'last_with_range'};
+        const ctx = aggregatedScatterCtx(dailyRun(calendarDays('2024-01-01', '2024-01-10')), 'weekly', [beta]);
+        // Precondition: the downsampled overlay is keyed by the main line's render dates, with values of its own.
+        expect(ctx.overlayDataByLabel.get('Beta')).toEqual(
+            new Map([
+                ['2024-01-07', 700],
+                ['2024-01-10', 1000],
+            ]),
+        );
+        const event = evm('2024-01-08', 'DIVIDEND', {assetLabel: 'Beta', signalColor: '#ff0000'});
+        const groups = buildEventScatterGroups([event], 'weekly', ctx);
+        expect(groups, 'the comparison marker of the open week vanished').toHaveLength(1);
+        expect(groups[0]).toMatchObject({label: 'Beta DIVIDEND', color: '#ff0000', eventType: 'DIVIDEND'});
+        // On the overlay (1000), not on the main line (10).
+        expect(groups[0].points).toEqual([{value: ['2024-01-10', 1000], markers: [event], bucketInfo: {bucketStart: '2024-01-08', bucketEnd: '2024-01-14'}, bucketValue: 1000}]);
+    });
+
+    it('shows an event dated after the last data point on the bar of its open week, not one of a later week (R-5, lot 51)', () => {
+        // A bar stands for its whole period: the first partial bucket already carries events dated
+        // before its first data point, so the last one carries those dated after its last.
+        const ctx = aggregatedScatterCtx(dailyRun(calendarDays('2024-01-01', '2024-01-10')), 'weekly');
+        expect([...ctx.dateIndexMap.keys()]).toEqual(['2024-01-07', '2024-01-10']);
+        const friday = evm('2024-01-12', 'DIVIDEND');
+        const nextMonday = evm('2024-01-15', 'DIVIDEND');
+        const groups = buildEventScatterGroups([friday, nextMonday], 'weekly', ctx);
+        expect(groups, 'the marker of the open week vanished').toHaveLength(1);
+        // Guard: a week with no data point renders no bar, so its event stays off the chart (as off-axis days do).
+        expect(groups[0].points).toEqual([{value: ['2024-01-10', 10], markers: [friday], bucketInfo: {bucketStart: '2024-01-08', bucketEnd: '2024-01-14'}, bucketValue: 10}]);
+    });
 });
 
 // ===========================================================================
@@ -1264,10 +1429,13 @@ describe('buildDeltaHtml', () => {
         expect(buildDeltaHtml(-2.5, 0, true)).toContain('(Δ -2.50%)');
     });
 
-    it('exactly 0 counts as non-negative (green, + sign)', () => {
+    it('exactly 0 counts as non-negative: green, and no sign (M-18)', () => {
         const html = buildDeltaHtml(0, 0, true);
         expect(html).toContain('#10b981');
-        expect(html).toContain('(Δ +0.00%)');
+        // Why (re-pin, M-18 CP2): the delta goes through `formatPercent`, whose rule (CP1) is that a zero
+        // is not a gain: `(Δ +0.00%)` becomes `(Δ 0.00%)`. The colour is unchanged.
+        expect(html).toContain('(Δ 0.00%)');
+        expect(html).not.toContain('+');
     });
 
     it('shows both the absolute and percentage delta in absolute view', () => {
@@ -1285,7 +1453,9 @@ describe('buildDeltaHtml', () => {
 
     it('reports a 0% relative delta when the first value is 0 (no divide-by-zero)', () => {
         const html = buildDeltaHtml(10, 0, false);
-        expect(html).toContain('(Δ +10.0000 / +0.00%)');
+        // Why (re-pin, M-18 CP2): the relative delta goes through `formatPercent`, and a zero carries no
+        // `+` (CP1): `+0.00%` becomes `0.00%`. The absolute delta keeps its `+`: it is a gain.
+        expect(html).toContain('(Δ +10.0000 / 0.00%)');
     });
 });
 
@@ -1384,5 +1554,116 @@ describe('splitGhostLabel — the name and the currency apart, nothing cut (K st
     it.each(['💱 Apple (🇺🇸 USD)', '💱 iShares World (Acc) (🇪🇺 EUR)', '💱 Apple', 'Apple (🇺🇸 USD)', 'Apple'])('agrees with formatTruncatedGhostLabel on what a ghost label is: rejoined, a label too short to cut reads the same — %s', (label) => {
         const {name, currency} = splitGhostLabel(label);
         expect(currency === null ? name : `${name} ${currency}`).toBe(formatTruncatedGhostLabel(label));
+    });
+});
+
+/**
+ * M-18 CP2: the tooltip delta and the month label in the interface language.
+ *
+ * `buildDeltaHtml` writes the `(Δ …)` suffix of the main tooltip row with `toFixed`, so a French reader
+ * gets `(Δ +2.50%)` beside amounts written `1 234,50`; `formatMonthLabel`, called without a locale — as
+ * PriceChartFull's tooltip header calls it — writes the month in the machine's language instead of the
+ * interface's. Every figure follows the interface language (the developer's decision M-18, 2026-10-12):
+ *
+ *   - percentage view: `(Δ ${formatPercent(value)})`;
+ *   - absolute view: `(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${formatPercent(deltaPct)})`;
+ *   - the colours stay derived from the sign, a zero green;
+ *   - `formatMonthLabel(date)` defaults to the interface locale; an explicit locale still wins.
+ *
+ * Expectations come from `formatPercent`/`formatFixed` and `Intl.DateTimeFormat` given an explicit
+ * locale, never typed; each case checks that the language under test differs from English, so a runtime
+ * without its data cannot make the comparison vacuous.
+ */
+describe('buildDeltaHtml and formatMonthLabel in the interface language (M-18)', () => {
+    const FR = {locale: 'fr'} as const;
+    const GREEN = '#10b981';
+    const RED = '#ef4444';
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'it' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    /** What a delta suffix shows: the colour it is painted in and its `(Δ …)` text. */
+    function deltaOf(html: string): {color: string; text: string} {
+        const match = /color:\s*(#[0-9a-f]{3,8})[^>]*>([^<]*)</i.exec(html);
+        return {color: match?.[1] ?? `(no colour in ${html})`, text: match?.[2] ?? `(no text in ${html})`};
+    }
+
+    /** The month as `Intl` writes it in `locale`, with the options and the UTC anchor `formatMonthLabel` uses. */
+    function monthIn(locale: string, date: string): string {
+        return new Intl.DateTimeFormat(locale, {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${date}T00:00:00Z`));
+    }
+
+    it('French UI, percentage view: the delta is a French percentage — `+` on a gain, none on a zero — in the colour of its sign', async () => {
+        await uiLanguage('fr');
+        const cases = [
+            {value: 2.5, color: GREEN},
+            {value: -2.5, color: RED},
+            {value: 0, color: GREEN},
+            {value: 1234.5, color: GREEN},
+        ];
+        const expected = cases.map(({value, color}) => ({color, text: `(Δ ${formatPercent(value, FR)})`}));
+        // Control: this runtime carries French data, so the French text is not today's English one.
+        expect(expected[0].text, 'French differs from English').not.toBe('(Δ +2.50%)');
+
+        expect(
+            cases.map(({value}) => deltaOf(buildDeltaHtml(value, 0, true))),
+            spelled(expected),
+        ).toEqual(expected);
+    });
+
+    it('French UI, absolute view: the absolute delta with four decimals and its sign, the relative one as a French percentage', async () => {
+        await uiLanguage('fr');
+        const cases = [
+            {value: 110, first: 100, color: GREEN},
+            {value: 90, first: 100, color: RED},
+            {value: 10, first: 0, color: GREEN},
+            {value: 2234.5, first: 1000, color: GREEN},
+        ];
+        // The two deltas as the helper computes them: the difference, and its share of the first value
+        // (0 when there is none).
+        const expected = cases.map(({value, first, color}) => {
+            const deltaPct = first !== 0 ? ((value - first) / first) * 100 : 0;
+            return {color, text: `(Δ ${formatFixed(value - first, 4, {signed: true, ...FR})} / ${formatPercent(deltaPct, FR)})`};
+        });
+        expect(expected[0].text, 'French differs from English').not.toBe('(Δ +10.0000 / +10.00%)');
+
+        expect(
+            cases.map(({value, first}) => deltaOf(buildDeltaHtml(value, first, false))),
+            spelled(expected),
+        ).toEqual(expected);
+    });
+
+    it('without a locale, the month label is written in the interface language — French, then Italian — not the machine’s', async () => {
+        const written: Record<string, string> = {};
+        for (const lang of ['fr', 'it'] as const) {
+            await uiLanguage(lang);
+            written[lang] = formatMonthLabel('2024-01-15');
+        }
+        const expected = {fr: monthIn('fr', '2024-01-15'), it: monthIn('it', '2024-01-15')};
+        // Control: both languages name the month differently from English.
+        expect(Object.values(expected), 'French and Italian differ from English').not.toContain(monthIn('en-US', '2024-01-15'));
+
+        expect(written).toEqual(expected);
+    });
+
+    it('English UI on an en-US browser: the month label without a locale is today’s English; an explicit locale still wins in French', async () => {
+        await uiLanguage('en');
+        expect(formatMonthLabel('2024-01-15')).toBe('January 2024');
+
+        await uiLanguage('fr');
+        expect(formatMonthLabel('2024-01-15', 'de-DE')).toBe('Januar 2024');
     });
 });

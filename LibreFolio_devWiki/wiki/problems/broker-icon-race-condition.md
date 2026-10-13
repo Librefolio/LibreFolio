@@ -8,6 +8,7 @@ tags: [frontend, broker-icon, race-condition, async, plugin-icons, svelte5]
 related:
   - sources/phase-final-bugs-2026-06-25
   - features/F-012
+  - problems/late-img-error-marked-the-visible-icon-failed
 ---
 
 # Problem: Broker Icon Race Condition
@@ -64,10 +65,18 @@ no icon field, `BrokerIcon.svelte` calls `ensureBrokerIconFieldsLoaded(brokerId)
 the broker and merges it into the store; but its icon chain reads only the props (`iconUrl`, `portalUrl`,
 `pluginCode`), so the store fills up and the props never change. Assigned to workstream I, in the UI polish lot.
 
+*Update (train 72)*: both symptoms had another cause. A late `error` event from a replaced `<img>` marked the plugin
+icon as failed, and the plugin state started from `null` even with a warm cache; fixed in `2412c3fe4` —
+[[problems/late-img-error-marked-the-visible-icon-failed]]. The diagnosis above was not the cause; it survives as the
+latent C-56 below.
+
 Two neighbouring items from I's analysis of 2026-10-12 are in the post-1.2 backlog, section C: **C-56** (the same
 chain does not read the store when its props are empty — latent, since every surface passes full props today; keep
 `settledIconFieldIds`, which stops the loop) and **C-57** (`ensurePluginIconsLoaded` in `brokerHelpers.ts` never retries
 after a failed first request, so plugin icons stay missing until the page reloads — to verify).
+
+*2026-10-13*: another way to the fallback icon, from outside the app — a broker's site that answers the browser with a
+bot check: [[problems/schwab-favicon-blocked-by-orb]].
 
 ## Prevention
 
@@ -89,4 +98,4 @@ Visual only — colored dots instead of brand icons. Confusing UX when users hav
 | dashboard page (race) | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | The shared reactive icon chain (Form B fix) | `frontend/src/lib/utils/broker/brokerIconChain.svelte.ts` |
 | The store that starts the plugin-icon cache; `ensureBrokerIconFieldsLoaded` | `frontend/src/lib/stores/reference/brokerStore.ts` |
-| Still open: the chain reads only the props | `frontend/src/lib/components/brokers/BrokerIcon.svelte` |
+| C-56, latent: the chain reads only the props | `frontend/src/lib/components/brokers/BrokerIcon.svelte` |

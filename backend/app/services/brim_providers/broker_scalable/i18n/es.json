@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_scalable": {
+      "name": "Scalable Capital cuenta de valores",
+      "description": "Importa la cuenta de valores de Scalable Capital desde la exportación CSV de Scalable (PRIME) o desde el archivo de bróker del exportador de LibreFolio: compraventas con sus comisiones e impuestos, planes de ahorro, dividendos, intereses, depósitos, retiradas y transferencias a la cuenta remunerada."
+    }
+  }
+}

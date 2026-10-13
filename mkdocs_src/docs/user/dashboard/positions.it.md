@@ -3,21 +3,21 @@
 La scheda **Posizioni** mostra ciò che possiedi, quanto ha guadagnato ciascuna posizione nel periodo e, a un clic di distanza, i lotti FIFO dietro qualsiasi posizione. La pagina di ciascun broker ha la stessa scheda per quel singolo broker, con le stesse impostazioni della tabella.
 
 - 📋 **[Posizioni](#holdings)** — ciò che possiedi alla data finale
-- 📈 **[Performance](#performance)** — quanto ha guadagnato ciascuna posizione nel periodo
+- 📈 **[Periodo](#performance)** — quanto ha guadagnato ciascuna posizione nel periodo
 - 🔬 **[Analisi Lotti FIFO](#fifo-lots-analysis)** — i lotti dietro una posizione
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Posizioni (Tabella)" alt="Vista Tabella Posizioni">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Posizioni (Mappa / Treemap)" alt="Vista Mappa Posizioni">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Performance (Tabella)" alt="Vista Tabella Performance">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Performance (Mappa / Grafico)" alt="Vista Mappa Performance">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Portafoglio (Tabella)" alt="Vista Tabella Portafoglio">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portafoglio (Mappa / Treemap)" alt="Vista Mappa Portafoglio">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Periodo (Tabella)" alt="Vista Tabella Periodo">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Periodo (Mappa / Grafico)" alt="Vista Mappa Periodo">
 </div>
 
 ---
 
 ## 🎛️ Scegliere una vista
 
-- **Portafoglio / Periodo** alterna tra [Posizioni](#holdings) e [Performance](#performance); **Tabella / Mappa** (le due icone) tra una tabella e un grafico.
+- **[Portafoglio](#holdings) / [Periodo](#performance)** alterna tra ciò che possiedi e quanto ha guadagnato ciascuna posizione; **Tabella / Mappa** (le due icone) tra una tabella e un grafico.
 - **L'icona a forma di occhio** (in Tabella) mostra, nasconde o riordina le colonne; **Ripristina layout** le ripristina. **Vedi tutte →** apre la pagina Asset.
 - **Per approfondire una posizione**, apri il suo menu **⋮** in una tabella, oppure fai clic con il tasto destro su di essa in qualsiasi vista: **Analizza Lotti** apre l'[Analisi Lotti FIFO](#fifo-lots-analysis) qui sotto, **Vedi Asset** la pagina dell'asset.
 
@@ -65,7 +65,7 @@ Quanto reddito ti paga ciascuna unità, rispetto a quanto è costata? **YOC** co
 - **Un valore per asset e broker**, sull'anno che termina alla data finale: spostare la data iniziale non lo cambia.
 - **Lordo, non al netto delle imposte**: le transazioni separate di imposte e commissioni non vengono sottratte.
 - **Passa il mouse su un valore** per il reddito per unità, il periodo e i tassi di cambio usati — ogni pagamento al tasso della propria data.
-- **`0.00%`** significa reddito registrato a zero; un semplice **`-`** significa nessun reddito nell'ultimo anno.
+- **`0,00%`** significa reddito registrato a zero; un semplice **`-`** significa nessun reddito nell'ultimo anno.
 
 🔗 **Teoria**: [Rendimento sul Costo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) — le regole esatte, e come YOC differisce dal rendimento da dividendi o dal CAGR
 
@@ -75,7 +75,7 @@ Quanto reddito ti paga ciascuna unità, rispetto a quanto è costata? **YOC** co
 
 ---
 
-## 📈 Performance — quanto ha guadagnato ciascuna posizione {: #performance }
+## 📈 Periodo — quanto ha guadagnato ciascuna posizione {: #performance }
 
 Quali posizioni hanno guadagnato o perso denaro nel periodo, e come? **Periodo** elenca ogni posizione del periodo, aperta o chiusa da allora, dalle variazioni maggiori in poi. LibreFolio la calcola la prima volta che la apri, quindi può richiedere un momento.
 

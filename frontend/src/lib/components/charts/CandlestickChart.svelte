@@ -31,12 +31,14 @@
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
     import {downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
-    import {formatMonthLabel, getBucketInfo} from './priceChartHelpers';
+    import {bucketSpanUpTo, formatMonthLabel, getBucketInfo} from './priceChartHelpers';
     import {buildCandleSeriesData, computePercentageBase, formatCandlePrice, formatVolume, hasRenderableVolume, isBullishBar, parseCandleTooltipValue} from './candlestickChartHelpers';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {truncateName} from '$lib/utils/text';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
 
     // =========================================================================
     // Props
@@ -164,7 +166,7 @@
             void yAxisMin;
             void yAxisMax;
             void secondaryAxisScales;
-            void $currentLanguage;
+            void uiLocale();
             tick().then(renderChart);
         }
     });
@@ -186,17 +188,18 @@
 
     function buildTooltipHeader(date: string, bucketInfo?: {bucketStart: string; bucketEnd: string}): string {
         if (resolution === 'daily') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${(isDarkProp ?? document.documentElement.classList.contains('dark')) ? '#e2e8f0' : '#1f2937'}">${date}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${(isDarkProp ?? document.documentElement.classList.contains('dark')) ? '#e2e8f0' : '#1f2937'}">${formatDay(date)}</div>`;
         }
 
         const dark = isDarkProp ?? document.documentElement.classList.contains('dark');
-        const info = bucketInfo ?? {bucketStart: date, bucketEnd: date};
+        // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
+        const info = bucketSpanUpTo(date, bucketInfo ?? {bucketStart: date, bucketEnd: date});
 
         if (resolution === 'weekly') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.weekRange', {values: {start: info.bucketStart, end: info.bucketEnd}})}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</div>`;
         }
 
-        return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</div><div style="font-size:11px;margin-bottom:3px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: info.bucketEnd}})}</div>`;
+        return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</div><div style="font-size:11px;margin-bottom:3px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</div>`;
     }
 
     // =========================================================================
@@ -215,7 +218,7 @@
                             const policy = buildResponsiveXAxisPolicy({
                                 width: chartContainer.clientWidth,
                                 values: lastRenderedDates,
-                                locale: $currentLanguage,
+                                locale: uiLocale(),
                                 axisType: 'category',
                             });
                             const wasCompact = responsiveXAxisCompact;
@@ -409,7 +412,7 @@
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: rect.width,
             values: dates,
-            locale: $currentLanguage,
+            locale: uiLocale(),
             axisType: 'category',
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
@@ -511,7 +514,7 @@
 
                 // Overlay signal line
                 if (p.value !== null && p.value !== undefined) {
-                    html += `<div style="font-size:11px"><span style="color:${p.color ?? '#888'}">${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${typeof p.value === 'number' ? p.value.toFixed(4) : p.value}</span></div>`;
+                    html += `<div style="font-size:11px"><span style="color:${p.color ?? '#888'}">${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${typeof p.value === 'number' ? formatFixed(p.value, 4) : p.value}</span></div>`;
                 }
             }
 

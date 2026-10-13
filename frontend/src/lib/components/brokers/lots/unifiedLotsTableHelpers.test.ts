@@ -23,11 +23,34 @@
  * footers (opening price, open return). A row that takes part in the average (a
  * finite, non-zero weight) and has an unknown value makes the average unknown. A row
  * whose weight does not take part is still skipped, as in `weightedAverage`.
+ *
+ * Without a locale, the three quantity formatters write in the interface language
+ * (M-18 CP2): every figure follows the UI language through one source, `uiLocale()`,
+ * where until now an absent locale meant the machine's. That is how
+ * `UnifiedLotsTable.svelte`, which passes none, comes to write the reader's notation.
+ * An explicit locale still wins. The browser is pinned to en-US before any import —
+ * Node's follows the host's ICU locale — so an English UI is written en-US and an
+ * Italian one bare `it` (an en-US browser lends no region to Italian). The language is
+ * switched as LanguageSelector does and put back to English after each case; Italian
+ * digits come from `Intl.NumberFormat` in this runtime, never typed.
  */
-import {afterEach, beforeEach, describe, it, expect} from 'vitest';
+import {afterAll, afterEach, beforeEach, describe, it, expect, vi} from 'vitest';
+
+// The browser, pinned before any import: the interface locale takes its region from it.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+import {currentLanguage} from '$lib/stores/app/language';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {primaryState, secondaryStates, filterStates, formatLotQuantity, formatLotQuantityMasked, formatLotQuantityCell, findBroker, sameIdSet, sumNumeric, sumCompleteOrNull, weightedAverage, weightedAverageCompleteOrNull, ratioOrNull} from './unifiedLotsTableHelpers';
+
+afterAll(() => {
+    vi.unstubAllGlobals();
+});
 
 describe('primaryState', () => {
     it('prefers PARTIALLY_CLOSED over everything else (first if true)', () => {
@@ -90,9 +113,10 @@ describe('formatLotQuantity', () => {
         expect(formatLotQuantity(0.123456789, 'en-US')).toBe('0.123457');
     });
 
-    it('accepts the default (machine) locale when none is passed', () => {
-        // Exercises the optional-locale call path; only assert it is a non-empty numeric string.
-        expect(formatLotQuantity(42)).toMatch(/42/);
+    it('without a locale, the interface locale: an English UI on an en-US browser writes en-US (M-18)', () => {
+        // M-18 rewrite: this case accepted the machine locale and only looked for the digits. The
+        // absent locale is the interface's now; the Italian side is in the M-18 block below.
+        expect(formatLotQuantity(1234.5)).toBe('1,234.5');
     });
 });
 
@@ -176,6 +200,80 @@ describe('formatLotQuantityCell', () => {
         const third = formatLotQuantityCell(1, 3, true, 'en-US');
         expect(third).toBe('••• (33%)');
         expect(third.match(/\d+/g)).toEqual(['33']);
+    });
+});
+
+describe('formatLotQuantity / formatLotQuantityMasked / formatLotQuantityCell — without a locale, the interface language (M-18)', () => {
+    /** A quantity as Intl writes it in `locale`, with the formatter's options: up to six fraction digits. */
+    function intlQuantity(locale: string, value: number): string {
+        return new Intl.NumberFormat(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6}).format(value);
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    /** The UI in Italian on the pinned en-US browser: the interface locale is bare `it`. */
+    async function italianUi(): Promise<void> {
+        await uiLanguage('it');
+        expect(uiLocale(), 'control: an Italian UI on an en-US browser is written bare it').toBe('it');
+    }
+
+    // The quantity is masked under privacy: every case here reads it in the clear.
+    beforeEach(() => setPrivacyEnabled(false));
+    afterEach(async () => {
+        setPrivacyEnabled(false);
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('formatLotQuantity: an Italian UI reads Italian digits without passing a locale; an explicit locale still wins', async () => {
+        // 1234.5 is grouped in en-US only (Italian groups from five digits), 12345.678 in both, and
+        // 0.123456789 is capped at six fraction digits.
+        const quantities = [1234.5, 12345.678, 0.123456789];
+        const italian = quantities.map((value) => intlQuantity('it', value));
+        const american = quantities.map((value) => intlQuantity('en-US', value));
+        italian.forEach((text, index) => expect(text, `control: Italian writes ${quantities[index]} otherwise than en-US`).not.toBe(american[index]));
+
+        await italianUi();
+        expect(
+            quantities.map((value) => formatLotQuantity(value, 'en-US')),
+            'an explicit locale still wins',
+        ).toEqual(american);
+
+        expect(
+            quantities.map((value) => formatLotQuantity(value)),
+            'without a locale, an Italian UI must read Italian quantities',
+        ).toEqual(italian);
+    });
+
+    it('formatLotQuantityMasked: in the clear, the same Italian digits, the sign of a short quantity kept', async () => {
+        const quantities = [1234.5, -2.5];
+
+        await italianUi();
+        expect(
+            quantities.map((value) => formatLotQuantityMasked(value, 'en-US')),
+            'an explicit locale still wins',
+        ).toEqual(quantities.map((value) => intlQuantity('en-US', value)));
+
+        expect(
+            quantities.map((value) => formatLotQuantityMasked(value)),
+            'without a locale, an Italian UI must read Italian quantities',
+        ).toEqual(quantities.map((value) => intlQuantity('it', value)));
+    });
+
+    it('formatLotQuantityCell: open / original for a partially closed lot, the open quantity for a whole one — in Italian digits', async () => {
+        const cells = (locale?: string) => ({partial: formatLotQuantityCell(1234.5, 5000, true, locale), whole: formatLotQuantityCell(1234.5, 5000, false, locale)});
+
+        await italianUi();
+        expect(cells('en-US'), 'an explicit locale still wins').toEqual({partial: '1,234.5 / 5,000', whole: '1,234.5'});
+
+        expect(cells(), 'without a locale, an Italian UI must read Italian quantities').toEqual({
+            partial: `${intlQuantity('it', 1234.5)} / ${intlQuantity('it', 5000)}`,
+            whole: intlQuantity('it', 1234.5),
+        });
     });
 });
 

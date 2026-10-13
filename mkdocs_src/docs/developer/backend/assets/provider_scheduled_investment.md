@@ -144,7 +144,7 @@ A P2P loan of €10,000 with 5% simple annual interest (ACT/365), one period fro
 
 ## 🔧 Technical Notes
 
-- **`financial_math.py` eliminated**: All financial math functions (`calculate_day_count_fraction`, `calculate_simple_interest`, `_compute_maturation_dates`) are now inside `scheduled_investment.py` as a `# Financial Math` section.
+- **`financial_math.py` eliminated**: All financial math functions (`calculate_day_count_fraction`, `calculate_simple_interest`, `_compute_maturation_dates`) are now inside `scheduled_investment/plugin.py` as a `# Financial Math` section.
 - **`identifier_type`**: Always `AUTO_GENERATED` — the engine generates its own UUID identifier.
 - **`params_schema`**: Exposes a single `ui_component` field (`key: "_ui_component"`, `default: "scheduled_investment"`) telling the frontend to render the dedicated `ScheduledInvestmentEditor` instead of generic fields.
 - **Events**: there is no `supports_events` flag. `get_history_value()` returns price points and events together in `FAHistoricalData.events` (auto-generated + manual, filtered to the requested range).

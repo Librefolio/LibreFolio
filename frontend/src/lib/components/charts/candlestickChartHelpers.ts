@@ -15,6 +15,8 @@
  */
 
 import type {LineDataPoint} from './LineChart.svelte';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 
 /**
  * Baseline for percentage mode: the first point's open (falling back to its
@@ -82,22 +84,22 @@ export function isBullishBar(d: LineDataPoint): boolean {
 }
 
 /**
- * Format a price for the tooltip. Percentage mode → signed two-decimal percent.
- * Absolute mode scales precision to magnitude: ≥100 → 2 dp, ≥1 → 4 dp, otherwise
- * 6 dp with trailing zeros trimmed (a bare integer such as 0 is kept as "0.0").
- * Built on `toFixed`, so the decimal separator is always '.', independent of the
- * process locale.
+ * Format a price for the tooltip. Percentage mode → signed two-decimal percent (a
+ * zero carries no sign). Absolute mode scales precision to magnitude: ≥100 → 2 dp,
+ * ≥1 → 4 dp, otherwise up to 6 dp with trailing zeros trimmed, keeping at least one
+ * (0 is "0.0"). Written in the interface locale (`formatPercent`, `formatFixed`, M-18).
  */
 export function formatCandlePrice(v: number, isPercentage: boolean): string {
-    if (isPercentage) return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
-    if (Math.abs(v) >= 100) return v.toFixed(2);
-    if (Math.abs(v) >= 1) return v.toFixed(4);
-    return v.toFixed(6).replace(/0+$/, '').replace(/\.$/, '.0');
+    if (isPercentage) return formatPercent(v);
+    if (Math.abs(v) >= 100) return formatFixed(v, 2);
+    if (Math.abs(v) >= 1) return formatFixed(v, 4);
+    const decimals = Math.abs(v).toFixed(6).replace(/0+$/, '').split('.')[1]?.length ?? 0;
+    return formatFixed(v, Math.max(1, decimals));
 }
 
-/** Compact volume label: millions → "…M", thousands → "…K", otherwise integer. */
+/** Compact volume label: millions → "…M", thousands → "…K", otherwise integer; in the interface locale. */
 export function formatVolume(vol: number): string {
-    return vol >= 1_000_000 ? `${(vol / 1_000_000).toFixed(2)}M` : vol >= 1_000 ? `${(vol / 1_000).toFixed(1)}K` : vol.toFixed(0);
+    return vol >= 1_000_000 ? `${formatFixed(vol / 1_000_000, 2)}M` : vol >= 1_000 ? `${formatFixed(vol / 1_000, 1)}K` : formatFixed(vol, 0);
 }
 
 /**

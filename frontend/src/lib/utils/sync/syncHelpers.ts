@@ -12,6 +12,7 @@
 import type {Component, Snippet} from 'svelte';
 import {AlertCircle, AlertTriangle, Check, SkipForward} from 'lucide-svelte';
 import type {LegDetail} from '$lib/utils/providerHelpers';
+import {formatFixed} from '$lib/utils/core/formatFixed';
 
 // =========================================================================
 // Sync status type and result interface
@@ -107,7 +108,7 @@ export const STATUS_COLORS: Record<SyncStatus, string> = {
 /** Format elapsed milliseconds to human-readable string. */
 export function formatElapsed(ms: number): string {
     if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
+    return `${formatFixed(ms / 1000, 1)}s`;
 }
 
 /** Format seconds to mm:ss or Ns. */

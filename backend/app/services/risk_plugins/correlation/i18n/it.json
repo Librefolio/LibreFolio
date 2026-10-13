@@ -1,0 +1,11 @@
+{
+  "risk": {
+    "analytics": {
+      "correlation": {
+        "name": "Correlazione",
+        "description": "Matrice di correlazione Pearson sui rendimenti in valuta target.",
+        "help": "In questo pannello si analizzano le correlazioni a due a due di tutti gli asset presi in esame, calcolate sul periodo scelto e tenendo conto degli eventuali cambi valuta. Un valore alto, vicino a +1, dice che due asset si muovono insieme e si diversificano poco; vicino a 0, che si muovono per conto loro; negativo, che uno attutisce l’altro. Clicca l’icona per la guida."
+      }
+    }
+  }
+}

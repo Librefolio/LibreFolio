@@ -8,16 +8,93 @@
  * - Database populated (./dev.py test db populate --force)
  */
 
-import {expect, test} from '../fixtures/playwright';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
-import {goToAssetDetailPage, goToAssetsPage, openCreateAssetModal, openEditAssetModal} from './assets-helpers';
-import {uniqueToken} from '../fixtures/unique';
+import {API_BASE, goToAssetDetailPage, goToAssetsPage, openCreateAssetModal, openEditAssetModal} from './assets-helpers';
+import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
+
+/**
+ * Every asset a test saved, by the unique name it gave it: its id once the create response has
+ * named it, `null` until then — a save whose answer never came back is still findable by name.
+ */
+type OwnedAssets = Map<string, number | null>;
+type HttpResponse = {status(): number; json(): Promise<unknown>};
+type CreateBody = {results?: Array<{asset_id?: number | null; display_name?: string; success?: boolean; message?: string | null}>};
+type DeleteBody = {results?: Array<{asset_id: number; success: boolean; message?: string | null}>};
+
+/**
+ * Click Save on the open create modal and record the id of the asset it creates, read from the
+ * POST /assets response — the moment the asset exists, before anything that follows can fail.
+ */
+async function saveAndRecordCreated(page: Page, owned: OwnedAssets, name: string, save: () => Promise<void>): Promise<number> {
+    owned.set(name, null);
+    const [response] = await Promise.all([page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === `${API_BASE}/assets`, {timeout: 15_000}), save()]);
+    return recordCreated(response, owned, name);
+}
+
+/** A plain EUR stock of the test's own, created over the API and recorded the moment it exists. */
+async function createOwnedAsset(page: Page, owned: OwnedAssets, name: string): Promise<number> {
+    owned.set(name, null);
+    const response = await page.request.post(`${API_BASE}/assets`, {data: [{display_name: name, currency: 'EUR', asset_type: 'STOCK'}]});
+    return recordCreated(response, owned, name);
+}
+
+/** Read a POST /assets answer: record the id it gives `name`, then require that the create succeeded. */
+async function recordCreated(response: HttpResponse, owned: OwnedAssets, name: string): Promise<number> {
+    const body = (await response.json().catch(() => null)) as CreateBody | null;
+    const result = body?.results?.find((item) => item.display_name === name);
+    // Recorded before any assertion can throw: whatever was created gets deleted.
+    if (typeof result?.asset_id === 'number') owned.set(name, result.asset_id);
+    expect(response.status(), `POST ${API_BASE}/assets creates "${name}": ${JSON.stringify(body)}`).toBe(201);
+    if (!result?.success || typeof result.asset_id !== 'number') throw new Error(`"${name}" was not created: ${JSON.stringify(body)}`);
+    return result.asset_id;
+}
+
+/** The ids of the assets carrying exactly `name` — a unique name, so only ever the test's own. */
+async function assetIdsNamed(page: Page, name: string): Promise<number[]> {
+    const response = await page.request.get(`${API_BASE}/assets/query?search=${encodeURIComponent(name)}`);
+    if (!response.ok()) throw new Error(`asset query answered ${response.status()}: ${await response.text()}`);
+    return ((await response.json()) as Array<{id: number; display_name: string}>).filter((asset) => asset.display_name === name).map((asset) => asset.id);
+}
+
+/**
+ * Delete what the test created, by id: the id each create response named, or — for a save whose
+ * answer never arrived — the asset found by the unique name it was given. Every asset is tried
+ * whatever happened to the previous one, and every failure is named.
+ */
+async function deleteOwnedAssets(page: Page, owned: OwnedAssets): Promise<void> {
+    const failures: string[] = [];
+    for (const [name, recordedId] of owned) {
+        try {
+            const ids = recordedId !== null ? [recordedId] : await assetIdsNamed(page, name);
+            for (const id of ids) {
+                const response = await page.request.delete(`${API_BASE}/assets?asset_ids=${id}`);
+                const body = (await response.json().catch(() => null)) as DeleteBody | null;
+                if (!response.ok() || body?.results?.find((result) => result.asset_id === id)?.success !== true) failures.push(`asset ${id} "${name}": HTTP ${response.status()} ${JSON.stringify(body)}`);
+            }
+        } catch (error) {
+            failures.push(`"${name}": ${String(error)}`);
+        }
+    }
+    expect(failures, 'cleanup deletes every asset this test created').toEqual([]);
+}
 
 test.describe('Asset Modal', () => {
+    // Tests 4 and 5 each own one asset: its id is recorded the moment it exists, and the
+    // afterEach deletes exactly that asset, by id. The other tests save nothing.
+    let owned: OwnedAssets = new Map();
+
     test.beforeEach(async ({page}) => {
+        owned = new Map();
         await login(page, TEST_USER);
+    });
+
+    // afterEach, not `finally`: it runs after a timeout too, while the page can still reach the
+    // API, and an error of its own is reported beside the test's instead of replacing it.
+    test.afterEach(async ({page}) => {
+        await deleteOwnedAssets(page, owned);
     });
 
     // ========================================================================
@@ -62,44 +139,56 @@ test.describe('Asset Modal', () => {
     // ========================================================================
     test('can create basic asset with name and currency', async ({page}) => {
         await goToAssetsPage(page);
-        const countBefore = await page.getByTestId('assets-count-badge').textContent();
+        // Checked below on this test's own card, never on a count of everyone's assets. Cards are
+        // the grid's — the default view, driven to rather than assumed, since the view is remembered.
+        await page.getByTestId('view-mode-grid').click();
 
         await openCreateAssetModal(page);
+        const name = `E2E Test Asset ${uniqueSuffix()}`;
         const nameInput = page.getByTestId('asset-modal-display-name');
-        await nameInput.fill(`E2E Test Asset ${Date.now()}`);
+        await nameInput.fill(name);
 
-        // Save
+        // Save — the create response names the new asset's id, recorded for the afterEach
         const saveBtn = page.getByTestId('asset-modal-save');
         await expect(saveBtn).toBeEnabled({timeout: 3000});
-        await saveBtn.click();
+        const assetId = await saveAndRecordCreated(page, owned, name, () => saveBtn.click());
 
         // Modal should close
         await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
 
-        // Page should still be visible
+        // Page should still be visible, and list the asset this test created
         await expect(page.getByTestId('assets-page')).toBeVisible();
+        await expect(page.getByTestId(`asset-card-${assetId}`), 'the asset this test created must reach the list').toBeVisible({timeout: 15_000});
     });
 
     // ========================================================================
     // Test 5: Edit modal shows pre-populated fields
     // ========================================================================
     test('edit modal shows pre-populated display name', async ({page}) => {
+        // An asset of the test's own, created before the list loads: the card is opened by its
+        // id, never by position — a neighbour's asset may sort first — and the name the form
+        // must show is the one this test gave it.
+        const name = `E2E Prefill ${uniqueSuffix()}`;
+        const assetId = await createOwnedAsset(page, owned, name);
+
         await goToAssetsPage(page);
-        // Navigate to first asset detail
-        const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-        await expect(firstCard).toBeVisible({timeout: 5_000});
-        await firstCard.click();
+        // Cards are the grid's: the default view, driven to rather than assumed.
+        await page.getByTestId('view-mode-grid').click();
+        // Navigate to this test's asset detail
+        const card = page.getByTestId(`asset-card-${assetId}`);
+        await expect(card).toBeVisible({timeout: 5_000});
+        await card.click();
         await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
 
         // Open edit modal
         await page.getByTestId('asset-detail-edit-btn').click();
         await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
 
-        // Display name should be pre-filled (not empty). populateFromEditData() runs
-        // inside an $effect after mount, so use a retrying assertion instead of a
-        // one-shot inputValue() read (avoids a race with the effect's async timing).
+        // Display name should be pre-filled with this asset's name. populateFromEditData() runs
+        // inside an $effect after mount, so use a retrying assertion instead of a one-shot
+        // inputValue() read (avoids a race with the effect's async timing).
         const nameInput = page.getByTestId('asset-modal-display-name');
-        await expect(nameInput).not.toHaveValue('', {timeout: 3000});
+        await expect(nameInput).toHaveValue(name, {timeout: 3000});
 
         // Close
         await page.getByTestId('asset-modal-cancel').click();

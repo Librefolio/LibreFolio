@@ -25,9 +25,12 @@
  *
  * Offline and read-only. Every origin but the app's is refused, and POST /assets/prices/current — which /assets polls
  * on load and every 30 s, asking the live providers and writing today's row on shared seeded assets — is answered
- * empty, as in toolbar-width-sweep.spec.ts. TEST_USER only reads and is grandfathered completed on every onboarding
- * flow (populate_mock_data), read back over the API, so no welcome redirect or tour moves the page. The one session
- * state a test changes is its own browser context's cookie jar. Routes are removed after each test.
+ * empty, as in toolbar-width-sweep.spec.ts. The 401 test also answers GET /fx/providers/routes with zero pairs: /assets
+ * fetches its FX pairs' rates without awaiting them, outside its data-busy, and that wave would otherwise still be
+ * calling the backend when the test clears the cookies, so its 401 could come before /brokers'. TEST_USER only reads
+ * and is grandfathered completed on every onboarding flow (populate_mock_data), read back over the API, so no welcome
+ * redirect or tour moves the page. The one session state a test changes is its own browser context's cookie jar. Routes
+ * are removed after each test.
  *
  * Desktop project (the runner's default); the 401 test opens the off-canvas sidebar first when run on mobile.
  */
@@ -43,14 +46,23 @@ const AUTH_ME = '**/api/v1/auth/me';
 const PANEL_TIMEOUT_MS = 20_000;
 const PAGE_TIMEOUT_MS = 30_000;
 const LOGIN_URL_TIMEOUT_MS = 10_000;
+/**
+ * From the layout's first render to its GET /auth/me reaching the gate. The request leaves in the layout's onMount, but
+ * every request of these pages is first held at Playwright's routes until the worker answers (keepOffline routes by
+ * predicate, so by every URL): a queue on a loaded machine. A condition, not a sleep.
+ */
+const GATE_TIMEOUT_MS = 10_000;
 /** Two query parameters: the `&` must survive the trip through `redirect`, which only an encoded value lets it do. */
 const REQUESTED_WITH_QUERY = '/assets?view=table&probe=app-start-auth';
 /** Where a sign-out takes an app page: the root login, then the signed-in user's default page. */
 const SIGN_OUT_PATHS: readonly string[] = ['/', '/dashboard'];
 
-// Sign-in, a 5 s wait on /auth/me and the assets page's two load waves exceed the default 30 s on a loaded machine;
-// a red must end on its own assertion, not on the test timeout.
-test.setTimeout(60_000);
+// A red must end on its own assertion, not on the test timeout, so the budget holds the longest chain a red can sit
+// behind: signIn(), whose login() may take 70 s and still return (10 s, then a 10 s retry, on the first paint; 20 s on the
+// sign-in; 30 s on the arrival), then one of this file's waits running out (PAGE_TIMEOUT_MS, 30 s): 100 s. The rest of
+// a test runs on top at a loaded pace — the 5 s of silence on /auth/me and the assets page's two load waves; the first
+// test took 8.4 s at one worker, load 20 (13/10).
+test.setTimeout(150_000);
 
 type MarkedWindow = Window & {__lfAppStartAuthRuntime?: true};
 
@@ -153,7 +165,7 @@ async function holdAuthMe(page: Page): Promise<{held: () => number; open: () => 
 /** Signs in with the shared helper, then waits for the root's post-login routing to leave `/`: the app shell is up. */
 async function signIn(page: Page): Promise<void> {
     await login(page, TEST_USER);
-    // login() returns once the login form is gone, while the root page still loads the bootstrap and routes away.
+    // login() returns once the app has arrived; the two waits below pin which arrival: off `/`, on the app shell.
     await page.waitForURL((url) => url.pathname !== '/', {timeout: PAGE_TIMEOUT_MS});
     await expect(page.getByTestId('app-shell'), 'the app shell is up after the post-login routing').toBeVisible({timeout: PAGE_TIMEOUT_MS});
 }
@@ -189,7 +201,12 @@ test.describe('App start: only a 401 signs out, and the login keeps the page (K 
         const trail = recordMainFrame(page);
         try {
             await page.goto('/assets');
-            await expect.poll(gate.held, {message: "precondition: the layout's GET /auth/me reached the gate, which holds it"}).toBeGreaterThan(0);
+            // `goto` resolves on the document's load event; the app boots after it, and under load seconds after it.
+            // The (app) layout publishes its own check: `app-auth-checking` from its first render — the request leaves
+            // in its onMount — until AUTH_SLOW_MS, then `server-unreachable`. Either one says the layout is up and
+            // waiting on /auth/me; only then is the gate asked.
+            await withTrail(page, trail, () => expect(page.getByTestId('app-auth-checking').or(page.getByTestId('server-unreachable')), 'the (app) layout is up and checking the session').toBeVisible({timeout: PAGE_TIMEOUT_MS}));
+            await expect.poll(gate.held, {message: "precondition: the layout's GET /auth/me reached the gate, which holds it", timeout: GATE_TIMEOUT_MS}).toBeGreaterThan(0);
 
             const panel = page.getByTestId('server-unreachable');
             const heldNote = (): string => `GET /auth/me requests held by the gate: ${gate.held()} (1 is the layout's own; a 2nd is the root page asking again after a redirect)`;
@@ -252,6 +269,11 @@ test.describe('App start: only a 401 signs out, and the login keeps the page (K 
     test('a 401 in the middle of a session goes to the login carrying the page it happened on', async ({page, context}, testInfo) => {
         await signIn(page);
         await expectNoOnboardingDue(page);
+        // /assets loads its FX pairs' rates (GET /fx/providers/routes, then one POST /fx/currencies/convert per pair)
+        // without awaiting them, once its two load waves are in — so outside the data-busy awaited below, and still in
+        // flight when the cookies go: a convert answering 401 there would send the login to /assets ahead of /brokers.
+        // Zero pairs, answered here, and that wave never reaches the backend; the cookie clear and /brokers' 401 stay real.
+        await page.route('**/api/v1/fx/providers/routes', (route) => (route.request().method() === 'GET' ? route.fulfill({json: {items: []}}) : route.fallback()));
         await navigateTo(page, '/assets');
         await expectAssetsReady(page);
         // Mark the running app: the login must come from inside it — the 401 interceptor — not from a fresh start.

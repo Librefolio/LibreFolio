@@ -89,11 +89,106 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
 - **C-57 · La lista dei plugin per le icone non si ritenta dopo un errore (H2)** — basso, da verificare; I, 12/10. Se la
   prima richiesta fallisce (`frontend/src/lib/utils/broker/brokerHelpers.ts`, `ensurePluginIconsLoaded`), le icone dei
   plugin mancano fino al ricaricamento della pagina. Dettagli: come C-56.
-- **C-58 · Dettaglio broker: un test sfora i 30 s sotto carico** — basso; coordinatore, 12/10. Nel gate del treno 59,
+- ✅ **C-58 · Dettaglio broker: un test sfora i 30 s sotto carico** — chiusa nella 1.2 da I, lotto 50 (13/10): era
+  un'assunzione di tempo, non un difetto. Ogni test del blocco esterno ricaricava la lista dei broker che il
+  `beforeEach` aveva appena lasciato pronta. Ora gli helper aprono il broker dalla lista sullo schermo e ne asseriscono
+  l'indirizzo, e il blocco FIFO ha un budget esplicito di 60 s, come i blocchi axisBuilder e P&L; nessuna asserzione
+  tolta o allentata. La prova, sul test (ora `:429`): con ogni risposta dell'API ritardata di 2,5 s la base scade a
+  30,0 s e la cura passa in 23,1 s; con 3,8 s la cura passa in 34,6 s, grazie ai 60 s. La spec intera è verde a 1
+  worker (carico 16 → 44) e a 4 worker (carico 46 → 34). Era: basso; coordinatore, 12/10. Nel gate del treno 59,
   con carico ~56, «the lot detail modal renders its three sections and the net breakdown»
   (`frontend/e2e/brokers/brokers-detail.spec.ts:410`) è scaduto durante la navigazione, prima del pannello (40,1 s);
   rilanciato con carico 30, è passato in 2,9 s. Nei 30 s stanno login, `ensureBrokerExists`, due navigazioni e il
-  pannello. Da valutare con `test-triage`: un budget esplicito o una navigazione in meno.
+  pannello. Da valutare con `test-triage`: un budget esplicito o una navigazione in meno. Dettagli:
+  [piano della 50](50_brokerDetailBudget/plan-phase00BrokerDetailBudget.prompt.md).
+- ✅ **C-59 · L'immagine Docker installa `uvicorn[standard]` fuori dal lock** — chiusa il 13/10, prima del tag (decisione
+  del developer, D5): il developer ha eseguito `pipenv upgrade "uvicorn[standard]==0.52.4"` e `pipenv sync --dev`, a
+  corsie ferme. Il lock ora contiene uvloop 0.23.0, httptools 0.9.0 e watchfiles 1.3.0. Il resolver ha alzato due extra
+  già presenti, websockets 17.1 → 17.2 e python-dotenv 1.2.3 → 1.2.4; i pacchetti di sviluppo non sono cambiati. Il
+  `Dockerfile` installa solo `requirements.txt`, generato dal lock. Era: medio-basso; coordinatore, 12/10, dalla
+  ricerca su Python. `Dockerfile:70` esegue `pip install uvicorn[standard]` senza versione dopo `requirements.txt`:
+  `uvloop`, `httptools` e gli altri extra arrivano in produzione all'ultima versione del giorno della build, mentre il
+  lock non li contiene, e sviluppo e test girano senza `uvloop`. È uno scarto fra sviluppo e produzione, e una build
+  non riproducibile. Cura: gli extra nel `Pipfile` (`uvicorn = {extras = ["standard"], …}`), il lock e
+  `requirements.txt` rigenerati dal developer, poi via la riga 70. Dettagli: [rapporto di ricerca del 12/10](38_postReleaseBacklog/research-python-3.15-20261012.md),
+  §5.
+- **C-60 · Python dopo la 3.13** — medio; developer, 12/10 (richiesta di ricerca). Python 3.15.0 è uscito il 09/10.
+  - Gli import lazy (PEP 810) sono una parola chiave esplicita, `lazy import`: utili per avviare più in fretta i worker
+    con QuantLib, cvxpy, matplotlib e TA-Lib.
+  - Il free-threading (senza GIL) resta una build separata, `python3.15t`, non il default. Non alza il throughput di
+    questo server: l'event loop resta uno e SQLite ha un solo scrittore. Aiuterebbe solo il lavoro CPU nei thread.
+  - Al 12/10 cvxpy, riskfolio-lib, osqp, arch, ta-lib e PyYAML non hanno wheel per la 3.15.
+  - Consiglio del 12/10: la 1.2 resta su 3.13 (sicurezza fino a ottobre 2029); dopo la 1.2 la **3.14 con la build
+    normale**; la 3.15 verso il primo trimestre 2027, dopo una nuova verifica delle wheel; il free-threading più avanti.
+  - **Decisione del developer (13/10)**: si resta sulla 3.13 finché un salto non porta vantaggi significativi. Il
+    passaggio alla 3.14 dopo la 1.2 non è in calendario. Il rapporto del 12/10 è **il punto di partenza dei prossimi
+    confronti**: si rifanno le stesse verifiche (la tabella delle wheel pacchetto per pacchetto, lo stato del
+    free-threading, le immagini Docker) e si confrontano con le sue tabelle.
+  - Dettagli, con la tabella di compatibilità pacchetto per pacchetto: [rapporto di ricerca del 12/10](38_postReleaseBacklog/research-python-3.15-20261012.md).
+- **C-61 · BulkModal: la barra di selezione dopo un import, mai provata** — basso, da verificare; W (lint della
+  devWiki), 12/10. La pagina della wiki è aperta dal 25/06: dopo un import BRIM la barra di selezione del BulkModal
+  mancava o era tagliata (il contenitore `overflow-y: auto`, oppure `onSelectionChange` non propagato). Nessuna delle
+  due cure proposte è nel codice, e nessun E2E seleziona una riga nel BulkModal dopo il passaggio dall'import
+  (`tx-bulk-import-handoff.spec.ts` non guarda la barra). Prima un test rosso; se non si riproduce, la pagina si
+  chiude. Dettagli: [`bulk-modal-sticky-z-index`](../../../LibreFolio_devWiki/wiki/problems/bulk-modal-sticky-z-index.md).
+- **C-62 · DataTable: il ridimensionamento delle colonne è provato su una tabella sola** — basso, da verificare; W (lint
+  della devWiki), 12/10. La pagina della wiki, aperta dal 07/07, dice che in alcune tabelle la maniglia non allarga la
+  colonna, senza una causa trovata (`onColumnResize` non letto dal genitore, o una `width` fissa che la rimette com'era).
+  Un E2E lo prova solo sulla tabella L1° del Laboratorio di rischio (`risk-lab.spec.ts`, «value columns carry their
+  help»): le altre DataTable vanno ritestate. Dettagli: [`datatable-column-resize-noop`](../../../LibreFolio_devWiki/wiki/problems/datatable-column-resize-noop.md).
+- ✅ **C-63 · File: due pulsanti «copia» con un ripiego scritto a mano** — chiusa nella 1.2 da I, treno 72
+  (`65d20910e`): FileGrid e FilesTable copiano dall'helper. Era: minimo; coordinatore, 12/10, dal lint della
+  devWiki. `components/files/FileGrid.svelte:110` e `components/files/FilesTable.svelte:544` hanno un loro ripiego
+  `execCommand` per l'HTTP, che funziona, invece dell'helper comune `utils/clipboard.ts` (`writeTextToClipboard`);
+  FileGrid ignora l'esito di `execCommand` e segna «copiato» anche quando non ha copiato. Cura: passare entrambi
+  dall'helper, dopo M-20 (lotto 48 di I). Dettagli: la voce M-20 nella sezione M.
+- ✅ **C-64 · Devwiki: il secondo giro di lint** — chiusa da W il 13/10 (devWiki soltanto): date e hash in conflitto
+  e feature `planned` contro il codice (C-64a–e, la mappa degli hash riscritti `8ba2db509`); le pagine feature
+  contro il capitolo [1.2.0] verificato, con la pagina nuova F-114 (`fa93b1777`); i piani di
+  `phases/06_betaTestingReportAndFixing`, con 3 pagine corrette perché contraddicevano il codice e 5 nuove
+  (`2b1734e76`). I rilievi minori non verificati sono elencati nella pagina fonte
+  `sources/beta-testing-2026-08-05`. Ne sono nate C-65 e C-66, qui sotto.
+- **C-65 · Evento → transazione: il resto del collegamento (F-090)** — medio-basso; W (C-64), 12/10. Sono già nel
+  codice, sotto F-051: la FK `RESTRICT` (`backend/app/db/models.py:830`), la cancellazione degli eventi che risponde
+  con un esito per id e rispetta il `RESTRICT` (`api/v1/assets.py`, `delete_events_bulk`), il selettore degli eventi
+  nel form. Mancano il modale al cambio di provider (vecchio evento → nuovo, con la proposta di ricollegare) e la
+  ricerca inversa `GET /transactions?asset_event_id=`. Vicina ma diversa: «🔗 Suggerimento eventi collegabili nella
+  bulk modal» in [`TODO_FUTURI.md`](../../../TODO_FUTURI.md). Dettagli: [F-090](../../../LibreFolio_devWiki/wiki/features/F-090.md).
+- **C-66 · Sync: l'avviso prima di sovrascrivere i dati (F-094)** — basso; W (C-64), 12/10. Il dialogo c'è già ed è
+  comune a cambi e asset: `SyncModalBase`, con `FxSyncModal`, `AssetSyncModal` (lista degli asset) e `PageSyncModal`
+  (pagine di dettaglio), che sincronizzano l'intervallo della pagina. Manca solo l'avviso quando l'intervallo scelto
+  copre dati che esistono già, per i cambi come per gli asset. Dettagli: [F-094](../../../LibreFolio_devWiki/wiki/features/F-094.md).
+- **C-67 · Coverage JS: ogni invocazione ricostruisce il frontend due volte** — basso; R, 13/10, run completa §3.6.
+  `dev.py server --test` forza il modo debug (`dev.py:197`, `:228`), quindi una build di produzione strumentata è
+  «del modo sbagliato» e viene ricostruita in debug; poi `_ensure_frontend_build` (`_frontend_common.py:71-74`) rifà
+  la strumentata. Nella run completa non costa nulla, nei rilanci di una singola azione 5–7 minuti. Dettagli:
+  [rapporto di R del 12/10](38_postReleaseBacklog/report-R-full-run-coverage-20261012.md), §3.6.
+- **C-68 · Gli artefatti di Playwright spariscono alla categoria successiva** — basso; R, 13/10. `test-results/` si
+  svuota a ogni invocazione: `error-context.md` e gli screenshot dei rossi di una categoria si perdono quando parte la
+  successiva. In una run completa vanno copiati via mano a mano. Dettagli: come C-67.
+- **C-69 · Il planner del PAC non ha coverage JS** — medio-basso; R, 13/10. 7 008 statement al 14 % nella run del
+  12/10 (`features/tools/pac-allocator`), perché nessuna E2E lo attraversava (la galleria è esclusa); senza
+  `features/tools` il JS è al 78,4 %. La lacuna 3 di V (`pac-allocator-real`, treno 76) ne copre una parte: da
+  rimisurare nella run finale. Dettagli: come C-67, §4.2.
+- **C-70 · I rifiuti di lettura dei plugin di import sono solo in inglese** — basso; T, 13/10, controllo del
+  CHANGELOG (D13). Il messaggio che il Generic CSV dà per un file che non sa leggere, e quelli della lettura di L108,
+  arrivano in inglese in ogni lingua, e il rifiuto del Generic CSV nomina il codice `broker_generic_csv` invece del
+  nome del plugin. Da fare: codici d'errore con parametri, tradotti nel frammento i18n del plugin. Dettagli:
+  `/tmp/libreFolio_changelog_audit_T.md` §3 D13 (copia nella sessione del coordinatore).
+- **C-71 · Due «Rolling Return» con lo stesso nome** — minimo; I, 13/10, controllo del CHANGELOG (D-I1). L'indicatore
+  della 1.1 (`rolling_return`, finestra in osservazioni) resta nel catalogo dei segnali e usa la stessa chiave di nome,
+  `signals.riskRollingReturn.name`, del modo nuovo del grafico dell'asset (`calendar_rolling_return`, giorni di
+  calendario, nascosto dal catalogo). Chi viene dalla 1.1 può leggerli come un doppione. Da fare: un nome che dica la
+  finestra («… (observations)» contro «… (calendar days)»), oppure ritirare l'indicatore vecchio.
+- **C-72 · Commenti e pagine del runner e della coverage rimasti indietro** — minimo; V e M, 13/10, trovati
+  lavorando a V-28 e M-29. Il codice è giusto, i testi no:
+  - help e commenti del runner: `scripts/test_runner/_cli.py:437`, `:482`, `:866`; `_coverage.py:151-165`;
+    `_consolidate.py:204`, `:259`; la docstring di `_common.py:120` nomina `_consolidate._run_playwright_batch`, che oggi
+    è `run_playwright_group`;
+  - `frontend/vitest.config.ts:47` cita uno script che non esiste; `frontend/scripts/js-coverage-report.js:14`, `:35`;
+  - `mkdocs_src/docs/developer/test-walkthrough/runner_architecture.md:433-453`, `:716`, `:732`;
+  - la pagina devWiki `problems/svelte-template-branches-not-instrumented.md`, contraddetta da `2e104b919`.
+  Da fare: un giro solo sui testi, senza toccare il comportamento.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6).
 
 ## Risk · Rischio (02)
@@ -130,7 +225,7 @@ Dettagli: [piano della 41](41_brokerPnlFlows/plan-phase00BrokerPnlFlows.prompt.m
 lotto è chiuso: il motore nel treno 32, la card (H) nel treno 35, F nel treno 42. Su F-AI il developer ha deciso il
 12/10: nella 1.2 la (a), cioè niente; la (b), il nome «FX on cash» nell'export del portafoglio, è la voce qui sotto.
 Righe scritte da I il 12/10, coi numeri di riga di `5d62658bb`; la voce F-AI (b) con quelli di `378338fed`; la 47-1,
-dal piano 47, con quelli del suo commit C3.
+dal piano 47, con quelli del suo commit C3; la 49-1, dal piano 49, con quelli di `0071b9703`.
 
 Altrove: B9 (T-U3), C1 (T-U4), L1/L2 (T-U6) e KpiSection (T-U8) sono nella sezione T. P1, R4, W1 e X5 sui prezzi F
 non li ha toccati e restano a T: P1 in U4, R4 in U5 con B8, W1 in U7, X5 dei prezzi in U1 (§17.6). Il gruppo I del
@@ -210,6 +305,17 @@ debito di traduzione di F-5 (di M).
   zoom, 7 con metà periodo, 4 con un quinto, solo i due bordi su una finestra di 33 punti. Gli assi time non ne
   soffrono. Dettagli: [piano della 47](47_chartAxisDayLabels/plan-phase00ChartAxisDayLabels.prompt.md), §4 «Fuori» e
   §9, passo 7.
+- **48-1 · Il pulsante dell'AI Export più largo dei vicini nella barra** — minimo, cosmetico; I, 12/10 (piano 48,
+  V-19). Il trigger di `AiExportMenu.svelte:298` ha `px-3 gap-2`, i pulsanti vicini `px-2.5 gap-1.5`
+  (`assets/[id]/+page.svelte:2826-2861`). Allinearlo stringe la colonna di «Exportación IA» di circa 12 px. Da solo
+  non avrebbe curato V-19, che sforava fino a 18,8 px: lo ha curato C5 con le soglie `denseRow`. Resta un ritocco di
+  coerenza. Dettagli: [piano della 48](48_uiPolish/plan-phase00UiPolish.prompt.md), §1.5 e passo 5.
+- **49-1 · Il debito di lint di `_frontend_broker.py`** — minimo, preesistente; I, 12/10 (piano 49, §6). `ruff check`
+  dà E701 a `:44`, `:45`, `:52`, `:53` e PLC0415 a `:96`; `black --check` lo riformatterebbe in due pezzi. Viene da
+  `1a29e0523`, `547c06cf0` e `7d3463e2f`, ed è fuori dal gate: ruff e black del gate passano solo `backend/`
+  (`dev.py:1841`, `:1848`). Nel runner intero sono 149 errori ruff in 17 file, e black riformatterebbe 15 file su 30:
+  se pulirlo in una volta sola lo decide il coordinatore. Dettagli:
+  [piano della 49](49_requestCountRace/plan-phase00RequestCountRace.prompt.md), §6.
 
 ## P · Transazioni e Bulk (42)
 
@@ -362,6 +468,104 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   (`financial_math/portfolio/data_quality.py`); `portfolio_service` importa `_compute_tx_fingerprint` dal motore. Il
   PAC l'ha già fatto in T-1 (`QUANTITY_DUST_THRESHOLD` pubblico). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «B2 — motore del portafoglio in sei moduli».
+- **T-ST · I giorni «stale»: un plurale vero e l'abbreviazione tradotta** — minimo; T, 12/10 (M-18 CP2, scelta (A) del
+  coordinatore). `chart.tooltip.stale` ha lo stesso `{days}` nelle 4 lingue ma nessun plurale ICU: «day(s)»,
+  «giorno/i», «jour(s)», «día(s)». La leggono i tooltip di `CandlestickChart.svelte:520` e `LineChart.svelte:777` e,
+  dal CP2, il titolo del badge di `DataEditor.svelte:180`. Il badge visibile `⚠️ {N}d` ha una «d» inglese (it «g», fr
+  «j»); l'unica chiave con l'abbreviazione è `transactions.fxInfo.stale` («non agg. {days}g»), che aggiunge una parola.
+  Da fare: il plurale ICU nei 4 cataloghi, con testi diversi per lingua (la cache dei formatter di svelte-i18n), e
+  un'abbreviazione tradotta per il badge. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezione «10», M-18 CP2.
+- **T-ICU · I numeri dentro i messaggi del catalogo seguono la lingua senza regione** — minimo, limite noto; T, 12/10
+  (M-18 CP2). Con M-18 ogni cifra passa da `uiLocale()`, ma le cifre che svelte-i18n formatta dentro un messaggio ICU
+  usano il suo `$locale`, cioè la lingua senza regione: l'unico `{covered, number, percent}`
+  (`risk.warnings.historical_replay_mostly_excluded`) e il `#` dei 74 plurali. Si vede solo con un browser che porta
+  una regione diversa da quella di default: per esempio con un browser es-MX il `#` di un plurale scrive `1234` dove il
+  resto della pagina scrive `1,234`, e l'unico percento `13 %` invece di `13%`. Nei cataloghi
+  non ci sono date ICU. Due strade: passare a svelte-i18n la locale completa (`it-CH` ricade sul catalogo `it`) senza
+  cambiare chi legge `$locale` per i link e i testi, oppure formattare le cifre prima di passarle al messaggio, come fa
+  già `problemCount`. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione
+  «10», M-18 CP2.
+- ✅ **T-EN1 · Testo inglese scritto a mano nei tooltip del grafico dei prezzi** — chiusa nella 1.2 da T, checkpoint
+  T-EN del 13/10, con le chiavi `chart.tooltip.{originalValue,fxRateDate,fxDaysBack}` e `assets.probe.points` (il
+  plurale: «1 point»). Il commit lo scrive il coordinatore all'integrazione. Era: minimo; T, 12/10 (trovato con M-18).
+  `PriceChartFull.svelte:785-788` scrive «orig.», «(Nd back)» e «fx @» in ogni lingua; `ProviderAssignmentSection.svelte:354`
+  scrive «points» nel dettaglio della sonda dello storico (la cifra accanto segue la lingua dal CP3b). Servono chiavi
+  nuove: dopo la
+  divisione dei cataloghi di U. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezione «10», M-18 CP3.
+- ✅ **T-EN2 · Le etichette dei segnali what-if sono in inglese, con cifre grezze** — chiusa nella 1.2 da T,
+  checkpoint T-EN del 13/10: le chiavi `chartSettings.signals.{linear,compound,sine}Label`, le cifre da
+  `formatPercent` e `formatFixed`. Per decisione del coordinatore include anche le unità dell'editor dei parametri
+  («%/yr», «days»), con `signals.units.percentPerYear`. Il commit lo scrive il coordinatore all'integrazione. Era:
+  minimo; T, 12/10 (trovato con M-18).
+  `LinearSignal.ts:74-75`, `CompoundSignal.ts:96-97` e `SineSignal.ts:87` scrivono «Linear 5%/yr +2%», «Compound …» e
+  «Sine ±…% / …d»: parole inglesi e numeri stampati grezzi (`${rate}%`) in ogni lingua. Servono chiavi, e le cifre da
+  `formatPercent`/`formatFixed`. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezione «10», M-18 CP3.
+- **T-COL · L'ordine dei nomi segue la collazione del browser** — minimo; T, 12/10 (trovato con M-18). Nessun chiamante
+  passa una locale a `nameComparator` (`risk/correlationHelpers.ts:252`): `assetSetTable.ts:49`,
+  `CorrelationHeatmap.svelte:140`, `LabAssetPicker.svelte:46`. Così i nomi si ordinano con le regole del browser, non
+  con quelle della lingua dell'interfaccia. Non è una cifra: è testo, quindi conta la lingua (`$currentLanguage`), non
+  `uiLocale()`. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «10»,
+  M-18 CP3.
+- **T-DEAD · Codice morto trovato con M-18** — minimo; T, 12/10. Il ramo `relative` di `formatCellDate`
+  (`components/table/dataTableLogic.ts:335-342`) scrive «Nd ago» in inglese, ma nessuna colonna usa
+  `format: 'relative'` (il tipo è in `types.ts:46`). `formatDate` in `routes/(app)/files/+page.svelte:685` non viene
+  mai chiamata. Da togliere, oppure, se una colonna adotta `relative`, da scrivere con `Intl.RelativeTimeFormat` nella
+  lingua dell'interfaccia. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezione «10», M-18 CP3.
+- ✅ **T-ISO · Le date d'osservazione restano ISO nei tooltip del grafico dei prezzi e nella sonda** — chiusa nella
+  1.2 da T, checkpoint T-ISO + T-FB del 13/10: il coordinatore l'ha anticipata, perché la riga 🔄 «Numbers and dates
+  follow the interface language everywhere» promette anche i tooltip. Le date passano da `formatDay`
+  (`utils/core/formatAxisDate.ts`), nella lingua dell'interfaccia. Il lotto copre anche le intestazioni dei tooltip di
+  `PriceChartFull`, `CandlestickChart` e `LineChart`, e la tabella che compare al passaggio sulla sonda
+  (`providerProbe.ts`). Il `date_range` si legge senza cambiare l'API, perché il backend lo scrive sempre
+  `inizio → fine`. Il commit lo scrive il coordinatore all'integrazione. Era: basso; T, 13/10 (trovato con T-EN1).
+  Con M-18 le date seguono la lingua dell'interfaccia, ma alcune date d'osservazione si leggevano ancora `2024-03-01`.
+  - In `components/charts/PriceChartFull.svelte`: il segnaposto `{date}` di `chart.tooltip.valueAt` (`:1017`, `:1020`,
+    `:1029`), le righe `↩` (`:1018`) e `💱` (`:1023`) del riferimento, la data dell'evento nei periodi aggregati
+    (`:778`) e quella del cambio (`chart.tooltip.fxRateDate`, `:789`).
+  - In `components/assets/ProviderAssignmentSection.svelte`: la data del prezzo corrente (`:335`) e l'intervallo dello
+    storico, `date_range`, che arriva dal backend come una stringa sola (`:355`).
+
+  Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «T-EN — analisi» e
+  «T-ISO + T-FB».
+
+  **Riparazione dopo il treno 88**: il test del ciclo di vita dell'AssetModal riconosceva la riga dello storico dal
+  `date_range` grezzo nel testo, e ha dato 8 rossi in `component-unit`. Le righe della sonda pubblicano ora
+  `data-operation` (`current_price`, `history`, `probe`). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezione «T-ISO, la riparazione di `component-unit`».
+- ✅ **T-FB · I ripieghi inglesi dei segnali di confronto** — chiusa nella 1.2 da T, checkpoint T-ISO + T-FB del 13/10,
+  per decisione del coordinatore. «Asset #N» ha ora una chiave sola, `chartSettings.signals.assetFallback`. Prima
+  era `fxDetail.assetFallback`, che è stata tolta. I segnali la leggono con `ChartSignal.text`, le due pagine con `$t`.
+  «Asset» e «FX Pair» vengono dal catalogo (`common.asset`, `chartSettings.signals.fxPair`). Nello stesso lotto sono
+  entrati i tre errori della pagina dell'asset («Asset #N not found», «Failed to load asset info», «Failed to load
+  prices»), ora chiavi `assetDetail.*`, e «Other» nelle regole dello stress in it, fr ed es. Il commit lo scrive il
+  coordinatore all'integrazione. Era: minimo; T, 13/10 (trovato con T-EN2).
+  Se l'asset di confronto non c'era più, l'etichetta diceva `Asset #N` o `Asset`
+  (`charts/signals/AssetComparisonSignal.ts:173-174`, e `routes/(app)/assets/[id]/+page.svelte:690`, `:871`, `:895`,
+  `:1004`, `:1274`). Una coppia vuota diceva `FX Pair` (`charts/signals/FxPairSignal.ts:94`). Si vedeva solo con una
+  configurazione salvata che punta a un asset cancellato. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezioni «T-EN — analisi» e «T-ISO + T-FB».
+- **T-CAT · Due rese delle categorie: tipi, settori e paesi** — minimo; T, 13/10 (trovato con T-SHK). Lo shock del
+  rischio scrive i bucket con `components/risk/stressBucketLabel.ts`, il PAC le categorie di esposizione con
+  `exposureCategoryLabel` (`features/tools/pac-allocator/planner/categoryLabels.svelte.ts`). Le regole sono le stesse:
+  tipo tradotto, settore con emoji, paese con bandiera, codice sconosciuto scritto com'è. Da fare: una funzione sola, in
+  un modulo condiviso fuori dalle due feature. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «T-SHK — analisi».
+- **T-GRP · I gruppi geografici dell'host restano id grezzi nella tabella dello shock** — minimo; T, 13/10 (trovato con
+  T-SHK). `stressBucketLabel` dà un nome solo a `european_union`. Un gruppo definito dall'host nel catalogo degli scenari
+  porta già i suoi nomi per lingua (`geography_groups`), ma la tabella non li legge. Inoltre, se un impatto avesse i pesi
+  senza `bucket_audit`, ogni bucket avrebbe peso 0 e la tabella sparirebbe; oggi il backend lo manda sempre. Dettagli:
+  [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «T-SHK + T-CL».
+- ✅ **T-EVW · Il grafico dei prezzi forse perde gli eventi alla risoluzione settimanale o mensile** — chiusa nella 1.2:
+  è la R-5 del lotto 51 di I, confermata a runtime da V e curata da I in `1acd1bf10`, treno 91. Il tooltip dello stesso
+  punto, che diceva ancora «value at» la fine teorica del periodo, lo allinea T nel checkpoint «Il tooltip del periodo
+  in corso». Dettagli: [piano della 51](51_narrowFitFixes/plan-phase00NarrowFitFixes.prompt.md), sezione «R-5», e
+  [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «Il tooltip del periodo in
+  corso». Era: da verificare; T, 13/10 (letto nel codice da test-author durante T-ISO).
+  Il marcatore stava sulla fine teorica del periodo, il punto aggregato sull'ultimo dato: nell'ultimo periodo, ancora
+  aperto, l'evento non trovava il suo punto e non si disegnava.
 
 La voce di `TODO_FUTURI.md` sul riordino del codice si cancella a mano a mano.
 
@@ -456,7 +660,7 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   formule non si vedevano. Ora la base è l'indirizzo dello script stesso (`document.currentScript`), che MkDocs collega
   sempre alla radice del sito. Provato senza internet: 34 pagine su 34 (16 pagine con formule, 4 lingue, profondità da 2
   a 6, servite sotto `/mkdocs/` e sotto `/LibreFolio/`) caricano la copia locale e disegnano ogni formula. Il test e2e
-  aspetta che il coordinatore assegni il file del runner. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
+  `front-utility docs-offline-math` è registrato nel lotto 28. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
   sezione «15». **Seguito nel lotto 25** (12/10, decisione del coordinatore): la copia locale non aveva i font di MathJax,
   che il bundle cerca accanto a sé (`output/chtml/fonts/woff-v2/`). Con la correzione ogni pagina annidata prendeva lo
   script locale e disegnava le formule col font della pagina: lettere diritte, frazioni tagliate. Prima, online, quelle
@@ -464,7 +668,8 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   `scripts/update_js_cache.py` ora scarica anche i 22 font che il bundle nomina (321 KB), con la stessa severità dello
   script; `mathjax.js` non chiama più `MathJax.typesetPromise()` prima che MathJax esista (un `TypeError` su ogni
   pagina). Dettagli: [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md), passo «8».
-- **M-20 · Cinque pulsanti «copia» senza il ripiego per l'HTTP** — basso; M (trovato da docs-writer), 12/10, fuori dal
+- ✅ **M-20 · Cinque pulsanti «copia» senza il ripiego per l'HTTP** — chiusa nella 1.2 da I, treno 72 (`65d20910e`).
+  Era: basso; M (trovato da docs-writer), 12/10, fuori dal
   perimetro di M: assegnata a I nel lotto di rifinitura UI (decisione del coordinatore). Il browser non dà l'API degli appunti a una pagina in `http://` fuori da `localhost` (per esempio
   Tailscale in HTTP, o l'indirizzo di rete locale). `frontend/src/lib/utils/clipboard.ts:14` (`writeTextToClipboard`)
   ha il ripiego, ma cinque pulsanti chiamano `navigator.clipboard.writeText` direttamente e lì non copiano niente:
@@ -489,13 +694,82 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   MathJax: una copia in `vendor/` scaricata da `scripts/update_js_cache.py` e un caricatore con ripiego; resta da
   scegliere il formato da copiare, perché il modulo ESM di Mermaid ne carica altri. Dettagli:
   [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md), passo «8».
-- **M-23 · Il changelog dell'app in francese senza spazi non separabili** — basso; M, 12/10, fuori dal perimetro di M
-  (il renderer del modale). Le traduzioni tengono spazi normali, e per le pagine della documentazione li cambia in
-  spazi non separabili `mkdocs_src/hooks/fr_typography.py`, al momento della build. Il modale del changelog legge
-  `CHANGELOG.fr.md` senza MkDocs (`frontend/src/lib/features/changelog/changelog.ts`), quindi lì una riga può andare
-  a capo prima di `;` `:` `?` `!` `%` o dentro « ». Le stesse regole dell'hook vanno applicate al testo del modale in
-  francese; i sorgenti restano come sono. Dettagli: [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md),
-  passo «10».
+- ✅ **M-23 · Il changelog dell'app in francese senza spazi non separabili** — nella 1.2, M (lotto 27; assegnata a M
+  dal coordinatore il 12/10, con `changelog.ts` e i suoi test). Le traduzioni tengono spazi normali, e per le pagine
+  della documentazione li cambia in spazi non separabili `mkdocs_src/hooks/fr_typography.py`, al momento della build.
+  Il modale del changelog legge `CHANGELOG.fr.md` senza MkDocs, quindi lì una riga poteva andare a capo prima di `;`
+  `:` `?` `!` `%` o dentro « ». Ora `frontend/src/lib/features/changelog/changelog.ts` applica le stesse regole ai
+  capitoli francesi (`typesetFrench`, `typesetFrenchMarkdown`), sul testo Markdown prima di tagliarlo in capitoli, fuori
+  dal codice (inline e blocchi), dalle destinazioni dei link, dalle immagini, dall'HTML e dagli URL; i sorgenti restano
+  come sono. L'HTML del modale coincide byte per byte con quello dell'hook sui 4 capitoli francesi; 136 test Vitest nuovi
+  (`front-utility core-unit`). Dettagli: [piano del lotto 25](27_releaseImages/plan-phase00ChangelogTranslation.prompt.md),
+  passo «11».
+- **M-24 · La galleria non fissa `navigator.language`** — basso; M (sonda della preparazione di I5), 12/10, riga di
+  backlog per decisione del coordinatore. Dal M-18 l'app scrive le cifre con `uiLocale()`, che legge
+  `navigator.language`.
+  - **Cosa fissa la galleria:** il locale del browser, con `Emulation.setLocaleOverride`
+    (`frontend/e2e/fixtures/galleryLocale.ts`). Quell'override sposta solo il locale di ripiego di `Intl` e
+    l'Accept-Language.
+  - **Oggi:** nel Chromium headless della galleria `navigator.language` resta `en-US` (misurato su macOS con LANG C,
+    it_IT ed en_GB), quindi gli scatti inglesi escono americani, come previsto.
+  - **Il rischio:** con `dev.py mkdocs gallery --headed` o `--ui`, o dove Chromium risponde altrimenti (non misurato),
+    gli scatti inglesi uscirebbero britannici, e nessun test diventerebbe rosso.
+  - **La guardia:** il timbro di `stampDocumentLocale` registra anche `navigator.language`, ed `expectDrawnUnder`
+    controlla che ne venga il locale atteso per ogni lingua.
+
+  Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezioni «21.2» e «23».
+- **M-25 · Un `dev.py docker build` locale può riusare un frontend con un'altra versione** — basso; M (lotto 34), 13/10.
+  - **Perché:** `_docker_ensure_assets_built()` ricostruisce il frontend solo se `check_frontend_needs_build()` lo
+    trova vecchio, e quel controllo guarda le date dei sorgenti, non la versione.
+  - **L'effetto:** dopo un commit che non tocca il frontend, l'immagine locale riusa un bundle con la versione di un
+    build precedente, anche `-dirty`, mentre `VERSION`, scritto alla fine, è nuovo.
+  - **Fuori portata:** le immagini pubblicate non ne soffrono, perché la CI ricostruisce sempre il frontend con
+    `LF_APP_VERSION`.
+  - **La cura:** congelare la versione una volta all'inizio di `_docker_ensure_assets_built()`, passarla come
+    `LF_APP_VERSION` al build del frontend, segnarla in `frontend/build/` accanto a `.build-debug`, e ricostruire
+    quando è diversa.
+
+  Dettagli: [piano ReleaseGallery](27_releaseImages/plan-phase00ReleaseGallery.prompt.md), passo «30».
+- ✅ **M-26 · Due pagine della doc dicono ancora cose vecchie sui test e sulla CLI** — chiusa nella 1.2, M (lotto 36,
+  13/10). Era: basso; M (docs-writer, lotto 35), 13/10, fuori dal perimetro del punto 2. `runner_architecture` ora usa
+  `trackTransactionWrites()` e dice le due condizioni della pulizia; `cli_tools` dice in 4 lingue che anche `deactivate`
+  rifiuta l'ultimo amministratore attivo. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «27.3».
+  - `developer/test-walkthrough/runner_architecture.md:205-227` importa `deleteTransactionsCreatedSince`, che non
+    esiste più, e consiglia la pulizia per differenza di id che `db-cleanup.ts` chiama non sicura; `:573` non dice che
+    serve anche `E2E_WORKERS` ≤ 1.
+  - `admin/cli_tools.*.md:70-77` non dice che anche `deactivate` rifiuta l'ultimo amministratore attivo.
+
+  Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «26.2».
+- ✅ **M-27 · La scheda Posizioni si chiama ancora «Performance» in alcune pagine** — chiusa nella 1.2, M (lotto 36,
+  13/10), con la regola del coordinatore: per i controlli il nome del catalogo, «Holdings» resta dove indica il
+  contenuto. Didascalie, frasi della galleria, `positions` e le due pagine developer, in 4 lingue dove tradotte.
+  Restano due commenti nel codice (`PositionsPanel.svelte:142`, `dashboard/+page.svelte:623`). Dettagli:
+  [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «27.2». Era: basso; M (docs-writer, lotto 35),
+  13/10. Il selettore dice «Portafoglio / Periodo»; il lotto 35 ha corretto solo le 5 «Performance view» chieste.
+  Restano la sezione e i titoli degli scatti di `user/dashboard/positions.*.md` e `user/brokers/index.*.md`, le pagine
+  della galleria («Holdings and Performance») e due pagine developer. Dettagli: [journal del giro
+  12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «26.2».
+- ✅ **M-28 · Lo spagnolo chiama i tassi di cambio sia «tasas» sia «tipos de cambio»** — chiusa nella 1.2, M (lotto 37,
+  13/10): 56 valori ora dicono *tipo(s) de cambio*, gli 8 che non sono un cambio tengono *tasa*; larghezze verificate
+  (`toolbar-width-sweep` 15/15, sonda a 360 px). Dettagli: [journal del giro
+  12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «28.2». Era: basso; M (lotto 36), 13/10.
+  Il glossario dice *tipo de cambio*, e così il nuovo pulsante dei dati mancanti (`dataQuality.cta.sync_fx_pair`,
+  «Sincronizar tipos de cambio») e `common.syncFxRates`. Nel catalogo spagnolo, però, 29 valori dicono *tasas*:
+  per esempio «Sincronizar tasas» sul pulsante della pagina FX (`fxDetail.syncRates`) e altri valori di `fx.*`,
+  `csvImport.*` e `transactions.wac.*`. Sono sorgenti di altre aree (`i18n/fx/`, …), da allineare al glossario
+  con `dev.py i18n update`. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «27.1».
+  - **Lotto 37, 13/10:** elenco pronto, 56 valori da cambiare e 8 da tenere (tasso privo di rischio, d'interesse, di
+    crescita); si applica dopo il lotto di T. Dettagli: stesso journal, sezione «28.2».
+- ✅ **M-29 · `runner_architecture.md` sbaglia ancora i worker** — chiusa nella 1.2, M (lotto 37, 13/10): la sezione
+  «`--workers` reaches Playwright too» ora dice il tetto dei worker del browser e il backend condiviso dimensionato da
+  `--workers`. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione
+  «28.1». Era: basso; M (docs-writer, lotto 36), 13/10.
+  - `:264` dice che si inietta `E2E_WORKERS=4`; oggi è al più metà dei core logici, ed è esportato solo sopra 1 e se
+    non è già impostato (`scripts/test_runner/_common.py:90-131`).
+  - `:267` e `:270` danno ⌊n/2⌋ worker del server; la configurazione usa `Math.ceil(E2E_WORKERS / 2)`,
+    sovrascrivibile (`frontend/playwright.config.ts:54`): con 3 worker del browser sono 2, non 1.
+
+  Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «27.3».
 
 ## Q · Documentazione e onboarding (21, 32)
 
@@ -566,9 +840,17 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 - **V-2 · Il pannello lotti non pubblica `data-busy`** — basso; V, 12/10. Parte con `loading` falso
   (`LotsAnalysisPanel.svelte:91`), quindi un'assenza si legge solo dopo un testimone, cioè le righe dei lotti, o sulla
   risposta. Gli spec della 46 fanno così. Dettagli: idem, §9 «Passo 3».
-- **V-3 · TRANSFER orfano: i lotti falliscono, la Dashboard lo conta come capitale in natura** — basso, serve una
-  decisione; test-author di V (B1), 12/10. L'analisi dei lotti risponde `FAILED` con `TRANSFER_PAIR_MISSING`. Nessun
-  test lo fissa. Dettagli: idem, §9 «Passo 1».
+- **V-3 · TRANSFER orfano: i lotti falliscono, la Dashboard lo conta come capitale in natura** — basso, dopo la 1.2
+  (decisione del developer, 13/10); test-author di V (B1), 12/10. L'analisi dei lotti risponde `FAILED` con
+  `TRANSFER_PAIR_MISSING`. Nessun test lo fissa. Dettagli: idem, §9 «Passo 1».
+  - **Come nasce**: cancellando un broker, `delete_by_broker` (`transaction_service.py:334-352`) toglie solo il
+    collegamento `related_transaction_id` alla metà rimasta sull'altro broker, che resta un TRANSFER spaiato. C'era già
+    nella `v1.1.0`.
+  - **Il comportamento giusto, deciso dal developer il 13/10**: il TRANSFER rimasto senza la sua metà torna a essere un
+    semplice **ADJUSTMENT**, con la stessa quantità e lo stesso `cost_basis_override`. Così i lotti FIFO lo leggono come
+    un ADJUSTMENT (`fifo/engine.py`, i rami `ADJUSTMENT_IN`/`ADJUSTMENT_OUT`) e non falliscono più.
+  - Da progettare: la Dashboard (oggi `classifier.py:104`, capitale in natura), gli orfani già presenti nei DB (una
+    migrazione o una conversione alla lettura), e i test della cancellazione del broker.
 - **V-4 · Se si chiude P-10, E2 di `data-quality-real.spec.ts` va ricostruito** — minimo; V, 12/10. E2 ottiene
   `MISSING_COST_BASIS` dall'app riclassificando uno SPLIT in PRICE_ADJUSTMENT. E4 (righe legacy) e B1 restano validi.
   Dettagli: idem, §4.
@@ -594,11 +876,12 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   broker suoi, e `TEST_USER` non viene più toccato. Nel giro consolidato a 4 worker passano 157/157, con
   `dashboard-cache:338` accanto ai test di `broker-filter-label`. La domanda sul 403 continua in V-8. Commit: lotto 2
   di V, indicato dal coordinatore.
-- **V-8 · Il pannello Rischio con un broker sparito: 403 e nessuna rilettura** — basso, serve una decisione; V,
-  12/10. Se un broker posseduto sparisce dopo che la Dashboard ha letto i broker, per esempio cancellato in un'altra
-  scheda, la `risk/query` riceve 403 «Requested portfolio broker subset is not fully accessible» (`risk.py:73,89`).
-  Il tab Rischio mostra «Risk data could not be loaded» finché la pagina non rilegge i broker. Da decidere se il
-  pannello debba rileggere i broker posseduti e riprovare. Dettagli: piano della 46, §9 «Passo 7» e §11.
+- **V-8 · Il pannello Rischio con un broker sparito: 403 e nessuna rilettura** — basso, dopo la 1.2 (decisione del
+  developer, 13/10); V, 12/10. Se un broker posseduto sparisce dopo che la Dashboard ha letto i broker, per esempio
+  cancellato in un'altra scheda, la `risk/query` riceve 403 «Requested portfolio broker subset is not fully accessible»
+  (`risk.py:73,89`). Il tab Rischio mostra «Risk data could not be loaded» finché la pagina non rilegge i broker.
+  Nessun dato è sbagliato o perso. Cura proposta: al 403 il pannello rilegge i broker posseduti e riprova una volta,
+  con un E2E. Dettagli: piano della 46, §9 «Passo 7» e §11.
 - ✅ **V-9 · Due frasi superate nella doc del banner** — minimo; docs-writer di V, 12/10. In
   [data-quality-banner.md](../../../mkdocs_src/docs/developer/frontend/data-quality-banner.md):
   - la sezione «Component Modes → grouped» dice che le prime 3 issue sono visibili e che un pulsante appare quando
@@ -662,7 +945,9 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   - broker: `brokers/broker-create-feedback.spec.ts`, `brokers/broker-recovery.spec.ts`,
     `brokers/brokers-detail.spec.ts`;
   - fx: `fx/fx-flag-font.spec.ts`;
-  - utility: `files.spec.ts`, `files-destructive.spec.ts` (seriale; i broker vivono fino ad `afterAll`);
+  - utility: `files.spec.ts`, `files-destructive.spec.ts` (seriale; i broker vivono fino ad `afterAll`). Correzione del
+    12/10: in `files.spec.ts` il test di `:886` «opens table preview for BRIM files» è di classe A, perché lascia il suo
+    broker e il file BRIM; la cura è nel checkpoint delle lacune 2 e 1;
   - transaction: `tx-broker-icon-hydration`, `tx-bulk-diagnostics`, `tx-bulk-import-handoff`,
     `tx-bulk-promote-cost-basis`, `tx-bulk-row-order`, `tx-clone` (tranne il test di `:549`, che va nella cura A7),
     `tx-fx-completeness`, `tx-import-asset-inspector`, `tx-import-ca-contract`, `tx-import-degiro`,
@@ -671,6 +956,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
   Cura, a poco a poco: un account usa-e-getta (`registerDisposableUser`, `createOwnedBroker` di
   `fixtures/onboarding-accounts.ts`), come in `dashboard-broker-filter-label`. Dettagli: piano della 46, §12.3.
+  Nella 2b (12/10) è stato sistemato anche `tx-wac-bulk`: WB5 dipendeva dagli avanzi degli altri spec, e ora costruisce
+  la sua coppia; WB4 cancella ciò che committa. Dettagli: piano della 46, §12.8.
 - ✅ **V-16 · Login, registrazione e cambio password fanno bcrypt dentro l'event loop** — medio, serve una decisione;
   test-author di V, 12/10, verificato da me. Le chiamate sincrone stanno direttamente nei gestori `async def`:
   - `login` (`api/v1/auth.py:105`) chiama `verify_password_or_dummy`, cioè `bcrypt.checkpw`
@@ -702,6 +989,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     giro, con il backend condiviso già avviato;
   - il catalogo delle eccezioni seriali in `playwright.config.ts` non elenca il blocco seriale nuovo di
     `settings/scheduler.spec.ts` («Saving»), e mancava già di `fx-destructive` e `files-destructive`.
+    **Questo punto è chiuso il 12/10**, nella 2b di V: il catalogo elenca i cinque blocchi seriali veri, e
+    `asset-event-delete` è uscito dall'elenco.
   Dettagli: piano della 46, §12.5.
 - **V-18 · Selettori CSS e in inglese rimasti nei test delle impostazioni** — basso; test-author di V, 12/10:
   - in `SchedulerConfigModal.svelte` i chip degli orari non hanno testid: FSCH-008/009 usano `span.rounded-full`. Il
@@ -712,7 +1001,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     testo ON/OFF. I testid per migrarlo esistono già: `settings-lock-toggle`, `setting-save`, `setting-undo`;
   - «preferences persist after navigating away and back» controlla solo la visibilità.
   Dettagli: piano della 46, §12.5.
-- **V-19 · In spagnolo la barra della Dashboard e dell'asset sfora in modo denseRow** — basso, difetto di layout;
+- ✅ **V-19 · In spagnolo la barra della Dashboard e dell'asset sfora in modo denseRow** — chiusa nella 1.2 da I,
+  treno 72 (`7f8febd9d`): soglie denseRow 990 e 890. Era: basso, difetto di layout;
   gate di V, 12/10. `layout/toolbar-width-sweep.spec.ts:873`, casi `es` di dashboard e assetDetail. Il gruppo
   «Exportación IA …» esce dalla barra (`dashboard-filter-bar`, `asset-detail-filter-bar`):
   - asset: +1,8 px a vw 1220, +11,8 px a vw 1210, +9,8 px a vw 940 (soglia denseRow 850);
@@ -720,8 +1010,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
   È deterministico: rosso anche a 1 worker. Lo spec suggerisce di alzare la soglia sopra la barra più larga, oppure di
   accorciare le etichette. La 2a di V non tocca né le barre né i cataloghi. Dettagli: piano della 46, §12.5.
-- **V-20 · Attese di 3 s sulla prima navigazione, rosse sotto carico** — basso; gate di V, 12/10. Sono verdi da sole
-  o a 1 worker, rosse con la concorrenza:
+- ✅ **V-20 · Attese di 3 s sulla prima navigazione, rosse sotto carico** — basso; gate di V, 12/10. Sono verdi da
+  sole o a 1 worker, rosse con la concorrenza:
   - `auth.spec.ts:379` e `:615` (Integrated onboarding 1 e 4): dopo `login()`, `toHaveURL(/dashboard/)` usa i 3 s di
     default; il test accanto (`:370`) ne usa 15;
   - `layout/app-start-auth.spec.ts:184`: poll di 3 s su `/auth/me` dopo `goto('/assets')`. Con tre test concorrenti i
@@ -730,6 +1020,382 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
   Cura: aspettare la condizione con un limite di stato adeguato, non i 3 s di default. Il rallentamento stesso merita
   una voce sua; V-16 è una concausa possibile. Dettagli: piano della 46, §12.5.
+
+  **Chiusa il 12/10**, nella 2b di V, con attese su stati pubblicati e limiti espliciti:
+  - `openLoginPage`, `expectLandedOnDashboard` (path, poi `dashboard-page`) ed `expectLandedOnWelcome` in
+    `auth.spec.ts`, che copre anche il resto del flusso;
+  - lo stato del layout prima del gate in `app-start-auth:190`;
+  - `files-page` `data-busy` e la pulizia in `afterEach` in `files:854`.
+
+  Verdi `auth` 29/29, `app-start-auth` 3/3 e `files` 28/28, a 1 e a 4 worker, sotto carico alto. Commit: checkpoint 2b
+  di V, indicato dal coordinatore. Dettagli: piano della 46, §12.8.
+- **V-21 · Sonde e selettori vietati rimasti negli spec curati dalla 2b** — basso; test-author di V, 12/10. La 2b ha
+  curato i test che scrivevano sullo stato condiviso, non tutto il resto degli stessi file:
+  - `transactions-modals`:
+    - **T10 non prova niente**: il delete della toolbar ora apre il workspace bulk, quindi la sua sonda su
+      `confirm-modal-confirm` risponde sempre falso. In più legge un contatore globale;
+    - **T1 non mostra mai un commit riuscito**: sceglie Charles Schwab, senza cassa, e va in rollback. È una
+      decisione, perché cambiare broker cambia ciò che il test asserisce;
+    - `.first()` senza filtro in T3/T9/T11, e sonde `isVisible().catch`;
+  - `tx-wac-unit-toggle`: classi CSS (`bg-gray-200`, `bg-libre-green`) e sonde;
+  - `tx-wac-formmodal`: FM10 usa `.nth(count-1)` e la classe `font-medium`; FM7 ha una sonda;
+  - `tx-commit-all-types`:
+    - `.checkbox-btn` e `tr.row-deleted`;
+    - il test FX_CONVERSION accetta ancora «nessun commit»;
+    - `expectTransactionGone` dice che gli id vengono riusati, ma `AUTOINCREMENT` c'è dal piano 34;
+  - `tx-split-promote` e `tx-paired-edit`:
+    - sonde e classi CSS in Bug 6, Bug 14, NR-1 e Guard;
+    - gli helper della coppia sono copiati nei due spec;
+    - il commento di `selectRow` («a paired row selects both halves») è sbagliato;
+  - `tx-event-picker`: `pickAssetByName`, se la sonda manca, clicca il primo asset della lista;
+  - `tx-import-resolution`:
+    - `openImportWizard` usa un `.first()` senza filtro;
+    - IWR-007 e IWR-010 hanno `return` condizionali;
+    - IWR-006b ripiega su un controllo più debole;
+  - `tx-clone`: righe scelte per posizione, classi CSS, `text=new`; il test «view-only» esce presto;
+  - `files.spec.ts`:
+    - ✅ gli altri test di File Preview: i PDF puliscono in `finally` con 30 s, mentre markdown, immagine, dettaglio, zoom
+      e commenti non cancellano mai il loro upload (la lista `ownedStaticFiles` ora c'è). **Chiuso il 12/10** da
+      `eb269ecde` («files spec cleans uploads and broker»), ora nel target (treno 76): ogni upload si iscrive in
+      `ownedStaticFiles`, e il broker BRIM si cancella in un `afterEach`;
+    - il modo griglia/lista si legge dalla classe `active`: servirebbe `aria-pressed` su `view-mode-grid` e
+      `view-mode-list` in `files/+page.svelte` (~`:704/707`);
+  - la fixture `logout()` (`auth-helpers.ts`) usa ancora i 3 s di default.
+
+  Dettagli: piano della 46, §12.8.
+
+  ✅ **Chiusa in gran parte il 13/10**, nel checkpoint V-25/V-21 di V, via test-author. Verde a 1 e a 4 worker, col
+  DB al seed. Dettagli: piano della 46, §12.10.
+  - `transactions-modals`:
+    - T10 lavora su un DEPOSIT proprio, cancellato dal flusso vero e verificato per id;
+    - T3, T9 e T11 usano righe proprie;
+    - le sonde sono tolte, e T6 e T7b ora provano davvero.
+  - `tx-wac-unit-toggle` e `tx-wac-formmodal`: `aria-pressed` al posto delle classi; FM10 trova la riga per una
+    descrizione unica; FM7 è un'asserzione.
+  - `tx-commit-all-types`:
+    - checkbox per id, e lo stato della riga da `tx-bulk-row-status`;
+    - FX_CONVERSION esige il commit;
+    - il commento su AUTOINCREMENT è corretto.
+  - `tx-split-promote`, `tx-paired-edit` e `tx-clone` usano account propri; gli helper della coppia stanno in
+    `fixtures/owned-pair.ts`.
+  - `tx-event-picker`: niente più ripiego sul primo asset.
+  - `tx-import-resolution`:
+    - niente `return` condizionali;
+    - IWR-007 asserisce il contratto vero, quello della doc utente: una collisione col DB arriva alla revisione non
+      spuntata, con `data-duplicate-status="likely"`, e senza il passo «Duplicates»;
+    - IWR-006b apre la `TransactionCompareModal`.
+  - `files.spec.ts` legge `aria-pressed`, e `logout()` aspetta `/` e `login-page`.
+  - Gli attributi nuovi:
+    - `tx-bulk-row-status` con `data-status`;
+    - `tx-bulk-delete-selected`;
+    - la prop `testId` di `Tooltip`, usata come `tx-form-cost-basis-help`;
+    - `data-duplicate-status`;
+    - `aria-pressed` su `view-mode-*`.
+
+  **Resta aperto:**
+  - ✅ **T1, chiusa il 13/10** in un checkpoint di V, via test-author. La decisione del developer (domanda 8): «C:
+    entrambi, due test». Il vecchio T1 sparisce. T1a, T1b e T6 stanno in un blocco proprio, ciascuno su un account suo,
+    con un broker suo.
+    - **T1a**: un BUY dal form, sul broker del test finanziato, arriva nel bulk editor e si salva (`committed`). Lo si
+      ritrova via API, per id e con i valori mandati, e nella tabella.
+    - **T1b**: lo stesso BUY su un broker senza cassa viene rifiutato con `balanceCashNegative`, coi parametri della
+      richiesta.
+      - Il messaggio nomina il broker, la data ISO e la valuta, e il suo link porta alla riga.
+      - Il modale resta aperto con la riga, e il broker non ha righe.
+    - **Le prove**: T1a rosso senza deposito, T1b rosso col broker finanziato; entrambi poi verdi.
+    - `fillBuyTransaction` sceglie broker e asset per nome. T2 e T6 sono verdi.
+      - **T6** era verde per la ragione sbagliata: il form corregge il segno di `-1`, e l'avviso nasceva dalla cassa
+        vuota di Charles Schwab. Ora sta anche lui su un account suo, con un broker senza cassa: prima verifica che
+        l'avviso nomini il broker, poi lo chiude. È rosso col broker finanziato.
+    - `transactions-modals` 21/21 a 1 e a 4 worker, col DB al seed. Ne sono nate V-37 e V-38.
+
+    Dettagli: piano della 46, §12.14.
+  - ✅ **T4, chiusa il 13/10** in un checkpoint di V, via test-author.
+    - **La decisione del developer** (domanda 12): nel bulk editor «Costo di carico» (`cost_basis_override`) prima di
+      «Evento» (`asset_event_id`) è voluto, non è una regressione. La nota del passo 10 del piano Bugfix-3 («spostato
+      dopo») è superata.
+    - **Il test**: T4 ora legge l'ordine delle intestazioni del workspace (`dt-header-*` in `tx-bulk-body`), dopo aver
+      verificato che le due colonne si vedono di default.
+    - **Le prove**:
+      - col solo ordine atteso invertito è rosso, e mostra l'ordine vero;
+      - ripristinato, è verde;
+      - `transactions-modals` 20/20 a 1 e a 4 worker, col DB al seed.
+
+    Dettagli: piano della 46, §12.13.
+  - **T5 e T8** asseriscono il testo tradotto dell'etichetta dell'asset. Servirebbe uno stato pubblicato, per esempio
+    `data-asset-field` su `tx-form-asset-wrap` (`TransactionFormModal.svelte`, ~`:1900`); per T8, però, il soggetto è
+    la traduzione.
+  - **T13** comincia ad aspettare la risposta di validazione solo dopo il click su Apply.
+  - **`transactions-modals`, residui minori** visti da test-author di V il 13/10, fuori lista:
+    - `goToTransactions` ingoia la sua `Promise.race` con `.catch`;
+    - `optionListReady` usa `.first()` su `[role="listbox"]` senza filtro;
+    - l'intestazione dello spec dice ancora «port 6041»;
+    - il commento «T4: no confirm dialog» nel test «Delete» usa un'altra numerazione;
+    - l'opzione `skipCash` di `fillBuyTransaction` non ha più chiamanti.
+
+    I `bulkRows.first()` e la `Promise.race(...).catch` del vecchio T1 sono spariti con T1a e T1b (13/10).
+  - **`tx-delete`**, fuori lista: `.checkbox-btn` in A6 e B3-guard (`:652`, `:774`, `:815`), `.disabled-select-icon`
+    (`:811`) e una sonda (`:793`).
+- **V-22 · «+ New event» può modificare un evento esistente dicendo di averlo creato** — dopo la 1.2, deciso dal developer il 13/10; letto da
+  test-author di V e verificato nel codice da me, 12/10. Nessun test lo dimostra ancora:
+  - `EventCreateMiniModal.svelte:133-145` manda un upsert senza id (`upsert_events_bulk`);
+  - il backend applica un upsert senza id all'evento con la stessa data e lo stesso tipo, e lo aggiorna sul posto, anche
+    se è collegato (`test_upsert_without_id_keeps_the_event_id`,
+    `test_upsert_without_id_updates_a_linked_event_in_place`);
+  - il modale rilegge quell'evento, mostra un toast di successo e lo passa al form come appena creato.
+
+  Un dividendo «nuovo» nello stesso giorno di uno esistente, magari del provider, ne sovrascrive importo e note. Da
+  decidere se è voluto. Se non lo è, il rosso va scritto prima della cura. Dettagli: piano della 46, §12.8.
+- **V-23 · Il bulk editor nasconde il broker di sola lettura e attacca l'errore d'accesso alla riga sbagliata** — basso,
+  UX; test-author di V (triage di WB5), 12/10:
+  - un TRANSFER verso un broker di sola lettura mostra il ricevente come «To: —». `renderBrokerHtml`
+    (`TransactionBulkModal.svelte` ~`:1608`) cerca il broker solo nella lista dei broker modificabili
+    (`getEditableBrokers()`, ~`:593`). L'utente non vede quale broker causa l'errore, e il banner lo chiama solo
+    «Broker #2»;
+  - `_append_access_issues` (`transaction_batch_stages.py` ~`:158-178`) riporta ogni errore d'accesso come
+    `operation="create", index=0`. La griglia lo mette sulla riga 1a (IB, modificabile) e non sulla 1b (DEGIRO).
+
+  Dettagli: piano della 46, §12.8.
+
+- **V-24 · Nel bulk editor la cella del costo in Auto può mostrare per un attimo «💡 0.00» come `ready`** — basso, UX;
+  test-author di V (lacuna 5), 12/10, letto nel codice e non visto a schermo. Appena un TRANSFER in Auto passa dal form
+  all'editor, il form invia un importo 0 come segnaposto, che porta solo la valuta, e la cella tratta qualsiasi importo
+  come proposta pronta. Il valore si corregge appena torna la validazione dell'editor (150 nel test). Per un istante
+  l'utente vede il sintomo corretto nella 1.2 (costo 0), e `data-state="ready"` non vuol dire «calcolato». Dettagli:
+  piano della 46, §12.9.
+
+- **V-25 · `tx-delete` consuma righe del seed e lascia un broker di `TEST_USER`** — basso; gate di V, 12/10. Nel giro
+  consolidato `front-transaction all`:
+  - «A1-confirm» (`tx-delete.spec.ts:181`) cancella la FEE `[delete-safe] Platform fee for delete test`;
+  - «A2-confirm» cancella la coppia `delete-consume`;
+  - «A1-error» lascia di proposito il broker `T4-delref-<suffix>` (OWNER `e2e_test_user`) e il suo asset
+    (`:390-393`).
+
+  Il DB, quindi, a fine categoria non torna al seed. Le righe consumate sono monouso per costruzione, e ogni invocazione
+  ripopola. Il broker permanente, però, è della classe A7. Cura possibile: righe e broker creati dal test, come in A5
+  e A7. Dettagli: piano della 46, §12.9.
+
+  ✅ **Chiusa il 13/10**, nel checkpoint V-25/V-21 di V, via test-author.
+  - **La prova del danno**, sullo spec non modificato: dopo il giro il DB aveva 73 transazioni, 9 broker e 18 asset,
+    contro 76, 8 e 17 del seed.
+  - **La cura**:
+    - A1-confirm e A2-confirm lavorano su account usa-e-getta, con una FEE propria e una coppia ETH propria, finanziate
+      da righe proprie, e cancellate in `afterEach` con l'account;
+    - A1-error registra gli id appena esistono e cancella righe, broker (`force`) e asset per id;
+    - lo stato «delete» si legge da `tx-bulk-row-status`.
+  - **La verifica**: 15/15 a 1 e a 4 worker, col DB al seed. L'impronta delle righe 1–76 è identica nei due giri.
+  - **Resta**: la riga 28 del seed (FEE «Platform fee for delete test») e la coppia 45/46 (`delete-consume`) non le
+    legge più nessuno spec. Restano nel seed, perché toglierle sposterebbe i lettori posizionali, come FE-SP-C4 di
+    `tx-bulk-suggest-ux`, `tx-picker-pagination`, A6 e B3-guard di `tx-delete`. Un consolidato a 1 worker non dovrebbe
+    più ripopolare dopo `tx-delete`.
+  - **I commenti** che lo davano ancora per distruttivo sono corretti nello stesso checkpoint: fixture `playwright.ts`,
+    skill `testing-frontend`, `populate_mock_data.py` 9c e `tx-paired-edit`. La doc dev `runner_architecture.md`
+    (`:232`, `:561`, `:577`, `:588`) è di M ed è segnalata al coordinatore.
+
+- ✅ **V-26 · Due rossi da carico della classe di V-20, nella verifica di V-21c** — basso; V, 13/10. Visti con la
+  coverage della 6176 in corso; test-triage dà «assunzione», col prodotto corretto in tutti e due.
+  - **`layout/app-start-auth.spec.ts`**, «a 401 in the middle of a session» (era `:263`, ora `:266`): rosso 2 volte su
+    2 a 1 worker, con loadavg 17–25.
+    - Appena `data-busy` diventa falso, `/assets` lancia senza `await` `loadFxPairSlugs()`: la GET delle route e 24
+      `POST /fx/currencies/convert`.
+    - Le `convert` partono a cavallo di `clearCookies`, quindi il primo 401 può nascere su `/assets`. L'interceptor
+      porta giustamente a `/?redirect=%2Fassets`.
+  - **`ai-export/ai-export-memory.spec.ts:66`**: rosso a 4 worker nel setup.
+    - `setupAiExportPage` faceva `login()` e poi `setLanguage('en')`, con 5 s per tutta la catena del bootstrap
+      (V-27).
+  - **Chiusa il 13/10** nel checkpoint V-25/V-21, via test-author, decisione del coordinatore:
+    - in quel test, `GET /fx/providers/routes` è servita localmente con zero coppie, mentre il 401 resta vero e del
+      backend;
+    - `setupAiExportPage` aspetta l'arrivo: l'URL fuori da `/` e `app-shell` visibile.
+
+    Verdi `front-utility auth` 29/29 e `front-ai-export all` (18 E2E e 426 Vitest), a 1 e a 4 worker, col DB pulito.
+    Dettagli: piano della 46, §12.10.
+
+- ✅ **V-27 · `login()` ritorna appena sparisce il form, prima dell'arrivo** — basso; V (triage di V-26), 13/10.
+  - `auth-helpers.ts` `login()` ritorna quando il form sparisce, mentre `/` carica ancora il bootstrap: impostazioni
+    utente, onboarding, impostazioni globali. Solo dopo porta a `/dashboard`.
+  - Ogni chiamante che ha bisogno dell'arrivo deve compensare da sé: `signIn()` di `app-start-auth`,
+    `expectLandedOnDashboard` di `auth.spec` e, da V-26, `setupAiExportPage`.
+  - Non compensa ancora `switchUser` di `ai-export-memory`, che fa `login()` e subito `setLanguage` per `TEST_USER_2`
+    e `TEST_ADMIN`.
+  - Cura strutturale: `login()` finisce all'arrivo, cioè URL fuori da `/` e `app-shell` (o `welcome-shell`) visibile.
+    I chiamanti sono più di 100, quindi serve una validazione dell'intera suite. Dettagli: piano della 46, §12.10.
+  - **Portata nella 1.2** dal coordinatore il 13/10: nella run completa di R è la causa di 9 rossi (auth ×5, AI Export
+    ×4). Quei 9 erano su `a5653f9ef`, prima di V-20 e V-26, che li curano già sul posto. La cura strutturale resta per
+    tutti i chiamanti, che sono 257 chiamate in 102 file.
+  - `login()` deve chiudere anche su `onboarding-bootstrap-blocked`, che un test di `auth.spec` provoca apposta.
+    Dettagli: piano della 46, §12.11.
+
+  ✅ **Chiusa il 13/10**, nel lotto «rossi da carico» di V, via test-author.
+  - `login()` (`frontend/e2e/fixtures/auth-helpers.ts`) ritorna solo quando è visibile uno dei tre stati d'arrivo:
+    `app-shell`, `welcome-shell` o `onboarding-bootstrap-blocked`. Ha 30 s, e se l'arrivo non viene il messaggio nomina
+    la schermata a vista e il suo path.
+  - Lo scan delle 273 chiamate non ha trovato test che trattengano il bootstrap attorno a `login()`.
+  - I commenti diventati falsi sono aggiornati, e le attese sul posto restano.
+  - I budget dei test sono alzati dove l'header dichiara «a red must end on its own assertion»: `auth.spec` 120 s,
+    `app-start-auth` 150 s, `ai-export-contract` 240 s.
+  - Verde: 6 giri a 1 worker (102/102), poi le 8 categorie front a 4 worker.
+- ✅ **V-28 · Il teardown di `jsCoverage` consuma i 30 s del test** — medio, perché blocca il gate di rilascio con coverage;
+  run completa di R, 12/10, assegnata a V dal coordinatore il 13/10.
+  - Il fixture (`frontend/e2e/fixtures/playwright.ts`, `jsCoverage`) è `{scope: 'test', auto: true}` senza un
+    `timeout` suo. Raccoglie `window.__coverage__` e scrive circa 17 MB di JSON per test dentro il budget del test,
+    che è di 30 s.
+  - Sotto carico (load 45–112) questo è costato 15 rossi, «Tearing down "jsCoverage" exceeded the test timeout», con
+    durate di 40–49 s. Da soli sono tutti verdi, in 11–19 s.
+  - Esiste solo con `--coverage js`.
+  - Cura: un `timeout` dedicato al fixture. In Playwright 1.61 setup e teardown hanno allora uno slot loro.
+  - Fonti: rapporto di R, §3.2; devWiki `problems/jscoverage-teardown-spends-the-test-budget`. Dettagli: piano della
+    46, §12.11.
+
+  ✅ **Chiusa il 13/10**, nel lotto «rossi da carico» di V, via test-author.
+  - La cura: `JS_COVERAGE_TIMEOUT_MS = 120_000` sul fixture. Precisazione, verificata nel sorgente di Playwright: senza
+    `timeout` il teardown pesava sullo slot degli after-hooks, 30 s condivisi.
+  - La prova del meccanismo: un ritardo temporaneo di 35 s nel teardown. Senza la cura è rosso, «Tearing down
+    "jsCoverage" exceeded the test timeout»; con la cura è verde. Il ritardo è stato tolto.
+  - La prova con coverage: `--coverage js --workers 4 front-fx all` ha 103 E2E verdi, nessun teardown in timeout, test
+    più lungo 9,6 s, 97 file raw da circa 18 MB.
+  - Doc allineate: la skill `testing-frontend`, `frontend-testing.instructions.md`, e in MkDocs
+    `test-walkthrough/coverage-model.md` e `index.md`. Descrivono la pipeline istanbul vera; V8 e monocart non ci
+    sono più.
+  - La pagina devWiki la riallinea W, su indicazione del coordinatore.
+- ✅ **V-29 · Togliere una coppia nuova dal bulk editor lasciava la metà nascosta: «Discard changes?» su un workspace
+  vuoto** — basso, UX; evidenza E0 di V-21a, 13/10.
+  - Il caso: si aggiunge una coppia nuova (TRANSFER o FX_CONVERSION dal form), poi la si toglie con «Mark for
+    deletion» o «Delete selected». La griglia resta vuota, ma alla chiusura il workspace chiede di scartare.
+  - Il controllo: una riga singola nuova, tolta allo stesso modo, si chiude senza chiedere.
+  - La causa: `removeRow` filtrava solo `tempId`, quindi la partner nascosta (`pairedWith`) restava in `ops`.
+    `resolveOps` la saltava, perciò non arrivava mai al server; `serializeOps` invece la contava. I dati non si
+    toccavano.
+  - Il difetto c'è dalla **1.1.0**.
+  - **Chiusa il 13/10** in un commit a parte, `fix(transactions): …`, deciso dal coordinatore: `removeRow` toglie
+    anche l'op con `pairedWith === tempId`.
+    - Il rosso prima della cura: T7b e la variante «Delete selected» di `transactions-modals`, `Received: "asks to
+      discard"`.
+    - Dopo la cura: `transactions-modals` 20/20 a 1 e a 4 worker, e i vicini `tx-paired-edit` e `tx-split-promote`
+      verdi a 1 e a 4 worker.
+  - Se merita una riga 🐛 nel CHANGELOG lo decide il coordinatore. Dettagli: piano della 46, §12.10.
+- **V-30 · Il fixture `jsCoverage` fonde le pagine di un test con `Object.assign`: può sottocontare** — basso, misura;
+  visto dal docs-writer di V (lotto V-28), 13/10, letto nel codice e non misurato.
+  - Il teardown (`frontend/e2e/fixtures/playwright.ts`, `jsCoverage`) scrive
+    `JSON.stringify(Object.assign({}, ...entries))`: un oggetto per test, con le coverage delle sue pagine fuse per
+    chiave di file.
+  - Se due pagine dello stesso test caricano lo stesso file, i contatori dell'ultima sostituiscono quelli della prima,
+    invece di sommarsi. Il report sottostima allora le righe raggiunte solo dalla prima pagina.
+  - Cura possibile: un file per pagina, perché `js-coverage-report.js` fonde già per file con `istanbul-lib-coverage`;
+    oppure la fusione con `createCoverageMap().merge()` nel fixture.
+  - Fuori dal mandato di V-28, che riguarda solo il budget del teardown: dopo la 1.2. Dettagli: piano della 46, §12.11.
+- **V-31 · `fx-sync-mock` lascia i tassi MOCKFX che il suo sync scrive** — basso; gate `front-fx all` a 4 worker di V,
+  13/10. Dopo la 1.2, decisione del coordinatore.
+  - `frontend/e2e/fx/fx-sync-mock.spec.ts` sincronizza le coppie MOCKFX del seed. Le route sono del seed, ma i tassi
+    li scrive il test: dopo la categoria restano 372 righe (EUR/ILS, MYR, PHP e TWD, 93 ciascuna).
+  - Il suo header diceva «this file writes nothing». In questo lotto si corregge solo l'header.
+  - Oggi è tollerato: nessuno spec legge i tassi di quelle coppie, e il populate seguente li riscrive.
+  - Cura possibile: togliere i tassi scritti, per coppia e finestra di date, in `afterAll`; oppure route proprie. Il
+    motivo dell'header per non usarle, la rete di ripopolamento che le cancellava a metà giro, non regge più: la rete
+    è spenta sopra 1 worker, e dopo V-25 nessuno spec distrugge più righe del seed.
+  - Nello stesso gate, `fx-destructive` cancellava EUR/PLN ed EUR/SEK del seed: è curato in questo lotto. Dettagli:
+    piano della 46, §12.11.
+- **V-32 · Gli spec degli asset: scelte per posizione, pulizie che non verificano l'esito, un rischio latente** —
+  basso; `v32-asset` di V, 13/10. Dopo la 1.2, per il confine del lotto deciso dal coordinatore.
+  - In questo lotto sono curati i 4 asset mai cancellati (`asset-classification` ×3, `asset-modal` Test 4) e il
+    `.first()` del Test 5 di `asset-modal`.
+  - **Restano, per posizione**:
+    - il Test 9 di `asset-modal` (`:247`), lo stesso difetto del Test 5: gli helper per curarlo sono già nel file;
+    - `navigateToAssetByName` (`frontend/e2e/assets/assets-helpers.ts:52/57`) ripiega sulla prima card o riga dopo
+      una ricerca sondata. La usa anche la galleria;
+    - `asset-detail:292` sceglie la prima opzione di confronto;
+    - lo Scenario 3 di `asset-event-delete` (`:291/:295`) prende la prima card, e il resto dipende da sonde.
+  - **Restano, pulizie che non verificano l'esito**: `asset-modal` Bug K (`await createResponse` fuori dal `try`),
+    Param, Benchmark e Type Tree; `asset-list` `:604`, `:846` e `:1007`; `dropFixture` di `asset-merge` (`:100`,
+    anche lui con id per posizione); le pulizie degli eventi di `asset-event-delete` e `asset-data-editor`.
+  - **Il rischio latente**: lo Scenario 2 di `asset-event-delete` (~`:220-270`) segna da cancellare ogni evento di Apple
+    nella finestra di 3 mesi e salva. Oggi non cancella niente solo perché gli eventi del seed in quella finestra sono
+    collegati a transazioni. Un evento scollegato, di un vicino a 4 worker o di un seed futuro, verrebbe cancellato
+    davvero.
+  - Nel Test 3 di `asset-classification`, la cancellazione della voce dipende da una sonda su `row-actions-*`.
+    Dettagli: piano della 46, §12.11.
+- ✅ **V-33 · Budget stretti dopo una navigazione: il dettaglio FX e la tabella delle transazioni** — basso; run
+  completa di R, §3.4–3.5, 12/10; esteso dal coordinatore il 13/10.
+  - **I rossi di R**:
+    - `fx/fx-add-pair.spec.ts:219` aspettava `fx-detail-page` coi 3 s di default dopo il click sulla card;
+    - CAC-001, `tx-import-ca-contract.spec.ts:131`, aspettava `tx-table` con 10 s, e la tabella è arrivata appena dopo.
+  - Il verdetto di test-triage: assunzione d'orologio.
+  - **Chiusa il 13/10**, via test-author.
+    - `fx-add-pair`: 15 s di navigazione, e `data-chart-pair` prima della visibilità.
+    - **Le attese di `tx-table`** dopo una navigazione: 38 siti in 36 spec delle transazioni, a 10 s o a 8 s. Ora
+      aspettano prima `waitForSettled(transactions-page, 20 s)`, poi `tx-table` a 20 s.
+    - **I budget di test** che non contenevano il gate: `transactions-table`, `tx-wac`, `tx-wac-mode`,
+      `tx-broker-access`, `tx-tooltips`, `tx-paired-edit`, `tx-clone`, `tx-delete` e `tx-picker-pagination` passano a
+      45 s; `tx-wac-fx` a 60 s. Il blame non dava nessuna ragione contraria.
+    - Le 13 attese della galleria le gira il coordinatore a M.
+  - Verde: `front-transaction all` a 4 worker, 365 E2E, al seed, e `front-fx all` a 4 worker.
+  - Sotto osservazione nella run finale: il gruppo a 30 s, che lascia circa 10 s a login e test. Dettagli: piano della
+    46, §12.11.
+- **V-34 · La pulizia di `trackTransactionWrites` controlla solo lo stato HTTP** — basso; segnalato da M tramite il
+  coordinatore, 13/10. Dopo la 1.2.
+  - `cleanup()` in `frontend/e2e/fixtures/db-cleanup.ts` (~`:130-141`) cancella le righe create dalla pagina con un
+    `POST /transactions/commit` e verifica solo `res.ok()`.
+  - Non legge `committed` né gli esiti per id. Una delete rifiutata dentro una risposta 200 passerebbe quindi in
+    silenzio, e la pulizia fallita non si vedrebbe: un esito negativo per id, per esempio un `RESTRICT`, o un commit
+    respinto dalla validazione (saldo, accesso).
+  - Lo usano 6 spec: `transactions-modals`, `tx-bulk-promote-exec`, `tx-clone`, `tx-commit-all-types`,
+    `tx-wac-formmodal`, `tx-wac-unit-toggle`.
+  - **Nel lotto V-27/V-28/V-33 non ha nascosto niente**: dopo ogni giro di quegli spec, e dopo `front-transaction all` a
+    4 worker, il DB era al seed (76 transazioni, id massimo 76).
+  - Cura possibile: richiedere `committed === true` e il successo di ogni esito di delete, nominando gli id rimasti,
+    come fanno già le pulizie di V-25 e degli asset.
+- **V-35 · `fx-detail:923`: il pannello «aesthetics» resta aperto dopo il secondo click, una volta, sotto carico** —
+  medio, perché il meccanismo è sconosciuto; gate del treno 88 (6150, 1 worker, carico 100–158), triage di V, 13/10.
+  **Sotto osservazione.**
+  - **Il rosso**: dopo il secondo click, `not.toBeVisible()` scade coi 3 s. Il call log dice «10 × locator resolved to
+    <div data-testid="fx-detail-aesthetics-panel" …> unexpected value "visible"»: il processo era vivo, e il pannello è
+    rimasto davvero aperto. Da solo è verde 17/17.
+  - **Nel codice** (`frontend/src/routes/(app)/fx/[pair]/+page.svelte`) il toggle fa solo
+    `showAesthetics = !showAesthetics`. Il pannello è un `{#if}` semplice, senza `{#key}`, transizioni o async.
+    `showAesthetics` torna `true` solo dal toggle, o dai ripristini dell'editor dei dati, che si apre solo dai suoi
+    bottoni. Nessun meccanismo trovato.
+  - **50 giri di sonda, tutti verdi**, coi passi esatti del test, sotto CPU ×1–20, API ritardate, pause e richieste
+    tardive (`/tmp/libreFolio_v_fxaes_*`).
+  - **Quello che c'è ora**, decisione del coordinatore:
+    - `aria-expanded` sul toggle dell'estetica; quello dei segnali l'aveva già;
+    - i due test di `fx-detail` (e `fx-destructive`) verificano `aria-expanded` dopo ogni click e poi il pannello;
+    - su un rosso allegano e stampano il registro in pagina, `[fx-panel-log]`: click, `aria-expanded`, pannelli,
+      `data-busy`, errori.
+
+    Il prossimo rosso dirà da solo se il click non è arrivato o se lo stato si è ribaltato.
+  - Se succede: leggere il registro; se lo stato torna `true` senza un click, è un difetto di prodotto. Dettagli: piano
+    della 46, §12.12.
+- ✅ **V-36 · `setLanguage` scommetteva 3 s sul caricamento del dizionario** — basso; rosso di M nella
+  `toolbar-width-sweep` (`assetsList › fr`, carico 60), 13/10.
+  - `setLanguage` (`frontend/e2e/fixtures/auth-helpers.ts`) aspetta lo stato giusto: `<html lang>` e
+    `data-i18n-ready`, pubblicati da `routes/+layout.svelte` quando svelte-i18n ha caricato il chunk del dizionario,
+    circa 290 KB. Lo faceva però coi 3 s di default, e il bottone del selettore con 5 s.
+  - **Chiusa il 13/10** in un checkpoint di V.
+    - Il rosso deterministico: il chunk del dizionario trattenuto 5 s dà «Expected "it", Received "en", Timeout 3000ms».
+    - La cura: `LANGUAGE_SWITCH_MS = 15_000` sulle tre attese. Col ritardo ancora attivo è verde.
+    - `toolbar-width-sweep` 15/15 e `front-ai-export all` sono verdi a 4 worker.
+
+    Dettagli: piano della 46, §12.12.
+- **V-37 · Nel form, «valid» accanto a un errore che blocca Apply** — da decidere, UX; visto da test-author di V nello
+  snapshot di T6, 13/10, e verificato nel codice da me.
+  - Un BUY con quantità `-1`: il campo Qty è rosso con «must be > 0» e Apply è disabilitato.
+  - «⚡ Validate now», però, risponde «valid»: il form manda al server la quantità col segno già corretto,
+    `applySign('-1', 'positive')` → `'1'` (`frontend/src/lib/utils/transactions/txPayloadHelpers.ts:142-150`,
+    `:243-249`).
+  - L'utente legge insieme «valid» e un errore che gli impedisce di salvare.
+  - Domanda per il developer, mandata al coordinatore il 13/10: è voluto? Se no, il verdetto dovrebbe tenere conto degli
+    errori del form; è una cura di prodotto.
+  - Prove: `/tmp/libreFolio_v_t1/4-t2-t6.t6-results/error-context.md`, righe 1510-1535. Dettagli: piano della 46,
+    §12.14.
+- **V-38 · Il form elenca un problema di saldo tra i problemi dei campi** — basso, UX; letto nel codice da test-author
+  di V, 13/10, e verificato da me; **non visto a schermo**.
+  - Il form divide i problemi per indice: `index >= 0` sono dei campi, `< 0` di saldo
+    (`TransactionFormModal.svelte:944-945`).
+  - Il server attacca `balanceCashNegative` alla riga che lo causa (`index: 0`). Nel form finisce quindi sotto il titolo
+    dei problemi dei campi, non sotto «This configuration causes data inconsistencies».
+  - Il bulk editor divide invece per codice (`isBulkBalanceIssue`, `utils/transactions/bulkDisplay.ts:145`), e mette lo
+    stesso problema sotto il titolo del saldo.
+  - Da verificare a schermo prima di decidere. Dettagli: piano della 46, §12.14.
 
 ## 09 · Feedback e backlog strutturale
 
@@ -763,11 +1429,69 @@ plugin.
   caricato ma non le traduzioni, che si uniscono al build, quindi mostra il nome del backend. Servirà un'unione a
   runtime: il backend serve i frammenti, il frontend li aggiunge con `addMessages`. Dettagli: piano della 45, sezioni
   «0» e «9».
+- **U-B2 · Le sorgenti dei sottosistemi accanto al codice** — basso; U, 12/10, decisione D-B del developer: per la 1.2
+  le 17 sorgenti restano in `frontend/src/lib/i18n/<sottosistema>/`. Quando T-FE2…FE11 crea le cartelle per
+  funzionalità (`lib/features/<x>/`), ogni sottosistema si può spostare con la sua funzionalità: è un `git mv` della
+  cartella, che porta con sé il suo `prefixes.txt`, più un glob in più in `discover()` di `scripts/i18n_catalog.py`. Le
+  chiavi e i prefissi non cambiano, e `dev.py i18n check --against <rev>` prova l'equivalenza. Dettagli: piano della 45,
+  sezioni «2.5» e «9».
 - **U-B3 · Le icone dentro la cartella del plugin** — basso; U, 12/10, decisione D-7, che le lascia dove sono nella 1.2.
   Servono `static/` nella cartella, la rotta di `uploads.py` e `generate_static_url` nelle 3 basi. Dettagli: piano della
   45, sezione «9».
+  - **Schwab resta dopo la 1.2** (U-6b, 13/10). U-6 aveva messo nel pacchetto il logo di Schwab, e il developer l'ha
+    annullato: «ci blocca solo perchè abbiamo fatto tante richieste tutte assieme. comunque mostrare la valigetta è
+    accettabile».
+    - L'ipotesi del developer: il controllo anti-bot di www.schwab.com risponde alle nostre raffiche di richieste, cioè
+      galleria ed E2E, e gli utenti non ne sono toccati.
+    - L'`icon_url` resta `https://www.schwab.com/favicon.ico`.
+    - La strada provata in U-6 è nella storia, nel commit `a6d1754ed`: il logo, la mappa `SINGLE_PLUGIN` di
+      `compose_broker_icons.py` e `generate_static_url`. Si riprende se il blocco tocca gli utenti.
+
+    Dettagli: piano della 45, sezione «10», U-6 e U-6b.
 - **U-B4 · `sample_reports/` per plugin** — basso-medio; U, 12/10, decisione D-7. Ci sono 25 percorsi fra E2E e test
   backend. Dettagli: piano della 45, sezione «9».
-- **U-B5 · I vecchi percorsi `<famiglia>/<nome>.py` fuori da U** — basso; U, 12/10. Sono 84 citazioni in 47 pagine del
-  devWiki, per l'historian, come T-W1, e `financial-theory/fundamentals/day-count.{en,it,fr,es}.md:10`, per M. Dettagli:
-  piano della 45, sezione «3».
+- ✅ **U-B5 · I vecchi percorsi `<famiglia>/<nome>.py` fuori da U** — basso; U, 12/10. Chiusa: le due parti erano già
+  fatte.
+  - Il devWiki: W, passo D del 12/10 (`a74a5bfb6`, treno 63). Ha spostato 112 citazioni in 54 pagine e ne ha lasciate 8
+    come storia.
+  - `financial-theory/fundamentals/day-count.{en,it,fr,es}.md:10`: già corretto nelle 4 lingue (`18e872872`).
+
+  Verifica di U, 13/10:
+  - `check_source_paths` non trova percorsi di plugin; i suoi 5 percorsi mancanti sono artefatti ignorati, fuori da U;
+  - i percorsi piatti di plugin restano solo nella cronaca, `log.md` e `raw/ingest-registry.md`.
+
+  Dettagli: piano della 45, sezioni «3» e «10», U-5.
+- **U-B6 · Il server di sviluppo non segue le sorgenti del catalogo** — basso; U, 12/10.
+  - Oggi: `npm run dev` genera il catalogo all'avvio (`predev`), e i comandi `dev.py i18n` lo rigenerano da soli.
+  - Il limite: una modifica a mano di una sorgente (`base/`, un sottosistema, un frammento di plugin) arriva al server di
+    sviluppo solo dopo `dev.py i18n build` o `npm run i18n:build`.
+  - La soluzione: un plugin Vite che osserva le sorgenti e rilancia la build.
+
+  Dettagli: piano della 45, sezione «10», U-2.
+- **U-B7 · `dev.py i18n add` non conosce gli spazi dei plugin** — basso; U con docs-writer, 12/10.
+  - Oggi: senza `--into`, la prima chiave di un segnale o di un tool nuovo (`signals.<nuovo>.name`, `tools.<nuovo>.name`)
+    va nel sottosistema col prefisso dichiarato (`charts`, `tools`), senza avviso, e la segnala solo
+    `utils gate-plugin-i18n-ownership`. Le guide dicono di passare sempre `--into` per le chiavi di un plugin.
+  - La soluzione: un avviso in `route()` quando la chiave apre un ramo nuovo sotto un prefisso di sottosistema che
+    contiene già frammenti di plugin («se è un plugin nuovo, `--into <famiglia>/<plugin>`»). Non servono i registri,
+    bastano i proprietari.
+
+  Dettagli: piano della 45, sezione «10», U-4.
+- **U-B8 · Un passo superato nella guida dei plugin BRIM** — basso; docs-writer in U-6, 13/10.
+  - Il passo 3 di «Register the user-facing docs» in `brim_plugin_guide.md` (la «Capacity table», l.~1598) chiede
+    una riga nella tabella `??? info "📊 Importer Capabilities"` delle pagine `user/transactions/import/index.*.md`.
+    Quella tabella non c'è più.
+  - Fuori dal perimetro di U-6, quindi non l'ho toccato: si toglie il passo, oppure lo si riscrive per le schede
+    dell'indice.
+
+  Dettagli: piano della 45, sezione «10», U-6.
+- **U-B9 · I broker dei dati mock non hanno un plugin d'importazione predefinito** — basso; U, 13/10, nel controllo a
+  occhio di U-6.
+  - `populate_mock_data.py:300-369` scrive `brim_plugin_key` nei dizionari dei broker, ma `Broker(**broker_data)` lo
+    scarta senza dirlo, e il campo viene solo stampato. Il campo vero è `default_import_plugin`.
+  - Così nel DB di test e nella galleria nessun broker mock usa l'icona del suo plugin: ognuno resta sul favicon del
+    portale. Per «Charles Schwab» questo vuol dire la valigetta, quando il sito blocca le nostre raffiche.
+  - **Dopo la 1.2.** Il developer, 13/10: «mostrare la valigetta è accettabile», anche in galleria.
+  - La correzione è di M (galleria) o dei dati di test: rinominare la chiave cambia le icone di tutti i broker mock.
+
+  Dettagli: piano della 45, sezione «10», U-6 (passo 8) e U-6b.

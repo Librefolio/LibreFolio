@@ -2,7 +2,7 @@
 
 `broker_danske_bank` imports the **equity savings account** (*osakesäästötili*) of Danske Bank
 Finland from two exports that only make sense together: the custody transactions (XLSX) and the
-cash statement (CSV). It lives in `backend/app/services/brim_providers/broker_danske_bank.py`
+cash statement (CSV). It lives in `backend/app/services/brim_providers/broker_danske_bank/plugin.py`
 (`plugin_version` 1.0.0, 🔬 Alpha — built from the exports of one account, shared in
 [issue #26](https://github.com/Librefolio/LibreFolio/issues/26)) and is LibreFolio's reference
 **report-set plugin**.

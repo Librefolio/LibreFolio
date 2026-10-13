@@ -17,7 +17,7 @@ related:
 
 The "YOUR POSITIONS" panel on the Dashboard Home page (`PositionsPanel.svelte`) is split into two tabs —
 **Holdings** and **Performance** — each with a Table/Chart toggle. This replaces the earlier
-"Exposure/Contribution" naming and semantics (renamed in commit `78aaa0a3`, 2026-07-06, per
+"Exposure/Contribution" naming and semantics (renamed in commit `13052a006`, 2026-07-06, per
 `Low-dashboard_refactor.md` design and `Low-dashboard_gap_analysis.md`).
 
 The core insight driving the refactor: **Holdings** and **Performance** answer two genuinely different

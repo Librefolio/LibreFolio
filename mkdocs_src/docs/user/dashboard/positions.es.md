@@ -3,21 +3,21 @@
 La pestaña **Posiciones** muestra lo que tienes, lo que ganó cada posición en el período y, a un clic de distancia, los lotes FIFO detrás de cualquier posición. La página de cada bróker tiene la misma pestaña solo para ese bróker, con la misma configuración de tabla.
 
 - 📋 **[Posiciones](#holdings)** — lo que posees en la fecha de fin
-- 📈 **[Rendimiento](#performance)** — lo que ganó cada posición en el período
+- 📈 **[Periodo](#performance)** — lo que ganó cada posición en el período
 - 🔬 **[Análisis de lotes FIFO](#fifo-lots-analysis)** — los lotes detrás de una posición
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Posiciones (Tabla)" alt="Vista de tabla de posiciones">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Posiciones (Mapa / Treemap)" alt="Vista de mapa de posiciones">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Rendimiento (Tabla)" alt="Vista de tabla de rendimiento">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Rendimiento (Mapa / Gráfico)" alt="Vista de mapa de rendimiento">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Cartera (Tabla)" alt="Vista de tabla de la cartera">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Cartera (Mapa / Treemap)" alt="Vista de mapa de la cartera">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Periodo (Tabla)" alt="Vista de tabla del período">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Periodo (Mapa / Gráfico)" alt="Vista de mapa del período">
 </div>
 
 ---
 
 ## 🎛️ Elegir una vista
 
-- **Cartera / Período** alterna entre [Posiciones](#holdings) y [Rendimiento](#performance); **Tabla / Mapa** (los dos iconos) entre una tabla y un gráfico.
+- **[Cartera](#holdings) / [Periodo](#performance)** alterna entre lo que posees y lo que ganó cada posición; **Tabla / Mapa** (los dos iconos) entre una tabla y un gráfico.
 - **El icono del ojo** (en Tabla) muestra, oculta o reordena las columnas; **Restablecer diseño** las restaura. **Ver todo →** abre la página de Activos.
 - **Para profundizar en una posición**, abre su menú **⋮** en una tabla, o haz clic derecho en cualquier vista: **Analizar lotes** abre el [Análisis de lotes FIFO](#fifo-lots-analysis) a continuación, **Ver activo** la página del activo.
 
@@ -65,7 +65,7 @@ LibreFolio recuerda tus elecciones.
 - **Un valor por activo y bróker**, durante el año que termina en la fecha de fin: mover la fecha de inicio no lo cambia.
 - **Bruto, no después de impuestos**: las transacciones separadas de impuestos y comisiones no se restan.
 - **Pasa el cursor sobre un valor** para ver los ingresos por unidad, el período y los tipos de cambio utilizados — cada pago al tipo de su propia fecha.
-- **`0.00%`** significa ingresos registrados a cero; un **`-`** simple significa que no hay ingresos en el último año.
+- **`0,00 %`** significa ingresos registrados a cero; un **`-`** simple significa que no hay ingresos en el último año.
 
 🔗 **Teoría**: [Rendimiento sobre coste](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) — las reglas exactas y en qué se diferencia YOC del rendimiento por dividendo o del CAGR
 
@@ -75,9 +75,9 @@ LibreFolio recuerda tus elecciones.
 
 ---
 
-## 📈 Rendimiento — lo que ganó cada posición {: #performance }
+## 📈 Periodo — lo que ganó cada posición {: #performance }
 
-¿Qué posiciones ganaron o perdieron dinero en el período y cómo? **Período** enumera cada posición del período, abierta o cerrada desde entonces, los mayores movimientos primero. LibreFolio lo calcula la primera vez que lo abres, por lo que puede tardar un momento.
+¿Qué posiciones ganaron o perdieron dinero en el período y cómo? **Periodo** enumera cada posición del período, abierta o cerrada desde entonces, los mayores movimientos primero. LibreFolio lo calcula la primera vez que lo abres, por lo que puede tardar un momento.
 
 **Métricas mostradas**
 

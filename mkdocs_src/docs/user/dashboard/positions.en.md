@@ -3,21 +3,21 @@
 The **Positions** tab shows what you hold, what each position earned in the period and, one click away, the FIFO lots behind any position. Each broker's page has the same tab for that broker alone, with the same table settings.
 
 - 📋 **[Holdings](#holdings)** — what you own on the end date
-- 📈 **[Performance](#performance)** — what each position earned in the period
+- 📈 **[Period](#performance)** — what each position earned in the period
 - 🔬 **[FIFO Lots Analysis](#fifo-lots-analysis)** — the lots behind one position
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-positions-views" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Holdings (Table)" alt="Holdings Table View">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Holdings (Map / Treemap)" alt="Holdings Map View">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Performance (Table)" alt="Performance Table View">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Performance (Map / Chart)" alt="Performance Map View">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Portfolio (Table)" alt="Portfolio Table View">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portfolio (Map / Treemap)" alt="Portfolio Map View">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Period (Table)" alt="Period Table View">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Period (Map / Chart)" alt="Period Map View">
 </div>
 
 ---
 
 ## 🎛️ Choosing a view
 
-- **Portfolio / Period** switches between [Holdings](#holdings) and [Performance](#performance); **Table / Map** (the two icons) between a table and a chart.
+- **[Portfolio](#holdings) / [Period](#performance)** switches between what you own and what each position earned; **Table / Map** (the two icons) between a table and a chart.
 - **The eye icon** (in Table) shows, hides or reorders the columns; **Reset layout** restores them. **See all →** opens the Assets page.
 - **To dig into a position**, open its **⋮** menu in a table, or right-click it in any view: **Analyze Lots** opens the [FIFO Lots Analysis](#fifo-lots-analysis) below, **View Asset** the asset's page.
 
@@ -75,7 +75,7 @@ How much income does each unit pay you, compared with what it cost? **YOC** comp
 
 ---
 
-## 📈 Performance — what each position earned {: #performance }
+## 📈 Period — what each position earned {: #performance }
 
 Which positions made or lost money in the period, and how? **Period** lists every position of the period, open or closed since, the biggest movers first. LibreFolio computes it the first time you open it, so it can take a moment.
 

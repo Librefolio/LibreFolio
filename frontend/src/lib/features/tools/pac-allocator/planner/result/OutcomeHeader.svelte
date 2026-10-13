@@ -1,6 +1,6 @@
 <script lang="ts">
     import {ArrowDown} from 'lucide-svelte';
-    import {t, locale} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {formatObjectiveValue, formatPlannerDate, type CurrencyDigits} from '../format';
     import {L2_FORMULA_FALLBACK} from '../policies';
@@ -45,7 +45,7 @@
             <p class={HINT} data-testid="pac-planner-outcome-basis">
                 {$t(`${KEY}.basis`, {
                     default: 'Scenario {date} · Currency {currency} · draft rev. {revision} · Backend/API {version}',
-                    values: {date: formatPlannerDate(basis.as_of, $locale), currency: basis.valuation_currency, revision, version: apiVersion},
+                    values: {date: formatPlannerDate(basis.as_of), currency: basis.valuation_currency, revision, version: apiVersion},
                 })}
             </p>
         </div>

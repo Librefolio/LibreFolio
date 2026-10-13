@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_generic_csv": {
+      "name": "CSV generico",
+      "description": "Importa le transazioni da un file CSV generico. Riconosce le colonne dai nomi dell’intestazione. Supporta vari formati di data e di numero."
+    }
+  }
+}

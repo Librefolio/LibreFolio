@@ -16,7 +16,7 @@ related:
 # Source: R2 SP-A — Cost Basis Override Currency + WAC Service
 
 ## Summary
-Backend implementation plan (✅ completed, commit `92f4b1ba`) covering the fundamental breaking change: `cost_basis_override` upgraded from `SafeDecimal` to `Currency` object. Steps 1–5 of the master plan. Adds `cost_basis_currency` DB column, rewrites `compute_weighted_avg_cost` with FX cross-currency support, and introduces `POST /transactions/recalc-wac` endpoint.
+Backend implementation plan (✅ completed, commit `a79e68156`) covering the fundamental breaking change: `cost_basis_override` upgraded from `SafeDecimal` to `Currency` object. Steps 1–5 of the master plan. Adds `cost_basis_currency` DB column, rewrites `compute_weighted_avg_cost` with FX cross-currency support, and introduces `POST /transactions/recalc-wac` endpoint.
 
 ## Key Takeaways
 

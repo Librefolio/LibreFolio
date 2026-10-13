@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_generic_csv": {
+      "name": "Generic CSV",
+      "description": "Import transactions from a generic CSV file. Auto-detects columns based on header names. Supports various date and number formats."
+    }
+  }
+}

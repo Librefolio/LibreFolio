@@ -1,0 +1,102 @@
+{
+  "help": {
+    "helpAndSupport": "Aiuto e Supporto",
+    "faq": "FAQ",
+    "reportBug": "Segnala Bug",
+    "buyMeACoffee": "Offrimi un Caffè",
+    "installApp": "Installa App",
+    "installAppIos": "Tocca Condividi, poi \"Aggiungi a Home\"",
+    "installAppDesktop": "Cerca l'icona di installazione (⊕) nella barra degli indirizzi",
+    "installAppAndroid": "Serve HTTPS per l'installazione. Usa menu Chrome ⋮ → \"Aggiungi a Home\" come scorciatoia"
+  },
+  "donationPopup": {
+    "title": "LibreFolio cresce grazie agli utenti come te!",
+    "message": "Se apprezzi il progetto e lo usi regolarmente, considera una piccola donazione per sostenerne lo sviluppo.",
+    "laterButton": "La prossima volta",
+    "donationNote": "☕ Anche il prezzo di un caffè può fare la differenza."
+  },
+  "updateCheck": {
+    "title": "Nuova versione disponibile",
+    "message": "LibreFolio {latest} è stato rilasciato.",
+    "guideLink": "Come aggiornare",
+    "releaseLink": "Note di rilascio su GitHub",
+    "laterButton": "Ricordamelo dopo",
+    "skipVersion": "Salta questa versione"
+  },
+  "changelog": {
+    "title": "Note di rilascio",
+    "viewRemote": "Vedi su GitHub",
+    "empty": "Nessun changelog incluso in questa build.",
+    "searchPlaceholder": "Cerca nelle note di rilascio…",
+    "expandAll": "Espandi tutto",
+    "collapseAll": "Comprimi tutto",
+    "checkNow": "Verifica aggiornamenti",
+    "upToDate": "Sei aggiornato alla versione più recente!",
+    "askAdmin": "Esiste una versione più recente. Chiedi a un amministratore di aggiornare:",
+    "searchResults": "Risultati:",
+    "copyEmail": "Copia email",
+    "askAdminTitle": "Aggiornamento disponibile — contatta un amministratore",
+    "emailCopied": "Email copiata negli appunti",
+    "detectedRemoteVersion": "Versione rilevata online: {version}",
+    "checkFailed": "Impossibile completare la verifica degli aggiornamenti. Riprova.",
+    "noStableRelease": "Non è stata trovata alcuna versione stabile su GitHub.",
+    "imagePending": "È stata rilevata una versione stabile più recente, ma la relativa immagine Docker non è ancora disponibile.",
+    "imageCheckFailed": "È stata rilevata una versione stabile più recente, ma non è stato possibile verificarne l’immagine Docker. Riprova.",
+    "adminLookupFailed": "Aggiornamento disponibile, ma non è stato possibile caricare l’elenco degli amministratori.",
+    "notTranslated": "Non ancora tradotto"
+  },
+  "support": {
+    "title": "Sostieni LibreFolio",
+    "description": "Offri un caffè o fai conoscere il progetto.",
+    "shareDivider": "Oppure condividi",
+    "shareOn": "Condividi su",
+    "share": {
+      "titleLabel": "Titolo suggerito",
+      "x": {
+        "message": "Hey! Sto usando LibreFolio per seguire i miei investimenti e mi trovo benissimo. Provala anche tu!",
+        "hint": "Il link al progetto viene aggiunto alla copia e al post. X si apre in una nuova scheda."
+      },
+      "reddit": {
+        "title": "Sto provando LibreFolio, un gestore di portafoglio open source",
+        "message": "Da un po' cercavo un modo più semplice per seguire i miei investimenti senza affidare tutti i dati del portafoglio a un servizio esterno. In questi giorni sto provando LibreFolio e mi sta piacendo avere tutto in un unico posto.\n\nÈ un programma open source per organizzare il portafoglio e analizzarne l'andamento, mantenendo i dati sotto il tuo controllo. Se cerchi qualcosa di simile, dagli un'occhiata!",
+        "hint": "Apriamo un post di testo con titolo e corpo separati. Se Reddit non compila il corpo, incolla il testo già copiato."
+      },
+      "facebook": {
+        "message": "Ultimamente sto usando LibreFolio per tenere d'occhio i miei investimenti e mi piace avere tutto in un unico posto senza rinunciare al controllo dei miei dati.\n\nSe cercate un gestore di portafoglio open source che lasci i dati sotto il vostro controllo, dateci un'occhiata!",
+        "hint": "Facebook prepara solo l'anteprima del link. Dopo l'apertura, incolla il testo copiato nel campo del messaggio del post.",
+        "afterCopy": "Testo e link copiati. Incolla il testo nel messaggio del post su Facebook."
+      },
+      "instagram": {
+        "message": "Un po' più di ordine nei miei investimenti, senza lasciare i miei dati altrove. Sto provando LibreFolio, un gestore di portafoglio open source.",
+        "hint": "Instagram non prepara un post da questo link. Dopo l'apertura scegli Crea (+), seleziona una foto o un video, poi incolla la didascalia copiata.",
+        "afterCopy": "Didascalia e link copiati. Su Instagram: Crea (+), scegli foto/video e incolla la didascalia."
+      },
+      "tiktok": {
+        "message": "Il mio nuovo alleato per tenere d'occhio il portafoglio: LibreFolio. Open source, con i miei dati sotto controllo. Se ti piace smanettare, dagli un'occhiata!",
+        "hint": "Apriamo la pagina Carica di TikTok; accedi se richiesto. Seleziona il tuo video, poi incolla la didascalia copiata. Non carichiamo video o testi automaticamente.",
+        "afterCopy": "Didascalia e link copiati. Nella pagina Carica di TikTok scegli il video e incolla la didascalia."
+      }
+    },
+    "shareMessageLabel": "Messaggio suggerito",
+    "clipboardUnavailable": "Impossibile copiare negli appunti. Consenti l'accesso agli appunti e riprova.",
+    "copyAndGo": "Copia e vai",
+    "navigationFailed": "Testo e link copiati, ma non è stato possibile aprire il social. Consenti i pop-up e riprova."
+  },
+  "connectionSecurity": {
+    "level": {
+      "secure": "Connessione: sicura",
+      "local": "Connessione: rete locale",
+      "insecure": "Connessione: non sicura"
+    },
+    "reason": {
+      "https": "Cifrata con HTTPS: il browser considera sicura questa connessione.",
+      "localhost": "Sei sul server stesso: il traffico non esce da questo computer.",
+      "vpn": "Cifrata dalla VPN (Tailscale) tra il tuo dispositivo e il server.",
+      "lan": "Rete locale senza cifratura: chiunque sia sulla stessa rete, per esempio il Wi-Fi, può leggere il traffico. Per la massima sicurezza usa l'indirizzo HTTPS anche in casa.",
+      "uncertain": "Incerta: l'indirizzo che hai aperto e la sorgente che vede il server non coincidono, per esempio un nome pubblico raggiunto con lo split DNS o un proxy locale. Il traffico non è cifrato: usa l'indirizzo HTTPS.",
+      "internet": "Non cifrata su Internet: password e dati viaggiano in chiaro."
+    },
+    "cookieWarning": "Il browser usa HTTPS, ma il cookie di sessione non è marcato Secure. Fai mandare X-Forwarded-Proto al reverse proxy (Nginx: proxy_set_header X-Forwarded-Proto $scheme;), oppure riporta SESSION_COOKIE_SECURE ad auto se è never.",
+    "learnMore": "Come connettersi in sicurezza"
+  }
+}

@@ -44,10 +44,10 @@ const TEST_DATE = '2026-06-25';
 
 async function goToTransactions(page: Page, query = '') {
     await navigateTo(page, `/transactions${query}`);
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
     // Visible ≠ loaded: the table renders empty then fills. The page publishes
     // data-busy, so wait on that rather than on a duration.
-    await waitForSettled(page.getByTestId('transactions-page'));
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /**

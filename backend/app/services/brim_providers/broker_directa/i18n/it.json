@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_directa": {
+      "description": "Importa le transazioni dall’export di Directa SIM (CSV o XLSX). Supporta tutti i tipi di transazione italiani, compresi dividendi di ETF, cedole obbligazionarie, imposte e operazioni di compravendita.",
+      "name": "Directa SIM"
+    }
+  }
+}

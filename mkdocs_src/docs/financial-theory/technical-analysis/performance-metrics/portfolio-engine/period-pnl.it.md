@@ -36,7 +36,7 @@ $$
 \mathrm{Other} = \mathrm{PnL}_{\text{period}} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Poiché il costo di carico mantiene i suoi tassi di cambio storici (vedi [Valore contabile](book-value.md)), l'effetto dei tassi di cambio sugli asset esteri fa parte di $\Delta\mathrm{UGL}$, non di Other. La liquidità detenuta in un'altra valuta è diversa: il NAV e il valore contabile la valutano entrambi al tasso di ogni giorno, quindi il suo effetto di cambio si annulla nel P&L latente e non è in $\Delta\mathrm{UGL}$. È la prima parte di Other, l'[Effetto cambio sulla liquidità](#fx-on-cash) di ciascun broker $b$, che la vista Performance mostra per broker:
+Poiché il costo di carico mantiene i suoi tassi di cambio storici (vedi [Valore contabile](book-value.md)), l'effetto dei tassi di cambio sugli asset esteri fa parte di $\Delta\mathrm{UGL}$, non di Other. La liquidità detenuta in un'altra valuta è diversa: il NAV e il valore contabile la valutano entrambi al tasso di ogni giorno, quindi il suo effetto di cambio si annulla nel P&L latente e non è in $\Delta\mathrm{UGL}$. È la prima parte di Other, l'[Effetto cambio sulla liquidità](#fx-on-cash) di ciascun broker $b$, che la vista Periodo mostra per broker:
 
 $$
 \mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}

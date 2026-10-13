@@ -28,7 +28,8 @@ LibreFolio needs a self-hosted deployment model that is simple to run for non-te
 - **Frontend must be pre-built on host** before `docker build`: `./dev.py front build`
 - **MkDocs must be pre-built on host** before `docker build`: `./dev.py mkdocs build`
 - `COPY frontend/build/ ./frontend/build/` and `COPY mkdocs_src/site/ ./mkdocs_src/site/` in Dockerfile
-- Base image: `python:3.13-slim`
+- Base image: `python:3.13-slim` — the version stays until a jump brings significant advantages:
+  [[decisions/python-stays-on-3-13]]
 - Single `CMD`: `uvicorn backend.app.main:app --host 0.0.0.0 --port 6040`
 - `EXPOSE 6040` (prod) and `6041` (test mode)
 - Volume mount: `/app/backend/data/prod/` for SQLite + uploaded files

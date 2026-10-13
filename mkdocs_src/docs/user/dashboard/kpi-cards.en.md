@@ -36,7 +36,7 @@ How much money did your investments make in the selected period? The **Period P&
 **How to read it**
 
 - **Green is a gain, red a loss** — and a deposit or a withdrawal is neither.
-- **The four rows explain the big number.** What they cannot see goes to the [Performance view](positions.md#performance): what the exchange rates did to cash you hold in another currency appears there as **FX on cash**, a row for each broker whose cash the rates moved, and the rest — such as assets moving between two of your brokers on the first or last day — as the **Other / reconciliation residual**.
+- **The four rows explain the big number.** What they cannot see goes to the [Period view](positions.md#performance): what the exchange rates did to cash you hold in another currency appears there as **FX on cash**, a row for each broker whose cash the rates moved, and the rest — such as assets moving between two of your brokers on the first or last day — as the **Other / reconciliation residual**.
 - **The longest bar** is the row that moved your result the most.
 
 ??? info "📏 The line under the big number — how it is computed"

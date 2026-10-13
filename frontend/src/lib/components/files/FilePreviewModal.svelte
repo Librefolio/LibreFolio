@@ -4,6 +4,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import type {FilePreviewResponse} from '$lib/types';
     import {formatBytes} from '$lib/utils/files/upload';
+    import {writeTextToClipboard} from '$lib/utils/clipboard';
     import {NO_PDF_REPORTS, pdfPreviewState, type PdfPreviewReports, type PdfPreviewState} from '$lib/utils/files/pdfPreviewState';
     import type {DocumentManagerCapability, TilingCapability} from '@embedpdf/snippet';
     import {AlertCircle, Copy, Download, Eye, FileImage, FileSpreadsheet, FileText, LoaderCircle, Minus, Plus, RotateCcw, X} from 'lucide-svelte';
@@ -374,7 +375,7 @@
         if (!textContent) return;
 
         try {
-            await navigator.clipboard.writeText(textContent);
+            await writeTextToClipboard(textContent);
             copied = true;
             window.setTimeout(() => {
                 copied = false;

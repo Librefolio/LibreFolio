@@ -20,6 +20,9 @@ import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
 import {getBackendSignalProblem, type SignalProblem} from '$lib/charts/signals/signalProblem';
 import {truncateName} from '$lib/utils/text';
 import {aggregateLineSeries, bucketEventMarkers, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /** A resolved logical date span the chart is currently showing. */
 export interface LogicalVisibleRange {
@@ -208,11 +211,11 @@ export function extractCalendarReturnViewsByAsset(rawItems: unknown, assetIds: r
 
 /**
  * Localized "Month YYYY" label for a `YYYY-MM-DD` date. Anchored to UTC so the
- * month never drifts across a timezone boundary. `locale` defaults to the host
- * default (what the component uses); tests pass an explicit locale to stay
+ * month never drifts across a timezone boundary. `locale` defaults to the
+ * interface locale (`uiLocale()`, M-18); tests pass an explicit locale to stay
  * deterministic regardless of the machine's locale.
  */
-export function formatMonthLabel(date: string, locale?: string | string[]): string {
+export function formatMonthLabel(date: string, locale: string | string[] = uiLocale()): string {
     return new Intl.DateTimeFormat(locale, {
         month: 'long',
         year: 'numeric',
@@ -235,6 +238,17 @@ export function getBucketInfo(point: LineDataPoint, currentResolution: ChartReso
         bucketStart: typeof (point as {bucketStart?: unknown}).bucketStart === 'string' ? (point as {bucketStart: string}).bucketStart : mapDateToBucket(point.date, currentResolution).bucketStart,
         bucketEnd: typeof (point as {bucketEnd?: unknown}).bucketEnd === 'string' ? (point as {bucketEnd: string}).bucketEnd : point.date,
     };
+}
+
+/**
+ * The span an aggregated point's tooltip names: its bucket from the first day up to the point's own day,
+ * the last day with data that the line or the candle renders the bucket at. A whole week or month ends on
+ * its bucket end, because the read path fills every calendar day; the one still running, or a series that
+ * stops inside it, ends on its last data point, not on a day without data or still to come. A date outside
+ * the bucket, or no day at all, leaves the bucket whole.
+ */
+export function bucketSpanUpTo(date: string, info: BucketInfo): BucketInfo {
+    return ISO_DATE_PATTERN.test(date) && date >= info.bucketStart && date < info.bucketEnd ? {bucketStart: info.bucketStart, bucketEnd: date} : info;
 }
 
 /**
@@ -494,10 +508,20 @@ export interface EventScatterContext {
  * signal. A marker's Y value follows its overlay line when it belongs to one,
  * otherwise the main price at that date; a date the axis does not contain is
  * skipped. Coarser resolutions bucket the markers first and carry the whole
- * bucket on one point. Groups that placed nothing are dropped.
+ * bucket on one point, placed where the line renders that bucket: its last data
+ * point, which for the open week or month falls before the bucket's end. Groups
+ * that placed nothing are dropped.
  */
 export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResolution: ChartResolution, ctx: EventScatterContext): EventScatterGroup[] {
     const {dateIndexMap, resolvedLineData, overlayDataByLabel, bucketInfoByDate, baseColor} = ctx;
+
+    // Markers are keyed by their bucket's end date, the line by the date each bucket renders at.
+    const renderDateByBucketEnd = new Map<string, string>();
+    if (activeResolution !== 'daily') {
+        for (const point of resolvedLineData) {
+            renderDateByBucketEnd.set(point.bucketEnd ?? mapDateToBucket(point.date, activeResolution).bucketEnd, point.date);
+        }
+    }
 
     const grouped = new Map<string, {markers: EventMarker[]; color: string; label: string}>();
     for (const marker of eventMarkers) {
@@ -539,11 +563,12 @@ export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResol
             }
         } else {
             const bucketedMarkers = bucketEventMarkers(markers, activeResolution);
-            for (const [bucketDate, bucketEntries] of bucketedMarkers) {
-                const index = dateIndexMap.get(bucketDate);
+            for (const [bucketEnd, bucketEntries] of bucketedMarkers) {
+                const renderDate = renderDateByBucketEnd.get(bucketEnd) ?? bucketEnd;
+                const index = dateIndexMap.get(renderDate);
                 if (index === undefined) continue;
-                const yValue = resolveY(bucketEntries[0]?.assetLabel, bucketDate, index);
-                points.push({value: [bucketDate, yValue], markers: bucketEntries, bucketInfo: bucketInfoByDate.get(bucketDate) ?? mapDateToBucket(bucketDate, activeResolution), bucketValue: yValue});
+                const yValue = resolveY(bucketEntries[0]?.assetLabel, renderDate, index);
+                points.push({value: [renderDate, yValue], markers: bucketEntries, bucketInfo: bucketInfoByDate.get(renderDate) ?? mapDateToBucket(renderDate, activeResolution), bucketValue: yValue});
             }
         }
 
@@ -567,15 +592,15 @@ export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResol
  */
 export function buildDeltaHtml(value: number, firstValue: number, isPercentage: boolean): string {
     const color = (n: number) => (n >= 0 ? '#10b981' : '#ef4444');
-    const sign = (n: number) => (n >= 0 ? '+' : '');
 
+    // In the interface locale (M-18); a zero carries no sign, as with `formatPercent` everywhere.
     if (isPercentage) {
-        return ` <span style="font-size:10px;color:${color(value)}">(Δ ${sign(value)}${value.toFixed(2)}%)</span>`;
+        return ` <span style="font-size:10px;color:${color(value)}">(Δ ${formatPercent(value)})</span>`;
     }
 
     const deltaAbs = value - firstValue;
     const deltaPct = firstValue !== 0 ? ((value - firstValue) / firstValue) * 100 : 0;
-    return ` <span style="font-size:10px;color:${color(deltaAbs)}">(Δ ${sign(deltaAbs)}${deltaAbs.toFixed(4)} / ${sign(deltaPct)}${deltaPct.toFixed(2)}%)</span>`;
+    return ` <span style="font-size:10px;color:${color(deltaAbs)}">(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${formatPercent(deltaPct)})</span>`;
 }
 
 /**
