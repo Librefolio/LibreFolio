@@ -67,7 +67,10 @@
       "previous": "Previous asset",
       "next": "Next asset",
       "position": "Asset {current} of {total}"
-    }
+    },
+    "notFound": "Asset #{id} not found",
+    "loadFailed": "Failed to load asset info",
+    "pricesLoadFailed": "Failed to load prices"
   },
   "assets": {
     "create": "New asset",

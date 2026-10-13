@@ -378,7 +378,7 @@
                 const targetId = Number(cfg.params.assetId);
                 if (!targetId) continue;
                 const targetAsset = allAssets.find((a) => a.id === targetId);
-                instance.params._assetDisplayName = targetAsset?.display_name ?? $t('fxDetail.assetFallback', {values: {id: String(targetId)}});
+                instance.params._assetDisplayName = targetAsset?.display_name ?? $t('chartSettings.signals.assetFallback', {values: {id: String(targetId)}});
                 instance.params._assetIconUrl = targetAsset?.icon_url ?? null;
                 instance.params._assetType = targetAsset?.asset_type ?? null;
                 if (!instance.params._resolvedData) continue;
@@ -435,7 +435,7 @@
         const markers: EventMarker[] = [];
         for (const [aid, evts] of comparisonEvents) {
             const targetAsset = allAssets.find((a) => a.id === aid);
-            const label = targetAsset?.display_name ?? $t('fxDetail.assetFallback', {values: {id: String(aid)}});
+            const label = targetAsset?.display_name ?? $t('chartSettings.signals.assetFallback', {values: {id: String(aid)}});
             const sigColor = overlaySignals.find((s) => s.label === label)?.color;
             for (const ev of evts) {
                 markers.push({

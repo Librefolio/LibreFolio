@@ -1,5 +1,10 @@
-import {describe, expect, it} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it} from 'vitest';
+import {get} from 'svelte/store';
+import {waitLocale} from 'svelte-i18n';
 
+import {setupI18n} from '$test/component';
+import {_} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 import {AssetComparisonSignal} from '../AssetComparisonSignal';
 import type {SignalStyle} from '../ChartSignal';
 import {FxPairSignal} from '../FxPairSignal';
@@ -17,7 +22,25 @@ import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
  *
  * The currency store is empty in a unit run, so `getCurrencyInfo` returns its
  * documented fallback: the code as its own name and 🏳️ as the flag.
+ *
+ * What a comparison signal calls itself before the page has named it comes from
+ * the catalogue (T-FB): «Asset #7», «Asset» and «FX Pair» are
+ * `chartSettings.signals.assetFallback` around the id, `common.asset` and
+ * `chartSettings.signals.fxPair`, read through `ChartSignal.text`. Formatting a
+ * message throws before svelte-i18n is initialised, so the file boots it once,
+ * in English, the app's fallback: the English names the cases pin as literals
+ * are the guards of that change. The other languages are the last describe's.
  */
+
+/**
+ * svelte-i18n throws when it formats a message before it is initialised, and the
+ * fallback names are formatted messages: boot it once for the whole file, in
+ * English. The cases that speak another language switch the interface language
+ * themselves and put English back.
+ */
+beforeAll(async () => {
+    await setupI18n('en');
+});
 
 const style: SignalStyle = {
     color: '#3b82f6',
@@ -295,5 +318,78 @@ describe('FxPairSignal', () => {
     it('falls back to a bare word before a pair is chosen', () => {
         expect(new FxPairSignal('fx1', style, {pairSlug: ''}).getLabel()).toBe('FX Pair');
         expect(new FxPairSignal('fx1', style, {}).getLabel()).toBe('FX Pair');
+    });
+});
+
+describe('The comparison signals’ fallback names in the interface language (T-FB)', () => {
+    /*
+     * Before the page has named it, an asset comparison calls itself by its id — «Asset #7» — or, with no asset
+     * chosen yet, «Asset»; an FX pair with no pair chosen calls itself «FX Pair». Today those are English written
+     * in the classes, whatever the interface language, and they reach the chart: the legend and the tooltip read
+     * `render()`'s label, which is `getLabel()`.
+     *
+     * The contract. `AssetComparisonSignal` with no `_assetDisplayName` and an `assetId` is
+     * `chartSettings.signals.assetFallback` around `{id}`; with no `assetId` either, `common.asset`.
+     * `FxPairSignal` with an empty slug is `chartSettings.signals.fxPair`. All three through `ChartSignal.text`,
+     * the tracked translator.
+     *
+     * Every expectation is the catalogue's own text (`$_`), never a typed translation. `common.asset` reads
+     * «Asset» in Italian as in English, so only French tells the bare word from the literal; the numbered name
+     * and the FX pair are told apart in both.
+     *
+     * Red today: in Italian and French every fallback reads as it does in English.
+     */
+    const LANGUAGES = ['it', 'fr'] as const;
+    type UiLanguage = 'en' | (typeof LANGUAGES)[number];
+
+    /** Switch the interface language in place, as the language selector does. */
+    async function speak(lang: UiLanguage): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every case of the file.
+        await speak('en');
+    });
+
+    /** A catalogue message with its values, as the interface language words it. */
+    function catalogue(key: string, values: Record<string, string> = {}): string {
+        return get(_)(key, {values});
+    }
+
+    /** The fallback names the two signals give themselves — and hand the chart — before the page has named them. */
+    function fallbackNames(): Record<string, string> {
+        const numbered = new AssetComparisonSignal('a1', style, {assetId: '7', _resolvedData: [{date: '2026-03-02', value: 200}]});
+        return {
+            numbered: numbered.getLabel(),
+            numberedOnTheChart: numbered.render(chart, 'absolute').label,
+            bare: new AssetComparisonSignal('a1', style, {}).getLabel(),
+            fxPair: new FxPairSignal('fx1', style, {pairSlug: ''}).getLabel(),
+        };
+    }
+
+    /** The same names as the catalogue words them in the interface language. */
+    function cataloguedNames(): Record<string, string> {
+        const numbered = catalogue('chartSettings.signals.assetFallback', {id: '7'});
+        return {
+            numbered,
+            numberedOnTheChart: numbered,
+            bare: catalogue('common.asset'),
+            fxPair: catalogue('chartSettings.signals.fxPair'),
+        };
+    }
+
+    it.each(LANGUAGES)('%s interface: «Asset #7», «Asset» and «FX Pair» are the catalogue’s — assetFallback around the id, common.asset, chartSettings.signals.fxPair — and the chart gets the same', async (lang) => {
+        await speak(lang);
+        expect(catalogue('chartSettings.signals.assetFallback', {id: '7'}), `premise: the ${lang} catalogue names an asset by its id another way than English`).not.toBe(get(_)('chartSettings.signals.assetFallback', {values: {id: '7'}, locale: 'en'}));
+
+        expect(fallbackNames(), `the fallback names are not in the ${lang} interface's words: the classes write «Asset #», «Asset» and «FX Pair» in English`).toEqual(cataloguedNames());
+    });
+
+    it('English interface: the English catalogue words the fallbacks exactly as the classes always did (guard)', async () => {
+        await speak('en');
+
+        expect(fallbackNames(), 'the English fallback names moved').toEqual(cataloguedNames());
     });
 });

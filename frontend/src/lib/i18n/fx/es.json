@@ -94,7 +94,6 @@
     "aiExport": "Exportación IA",
     "syncFailed": "Error de sincronización: {error}",
     "loadFailed": "No se pudieron cargar las tasas",
-    "assetFallback": "Activo n.º {id}",
     "invalidRates": "{n, plural, one {# fila tiene una tasa no válida} other {# filas tienen una tasa no válida}}: la tasa debe ser estrictamente mayor que cero (0 no está permitido).",
     "savedSummary": "Tasas FX: {details}",
     "savedCount": "{n, plural, one {# guardado} other {# guardados}}",
