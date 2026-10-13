@@ -10,7 +10,7 @@
  * Uses Apple (USD) TRANSFER on IB — same currency, WAC auto-calculates immediately.
  */
 import {expect, test, type Page} from '../fixtures/playwright';
-import {waitForSettled} from '../fixtures/app-events';
+import {validateRuns, waitForSettled, waitForValidateRun} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 
@@ -243,12 +243,20 @@ test.describe('WAC Mode — Auto/Manual Toggle & Blur', () => {
         const costBasis = page.getByTestId('tx-form-cost-basis');
         await expect(costBasis).toBeVisible({timeout: 5_000});
 
-        // Look for validate now button
+        // Validate now: a create form always renders it, enabled once the form is complete —
+        // which the WAC computed by the setup proves. Asserted, never probed: the click is the subject.
+        const root = page.getByTestId('tx-form-modal-root');
         const validateBtn = page.getByTestId('tx-form-validate-now');
-        if (await validateBtn.isVisible({timeout: 3_000}).catch(() => false)) {
-            await validateBtn.click();
-            // Recalculation is over when the component says so, not after 2 seconds.
-            await waitForWacComputed(page);
-        }
+        await expect(validateBtn).toBeVisible({timeout: 3_000});
+        await expect(validateBtn).toBeEnabled({timeout: 3_000});
+        // The counter is read on an idle form: the first WAC result can arm one more automatic
+        // run, and a run already queued must not answer for the click. Any run counted after
+        // this read is the one the click started — proof that it reached the server.
+        await waitForSettled(root);
+        const before = await validateRuns(root);
+        await validateBtn.click();
+        await waitForValidateRun(root, before);
+        // Recalculation is over when the component says so, not after 2 seconds.
+        await waitForWacComputed(page);
     });
 });
