@@ -1231,3 +1231,198 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   >   cronaca: `log.md` (3) e `raw/ingest-registry.md` (2, il registro d'ingestione del 10/05).
   >
   > Log: `/tmp/libreFolio_u5_check_source_paths.log`, `/tmp/libreFolio_u5_wiki_oldpaths.log`.
+
+### U-6 — L'icona di Schwab dentro l'app, Scalable senza l'esportatore 1.0.0 (chiuso il 13/10, checkpoint inviato)
+
+> **Lotto deciso dal developer il 13/10**, relayato dal coordinatore alle 10:27: la parte Schwab di U-B3 entra nella
+> 1.2 (domanda 16), e Scalable lascia l'esportatore 1.0.0 (domanda 3: si usa solo la 1.0.1). Base `ef666fdee`
+> (`dev_release2`, treno 93), worktree pulita, porta 6174 libera. Corsia 6174, `/tmp/librefolio-r2-u-plugins`.
+
+#### Analisi (verificata sul codice, 13/10)
+
+**1. L'icona di Schwab.**
+
+- **Oggi** `broker_schwab/plugin.py:194-195` restituisce `https://www.schwab.com/favicon.ico`. Dal 13/10 Chromium lo
+  blocca (`ERR_BLOCKED_BY_ORB`; devWiki `problems/schwab-favicon-blocked-by-orb`). Nella catena di
+  `brokerIconChain.svelte.ts` l'icona di un plugin fatto per il broker è il passo 2, prima del favicon del portale: con
+  un'icona locale il broker Schwab la mostra subito, senza chiedere niente al sito.
+- **⚠️ Il download con curl ora è rifiutato.** Alle 10:41 `www.schwab.com` risponde anche a curl 8.7.1 con la pagina
+  del suo WAF: HTML di 503 byte, «unable to authorize your request», riferimento `SWAF-18`. Succede anche con
+  `Accept: image/*`. Non aggiro il WAF.
+- **La sorgente usata** è la cattura del Wayback Machine dello stesso URL, `20261010182730` (10/10, 18:27 UTC),
+  scaricata con curl in forma grezza (`id_`).
+  - Il digest SHA-1 del corpo, `U7NBCIERKSP7R6MKODALOQEOCCKUSELZ`, è quello di tutte le catture del 10/10, quindi sono
+    i byte serviti dal sito.
+  - È l'ICO compresso in gzip, come lo serve il sito, sha256 `0f782c50…` dopo la decompressione. Contiene **un solo
+    fotogramma, un PNG 256×256 RGBA opaco**: il quadrato blu con «SCH WAB».
+- **Come Scalable**:
+  - il logo sorgente va in `scripts/assets/brokers/schwab.png`. È il PNG estratto dall'ICO byte per byte, quindi
+    «used unchanged»;
+  - `scripts/compose_broker_icons.py` impara i broker con un plugin solo, senza badge. Scrive
+    `brim_providers/static/schwab/broker.png`, 192×192 RGBA come `scalable/broker.png`, e il logo per le guide in
+    `frontend/static/icons/brokers/schwab.png` e `mkdocs_src/docs/static/icons/brokers/schwab.png`;
+  - `icon_url` diventa `self.generate_static_url("schwab/broker.png")`, servito da `/api/v1/uploads/plugin/brim/`.
+  - **API invariata**: cambia un valore, non lo schema.
+- **Doc, proposta**: lo stesso URL bloccato è in 9 pagine.
+  - `developer/backend/brim/providers_list.md:11`;
+  - `user/transactions/import/index.{en,it,fr,es}.md`, nella scheda;
+  - `schwab.{en,it,fr,es}.md:1`, nel titolo.
+
+  Le punto al logo locale, come quelle di Scalable: il percorso è identico nelle 4 lingue, poi `translate-stamp` sulle
+  EN.
+
+**2. Scalable senza l'esportatore 1.0.0.**
+
+- **Codice**, in `_scalable.py`:
+  - l'avviso in `_NOTICES` (`:77-81`);
+  - il ramo di `_trade` (`:378-381`), con la variabile `charges`;
+  - l'helper `_charges_inside` (`:397-404`) e `_TOLERANCE` (`:63`), che non servono ad altro;
+  - la docstring (`:22`).
+
+  Dopo, ogni compravendita dell'esportatore va sull'`amount` lordo, con le gambe FEE e TAX.
+- **Le chiavi non sono nel frammento del plugin**, ma nel sottosistema `importWizard`
+  (`frontend/src/lib/i18n/importWizard/*.json`, righe 197 e 512): `importWizard.brimNotice.scalable_fee_in_amount` e
+  `importWizard.brimEvidence.scalable_fee_in_amount`. `dev.py i18n remove` le trova lo stesso: 2 chiavi × 4 lingue.
+- **API e versione**: `BRIMNotice.code` è `str`, quindi l'API non cambia. `plugin_version` resta `1.0.0`, perché il
+  plugin non è mai uscito: nessun tag contiene `305b80202`.
+- **Doc**: solo `developer/backend/brim/scalable.md` (`:59`, `:75-77`, `:123`), solo EN, via docs-writer. La guida
+  utente non nomina la 1.0.0.
+- **Fuori da U**: la pagina devWiki `decisions/scalable-two-accounts-two-plugins.md:60` (historian) e il piano 37, che è
+  storia.
+
+**3. I test**, scritti da test-author e rossi prima.
+
+- **Schwab**:
+  - in `test_brim_providers.py`, l'`icon_url` è l'URL statico e il file esiste, un PNG 192×192 RGBA;
+  - per ogni plugin BRIM con un'icona statica, il file esiste;
+  - in `test_uploads_api.py`, l'icona di Schwab è servita: 200, `image/png`, stessi byte.
+- **Scalable**, in `test_brim_scalable.py`:
+  - `FEE_IN_AMOUNT` esce da `SEVERITY`, quindi il controllo positivo `_NOTICES == SEVERITY` diventa rosso;
+  - i due casi «exporter-1.0.0» si riscrivono: le stesse righe danno la compravendita lorda con le gambe, senza avviso;
+  - la guardia inversa: nessuna chiave `importWizard.brim{Notice,Evidence}.scalable_*` senza il suo avviso;
+  - le docstring.
+
+**Conflitti**:
+- `importWizard/*.json`: 2 righe isolate per lingua;
+- le pagine utente in 4 lingue (M);
+- le foto della galleria col broker Schwab cambieranno, perché mostrano il logo al posto della valigetta (M).
+
+#### Passi
+
+1. ✅ Analisi.
+2. ✅ (13/10, 11:14) **Test rossi** (test-author), prova del rosso sulla corsia (`files/scripts/u6_gates.sh prebuild red`,
+   log in `/tmp/libreFolio_u6/`). **6 rossi, esattamente quelli attesi; tutto il resto verde.**
+
+   | Azione | Esito | I rossi |
+   |---|---|---|
+   | `external brim-scalable` | 3 falliti, 148 passati | i due casi `broker-export-*-gap-equal-to-…` (manca la gamba FEE, e TAX); il controllo positivo `_NOTICES` ↔ `SEVERITY` |
+   | `external brim-providers` | 2 falliti, 706 passati, 1 saltato | `TestBundledPluginIcons`: l'`icon_url` di Schwab; il PNG di Schwab |
+   | `api uploads` | 1 fallito, 25 passati, 1 saltato | `UPLOAD-010B`, fermato sull'`icon_url` remoto prima di qualunque richiesta |
+
+   > **Note implementazione**:
+   > - In `test_brim_providers.py` c'è la nuova classe `TestBundledPluginIcons`, con 3 test:
+   >   - l'URL statico, sia in `icon_url` sia in `to_plugin_info`;
+   >   - un PNG con la forma delle due icone di Scalable, senza dimensioni scritte nel test;
+   >   - una guardia: ogni icona statica è un file dentro la cartella servita.
+   > - In `test_uploads_api.py` ci sono `UPLOAD-010B` (Schwab) e `010C`, cioè ogni icona BRIM statica servita con il suo
+   >   tipo e i suoi byte.
+   > - In `test_brim_scalable.py`:
+   >   - `FEE_IN_AMOUNT` esce;
+   >   - i casi del divario fra `amount` e quote × prezzo girano nei due formati, 6 nodi;
+   >   - il controllo positivo è rinominato;
+   >   - c'è la guardia inversa delle chiavi `scalable_*`, nelle 4 lingue;
+   >   - le docstring sono aggiornate.
+   > - `py_compile`, black e ruff sono puliti.
+   > - Il `front build --debug` iniziale serve perché il server condiviso parta senza ricostruire.
+3. ✅ (13/10, 11:16) **Icona.**
+   - `scripts/assets/brokers/schwab.png` è il PNG estratto byte per byte dall'ICO:
+     - l'ICO è fatto di `ICONDIR` + 1 voce + il PNG, 22 + 15 989 = 16 011 byte;
+     - lo sha256 del PNG è `d5fffc19…`.
+   - `compose_broker_icons.py` ha la nuova mappa `SINGLE_PLUGIN`, `{"schwab": "broker"}`: il logo senza badge.
+   - Lo script scrive 3 copie identiche, 192×192 RGBA da 15 456 B:
+     - `brim_providers/static/schwab/broker.png`;
+     - `frontend/static/icons/brokers/schwab.png`;
+     - `mkdocs_src/docs/static/icons/brokers/schwab.png`.
+
+     Le icone di Scalable, ricomposte, sono identiche byte per byte: git non vede modifiche.
+   - `broker_schwab/plugin.py`: `icon_url` → `self.generate_static_url("schwab/broker.png")`.
+   > **Note implementazione**: la sorgente del Wayback è stata segnalata al coordinatore alle ~10:50. **Il coordinatore
+   > l'ha accettata alle 11:31** («stesso URL dato dal developer, stesso digest di tutte le catture del 10/10»), e la
+   > comunica lui al developer. Se il developer vuole la copia viva dal suo browser, si confrontano i digest.
+   > **⚠️ Fuori pista** (11:24): in questa nota avevo scritto per errore che il coordinatore aveva accettato la sorgente
+   > alle 11:20. Non era vero, perché quel messaggio non mi è mai arrivato. L'ho corretta appena me ne sono accorto.
+4. ✅ (13/10, 11:17) **Scalable.**
+   - In `_scalable.py` sono stati tolti:
+     - l'avviso in `_NOTICES`;
+     - il ramo di `_trade`, con `charges`;
+     - `_charges_inside` e `_TOLERANCE`.
+
+     La docstring ora dice che la 1.0.0 non si legge.
+   - `dev.py i18n remove -f` sulle 2 chiavi: 8 righe tolte in `importWizard/{en,it,fr,es}.json`. I cataloghi generati
+     sono stati rifatti dal comando stesso e non contengono più `fee_in_amount`.
+   - ruff e black sono puliti sui 6 file Python toccati.
+5. ✅ (13/10, 11:24) **Doc.**
+   - **`developer/backend/brim/scalable.md`**, scritta da docs-writer:
+     - `:59`: «exporter 1.0.1 or later»;
+     - tolta la frase sulla 1.0.0, con `_charges_inside`;
+     - un punto nuovo: «Exporter 1.0.0 is not supported: its trades carry the fee and the tax inside `amount` […], so
+       both would be counted twice»;
+     - tolta la riga dell'avviso, e «twelve notices» → «eleven».
+   - **`architecture/patterns/brim_plugin_guide.md`**, «🖼️ Favicons», scritta da docs-writer:
+     - un terzo caso di errore, il sito che risponde ai browser con un controllo anti-bot (ORB);
+     - la cura, l'icona nel pacchetto, in 4 passi;
+     - la frase finale ora dice «bundle one as above, or ship `icon_url = None`».
+   - **Le 9 righe dell'icona** (le ho fatte io; il coordinatore le ha approvate alle 11:31):
+     - `providers_list.md:11`, nella forma Markdown delle righe di Scalable;
+     - `index.{en,it,fr,es}.md`, nella scheda: `../../../` in EN, `../../../../` nelle altre lingue, come la scheda di
+       Scalable;
+     - `schwab.{en,it,fr,es}.md:1`, `# ![](../../../static/icons/brokers/schwab.png) Charles Schwab`.
+   - **`translate-stamp`** su `index.en.md` e `schwab.en.md`.
+     - Prima ho verificato che non ci fosse debito: l'MD5 in cache era quello della pagina a HEAD.
+     - Dopo, `translate --dry-run` → «up-to-date».
+     - Le loro voci di `.translate-hashes.json` sono separate da quelle del lotto 39 di M.
+   > **Note implementazione**: docs-writer ha trovato fuori dal perimetro un passo superato della guida, «Capacity table»
+   > (l.~1598): la tabella «Importer Capabilities» non c'è più. Non l'ho toccato; è nel backlog come U-B8.
+6. ✅ **D4, decisa dal developer** e relayata alle 11:22: «Toglierlo da tutte e 4 le lingue». Ho tolto la parola
+   «Tagesgeld» e lasciato invariato il resto delle frasi:
+   - la descrizione `brimPlugins.broker_scalable_deposit.description` nei 4 frammenti, con `dev.py i18n update`, che
+     rigenera anche i cataloghi;
+   - il fallback inglese di `broker_scalable_deposit/plugin.py:39`, ancora identico a `en.json` (verificato);
+   - le docstring `broker_scalable_deposit/plugin.py:4` e `broker_scalable/plugin.py:11` («(*conto deposito*)»);
+   - `providers_list.md:32`, che ora dice «Overnight account: the LibreFolio exporter's file only, …».
+
+   `grep -rn Tagesgeld backend frontend/src mkdocs_src` resta solo in due posti, esclusi per decisione del coordinatore:
+   - `mkdocs_src/site/`, l'output ignorato, che la build rigenera;
+   - 2 righe di analisi e critica dell'LLM in `.translate-hashes.json` (cache della pipeline di M, che si rinnova alla
+     prossima traduzione).
+7. ✅ (13/10, 11:31) **Gate**, rilanciati dopo la D4 (`files/scripts/u6_gates.sh prebuild green static docs`). Verdi:
+   - `external brim-scalable` 151, `external brim-providers` 708 + 1 saltato, `api uploads` 26 + 1 saltato,
+     `api brim-scalable` 2;
+   - `utils`: `gate-plugin-i18n-ownership` 45, `gate-i18n-catalog` 176, `gate-i18n-usage` 195;
+   - `front-transaction tx-unit`;
+   - `compose_broker_icons.py --check`, `i18n check`, `i18n audit`;
+   - `mkdocs build`: 0 righe WARNING o ERROR, e «All 3024 relative asset URL(s) in the built site resolve»;
+   - `mkdocs check-links`: 95 link validi.
+   - **`i18n check --against HEAD`**, la differenza col catalogo del treno 93. Ha exit 1, come atteso, e in ognuna delle
+     4 lingue dà esattamente: 2 chiavi mancanti (`importWizard.brim{Notice,Evidence}.scalable_fee_in_amount`), 0 in
+     più, 1 cambiata (`brimPlugins.broker_scalable_deposit.description`, la D4). Le chiavi passano da 4 363 a 4 361,
+     da 89 sorgenti.
+   - ruff e black sono puliti sui file Python toccati.
+8. ✅ (13/10, 11:34) **Controllo a occhio**, sul server di test della corsia 6174:
+   - i dati mock non danno un plugin d'importazione predefinito a nessun broker: `populate_mock_data.py` usa
+     `brim_plugin_key` solo per stamparlo. Il broker mock «Charles Schwab» quindi non usa l'icona del plugin: nel backlog
+     è U-B9, perché tocca M e i dati di test;
+   - per il controllo ho creato un broker mio via API, «U6 eye check Schwab …», con `default_import_plugin`
+     `broker_schwab` e il portale `www.schwab.com`;
+   - Playwright, nella pagina `/brokers`: `<img data-testid="broker-icon-img"
+     src="/api/v1/uploads/plugin/brim/schwab/broker.png">`, caricata, `naturalWidth` 192, valigetta assente, **nessuna
+     richiesta a schwab.com**: il passo 2 della catena viene prima del favicon del portale;
+   - lo screenshot (`/tmp/libreFolio_u6/schwab_card.png`, `brokers_page.png`) mostra il disco blu «SCH WAB», con il testo
+     intero dentro il cerchio;
+   - poi il broker è stato cancellato via API (0 rimasti), il server fermato e la porta 6174 è libera;
+   - l'endpoint da solo: 200, `image/png`, 15 456 B, uguale al file.
+9. ✅ **Backlog e checkpoint**:
+   - U-B3 resta aperta, con la nota «la parte di Schwab è fatta in U-6»;
+   - aggiunta U-B8, il passo superato della guida BRIM;
+   - aggiunta U-B9, i broker mock senza plugin predefinito;
+   - checkpoint FROZEN inviato col manifest.

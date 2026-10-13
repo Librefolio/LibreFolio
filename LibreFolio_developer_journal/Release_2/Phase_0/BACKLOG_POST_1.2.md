@@ -1360,6 +1360,13 @@ plugin.
 - **U-B3 · Le icone dentro la cartella del plugin** — basso; U, 12/10, decisione D-7, che le lascia dove sono nella 1.2.
   Servono `static/` nella cartella, la rotta di `uploads.py` e `generate_static_url` nelle 3 basi. Dettagli: piano della
   45, sezione «9».
+  - **La parte di Schwab è fatta in U-6** (13/10, decisione del developer). Il sito rifiuta il favicon ai browser, quindi
+    il logo è nel pacchetto come quello di Scalable:
+    - `scripts/assets/brokers/schwab.png`;
+    - la mappa `SINGLE_PLUGIN` di `scripts/compose_broker_icons.py`;
+    - `brim_providers/static/schwab/broker.png`.
+
+    Resta da fare lo spostamento delle icone nelle cartelle dei plugin. Dettagli: piano della 45, sezione «10», U-6.
 - **U-B4 · `sample_reports/` per plugin** — basso-medio; U, 12/10, decisione D-7. Ci sono 25 percorsi fra E2E e test
   backend. Dettagli: piano della 45, sezione «9».
 - ✅ **U-B5 · I vecchi percorsi `<famiglia>/<nome>.py` fuori da U** — basso; U, 12/10. Chiusa: le due parti erano già
@@ -1389,3 +1396,20 @@ plugin.
     bastano i proprietari.
 
   Dettagli: piano della 45, sezione «10», U-4.
+- **U-B8 · Un passo superato nella guida dei plugin BRIM** — basso; docs-writer in U-6, 13/10.
+  - Il passo 3 di «Register the user-facing docs» in `brim_plugin_guide.md` (la «Capacity table», l.~1598) chiede
+    una riga nella tabella `??? info "📊 Importer Capabilities"` delle pagine `user/transactions/import/index.*.md`.
+    Quella tabella non c'è più.
+  - Fuori dal perimetro di U-6, quindi non l'ho toccato: si toglie il passo, oppure lo si riscrive per le schede
+    dell'indice.
+
+  Dettagli: piano della 45, sezione «10», U-6.
+- **U-B9 · I broker dei dati mock non hanno un plugin d'importazione predefinito** — basso; U, 13/10, nel controllo a
+  occhio di U-6.
+  - `populate_mock_data.py:300-369` scrive `brim_plugin_key` nei dizionari dei broker, ma `Broker(**broker_data)` lo
+    scarta senza dirlo, e il campo viene solo stampato. Il campo vero è `default_import_plugin`.
+  - Così nel DB di test e nella galleria il broker «Charles Schwab» non usa l'icona del plugin, che U-6 ha messo nel
+    pacchetto: resta sul favicon del portale, bloccato, e mostra la valigetta.
+  - La correzione è di M (galleria) o dei dati di test: rinominare la chiave cambia le icone di tutti i broker mock.
+
+  Dettagli: piano della 45, sezione «10», U-6, passo 8.
