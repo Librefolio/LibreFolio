@@ -103,11 +103,19 @@ export async function logout(page: Page) {
 }
 
 /**
+ * The budget of each wait in setLanguage(). A switch waits for the chosen dictionary, a ~290 KB chunk fetched on first
+ * use, and for the page to redraw in it: a round trip the 3 s expect default bets against, and lost at load 60
+ * (toolbar-width-sweep, French on screen a moment later). 15 s, as navigateTo() gives the same `data-i18n-ready`.
+ * A deadline, never a delay.
+ */
+const LANGUAGE_SWITCH_MS = 15_000;
+
+/**
  * Change UI language
  */
 export async function setLanguage(page: Page, lang: Language) {
     // Wait for language selector to be visible (needs longer timeout for SvelteKit hydration after fresh navigation)
-    await expect(page.getByTestId('language-selector-button')).toBeVisible({timeout: 5000});
+    await expect(page.getByTestId('language-selector-button')).toBeVisible({timeout: LANGUAGE_SWITCH_MS});
     await page.getByTestId('language-selector-button').click();
 
     // Click the menu item specifically (not any element with that text)
@@ -123,8 +131,8 @@ export async function setLanguage(page: Page, lang: Language) {
     // data-i18n-ready goes true only once that dictionary has actually landed.
     // Asserting both is what makes this helper's promise ("when I return, the UI
     // speaks `lang`") true instead of merely likely.
-    await expect(page.locator('html')).toHaveAttribute('lang', lang);
-    await expect(page.locator('html')).toHaveAttribute('data-i18n-ready', 'true');
+    await expect(page.locator('html')).toHaveAttribute('lang', lang, {timeout: LANGUAGE_SWITCH_MS});
+    await expect(page.locator('html')).toHaveAttribute('data-i18n-ready', 'true', {timeout: LANGUAGE_SWITCH_MS});
 }
 
 /**
