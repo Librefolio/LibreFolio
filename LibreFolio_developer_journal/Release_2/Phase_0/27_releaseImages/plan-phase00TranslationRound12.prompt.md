@@ -1669,7 +1669,7 @@ Batch 39 is in the target (train 94, `9c1750325`). Two coordinator edits of the 
 > - The coordinator's FREEZE-VENV (`uvicorn[standard]` into the shared venv) came after these runs. The manifest and
 >   this entry use only the system Python and git.
 
-### 32. ⏳ Batch 41: the form's two changelog lines and V's form line, then the final gallery — on `f8dbdddaf`, 2026-10-13 evening
+### 32. ✅ Batch 41: the form's two changelog lines and V's form line, then the final gallery — on `f8dbdddaf`, 2026-10-13 evening
 
 Batch 40 is in the target (train 96, `124c02a8a`). The coordinator fast-forwarded the worktree to `f8dbdddaf`; the
 batch's brief excludes any git write, the fast-forward included. The developer keeps the Mac awake for the night and
@@ -1699,4 +1699,79 @@ has delegated the merges to the coordinator: the translations first, with their 
 > - **Tests:** the changelog's Vitest 189 passed; `front-utility changelog-locale` (1 worker, lane 6158) 2 passed.
 > - `git diff --check` clean; ports free.
 
-**32.2 ⏳ The final gallery** (on this tree, `LF_APP_VERSION=v1.2.0`): see below once it has run.
+**32.2 ✅ The final gallery** (on this tree, `LF_APP_VERSION=v1.2.0`; full report:
+`release-pipeline/runs/b41/B41_GALLERY_REPORT.md`)
+> **Note implementazione**: the run.
+> - **The tree:** `baabbf7a2`. The coordinator committed batch 41's translations between the bundle's build (20:38–20:40)
+>   and the start: the same 8 files, the same content.
+> - **The bundle:** a debug build with `LF_APP_VERSION=v1.2.0`, with `v1.2.0` in 9 bundle files and no `git describe`
+>   version.
+> - **Command:** `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r2-m LIBREFOLIO_TEST_STARTUP_TIMEOUT=900 dev.py mkdocs
+>   gallery --test-port 6158 --workers 2`, with a fresh population of the lane's DB.
+> - **Result, 20:40–21:46 (1.1 h), load 15 → 9:** **251 passed, 0 failed, 1 skipped** by design; 2825 screenshots.
+>
+> **By eye:**
+> - `v1.2.0` in the sidebar and the mobile drawer.
+> - The favicon logos are back on `brokers/list`. Charles Schwab shows the briefcase, as U-6b accepts.
+> - M-18's formats in fr, es and it.
+> - In Spanish, «Faltan tipos de cambio…» and **Sincronizar tipos de cambio** (batch 36, M-28).
+> - The security panel open.
+>
+> **Seen, for I's batch 52:** the Growth chart's last x-axis label is cut at the right edge in every language («Oct 13,
+> 2», «13 oct. 2»).
+>
+> **To re-run after I's train,** with `--no-populate` and a `-f` filter (in the report): 9 tests, desktop and mobile.
+> - main dashboard, growth P&L submodes, allocation charts;
+> - the FIFO lots panel on the dashboard and on the broker page, and broker detail;
+> - privacy mode, the two data-quality banners, the connection indicator.
+
+### 33. ✅ Batch 42: the running-period line, then the time-chart groups again — on `10e646f79` (train 97), 2026-10-13 evening
+
+Train 97 is in the target: batch 41 (`b7f38e34b`, `0184e06b6`, `baabbf7a2`) and I's batch 52, then the widened changelog
+line (`10e646f79`). The coordinator fast-forwarded the worktree to it.
+
+**33.1 ✅ The changelog line** (`release-pipeline/scripts/b42_changelog_line.py`, `b42_es160_growth.py`)
+> **Note implementazione**:
+> - **`10e646f79`, `:162`:** at weekly or monthly resolution, the running week or month now reads right on the Growth
+>   chart, the allocation history and the lot comparison chart too, not only on the asset and FX charts. The tooltip
+>   dates the value on its last day with data; on the Growth chart the point stands on that day, so the line no longer
+>   reaches a date still to come.
+> - **UI names:** the Growth chart is grafico Crescita / graphique Croissance / gráfico Crecimiento (`dashboard.growth`);
+>   the allocation history is storico dell'allocazione / historique de l'allocation / histórico de la asignación; the
+>   lot comparison chart is named as at `:161`.
+> - **⚠️ Fuori pista:** es `:160`, in the same piece, called the chart «Growth» twice: «los gráficos Growth y
+>   Performance» and «la información emergente de Growth». Both now say Crecimiento («del gráfico Crecimiento», like
+>   `:228`'s «la información emergente del gráfico de precios»), as it and fr already did. The second was completed
+>   during the gallery run (21:56); no shot of those groups shows the changelog.
+>
+> **Gates** (`b42_gates.sh`, 21:49–21:51; again after es `:160`, `b42_regates.sh`, 22:05–22:09; load 7–23):
+> - **Stamp:** `1.2.0/fixed/charts`, 1 piece × 3; the cache changed only there (its md5 and three `stamped_at`). The
+>   second stamp: 0 pieces.
+> - **Translations:** dry-run empty; `translate-validate --hide-localized` 630 files 0/0, no INFO; the CHANGELOG alone
+>   3 files OK; `translate-diff` 642 of 642 clean.
+> - **Docs:** strict build 0; `check-links` 95.
+> - **Review scripts:** only the intended `:266` examples and the four quotes of old text.
+> - **Tests:** the changelog's Vitest 189 passed, twice; `front-utility changelog-locale` (1 worker, lane 6158) 2
+>   passed, twice. The second ran on the rebuilt debug bundle, with the new es text in it and the old one gone.
+> - `git diff --check` clean; ports free.
+
+**33.2 ✅ The time-chart groups again** (full report: `release-pipeline/runs/b42/B42_GALLERY_REPORT.md`)
+> **Note implementazione**:
+> - **The bundle:** a debug build with `LF_APP_VERSION=v1.2.0` (21:52–21:53), with `v1.2.0` in 9 bundle files and no
+>   `git describe` version.
+> - **Command:** batch 41's, with `--no-populate` and the report's 9-group `-f` filter. The DB is batch 41's population
+>   (20:40); no migration, seed, fixture or `scripts/` change since.
+> - **Left out:** `Asset detail` and `FX › Detail`. Batch 52 only adds exports to `responsiveXAxis.ts`;
+>   `buildResponsiveXAxisPolicy`, all that `PriceChartFull` and `CandlestickChart` import from it, is unchanged.
+> - **Result, 21:55–22:03, load 6 → 9:** **20 passed, 0 failed** (10 tests × desktop and mobile), 7.4 min; 496
+>   screenshots.
+>
+> **By eye** (against batch 41's shots, still in the docs build of 21:50):
+> - The time axis's last label is whole: «Oct 13, 26», «13 oct. 26», «13 ott 26» on Growth and the allocation
+>   history, desktop and mobile. Batch 41 read «Oct 13, 2», «13 oct. 2», «13 ott 2».
+> - The lines end on the last day with data. The tooltips are not in the shots, since the gallery asserts that none is
+>   open: batch 52's unit tests cover the running period's dates.
+>
+> **Seen, not from batch 52** (identical in batch 41), passed to the coordinator:
+> - the allocation history's stack tops out near 75 %, not 100 %, by type, sector and geography;
+> - `brokers/detail` shows Charles Schwab empty over 3M, so it holds no broker Growth chart with data.
