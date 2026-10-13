@@ -305,23 +305,44 @@ class then only resets the line height.
 ## Responsive Date Axis
 
 `lib/components/charts/responsiveXAxis.ts` (`buildResponsiveXAxisPolicy()`) decides how many date
-labels fit:
+labels fit and how they read, in the interface locale (`uiLocale()`) unless a `locale` is passed.
+Two neighbouring labels never read the same (pinned in `chartCoreHelpers.test.ts`).
 
-- The usable width is the chart width minus `horizontalPadding`, 64 px by default.
-- The axis turns **compact** when that width is under 480 px, or when it leaves fewer than 24 px
-  per point.
-- A compact axis keeps between 2 and 12 labels, one per 48 px on a time axis or per 56 px on a
-  category axis: a time axis gets that count as `splitNumber`, a category axis an `interval` that
-  spreads them.
-- Compact labels are shorter, by span (`formatCompactXAxisDate()`, in the interface locale): month
-  and two-digit year from a year up, the month alone beyond 90 days, day and month below. They
-  never rotate, overlapping ones hide, and the first and last stay.
+- **Compact or wide**: the usable width is the chart width minus `horizontalPadding`, 64 px by
+  default. The axis turns compact when that width is under 480 px, or leaves fewer than 24 px per
+  point. A compact axis keeps 2 to 12 labels, one per 48 px on a time axis or per 56 px on a
+  category axis: a time axis gets that count as `splitNumber`, a category axis with more points an
+  `interval` that spreads them.
+- **Compact labels**: `axisLabel` turns on `hideOverlap`, `showMinLabel` and `showMaxLabel`, sets
+  `rotate: 0` and carries the formatter. A category axis also gets `alignMaxLabel: 'right'`: the
+  forced last label ends at its tick instead of spilling past the chart's right edge on a phone. A
+  time axis does not: ECharts ranks time labels by tick level before hiding overlaps, so a month or
+  year tick next to the edge would win, and the end label, pulled inward, would be the one hidden.
+  The first label needs no alignment: it spills at most into the y-axis labels, inside the chart.
+- **Wide labels**: no `axisLabel` overrides, only the `formatter`, which the consumers apply in
+  both modes: ECharts' own labels are English on a time axis and raw ISO dates on a category one.
+- **Time axis** (`buildTimeAxisFormatter`): a label names the tick ECharts places, not the length
+  of the period, so ticks a week apart read *8 Aug*, *15 Aug* (in `en-GB`), never *Aug Aug*. A day
+  tick reads *15 Jul* and 1 January *2026*. The 1st of another month reads *Aug* when the ticks are
+  months (tick level 0), *1 Aug* when it is a month boundary among day ticks. A tick off local
+  midnight gets no label: it would repeat a day already on the axis. When compact, with the end
+  labels forced on, the first and last data points keep their day, plus a two-digit year when the
+  range crosses a calendar year; the midnight of a last day that ends mid-day gets no label.
+- **Category axis** (`buildCategoryAxisFormatter`): a compact axis labels one point every
+  `interval + 1`. Month names stand alone only when every two neighbouring labels fall in different
+  months; otherwise a label reads day and month. The two-digit year appears where it changes from
+  the previous label, and on the first and last point when the data crosses a year. A label off
+  the regular grid (the last point, or one moved by zoom) keeps its day. A wide axis has no
+  `interval`: ECharts picks the labels, so each carries what it needs, the month for monthly data,
+  the day otherwise, the year whenever the data crosses one.
 
-It serves `PriceChartFull` (the asset and FX detail charts, with its `CandlestickChart`),
-`LineChart` (the asset and FX cards through `PriceChartCompact`, the **Chart Settings** preview,
-and the risk charts), `GrowthChart` in its time-axis views (the Candles and Income ladders plan
-their own labels, above), `AllocationHistoryChart`, and the broker lots charts
-(`LotWacPriceChart`, `LotComparisonChart` and `LotGanttChart`, which pass their own padding).
+The category axis serves `PriceChartFull` (asset and FX detail, with its `CandlestickChart`) and
+`LineChart` (the **Chart Settings** preview and the risk charts; the asset and FX cards draw it
+through `PriceChartCompact`, date axis hidden). The time axis serves `GrowthChart` in its time-axis
+views (the Candles and Income ladders plan their own labels, above), `AllocationHistoryChart` and
+the broker lots charts (`LotWacPriceChart`, `LotComparisonChart` and `LotGanttChart`, which pass
+their own padding). When a chart goes back from compact to wide, its consumer rebuilds the whole
+option, so compact-only keys such as `alignMaxLabel` do not linger.
 
 ## Pie Charts (AllocationPieChart)
 
