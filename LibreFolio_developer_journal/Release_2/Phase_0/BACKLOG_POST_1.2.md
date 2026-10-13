@@ -1089,15 +1089,41 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     - `aria-pressed` su `view-mode-*`.
 
   **Resta aperto:**
-  - **T1**, decisione del developer. Ne dipende anche `fillBuyTransaction`, che prende la prima opzione e serve pure a
-    T2 e T6.
-  - **T4**, domanda 12 per il developer. Il prodotto mette `cost_basis_override` (`TransactionBulkModal.svelte:1825`)
-    prima di `asset_event_id` (`:1888`), mentre il piano Bugfix-3 M5, passo 10, dice che è stato spostato dopo. T4 non
-    prova niente ed è rimasto com'è.
+  - **T1**, decisione del developer (domanda 8). Ne dipende anche `fillBuyTransaction`, che prende la prima opzione e
+    serve pure a T2 e T6. Il 13/10 il developer ha chiesto una spiegazione migliore, mandata al coordinatore.
+    - Il primo broker, Charles Schwab, non ha cassa: il server rifiuta il BUY con `BALANCE_CASH_NEGATIVE`, e dopo il
+      salvataggio il test non asserisce niente.
+    - Le scelte:
+      - (A) «un BUY si salva», su un broker del test, consigliata;
+      - (B) «un BUY senza cassa viene rifiutato»;
+      - (C) entrambi;
+      - (D) com'è, ma rinominato.
+
+    Dettagli: piano della 46, §12.13.
+  - ✅ **T4, chiusa il 13/10** in un checkpoint di V, via test-author.
+    - **La decisione del developer** (domanda 12): nel bulk editor «Costo di carico» (`cost_basis_override`) prima di
+      «Evento» (`asset_event_id`) è voluto, non è una regressione. La nota del passo 10 del piano Bugfix-3 («spostato
+      dopo») è superata.
+    - **Il test**: T4 ora legge l'ordine delle intestazioni del workspace (`dt-header-*` in `tx-bulk-body`), dopo aver
+      verificato che le due colonne si vedono di default.
+    - **Le prove**:
+      - col solo ordine atteso invertito è rosso, e mostra l'ordine vero;
+      - ripristinato, è verde;
+      - `transactions-modals` 20/20 a 1 e a 4 worker, col DB al seed.
+
+    Dettagli: piano della 46, §12.13.
   - **T5 e T8** asseriscono il testo tradotto dell'etichetta dell'asset. Servirebbe uno stato pubblicato, per esempio
     `data-asset-field` su `tx-form-asset-wrap` (`TransactionFormModal.svelte`, ~`:1900`); per T8, però, il soggetto è
     la traduzione.
   - **T13** comincia ad aspettare la risposta di validazione solo dopo il click su Apply.
+  - **`transactions-modals`, residui minori** visti da test-author di V il 13/10, fuori lista:
+    - `goToTransactions` ingoia la sua `Promise.race` con `.catch`;
+    - `optionListReady` usa `.first()` su `[role="listbox"]` senza filtro;
+    - l'intestazione dello spec dice ancora «port 6041»;
+    - il commento «T4: no confirm dialog» nel test «Delete» usa un'altra numerazione.
+
+    In T1 ci sono anche un `bulkRows.first()` senza filtro e una `Promise.race(...).catch`: si sistemano con la
+    decisione su T1.
   - **`tx-delete`**, fuori lista: `.checkbox-btn` in A6 e B3-guard (`:652`, `:774`, `:815`), `.disabled-select-icon`
     (`:811`) e una sonda (`:793`).
 - **V-22 · «+ New event» può modificare un evento esistente dicendo di averlo creato** — dopo la 1.2, deciso dal developer il 13/10; letto da
