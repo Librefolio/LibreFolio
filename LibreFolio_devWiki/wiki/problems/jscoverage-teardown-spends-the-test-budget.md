@@ -1,7 +1,7 @@
 ---
-title: "Under coverage and load, collecting the JS coverage at teardown spends the test's own 30 s: the fixture has no budget of its own"
+title: "Under coverage and load, collecting the JS coverage at teardown ran out the after-hooks slot: the fixture had no budget of its own (V-28)"
 category: problem
-status: open
+status: resolved
 date: 2026-10-13
 tags: [testing, e2e, playwright, coverage, fixtures, timeout, load, workstream-r, workstream-v, release-1.2]
 related:
@@ -23,9 +23,24 @@ The `jsCoverage` fixture collects the coverage in its teardown and has no `timeo
 body, but against the after-hooks slot — also 30 s, and shared with `afterEach`. That is why R's failing durations
 read as the body plus 30 s. Under load, the collection runs that slot out.
 
-## Status
+The slot is also shared with the other fixtures' teardowns.
 
-Open: V-28 — a `timeout` on the fixture, which gives its teardown a slot of its own; workstream V's next lot.
+## Solution
+
+V-28 (`d1a149afa`, 2026-10-13, train 87): the fixture declares its own budget, `{scope: 'test', auto: true,
+timeout: JS_COVERAGE_TIMEOUT_MS}` with `JS_COVERAGE_TIMEOUT_MS = 120_000`. Its teardown now has a slot of its own: a
+collection that is really too slow fails by name, «Fixture "jsCoverage" timeout of 120000ms», instead of eating the
+after-hooks.
+
+The proof, at one worker with a delay injected into the collection and then removed: without the cure
+«Tearing down "jsCoverage" exceeded the test timeout of 30000ms»; with it, green, and the delay ran its full 35.0 s.
+Under load, `--fresh-run --coverage js --workers 4 front-fx all` was green: 103 E2E, no teardown timeout, the longest
+test 9.6 s.
+
+## Prevention
+
+A fixture that does slow work in its teardown needs its own `timeout`: without one it borrows a slot that belongs to
+every after-hook of the test, and fails in someone else's name.
 
 ## Source files
 
@@ -34,3 +49,5 @@ Open: V-28 — a `timeout` on the fixture, which gives its teardown a slot of it
 | The `jsCoverage` fixture | `frontend/e2e/fixtures/playwright.ts` |
 | The test timeout | `frontend/playwright.config.ts` |
 | R's report (§3.2) | `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/report-R-full-run-coverage-20261012.md` |
+| V's lot (V-28) | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` |
+| Developer docs | `mkdocs_src/docs/developer/test-walkthrough/coverage-model.md` |

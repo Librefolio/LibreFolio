@@ -778,3 +778,13 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `CHANGELOG.md` | `60f734e08` | 2026-10-13 | [[sources/release-1.2.0]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `b2a21bb4a` | 2026-10-13 | [[sources/release-1.2.0]] |
 | `backend/alembic/versions/004_release_1_2_0_schema.py` | `f1047f766` | 2026-10-13 | [[sources/release-1.2.0]] |
+
+## 2026-10-13 — trains 84–91 (base `fa6299689`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `237160725` | 2026-10-13 | lots 35–38 → [[sources/phase00-translation-round12-2026-10]], [[problems/schwab-favicon-blocked-by-orb]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` | `a0f6843d8` | 2026-10-13 | T-SHK, T-CL, T-ISO, T-FB → [[sources/phase00-financial-math-home-2026-10]], [[problems/test-hooks-read-the-localized-text]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` | `db90ecb07` | 2026-10-13 | V-27, V-28, V-33 → [[sources/phase00-data-quality-e2e-2026-10]] and the two resolved problems |
+| `LibreFolio_developer_journal/Release_2/Phase_0/51_narrowFitFixes/plan-phase00NarrowFitFixes.prompt.md` | `5717bf2a8` | 2026-10-13 | lot 51 → [[problems/event-markers-lost-in-the-last-partial-period]], [[concepts/echarts-chart-gotchas]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `0c8d47d0d` | 2026-10-13 | V-30…V-34, M-26…M-29, T-CAT, T-GRP, T-EVW → the pages above |
