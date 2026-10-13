@@ -463,7 +463,7 @@
     }
   },
   "user/brokers/index.en.md": {
-    "md5": "1d0ef7d1c98c7634f3438e1642bfafa3",
+    "md5": "cca4cef05a0a21936c2ccc94c87caa78",
     "langs_done": [
       "es",
       "fr",
@@ -483,7 +483,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 237.3,
-        "stamped_at": "2026-10-13T02:45:49.670582+00:00",
+        "stamped_at": "2026-10-13T20:38:32.735359+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -498,7 +498,7 @@
         "elapsed_s": 222.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=69, translated=70 (Δ+1)\n  L109: src=1 trn=2\n    EN: The Brokers page, the **Add Broker** form and the broker page each have a short contextual guide: replay them from [Sett\n    TR: La page **Courtiers**, le formulaire **Ajouter un courtier** et la page du courtier disposent chacun d'un bref guide con\n\nSOURCE_OUTLINE (for reference):\n  # 🏦 Brokers\n    ## ➕ Create a broker\n    ## ✏️ Edit or delete a broker\n    ## 🗂️ Inside a broker\n    ## 📈 Overview tab\n    ## 🔍 Positions tab\n    ## 📑 In this section",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-13T02:45:49.670582+00:00",
+        "stamped_at": "2026-10-13T20:38:32.735359+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -511,7 +511,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 260.4,
-        "stamped_at": "2026-10-13T02:45:49.670582+00:00",
+        "stamped_at": "2026-10-13T20:38:32.735359+00:00",
         "stamped_by": "translate-stamp"
       }
     }

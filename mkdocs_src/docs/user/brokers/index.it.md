@@ -25,9 +25,6 @@ La pagina **Broker** mostra una scheda per broker, con il suo valore (**NAV**) n
     </div>
 
 3. Fai clic su **Crea**: il broker compare nel tuo elenco, pronto per transazioni e report.
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="detail" alt="Modulo di modifica broker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
 
 ??? info "⚙️ I campi opzionali — cosa fa ciascuno"
 
@@ -54,6 +51,12 @@ La pagina **Broker** mostra una scheda per broker, con il suo valore (**NAV**) n
 ---
 
 ## 🗂️ Dentro un broker
+
+Dall'elenco, ogni broker si apre sulla scheda **Panoramica** della sua pagina di dettaglio:
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="detail" alt="Dettaglio broker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 La barra degli strumenti in alto si applica a ogni scheda:
 

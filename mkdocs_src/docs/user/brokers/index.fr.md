@@ -25,9 +25,6 @@ La page **Courtiers** affiche une carte par courtier, avec sa valeur (**NAV**) d
     </div>
 
 3. Cliquez sur **Créer** : le courtier apparaît dans votre liste, prêt pour les transactions et les rapports.
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="detail" alt="Formulaire de modification du courtier" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
 
 ??? info "⚙️ Les champs facultatifs — à quoi sert chacun"
 
@@ -54,6 +51,12 @@ La page **Courtiers** affiche une carte par courtier, avec sa valeur (**NAV**) d
 ---
 
 ## 🗂️ À l'intérieur d'un courtier
+
+La carte d'un courtier ouvre sa page de détail sur l'onglet **Vue d'ensemble** :
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="detail" alt="Détail du courtier" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 La barre d'outils en haut s'applique à chaque onglet :
 
