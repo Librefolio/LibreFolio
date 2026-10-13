@@ -97,7 +97,8 @@ Tests are organized **per concern**, not monolithically per page. Each spec file
 ## Conventions
 
 - **Always use `data-testid`** — never CSS classes or text (fragile with i18n)
-- **Explicit timeouts**: `{timeout: N}` on expect/waitFor — keep tight (localhost is fast, 15s per test)
+- **Explicit timeouts**: `{timeout: N}` on expect/waitFor — tight for an element already on screen (the `expect`
+  default is 3 s), a navigation budget for what follows a route change or a round trip (the test itself has 30 s)
 - **Never skip for missing mock data**: if data is needed, it must exist in `populate_mock_data.py`. Use `throw new Error(...)` pointing to the seeding script instead.
 - **Reserve `test.skip()` only for infrastructure conditions** (e.g. mobile-only test on desktop project)
 - **Mobile awareness**: handle hamburger menu with `openMobileMenu()`
