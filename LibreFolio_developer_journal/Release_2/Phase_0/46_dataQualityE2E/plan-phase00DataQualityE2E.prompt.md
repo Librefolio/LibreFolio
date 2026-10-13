@@ -1788,3 +1788,335 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   - ruff: 41 segnalazioni sui quattro file del runner sia a HEAD sia ora, quindi nessuna nuova;
   - `git diff --check` pulito;
   - `check-orphans` pulito, con 117 spec, nell'ultimo giro di g3.
+
+> Lacune committate dal coordinatore: `eb269ecde`, `be3e1ed60`, `56830fc79`, `ec488a296`. Poi il ramo è stato portato
+> sul treno 73: ora sono a **`247a9b9bd`**, con merge pulito; `_frontend_utility.py` e il backlog si sono fusi da soli
+> (12/10). La base nuova contiene:
+> - U-2: i cataloghi in `frontend/src/lib/i18n/base/`; `src/lib/i18n/<lang>.json` è generato e in sola lettura;
+> - il lotto 48 di I: clipboard, `BrokerIcon`, la modale del broker sbagliato, il pannello della sicurezza e la cura
+>   di V-19.
+
+### 12.10 Convalida sul treno 73, poi V-25 e V-21
+
+- **Convalida** (in corso, 12/10, una suite alla volta sulla 6175):
+  - `check-orphans`, `front check`, `component-unit`;
+  - i 7 E2E nuovi e `files`, `--fresh-run --workers 4`, ciascuno col confronto del DB col seed;
+  - i due `es` di V-19, che ora devono uscire verdi.
+
+  Poi un riepilogo breve al coordinatore: le lacune entrano nel treno 74.
+- **Mandato successivo** (coordinatore, 12/10): V-25 (gli avanzi di `tx-delete`) e V-21 senza il T1, che resta allo
+  sviluppatore. Un checkpoint, i test tutti via test-author. V-22, V-23 e V-24 restano dopo la 1.2. I quattro agenti
+  scrivono in parallelo, e la corsia arriva dopo la convalida:
+  - `v25-txdelete`: `tx-delete.spec.ts`. A1-confirm e A2-confirm cancellano righe create dal test; A1-error cancella il
+    suo broker e il suo asset;
+  - `v21-tx1`: `transactions-modals` (T10 vuoto da riscrivere; `.first()`, sonde), `tx-wac-unit-toggle`,
+    `tx-wac-formmodal`, `tx-commit-all-types`;
+  - `v21-tx2`: `tx-split-promote`, `tx-paired-edit`, `tx-event-picker`, `tx-import-resolution`, `tx-clone`, più una
+    fixture nuova per la coppia;
+  - `v21-files`: `files.spec.ts` (modo griglia/lista con `aria-pressed`, sonde, il test di upload per id) e l'attesa di
+    `logout()` nella fixture `auth-helpers.ts`.
+- ✅ **Convalida sul treno 73** (12/10, 23:40-23:55, carico in calo: load da 34,6 a 11,9). Tutto verde:
+
+  | Controllo | Esito |
+  |---|---|
+  | `check-orphans` | pulito: 117 spec, 355 unit |
+  | `front check` | svelte-check 0 errori, 0 warning |
+  | `component-unit` | 115 file, 3040/3040 |
+  | 7 E2E nuovi, `--fresh-run --workers 4` | tutti verdi, DB uguale al seed dopo ciascuno |
+  | `files`, `--fresh-run --workers 4` | 28/28, DB uguale al seed |
+  | V-19, `toolbar-width-sweep "es: 1700"` | **5/5**: la cura di I funziona |
+
+  Log: `/tmp/libreFolio_v_combo2_*.log`; riepilogo in `/tmp/libreFolio_v_combo2_summary.log`. Ho mandato il riepilogo
+  al coordinatore: le lacune entrano nel treno 74.
+- ✅ **Attributo per V-21c** (13/10, mio, solo attributi). In `frontend/src/routes/(app)/files/+page.svelte`:
+  `aria-pressed={viewMode === 'grid'}` su `view-mode-grid` e `aria-pressed={viewMode === 'list'}` su `view-mode-list`.
+  `class:active` resta per lo stile. Prettier pulito; la pagina non ha Vitest.
+- **V-21c** (`v21-files`), cura scritta, in corsia per la verifica:
+  - in `files.spec.ts`, i modi vista si aprono senza sonde, e i due test sui modi caricano un loro file;
+  - «can upload a file to static storage» trova la sua riga per id, scorrendo le pagine della tabella;
+  - via `.file-item`/`networkidle` e i 3 s dopo il primo caricamento;
+  - `logout()` aspetta `/` e `login-page` entro 20 s.
+
+  I chiamanti di `logout()` sono `auth.spec.ts` e `ai-export-memory.spec.ts` (`front-ai-export memory`).
+  > **⚠️ Fuori pista**: l'agente ha toccato `auth-helpers.ts` e `files.spec.ts` alle 23:53, mentre girava il mio `files`
+  > di convalida, chiuso alle 23:54 con 28/28. Allora la modifica a `files.spec.ts` erano solo import non usati, e
+  > nessuno dei due spec chiama `logout()`: l'esito non ne risente.
+- ✅ **Attributi per V-21a** (13/10, miei). Vitest dei componenti toccati: 9 file, 159/159; prettier pulito.
+  - `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte`, cella di stato: ogni span ha
+    `data-testid="tx-bulk-row-status"` e `data-status` = `new` | `edited` | `delete` | `original` | `split`. Serve al
+    posto di `tr.row-deleted`.
+  - `frontend/src/lib/components/ui/feedback/Tooltip.svelte`: una prop facoltativa `testId`, che va come
+    `data-testid` sul wrapper del trigger, nei due rami.
+  - `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte`: passa `testId="{testid}-help"` al tooltip
+    d'aiuto del costo. Serve al posto di `.tooltip-wrapper`.
+- **V-21a** (`v21-tx1`), cura scritta:
+  - T10 riscritto: un DEPOSIT suo, cancellato dal flusso vero e verificato per id;
+  - T3, T9 e T11 usano righe proprie, selezionate per id;
+  - T6 e T7b erano vuoti anche loro, ora provano davvero;
+  - sonde tolte da T5, T8, T12 e T13;
+  - `aria-pressed` al posto delle classi;
+  - commit rigoroso, anche nel test FX_CONVERSION;
+  - commento AUTOINCREMENT corretto.
+  > **⚠️ Fuori pista: due decisioni per lo sviluppatore.**
+  > - **T4** di `transactions-modals` oggi non prova niente: due `column-visibility-toggle` mandano `isVisible()` in
+  >   errore di strict mode, la `.catch` lo trasforma in `false`, e i testid `col-toggle-*` non esistono. Reso vero
+  >   diventerebbe rosso, perché il prodotto mette `cost_basis_override` prima di `asset_event_id`
+  >   (`TransactionBulkModal.svelte` `:1825` contro `:1888`), mentre il piano Bugfix-3 M5, passo 10, dice che è stato
+  >   spostato dopo. Resta com'è e va al coordinatore: o il prodotto è regredito, o l'attesa del test è superata.
+  > - **Possibile difetto**, letto nel codice: rimuovere una riga NUOVA accoppiata con `mark-delete` → `removeRow`
+  >   toglie solo l'operazione visibile; la metà nascosta (`pairedWith`) resta in `ops`, senza essere mai inviata. Il
+  >   sintomo atteso è un «Discard changes?» quando si chiude il workspace ormai vuoto. Il giro di evidenza E0 lo
+  >   verifica; se si conferma, STOP e messaggio.
+- ✅ **V-21c** (`v21-files`, 13/10): cura e verifica.
+  - **La cura**:
+    - `files.spec.ts`: il modo griglia/lista si legge da `aria-pressed`;
+    - i due test del modo caricano un file proprio, quindi niente più sonde;
+    - «upload static» trova la riga per id, scorrendo le pagine;
+    - le attese di 3 s dopo il primo caricamento sono diventate attese su `files-page` `data-busy`; anche i controlli
+      della tab BRIM aspettano il caricamento;
+    - via `networkidle` e le classi CSS;
+    - `auth-helpers.ts`: `logout()` aspetta `/` e `login-page`, entro 20 s ciascuno.
+  - **I giri** (6175, `--fresh-run`, coverage della 6176 in corso, loadavg 17–39):
+
+    | giro | esito | loadavg |
+    |---|---|---|
+    | `files`, 1 worker | 28/28 | 26 |
+    | `files`, 4 worker | 28/28 | 27 |
+    | `auth`, 1 worker | 28/29 | 17 |
+    | `auth`, 4 worker | 29/29 | 23 |
+    | `memory`, 1 worker | 4/4 | 39 |
+    | `memory`, 4 worker | 3/4 | 26 |
+
+    Tutti i chiamanti di `logout()` sono verdi a 1 e a 4 worker. Uploads, BRIM e broker sono tornati al seed.
+  > **⚠️ Fuori pista: due rossi fuori dal delta.**
+  > - **`layout/app-start-auth.spec.ts:263`** («a 401 in the middle of a session…»): rosso nel giro intero e anche da
+  >   solo, a 1 worker; verde a 4.
+  >   - Il test non chiama `logout()`, e da `d60937c08` app, API e layout non sono cambiati in modo rilevante.
+  >   - Dopo `clearCookies`, la pagina va a `/?redirect=%2Fassets` (+120 ms e +676 ms) prima che la navigazione arrivi
+  >     a `/brokers`.
+  >   - Ipotesi: «assunzione». Una richiesta di `/assets` è partita prima della pulizia dei cookie ma è rimasta nella
+  >     coda delle route di Playwright, ed esce dopo, senza cookie: il backend risponde 401. L'interceptor (`zodios-client.ts:130`) rimanda allora al login con la pagina
+  >     corrente, e il prodotto rispetta il contratto.
+  >   - Diagnosi in coda: strumentazione temporanea, poi ripristinata.
+  > - **`ai-export/ai-export-memory.spec.ts:66`**: rosso a 4 worker, nel setup. `setLanguage` aspetta 5 s mentre la
+  >   pagina mostra ancora «Loading…». Verde da solo a 1 worker. È della classe di V-20; in coda un secondo giro a 4
+  >   worker e il verdetto.
+- ✅ **V-25, prova del danno** (`v25-txdelete`, 13/10): `--fresh-run --workers 1 front-transaction tx-delete`, sullo spec
+  non modificato. 15/15 verdi in 34 s, loadavg 19,7. Il DB letto dopo il giro:
+
+  | | dopo il giro | seed |
+  |---|---|---|
+  | transazioni | 73: mancano gli id 28, 45 e 46 | 76 |
+  | broker | 9: resta `T4-delref-<suffix>` | 8 |
+  | asset | 18: resta `T4-delref-asset-<suffix>` | 17 |
+
+  È il danno descritto in V-25, numero per numero.
+  - **La cura**, nello spec:
+    - A1-confirm e A2-confirm lavorano su un account usa-e-getta, con una FEE propria e una coppia ETH propria;
+      `afterEach` cancella l'account;
+    - A1-error registra gli id appena esistono, e `afterEach` cancella righe, broker (`force`) e asset per id.
+  - La colonna di stato del bulk editor è visibile di default (`hiddenByDefault: false` a `:1646`; il commento sopra
+    è superato), quindi l'helper `tr.row-deleted` passa a `tx-bulk-row-status[data-status="delete"]`.
+  - In attesa della verifica a 1 e a 4 worker.
+- ✅ **Diagnosi dei due rossi fuori dal delta** (`v21-files`, 13/10; strumentazione temporanea, poi ripristinata: lo
+  sha256 di `app-start-auth.spec.ts` è tornato quello d'origine, `b93aba42…`).
+  - **`app-start-auth:263`**: 3 giri strumentati da solo a 1 worker, tutti verdi, con loadavg 12–17.
+    - Ogni giro mostra lo stesso meccanismo. Appena `data-busy` diventa falso, `/assets` lancia senza `await`
+      `loadFxPairSlugs()`: la GET di `/fx/providers/routes` e 24 `POST /fx/currencies/convert`. Alcune partono a
+      cavallo di `clearCookies`, anche a +0 e +1 ms, e restano in volo fino a +94 ms.
+    - Quando una `convert` esce senza cookie, il primo 401 nasce su `/assets`, e l'interceptor porta giustamente a
+      `/?redirect=%2Fassets`.
+    - Verdetto: **assunzione**; il prodotto è corretto. Non si è vista invece la coda delle route di Playwright.
+    - Cura proposta, solo test: in quel test, prima di `/assets`, rispondere `GET /fx/providers/routes` con zero
+      coppie.
+  - **`ai-export-memory:66`**: rilanciato a 4 worker, 4/4 verdi (loadavg 10).
+    - `setupAiExportPage` fa `login()` e poi `setLanguage('en')`, che dà 5 s alla catena del bootstrap. `login()`
+      ritorna appena sparisce il form, mentre `/` è ancora in `auth-loading`.
+    - Verdetto: **assunzione (tempo)**.
+    - Cura proposta, solo test: tra le due chiamate, aspettare l'URL fuori da `/` e `app-shell` visibile.
+    - Il rimedio strutturale, cioè `login()` che finisce all'arrivo, tocca più di 100 chiamanti.
+  - Mandate al coordinatore come domanda di perimetro: la proposta è V-26 in questo checkpoint, più V-27 nel backlog.
+    Insieme è partita la domanda su T4 per il developer.
+- ✅ **IWR-007** (`v21-tx2`): opzione (A).
+  - La premessa del test, cioè che un secondo import dello stesso file apra il passo «Duplicates», è superata. Il
+    contratto è scritto nella doc utente, `import/index.en.md`, «Duplicate Detection», e in
+    `ImportWizardModal.svelte:3056-3060`: le collisioni col DB arrivano alla revisione non spuntate, e il passo si apre
+    solo per le copie tra file importati insieme.
+  - Il test, oggi sempre uscito presto, asserirà il contratto vero, su un broker suo.
+- ✅ **Decisioni del coordinatore** (13/10, 00:39):
+  - **V-26 approvata**, in questo checkpoint, scritta da test-author (`v21-files`) e provata a 1 e a 4 worker coi
+    vicini. Le cure sono due:
+    - (A) `app-start-auth:263`, con la GET delle route servita localmente a zero coppie;
+    - (B) `setupAiExportPage`, con l'attesa dell'arrivo tra `login()` e `setLanguage`.
+  - **V-27** va nel backlog, dopo la 1.2: `login()` deve finire solo all'arrivo.
+  - **T4** di `transactions-modals` diventa la **domanda 12** per il developer: o l'ordine delle colonne è regredito,
+    o l'attesa del test è superata. I riferimenti: `TransactionBulkModal.svelte:1825` (`cost_basis_override`) contro
+    `:1888` (`asset_event_id`); il piano Bugfix-3 M5, passo 10, dice che la colonna è stata spostata dopo. T4 resta
+    com'è.
+  - Se V-21a conferma un difetto di prodotto: messaggio al coordinatore prima di qualsiasi cura.
+- ✅ **Attributo per IWR-007** (13/10, mio): in `ImportWizardModal.svelte`, ~`:2104-2131`, lo span esterno di ogni badge
+  di confronto ha ora `data-duplicate-status`, con valore `likely`, `pending_duplicate`, `pending_possible_duplicate`
+  o `possible`.
+  - Prima i quattro stati avevano lo stesso testid, `import-wizard-compare-<i>`, e si distinguevano solo per classi CSS
+    e testo tradotto.
+  - Vitest di `transactions/modals` e `utils/transactions`: 794/794; prettier pulito.
+- ✅ **V-21a, giro di evidenza E0** (`v21-tx1`, 13/10): `--fresh-run --workers 1 front-transaction transactions-modals
+  "V21-EVIDENCE"`, un blocco temporaneo, poi tolto, che registra e non asserisce. 5/5 in 1m05, loadavg 11–14; il DB è
+  rimasto al seed (76 tx, sequenza a 76).
+  - **T10, versione vecchia**: il delete non è mai partito, e la riga presa per posizione era la 45, metà della coppia
+    `[delete-consume]`.
+  - **T4, versione vecchia**: non verificava niente (strict mode, poi `.catch`). Nel prodotto l'ordine è
+    `cost_basis_override` alla posizione 9, `asset_event_id` alla 10: domanda 12 per il developer.
+  - **T6, versione vecchia**: il banner c'è, ma il dismiss non è mai stato provato.
+  - **T7b, versione vecchia**: il selettore del delete non trovava niente.
+  - **Il difetto**: chiudendo il workspace vuoto dopo aver rimosso una coppia nuova, compare il prompt di scarto. Il
+    controllo con un DEPOSIT singolo si chiude senza chiedere.
+  > **⚠️ Fuori pista: difetto di prodotto confermato** (letto nel codice, `TransactionBulkModal.svelte`):
+  > - `removeRow` (`:877-879`) toglie solo l'op visibile, e la metà nascosta (`pairedWith`, creata da
+  >   `addDualRowFromForm`, ~`:2477`) resta;
+  > - `resolveOps` (`:1078`) la salta, quindi non va mai al server;
+  > - `serializeOps` la conta, quindi `hasUnsavedChanges()` (`:576`) è vero.
+  >
+  > Riguarda la sola UX, i dati non si toccano. Hanno lo stesso effetto anche gli altri chiamanti di `removeRow`:
+  > `:2106`, `:2569` e `:3159`.
+  >
+  > Mandato al coordinatore. La proposta (a): il rosso su T7b, poi `removeRow` che toglie anche l'op con
+  > `pairedWith === tempId`. L'alternativa (b): backlog V-28. Nessuna cura prima della risposta.
+- **V-21a**: ordine dei giri cambiato. Prima `tx-wac-unit-toggle`, `tx-wac-formmodal` e `tx-commit-all-types`, a 1 e a
+  4 worker; `transactions-modals` dopo la decisione.
+- ✅ **Cura (a) approvata** dal coordinatore (13/10, 00:44).
+  - Prima il rosso via test-author: T7b, più la variante «Delete selected».
+  - Poi la mia cura di una riga in `removeRow`.
+  - Le prove: a 1 e a 4 worker, più `front-transaction all` a 4 worker nei gate.
+  - Va in un **commit a parte**, `fix(transactions): …`.
+- ✅ **Da quando c'è il difetto**: dalla **1.1.0** (`837a8f2c7`, 07/09), quindi è uscito. In quel tag ci sono già tutti i
+  pezzi:
+  - `removeRow` filtra solo `tempId` (`:815-817`), ed è invariato dalla migrazione PendingOp (`96d8d0a4d`, 11/05);
+  - `addDualRowFromForm` crea la partner nascosta, `toOp.pairedWith = fromOp.tempId` (`:2339`); `-S` fa risalire la riga
+    a `8268a44bb`, del 05/06;
+  - `resolveOps` salta le partner (`:1011`);
+  - `serializeOps` serializza tutte le op (`:503`), e `requestClose` (`:517`) apre la conferma.
+
+  Se merita una riga 🐛 nel CHANGELOG lo decide il coordinatore.
+- ✅ **V-21a, giri V3–V8** (13/10, `--fresh-run`): `tx-wac-unit-toggle` 4/4, `tx-wac-formmodal` 10/10 e
+  `tx-commit-all-types` 19/19, ciascuno a 1 e a 4 worker. Nessun rosso e nessun rilancio, loadavg da 18 a 48. Dopo ogni
+  giro il DB era al seed (76 tx, id 1–76), con la sequenza avanzata: le righe dei test sono state create e tolte.
+- ✅ **Attributo per la variante «Delete selected»** (mio): `data-testid="tx-bulk-delete-selected"` sul bottone di
+  cancellazione della toolbar di selezione (`TransactionBulkModal.svelte`, ~`:3539`). Prima aveva solo un `title`
+  tradotto e classi CSS. Prettier lo ha riformattato su più righe.
+- **V-21a, il rosso del difetto**: T7b e la variante «Delete selected» chiudono il workspace svuotato e asseriscono
+  che non chiede di scartare. Il giro rosso a 1 worker è in corsia.
+- ✅ **Il rosso del difetto C3** (`v21-tx1`, 13/10): `--fresh-run --workers 1 front-transaction transactions-modals
+  "removes both halves"`. 2 test, 2 rossi, 2m56, loadavg 11–19; il DB è rimasto al seed, con la sequenza ferma a 76.
+  - Entrambi i percorsi falliscono nello stesso punto, `transactions-modals.spec.ts:258`, in `expectBothHalvesGone`:
+    il kebab «Mark for deletion» (`:629`) e «Delete selected» (`:640`).
+  - L'errore: `Expected: "closed"`, `Received: "asks to discard"`.
+  - I controlli a schermo precedenti passano: nessuna riga, griglia vuota. Il rosso è quindi per la ragione giusta, al
+    passo della chiusura.
+- ✅ **La cura** (mia, 13/10): `removeRow` (`TransactionBulkModal.svelte:877`) toglie anche l'op con
+  `pairedWith === tempId`, con un commento di una riga. Prettier pulito; Vitest dei componenti transazioni e di
+  `utils/transactions` 912/912. È un commit a parte: `fix(transactions): …`.
+- **V-21a**: in corsia `transactions-modals` intero, a 1 e a 4 worker.
+- ✅ **V-21a verificata** (`v21-tx1`, 13/10, `--fresh-run`), dopo la cura: `transactions-modals` **20/20 a 1 worker**
+  (3m23, loadavg 27→17) e **20/20 a 4 worker** (1m27, loadavg 20→41). Sono compresi i due test C3, rossi prima della
+  cura e verdi dopo.
+  - Dopo ogni giro il DB è al seed: 76 tx, id 1–76, impronta delle colonne di business invariata; la sequenza è
+    avanzata a 80.
+  - I residui:
+    - T4 è la domanda 12;
+    - T1, cioè `fillBuyTransaction` che prende la prima opzione: anche T2 e T6 la usano, ed è una decisione del
+      developer;
+    - T5 e T8 asseriscono ancora il testo tradotto dell'etichetta dell'asset: servirebbe uno stato pubblicato, per
+      esempio `data-asset-field` su `tx-form-asset-wrap` (`TransactionFormModal.svelte`, ~`:1900`). Per T8 però il
+      soggetto è la traduzione;
+    - fuori lista: in T13 l'attesa della risposta di validazione parte dopo il click su Apply;
+    - fuori lista: in `tx-wac-formmodal`, `.first()` sulle celle del costo, comunque uniche in un workspace proprio.
+- **V-21b**: in corsia, 10 giri. I giri di `tx-paired-edit` e `tx-split-promote` provano anche la cura di `removeRow`
+  sui vicini.
+- ✅ **V-21b verificata** (13/10). `v21-tx2` è caduto verso le 01:24 per un errore di rete del modello (DNS), dopo 8 dei
+  suoi 10 giri; i tre mancanti li ho lanciati io. Tutti con `--fresh-run`:
+
+  | spec | 1 worker | 4 worker |
+  |---|---|---|
+  | `tx-split-promote` | 6/6 | 6/6 |
+  | `tx-paired-edit` | 4/4 | 4/4 |
+  | `tx-event-picker` | 5/5 | 5/5 |
+  | `tx-import-resolution` | 14/15, poi 15/15 | 15/15 (mio) |
+  | `tx-clone` | 8/8 (mio) | 8/8 (mio) |
+
+  I giri di `tx-split-promote` e `tx-paired-edit` sono verdi dopo la cura di `removeRow`, e valgono come prova sui
+  vicini.
+  > **⚠️ Fuori pista: IWR-006b.** Nel primo giro a 1 worker era rosso: aspettava ancora il compare dentro
+  > `tx-form-modal`. Prima il test usciva presto e non arrivava mai a quel punto. Il prodotto apre invece la
+  > `TransactionCompareModal` N-way, `import-wizard-compare-modal` (`TransactionCompareModal.svelte:155`), come dice la
+  > doc utente («click a duplicate badge to compare the row with its twin»). Alle 01:20:46 l'agente ha corretto il test,
+  > che ora asserisce:
+  > - la colonna della riga del file e quella del gemello nel DB, per id;
+  > - il titolo con 🔍;
+  > - la sola lettura: niente `keep-*` né `apply`;
+  > - la chiusura con Esc.
+  >
+  > Il secondo giro è stato 15/15. È una correzione dell'attesa, non un difetto.
+  > **⚠️ Fuori pista: i tassi FX del seed.** Dopo la mezzanotte il DB ha 4140 tassi invece di 4125. Non è una perdita
+  > dei test: il populate scarica una finestra ECB che finisce oggi, e tutti i 4140 hanno lo stesso `fetched_at`, quello
+  > del populate. Il controllo del DB ora verifica che nessun tasso sia scritto più di 30 s dopo il populate
+  > (`/tmp/libreFolio_v_dbcheck2.py`).
+  - **Il DB.** I giri dell'agente li ho verificati sugli snapshot che il runner archivia a fine invocazione
+    (`.testLog/00_archive/test-db_20261013_01*.tar.xz`). I giri di V-21a e V-21b, da `010243` a `015028`, sono tutti al
+    seed, e la sequenza delle tx avanza solo per le righe create e tolte.
+- **V-25**: verifica a 1 e 4 worker in corsia.
+- ✅ **V-25 verificata** (`v25-txdelete`, 13/10, `--fresh-run`): `tx-delete` 15/15 a 1 worker (loadavg 46→35) e a 4
+  worker (35→28).
+  - Dopo ogni giro il DB è al seed: 76 tx con id 1–76, 8 broker, 17 asset, 30 accessi, 11 utenti, nessun orfano.
+  - L'impronta delle righe 1–76, date escluse, è identica nei due giri (`0e15226dc5095958`).
+  - I contatori mostrano righe, broker, asset e utenti creati e poi tolti. Nessun tasso FX scritto dopo il populate.
+  > **⚠️ Fuori pista: commenti e doc superati.** Diversi testi dicono ancora che `tx-delete` distrugge righe del seed:
+  > - la fixture `playwright.ts` (`:84`, `:96`, `:178`);
+  > - la skill `testing-frontend` (`:484`, `:494`, `:504`);
+  > - `populate_mock_data.py` 9c;
+  > - `tx-paired-edit.spec.ts:231-233`.
+  >
+  > Sono documentazione legata direttamente a V-25, e la corregge `v25-txdelete`, solo nei commenti. La pagina dev
+  > MkDocs `runner_architecture.md` (`:232`, `:561`, `:577`, `:588`) è di M: la segnalo al coordinatore.
+- **V-26**: in corsia, `auth` e `front-ai-export all`, a 1 e a 4 worker.
+- ✅ **V-26 verificata** (`v21-files`, 13/10, `--fresh-run`, loadavg 14–38):
+
+  | chiave | 1 worker | 4 worker |
+  |---|---|---|
+  | `front-utility auth` | 29/29 | 29/29 |
+  | `front-ai-export all` | 18/18 E2E, 426 Vitest | 18/18 E2E, 426 Vitest |
+
+  - Il test del 401 di `app-start-auth`, ora a `:266`, è verde a 1 e a 4 worker. Anche `ai-export-memory:66` è verde,
+    a 4 worker con loadavg 38, più alto di quando era rosso.
+  - Il DB è pulito prima e dopo ogni giro: 11 utenti, 8 broker, nessun tasso FX scritto dopo il populate, upload e
+    BRIM al seed.
+- ✅ **Commenti superati su `tx-delete`** (`v25-txdelete`, solo commenti): fixture `playwright.ts`, skill
+  `testing-frontend`, `populate_mock_data.py` 9a.2 e 9c, `tx-paired-edit:231-235`, più `db-cleanup.ts:15-18` e
+  `tx-clone:279-281`.
+  - prettier e `git diff --check` puliti; `ruff` e `black` puliti sul `.py`.
+  - La skill `SKILL.md` già non passava prettier su HEAD, con 40 differenze nei blocchi `!!!`: lasciata com'è.
+- ✅ **svelte-check** dopo le ultime modifiche ai `.svelte`: 0 errori, 0 avvisi.
+- **Numerazione** (13/10): il coordinatore ha dato **V-28** al teardown di `jsCoverage`, nel lotto successivo. La cura di
+  `removeRow` è quindi **V-29** nel backlog. Il «V-28» citato sopra, nell'alternativa (b), era solo una proposta, mai
+  adottata.
+- **Lotto successivo, assegnato dal coordinatore** (13/10, dopo questo checkpoint): i 27 rossi da carico della run
+  completa di R (rapporto di R, §3.2–3.5). Comprende:
+  - V-28, il teardown di `jsCoverage`, 15 rossi;
+  - V-27 dentro la 1.2, con `login()` che aspetta l'arrivo: 9 rossi;
+  - i budget stretti di `fx-add-pair:219` e CAC-001.
+
+  Va in un checkpoint suo.
+- ✅ **Gate del checkpoint V-25/V-21/V-26/V-29** (13/10, 6175, in sequenza; loadavg 10–18):
+  - `--fresh-run --workers 4 front-transaction all`: E2E 34 + 331 = **365 verdi**, cioè i 363 di prima più i due C3; 32
+    skip voluti, tutti mobile/desktop di `tx-import-report-set`; **Vitest 881/881**; DB al seed.
+  - `front-utility component-unit`: **3040/3040**, 115 file.
+  - `check-orphans`: 117 E2E, 355 unit e 261 backend, tutti raggiungibili.
+  - svelte-check 0/0; prettier pulito su tutto il delta frontend; `git diff --check` pulito; `ruff` e `black` puliti su
+    `populate_mock_data.py`.
+  - `tsc -p tsconfig.e2e.json` dà 2 errori, già presenti e fuori dal delta: `onboarding-tour.spec.ts:863`, un
+    restringimento di tipo, e `src/lib/types/files.ts:9`, l'alias `$lib`, che quel tsconfig non risolve.
+  - Porta 6175 libera.
+- ✅ **Checkpoint pronto** (13/10): 25 file tracciati e 1 nuovo (`fixtures/owned-pair.ts`), in 7 commit proposti.
+  - La cura di `removeRow` è in un commit a parte, come chiesto dal coordinatore.
+  - `TransactionBulkModal.svelte` passa per un blob intermedio con i soli attributi:
+    `/tmp/libreFolio_v_cp_TransactionBulkModal.attrs-only.svelte`, blob `5acaa10a`.
