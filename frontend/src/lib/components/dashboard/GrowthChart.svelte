@@ -29,7 +29,7 @@
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {_} from '$lib/i18n';
-    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
+    import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
     import {clampGrowthLogicalRange, type GrowthLogicalRange} from './growthChartRange';
     import {planLadderAxis, ladderAxisOption, type LadderAxisPlan} from './growthLadderAxis';
     import {buildCalendarLadder, countCalendarBuckets, type CalendarPeriod, type LadderRung} from './growthLadderBuckets';
@@ -293,6 +293,8 @@
     let lastDomainKey: string | null = null;
     let lastSyncedGrammar: ChartGrammar | null = null;
     let responsiveXAxisCompact = false;
+    /** The grid's right edge on screen: the time-axis inset that keeps the last label whole (plan 52), or the '4%' base. */
+    let appliedGridRight: number | string = '4%';
     const resizeWatcher = createResizeWatcher(() => {
         chartInstance?.resize();
         if (chartContainer) containerWidthPx = chartContainer.clientWidth;
@@ -312,6 +314,20 @@
                 chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
             } else if (wasCompact) {
                 renderChart(true);
+            }
+            // The '4%' base stands for other pixels at another width, so the inset may change with it.
+            const gridRight = timeAxisGridRight({
+                width: chartContainer.clientWidth,
+                values: activeChartData.dates,
+                locale: uiLocale(),
+                base: '4%',
+                measure: axisLabelMeasure(chartInstance, 14),
+            });
+            if (gridRight !== appliedGridRight) {
+                appliedGridRight = gridRight;
+                // Not lazy: syncPlotGeometry() reads the grid this call lays out.
+                chartInstance.setOption({grid: {right: gridRight}});
+                syncPlotGeometry();
             }
         }
         scheduleResolutionSync();
@@ -1786,6 +1802,7 @@
         }
 
         let xAxis: Record<string, unknown>;
+        let gridRight: number | string | undefined;
         if (entry.ladder) {
             // A category axis takes its positions from `data` alone, so the bucket closings
             // travel with every update: a rung change replaces all of them. The labels are
@@ -1806,6 +1823,14 @@
             }
             responsiveXAxisCompact = xAxisPolicy.compact;
             xAxis = xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {axisLabel: {formatter: xAxisPolicy.formatter}};
+            gridRight = timeAxisGridRight({
+                width: chartContainer?.clientWidth ?? 0,
+                values: entry.dates,
+                locale: uiLocale(),
+                base: '4%',
+                measure: axisLabelMeasure(chartInstance, 14),
+            });
+            appliedGridRight = gridRight;
         }
 
         const series = seriesData.map((seriesEntry) => ({
@@ -1822,6 +1847,8 @@
                       }
                     : CHART_ANIMATION_CONFIG),
                 dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],
+                // New dates are new labels: the inset travels with the axis they are drawn on.
+                ...(gridRight === undefined ? {} : {grid: {right: gridRight}}),
                 xAxis,
                 series,
             },
@@ -2107,6 +2134,18 @@
                   axisType: 'time',
               });
         responsiveXAxisCompact = xAxisPolicy?.compact ?? false;
+        // The time axis widens the right inset to keep its last label whole (plan 52); the
+        // ladder's category axis ends each label at its slot and keeps the base.
+        const gridRight = xAxisPolicy
+            ? timeAxisGridRight({
+                  width: chartContainer?.clientWidth ?? 0,
+                  values: activeChartData?.dates ?? dates,
+                  locale: uiLocale(),
+                  base: '4%',
+                  measure: axisLabelMeasure(chartInstance, 14),
+              })
+            : '4%';
+        appliedGridRight = gridRight;
         // Planned for the window this option is about to send. Before the first layout
         // the grid is unmeasured and the plan is empty; refreshLadderAxis() below fills
         // it in as soon as syncPlotGeometry() has read the grid.
@@ -2187,7 +2226,7 @@
             // `top` stays 10px in every mode: the toggle is an OVERLAY and must float on
             // the plot, not push it down (developer review — reserving a band shortened
             // the chart, which was never what was asked for).
-            grid: {left: '3%', right: '4%', bottom: '30px', top: '10px', containLabel: true},
+            grid: {left: '3%', right: gridRight, bottom: '30px', top: '10px', containLabel: true},
             tooltip: {
                 trigger: 'axis',
                 // Bugfix: `appendToBody` moves the tooltip DOM to `document.body`, which

@@ -19,7 +19,7 @@ import type {ConfigurableAxisDescriptor} from './chartCoreHelpers';
 import {exchangeRateAxisLabel, percentageAxisLabel, priceAxisLabel, secondaryAxisLabel, type AxisLabelTranslator} from './axisLabelHelpers';
 import {CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
 import {buildSignalReferencePrimitives} from './lineChartHelpers';
-import {buildResponsiveXAxisPolicy, type ResponsiveXAxisFormatter} from './responsiveXAxis';
+import {axisLabelFont, axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight, type AxisLabelMeasure, type ResponsiveXAxisFormatter} from './responsiveXAxis';
 import {buildOhlcQuad} from './candlestickChartHelpers';
 import {buildTooltipDivider} from './echartsTooltipHelpers';
 import {buildBucketInfos, buildZoomWindowForRange, computeBucketCounts, logicalRangeFromBuckets} from '../brokers/lots/lotComparisonChartHelpers';
@@ -1481,6 +1481,307 @@ describe('canonical overlay axis and reference helpers', () => {
             expect.soft(firstExtent.left, `${firstExtent.described} — the first label starts inside the chart`).toBeGreaterThanOrEqual(0);
             expect.soft(lastExtent.right, `${lastExtent.described} — the last label ends inside the ${width}px chart`).toBeLessThanOrEqual(width);
         });
+
+        describe('timeAxisGridRight — the right inset for the last time label (plan 52, C1)', () => {
+            // Plan 52, C1: `grid.containLabel` reserves the x labels' height, never the half-width a centred label overhangs
+            // past the plot's right edge. A time axis ends exactly on the last day of the data (or of the zoom) and ECharts
+            // labels that edge, so on a phone the last label was cut: «Oct 2» for «Oct 20». The fix widens `grid.right` to
+            // half the widest label the axis can draw plus 2 px when that beats the base inset. Expected texts come from Intl,
+            // from the real policy formatter or from what real ECharts draws, never from the helper's own enumeration.
+
+            /** A measure answering `widthOf(text)` that records every text it is asked: what the helper measures IS its candidate set. */
+            function recordingMeasure(widthOf: AxisLabelMeasure = () => 10): {measure: AxisLabelMeasure; texts: string[]} {
+                const texts: string[] = [];
+                const measure: AxisLabelMeasure = (text) => {
+                    texts.push(text);
+                    return widthOf(text);
+                };
+                return {measure, texts};
+            }
+
+            /** `isoDate` ('YYYY-MM-DD') as the local midnight the policy parses it to. */
+            function localDay(isoDate: string): Date {
+                const [year, month, day] = isoDate.split('-').map(Number);
+                return new Date(year, month - 1, day);
+            }
+
+            /** Every local midnight from the day before `first` to the day after `last`: the ticks a time axis on those days can label. Stepped by calendar day, so a DST change neither drops nor doubles one. */
+            function midnightsAround(first: string, last: string): Date[] {
+                const start = localDay(first);
+                const end = localDay(last);
+                const stop = new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1).getTime();
+                const days: Date[] = [];
+                for (let day = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1); day.getTime() <= stop; day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)) days.push(day);
+                return days;
+            }
+
+            it('keeps the base when it already holds half the widest label: 40px labels on a 1280px chart stay on 4% (A1)', () => {
+                // Why: desktop must not move. 4% of 1280 is 51.2px, more than the 22px inset, and the base comes back as given.
+                const {measure} = recordingMeasure(() => 40);
+                expect(timeAxisGridRight({width: 1280, values: isoDays('2026-07-16', '2026-10-20'), locale: 'en-US', base: '4%', measure})).toBe('4%');
+            });
+
+            it('returns the inset in px when it beats the base: 41px labels on a 360px phone need 23px, more than 4% (A2)', () => {
+                // Why: ceil(41 / 2) + 2 = 23 > 14.4px, and a number is what ECharts reads as px.
+                const {measure} = recordingMeasure(() => 41);
+                expect(timeAxisGridRight({width: 360, values: isoDays('2026-07-16', '2026-10-20'), locale: 'en-US', base: '4%', measure})).toBe(23);
+            });
+
+            it('keeps a px base that already holds the inset: 30px labels need 17px, the 18px base stays (A3)', () => {
+                // Why: a number base is px, compared as is and returned untouched when it wins (LotComparisonChart's 18).
+                const {measure} = recordingMeasure(() => 30);
+                expect(timeAxisGridRight({width: 360, values: isoDays('2025-12-20', '2026-01-10'), locale: 'en-US', base: 18, measure})).toBe(18);
+            });
+
+            it('widens a px base the inset beats: 34px labels need 19px, one more than the 18px base (A3)', () => {
+                // Why: ceil(34 / 2) + 2 = 19 > 18, the pixel the last label lacked.
+                const {measure} = recordingMeasure(() => 34);
+                expect(timeAxisGridRight({width: 360, values: isoDays('2025-12-20', '2026-01-10'), locale: 'en-US', base: 18, measure})).toBe(19);
+            });
+
+            it.each([
+                ['no values', [] as string[]],
+                ['an endpoint that does not parse', ['not-a-date']],
+            ])('returns the base and measures nothing for %s (A4)', (_case, values) => {
+                // Why: no date, no label to fit, and every measure is a text layout: none is spent.
+                const {measure, texts} = recordingMeasure(() => 99);
+                expect(timeAxisGridRight({width: 360, values, locale: 'en-US', base: '4%', measure})).toBe('4%');
+                expect(texts).toEqual([]);
+            });
+
+            it('sizes the inset on the widest text alone: one 61px label among 10px ones gives 33px (A5)', () => {
+                // Why: the last date's label is the one cut on a phone; the inset follows the widest text, never an average or the first.
+                const lastLabel = compactLabel('en-US', 'dm', '2026-10-20');
+                const {measure} = recordingMeasure((text) => (text === lastLabel ? 61 : 10));
+                expect(timeAxisGridRight({width: 360, values: isoDays('2026-07-16', '2026-10-20'), locale: 'en-US', base: '4%', measure})).toBe(33);
+            });
+
+            it('measures each candidate text once per call, and at least one (A6)', () => {
+                // Why: every measure lays the text out; a repeat is pure cost, and an empty list means nothing was fitted.
+                const {measure, texts} = recordingMeasure();
+                timeAxisGridRight({width: 360, values: isoDays('2026-07-16', '2026-10-20'), locale: 'en-US', base: '4%', measure});
+                expect(texts.length, 'texts measured').toBeGreaterThan(0);
+                expect(
+                    texts.filter((text, index) => texts.indexOf(text) !== index),
+                    'texts measured more than once',
+                ).toEqual([]);
+            });
+
+            it('measures the labels in the locale it is given: the Spanish day of the last date in es-ES, not the English one (A7)', () => {
+                // Why: the widths must be those of the labels the policy draws, and those follow the interface locale (M-18).
+                const spanish = compactLabel('es-ES', 'dm', '2026-10-20');
+                const english = compactLabel('en-US', 'dm', '2026-10-20');
+                const {measure, texts} = recordingMeasure();
+                timeAxisGridRight({width: 360, values: isoDays('2026-07-16', '2026-10-20'), locale: 'es-ES', base: '4%', measure});
+                expect(spanish, 'precondition: the two locales write the day apart').not.toBe(english);
+                expect(texts).toContain(spanish);
+                expect(texts).not.toContain(english);
+            });
+
+            it('covers a range over 366 days: the year labels, 29 February and both endpoints with their 2-digit year (A8)', () => {
+                // Why: a long axis can tick any day of any year, the leap day included, and each January 1 as its year, while its
+                // compact ends carry the year.
+                const {measure, texts} = recordingMeasure();
+                timeAxisGridRight({width: 360, values: isoDays('2023-11-20', '2026-02-10'), locale: 'en-US', base: '4%', measure});
+                expect(texts).toEqual(
+                    expect.arrayContaining([
+                        compactLabel('en-US', 'y', '2024-01-01'),
+                        compactLabel('en-US', 'y', '2025-01-01'),
+                        compactLabel('en-US', 'y', '2026-01-01'),
+                        compactLabel('en-US', 'dm', '2024-02-29'),
+                        compactLabel('en-US', 'dmy', '2023-11-20'),
+                        compactLabel('en-US', 'dmy', '2026-02-10'),
+                    ]),
+                );
+            });
+
+            it('fits one value with its neighbours: the day before, the day and the day after (A9)', () => {
+                // Why: ECharts widens a one-point time extent by a day on each side, so both neighbours can be labelled ticks.
+                const {measure, texts} = recordingMeasure();
+                timeAxisGridRight({width: 360, values: ['2026-03-15'], locale: 'en-US', base: '4%', measure});
+                expect(texts).toEqual(expect.arrayContaining(['2026-03-14', '2026-03-15', '2026-03-16'].map((isoDate) => compactLabel('en-US', 'dm', isoDate))));
+            });
+
+            it.each([
+                ['inside one month', isoDays('2026-07-03', '2026-07-24')],
+                ['across a month', isoDays('2026-09-20', '2026-10-10')],
+                ['from Dec 20 to Jan 10', isoDays('2025-12-20', '2026-01-10')],
+                ['over 366 days, given by its two endpoints', ['2023-11-20', '2026-02-10']],
+                ['on one value', ['2026-03-15']],
+            ])('measures every text the real policy formatter writes on a midnight of the axis, compact and wide, %s (A10)', (_case, values) => {
+                // Why: the inset holds only if no label the axis can draw escapes the measure. The oracle is the policy's own
+                // formatter at 360px (compact) and 1280px (wide), levels 0 and 1, never a copy of the helper's enumeration. The
+                // multi-year range is given by its endpoints: daily, its density would make the 1280px policy compact too.
+                const {measure, texts} = recordingMeasure();
+                timeAxisGridRight({width: 360, values, locale: 'en-US', base: '4%', measure});
+                const formatters = [policyFormatter(buildResponsiveXAxisPolicy({width: 360, values, locale: 'en-US', axisType: 'time'}), true), policyFormatter(buildResponsiveXAxisPolicy({width: 1280, values, locale: 'en-US', axisType: 'time'}), false)];
+                const drawable = [...new Set(formatters.flatMap((formatter) => midnightsAround(values[0], values[values.length - 1]).flatMap((day) => [0, 1].map((level) => formatter(day.getTime(), 0, tickLevel(level))))))].filter((text) => text !== '');
+
+                expect(drawable.length, 'precondition: the formatter names the midnights of the axis').toBeGreaterThan(0);
+                expect(
+                    drawable.filter((text) => !texts.includes(text)),
+                    `measured: ${texts.join(' | ')}`,
+                ).toEqual([]);
+            });
+
+            it('reads the label family from the chart model: 14px LF Test Sans (B1)', () => {
+                // Why: the measure must lay text out in the font ECharts draws the labels with, the theme's family when it names one.
+                const chart = {getModel: () => ({get: (path: unknown) => ((Array.isArray(path) ? path.join('.') : path) === 'textStyle.fontFamily' ? 'LF Test Sans' : undefined)})};
+                expect(axisLabelFont(chart as unknown as Parameters<typeof axisLabelFont>[0], 14)).toBe('14px LF Test Sans');
+            });
+
+            it.each([
+                ['no chart', null],
+                ['a chart with no model', {}],
+                ['a model not built yet', {getModel: () => undefined}],
+                ['an empty family', {getModel: () => ({get: () => ''})}],
+                ['a family that is not a string', {getModel: () => ({get: () => 42})}],
+            ])('falls back to the ECharts default family off Windows for %s: 14px sans-serif (B2)', (_case, chart) => {
+                // Why: before the first setOption, or under a theme that names no family, ECharts draws its labels in its own default.
+                expect(axisLabelFont(chart as unknown as Parameters<typeof axisLabelFont>[0], 14)).toBe('14px sans-serif');
+            });
+
+            it('falls back to Microsoft YaHei on Windows, as ECharts does: 12px Microsoft YaHei (B3)', () => {
+                // Why: ECharts picks its default family from navigator.platform; a measure in another family would size another text.
+                // Restored by re-stubbing, never by unstubAllGlobals, which would drop the file's hoisted en-US navigator.
+                const previous = globalThis.navigator;
+                vi.stubGlobal('navigator', {...previous, platform: 'Win32'});
+                try {
+                    expect(axisLabelFont(null, 12)).toBe('12px Microsoft YaHei');
+                } finally {
+                    vi.stubGlobal('navigator', previous);
+                }
+            });
+
+            it('measures a label with the ECharts text measurer in the resolved font (B4)', () => {
+                // Why: the inset must come from the layout ECharts draws the label with, not from a guess per character.
+                const width = axisLabelMeasure(null, 14)('Oct 20');
+                expect(width).toBe(echarts.format.getTextRect('Oct 20', '14px sans-serif').width);
+                expect(width).toBeGreaterThan(0);
+            });
+
+            describe('on a real ECharts time axis rendered server-side (C)', () => {
+                // As the R-2 case reads a category axis: every label ECharts draws under the plot, its anchor, and its width in
+                // its own font. Each case runs twice: with the base inset (it must cut a label today) and with the fix's.
+
+                /** One chart of a C case: its option at a given `grid.right`, and what the fix is called with. */
+                interface CutCase {
+                    name: string;
+                    width: number;
+                    height: number;
+                    base: number | string;
+                    fontSize: number;
+                    values: string[];
+                    option: (right: number | string) => echarts.EChartsCoreOption;
+                }
+
+                /** GrowthChart (and AllocationHistoryChart) as it draws a time axis: the policy on the full data, its compact keys, 14px labels, an optional inside zoom between two local midnights. */
+                function growthCase(width: number, dates: string[], zoom?: readonly [string, string]): CutCase {
+                    const policy = buildResponsiveXAxisPolicy({width, values: dates, locale: 'en-US', axisType: 'time'});
+                    return {
+                        name: `Growth ${dates[0]} → ${dates[dates.length - 1]}${zoom ? ` zoomed ${zoom[0]} → ${zoom[1]}` : ''} at ${width}px`,
+                        width,
+                        height: 240,
+                        base: '4%',
+                        fontSize: 14,
+                        values: dates,
+                        option: (right) => ({
+                            animation: false,
+                            grid: {top: 20, right, bottom: 25, left: 10, containLabel: true},
+                            xAxis: {type: 'time', ...(policy.compact ? {splitNumber: policy.splitNumber} : {}), axisLabel: {fontSize: 14, rotate: 0, formatter: policy.formatter, ...policy.axisLabel}},
+                            yAxis: {type: 'value', scale: true},
+                            series: [{type: 'line', data: dates.map((date, index) => [date, 100 + index])}],
+                            ...(zoom ? {dataZoom: [{type: 'inside', startValue: localDay(zoom[0]).getTime(), endValue: localDay(zoom[1]).getTime()}]} : {}),
+                        }),
+                    };
+                }
+
+                /** LotComparisonChart's time axis: ECharts' default 12px labels (the chart sets no size), an 18px base, the policy on the date range with its 42px padding, weekly points plus the last day, 320px tall under its legend band. */
+                function lotsCase(width: number, first: string, last: string): CutCase {
+                    const days = isoDays(first, last);
+                    const points = days.filter((_day, index) => index % 7 === 0 || index === days.length - 1);
+                    const policy = buildResponsiveXAxisPolicy({width, values: [first, last], locale: 'en-US', axisType: 'time', horizontalPadding: 42});
+                    return {
+                        name: `Lots ${first} → ${last} at ${width}px`,
+                        width,
+                        height: 320,
+                        base: 18,
+                        fontSize: 12,
+                        values: [first, last],
+                        option: (right) => ({
+                            animation: false,
+                            grid: {top: 62, right, bottom: 34, left: 10, containLabel: true},
+                            xAxis: {type: 'time', min: first, max: last, ...(policy.compact ? {splitNumber: policy.splitNumber} : {}), axisTick: {show: false}, axisLabel: {hideOverlap: true, formatter: policy.formatter, ...policy.axisLabel}},
+                            yAxis: {type: 'value', scale: true},
+                            series: [{type: 'line', data: points.map((date, index) => [date, 1000 + index * 3])}],
+                        }),
+                    };
+                }
+
+                /** Every label ECharts draws under the plot of `testCase` at `right`, with where it ends: the R-2 extent, from its anchor and its width in its own font. */
+                function drawnLabels({option, width, height}: CutCase, right: number | string): Array<{text: string; end: number; described: string}> {
+                    return renderedXAxisLabelElements(option(right), width, height).map(({text, anchor, font, x}) => {
+                        if (!font) throw new Error(`"${text}" carries no font to measure it with`);
+                        const textWidth = echarts.format.getTextRect(text, font).width;
+                        const left = anchor === 'end' ? x - textWidth : anchor === 'middle' ? x - textWidth / 2 : x;
+                        const end = left + textWidth;
+                        return {text, end, described: `"${text}" anchored ${anchor} at x=${x.toFixed(1)}, ${textWidth.toFixed(1)}px in "${font}", ends at ${end.toFixed(1)}`};
+                    });
+                }
+
+                const WIDTHS = [320, 360, 390, 440];
+                const JUL_TO_OCT_13 = isoDays('2026-07-16', '2026-10-13');
+                const CASES: CutCase[] = [
+                    ...WIDTHS.map((width) => growthCase(width, isoDays('2026-07-16', '2026-10-20'))),
+                    ...WIDTHS.map((width) => growthCase(width, isoDays('2025-12-20', '2026-01-10'))),
+                    ...WIDTHS.map((width) => growthCase(width, JUL_TO_OCT_13, ['2026-08-03', '2026-09-28'])),
+                    ...WIDTHS.map((width) => growthCase(width, JUL_TO_OCT_13, ['2026-07-25', '2026-08-28'])),
+                    ...WIDTHS.map((width) => lotsCase(width, '2025-12-20', '2026-01-10')),
+                ];
+
+                it.each(CASES)('$name: the base inset lets a drawn label end past the chart (precondition)', (testCase) => {
+                    // Why: the fix below proves something only where today cuts a label; a failing precondition is reported, never tuned away.
+                    const drawn = drawnLabels(testCase, testCase.base);
+                    expect(
+                        drawn.filter(({end}) => end > testCase.width).map(({described}) => described),
+                        `drawn: ${drawn.map(({described}) => described).join(' | ')}`,
+                    ).not.toEqual([]);
+                });
+
+                it.each(CASES)('$name: every drawn label ends inside the chart, whole, once grid.right holds the inset (fix)', (testCase) => {
+                    // Why: the user-visible defect. The label ECharts draws at the right edge must end inside the chart, the text
+                    // cut today must still be drawn and whole, and every drawn text must be one the inset measured.
+                    const {width, base, fontSize, values} = testCase;
+                    const cutToday = drawnLabels(testCase, base)
+                        .filter(({end}) => end > width)
+                        .map(({text}) => text);
+                    const {measure, texts} = recordingMeasure(axisLabelMeasure(null, fontSize));
+                    const right = timeAxisGridRight({width, values, locale: 'en-US', base, measure});
+                    const drawn = drawnLabels(testCase, right);
+                    const rendered = `grid.right=${String(right)}; drawn: ${drawn.map(({described}) => described).join(' | ')}`;
+
+                    expect(cutToday, 'precondition: the base inset cuts a label').not.toEqual([]);
+                    expect
+                        .soft(
+                            drawn.filter(({end}) => end > width).map(({described}) => described),
+                            `${rendered} — labels past the ${width}px edge`,
+                        )
+                        .toEqual([]);
+                    expect
+                        .soft(
+                            cutToday.filter((text) => !drawn.some((label) => label.text === text && label.end <= width)),
+                            `${rendered} — labels cut today and not drawn whole`,
+                        )
+                        .toEqual([]);
+                    expect
+                        .soft(
+                            drawn.map(({text}) => text).filter((text) => !texts.includes(text)),
+                            `${rendered} — drawn labels the inset never measured`,
+                        )
+                        .toEqual([]);
+                });
+            });
+        });
     });
 
     const RESPONSIVE_X_AXIS_CHARTS = [
@@ -2218,7 +2519,8 @@ describe('canonical overlay axis and reference helpers', () => {
         it.each(RESPONSIVE_X_AXIS_CHARTS)('%s imports and applies the shared policy to initial and resized options', (name, path) => {
             const source = readFileSync(path, 'utf8');
 
-            expect(source).toMatch(/import\s+\{\s*buildResponsiveXAxisPolicy\s*\}\s+from\s+['"][^'"]*responsiveXAxis['"]/);
+            // Why (re-pin, plan 52 C1): the import now carries the inset helpers too (`timeAxisGridRight`, `axisLabelMeasure`), so the pin asks for the policy among the names, not alone.
+            expect(source).toMatch(/import\s+\{[^}]*\bbuildResponsiveXAxisPolicy\b[^}]*\}\s+from\s+['"][^'"]*responsiveXAxis['"]/);
             expect(source).toMatch(/\bbuildResponsiveXAxisPolicy\s*\(/);
             expect(source).toMatch(/if \(policy\.axisLabel\) \{[\s\S]*?setOption\(\{xAxis:\s*\{[\s\S]*?axisLabel:\s*policy\.axisLabel/);
             // Why (re-pin, S7): GrowthChart's ladder (P&L Candles and Income) owns its category
@@ -2731,6 +3033,146 @@ describe('canonical overlay axis and reference helpers', () => {
 
             expect(source).not.toContain('responsiveXAxis');
             expect(source).not.toContain('buildResponsiveXAxisPolicy');
+        });
+
+        describe('the time-axis charts size grid.right with timeAxisGridRight (plan 52, C1)', () => {
+            // Plan 52, C1: GrowthChart, AllocationHistoryChart and LotComparisonChart widen `grid.right` so the last time
+            // label is drawn whole. These pins hold the wiring the jsdom harnesses cannot reach: the measure each chart hands
+            // the helper, the grid it lays out, its resize callback and GrowthChart's data-update path.
+
+            /** The three charts the defect touched, with the base inset and the label size each one draws its time axis with. */
+            const INSET_CHARTS = [
+                {chart: 'GrowthChart', path: new URL('../dashboard/GrowthChart.svelte', import.meta.url), base: "'4%'", fontSize: 14},
+                {chart: 'AllocationHistoryChart', path: new URL('../dashboard/AllocationHistoryChart.svelte', import.meta.url), base: "'4%'", fontSize: 14},
+                {chart: 'LotComparisonChart', path: new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url), base: '18', fontSize: 12},
+            ] as const;
+
+            /** The argument text of every `timeAxisGridRight(…)` call in `source`, parentheses balanced: one entry per call site. */
+            function gridRightCallArgs(source: string): string[] {
+                return sitesOf(source, /\btimeAxisGridRight\(/g).map((at) => {
+                    const open = source.indexOf('(', at);
+                    let depth = 0;
+                    for (let i = open; i < source.length; i++) {
+                        if (source[i] === '(') depth++;
+                        else if (source[i] === ')' && --depth === 0) return source.slice(open + 1, i);
+                    }
+                    throw new Error(`An unbalanced timeAxisGridRight( call at ${at}`);
+                });
+            }
+
+            /** `let appliedGridRight = '4%';`, typed or not: the inset the instance holds, compared by the resize callback. */
+            const APPLIED_GRID_RIGHT_DECLARATION = /let appliedGridRight(?::\s*(?:number \| string|string \| number))? = '4%';/;
+
+            it.each(INSET_CHARTS)('$chart imports the inset helpers and hands every timeAxisGridRight call its base and a $fontSize px measure (E2)', ({chart, path, base, fontSize}) => {
+                // Why: the inset fits the labels only if it measures them in the size the axis draws them at, against the chart own base.
+                const source = readFileSync(path, 'utf8');
+                const importedNames =
+                    /import\s+\{([^}]*)\}\s+from\s+['"][^'"]*responsiveXAxis['"]/
+                        .exec(source)?.[1]
+                        .split(',')
+                        .map((name) => name.trim()) ?? [];
+                const calls = gridRightCallArgs(source);
+
+                expect(importedNames, `${chart}: the names of its responsiveXAxis import`).toEqual(expect.arrayContaining(['timeAxisGridRight', 'axisLabelMeasure']));
+                expect(calls.length, `${chart}: timeAxisGridRight( call sites`).toBeGreaterThan(0);
+                for (const args of calls) {
+                    expect(args, `${chart}: the base of timeAxisGridRight(${args})`).toMatch(new RegExp(`\\bbase:\\s*${base}\\s*[,}]`));
+                    expect(args, `${chart}: the measure of timeAxisGridRight(${args})`).toContain(`measure: axisLabelMeasure(chartInstance, ${fontSize})`);
+                }
+            });
+
+            it.each([
+                {
+                    chart: 'GrowthChart',
+                    path: new URL('../dashboard/GrowthChart.svelte', import.meta.url),
+                    // The applyFullOption slice of the existing GrowthChart pins: from the function to the end of the script.
+                    body: (source: string) => {
+                        const start = source.indexOf('function applyFullOption(');
+                        const end = source.indexOf('\n</script>', start);
+                        return start < 0 || end <= start ? undefined : source.slice(start, end);
+                    },
+                },
+                {
+                    chart: 'AllocationHistoryChart',
+                    path: new URL('../dashboard/AllocationHistoryChart.svelte', import.meta.url),
+                    body: (source: string) => blockAfter(source, 'function buildChartOption(', '): echarts.EChartsOption {'),
+                },
+            ])('$chart lays its full option out on the computed gridRight and records it as the applied inset (E2)', ({chart, path, body}) => {
+                // Why: the grid must carry the computed inset, not the literal 4%, and the resize guard compares against the inset the full option applied.
+                const source = readFileSync(path, 'utf8');
+                const fullOption = body(source);
+                if (!fullOption) throw new Error(`${chart}: the full-option builder not found`);
+
+                expect(source, `${chart}: declares the applied inset`).toMatch(APPLIED_GRID_RIGHT_DECLARATION);
+                expect(fullOption, `${chart}: the inset is computed and recorded`).toMatch(/const gridRight = (?:xAxisPolicy\s*\?\s*)?timeAxisGridRight\(\{[^;]*;\s*appliedGridRight = gridRight;/);
+                expect(fullOption, `${chart}: grid.right is the computed inset`).toMatch(/\bgrid:\s*\{[^{}]*\bright:\s*gridRight\b/);
+                expect(fullOption, `${chart}: grid.right is no longer the 4% literal`).not.toMatch(/\bgrid:\s*\{[^{}]*\bright:\s*'4%'/);
+            });
+
+            it('LotComparisonChart computes its grid right in buildOption in place of the 18 px literal (E2)', () => {
+                // Why: the lots chart has no other grid write, so the inset must be computed where the option is built.
+                const source = readFileSync(new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url), 'utf8');
+                const buildOption = blockAfter(source, 'function buildOption(', '{');
+                if (!buildOption) throw new Error('LotComparisonChart: buildOption() not found');
+
+                expect(buildOption).toMatch(/\bgrid:\s*\{[^{}]*?\bright:\s*timeAxisGridRight\(\{/);
+                expect(buildOption).not.toMatch(/\bgrid:\s*\{[^{}]*?\bright:\s*18\b/);
+            });
+
+            it('GrowthChart re-lays its grid on resize only off the ladder and only when the inset changes, eagerly, then re-reads the plot (E3)', () => {
+                // Why: a resize moves the px a 4% base stands for; syncPlotGeometry() reads the grid this write lays out, so it cannot be lazy.
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const resizeStart = source.indexOf('const resizeWatcher = createResizeWatcher(() => {');
+                const resizeEnd = source.indexOf('\n    let darkModeObserver', resizeStart);
+                if (resizeStart < 0 || resizeEnd <= resizeStart) throw new Error('GrowthChart resize watcher contract not found');
+                const resizeCallback = source.slice(resizeStart, resizeEnd);
+                const offLadder = blockAfter(resizeCallback, 'if (chartInstance && chartContainer && activeChartData && !ladderActive)', '{');
+                if (!offLadder) throw new Error('GrowthChart: the off-ladder block of the resize watcher not found');
+
+                expect(source).toMatch(APPLIED_GRID_RIGHT_DECLARATION);
+                expect(offLadder).toContain('timeAxisGridRight(');
+                expect(offLadder).toMatch(/if \(gridRight !== appliedGridRight\) \{(?:\s|\/\/[^\n]*)*appliedGridRight = gridRight;(?:\s|\/\/[^\n]*)*chartInstance\.setOption\(\{grid: \{right: gridRight\}\}\);(?:\s|\/\/[^\n]*)*syncPlotGeometry\(\);/);
+                expect(resizeCallback).not.toMatch(/setOption\(\{grid:[^;]*lazyUpdate/);
+                // The existing guard stays the only ladderActive reference: the inset does not fork the block on the submode.
+                expect((resizeCallback.match(/\bladderActive\b/g) ?? []).length).toBe(1);
+            });
+
+            it('AllocationHistoryChart re-lays its grid on resize only when the inset changes, lazily (E4)', () => {
+                // Why: the same width-dependent inset; this chart reads no plot geometry back, so its lazy axis write is enough.
+                const source = readFileSync(new URL('../dashboard/AllocationHistoryChart.svelte', import.meta.url), 'utf8');
+                const callback = blockAfter(source, 'resizeObserver = new ResizeObserver(', '=> {');
+                if (!callback) throw new Error('AllocationHistoryChart: the ResizeObserver callback not found');
+
+                expect(source).toMatch(APPLIED_GRID_RIGHT_DECLARATION);
+                expect(callback).toContain('timeAxisGridRight(');
+                expect(callback).toMatch(/if \(gridRight !== appliedGridRight\) \{(?:\s|\/\/[^\n]*)*appliedGridRight = gridRight;(?:\s|\/\/[^\n]*)*chartInstance\.setOption\(\{grid: \{right: gridRight\}\}, \{lazyUpdate: true\}\);/);
+            });
+
+            it('LotComparisonChart leaves the inset out of its resize callback: a px base does not depend on the width (E5)', () => {
+                // Why: with base 18 the inset follows the labels alone, so the resize keeps the single axis write LOT_X_AXIS_PATCH_GUARDS counts.
+                const source = readFileSync(new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url), 'utf8');
+                const callback = blockAfter(source, 'const resizeWatcher = createResizeWatcher(', '=> {');
+                if (!callback) throw new Error('LotComparisonChart: resize callback not found');
+
+                expect(callback, 'positive control: the slice is the callback that re-plans the axis').toContain('buildLotXAxisPolicy(');
+                expect(callback).not.toContain('timeAxisGridRight');
+            });
+
+            it('GrowthChart sends the inset with every time-axis data update and none from the ladder (E6)', () => {
+                // Why: a data update brings new dates, hence new labels; the ladder category axis keeps the 4% the full option gave it.
+                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const updateStart = source.indexOf('function updateChartData(');
+                const updateEnd = source.indexOf('\n    function syncResolutionToViewport()', updateStart);
+                if (updateStart < 0 || updateEnd <= updateStart) throw new Error('GrowthChart updateChartData contract not found');
+                const updateChartData = source.slice(updateStart, updateEnd);
+                const ladderBranch = /if \(entry\.ladder\) \{([\s\S]*?)\} else \{\s*const xAxisPolicy = buildResponsiveXAxisPolicy\(/.exec(updateChartData)?.[1];
+
+                expect(updateChartData).toContain('let gridRight: number | string | undefined;');
+                expect(updateChartData).toMatch(/xAxis = xAxisPolicy\.compact \? [^;]+;\s*gridRight = timeAxisGridRight\(\{[^;]*\);\s*appliedGridRight = gridRight;/);
+                expect(updateChartData).toMatch(/\.\.\.\(gridRight === undefined \? \{\} : \{grid: \{right: gridRight\}\}\),\s*xAxis,/);
+                expect(ladderBranch, 'positive control: the ladder branch of updateChartData').toBeDefined();
+                expect(ladderBranch).not.toContain('gridRight');
+            });
         });
     });
 

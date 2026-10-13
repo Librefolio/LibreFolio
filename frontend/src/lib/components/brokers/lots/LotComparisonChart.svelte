@@ -17,7 +17,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {parseDisplayDate} from '$lib/utils/core/formatAxisDate';
-    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
+    import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
@@ -1107,10 +1107,18 @@
             ...CHART_ANIMATION_CONFIG,
             // With `containLabel: true`, `left` is only the empty inset BEFORE the y labels
             // (ECharts adds the label width itself). 24 px left a visible empty strip on a phone
-            // (developer review, 2026-09-29): 10 px keeps the labels off the card edge.
+            // (developer review, 2026-09-29): 10 px keeps the labels off the card edge. `right` holds
+            // half the widest time label past the last tick (plan 52): a px base does not follow the
+            // width, so the resize leaves it alone.
             grid: {
                 top: 62,
-                right: 18,
+                right: timeAxisGridRight({
+                    width: chartContainer?.clientWidth ?? 0,
+                    values: axisDateRange ? [axisDateRange.min, axisDateRange.max] : [],
+                    locale: uiLocale(),
+                    base: 18,
+                    measure: axisLabelMeasure(chartInstance, 12),
+                }),
                 bottom: 34,
                 left: 10,
                 containLabel: true,

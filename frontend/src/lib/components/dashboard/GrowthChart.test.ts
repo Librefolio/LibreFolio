@@ -256,6 +256,7 @@ import itCatalogue from '$lib/i18n/it.json';
 import {currentLanguage} from '$lib/stores/app/language';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
 import type {PortfolioAcquisitionFundingSeries, PortfolioBrokerPnlHistory, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioHistoryPoint, PortfolioIncomeHistorySeries, PortfolioPnlCandlePoint, PortfolioPnlCandleSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
@@ -1683,6 +1684,63 @@ describe('GrowthChart grid left inset (developer review, 2026-09-29)', () => {
         await fireEvent.click(getByTestId('growth-toggle-pnl'));
         await fireEvent.click(getByTestId('growth-pnl-submode-income'));
         expectLeftInset(await waitForFrame(FRAME.income), 'P&L Income');
+    });
+});
+
+/**
+ * Plan 52, C1: `containLabel` reserves the x labels' height, never the half-width a centred label overhangs past the
+ * plot's right edge, so on a phone the last time label was cut («Oct 2» for «Oct 20»). The time axis now widens
+ * `grid.right` to half its widest label plus 2 px when that beats '4%'; the ladder submodes keep '4%'.
+ */
+describe('GrowthChart grid right inset for the last time label (plan 52, C1)', () => {
+    /** `FullOption` leaves the grid and the x axis out: only this describe reads them. */
+    type WithTimeAxis = FullOption & {grid?: {right?: unknown}; xAxis?: {axisLabel?: {formatter?: (value: number, index?: number, extra?: {time?: {level?: number}; level?: number}) => string}}};
+
+    /** Every local midnight from the day before `first` to the day after `last` ('YYYY-MM-DD'): the ticks the axis can label. Stepped by calendar day, so a DST change neither drops nor doubles one. */
+    function midnightsAround(first: string, last: string): Date[] {
+        const [firstYear, firstMonth, firstDay] = first.split('-').map(Number);
+        const [lastYear, lastMonth, lastDay] = last.split('-').map(Number);
+        const stop = new Date(lastYear, lastMonth - 1, lastDay + 1).getTime();
+        const days: Date[] = [];
+        for (let day = new Date(firstYear, firstMonth - 1, firstDay - 1); day.getTime() <= stop; day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)) days.push(day);
+        return days;
+    }
+
+    it('widens grid.right in Abs to half of every label the emitted time formatter can draw plus 2px, measured in the 14px axis font (D1)', async () => {
+        // WHY: the user-visible defect. jsdom's 0 px width is a phone (compact, and '4%' of it is 0 px), where the last label
+        // spilled past the chart. The bound comes from the formatter ECharts is handed, not from the helper's own list, and
+        // the fake measure is FAKE_TEXT_PX_PER_CHAR px a character.
+        render(GrowthChart, {props: {history: HISTORY}});
+        const option = (await waitForFrame(FRAME.abs)) as WithTimeAxis;
+        const right = option.grid?.right;
+        const formatter = option.xAxis?.axisLabel?.formatter;
+
+        expect(typeof right, 'grid.right is an inset in px, no longer the 4% base').toBe('number');
+        if (typeof formatter !== 'function') throw new Error('The Abs time axis carries no label formatter');
+        const texts = midnightsAround(DATES[0], DATES[DATES.length - 1])
+            .flatMap((day) => [0, 1].map((level) => formatter(day.getTime(), 0, {time: {level}, level})))
+            .filter((text) => text !== '');
+        expect(texts.length, 'precondition: the formatter names the midnights of the axis').toBeGreaterThan(0);
+        for (const text of texts) expect(right as number, `"${text}" overhangs half its width past its tick`).toBeGreaterThanOrEqual(Math.ceil((text.length * FAKE_TEXT_PX_PER_CHAR) / 2) + 2);
+        expect(right).toBe(timeAxisGridRight({width: 0, values: DATES, locale: uiLocale(), base: '4%', measure: (text) => text.length * FAKE_TEXT_PX_PER_CHAR}));
+        expect(measuredFonts.length, 'the labels were measured through echarts.format.getTextRect').toBeGreaterThan(0);
+        expect(
+            measuredFonts.filter((font) => !font.startsWith('14px ')),
+            'fonts other than the 14px axis font',
+        ).toEqual([]);
+    });
+
+    it('keeps grid.right at 4% in P&L Candles, whose ladder category axis the time inset does not concern (D2)', async () => {
+        // WHY: a guard. The ladder submodes are not affected by the defect, and their full rebuild must not inherit an inset
+        // sized for time labels.
+        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY, pnlCandles: PNL_CANDLES}});
+        await waitForFrame(FRAME.abs);
+
+        await fireEvent.click(getByTestId('growth-toggle-pnl'));
+        await fireEvent.click(getByTestId('growth-pnl-submode-candles'));
+        const option = (await waitForFrame(FRAME.candles)) as WithTimeAxis;
+
+        expect(option.grid?.right).toBe('4%');
     });
 });
 

@@ -88,7 +88,7 @@ import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} fr
  * listener → `off`/`on`, a resolution switch → `dispatchAction`, the teardown → `dispose`) and keeps every
  * `setOption` payload, so a test can read what the component decided to draw.
  */
-const {chartInstances, echartsModule} = vi.hoisted(() => {
+const {chartInstances, echartsModule, measuredFonts, FAKE_TEXT_PX_PER_CHAR} = vi.hoisted(() => {
     interface SetOptionCall {
         option: Record<string, unknown>;
         opts: unknown;
@@ -110,6 +110,10 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
     }
 
     const chartInstances: FakeChart[] = [];
+    /** Width of one character under the fake text measure, in px. */
+    const FAKE_TEXT_PX_PER_CHAR = 7;
+    /** Every font `format.getTextRect` was asked in, in call order. */
+    const measuredFonts: string[] = [];
 
     function createFakeChart(dom: unknown): FakeChart {
         let disposed = false;
@@ -136,7 +140,23 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         return chart;
     }
 
-    return {chartInstances, echartsModule: {init: (dom: unknown) => createFakeChart(dom)}};
+    return {
+        chartInstances,
+        measuredFonts,
+        FAKE_TEXT_PX_PER_CHAR,
+        echartsModule: {
+            init: (dom: unknown) => createFakeChart(dom),
+            // WHY (plan 52, C1): the time axis now measures its labels with `echarts.format.getTextRect` to size its right
+            // inset, and `vi.mock` throws on an export the factory leaves out. FAKE_TEXT_PX_PER_CHAR px a character, every
+            // font it is asked in kept in `measuredFonts`.
+            format: {
+                getTextRect(text: string, font: string) {
+                    measuredFonts.push(font);
+                    return {x: 0, y: 0, width: text.length * FAKE_TEXT_PX_PER_CHAR, height: 14};
+                },
+            },
+        },
+    };
 });
 
 vi.mock('echarts', () => echartsModule);
@@ -159,8 +179,10 @@ import {render, setupI18n, waitFor} from '$test/component';
 import {parseSourcePalette} from '$test/sourcePalettes';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
 import {buildTooltipByThreshold, buildTooltipHeader, buildTooltipTheme} from '$lib/components/charts/echartsTooltipHelpers';
+import {timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
 import {getAssetTypeEmoji} from './allocationTypeEmoji';
 
 // =============================================================================
@@ -1346,5 +1368,58 @@ describe('AllocationHistoryChart — the y axis and the type tooltip in the inte
             TOOLTIP_DAYS.map((_day, index) => sharesIn(tooltipOf(option, index))),
             spelled(expected),
         ).toEqual(expected);
+    });
+});
+
+// =============================================================================
+// The grid's right inset for the last time label (plan 52, C1)
+// =============================================================================
+
+/**
+ * `containLabel` reserves the x labels' height, never the half-width a centred label overhangs past the plot's right
+ * edge, so on a phone the last time label was cut. The time axis now widens `grid.right` to half its widest label
+ * plus 2 px when that beats '4%'. jsdom's container is 0 px wide: a compact axis, and '4%' of it is 0 px.
+ */
+describe('AllocationHistoryChart — the grid right inset holds the last time label (plan 52, C1)', () => {
+    /** The grid and the x-axis formatter of a full option: `DrawnOption` leaves them out, only this describe reads them. */
+    type WithTimeAxis = {grid?: {right?: unknown}; xAxis?: {axisLabel?: {formatter?: (value: number, index?: number, extra?: {time?: {level?: number}; level?: number}) => string}}};
+
+    /** Every local midnight from the day before `first` to the day after `last` ('YYYY-MM-DD'): the ticks the axis can label. Stepped by calendar day, so a DST change neither drops nor doubles one. */
+    function midnightsAround(first: string, last: string): Date[] {
+        const [firstYear, firstMonth, firstDay] = first.split('-').map(Number);
+        const [lastYear, lastMonth, lastDay] = last.split('-').map(Number);
+        const stop = new Date(lastYear, lastMonth - 1, lastDay + 1).getTime();
+        const days: Date[] = [];
+        for (let day = new Date(firstYear, firstMonth - 1, firstDay - 1); day.getTime() <= stop; day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)) days.push(day);
+        return days;
+    }
+
+    beforeEach(() => {
+        // The hoisted mock keeps the fonts across the file: each case reads only what its own mount measured.
+        measuredFonts.length = 0;
+    });
+
+    it('widens grid.right to half of every label the emitted time formatter can draw plus 2px, measured in the 14px axis font (D3)', async () => {
+        // WHY: the user-visible defect, as in GrowthChart (D1). The bound comes from the formatter ECharts is handed, not
+        // from the helper's own list, and the fake measure is FAKE_TEXT_PX_PER_CHAR px a character.
+        await mountChart(SUM_DAYS, 'type');
+        const option = drawnOption() as unknown as WithTimeAxis;
+        const dates = SUM_DAYS.map(({date}) => date);
+        const right = option.grid?.right;
+        const formatter = option.xAxis?.axisLabel?.formatter;
+
+        expect(typeof right, 'grid.right is an inset in px, no longer the 4% base').toBe('number');
+        if (typeof formatter !== 'function') throw new Error('The time axis carries no label formatter');
+        const texts = midnightsAround(dates[0], dates[dates.length - 1])
+            .flatMap((day) => [0, 1].map((level) => formatter(day.getTime(), 0, {time: {level}, level})))
+            .filter((text) => text !== '');
+        expect(texts.length, 'precondition: the formatter names the midnights of the axis').toBeGreaterThan(0);
+        for (const text of texts) expect(right as number, `"${text}" overhangs half its width past its tick`).toBeGreaterThanOrEqual(Math.ceil((text.length * FAKE_TEXT_PX_PER_CHAR) / 2) + 2);
+        expect(right).toBe(timeAxisGridRight({width: 0, values: dates, locale: uiLocale(), base: '4%', measure: (text) => text.length * FAKE_TEXT_PX_PER_CHAR}));
+        expect(measuredFonts.length, 'the labels were measured through echarts.format.getTextRect').toBeGreaterThan(0);
+        expect(
+            measuredFonts.filter((font) => !font.startsWith('14px ')),
+            'fonts other than the 14px axis font',
+        ).toEqual([]);
     });
 });

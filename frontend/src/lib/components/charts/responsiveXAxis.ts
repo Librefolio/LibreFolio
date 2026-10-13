@@ -1,3 +1,4 @@
+import * as echarts from 'echarts';
 import {parseDisplayDate} from '$lib/utils/core/formatAxisDate';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 
@@ -136,6 +137,125 @@ function buildCategoryAxisFormatter(locale: string | undefined, values: readonly
         const withYear = (!!previous && previous.getFullYear() !== date.getFullYear()) || ((index === 0 || index === lastIndex) && crossesYear);
         if (monthLabels && regular) return (withYear ? formats.monthYear : formats.month).format(date);
         return (withYear ? formats.dayMonthYear : formats.dayMonth).format(date);
+    };
+}
+
+/** Painted width, in px, of one axis label text. */
+export type AxisLabelMeasure = (text: string) => number;
+
+interface TimeAxisGridRightInput {
+    /** The chart's width in px. */
+    width: number;
+    /** The data dates of the axis: the first and the last bound the labels it can draw. */
+    values: readonly (number | string)[];
+    /** Default: the interface locale (`uiLocale()`, M-18). */
+    locale?: string;
+    /** The grid's right edge without the fix: px, or a percentage of `width` as ECharts reads it. */
+    base: number | string;
+    measure: AxisLabelMeasure;
+}
+
+/** The part of an ECharts instance the label font is read from: its model, once a first option has built it. */
+interface ChartModelSource {
+    getModel?: () => {get?: (path: string[]) => unknown} | undefined;
+}
+
+const DAY_MS = 86_400_000;
+const CANDIDATE_CACHE_SIZE = 16;
+const candidateCache = new Map<string, readonly string[]>();
+
+const calendarDay = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+
+/**
+ * Every text `buildTimeAxisFormatter` can write, compact or wide, on an axis whose data runs from
+ * `first` to `last`. Zoom can put the axis edge on any day of the data, and ECharts widens a
+ * one-day extent by a day on each side, so each local midnight from the day before `first` to the
+ * day after `last` can be a labelled tick. Past 366 days every day of the calendar can: a leap
+ * year names them all, plus the year of each real January 1.
+ */
+function timeAxisLabelCandidates(locale: string, first: Date, last: Date): readonly string[] {
+    const key = `${locale}|${calendarDay(first)}|${calendarDay(last)}`;
+    const cached = candidateCache.get(key);
+    if (cached) return cached;
+
+    const formats = axisDateFormats(locale);
+    const endpointFormat = crossesCalendarYear(first, last) ? formats.dayMonthYear : formats.dayMonth;
+    const texts = new Set([endpointFormat.format(first), endpointFormat.format(last)]);
+    const addTick = (day: Date) => {
+        if (day.getDate() !== 1) {
+            texts.add(formats.dayMonth.format(day));
+        } else if (day.getMonth() === 0) {
+            texts.add(formats.year.format(day));
+        } else {
+            texts.add(formats.month.format(day));
+            texts.add(formats.dayMonth.format(day));
+        }
+    };
+    const nextDay = (day: Date) => new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+    const start = new Date(first.getFullYear(), first.getMonth(), first.getDate() - 1);
+    const stop = new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1).getTime();
+    if (Math.round((stop - start.getTime()) / DAY_MS) + 1 > 366) {
+        for (let day = new Date(2024, 0, 2); day.getFullYear() === 2024; day = nextDay(day)) addTick(day);
+        for (let year = start.getFullYear(); year <= new Date(stop).getFullYear(); year++) {
+            const newYear = new Date(year, 0, 1);
+            if (newYear.getTime() >= start.getTime() && newYear.getTime() <= stop) addTick(newYear);
+        }
+    } else {
+        for (let day = start; day.getTime() <= stop; day = nextDay(day)) addTick(day);
+    }
+
+    const candidates = [...texts];
+    if (candidateCache.size >= CANDIDATE_CACHE_SIZE) candidateCache.delete(candidateCache.keys().next().value!);
+    candidateCache.set(key, candidates);
+    return candidates;
+}
+
+function insetPx(base: number | string, width: number): number {
+    if (typeof base === 'number') return base;
+    const value = parseFloat(base);
+    if (Number.isNaN(value)) return 0;
+    return base.trim().endsWith('%') ? (value / 100) * width : value;
+}
+
+/**
+ * The right edge of a time-axis grid that keeps the last label whole (plan 52).
+ *
+ * WHY: `grid.containLabel` reserves the height of the x labels, never the half-width a centred
+ * label overhangs past the plot's right edge. A time axis ends exactly on the last day of the data,
+ * or of the zoom, and ECharts labels that edge, so on a phone the last label was cut. The inset is
+ * half the widest label the axis can draw plus 2 px; it replaces `base` only when it is wider, so a
+ * desktop keeps its percentage and follows its own width.
+ */
+export function timeAxisGridRight({width, values, locale, base, measure}: TimeAxisGridRightInput): number | string {
+    const first = values.length > 0 ? parseDisplayDate(values[0]) : null;
+    const last = values.length > 0 ? parseDisplayDate(values[values.length - 1]) : null;
+    if (!first || !last) return base;
+    const [low, high] = first.getTime() <= last.getTime() ? [first, last] : [last, first];
+    let widest = 0;
+    for (const text of timeAxisLabelCandidates(locale || uiLocale(), low, high)) widest = Math.max(widest, measure(text));
+    const inset = widest > 0 ? Math.ceil(widest / 2) + 2 : 0;
+    return inset > insetPx(base, width) ? inset : base;
+}
+
+/** The CSS font ECharts draws a `fontSize` axis label with: the chart's family, or ECharts 6's own default before a first option. */
+export function axisLabelFont(chart: unknown, fontSize: number): string {
+    const family = (chart as ChartModelSource | null | undefined)?.getModel?.()?.get?.(['textStyle', 'fontFamily']);
+    if (typeof family === 'string' && family !== '') return `${fontSize}px ${family}`;
+    const windows = typeof navigator !== 'undefined' && /^Win/.test(navigator.platform ?? '');
+    return `${fontSize}px ${windows ? 'Microsoft YaHei' : 'sans-serif'}`;
+}
+
+/**
+ * Painted width of a `fontSize` axis label on `chart`, as ECharts lays it out.
+ *
+ * WHY lazy: the font is resolved at the first measure, and `echarts.format` read only inside the
+ * call, so a test that mocks ECharts without it still mounts a chart that measures nothing.
+ */
+export function axisLabelMeasure(chart: unknown, fontSize: number): AxisLabelMeasure {
+    let font: string | undefined;
+    return (text) => {
+        font ??= axisLabelFont(chart, fontSize);
+        return echarts.format.getTextRect(text, font).width;
     };
 }
 
