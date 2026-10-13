@@ -1,7 +1,7 @@
 ---
 title: "Since 2026-10-13 www.schwab.com answers headless Chromium with a bot check: its favicon is blocked (`ERR_BLOCKED_BY_ORB`) and the broker shows the fallback icon"
 category: problem
-status: open
+status: accepted
 date: 2026-10-13
 tags: [frontend, broker-icon, third-party, chromium, orb, gallery, release-gate, workstream-m, release-1.2]
 related:
@@ -38,8 +38,18 @@ plugin's generic icon.
 
 ## Status
 
-Open for Schwab itself. The real cure is U-B3, the icon inside the plugin's folder — a bundled icon, as Scalable
-has — which waits for the developer's answer (question 16).
+**Accepted** (developer, 2026-10-13). The answer to question 16 first brought the logo into 1.2: U-6 (`a6d1754ed`)
+bundled it, a frame of the site's favicon taken from a web archive capture, served like Scalable's. The same day the
+developer had it undone (U-6b, `2871db292`):
+
+> «no, evitiamo per ora, anche per schwab, ci blocca solo perchè abbiamo fatto tante richieste tutte assieme. comunque
+> mostrare la valigetta è accettabile.» — «c'è stato un fraintendimento, pensavo fosse che non avevi l'url, ritorna
+> indietro per favore»
+
+The plugin links the site's favicon again. The working hypothesis is the developer's: the site blocks our bursts of
+requests (the gallery, the E2E), not a user's single page load; where it does block, the app shows the briefcase,
+which is acceptable. U-B3 — the plugins' icons in their own folders — stays in the backlog for after 1.2, without
+Schwab.
 
 ## Source files
 
@@ -50,3 +60,4 @@ has — which waits for the developer's answer (question 16).
 | The icon chain | `frontend/src/lib/utils/broker/brokerIconChain.svelte.ts` |
 | The gallery's favicon mark | `frontend/e2e/fixtures/galleryReportSets.ts` (`FAVICON_MARK`, `keepFaviconImagesLoading`) |
 | M's lot 35 | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` |
+| U-6 and U-6b | `LibreFolio_developer_journal/Release_2/Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md` |
