@@ -71,9 +71,9 @@
  *
  * Language. `setLanguage` goes through the header selector, which writes `librefolio-locale` in this
  * context's localStorage and nothing on the server; the account's saved language is applied only at login,
- * which happens before the switch. There is nothing to restore. `login()` returns once the login form is gone,
- * while the root page still loads the bootstrap and has yet to route to /dashboard, whose header holds the
- * selector: the switch waits for that routing, not for a guess at its duration.
+ * which happens before the switch. There is nothing to restore. `login()` returns once the app has arrived:
+ * for this user, the app shell on /dashboard, whose header holds the selector. The switch still waits for the
+ * selector itself, never for a guess at a duration.
  *
  * Subjects. /assets, /dashboard and /fx need none. The detail pages choose theirs over the API, by property.
  * The asset is the header's worst case: its title is capped at 15ch inside two flex wrappers that cannot
@@ -874,8 +874,8 @@ test.describe('Top toolbars: every control inside its bar at every width (K step
                     if (!baseURL) throw new Error('The sweep needs the runner-provided baseURL');
                     await keepOffline(page, new URL(baseURL).origin);
                     await login(page, TEST_USER);
-                    // login() returns once the login form is gone: the root page still loads the bootstrap, then routes
-                    // to /dashboard, whose header holds the language selector. Wait for that routing, then the selector.
+                    // login() returns once the app has arrived (V-27): for TEST_USER, the app shell on /dashboard, whose
+                    // header holds the language selector. The two waits below re-check that landing, then the selector.
                     await page.waitForURL((url) => url.pathname !== '/', {timeout: 30_000});
                     await expect(page.getByTestId('language-selector-button'), 'the app shell is up after the post-login redirect').toBeVisible({timeout: 30_000});
                     await setLanguage(page, lang);

@@ -1055,12 +1055,11 @@ test.describe('Broker detail — GrowthChart P&L mode', () => {
         test.setTimeout(60_000);
         await login(page, TEST_USER);
 
-        // login() returns as soon as the login form is gone — before the Dashboard it lands on has
-        // finished loading, sometimes before it has even mounted — and that Dashboard asks its own
-        // report, with the income family and `broker_ids` set to every broker the user owns. A
-        // recorder armed before it has asked records it, and `reports.find(...)` then reads the
-        // portfolio's request as this broker's overview. So every test starts from a landing page
-        // that has finished asking.
+        // login() returns once the app has arrived — the Dashboard it lands on has mounted with the
+        // shell, but has not finished loading — and that Dashboard asks its own report, with the
+        // income family and `broker_ids` set to every broker the user owns. A recorder armed before
+        // it has asked records it, and `reports.find(...)` then reads the portfolio's request as this
+        // broker's overview. So every test starts from a landing page that has finished asking.
         const dashboard = page.getByTestId('dashboard-page');
         await expect(dashboard, 'login() lands TEST_USER on the Dashboard').toBeVisible({timeout: 15_000});
         await waitForSettled(dashboard, 30_000);
