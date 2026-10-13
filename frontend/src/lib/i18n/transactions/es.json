@@ -143,7 +143,7 @@
       "unitModePerUnit": "Por unidad",
       "suggested": "PMC sugerido",
       "txsUsed": "transacciones utilizadas",
-      "missingFx": "No se puede calcular el PMC: falta tasa FX",
+      "missingFx": "No se puede calcular el PMC: falta el tipo de cambio",
       "docsTooltip": "Descubre cómo se calcula el PMC (precio medio de compra)",
       "toggleAuto": "Auto",
       "toggleManual": "Manual",
@@ -164,16 +164,16 @@
       "validateToRecalculate": "⚡ Valida ahora para recalcular la tabla"
     },
     "wac": {
-      "syncSuccess": "Tasas FX sincronizadas con éxito",
+      "syncSuccess": "Tipos de cambio sincronizados con éxito",
       "syncFailed": "Error en la sincronización FX",
-      "fxStaleBannerTitle": "Conversiones FX con tasas desactualizadas",
-      "fxDisclaimer": "La tasa FX utilizada puede diferir de la aplicada por su bróker. Verifique el costo promedio con su bróker.",
-      "fxTooltipStale": "Tasa no actualizada",
+      "fxStaleBannerTitle": "Conversiones FX con tipos de cambio desactualizados",
+      "fxDisclaimer": "El tipo de cambio utilizado puede diferir del aplicado por su bróker. Verifique el costo promedio con su bróker.",
+      "fxTooltipStale": "Tipo de cambio no actualizado",
       "fxTooltipSameDay": "mismo día",
       "fxTooltipDaysBefore": "días antes",
       "fxDaysAgo": "d atrás",
       "convertedPairs": "Pares convertidos",
-      "noRateAvailable": "sin tasa disponible"
+      "noRateAvailable": "sin tipo de cambio disponible"
     },
     "promote": {
       "atomicWarning": "Esto ELIMINARÁ ambas filas origen y CREARÁ 2 filas enlazadas atómicamente. Si hay rollback, nada cambia.",
@@ -293,11 +293,11 @@
       "promoteCount": "{n} promocionados"
     },
     "fxInfo": {
-      "impliedRate": "Tasa implícita",
-      "marketRate": "Tasa de mercado",
+      "impliedRate": "Tipo de cambio implícito",
+      "marketRate": "Tipo de cambio de mercado",
       "spread": "Spread",
       "stale": "obsoleto {days}d",
-      "marketNotAvailable": "Tasa de mercado no disponible"
+      "marketNotAvailable": "Tipo de cambio de mercado no disponible"
     }
   }
 }

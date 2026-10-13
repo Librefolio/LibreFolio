@@ -280,7 +280,7 @@
         },
         "overview": {
           "display": "Resumen del par FX",
-          "description": "Identidad del par, tasa actual, ruta de conversión y procedencia."
+          "description": "Identidad del par, tipo de cambio actual, ruta de conversión y procedencia."
         },
         "market_context": {
           "display": "Contexto de mercado FX",
@@ -292,7 +292,7 @@
         },
         "market_technical": {
           "display": "Datos de mercado y técnicos FX",
-          "description": "OHLC de la tasa, rendimientos, volatilidad, indicadores, estados y eventos."
+          "description": "OHLC del tipo de cambio, rendimientos, volatilidad, indicadores, estados y eventos."
         },
         "direct_exposure": {
           "display": "Exposición FX directa",
