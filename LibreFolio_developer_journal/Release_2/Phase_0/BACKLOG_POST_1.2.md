@@ -1067,17 +1067,23 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     - `aria-pressed` su `view-mode-*`.
 
   **Resta aperto:**
-  - **T1**, decisione del developer (domanda 8). Ne dipende anche `fillBuyTransaction`, che prende la prima opzione e
-    serve pure a T2 e T6. Il 13/10 il developer ha chiesto una spiegazione migliore, mandata al coordinatore.
-    - Il primo broker, Charles Schwab, non ha cassa: il server rifiuta il BUY con `BALANCE_CASH_NEGATIVE`, e dopo il
-      salvataggio il test non asserisce niente.
-    - Le scelte:
-      - (A) «un BUY si salva», su un broker del test, consigliata;
-      - (B) «un BUY senza cassa viene rifiutato»;
-      - (C) entrambi;
-      - (D) com'è, ma rinominato.
+  - ✅ **T1, chiusa il 13/10** in un checkpoint di V, via test-author. La decisione del developer (domanda 8): «C:
+    entrambi, due test». Il vecchio T1 sparisce. T1a, T1b e T6 stanno in un blocco proprio, ciascuno su un account suo,
+    con un broker suo.
+    - **T1a**: un BUY dal form, sul broker del test finanziato, arriva nel bulk editor e si salva (`committed`). Lo si
+      ritrova via API, per id e con i valori mandati, e nella tabella.
+    - **T1b**: lo stesso BUY su un broker senza cassa viene rifiutato con `balanceCashNegative`, coi parametri della
+      richiesta.
+      - Il messaggio nomina il broker, la data ISO e la valuta, e il suo link porta alla riga.
+      - Il modale resta aperto con la riga, e il broker non ha righe.
+    - **Le prove**: T1a rosso senza deposito, T1b rosso col broker finanziato; entrambi poi verdi.
+    - `fillBuyTransaction` sceglie broker e asset per nome. T2 e T6 sono verdi.
+      - **T6** era verde per la ragione sbagliata: il form corregge il segno di `-1`, e l'avviso nasceva dalla cassa
+        vuota di Charles Schwab. Ora sta anche lui su un account suo, con un broker senza cassa: prima verifica che
+        l'avviso nomini il broker, poi lo chiude. È rosso col broker finanziato.
+    - `transactions-modals` 21/21 a 1 e a 4 worker, col DB al seed. Ne sono nate V-37 e V-38.
 
-    Dettagli: piano della 46, §12.13.
+    Dettagli: piano della 46, §12.14.
   - ✅ **T4, chiusa il 13/10** in un checkpoint di V, via test-author.
     - **La decisione del developer** (domanda 12): nel bulk editor «Costo di carico» (`cost_basis_override`) prima di
       «Evento» (`asset_event_id`) è voluto, non è una regressione. La nota del passo 10 del piano Bugfix-3 («spostato
@@ -1098,10 +1104,10 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     - `goToTransactions` ingoia la sua `Promise.race` con `.catch`;
     - `optionListReady` usa `.first()` su `[role="listbox"]` senza filtro;
     - l'intestazione dello spec dice ancora «port 6041»;
-    - il commento «T4: no confirm dialog» nel test «Delete» usa un'altra numerazione.
+    - il commento «T4: no confirm dialog» nel test «Delete» usa un'altra numerazione;
+    - l'opzione `skipCash` di `fillBuyTransaction` non ha più chiamanti.
 
-    In T1 ci sono anche un `bulkRows.first()` senza filtro e una `Promise.race(...).catch`: si sistemano con la
-    decisione su T1.
+    I `bulkRows.first()` e la `Promise.race(...).catch` del vecchio T1 sono spariti con T1a e T1b (13/10).
   - **`tx-delete`**, fuori lista: `.checkbox-btn` in A6 e B3-guard (`:652`, `:774`, `:815`), `.disabled-select-icon`
     (`:811`) e una sonda (`:793`).
 - **V-22 · «+ New event» può modificare un evento esistente dicendo di averlo creato** — da decidere; letto da
@@ -1344,6 +1350,26 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     - `toolbar-width-sweep` 15/15 e `front-ai-export all` sono verdi a 4 worker.
 
     Dettagli: piano della 46, §12.12.
+- **V-37 · Nel form, «valid» accanto a un errore che blocca Apply** — da decidere, UX; visto da test-author di V nello
+  snapshot di T6, 13/10, e verificato nel codice da me.
+  - Un BUY con quantità `-1`: il campo Qty è rosso con «must be > 0» e Apply è disabilitato.
+  - «⚡ Validate now», però, risponde «valid»: il form manda al server la quantità col segno già corretto,
+    `applySign('-1', 'positive')` → `'1'` (`frontend/src/lib/utils/transactions/txPayloadHelpers.ts:142-150`,
+    `:243-249`).
+  - L'utente legge insieme «valid» e un errore che gli impedisce di salvare.
+  - Domanda per il developer, mandata al coordinatore il 13/10: è voluto? Se no, il verdetto dovrebbe tenere conto degli
+    errori del form; è una cura di prodotto.
+  - Prove: `/tmp/libreFolio_v_t1/4-t2-t6.t6-results/error-context.md`, righe 1510-1535. Dettagli: piano della 46,
+    §12.14.
+- **V-38 · Il form elenca un problema di saldo tra i problemi dei campi** — basso, UX; letto nel codice da test-author
+  di V, 13/10, e verificato da me; **non visto a schermo**.
+  - Il form divide i problemi per indice: `index >= 0` sono dei campi, `< 0` di saldo
+    (`TransactionFormModal.svelte:944-945`).
+  - Il server attacca `balanceCashNegative` alla riga che lo causa (`index: 0`). Nel form finisce quindi sotto il titolo
+    dei problemi dei campi, non sotto «This configuration causes data inconsistencies».
+  - Il bulk editor divide invece per codice (`isBulkBalanceIssue`, `utils/transactions/bulkDisplay.ts:145`), e mette lo
+    stesso problema sotto il titolo del saldo.
+  - Da verificare a schermo prima di decidere. Dettagli: piano della 46, §12.14.
 
 ## 09 · Feedback e backlog strutturale
 
