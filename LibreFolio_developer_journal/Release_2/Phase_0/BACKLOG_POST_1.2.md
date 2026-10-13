@@ -172,6 +172,15 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   `signals.riskRollingReturn.name`, del modo nuovo del grafico dell'asset (`calendar_rolling_return`, giorni di
   calendario, nascosto dal catalogo). Chi viene dalla 1.1 può leggerli come un doppione. Da fare: un nome che dica la
   finestra («… (observations)» contro «… (calendar days)»), oppure ritirare l'indicatore vecchio.
+- **C-72 · Commenti e pagine del runner e della coverage rimasti indietro** — minimo; V e M, 13/10, trovati
+  lavorando a V-28 e M-29. Il codice è giusto, i testi no:
+  - help e commenti del runner: `scripts/test_runner/_cli.py:437`, `:482`, `:866`; `_coverage.py:151-165`;
+    `_consolidate.py:204`, `:259`; la docstring di `_common.py:120` nomina `_consolidate._run_playwright_batch`, che oggi
+    è `run_playwright_group`;
+  - `frontend/vitest.config.ts:47` cita uno script che non esiste; `frontend/scripts/js-coverage-report.js:14`, `:35`;
+  - `mkdocs_src/docs/developer/test-walkthrough/runner_architecture.md:433-453`, `:716`, `:732`;
+  - la pagina devWiki `problems/svelte-template-branches-not-instrumented.md`, contraddetta da `2e104b919`.
+  Da fare: un giro solo sui testi, senza toccare il comportamento.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6).
 
 ## Risk · Rischio (02)
@@ -1078,7 +1087,7 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   - **T13** comincia ad aspettare la risposta di validazione solo dopo il click su Apply.
   - **`tx-delete`**, fuori lista: `.checkbox-btn` in A6 e B3-guard (`:652`, `:774`, `:815`), `.disabled-select-icon`
     (`:811`) e una sonda (`:793`).
-- **V-22 · «+ New event» può modificare un evento esistente dicendo di averlo creato** — da decidere; letto da
+- **V-22 · «+ New event» può modificare un evento esistente dicendo di averlo creato** — dopo la 1.2, deciso dal developer il 13/10; letto da
   test-author di V e verificato nel codice da me, 12/10. Nessun test lo dimostra ancora:
   - `EventCreateMiniModal.svelte:133-145` manda un upsert senza id (`upsert_events_bulk`);
   - il backend applica un upsert senza id all'evento con la stessa data e lo stesso tipo, e lo aggiorna sul posto, anche
