@@ -209,7 +209,8 @@
       "quoteBaseInteger": "Whole numbers only",
       "currencyHelp": "Currency used to store this asset's prices.",
       "currencyHelpLabel": "About the asset currency",
-      "nameRequired": "Enter an asset name to continue."
+      "nameRequired": "Enter an asset name to continue.",
+      "descriptionPlaceholder": "Brief description of the asset…"
     },
     "provider": {
       "assignment": "Provider Assignment",

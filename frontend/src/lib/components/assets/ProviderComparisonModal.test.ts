@@ -37,13 +37,26 @@
  *   - the sector label's localisation. `formatDistKey` runs `$t` for `sector_area`;
  *     the test asserts the stable `data-dist-key`/`data-dist-pct`, never the
  *     rendered sector name, which is a translation.
+ *
+ * **`data-dist-pct` is a handle, not a rendering** (M-18 follow-up, 13/10/2026). Since M-18 the
+ * share shown beside a distribution key is written in the interface locale (`formatPercent`:
+ * `60,00%` in Italian, `60,00 %` in French); the attribute must not follow it. It carries the
+ * machine form — the value × 100, two decimals, a point, no space: `60.00%` — in every language,
+ * which is what these tests and the gallery fixture (`e2e/fixtures/galleryProviderCompare.ts`, a
+ * shot taken in four languages) read. The English cases cannot tell the two forms apart, because
+ * in English they coincide: the cases under «a share in another UI language» run in Italian and
+ * French, the visible share computed with `formatPercent` in that locale, the attribute with the
+ * contract's own formula.
  */
 import {describe, expect, it, vi} from 'vitest';
 import type {Mock} from 'vitest';
 import {get} from 'svelte/store';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {_} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import ProviderComparisonModal, {type DiffItem} from './ProviderComparisonModal.svelte';
 
 /** A plain string-valued difference. `label` is arbitrary — never asserted on. */
@@ -338,6 +351,83 @@ describe('ProviderComparisonModal — value rendering', () => {
                 expect(typeBadges(box), `comparison-${side}-${field} draws a type badge: only the asset_type row does`).toHaveLength(0);
             }
         }
+    });
+});
+
+// =========================================================================
+// A share in another UI language (M-18 follow-up) — see the header
+// =========================================================================
+
+type UiLanguage = 'it' | 'fr';
+type Box = 'current' | 'provider';
+
+/** The machine form the contract writes in `data-dist-pct`, in every language: two decimals, a point, no space. */
+function machinePct(value: number): string {
+    return `${(value * 100).toFixed(2)}%`;
+}
+
+/** The shares these cases pass in, by box: distinct, so the order is the weights'; 87.5% and 12.5% need their second decimal padded. */
+const SHARES: Readonly<Record<Box, Readonly<Record<string, number>>>> = {current: {US: 0.6, EU: 0.4}, provider: {IT: 0.875, DE: 0.125}};
+
+/** What a box must list, heaviest first: each key with the value passed in for it. */
+function sharesOf(box: Box): Array<[string, number]> {
+    return Object.entries(SHARES[box]).sort(([, a], [, b]) => b - a);
+}
+
+/**
+ * One box's entries as drawn: each key, its `data-dist-pct`, and the share it shows. A
+ * `geographic_area` key is drawn verbatim, so the share is the entry's other element.
+ */
+function drawnShares(box: Box): Array<{key: string; attribute: string | null; shown: string}> {
+    return within(screen.getByTestId(`comparison-${box}-geographic_area`))
+        .getAllByTestId('comparison-dist-entry')
+        .map((entry) => {
+            const key = entry.getAttribute('data-dist-key') ?? '';
+            const others = [...entry.children].map((child) => (child.textContent ?? '').trim()).filter((text) => text !== key);
+            return {key, attribute: entry.getAttribute('data-dist-pct'), shown: others.join(' | ')};
+        });
+}
+
+/** Run a case with the UI in `language` — the catalogue and the app language together, as the language selector sets them — and put English back after it. */
+async function inLanguage(language: UiLanguage, body: () => Promise<void>): Promise<void> {
+    await setupI18n(language);
+    currentLanguage.set(language);
+    try {
+        await body();
+    } finally {
+        currentLanguage.set('en');
+        await setupI18n('en');
+    }
+}
+
+describe('ProviderComparisonModal — a share in another UI language (M-18 follow-up)', () => {
+    it.each(['it', 'fr'] as const)('keeps data-dist-pct in the machine form — 60.00%, a point and no space — with the UI in %s', async (language) => {
+        await inLanguage(language, async () => {
+            // Premise: in this language the share on screen is written otherwise, so the attribute can be told from it.
+            expect(formatPercent(0.6, {scale: 100, signed: false, locale: language}), `premise: ${language} writes 60% as the machine form does`).not.toBe(machinePct(0.6));
+            mount([distDiff('geographic_area', SHARES.current, SHARES.provider)]);
+            await settled();
+
+            const boxes = ['current', 'provider'] as const;
+            expect(Object.fromEntries(boxes.map((box) => [box, drawnShares(box).map(({key, attribute}) => [key, attribute])])), `data-dist-pct follows the UI language (${language}); it is a handle, and reads the machine form in every language`).toEqual(
+                Object.fromEntries(boxes.map((box) => [box, sharesOf(box).map(([key, value]) => [key, machinePct(value)])])),
+            );
+        });
+    });
+
+    it.each(['it', 'fr'] as const)('shows each share as the interface writes it in %s, through formatPercent (guard)', async (language) => {
+        await inLanguage(language, async () => {
+            // jsdom's browser is en-US, which lends Italian or French no region: the interface locale is the bare language.
+            expect(uiLocale(), 'premise: the interface locale is not the language the UI was set to').toBe(language);
+            expect(formatPercent(0.6, {scale: 100, signed: false, locale: language}), `premise: ${language} writes 60% as the machine form does`).not.toBe(machinePct(0.6));
+            mount([distDiff('geographic_area', SHARES.current, SHARES.provider)]);
+            await settled();
+
+            const boxes = ['current', 'provider'] as const;
+            expect(Object.fromEntries(boxes.map((box) => [box, drawnShares(box).map(({key, shown}) => [key, shown])])), `a share on screen is not written as formatPercent writes it in ${language}`).toEqual(
+                Object.fromEntries(boxes.map((box) => [box, sharesOf(box).map(([key, value]) => [key, formatPercent(value, {scale: 100, signed: false, locale: language})])])),
+            );
+        });
     });
 });
 

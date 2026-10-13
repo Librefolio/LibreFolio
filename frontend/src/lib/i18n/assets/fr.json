@@ -209,7 +209,8 @@
       "quoteBaseInteger": "Nombres entiers uniquement",
       "currencyHelp": "Devise utilisée pour enregistrer les prix de cet actif.",
       "currencyHelpLabel": "À propos de la devise de l’actif",
-      "nameRequired": "Saisissez le nom de l'actif pour continuer."
+      "nameRequired": "Saisissez le nom de l'actif pour continuer.",
+      "descriptionPlaceholder": "Brève description de l'actif…"
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
