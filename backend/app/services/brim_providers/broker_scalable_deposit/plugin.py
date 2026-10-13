@@ -1,7 +1,7 @@
 """
 Scalable Capital overnight account import plugin for BRIM.
 
-The overnight account (*conto deposito*, Tagesgeld) has no export in Scalable's app: the
+The overnight account (*conto deposito*) has no export in Scalable's app: the
 LibreFolio exporter (``Librefolio/librefolio-exporter``) writes it as its own file, with
 the 14 columns of Scalable's broker CSV and ``lf_*`` columns (account, account index,
 transaction id, exact type, reversal).
@@ -36,7 +36,7 @@ class ScalableDepositProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return "Import the Scalable Capital overnight account (Tagesgeld) from the LibreFolio exporter's file: interest with the tax withheld, deposits, withdrawals and transfers to the broker account."
+        return "Import the Scalable Capital overnight account from the LibreFolio exporter's file: interest with the tax withheld, deposits, withdrawals and transfers to the broker account."
 
     @property
     def supported_extensions(self) -> List[str]:

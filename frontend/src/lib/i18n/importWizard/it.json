@@ -194,7 +194,6 @@
       "ca_succession_transfer_in": "Sono stati identificati dei titoli trasferiti da un altro dossier ({n} righe).\nSono stati registrati come transazioni di tipo «Rettifica» perché non hanno un movimento di cassa associato: si suppone quindi che fossero già tuoi presso un altro broker.\nIn caso affermativo, e se quel broker è tracciato su LibreFolio, importando l'altra metà della transazione il sistema proporrà di collegare le due e di trasformarle in un «Trasferimento titoli».\nDi seguito le righe in dettaglio:",
       "corporate_action": "Manca il costo unitario ereditato (PMC): inserisci il costo di una singola unità, non il totale, per importare questa riga.",
       "scalable_unreadable_rows": "{count, plural, one {# riga non è stata letta e non è stata importata} other {# righe non sono state lette e non sono state importate}}: manca la data, l’importo, la valuta, la quantità o il titolo.",
-      "scalable_fee_in_amount": "{count, plural, one {# operazione ha} other {# operazioni hanno}} la commissione dentro l’importo, come la scriveva l’esportatore LibreFolio 1.0.0: l’importo resta quello del file, senza una commissione separata. Esporta di nuovo con l’esportatore 1.0.1 o successivo per vedere le commissioni a parte.",
       "scalable_fees_unknown": "{count, plural, one {# riga è arrivata} other {# righe sono arrivate}} senza i dettagli di commissioni e imposte: l’importo è quello che mostra Scalable, senza commissioni o imposte separate. Esporta di nuovo con l’opzione che include commissioni e imposte per averle.",
       "scalable_open_partial": "{count, plural, one {# ordine è eseguito in parte e ancora aperto: non è ancora importato e arriverà eseguito con un export successivo.} other {# ordini sono eseguiti in parte e ancora aperti: non sono ancora importati e arriveranno eseguiti con un export successivo.}}",
       "scalable_reversal": "{count, plural, one {# riga storna un movimento già registrato e non è stata importata.} other {# righe stornano movimenti già registrati e non sono state importate.}} Controlla i movimenti stornati e correggili a mano.",
@@ -509,7 +508,6 @@
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "In queste righe manca, o non si legge, una data, un importo, una valuta, le quote o il titolo.",
-      "scalable_fee_in_amount": "Qui la colonna amount è quote × prezzo, con commissione e imposta già sommate (o sottratte, per una vendita).",
       "scalable_fees_unknown": "Le colonne fee e tax sono vuote in queste righe: valori sconosciuti, non zero.",
       "scalable_open_partial": "La colonna shares è quanto eseguito finora; lf_ordered_shares è quanto ordinato.",
       "scalable_reversal": "Queste righe sono storni: la colonna lf_is_cancellation è true.",

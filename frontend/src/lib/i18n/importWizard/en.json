@@ -194,7 +194,6 @@
       "ca_succession_transfer_in": "Securities transferred in from another custody account were detected ({n} rows).\nThey were recorded as «Adjustment» transactions because they have no matching cash movement: the assumption is that you already owned them at a different broker.\nIf that is the case, and that broker is tracked in LibreFolio, then when you import the other half of the transaction the system will offer to link the two and turn them into a «Securities transfer».\nThe rows in detail:",
       "corporate_action": "Missing inherited per-unit cost (WAC): enter the cost of a single unit, not the total, to import this row.",
       "scalable_unreadable_rows": "{count, plural, one {# row could not be read and was not imported} other {# rows could not be read and were not imported}}: a date, an amount, a currency, the shares or the security is missing.",
-      "scalable_fee_in_amount": "{count, plural, one {# trade carries} other {# trades carry}} the fee inside the amount, as LibreFolio exporter 1.0.0 wrote it: the amount is kept as in the file, without a separate fee. Export again with exporter 1.0.1 or later to see the fees apart.",
       "scalable_fees_unknown": "{count, plural, one {# row came} other {# rows came}} without the fee and tax details: the amount is the one Scalable shows, without separate fees or taxes. Export again with the option to include fees and taxes to get them.",
       "scalable_open_partial": "{count, plural, one {# order is filled in part and still open: it is not imported yet and will arrive executed with a later export.} other {# orders are filled in part and still open: they are not imported yet and will arrive executed with a later export.}}",
       "scalable_reversal": "{count, plural, one {# row reverses a transaction already booked and was not imported.} other {# rows reverse transactions already booked and were not imported.}} Check the reversed transactions and correct them by hand.",
@@ -509,7 +508,6 @@
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "On these rows a date, an amount, a currency, the shares or the security is missing or cannot be read.",
-      "scalable_fee_in_amount": "Here the amount column is shares × price with the fee and the tax already added (or taken away, for a sale).",
       "scalable_fees_unknown": "The fee and tax columns are empty on these rows: unknown, not zero.",
       "scalable_open_partial": "The shares column is what was executed so far; lf_ordered_shares is what was ordered.",
       "scalable_reversal": "These rows are reversals: their lf_is_cancellation column is true.",

@@ -8,7 +8,7 @@ Reads the two exports of the broker account, told apart by their header:
   the same 14 columns, then ``lf_*`` columns with the transaction id, the exact type and
   the parts of the fee.
 
-The overnight account (*conto deposito*, Tagesgeld) has its own plugin,
+The overnight account (*conto deposito*) has its own plugin,
 ``broker_scalable_deposit``, and its own broker in LibreFolio: each plugin refuses the
 other account's file and names the plugin that reads it. The shared reader, with the
 mapping rules, is ``_scalable.py``.
