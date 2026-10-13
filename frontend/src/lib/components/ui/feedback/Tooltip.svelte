@@ -52,10 +52,12 @@
         /** Delay before a plain-hover open (T2). Click/tap/keyboard always open
          *  instantly. Pass 0 to restore the pre-T2 instant hover. */
         showDelayMs?: number;
+        /** `data-testid` on the trigger wrapper, for tests that need to address this tooltip. */
+        testId?: string;
         children?: Snippet;
     }
 
-    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, children}: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, testId = '', children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement: HTMLDivElement | undefined = $state(undefined);
@@ -386,6 +388,7 @@
     <div
         bind:this={triggerElement}
         class="tooltip-wrapper {wrapperClass}"
+        data-testid={testId || undefined}
         onclick={(e) => {
             if (!isTouchInteraction) toggle(e);
         }}
@@ -402,6 +405,7 @@
     <div
         bind:this={triggerElement}
         class="tooltip-wrapper {wrapperClass}"
+        data-testid={testId || undefined}
         onclick={(e) => {
             if (!isTouchInteraction) toggle(e);
         }}
