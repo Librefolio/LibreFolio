@@ -254,7 +254,7 @@ def front_portfolio_risk_levels_component(verbose: bool = False, ui: bool = Fals
     """Run the four-level risk UI component tests (Vitest + jsdom mount)."""
     print(f"\n{Colors.BLUE}Running: Risk levels component Vitest tests{Colors.NC}")
     result = subprocess.run(
-        ["npx", "vitest", "run", "src/lib/components/risk/levels/l4/L4Replay.test.ts", "src/lib/components/risk/levels/RiskPartialNotice.test.ts", "src/lib/components/risk/levels/RiskLevelSection.test.ts", "src/lib/components/risk/levels/L2Diversification.test.ts", "src/lib/components/risk/BenchmarkSelect.test.ts", "src/lib/components/risk/levels/L3RiskAdjusted.test.ts", "src/lib/components/risk/levels/L4WhatIf.test.ts", "src/lib/components/risk/levels/l4/TornadoChart.test.ts"],
+        ["npx", "vitest", "run", "src/lib/components/risk/levels/l4/L4Replay.test.ts", "src/lib/components/risk/levels/l4/L4Shock.test.ts", "src/lib/components/risk/levels/RiskPartialNotice.test.ts", "src/lib/components/risk/levels/RiskLevelSection.test.ts", "src/lib/components/risk/levels/L2Diversification.test.ts", "src/lib/components/risk/BenchmarkSelect.test.ts", "src/lib/components/risk/levels/L3RiskAdjusted.test.ts", "src/lib/components/risk/levels/L4WhatIf.test.ts", "src/lib/components/risk/levels/l4/TornadoChart.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
     )
