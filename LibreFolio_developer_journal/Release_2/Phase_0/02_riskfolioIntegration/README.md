@@ -72,7 +72,11 @@ Promessi da un piano o da una decisione, mai fatti, e senza una decisione che li
 
 ### Difetti noti
 
-- **L4, la tabella dello shock** (da A). Il developer non l'ha più rivista dopo la correzione del peso (07/10: «via con
+- ✅ **L4, la tabella dello shock** (da A) — **risolto nella 1.2 da T, lotto T-SHK del 13/10**, su decisione del
+  coordinatore. Le righe e l'editor del dettaglio scrivono il nome del bucket (`components/risk/stressBucketLabel.ts`,
+  la stessa resa del pannello legacy). La prima colonna porta il nome della dimensione. Un bucket a peso 0 non è una
+  riga. L'API non cambia. Dettagli: [piano della 43](../43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezione «T-SHK». Com'era: il developer non l'ha più rivista dopo la correzione del peso (07/10: «via con
   i test»), e nessuno ha deciso. I file: `levels/l4/L4Shock.svelte`, di A; `levels/l4/TornadoChart.svelte` e
   `levels/l4/scenarioHelpers.ts`, di Risk.
   - Le righe mostrano gli id grezzi dei bucket (`CROWDFUND_REAL_ESTATE`, `ETF_MONETARY`): `rowLabel`, in

@@ -220,13 +220,19 @@
     // Helpers
     // =========================================================================
 
-    function formatDistribution(dist: Record<string, number> | null | undefined): Array<{key: string; pct: string}> {
+    /**
+     * Each entry twice: `pct` as the reader sees it, in the interface language, and `hook`, the
+     * `data-dist-pct` that tests and the gallery read — `60.00%` in every language, so a check
+     * written once holds in all four.
+     */
+    function formatDistribution(dist: Record<string, number> | null | undefined): Array<{key: string; pct: string; hook: string}> {
         if (!dist) return [];
         return Object.entries(dist)
             .sort(([, a], [, b]) => (b as number) - (a as number))
             .map(([key, val]) => ({
                 key,
                 pct: formatPercent(val as number, {scale: 100, signed: false}),
+                hook: `${((val as number) * 100).toFixed(2)}%`,
             }));
     }
 
@@ -322,7 +328,7 @@
                                 {#if item.type === 'distribution'}
                                     <div class="text-xs space-y-0.5">
                                         {#each formatDistribution(item.currentValue?.distribution ?? item.currentValue) as entry}
-                                            <div class="flex justify-between" data-testid="comparison-dist-entry" data-dist-key={entry.key} data-dist-pct={entry.pct}>
+                                            <div class="flex justify-between" data-testid="comparison-dist-entry" data-dist-key={entry.key} data-dist-pct={entry.hook}>
                                                 <span class="text-gray-600 dark:text-gray-400">{formatDistKey(entry.key, item.field)}</span>
                                                 <span class="font-mono text-gray-700 dark:text-gray-300">{entry.pct}</span>
                                             </div>
@@ -348,7 +354,7 @@
                                 {#if item.type === 'distribution'}
                                     <div class="text-xs space-y-0.5">
                                         {#each formatDistribution(item.providerValue?.distribution ?? item.providerValue) as entry}
-                                            <div class="flex justify-between" data-testid="comparison-dist-entry" data-dist-key={entry.key} data-dist-pct={entry.pct}>
+                                            <div class="flex justify-between" data-testid="comparison-dist-entry" data-dist-key={entry.key} data-dist-pct={entry.hook}>
                                                 <span class="text-gray-600 dark:text-gray-400">{formatDistKey(entry.key, item.field)}</span>
                                                 <span class="font-mono text-libre-green dark:text-green-400">{entry.pct}</span>
                                             </div>

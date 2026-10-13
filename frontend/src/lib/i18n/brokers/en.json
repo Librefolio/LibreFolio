@@ -12,7 +12,7 @@
     "portalUrl": "Portal URL",
     "portalUrlPlaceholder": "https://broker-portal.com",
     "iconUrl": "Custom Icon URL",
-    "iconUrlHint": "If empty, will try to use favicon from portal URL",
+    "iconUrlHint": "If empty, the default import plugin's icon is used, then the portal's favicon. A generic plugin's icon, such as Generic CSV's, comes last.",
     "defaultImportPlugin": "Default Import Plugin",
     "defaultImportPluginHint": "Pre-select this parser when importing transactions",
     "selectPlugin": "Select a plugin...",

@@ -69,7 +69,10 @@ vi.mock('$lib/stores/app/toastStore.svelte', () => ({
 vi.mock('$lib/stores/reference/assetStore', () => ({mergeAssets: vi.fn(), invalidateAfterMutation: vi.fn()}));
 
 import AssetModal from './AssetModal.svelte';
+import {get} from 'svelte/store';
 import {zodiosApi} from '$lib/api';
+import {_} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 
 // --- Helpers ------------------------------------------------------------
@@ -772,5 +775,44 @@ describe('AssetModal — cancel & discard', () => {
         expect(onclose).not.toHaveBeenCalled();
         // Form still there.
         expect(screen.queryByTestId('asset-modal-form')).not.toBeNull();
+    });
+});
+
+// =========================================================================
+// The description's placeholder is a catalogue sentence (13/10/2026). It was written in English in
+// the markup, so an Italian or French form showed an English hint. The expected sentence is read
+// from the loaded catalogue (`get(_)`), in the language the UI is in — never written here — and the
+// harness half proves it differs from the English one, else the language could not be told.
+describe('AssetModal — the description placeholder speaks the UI language', () => {
+    const PLACEHOLDER_KEY = 'assets.modal.descriptionPlaceholder';
+    const description = () => screen.getByTestId('asset-modal-description');
+
+    it('reads the catalogue sentence with the UI in English (guard)', async () => {
+        // beforeEach put the UI in English.
+        const sentence = get(_)(PLACEHOLDER_KEY);
+        expect(sentence, `${PLACEHOLDER_KEY} does not resolve: the catalogue is not loaded, or the key is gone`).not.toBe(PLACEHOLDER_KEY);
+        render(AssetModal, {open: true, oncreated: vi.fn()});
+        await waitForForm();
+
+        expect(description(), `the description's placeholder is not ${PLACEHOLDER_KEY} in English`).toHaveAttribute('placeholder', sentence);
+    });
+
+    it.each(['it', 'fr'] as const)('reads the catalogue sentence with the UI in %s, not the English one', async (language) => {
+        // beforeEach put the UI in English: the sentence the form must no longer show in another language.
+        const english = get(_)(PLACEHOLDER_KEY);
+        await setupI18n(language);
+        currentLanguage.set(language);
+        try {
+            const sentence = get(_)(PLACEHOLDER_KEY);
+            expect(sentence, `${PLACEHOLDER_KEY} does not resolve in ${language}: the catalogue is not loaded, or the key is gone`).not.toBe(PLACEHOLDER_KEY);
+            expect(sentence, `premise: ${PLACEHOLDER_KEY} reads alike in English and ${language}, so the placeholder's language could not be told`).not.toBe(english);
+            render(AssetModal, {open: true, oncreated: vi.fn()});
+            await waitForForm();
+
+            expect(description(), `the description's placeholder is not ${PLACEHOLDER_KEY} in ${language}: it is written in the markup`).toHaveAttribute('placeholder', sentence);
+        } finally {
+            currentLanguage.set('en');
+            await setupI18n('en');
+        }
     });
 });
