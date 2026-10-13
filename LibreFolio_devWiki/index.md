@@ -90,6 +90,7 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/changelog-entry-rules]] | **T and I, the 1.2 review.** A 🐛 fixes a defect of the last release, a ✨ is new since it, «Present since» names the birth release, UI names from the English catalogue, an upgrade break also in ⚠️; 227 lines checked, rewritten in `60f734e08` | 2026-10-13 | changelog, release |
 | [[decisions/clipboard-through-one-helper-with-a-gate]] | **I, M-20 and C-63 (train 72).** Every copy goes through `writeTextToClipboard()`, with a fallback that works on plain HTTP; a gate forbids other transports, AI Export's typed writer excepted (`65d20910e`) | 2026-10-12 | frontend, clipboard, gate |
 | [[decisions/security-details-close-after-30-seconds]] | **I, plan 48 (train 72).** The connection-security details close after 30 s; the pointer on the indicator or the focus inside the details holds the count — the coordinator's choice (b) (`5e9eff52d`) | 2026-10-12 | frontend, connection-security, ux |
 | [[decisions/web-link-finder-ddgs]] | **Folder 04.** The web link finder uses `ddgs` instead of a DuckDuckGo HTML scraper whose 202 «anomaly» pages were cached as empty results; SearXNG dropped (`ae417b9ab`) | 2026-07-28 | backend, search, ddgs |
@@ -298,6 +299,8 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/schwab-favicon-blocked-by-orb]] | **M, gallery (2026-10-13).** www.schwab.com answers headless Chromium with a bot check; the favicon is blocked (`ERR_BLOCKED_BY_ORB`), 4 gallery reds; cure U-B3 (a bundled icon), question 16 | open | broker-icon, third-party, gallery |
+| [[problems/portfolio-wac-endpoint-answered-anyone]] | **Security, found by the 1.2 CHANGELOG review.** `POST /portfolio/wac` answered without a session for any broker; closed in `0088748a8` (2026-09-18) without a line; now in 🔒 | resolved | security, api |
 | [[problems/hidden-pair-half-survived-row-removal]] | **V-29, train 82.** Removing a new pair from the bulk editor left its hidden partner: a false «Discard changes?» since 1.1.0; both halves removed (`e6019f349`) | resolved | frontend, bulk-editor, pairs |
 | [[problems/jscoverage-teardown-spends-the-test-budget]] | **R, full run.** 15 reds: the JS coverage collected at teardown spends the test's 30 s under load; the fixture has no budget of its own. V's next lot | open | e2e, coverage, timeout |
 | [[problems/login-returns-before-the-app-has-started]] | **R, full run; V-27.** 9 reds: `login()` returns before the app has started, and the next 3–5 s wait runs out under load. V's next lot | open | e2e, auth, waits |
@@ -630,6 +633,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-13 | **Train 83 — the 1.2 CHANGELOG reviewed; M's full gallery.** The rules of a changelog line; a security fix that shipped without one; Schwab's favicon blocked; the jsCoverage page corrected | [[decisions/changelog-entry-rules]] *(3 pages — 1 decision, 2 problems; see log)* |
 | 2026-10-13 | **Train 82 — V's §12.10.** V-29 (a product defect since 1.1.0) fixed; V-25 cured with an owned-pair fixture; V-21 in part; V-26; V-27 open | [[problems/hidden-pair-half-survived-row-removal]] *(1 page — 1 problem)* |
 | 2026-10-13 | **Train 81 and R's full run.** I's lot 50 (C-58); R's report: coverage, the triage of 29 reds, two open budgets, C-67 to C-69 | [[sources/r-full-run-coverage-2026-10-12]] *(4 pages — 1 source, 3 problems; see log)* |
 | 2026-10-13 | **Train 80 — U-5 and plan 45 closed; M's batch 34.** Plan 45's four findings; the dirty version of the release shots fixed in the code | [[problems/shared-server-rebuilt-the-frontend-past-its-startup-timeout]] *(2 pages — 2 problems; see log)* |
