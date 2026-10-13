@@ -1473,7 +1473,7 @@ answers to its two choices:
 >   - the structure check: only the `:263` examples. `:295` has the English's two bold labels again.
 > - **`git diff --check`:** clean. **Ports:** 6158, 6168 and 6042 free.
 
-### 28. ⏳ Batch 37: M-29 done, M-28 prepared — on `57773ab1a` (train 86: batch 36 in the target), 2026-10-13
+### 28. ✅ Batch 37: M-29, then M-28 — on `57773ab1a` (train 86), then `50886d1ca` (train 88: T's batch), 2026-10-13
 
 The coordinator, while the final gallery waits for V, T and I: M-29 now; M-28 in two steps. First the list, without
 writing; then, once T's batch (T-ISO, T-FB) is in the target, apply it. T removes `fxDetail.assetFallback` from the same
@@ -1506,7 +1506,7 @@ source and adds keys in `charts/` and `common`.
 > **Gates** (`release-pipeline/scripts/b37_m29_gates.sh`, 05:06–05:07, load 23–36): translate dry-run empty (the page
 > is not translated); strict build 0; `check-links` 95; `git diff --check` clean; ports 6158, 6168 and 6042 free.
 
-**28.2 ⏳ M-28 prepared: Spanish «tasa(s)» for an exchange rate → «tipo(s) de cambio»**
+**28.2 ✅ M-28: Spanish «tasa(s)» for an exchange rate → «tipo(s) de cambio»** (prepared 05:00, applied 05:52 on `50886d1ca`)
 > **Note implementazione**: read-only (`release-pipeline/scripts/b37_tasas_proposal.py check`; the list is in
 > `runs/b37/b37_tasas_proposal.tsv`).
 > - **The scope:** 64 Spanish values say «tasa(s)», 29 of them in the plural. The glossary keeps «tasa» where it is not
@@ -1530,3 +1530,34 @@ source and adds keys in `charts/` and `common`.
 >     the FX page is the CAGR: both right, and they stay.
 > - **Next:** once T's batch is in the target, `b37_tasas_proposal.py apply` writes the 56 values with
 >   `dev.py i18n update`. Then the i18n check and gate, and a checkpoint. The CHANGELOG needs no line.
+>
+> **Applied** (coordinator's go once T's batch was in the target, train 88), 05:52–05:55:
+> - **Re-check first:** all 56 keys still exist, with the same values as at 05:00. T's changes to `fx/` and `charts/`
+>   (`fxDetail.assetFallback` removed, new keys) touch none of them, and no new value says «tasa».
+> - **Write:** `b37_tasas_proposal.py apply`, one `dev.py i18n update` per key. Result: 56 of 56 as proposed, one line
+>   each, in 7 sources (`aiExport`, `assets`, `base`, `dataQuality`, `fx`, `pacAllocator`, `transactions`). Only the 8
+>   kept values still say «tasa».
+> - **i18n gates:** `dev.py i18n check` strict, 4363 keys; `utils gate-i18n-catalog` 176 passed; Prettier clean on the
+>   7 sources.
+>
+> **Width** (the coordinator: «tipo(s) de cambio» is longer than «tasa(s)»):
+> - **`front-utility toolbar-width-sweep`** (1 worker, lane 6158): the five top toolbars swept 1700 → 320 px in French,
+>   Italian and Spanish.
+>   - The bundle was built at 05:58, after the change, and carries the new labels.
+>   - **First run, 05:56–06:04, load 57–62:** 14 passed, 1 failed, `assetsList › fr`, in 7 s, before any measure.
+>     `setLanguage` (`frontend/e2e/fixtures/auth-helpers.ts:126`) waited 3 s for `<html lang="fr">`. Its screenshot
+>     shows the app already in French, a moment later.
+>   - **Verdict: the clock**, in a shared fixture: the first language switch of the run, cold, under load. Not M-28,
+>     which changes only Spanish. Reported to the coordinator.
+>   - **`--resume`, 06:05–06:10, load 117:** 15 passed.
+> - **Probe at 360 px in Spanish** (`release-pipeline/b37/probe_tasas_es_360.mjs`, read-only: signs in, switches to
+>   Spanish, never syncs). The lane's server ran without the scheduler, then was stopped.
+>   - **The 56 values in the app's font** (Inter, 14 px medium): most grow by about 70 px. The PAC's FX tab label is
+>     the same width (−1.3 px).
+>   - **The FX page's empty state, the one tight place:** `?start=1995-01-02&end=1995-12-29` on AUD-EUR and AUD-GBP.
+>     «Sincronizar tipos de cambio» (148 px) beside «Insertar manualmente» (138 px), two lines each, as the unchanged
+>     neighbour already was. 0 px past the card, no page overflow.
+>   - **The dashboard:** no page overflow.
+>   - **Elsewhere:** the PAC distribution cell's new text, 240 px, fits its 260 px column. The other long values are
+>     tooltips, toasts, list items and help text, which wrap.
+>   - **No short form («Tipos») was needed.**
