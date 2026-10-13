@@ -39,10 +39,18 @@ The coordinator resumed with train 71b, whose merge step retries up to 5 times w
 Train 71 then integrated (`c57acf510`, gates green). The retry lives in the coordinator's train script, outside the
 repository: nothing in the code changed.
 
+*Update (2026-10-13, `6e1a2ef3e`)*: the rule is now in the repository, in the coordinator agent's section «When
+`git merge` dies with «stash failed»». The developer decided that the coordinator **asks him first**, because he may be
+working in that checkout — an IDE commit, a refresh, a Git command of his own. A retry without asking happens only
+when he has said he is away and has delegated the merges, as in an overnight train; it is then recorded in the
+journal and reported when he returns. The section's seven steps go from classifying the stop without writing anything
+to verifying the merge afterwards; they live there and are not repeated here.
+
 ## Prevention
 
-- **A «stash failed» that leaves no `MERGE_HEAD` is a race for the index lock, not a conflict**: retry. There is
-  nothing to `--abort` or reset, and the files are as they were.
+- **A «stash failed» that leaves no `MERGE_HEAD` is a race for the index lock, not a conflict.** There is nothing to
+  `--abort` or reset, and the files are as they were. Ask the developer before retrying; retry alone only when he is
+  away and has delegated the merges — the procedure is the coordinator agent's section linked below.
 - Tell it from a real stop: a conflict leaves `MERGE_HEAD` and conflict markers; this leaves neither.
 - A merge run where no IDE or watcher reads the index (a clean clone, as here) avoids the race altogether. The other
   train-time obstacle on a shared checkout is a dirty file — [[problems/fast-forward-blocked-by-a-dirty-file]].
@@ -51,6 +59,6 @@ repository: nothing in the code changed.
 
 | Role | Path |
 |------|------|
-| The coordinator's merge procedure (the retry is not in it) | `.github/agents/release-coordinator.agent.md` |
+| The procedure, section «When `git merge` dies with «stash failed»» (`6e1a2ef3e`) | `.github/agents/release-coordinator.agent.md` |
 | Git 2.53.0: `save_state()` and its call | [builtin/merge.c](https://github.com/git/git/blob/v2.53.0/builtin/merge.c#L341-L366), [l. 1784](https://github.com/git/git/blob/v2.53.0/builtin/merge.c#L1784) |
 | Git 2.53.0: `git stash create` writes the index | [builtin/stash.c](https://github.com/git/git/blob/v2.53.0/builtin/stash.c#L1429-L1450) |
