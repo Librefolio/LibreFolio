@@ -2989,3 +2989,116 @@ una data futura o illeggibile e si esce dal campo; poi Apply. Il pacchetto appli
   > - I loro form sono validi (trasferimenti tra broker diversi, quantità positiva), quindi il minimo non li cambia. Ma
   >   se il pulsante sparisse, salterebbero il clic in silenzio.
   > - Messe nel backlog sotto V-21: da sistemare prima di toccare ⚡ per V-37.
+
+### 12.16 Lotto V-37, il minimo più 1b: implementazione (13/10)
+
+Base `7e4f2c3d1`, cioè il journal di V-37 committato dal coordinatore. Corsia 6175, un comando alla volta.
+
+- **La decisione del developer** (testuale, via coordinatore): «Il minimo ora, più la data se la sonda la conferma; il
+  pre-step completo dopo la 1.2 (Consigliato)». La sonda di 1b ha confermato la data: un BUY si salva in silenzio con la
+  data di prima, ed è così dalla v1.1.0 (`/tmp/libreFolio_v_1b/`). Entrano quindi tutte e due.
+- **Il perimetro**: solo `TransactionFormModal.svelte` e `SingleDatePicker.svelte`; il bulk editor non si tocca. Se la
+  cura esce da lì o supera la giornata: STOP e domanda.
+- **La cura che ho disegnato** (la scrivo io, dopo i rossi):
+  - **`SingleDatePicker`**: una prop facoltativa `onvaliditychange({valid})`.
+    - `valid` è `!typedInvalid`: falso solo quando il campo tiene un testo rifiutato e l'utente ne è uscito. Così non
+      ci sono sfarfallii mentre si digita.
+    - La prop riferisce una volta al montaggio e a ogni cambio. Se il picker sparisce mentre rifiuta, riferisce `true`:
+      un genitore non tiene mai la lamentela di un picker che non c'è più, per esempio dopo un cambio di disposizione.
+  - **`TransactionFormModal`**:
+    - `dateMainValid` e `dateToValid`, azzerati all'apertura come `quantityInputValid`;
+    - `hasLocalErrors = hasSignViolation || dualValidationError || data`. Va dichiarato **prima** dello scheduler, il cui
+      costruttore chiama già `enabled()` (`useValidateScheduler.svelte.ts:88`). Per questo le derivate del segno della
+      cassa e `hasSignViolation` salgono sopra lo scheduler, senza cambiare;
+    - `hasLocalErrors` entra in `isFreshlyValid`, in `scheduler.enabled`, nel cancello di Apply e nella guardia di
+      `commit()`;
+    - «Validate now» con errori locali porta il fuoco sul primo campo sbagliato, nell'ordine dello schermo, e non chiama
+      il server (lo stesso vale per `onsynced`). Il primo campo lo trova un `querySelector` su quello che i controlli
+      pubblicano (`data-invalid` del picker, la quantità invalida) e sui testid della cassa e della gamba «A».
+- **I passi**:
+  1. test-author `v-37`: prima le sonde intorno a ⚡ in `tx-wac-fx` e `tx-wac-mode`, verdi sul codice di oggi; poi i
+     rossi (E2E di 1b, E2E del minimo, Vitest del form e del picker), visti rossi sul codice di oggi;
+  2. la cura, mia;
+  3. i verdi:
+     - i test nuovi;
+     - `transactions-modals`, `tx-fx-completeness`, `tx-wac-fx`, `tx-wac-mode`, `tx-unit` e i Vitest dei componenti;
+     - `front-transaction all` a 4 worker con `--fresh-run`, dopo l'ultima scrittura;
+     - `front check` e prettier;
+  4. la doc: la riga di `user/transactions/form.en.md:29`, via docs-writer, solo EN, senza stamp;
+  5. le righe 🐛 del CHANGELOG proposte al coordinatore, con l'origine verificata (`merge-base --is-ancestor`);
+  6. backlog e checkpoint.
+- ✅ **Passo 1a: le sonde intorno a ⚡** (`v-37`, 13/10).
+  - `tx-wac-fx.spec.ts` W6, W7 e W8 (`:287`, `:320`, `:359`) e `tx-wac-mode.spec.ts` (`:247`) ora asseriscono il
+    pulsante visibile e attivo, cliccano e aspettano come prima.
+  - Nessuna sonda nascondeva un rosso.
+  - Verdi sul codice di oggi, 1 worker: `tx-wac-fx` 9/9, `tx-wac-mode` 5/5.
+- ✅ **Passo 1b: i rossi** (`v-37`, 13/10), sul codice di oggi, 1 worker, SEED OK dopo ogni E2E.
+  - **E2E 1** (`transactions-modals.spec.ts:583`), «a refused typed date blocks the form», due casi: data futura e
+    `2026-13-45`. Rosso a `:605`: «a refused date is on screen: the form must not call itself valid», Expected hidden,
+    Received visible.
+  - **E2E 2** (`:626`), «quantity -1: no valid, no request, focus; a corrected quantity validates once». Rosso a `:644`:
+    «… (validate requests since the edit carried [["1"]])», Received visible.
+  - **Vitest 3** (`TransactionFormModal.test.ts:919`), con timer finti. Rosso a `:972`: «expected [ [ '1' ] ] to deeply
+    equal []».
+  - **Vitest 4** (`SingleDatePicker.test.ts:449`, due test). Rossi a `:469` e `:484`: la callback non viene mai chiamata.
+  - Lo svelte-check del ramo dava l'unico errore atteso: la prop `onvaliditychange` mancante.
+- ✅ **Passo 2: la cura** (mia, 13/10), in `SingleDatePicker.svelte` e `TransactionFormModal.svelte`, preparata su copie in
+  `/tmp/libreFolio_v_37_cure/` e applicata dopo i rossi.
+  > **⚠️ Fuori pista**, due scostamenti dal disegno iniziale:
+  > - **Niente azzeramento di `dateMainValid` e `dateToValid` all'apertura.** Il picker riferisce la sua validità al
+  >   montaggio, a ogni cambio e allo smontaggio, quindi è lui la fonte di verità. Un azzeramento, se il form si
+  >   reinizializza con `openKey` senza smontare il picker, dichiarerebbe valida una data che il campo mostra ancora
+  >   rifiutata.
+  > - **Un `$effect` richiede di nuovo la validazione quando `hasLocalErrors` passa da vero a falso.** L'ha segnalato
+  >   `v-37`: `ExactQuantityInput` chiama `onchange` subito e riferisce la validità in un `$effect`. Così il
+  >   `trigger('change')` della bozza può vedere la quantità ancora invalida, e lo scheduler scarta il cambio e azzera
+  >   il timer idle (`useValidateScheduler.svelte.ts:174-178`). Con questo effetto, in qualunque ordine, parte un solo
+  >   giro.
+  - Il commento d'intestazione di `SingleDatePicker` diceva che il campo «falls back to the current value»: ora dice
+    che il testo rifiutato resta a schermo, mentre `value` tiene la data di prima.
+  - **Verifiche**:
+    - `dev.py front check` dà 0 errori e 0 avvisi;
+    - `front-utility component-unit` è 3145/3145;
+    - i tre Vitest nuovi, per nome, sono 3 verdi (erano 3 rossi).
+- ✅ **Passo 3: i verdi** (`v-37`, 13/10). Tutti i giri sono `--fresh-run`, uno alla volta, dopo l'ultima scrittura di
+  codice e test (13:10:11). SEED OK dopo ciascuno.
+  - Prima dei verdi, due ritocchi solo di test, della stessa classe:
+    - la quinta sonda intorno a ⚡, in `setupMissingFxScenario` (`tx-wac-fx.spec.ts:105`);
+    - il test ⚡ di `tx-wac-mode`, che ora aspetta il giro del clic (`data-validate-runs`) dopo un form fermo. Il
+      primo risultato del costo medio cambia `wacCurrencyHint` e arma un giro automatico in più.
+
+  | giro | workers | esito | durata |
+  |---|---|---|---|
+  | i 3 E2E nuovi | 1 | 3/3 | 2m14s |
+  | `transactions-modals` | 1 | 24/24 | 1m22s |
+  | `tx-fx-completeness` | 1 | 4/4 | 36 s |
+  | `tx-wac-fx` | 1 | 9/9 | 1m25s |
+  | `tx-wac-mode` | 1 | 5/5 | 41 s |
+  | `tx-unit` | — | Vitest 887/887 | 17 s |
+  | **`front-transaction all`** | **4** | **Playwright 369 passati, 0 rossi; Vitest 887/887** | 7m06s |
+
+  - I 32 saltati sono saltati per progetto (`@mobile` su desktop e viceversa), non per questo lavoro.
+  - **Statici**:
+    - `git diff --check` pulito; prettier pulito sui file toccati;
+    - `tsc -p tsconfig.e2e.json` dà solo i 2 errori preesistenti;
+    - `dev.py front check` dà 0 errori e 0 avvisi (dopo la cura);
+    - `front-utility component-unit` è 3145/3145.
+
+    Porta 6175 libera. Log in `/tmp/libreFolio_v_37/green-*`.
+- ✅ **Passo 4: la doc** (`v-37-docs`, docs-writer, 13/10). Una riga, `mkdocs_src/docs/user/transactions/form.en.md:29`
+  («Checks as you go»), +1/−1, solo EN e senza stamp: M la porta nelle altre lingue.
+  - Docs-writer ha corretto il mio brief sul codice:
+    - broker o valuta uguali danno un avviso in alto, non un campo rosso;
+    - ho tolto «una data futura, che una transazione non può avere», perché il server non rifiuta le date future: lo
+      fa solo il form.
+- ✅ **Passo 5: le righe 🐛 del CHANGELOG**, proposte al coordinatore che le scrive. Le origini, verificate con
+  `git merge-base --is-ancestor`:
+  - **la data**: `52b48fd83` (27/08), antenato di `v1.1.0`. Il picker tiene a schermo il testo rifiutato, e il cancello
+    di Apply è identico nella v1.1.0 (`:2107`): «Present since v1.1.0»;
+  - **il «valid»**: `isFreshlyValid` nasce in `8268a44bb` (05/06), antenato di `v1.1.0`. Nella v1.1.0
+    `hasSignViolation = qtySignHint.bad || cashSignResult.bad` bloccava Apply, mentre il giro automatico mandava la
+    quantità corretta da `applySign`: «Present since v1.1.0». `ExactQuantityInput` (`75309672e`, 18/09) è solo della
+    1.2, ma il difetto c'era già.
+- ✅ **Passo 6: il backlog**:
+  - V-37: il minimo e 1b ✅, V-37b aperto dopo la 1.2;
+  - V-21: le sonde intorno a ⚡ ✅, più una riga di residui di `tx-wac-fx` e `tx-wac-mode`.
