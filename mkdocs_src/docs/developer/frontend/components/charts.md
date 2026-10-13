@@ -76,6 +76,34 @@ The two flag sets differ on purpose:
 A resolution switch (daily ↔ weekly/monthly, chosen from the zoom) goes through the partial path
 without animation, after hiding the tooltip.
 
+**Weekly and monthly points.** In the time-axis views (Abs, % and the P&L `line` submode, whose
+daily, weekly and monthly resolutions the code calls the *cascade*), `buildBucketInfos` stands each
+weekly or monthly point on the last day of its bucket that the history holds, the day its
+aggregated value comes from (`aggregateLineSeries` keeps a bucket's last point): the calendar end
+of a whole period, the last day with data of the period still running. The line reaches the latest
+data and the axis ends on that day, never on a Sunday or a month end still to come. On a time axis
+ECharts maps a dataZoom percent linearly to time over the drawn extent, not to a point index; the
+two agree only while the points are evenly spaced, which the running period's point, or a gap in
+the history, breaks. So the cascade reads and writes its window in time: `getLogicalRangeFromChart`
+turns the percents into days from the first point (`cascadeDayOffsetsOf`) and widens the window to
+the points at or outside its edges (`cascadeIndicesAt`), so a partly visible period is never lost;
+an edge within 0.1 day of a point (`ZOOM_EDGE_SNAP_DAYS`) stands on it, which absorbs float and DST
+error. `buildZoomWindow` writes the percents the same way, in days over the drawn span. The ladder
+(below) keeps index percents on its category axis, each edge rounded to the nearest bucket as
+ECharts snaps it (`ladderIndicesAt`).
+
+**Tooltip dates.** The tooltip headers of `GrowthChart`, `AllocationHistoryChart` and the broker
+lots' `LotComparisonChart` write every day in the interface locale, never as a raw ISO date:
+through `formatDay` (`lib/utils/core/formatAxisDate.ts`: *1 Oct 2026* in `en-GB`, *Oct 1, 2026* in
+`en-US`) in the first two, through the chart's own `formatLongDate`, same format, in the third. On
+their time axes, `chart.tooltip.valueAt` under a weekly or monthly point prints the point's own
+day, and a weekly header (`chart.tooltip.weekRange`) runs from the bucket's first day up to it
+(`bucketSpanUpTo`, `priceChartHelpers.ts`, as in `PriceChartFull` and `CandlestickChart`): a whole
+week or month ends on its bucket end, the one still running, or the one the series stops inside,
+on its last day with data, never on a day still to come. `LotComparisonChart` reads that day from
+the hovered point (`tooltipBucketInfo`, `lotComparisonChartHelpers.ts`). The ladder header names
+the whole calendar period instead (below).
+
 **Privacy redraw.** The render runs inside `tick().then(…)`, where reading a store registers no
 dependency, so the render `$effect` reads `shouldMaskAmount()` itself: toggling privacy re-runs it,
 and the changed `masked` value forces the full rebuild. The y-axis ticks mask the digits and keep
@@ -146,9 +174,10 @@ number of series in a fixed order, which the partial update relies on across zoo
 - **Edges of the series**: a bucket the series starts inside, or a past bucket it stops inside, is
   `partial` and drawn at half opacity (`PARTIAL_BUCKET_OPACITY`) in both submodes; otherwise the
   bucket that has not ended yet is `current` and drawn whole. The tooltip header prints the rung
-  and the calendar period (`1M - 2026-10-01 → 2026-10-31`), then `chart.tooltip.partialBucket` or
-  `chart.tooltip.currentBucket` (none on a one-day bucket), then `chart.tooltip.valueAt` the last
-  day with data, except in Income, whose bars are sums. A `1D` bucket prints only its date.
+  and the whole calendar period, by design (`1M - 1 Oct 2026 → 31 Oct 2026` in `en-GB`), then
+  `chart.tooltip.partialBucket` or `chart.tooltip.currentBucket` (none on a one-day bucket), then
+  `chart.tooltip.valueAt` the last day with data, except in Income, whose bars are sums. Every day
+  goes through `formatDay`; a `1D` bucket prints only its date.
 - **Candles**: the daily OHLC comes from the backend (see
   [Price Resolver](../../backend/transactions/price_resolver.md#intraday-range-open-high-low)),
   requested through `onRequestPnlCandles` on entry while none is loaded. A bucket takes the first
@@ -317,8 +346,39 @@ Two neighbouring labels never read the same (pinned in `chartCoreHelpers.test.ts
   `rotate: 0` and carries the formatter. A category axis also gets `alignMaxLabel: 'right'`: the
   forced last label ends at its tick instead of spilling past the chart's right edge on a phone. A
   time axis does not: ECharts ranks time labels by tick level before hiding overlaps, so a month or
-  year tick next to the edge would win, and the end label, pulled inward, would be the one hidden.
-  The first label needs no alignment: it spills at most into the y-axis labels, inside the chart.
+  year tick next to the edge would win, and the end label, pulled inward, would be the one hidden;
+  its charts make room for the label instead (next bullet). The first label needs no alignment: it
+  spills at most into the y-axis labels, inside the chart.
+- **Right inset** (time axis, compact or wide): the axis ends on the last day of the data or of the
+  zoom, and ECharts centres that day's label on its tick, so half of it overhangs the plot's right
+  edge. `grid.containLabel: true` reserves the labels' height, never that overhang, so on a phone
+  the last label would be cut. `timeAxisGridRight()` takes the chart's `width`, the axis `values`,
+  the `locale`, the grid's `base` right edge and a `measure` function, and returns the grid's
+  `right`: half the widest label the axis can draw, rounded up, plus 2 px, when that is wider than
+  `base` (px, or a percentage of `width` as ECharts reads it); otherwise `base` itself, so a desktop
+  keeps its percentage and follows its own width. `containLabel: true` stays. ECharts 6's
+  `outerBoundsMode: 'same'` with `outerBoundsContain: 'axisLabel'` was rejected: it estimates the
+  label room once, before `hideOverlap` picks the ticks that survive, so on a narrower plot it cut
+  labels that were whole and lost first labels (and `containLabel: true` ignores the `outerBounds*`
+  keys). The price is a narrower plot on a phone (about 13–15 px in the dashboard charts, 4–5 px in
+  `LotComparisonChart`), so sometimes one label fewer; `hideOverlap` may still hide the end label
+  when the previous tick sits too close: a missing label, never a cut one.
+- **Inset candidates** (`timeAxisLabelCandidates`, cached for up to 16 locale-and-range keys): the
+  widest label is taken over every text `buildTimeAxisFormatter` (below) can write, compact or wide,
+  on an axis whose data runs from the first to the last of `values`. These are the two end days in
+  the endpoint format (day and month, plus the two-digit year when the range crosses a calendar
+  year), and the label of each local midnight from the day before the first to the day after the
+  last, since zoom can put the axis edge on any day of the data and ECharts widens a one-day extent
+  by a day on each side: *15 Jul* on a day other than the 1st, *2026* on 1 January, both *Aug* and
+  *1 Aug* on another 1st (in `en-GB`). Past 366 days, every day of a leap year (2024) stands in for
+  the calendar, except 1 January, which adds the year of each real one in range. Measured before
+  the render, the inset is conservative: equal to, or a few px wider than, what ECharts draws.
+  `axisLabelMeasure(chart, fontSize)` gives the `measure`: the width `echarts.format.getTextRect()`
+  returns in the font of `axisLabelFont(chart, fontSize)`, the chart model's `textStyle.fontFamily`
+  or, before a first option, ECharts 6's own default (`sans-serif`, `Microsoft YaHei` on Windows).
+  It is lazy on purpose: the font is resolved at the first measure and `echarts.format` read only
+  inside the call, so a test that mocks ECharts without `format` still mounts a chart that measures
+  nothing.
 - **Wide labels**: no `axisLabel` overrides, only the `formatter`, which the consumers apply in
   both modes: ECharts' own labels are English on a time axis and raw ISO dates on a category one.
 - **Time axis** (`buildTimeAxisFormatter`): a label names the tick ECharts places, not the length
@@ -343,6 +403,17 @@ views (the Candles and Income ladders plan their own labels, above), `Allocation
 the broker lots charts (`LotWacPriceChart`, `LotComparisonChart` and `LotGanttChart`, which pass
 their own padding). When a chart goes back from compact to wide, its consumer rebuilds the whole
 option, so compact-only keys such as `alignMaxLabel` do not linger.
+
+Three of the time-axis charts take the right inset. `GrowthChart` (`base: '4%'`, 14 px labels)
+computes it in its time-axis views only (the ladders keep `'4%'`: their plan keeps the outermost
+labels inside the canvas, above), in the full option, in the partial update (new dates are new
+labels, so the inset travels with the axis they are drawn on) and on resize, since `'4%'` stands
+for other pixels at another width; the resize applies it at once, not lazily, because
+`syncPlotGeometry()` reads the grid that call lays out. `AllocationHistoryChart` (`'4%'`, 14 px)
+computes it with every option it builds and on resize (`lazyUpdate`). `LotComparisonChart`
+(`base: 18` px, 12 px labels) computes it on its axis date range (`xAxisRange`, else the series'
+own) only when it builds the option: a px base does not follow the width. `LotWacPriceChart` and
+`LotGanttChart` keep a fixed 18 px (`GRID_RIGHT_PX`).
 
 ## Pie Charts (AllocationPieChart)
 

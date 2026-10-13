@@ -26,7 +26,7 @@ A few rules keep entries quick:
 
 - **Amounts are totals** — type the total paid or received, not the price per share (*Total amount (not per share)*).
 - **Type positive numbers** — the form adds the minus sign where money or units go out: a purchase's payment, a sale's units, a withdrawal, a fee, a tax. Only an **Adjustment** quantity takes a sign: positive adds units, negative removes them.
-- **Checks as you go** — once the required fields are filled, the form checks the entry against your ledger and the other workspace rows, and lists any problem at the top. **⚡ Validate now** checks at once.
+- **Checks as you go** — once the required fields are filled, the form checks the entry against your ledger and the other workspace rows, and lists any problem at the top. **⚡ Validate now** checks at once. The form also spots some mistakes by itself: a date it cannot read, or one in the future, stays on screen in red, and the previous date is not used in its place; a quantity or amount with the wrong sign or format, such as a negative quantity on a purchase, turns red; and a warning at the top flags a transfer with the same broker on both sides, or an exchange with the same currency. Until you fix them, nothing is checked, *valid* does not appear and **Apply** stays disabled; **⚡ Validate now** takes you to the field to fix instead.
 - **Missing broker or asset?** — **Create new** in the broker list, or **New asset** in the asset list, creates it without leaving the form.
 
 ??? info "💰 Cost basis of incoming units — for Adjustments and Asset Transfers"

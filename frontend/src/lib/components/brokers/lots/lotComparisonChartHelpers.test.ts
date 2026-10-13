@@ -9,7 +9,7 @@
  * is module level, so a flag left on by one test would still be on in the
  * next, and would mask its clear-text controls.
  *
- * The value-series block at the end (parseValueSeriesPoint, pnlWithIncome,
+ * The value-series block (parseValueSeriesPoint, pnlWithIncome,
  * comprehensiveValue, aggregateValuePoints, aggregateReturnPoints) pins the B3b
  * contract: a lot's cumulative income can be unknown (`null`: an income pool with
  * no FX rate). It stays unknown through every sum and ratio it enters and is never
@@ -19,11 +19,17 @@
  * `aggregateReturnPoints`. Ratios are chosen to be exact in binary, so `toEqual`
  * never depends on summation order.
  *
+ * The last block (plan 52, C3) pins tooltipBucketInfo, the bucket the lots
+ * tooltip header names, alone and through bucketSpanUpTo, and reads
+ * LotComparisonChart.svelte's source to pin the header's glue.
+ *
  * @vitest-environment node
  */
 
+import {readFileSync} from 'node:fs';
 import {afterEach, beforeEach, describe, it, expect} from 'vitest';
 import {mapDateToBucket} from '$lib/components/charts/timeSeriesAggregation';
+import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {formatAxisNumber} from './lotChartShared';
 import {
@@ -41,6 +47,7 @@ import {
     parseTimeMs,
     tooltipXValue,
     tooltipRawDate,
+    tooltipBucketInfo,
     tooltipTimestamp,
     findPointAtOrBefore,
     chartSeriesPointValue,
@@ -933,5 +940,294 @@ describe('aggregateReturnPoints', () => {
             {date: '2024-01-03', totalReturn: 0.25, openingValue: 100, pnlWithIncome: 25},
             {date: '2024-01-04', totalReturn: 0.5, openingValue: 100, pnlWithIncome: 50},
         ]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Plan 52, C3 — the lots tooltip header names the point's own day
+// ---------------------------------------------------------------------------
+
+/**
+ * At weekly and monthly resolution every lot series point comes from the component's
+ * `toChartSeriesPoints`: `{name: day, value: [day, y]}` on the bucket's last day with data, plus the
+ * bucket meta `bucketStart`, `bucketEnd` (the bucket's theoretical end: the Sunday, the month's last
+ * day), `resolution` and `sourcePointCount`. A header that names `bucketEnd` names, for the period
+ * still running or for a lot that stops inside one, a day without data or still to come.
+ *
+ * The contract of `tooltipBucketInfo(params)`:
+ * - it answers for the FIRST param, in order, whose `data` is a non-null object with
+ *   `bucketStart: string`, `bucketEnd: string` and `resolution` 'daily' | 'weekly' | 'monthly'.
+ *   Every other param is passed over: the internal series (axis-trigger anchor, hover dots, income
+ *   markers) carry no meta, and neither does a `data` that is null, undefined, a primitive or an array;
+ * - it returns exactly `{date, bucketStart, bucketEnd, resolution}`, nothing else `data` carries;
+ * - `date` is the point's own day: `data.value[0]` when it is an ISO day (`YYYY-MM-DD`), else
+ *   `data.name` when it is one, else `bucketEnd`. It is not clamped to the bucket: bucketSpanUpTo does that;
+ * - no params, or none with meta → `null`;
+ * - pure: the params and their `data` are left untouched, and the result is a new object.
+ */
+
+/** A bucket's meta as a coarse series point carries it, so the fixtures cannot invent a key the component does not emit. */
+type BucketMeta = Omit<BucketInfo, 'date'>;
+
+/** One tooltip param, typed from the helper itself because the module's CallbackParam is not exported. */
+type TooltipParam = Parameters<typeof tooltipBucketInfo>[0][number];
+
+/** The ISO week of Monday 11 March 2024, Sunday 17 included. */
+const WEEK_OF_11_MARCH: BucketMeta = {bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'weekly'};
+
+/** The next ISO week, Monday 18 to Sunday 24 March 2024: a second bucket, so two points can be told apart. */
+const WEEK_OF_18_MARCH: BucketMeta = {bucketStart: '2024-03-18', bucketEnd: '2024-03-24', resolution: 'weekly'};
+
+/** March 2024, the 31st included. */
+const MARCH_2024: BucketMeta = {bucketStart: '2024-03-01', bucketEnd: '2024-03-31', resolution: 'monthly'};
+
+/** Wednesday 13 March 2024 as a daily bucket: the component's daily meta spans the point's own day. */
+const DAY_13_MARCH: BucketMeta = {bucketStart: '2024-03-13', bucketEnd: '2024-03-13', resolution: 'daily'};
+
+/** A coarse point with the given name/value fields and the bucket meta, so a case can vary the day fields alone. */
+function bucketPoint(meta: BucketMeta, fields: {name?: unknown; value?: unknown}): Record<string, unknown> {
+    return {...fields, ...meta, sourcePointCount: 3};
+}
+
+/** The point toChartSeriesPoints emits on `day` (named and plotted there), so each case starts from the real shape. */
+function seriesPoint(day: string, meta: BucketMeta): Record<string, unknown> {
+    return bucketPoint(meta, {name: day, value: [day, 1234.5]});
+}
+
+/** A lot series' tooltip param, so the point under test reaches the helper as ECharts hands it over. */
+function lotParam(data: unknown, seriesId = 'return-1'): TooltipParam {
+    return {seriesId, data};
+}
+
+/** The axis-trigger anchor's param on `day`: a bare named point that carries a day but no bucket meta. */
+function anchorParam(day: string): TooltipParam {
+    return {seriesId: 'axis-trigger-anchor', data: {name: day, value: [day, 0]}};
+}
+
+/** A per-lot hover dot's param on `day`: x in epoch ms and a colour, no bucket meta. */
+function hoverDotParam(day: string): TooltipParam {
+    return {seriesId: 'per-lot-hover-dots', data: {value: [Date.parse(`${day}T00:00:00Z`), 1234.5], itemStyle: {color: '#2563eb'}}};
+}
+
+/** An income marker's param on `day`: an ISO x and its income event, no bucket meta. */
+function incomeMarkerParam(day: string): TooltipParam {
+    return {seriesId: 'lot-income-markers', data: {value: [day, 1234.5], incomeEvent: {type: 'DIVIDEND', date: day, broker_id: 1, transaction_id: 41, amount: '12.50', lot_ids: [1]}, itemStyle: {color: '#16a34a', opacity: 0.95}}};
+}
+
+/** The helper, once a barrier has proved the module exports it. */
+function bucketInfoOf(params: Parameters<typeof tooltipBucketInfo>[0]): BucketInfo | null {
+    expect(tooltipBucketInfo, 'barrier: lotComparisonChartHelpers exports tooltipBucketInfo').toBeTypeOf('function');
+    return tooltipBucketInfo(params);
+}
+
+describe('tooltipBucketInfo', () => {
+    // Why: the header must name the day the line draws the point on; only `date` moves, the bucket stays whole for the span.
+    it.each([
+        {name: 'open week, last data on Wed 13', day: '2024-03-13', meta: WEEK_OF_11_MARCH, info: {date: '2024-03-13', bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'weekly'}},
+        {name: 'whole week, point on Sun 17', day: '2024-03-17', meta: WEEK_OF_11_MARCH, info: {date: '2024-03-17', bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'weekly'}},
+        {name: 'a lot that stops on Tue 12, inside its week', day: '2024-03-12', meta: WEEK_OF_11_MARCH, info: {date: '2024-03-12', bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'weekly'}},
+        {name: 'open month, last data on the 13th', day: '2024-03-13', meta: MARCH_2024, info: {date: '2024-03-13', bucketStart: '2024-03-01', bucketEnd: '2024-03-31', resolution: 'monthly'}},
+        {name: 'whole month, point on the 31st', day: '2024-03-31', meta: MARCH_2024, info: {date: '2024-03-31', bucketStart: '2024-03-01', bucketEnd: '2024-03-31', resolution: 'monthly'}},
+        {name: 'a daily point', day: '2024-03-13', meta: DAY_13_MARCH, info: {date: '2024-03-13', bucketStart: '2024-03-13', bucketEnd: '2024-03-13', resolution: 'daily'}},
+    ])('names the point’s own day — $name', ({day, meta, info}) => {
+        expect(bucketInfoOf([lotParam(seriesPoint(day, meta))])).toEqual(info);
+    });
+
+    // Why: the result is a BucketInfo and nothing more; toEqual alone would let a key copied as undefined through.
+    it('returns exactly the four bucket keys, not sourcePointCount nor the point’s name and value', () => {
+        const info = bucketInfoOf([lotParam(seriesPoint('2024-03-13', WEEK_OF_11_MARCH))]);
+        expect(Object.keys(info ?? {}).sort()).toEqual(['bucketEnd', 'bucketStart', 'date', 'resolution']);
+    });
+
+    // Why: the internal series carry no bucket meta, so neither they nor their day may reach the header.
+    it('passes over the internal series and answers for the lot point after them', () => {
+        const params = [anchorParam('2024-03-13'), hoverDotParam('2024-03-13'), incomeMarkerParam('2024-03-13'), lotParam(seriesPoint('2024-03-12', WEEK_OF_11_MARCH))];
+        expect(bucketInfoOf(params)).toEqual({date: '2024-03-12', bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'weekly'});
+    });
+
+    // Why: with several lots under the cursor the header follows the first param ECharts lists, not the latest day.
+    it.each([
+        {name: 'Tue 12 listed before Tue 19', params: () => [lotParam(seriesPoint('2024-03-12', WEEK_OF_11_MARCH), 'return-1'), lotParam(seriesPoint('2024-03-19', WEEK_OF_18_MARCH), 'return-2')], info: {date: '2024-03-12', bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'weekly'}},
+        {name: 'Tue 19 listed before Tue 12', params: () => [lotParam(seriesPoint('2024-03-19', WEEK_OF_18_MARCH), 'return-2'), lotParam(seriesPoint('2024-03-12', WEEK_OF_11_MARCH), 'return-1')], info: {date: '2024-03-19', bucketStart: '2024-03-18', bucketEnd: '2024-03-24', resolution: 'weekly'}},
+    ])('answers for the first lot point in order — $name', ({params, info}) => {
+        expect(bucketInfoOf(params())).toEqual(info);
+    });
+
+    // Why: a point whose plotted x cannot be read still names its own day when its name carries one.
+    it.each([
+        {name: 'value absent', point: () => bucketPoint(WEEK_OF_11_MARCH, {name: '2024-03-12'})},
+        {name: 'value a bare number', point: () => bucketPoint(WEEK_OF_11_MARCH, {name: '2024-03-12', value: 1234.5})},
+        {name: 'value null', point: () => bucketPoint(WEEK_OF_11_MARCH, {name: '2024-03-12', value: null})},
+        {name: 'value an ISO day string, not an array', point: () => bucketPoint(WEEK_OF_11_MARCH, {name: '2024-03-12', value: '2024-03-13'})},
+        {name: 'value[0] in epoch ms', point: () => bucketPoint(WEEK_OF_11_MARCH, {name: '2024-03-12', value: [Date.UTC(2024, 2, 13), 1234.5]})},
+    ])('reads the day from name when value holds no ISO day — $name', ({point}) => {
+        expect(bucketInfoOf([lotParam(point())])).toEqual({date: '2024-03-12', bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'weekly'});
+    });
+
+    // Why: the plotted x is where the line draws the point, so it wins over a name that says otherwise.
+    it.each([
+        {name: 'name absent', point: () => bucketPoint(WEEK_OF_11_MARCH, {value: ['2024-03-12', 1234.5]})},
+        {name: 'name a different ISO day', point: () => bucketPoint(WEEK_OF_11_MARCH, {name: '2024-03-13', value: ['2024-03-12', 1234.5]})},
+    ])('reads the day from value[0], the plotted x — $name', ({point}) => {
+        expect(bucketInfoOf([lotParam(point())])).toEqual({date: '2024-03-12', bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'weekly'});
+    });
+
+    // Why: a point whose day cannot be read keeps the old header, the bucket end, rather than naming no day at all.
+    it.each([
+        {name: 'value[0] in epoch ms, no name', point: () => bucketPoint(WEEK_OF_11_MARCH, {value: [Date.UTC(2024, 2, 13), 1234.5]})},
+        {name: 'name not a day, no value', point: () => bucketPoint(WEEK_OF_11_MARCH, {name: 'Lot A'})},
+        {name: 'value[0] a timestamp, not a bare day, no name', point: () => bucketPoint(WEEK_OF_11_MARCH, {value: ['2024-03-13T00:00:00Z', 1234.5]})},
+    ])('falls back to bucketEnd when no ISO day can be read — $name', ({point}) => {
+        expect(bucketInfoOf([lotParam(point())])).toEqual({date: '2024-03-17', bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'weekly'});
+    });
+
+    // Why: clamping here would turn a day before the bucket into a one-day span on its first day; bucketSpanUpTo keeps that bucket whole.
+    it.each([
+        {name: 'a day after the bucket end', day: '2024-03-18', info: {date: '2024-03-18', bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'weekly'}},
+        {name: 'a day before the bucket start', day: '2024-03-10', info: {date: '2024-03-10', bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'weekly'}},
+    ])('keeps a day outside the bucket as it is, unclamped — $name', ({day, info}) => {
+        expect(bucketInfoOf([lotParam(seriesPoint(day, WEEK_OF_11_MARCH))])).toEqual(info);
+    });
+
+    /** Points whose meta misses one requirement, each built fresh, so the two tables below cannot share a mutated one. */
+    const INCOMPLETE_META = [
+        {name: 'bucketStart missing', data: () => ({name: '2024-03-13', value: ['2024-03-13', 1234.5], bucketEnd: '2024-03-17', resolution: 'weekly', sourcePointCount: 3})},
+        {name: 'bucketEnd a number', data: () => ({name: '2024-03-13', value: ['2024-03-13', 1234.5], bucketStart: '2024-03-11', bucketEnd: Date.UTC(2024, 2, 17), resolution: 'weekly', sourcePointCount: 3})},
+        {name: 'resolution quarterly', data: () => ({name: '2024-03-13', value: ['2024-03-13', 1234.5], bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'quarterly', sourcePointCount: 3})},
+        {name: 'resolution missing', data: () => ({name: '2024-03-13', value: ['2024-03-13', 1234.5], bucketStart: '2024-03-11', bucketEnd: '2024-03-17', sourcePointCount: 3})},
+    ];
+
+    // Why: a param with partial meta is no bucket point; answering for it would build the header out of a hole.
+    it.each(INCOMPLETE_META)('answers null for a lone point with incomplete meta — $name', ({data}) => {
+        expect(bucketInfoOf([lotParam(data())])).toBeNull();
+    });
+
+    // Why: passing over means the scan goes on, so a complete lot point after the incomplete one still names its bucket.
+    it.each(INCOMPLETE_META)('passes over incomplete meta to the next lot point — $name', ({data}) => {
+        expect(bucketInfoOf([lotParam(data()), lotParam(seriesPoint('2024-03-19', WEEK_OF_18_MARCH), 'return-2')])).toEqual({date: '2024-03-19', bucketStart: '2024-03-18', bucketEnd: '2024-03-24', resolution: 'weekly'});
+    });
+
+    // Why: with no bucket point under the cursor the header falls back to the plain day, and only a null answer sends it there.
+    it.each([
+        {name: 'no params', params: (): TooltipParam[] => []},
+        {name: 'data null', params: () => [lotParam(null)]},
+        {name: 'data undefined', params: () => [lotParam(undefined)]},
+        {name: 'data a number', params: () => [lotParam(42)]},
+        {name: 'data a string', params: () => [lotParam('x')]},
+        {name: 'data an array', params: () => [lotParam(['2024-03-13', 5])]},
+        {name: 'a param with no data at all', params: () => [{seriesId: 'return-1', axisValue: Date.UTC(2024, 2, 13)}]},
+        {name: 'only the internal series', params: () => [anchorParam('2024-03-13'), hoverDotParam('2024-03-13'), incomeMarkerParam('2024-03-13')]},
+    ])('answers null when no param carries bucket meta — $name', ({params}) => {
+        expect(bucketInfoOf(params())).toBeNull();
+    });
+
+    // Why: ECharts hands the formatter its own series data items; mutating them on hover would change what the chart draws.
+    it('leaves the params untouched and returns a new object', () => {
+        const point = seriesPoint('2024-03-13', WEEK_OF_11_MARCH);
+        const params = [anchorParam('2024-03-13'), lotParam(point)];
+        const before = structuredClone(params);
+
+        const info = bucketInfoOf(params);
+
+        expect(params, 'tooltipBucketInfo mutated its params').toStrictEqual(before);
+        expect(info).toEqual({date: '2024-03-13', bucketStart: '2024-03-11', bucketEnd: '2024-03-17', resolution: 'weekly'});
+        expect(info, 'tooltipBucketInfo returned the data object itself').not.toBe(point);
+    });
+});
+
+describe('tooltipBucketInfo through bucketSpanUpTo — the dates the lots header names', () => {
+    /*
+     * This is what the header shows: the component spans the bucket as `bucketSpanUpTo(bucket.date, bucket)`,
+     * and the week range and «Value at» end on the span's `bucketEnd` (the month label reads it too). Only the
+     * span's two dates are pinned: for a whole bucket bucketSpanUpTo returns the info it was given, four keys
+     * included, so a whole-object match would pin the wrong thing.
+     */
+
+    /** The two dates the header reads for `params`, so each case states its oracle as the user sees it. */
+    function headerSpanOf(params: Parameters<typeof tooltipBucketInfo>[0]): {bucketStart: string; bucketEnd: string} {
+        const info = bucketInfoOf(params);
+        if (info == null) throw new Error('tooltipBucketInfo found no bucket in the params');
+        const {bucketStart, bucketEnd} = bucketSpanUpTo(info.date, info);
+        return {bucketStart, bucketEnd};
+    }
+
+    // Why: in the period still running, or for a lot that stops inside one, the header must end on the last day with data.
+    it.each([
+        {name: 'open week, last data on Wed 13', day: '2024-03-13', meta: WEEK_OF_11_MARCH, span: {bucketStart: '2024-03-11', bucketEnd: '2024-03-13'}},
+        {name: 'open month, last data on the 13th', day: '2024-03-13', meta: MARCH_2024, span: {bucketStart: '2024-03-01', bucketEnd: '2024-03-13'}},
+        {name: 'a lot that stopped on Tue 12, inside a past week', day: '2024-03-12', meta: WEEK_OF_11_MARCH, span: {bucketStart: '2024-03-11', bucketEnd: '2024-03-12'}},
+    ])('ends the header on the point’s own day — $name', ({day, meta, span}) => {
+        expect(headerSpanOf([lotParam(seriesPoint(day, meta))])).toEqual(span);
+    });
+
+    // Why: a whole bucket, or a point whose day cannot be read, must still span the whole bucket: the fix shortens only the open ones.
+    it.each([
+        {name: 'whole week, point on Sun 17', params: () => [lotParam(seriesPoint('2024-03-17', WEEK_OF_11_MARCH))], span: {bucketStart: '2024-03-11', bucketEnd: '2024-03-17'}},
+        {name: 'whole month, point on the 31st', params: () => [lotParam(seriesPoint('2024-03-31', MARCH_2024))], span: {bucketStart: '2024-03-01', bucketEnd: '2024-03-31'}},
+        {name: 'no readable day, value[0] in epoch ms and no name', params: () => [lotParam(bucketPoint(WEEK_OF_11_MARCH, {value: [Date.UTC(2024, 2, 13), 1234.5]}))], span: {bucketStart: '2024-03-11', bucketEnd: '2024-03-17'}},
+    ])('keeps the whole bucket — $name', ({params, span}) => {
+        expect(headerSpanOf(params())).toEqual(span);
+    });
+});
+
+describe('LotComparisonChart tooltip header — the glue on the source', () => {
+    /*
+     * The header is built inside the component, out of reach of a node test, so its glue is pinned on the
+     * source: tooltipBucketInfo comes from the helper module (no local copy left to drift), the bucket is spanned
+     * with bucketSpanUpTo, and the header names the span, never `bucket.bucketEnd` or `bucket.bucketStart`.
+     */
+
+    /** LotComparisonChart.svelte as it is on disk, because a node test cannot render the header it builds. */
+    function componentSource(): string {
+        return readFileSync(new URL('./LotComparisonChart.svelte', import.meta.url), 'utf8');
+    }
+
+    /** The body of the block that `opener` (ending in `{`) opens first after `anchor`, braces balanced. */
+    function blockAfter(source: string, anchor: string, opener: string): string | undefined {
+        const at = source.indexOf(anchor);
+        const open = at < 0 ? -1 : source.indexOf(opener, at + anchor.length);
+        if (open < 0) return undefined;
+        const bodyStart = open + opener.length;
+        let depth = 1;
+        for (let i = bodyStart; i < source.length; i++) {
+            if (source[i] === '{') depth++;
+            else if (source[i] === '}' && --depth === 0) return source.slice(bodyStart, i);
+        }
+        return undefined;
+    }
+
+    /** buildTooltipBucketHeader's body, so the pins cannot match code elsewhere in the component; throws when it is not found. */
+    function headerBody(): string {
+        const body = blockAfter(componentSource(), 'function buildTooltipBucketHeader(', '): string {');
+        if (body === undefined) throw new Error('LotComparisonChart.svelte: the body of function buildTooltipBucketHeader(…): string { … } was not found');
+        return body;
+    }
+
+    // Why: a local copy would keep naming bucketEnd whatever the tested export does.
+    it('takes tooltipBucketInfo from the helper module and keeps no local copy', () => {
+        const source = componentSource();
+        expect(source, 'LotComparisonChart.svelte still defines a local function tooltipBucketInfo').not.toMatch(/\bfunction\s+tooltipBucketInfo\s*\(/);
+        expect(source, 'LotComparisonChart.svelte does not import tooltipBucketInfo from ./lotComparisonChartHelpers').toMatch(/import\s*\{[^}]*\btooltipBucketInfo\b[^}]*\}\s*from\s*'\.\/lotComparisonChartHelpers'/);
+    });
+
+    // Why: the span is bucketSpanUpTo's, already unit-tested; the header must not derive its own.
+    it('imports bucketSpanUpTo from priceChartHelpers', () => {
+        expect(componentSource(), 'LotComparisonChart.svelte does not import bucketSpanUpTo from $lib/components/charts/priceChartHelpers').toMatch(/import\s*\{[^}]*\bbucketSpanUpTo\b[^}]*\}\s*from\s*'\$lib\/components\/charts\/priceChartHelpers'/);
+    });
+
+    // Why: «Value at», the week range and the month must read the span; one bucket.bucketEnd left would name a day without data again.
+    it('spans the bucket up to the point’s day and names only the span', () => {
+        const body = headerBody();
+        expect(body, 'buildTooltipBucketHeader does not call bucketSpanUpTo(bucket.date, bucket)').toMatch(/bucketSpanUpTo\(\s*bucket\.date\s*,\s*bucket\s*\)/);
+        expect(body, 'buildTooltipBucketHeader still reads bucket.bucketEnd or bucket.bucketStart').not.toMatch(/\bbucket\.bucket(?:End|Start)\b/);
+    });
+
+    // Why: positive control on the same slice — without it the pins above could pass on an empty or wrong slice.
+    it('slices the header itself: the daily fallback and the three header keys', () => {
+        const body = headerBody();
+        expect(body).toContain('formatLongDate(fallbackDate)');
+        expect(body).toContain('chart.tooltip.valueAt');
+        expect(body).toContain('chart.tooltip.weekRange');
+        expect(body).toContain('chart.tooltip.monthLabel');
     });
 });
