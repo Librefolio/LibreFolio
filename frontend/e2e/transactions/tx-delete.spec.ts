@@ -63,7 +63,8 @@ import {uniqueSuffix} from '../fixtures/unique';
 import {daysAgoIso} from '../fixtures/dates';
 import {createOwnedBroker, deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 
-test.setTimeout(25_000);
+// 45 s: login and the 20 s transactions-page gate share this budget; the old 25 s left the test no time under load.
+test.setTimeout(45_000);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,10 +72,10 @@ test.setTimeout(25_000);
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions?page_size=200');
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
     // The table being VISIBLE is not the table being LOADED: it renders empty
     // and fills in. The page publishes data-busy, so wait on that instead.
-    await waitForSettled(page.getByTestId('transactions-page'));
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /** Find a row whose text content contains ALL given substrings. Returns null if not found. */

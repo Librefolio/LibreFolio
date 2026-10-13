@@ -49,14 +49,12 @@ async function optionListClosed(page: Page) {
 /** Navigate to the Transactions page and wait for table to appear. */
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    // Wait for either the table or the loading/error state to resolve
-    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {
-        /* either is fine */
-    });
     // The page publishes `data-busy` while it loads; wait for that rather than
     // for a duration chosen to be "probably enough".
-    await page.waitForSelector('[data-testid="transactions-page"][data-busy="false"]', {timeout: 20_000}).catch(() => {
-        /* the error state never clears the flag */
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    // Wait for either the table or the loading/error state to resolve
+    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 20_000})]).catch(() => {
+        /* either is fine */
     });
 }
 

@@ -10,10 +10,12 @@
  * Uses Apple (USD) TRANSFER on IB — same currency, WAC auto-calculates immediately.
  */
 import {expect, test, type Page} from '../fixtures/playwright';
+import {waitForSettled} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 
-test.setTimeout(20_000);
+// 45 s: login and the 20 s transactions-page gate share this budget; at 20 s they left the form-modal steps no time under load.
+test.setTimeout(45_000);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -21,7 +23,8 @@ test.setTimeout(20_000);
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 20_000})]).catch(() => {
         /* either is fine */
     });
     // The page is usable when the entry point is: never sleep for "settling".
