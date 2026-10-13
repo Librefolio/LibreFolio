@@ -25,6 +25,8 @@ export interface ResponsiveXAxisPolicy {
         showMaxLabel: true;
         rotate: 0;
         interval?: number | 'auto';
+        /** Category axes only: the forced last label ends at its tick instead of spilling past the chart's right edge. */
+        alignMaxLabel?: 'right';
         formatter: ResponsiveXAxisFormatter;
     };
 }
@@ -163,6 +165,11 @@ export function buildResponsiveXAxisPolicy({width, values, locale, axisType, hor
             rotate: 0,
             formatter,
             ...(interval !== undefined ? {interval} : {}),
+            // A centred last label spills half its width past the plot on a phone. Category labels share one priority,
+            // so the forced last one survives `hideOverlap` once it ends at its tick; on a time axis a month or year tick
+            // outranks it and the inward label would be the one hidden. The first label spills at most into the price axis's
+            // label column on the left, which the grid keeps inside the chart.
+            ...(axisType === 'category' ? {alignMaxLabel: 'right' as const} : {}),
         },
     };
 }
