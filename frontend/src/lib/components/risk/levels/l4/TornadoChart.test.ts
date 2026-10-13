@@ -31,6 +31,9 @@
  *   5. **The bars.** One per row, in the bar column, drawn on one scale for every row — the
  *      largest magnitude present, gains and losses alike — so their lengths are proportional to
  *      |value|; signed `loss` below zero and `gain` from zero up.
+ *   6. **The first header when the caller names none** (T-SHK, 13/10/2026): risk.levels.l4.table.asset,
+ *      for asset and bucket rows alike — a guard, so the replay keeps «Asset» once the shock heads
+ *      the column with its dimension (that half is pinned in `L4Shock.test.ts`).
  *
  * **Guards and reds.** Several cases are green before k5b and must stay green after it: they pin
  * what the rewrite must not lose — nothing drawn for no rows, the order given, one bar per row on
@@ -392,6 +395,28 @@ describe('TornadoChart — a table, its columns in a fixed order (k5b)', () => {
         expect(single, 'the table offers a control D376 does not give it').toEqual([]);
         const families = ['dt-row-checkbox-', 'row-actions-', 'col-filter-trigger-'].filter((prefix) => root.querySelector(`[data-testid^="${prefix}"]`) !== null);
         expect(families, 'the table offers per-row selection, row actions or column filters').toEqual([]);
+    });
+});
+
+describe('TornadoChart — the first column’s header when the caller names none (T-SHK)', () => {
+    // T-SHK gives the table an optional header for its first column, which the shock fills with the
+    // dimension it shocked (risk.stress.dimensions.*: «Asset class», «Sector», «Geography»). Without it
+    // the header stays risk.levels.l4.table.asset: the replay (`L4Replay`) passes none and keeps
+    // «Asset», and the table does not guess another header from its rows — a table of buckets included.
+    // That a caller's header replaces it is pinned where the caller is, in `L4Shock.test.ts`: written
+    // here, the case would have to name a prop whose identifier the cure has not fixed yet.
+    //
+    // Exact equality, not `toContain`: «Asset class» contains «Asset» in English.
+    it.each([
+        ['a weighted replay', WEIGHTED],
+        ['the Asset Global lab', LAB],
+        ['a shock by bucket', BUCKETS],
+    ] as const)('heads %s with risk.levels.l4.table.asset, and nothing else (guard)', (_case, rows) => {
+        const root = mount(rows);
+
+        const first = root.querySelector('th[data-testid^="dt-header-"]');
+        expect(first?.getAttribute('data-testid'), 'barrier: the first column is the name column').toBe('dt-header-asset');
+        expect(normalize(first?.textContent), 'with no header from the caller, the first column is not headed by risk.levels.l4.table.asset alone').toBe(t(HEADER_KEYS.asset));
     });
 });
 
