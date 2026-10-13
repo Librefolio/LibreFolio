@@ -83,6 +83,23 @@ V-24 and V-25.
 by the E2E and fixed — [[problems/hidden-pair-half-survived-row-removal]] (V-29). V-27 stays open —
 [[problems/login-returns-before-the-app-has-started]].
 
+## Train 87 (added 2026-10-13)
+
+The two budgets of R's run, and the leaks next to them:
+
+- V-28 (`d1a149afa`): the `jsCoverage` fixture has its own timeout — [[problems/jscoverage-teardown-spends-the-test-budget]].
+- V-27 (`4ebbaab20`): `login()` returns once the app has arrived — [[problems/login-returns-before-the-app-has-started]].
+- V-33 (`d9ff03a35`): navigation budgets — 15 s for the FX pair page, 20 s with a settled wait for the transactions
+  page, extended to every `tx-table` wait the batch found; the tests' own budgets raised to 45–60 s by the
+  coordinator's rule (gate plus rest).
+- `fx-destructive` owns its currencies (`586fd8aca`): its «clean slate» deleted the rates of two seed pairs; and the
+  asset specs delete what they create (`ba1c34d64`) — [[problems/e2e-writes-leaked-into-shared-state]].
+- Backlog after 1.2: V-30 (the coverage fixture merges a test's pages with `Object.assign`, read in the code), V-31
+  (the mock FX sync leaves its rates), V-32 (asset specs that pick rows by position), V-34 (a cleanup that checks only
+  the HTTP status).
+- The developer docs follow: `coverage-model.md` (one JSON per test, the teardown slot) and
+  `runner_architecture.md` (the shared backend's workers).
+
 ## Wiki pages created or updated
 
 - Created: [[decisions/data-quality-proved-on-real-data]], [[problems/open-panels-stale-after-fx-sync]].
