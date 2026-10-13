@@ -11,19 +11,28 @@
  * response here instead of a seeded provider and a live network round-trip.
  *
  * What these tests assert is the `onchange` payload (the contract to the parent)
- * and the `data-testid` / `data-status` the component publishes. Never a
- * translated label, never a CSS class, never geometry (jsdom has no layout).
+ * and the `data-testid` / `data-status` / `data-operation` the component
+ * publishes. Never a translated label, never a CSS class, never geometry (jsdom
+ * has no layout).
+ *
+ * Each `provider-test-result` row publishes the operation it reports in
+ * `data-operation`: the backend's own operation names, `current_price` and
+ * `history` — the strings the request sends in `operations` — or `probe` on the
+ * one row that reports the probe call itself failing. That is the hook a caller
+ * identifies a row by (`AssetModal.providerLifecycle.test.ts`); the probe cases
+ * pin it.
  *
  * The probe's figures (M-18 CP3b) are read where the component writes them: the
  * current price and the history count that open their results' details, each
  * result's time and the total, all in the interface locale (`uiLocale()`, through
- * `formatFixed`). Nothing finer than the `provider-test-result` row is published,
- * so those figures are found by structure — inside the row, and in the list that
- * holds the rows — and the labels that tell the rows apart are compared through
- * the catalogue (`$_`), never as literals. Every expected figure is written by
- * `Intl` itself. Its days (T-ISO) — the current price's day and the history's
- * range as the backend writes it — are written in the house notation of a
- * tooltip day, every expected day written by `Intl` too.
+ * `formatFixed`). A row publishes its operation and its status and nothing
+ * finer, so the figures and days inside it are found by structure — inside the
+ * row, and in the list that holds the rows — and in those cases the labels that
+ * tell the rows apart are compared through the catalogue (`$_`), never as
+ * literals. Every expected figure is written by `Intl` itself. Its days (T-ISO) —
+ * the current price's day and the history's range as the backend writes it — are
+ * written in the house notation of a tooltip day, every expected day written by
+ * `Intl` too.
  *
  * The pure probe classifiers/formatters (`isSoftProbeFailure`,
  * `summarizeProbeError`, `buildProbeTooltipHtml`, …) are covered exhaustively in
@@ -139,6 +148,15 @@ async function waitLoaded(name: string) {
 
 const testBtn = () => screen.getByTestId('provider-test-config') as HTMLButtonElement;
 const idInput = () => screen.getByTestId('provider-identifier') as HTMLInputElement;
+
+/**
+ * The result rows as `<operation>:<status>`, sorted: what each `provider-test-result` publishes in `data-operation`
+ * — the backend's own operation names (`current_price`, `history`), or `probe` for the probe call's own failure —
+ * and `data-status`. The hook a caller identifies a row by, whatever the order and the interface language.
+ */
+function operationStatuses(rows: HTMLElement[]): string[] {
+    return rows.map((row) => `${row.getAttribute('data-operation')}:${row.getAttribute('data-status')}`).sort();
+}
 
 beforeEach(async () => {
     await setupI18n();
@@ -365,6 +383,8 @@ describe('ProviderAssignmentSection — Test Configuration probe', () => {
         expect(urlField.value).toBe('https://prov/url');
         // …and the final emit carried the passed status.
         expect(onchange.mock.calls.at(-1)?.[0]).toMatchObject({testStatus: 'passed'});
+        // Each row names its operation: the hook a caller (AssetModal's lifecycle spec) identifies it by.
+        expect(operationStatuses(rows), 'the rows do not publish their operations: one current_price and one history, each a success').toEqual(['current_price:success', 'history:success']);
     });
 
     it('marks the probe failed on a real error and offers a copy button', async () => {
@@ -421,6 +441,8 @@ describe('ProviderAssignmentSection — Test Configuration probe', () => {
         const rows = screen.getAllByTestId('provider-test-result');
         expect(rows).toHaveLength(2);
         expect(rows.every((r) => r.getAttribute('data-status') === 'warning')).toBe(true);
+        // A soft failure keeps its operation's row: the same two operations, each a warning.
+        expect(operationStatuses(rows), 'the soft-failure rows do not publish their operations: one current_price and one history, each a warning').toEqual(['current_price:warning', 'history:warning']);
     });
 
     it('marks the probe failed when the probe call itself throws', async () => {
@@ -431,6 +453,8 @@ describe('ProviderAssignmentSection — Test Configuration probe', () => {
         await fireEvent.click(testBtn());
         await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'failed'));
         expect(onchange.mock.calls.at(-1)?.[0]).toMatchObject({testStatus: 'failed'});
+        // No operation answered: the one row reports the probe call itself, as `probe`, an error.
+        expect(operationStatuses(screen.getAllByTestId('provider-test-result')), 'the probe call’s own failure is not exactly one row publishing probe, an error').toEqual(['probe:error']);
     });
 });
 
@@ -456,10 +480,10 @@ describe('ProviderAssignmentSection — the probe figures in the interface langu
      * shown as it came (the fixtures' `2020-01-01..2024-01-01` and `2020..2024` among them). Expected days come
      * from Intl (`houseDay`); red today in Italian and French, where both days are ISO.
      *
-     * Handles. The rows are `provider-test-result` and nothing finer is published, so the rest is
-     * structure: a row is its label, its detail and its time — three spans, in that order — and the
-     * total is the one line of the rows' list that holds no row. The labels only prove which row is
-     * which, read through the catalogue.
+     * Handles. The rows are `provider-test-result`, each publishing its operation (`data-operation`) and its
+     * status and nothing finer, so the rest is structure: a row is its label, its detail and its time — three
+     * spans, in that order — and the total is the one line of the rows' list that holds no row. Here the labels
+     * prove which row is which, read through the catalogue.
      */
     type ProbeResponse = z.infer<typeof schemas.FAProviderProbeResponse>;
 

@@ -66,6 +66,11 @@
 
     interface TestResult {
         success: boolean;
+        /**
+         * The part of the probe this row reports, published as `data-operation`: the backend's operation
+         * (`current_price`, `history`), or `probe` when the call itself failed.
+         */
+        operation: 'current_price' | 'history' | 'probe';
         /** Display status: success, error, or warning (not supported) */
         status?: 'success' | 'error' | 'warning';
         label: string;
@@ -324,7 +329,7 @@
         if (probe.source !== 'manual') return [];
         if (probe.error) {
             const detail = extractErrorMessage(probe.error, $t('common.errorOccurred'));
-            return [{success: false, status: 'error', label: $t('common.error'), detail, summary: summarizeProbeError(detail), execution_time_ms: 0}];
+            return [{success: false, operation: 'probe', status: 'error', label: $t('common.error'), detail, summary: summarizeProbeError(detail), execution_time_ms: 0}];
         }
         const response = probe.response;
         if (!response) return [];
@@ -346,6 +351,7 @@
             const detail = cp.success ? `${formatFixed(Number(cpValue), 2)} ${ccyLabel}${cpDate ? ` (${formatDay(cpDate)})` : ''}` : (cpError ?? undefined);
             items.push({
                 success: cp.success,
+                operation: 'current_price',
                 status: cp.success ? 'success' : isSoftProbeFailure(safeString(cp.error) ?? undefined, safeString(cp.error_code)) ? 'warning' : 'error',
                 label: $t('common.currentPrice'),
                 detail,
@@ -366,6 +372,7 @@
             const detail = h.success ? `${$t('assets.probe.points', {values: {count: pointCount, n: formatFixed(pointCount, 0)}})}${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${probeDateRange(String(h.date_range))}` : ''}` : (hError ?? undefined);
             items.push({
                 success: h.success,
+                operation: 'history',
                 status: h.success ? 'success' : isSoftProbeFailure(safeString(h.error) ?? undefined, safeString(h.error_code)) ? 'warning' : 'error',
                 label: $t('assets.probe.history'),
                 detail,
@@ -583,7 +590,7 @@
                             })()}
                             position="top"
                         >
-                            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm" data-testid="provider-test-result" data-status={result.status}>
+                            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm" data-testid="provider-test-result" data-operation={result.operation} data-status={result.status}>
                                 {#if result.status === 'warning'}
                                     <AlertTriangle size={14} class="text-amber-500 shrink-0 self-center" />
                                 {:else if result.success}
