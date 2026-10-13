@@ -53,14 +53,20 @@ marker … vanished», and are green with the cure.
 
 - A lookup keyed on a computed date must use the same date the drawing used: here the period's theoretical end
   against the point's real date.
-- A sibling stays: in the partial period the main tooltip's «value at» shows the theoretical end
-  (`PriceChartFull.svelte`), signalled to T.
+- The sibling in the tooltip, signalled to T, is cured too: in the open period the tooltip named the theoretical
+  end — «value at» 31 October on 13 October, a day still to come. `341c77811` (T, train 93) adds `bucketSpanUpTo`
+  in `priceChartHelpers.ts`: the span a point's tooltip names runs from the period's first day to the point's own day,
+  in `PriceChartFull` and `CandlestickChart`. Present since v1.0.0 as well.
+- One more of the same family, recorded by T and not touched: the lot comparison chart (`LotComparisonChart.svelte`)
+  dates its open period on the theoretical end too, since 1.1.0. The Growth and allocation history charts already
+  read the open period right.
 
 ## Status
 
-Resolved in the code. The 🐛 CHANGELOG line I proposed — «At weekly or monthly resolution, events in a last week or
-month that is not over yet no longer disappear from the asset and FX charts…» — is not in the [1.2.0] chapter at
-`fa6299689`; the backlog entry T-EVW, the same defect, is still open there.
+Resolved. The [1.2.0] chapter carries one 🐛 line for both halves, under «📈 Charts»: «At weekly or monthly
+resolution, the week or month not over yet reads right on the asset and FX charts…», «Present since v1.0.0»
+(`fcc4ac96f`, extended with the tooltip in `ef666fdee`). The backlog entry T-EVW, the same defect seen in the code,
+is closed with a pointer to R-5 (`fafe68863`).
 
 ## Source files
 
@@ -70,4 +76,5 @@ month that is not over yet no longer disappear from the asset and FX charts…»
 | Event filing and aggregation | `frontend/src/lib/components/charts/timeSeriesAggregation.ts` |
 | Tests (T4) | `frontend/src/lib/components/charts/priceChartHelpers.test.ts` |
 | The chart | `frontend/src/lib/components/charts/PriceChartFull.svelte` |
+| The tooltip span (`bucketSpanUpTo`), candles | `frontend/src/lib/components/charts/CandlestickChart.svelte` |
 | I's lot 51 | `LibreFolio_developer_journal/Release_2/Phase_0/51_narrowFitFixes/plan-phase00NarrowFitFixes.prompt.md` |
