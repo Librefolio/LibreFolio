@@ -268,17 +268,23 @@ See [[concepts/pre-frame-frame-separation]].
 
 ## Blob Cache (Range-Aware)
 
-The engine cache is keyed by fingerprint AND range:
+The engine's blob cache (24-hour TTL) is keyed by fingerprints, **not** by the range:
 
 ```python
-cache_key = (
-    user_id, visible_brokers, selected_brokers, currency,
-    date_from, date_to, include_flags,
-    tx_fingerprint, price_fingerprint, fx_fingerprint
+blob_key = (
+    user_id, scope_broker_ids, access_fingerprint, target_currency,
+    tx_fingerprint, price_fingerprint, fx_fingerprint, split_fingerprint,
+    include_candles, include_acquisition_funding,
 )
 ```
 
-Cache hit: stored range `[ta, tb]` **contains** requested range `[t0, t1]`. If not contained: compute missing segments and extend the blob. Fingerprint change → full invalidation.
+The blob stores its own range. A hit needs the stored range to start on or before the requested start and to end
+**exactly** on the requested end: the blob's states are not trimmed, so a wider blob would leak days past `date_to`
+into every consumer. A blob that ends earlier is recomputed (resuming from its end state is deferred). Any fingerprint
+change gives a different key. The access fingerprint — the sorted `(broker_id, role, share)` of the scope — makes a
+changed share or role miss the cache, here and in the 30-minute report cache of `portfolio_service.py`:
+[[problems/portfolio-cache-ignored-role-and-share]]. *Update (2026-10-13, C-64)*: this section used to show the dates
+in the key and an extension of the blob on a partial hit.
 
 ## Scope Parameters
 
