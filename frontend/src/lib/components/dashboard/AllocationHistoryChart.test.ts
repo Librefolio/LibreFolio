@@ -812,6 +812,20 @@ function remainingLabel(): string {
     return label;
 }
 
+/**
+ * A calendar day as a tooltip header writes it in `localeTag` (plan 52, C2): short month, numeric day and year, read at
+ * LOCAL midnight the way the app reads a calendar day. WHY test-side: an expected date never comes from the formatter
+ * under test, so a wrong option or a wrong locale in the product cannot also be in the oracle. WHY at file scope: the
+ * C2 header cases and the sector and geography tooltip read one oracle.
+ */
+function dayIn(iso: string, localeTag: string): string {
+    const [year, month, date] = iso.split('-').map(Number);
+    return new Date(year, month - 1, date).toLocaleDateString(localeTag, {year: 'numeric', month: 'short', day: 'numeric'});
+}
+
+/** A calendar day in the interface locale the chart is drawn in. WHY: the header follows the interface language, never the browser's. */
+const uiDay = (iso: string) => dayIn(iso, uiLocale());
+
 function escapeRegExp(text: string): string {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -1219,7 +1233,7 @@ describe('AllocationHistoryChart — sector and geography draw as before (D375 l
         expect(drawnSeries().map(({id, data, itemStyle}) => ({id, value: pointValue(data?.[0]), color: itemStyle?.color}))).toEqual(rankedKeys(weights).map((key, index) => ({id: key, value: weights.find(([name]) => name === key)?.[1], color: palette[index % palette.length]})));
     });
 
-    it.each(UNTOUCHED)("$title: today's tooltip, every category under 3% grouped in «Remaining» (green today and after D375)", async ({dimension, weights}) => {
+    it.each(UNTOUCHED)("$title: today's tooltip, every category under 3% grouped in «Remaining» (D375 leaves it alone; plan 52 C2 writes its day in the interface language)", async ({dimension, weights}) => {
         // WHY: the family rows are the type tooltip's alone. Catches them, or the type's top-five rule,
         // reaching the sector or geography tooltip, and any change to its threshold rule.
         await mountChart(oneDay(weights), dimension);
@@ -1238,7 +1252,9 @@ describe('AllocationHistoryChart — sector and geography draw as before (D375 l
 
         const html = tooltipOf(option, 0);
 
-        expect(html).toBe(buildTooltipHeader(ONE_DATE, theme.mutedColor) + buildTooltipByThreshold(items, 3, theme, remainingLabel()));
+        // WHY (plan 52, C2): the header writes its day in the interface language, never as raw ISO.
+        expect(html).toBe(buildTooltipHeader(uiDay(ONE_DATE), theme.mutedColor) + buildTooltipByThreshold(items, 3, theme, remainingLabel()));
+        expect(html).not.toMatch(/\d{4}-\d{2}-\d{2}/);
         expect(html).not.toMatch(/data-allocation-(family|member)/);
     });
 });
@@ -1421,5 +1437,240 @@ describe('AllocationHistoryChart — the grid right inset holds the last time la
             measuredFonts.filter((font) => !font.startsWith('14px ')),
             'fonts other than the 14px axis font',
         ).toEqual([]);
+    });
+});
+
+// =============================================================================
+// Plan 52, C2 — the tooltip header in the interface language, the running week to its last day
+// =============================================================================
+
+/**
+ * Plan 52, C2: the tooltip header writes its dates in the interface language, and the week still running ends on its
+ * last day.
+ *
+ * `buildAllocationTooltipHeader` prints the ISO days it is handed (defect 3a): `2025-03-05` over a day,
+ * `Week 2024-06-03 – 2024-06-09` then `Value at 2024-06-09` over a week, `Value at 2010-06-30` under a month. And the
+ * week still running ends on the coming Sunday (`row.bucketEnd`), a day the series has not reached. After C2 every
+ * date in the header is written by `formatDay` (short month, numeric day and year, in `uiLocale()`), and a week ends on
+ * its last day with data: a closed week on its Sunday, the running one on the series' last day (`row.date`), the rule
+ * the price charts already apply (`bucketSpanUpTo`, read for the contract, not imported). Same keys, same lines; the
+ * month label is already localized and stays as it is.
+ *
+ * Resolution. The fake chart is 800 px wide (`getWidth`), and `chooseInitialResolution` climbs a tier while that
+ * tier's buckets are more than 1.3 per px (`DENSITY_THRESHOLDS.line`): read here, never changed. It picks once, over
+ * the whole history, before the first full option.
+ *   - daily: five days, 2025-03-03..07.
+ *   - weekly: 1100 consecutive days (Thu 2022-06-23..Thu 2025-06-26), 1.375 per px, over 1.3; their 158 weeks are 0.20
+ *     per px, so it stays weekly.
+ *   - monthly: one Wednesday a week for 1100 weeks (2000-01-05..2021-01-27), plus every day of June 2010: 1125 days
+ *     (1.41 per px) and 1100 weeks (1.375 per px) are both over 1.3, so it climbs to the 253 months (0.32 per px).
+ * Each row is found by its date, and the date of its neighbours proves the tier: the day before is a day, the Sunday
+ * before is a week, the last Wednesday of May is a month.
+ *
+ * Closed periods are read in the MIDDLE of the series, every day of them carrying data. The running week is the
+ * series' LAST row: the history stops on a Thursday.
+ *
+ * Expected texts. Every key is resolved through `get(_)` and read as text, every day comes from `dayIn` and the month
+ * from `Intl`, both in the test. Each case ends on the negative oracle: no `YYYY-MM-DD` anywhere in the header.
+ */
+describe('AllocationHistoryChart — the tooltip header writes its dates in the interface language, and the running week ends on its last day (plan 52, C2)', {timeout: 30_000}, () => {
+    /** A calendar period, its first and its last day. */
+    type Span = {start: string; end: string};
+
+    /** The weights of every day: two sectors. WHY sector: the plain threshold tooltip, its header ahead of its rows. */
+    const WEIGHTS: readonly Weight[] = [
+        ['Technology', 60],
+        ['Financials', 40],
+    ];
+
+    /** `count` ISO days from `first`, one every `step` days. WHY UTC arithmetic: no DST change shifts or doubles a date. */
+    function isoFrom(first: string, count: number, step = 1): string[] {
+        const start = Date.parse(`${first}T00:00:00Z`);
+        return Array.from({length: count}, (_day, index) => new Date(start + index * step * 86_400_000).toISOString().slice(0, 10));
+    }
+
+    /** One history day per distinct date, in date order, each holding WEIGHTS. */
+    const daysOn = (dates: readonly string[]): Day[] => [...new Set(dates)].sort().map((date) => ({date, weights: WEIGHTS}));
+
+    /** The day of the week of an ISO date, Sunday 0. WHY: a fixture's Monday, Thursday and Sunday are checked, not assumed. */
+    const weekdayOf = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay();
+
+    /** Five days; the cascade draws them day by day. */
+    const DAILY_DAYS = daysOn(isoFrom('2025-03-03', 5));
+    /** A day in the middle of DAILY_DAYS. */
+    const DAILY_DAY = '2025-03-05';
+
+    /** 1100 consecutive days, Thu 2022-06-23..Thu 2025-06-26. WHY so many: 1.375 days per px of the 800 px fake, over 1.3. */
+    const WEEKLY_DAYS = daysOn(isoFrom('2022-06-23', 1100));
+    /** A Monday–Sunday week in the middle of WEEKLY_DAYS, two years in. */
+    const CLOSED_WEEK: Span = {start: '2024-06-03', end: '2024-06-09'};
+    /** The week WEEKLY_DAYS stops in: its Monday, the series' last day (a Thursday) and the Sunday still to come. */
+    const RUNNING_WEEK = {start: '2025-06-23', last: '2025-06-26', comingSunday: '2025-06-29'};
+
+    /** One Wednesday a week for 1100 weeks, and every day of June 2010. WHY June day by day: a month whose last calendar day carries data. */
+    const MONTHLY_DAYS = daysOn([...isoFrom('2000-01-05', 1100, 7), ...isoFrom('2010-06-01', 30)]);
+    /** A calendar month in the middle of MONTHLY_DAYS. */
+    const CLOSED_MONTH: Span = {start: '2010-06-01', end: '2010-06-30'};
+
+    /** The interface locale the French UI gives on jsdom's en-US browser (see M-18 above). */
+    const FRENCH = 'fr';
+
+    /** An ISO day. WHY: what no header line may hold once C2 is in, the negative oracle. */
+    const ISO_DAY = /\d{4}-\d{2}-\d{2}/;
+
+    /** A month as the month label writes it in `localeTag`: long month and year, read in UTC as `formatMonthLabel` reads it. WHY test-side: the oracle never comes from the product. */
+    function monthIn(iso: string, localeTag: string): string {
+        const [year, month, date] = iso.split('-').map(Number);
+        return new Intl.DateTimeFormat(localeTag, {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(Date.UTC(year, month - 1, date)));
+    }
+
+    /** Text as a user reads it from HTML. WHY: the header interpolates raw `$t()` output, so an expected line goes through the same parser. */
+    function textOf(html: string): string {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        return host.textContent ?? '';
+    }
+
+    /** A key's text in today's language, as a header line reads. WHY: never a translated literal, and a key that does not resolve fails here instead of matching itself. */
+    function keyText(key: string, values: Record<string, string>): string {
+        const text = textOf(get(_)(key, {values}));
+        expect(text, `${key} does not resolve`).not.toBe(key);
+        return text;
+    }
+
+    /** The first `count` top-level lines of a tooltip, as read. WHY: the header and its "value at" line are each one top-level `<div>`, ahead of every row. */
+    function headerLines(html: string, count: number): string[] {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        return Array.from(host.children)
+            .filter((child) => child.tagName === 'DIV')
+            .slice(0, count)
+            .map((child) => child.textContent ?? '');
+    }
+
+    /** Barrier: every day of `span` carries data in `days`. WHY: a header names the period's own edges only when the series covers it whole. */
+    function expectCovered(days: readonly Day[], span: Span): void {
+        const first = Date.parse(`${span.start}T00:00:00Z`);
+        const count = (Date.parse(`${span.end}T00:00:00Z`) - first) / 86_400_000 + 1;
+        expect(
+            days.map(({date}) => date).filter((date) => date >= span.start && date <= span.end),
+            `fixture: every day of ${span.start}..${span.end} carries data`,
+        ).toEqual(isoFrom(span.start, count));
+    }
+
+    /** Change the UI language as LanguageSelector does, then flush. WHY a copy: M-18's is local to its describe. */
+    async function switchLanguage(lang: 'en' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+        expect(get(currentLanguage), `control: the app language is ${lang}`).toBe(lang);
+        expect(get(locale), `control: the svelte-i18n locale is ${lang}`).toBe(lang);
+    }
+
+    /** The dates the first series is drawn on, one per row. WHY the dates: a row is found by what it stands for, never by its position. */
+    const drawnDates = (option: DrawnOption) => (option.series[0]?.data ?? []).map(pointDate);
+
+    /**
+     * The row drawn on `date`, with the option that draws it, its neighbours proving the tier. WHY: never a position;
+     * `before` (and `after`) tell a day from a week and a week from a month, and `last` says whether the row must close the
+     * series (the running week) or sit inside it (a closed period).
+     */
+    async function rowOn(date: string, neighbours: {before: string; after?: string}, last: boolean): Promise<{option: DrawnOption; index: number}> {
+        return waitFor(
+            () => {
+                const option = drawnOption();
+                const dates = drawnDates(option);
+                const index = dates.indexOf(date);
+                expect(index, `a row drawn on ${date}, after the first`).toBeGreaterThan(0);
+                expect(dates[index - 1], `the row before ${date}`).toBe(neighbours.before);
+                if (last) {
+                    expect(index, `${date} closes the series`).toBe(dates.length - 1);
+                } else {
+                    expect(index, `${date} is not the last row`).toBeLessThan(dates.length - 1);
+                    if (neighbours.after) expect(dates[index + 1], `the row after ${date}`).toBe(neighbours.after);
+                }
+                return {option, index};
+            },
+            {timeout: 5_000},
+        );
+    }
+
+    beforeAll(async () => {
+        // English was loaded by the file's own beforeAll; French joins it, so a switch never waits on a loader.
+        await waitLocale(FRENCH);
+        // The one literal of this describe: if the oracle does not write en-US as en-US, the environment is wrong, not the product.
+        expect(dayIn('2025-12-29', 'en-US'), 'environment: the date oracle writes en-US').toBe('Dec 29, 2025');
+        // Control: this runtime has French data, so the French case tells the interface locale from English.
+        expect(dayIn(CLOSED_WEEK.start, FRENCH), 'a French day differs from English').not.toBe(dayIn(CLOSED_WEEK.start, 'en-US'));
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('daily: a day in the middle of the series heads its tooltip with the day in the interface language', async () => {
+        // WHY: the plainest header, the day itself, was raw ISO.
+        await mountChart(DAILY_DAYS, 'sector');
+        const {option, index} = await rowOn(DAILY_DAY, {before: '2025-03-04', after: '2025-03-06'}, false);
+        const lines = headerLines(tooltipOf(option, index), 1);
+
+        expect(lines).toEqual([uiDay(DAILY_DAY)]);
+        expect(lines.join('\n')).not.toMatch(ISO_DAY);
+    });
+
+    it('weekly, a closed week: its Monday and its Sunday, and its "value at" Sunday, in the interface language', async () => {
+        // WHY: the week range and the "value at" line both carried ISO.
+        expect([CLOSED_WEEK.start, CLOSED_WEEK.end].map(weekdayOf), 'fixture: a Monday–Sunday week').toEqual([1, 0]);
+        expectCovered(WEEKLY_DAYS, CLOSED_WEEK);
+        await mountChart(WEEKLY_DAYS, 'sector');
+        const {option, index} = await rowOn(CLOSED_WEEK.end, {before: '2024-06-02', after: '2024-06-16'}, false);
+        const lines = headerLines(tooltipOf(option, index), 2);
+
+        expect(lines).toEqual([keyText('chart.tooltip.weekRange', {start: uiDay(CLOSED_WEEK.start), end: uiDay(CLOSED_WEEK.end)}), keyText('chart.tooltip.valueAt', {date: uiDay(CLOSED_WEEK.end)})]);
+        expect(lines.join('\n')).not.toMatch(ISO_DAY);
+    });
+
+    it('weekly, the week still running: it ends on the series\u2019 last day, a Thursday, and the coming Sunday is nowhere in the header', async () => {
+        // WHY: the running week printed the coming Sunday (`row.bucketEnd`), a day the series has not reached.
+        expect([RUNNING_WEEK.start, RUNNING_WEEK.last, RUNNING_WEEK.comingSunday].map(weekdayOf), 'fixture: a Monday, a Thursday, a Sunday').toEqual([1, 4, 0]);
+        expect(
+            WEEKLY_DAYS.map(({date}) => date).filter((date) => date >= RUNNING_WEEK.start),
+            'fixture: the history stops on the Thursday',
+        ).toEqual(isoFrom(RUNNING_WEEK.start, 4));
+        await mountChart(WEEKLY_DAYS, 'sector');
+        const {option, index} = await rowOn(RUNNING_WEEK.last, {before: '2025-06-22'}, true);
+        const lines = headerLines(tooltipOf(option, index), 2);
+
+        expect(lines).toEqual([keyText('chart.tooltip.weekRange', {start: uiDay(RUNNING_WEEK.start), end: uiDay(RUNNING_WEEK.last)}), keyText('chart.tooltip.valueAt', {date: uiDay(RUNNING_WEEK.last)})]);
+        const header = lines.join('\n');
+        expect(header, 'the coming Sunday, formatted').not.toContain(uiDay(RUNNING_WEEK.comingSunday));
+        expect(header, 'the coming Sunday, ISO').not.toContain(RUNNING_WEEK.comingSunday);
+        expect(header).not.toMatch(ISO_DAY);
+    });
+
+    it('monthly, a closed month: the month label as today, and its "value at" day, its last, in the interface language', async () => {
+        // WHY: the month label was already localized and stays as it is; the "value at" line under it carried ISO.
+        expectCovered(MONTHLY_DAYS, CLOSED_MONTH);
+        await mountChart(MONTHLY_DAYS, 'sector');
+        const {option, index} = await rowOn(CLOSED_MONTH.end, {before: '2010-05-26', after: '2010-07-28'}, false);
+        const lines = headerLines(tooltipOf(option, index), 2);
+
+        expect(lines).toEqual([keyText('chart.tooltip.monthLabel', {month: monthIn(CLOSED_MONTH.start, uiLocale())}), keyText('chart.tooltip.valueAt', {date: uiDay(CLOSED_MONTH.end)})]);
+        expect(lines.join('\n')).not.toMatch(ISO_DAY);
+    });
+
+    it('fr UI on an en-US browser, weekly, a closed week: the dates follow the interface locale, not a hard-coded one', async () => {
+        // WHY: an English expectation alone would also pass with en-US hard-coded in the product.
+        await switchLanguage(FRENCH);
+        expect(uiLocale(), 'control: the interface locale').toBe(FRENCH);
+        expectCovered(WEEKLY_DAYS, CLOSED_WEEK);
+        await mountChart(WEEKLY_DAYS, 'sector');
+        const {option, index} = await rowOn(CLOSED_WEEK.end, {before: '2024-06-02', after: '2024-06-16'}, false);
+        const lines = headerLines(tooltipOf(option, index), 2);
+
+        expect(lines).toEqual([keyText('chart.tooltip.weekRange', {start: dayIn(CLOSED_WEEK.start, FRENCH), end: dayIn(CLOSED_WEEK.end, FRENCH)}), keyText('chart.tooltip.valueAt', {date: dayIn(CLOSED_WEEK.end, FRENCH)})]);
+        expect(lines.join('\n')).not.toMatch(ISO_DAY);
     });
 });

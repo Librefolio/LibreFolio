@@ -33,6 +33,8 @@
     import {debug} from '$lib/debug';
     import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface AllocationComponent {
@@ -568,16 +570,21 @@
         }).format(toUtcDate(date));
     }
 
+    /**
+     * Every day of the header is written in the interface language, never as raw ISO (plan 52, C2). The week
+     * still running ends on its last day with data, never on the Sunday still to come: the price charts' rule.
+     */
     function buildAllocationTooltipHeader(row: TemporalBucketRow, mutedColor: string): string {
         if (currentResolution === 'weekly') {
-            return buildTooltipHeader($t('chart.tooltip.weekRange', {values: {start: row.bucketStart, end: row.bucketEnd}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: row.date}}), mutedColor);
+            const span = bucketSpanUpTo(row.date, row);
+            return buildTooltipHeader($t('chart.tooltip.weekRange', {values: {start: formatDay(span.bucketStart), end: formatDay(span.bucketEnd)}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
         }
 
         if (currentResolution === 'monthly') {
-            return buildTooltipHeader($t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(row.bucketStart)}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: row.date}}), mutedColor);
+            return buildTooltipHeader($t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(row.bucketStart)}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
         }
 
-        return buildTooltipHeader(row.date, mutedColor);
+        return buildTooltipHeader(formatDay(row.date), mutedColor);
     }
 
     function getDisplayName(rawName: string): string {
