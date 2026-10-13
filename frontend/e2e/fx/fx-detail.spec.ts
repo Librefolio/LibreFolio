@@ -794,6 +794,77 @@ const RESERVED_QUOTE: Readonly<Record<string, string>> = {desktop: 'GTQ', mobile
 type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
 type PairResults = {results: Array<{base: string; quote: string; success: boolean}>};
 
+// ---------------------------------------------------------------------------
+// What the page saw, for the two fold/unfold tests (V-35)
+// ---------------------------------------------------------------------------
+//
+// «aesthetics panel toggles visibility» went red once under load: after the second click the panel stayed open, and
+// 50 probe runs with CPU and API throttling never reproduced it. Both fold/unfold tests now check each click in two
+// halves, the state the toggle publishes (`aria-expanded`) and then the panel, and a red of either carries the page's
+// own log of the clicks, the toggle states, the panel mounts and `data-busy`.
+
+/** What `recordFxPanelEvents` watches, by test id. */
+type FxPanelWatch = {toggles: string[]; panels: string[]; container: string};
+
+const FX_PANEL_WATCH: FxPanelWatch = {
+    toggles: ['fx-detail-aesthetics-toggle', 'fx-detail-signals-toggle'],
+    panels: ['fx-detail-aesthetics-panel', 'fx-detail-signals-panel'],
+    container: 'fx-detail-page',
+};
+
+/**
+ * An init script: it runs before the app's own code and keeps, on the page clock (`performance.now()`, ms), every click
+ * in the capture phase of `window` (so before any handler), every change of a toggle's `aria-expanded` and of the
+ * container's `data-busy`, every mount and unmount of a watched element, and every uncaught error or rejection. It only
+ * reads: no `preventDefault`, no stopped propagation, no DOM write. Playwright sends its source to the page, so it may
+ * use nothing but its argument.
+ */
+function recordFxPanelEvents(watch: FxPanelWatch): void {
+    const log: Array<Record<string, unknown>> = [];
+    (window as unknown as {__lfFxPanelLog?: typeof log}).__lfFxPanelLog = log;
+    const note = (entry: Record<string, unknown>) => {
+        if (log.length < 500) log.push({t: Math.round(performance.now() * 10) / 10, ...entry});
+    };
+    const describe = (el: Element) => ({testid: el.getAttribute('data-testid'), expanded: el.getAttribute('aria-expanded') ?? undefined, busy: el.getAttribute('data-busy') ?? undefined});
+    window.addEventListener(
+        'click',
+        (event) => {
+            const target = event.target instanceof Element ? event.target : null;
+            note({kind: 'click', target: target?.closest('[data-testid]')?.getAttribute('data-testid') ?? null, tag: target?.tagName.toLowerCase() ?? null, x: event.clientX, y: event.clientY, trusted: event.isTrusted});
+        },
+        {capture: true, passive: true},
+    );
+    window.addEventListener('error', (event) => note({kind: 'error', message: event.message}));
+    window.addEventListener('unhandledrejection', (event) => note({kind: 'rejection', reason: String(event.reason?.message ?? event.reason)}));
+    const selector = [...watch.toggles, ...watch.panels, watch.container].map((id) => `[data-testid="${id}"]`).join(', ');
+    // A batch can report a node and its ancestor as added (the parser does): note each element once per change.
+    const last = new WeakMap<Element, 'mount' | 'unmount'>();
+    const scan = (nodes: NodeList, kind: 'mount' | 'unmount') => {
+        for (const node of Array.from(nodes)) {
+            if (!(node instanceof Element)) continue;
+            const found = Array.from(node.querySelectorAll(selector));
+            if (node.matches(selector)) found.unshift(node);
+            for (const el of found) {
+                if (last.get(el) === kind) continue;
+                last.set(el, kind);
+                note({kind, ...describe(el)});
+            }
+        }
+    };
+    new MutationObserver((records) => {
+        for (const record of records) {
+            if (record.type === 'childList') {
+                scan(record.addedNodes, 'mount');
+                scan(record.removedNodes, 'unmount');
+            } else if (record.target instanceof Element) {
+                const testid = record.target.getAttribute('data-testid') ?? '';
+                const name = record.attributeName ?? '';
+                if (name === 'aria-expanded' ? watch.toggles.includes(testid) : testid === watch.container) note({kind: 'attr', testid, name, from: record.oldValue, to: record.target.getAttribute(name)});
+            }
+        }
+    }).observe(document, {childList: true, subtree: true, attributeFilter: ['aria-expanded', 'data-busy'], attributeOldValue: true});
+}
+
 /**
  * The EUR-X pairs a test registers here are deleted, and verified gone, after it — whatever happened in between.
  *
@@ -801,7 +872,7 @@ type PairResults = {results: Array<{base: string; quote: string; success: boolea
  * while a fixture that depends on `page` is torn down before it, with the session still signed in. Every other test
  * of this file leaves it unrequested, so for them nothing changes.
  */
-const test = base.extend<{ownedFxQuotes: string[]}>({
+const test = base.extend<{ownedFxQuotes: string[]; fxPanelLog: void}>({
     ownedFxQuotes: async ({page}, use) => {
         const quotes: string[] = [];
         try {
@@ -809,6 +880,29 @@ const test = base.extend<{ownedFxQuotes: string[]}>({
         } finally {
             for (const quote of quotes) await resetReservedPair(page, quote, 'cleanup');
         }
+    },
+    /**
+     * Opt-in by name, like `ownedFxQuotes`: from its next navigation on, the test's page runs `recordFxPanelEvents`.
+     * On a red the log is attached as `fx-panel-log` and also printed, because the list reporter shows no JSON
+     * attachment and the next invocation overwrites the HTML report. On a green nothing is read.
+     */
+    fxPanelLog: async ({page}, use, testInfo) => {
+        await page.addInitScript(recordFxPanelEvents, FX_PANEL_WATCH);
+        await use();
+        if (testInfo.status === testInfo.expectedStatus) return;
+        const log = await page
+            .evaluate((watch) => {
+                const atRead = [...watch.toggles, ...watch.panels, watch.container].map((testid) => {
+                    const found = Array.from(document.querySelectorAll(`[data-testid="${testid}"]`));
+                    return {testid, count: found.length, expanded: found[0]?.getAttribute('aria-expanded') ?? undefined, busy: found[0]?.getAttribute('data-busy') ?? undefined};
+                });
+                const entries = (window as unknown as {__lfFxPanelLog?: unknown[]}).__lfFxPanelLog ?? null;
+                return {url: location.href, timeOrigin: performance.timeOrigin, readAt: Math.round(performance.now() * 10) / 10, atRead, entries};
+            }, FX_PANEL_WATCH)
+            .catch((error: unknown) => ({unreadable: String(error), entries: null}));
+        await testInfo.attach('fx-panel-log', {body: JSON.stringify(log, null, 2), contentType: 'application/json'});
+        const {entries, ...head} = log;
+        console.log([`[fx-panel-log] ${testInfo.title} ${JSON.stringify(head)}`, ...(entries ?? []).map((entry) => `[fx-panel-log] ${JSON.stringify(entry)}`)].join('\n'));
     },
 });
 
@@ -920,25 +1014,36 @@ test.describe('FX Detail Page', () => {
     // ========================================================================
     // Test 6: Aesthetics panel fold/unfold
     // ========================================================================
-    test('aesthetics panel toggles visibility', async ({page}) => {
+    // Each click is checked in two halves, the state the toggle publishes and then the panel it gates, so a red says
+    // which one failed; `fxPanelLog` adds what the page itself saw.
+    test('aesthetics panel toggles visibility', async ({page, fxPanelLog}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         const toggle = page.getByTestId('fx-detail-aesthetics-toggle');
+        const panel = page.getByTestId('fx-detail-aesthetics-panel');
+        await expect(toggle, 'the page opens with the toggle closed').toHaveAttribute('aria-expanded', 'false');
         await toggle.click();
-        await expect(page.getByTestId('fx-detail-aesthetics-panel')).toBeVisible();
+        await expect(toggle, 'after click 1, the toggle publishes open').toHaveAttribute('aria-expanded', 'true');
+        await expect(panel, 'after click 1, the panel follows the toggle').toBeVisible();
         await toggle.click();
-        await expect(page.getByTestId('fx-detail-aesthetics-panel')).not.toBeVisible();
+        await expect(toggle, 'after click 2, the toggle publishes closed').toHaveAttribute('aria-expanded', 'false');
+        await expect(panel, 'after click 2, the panel follows the toggle').not.toBeVisible();
     });
 
     // ========================================================================
     // Test 7: Signals panel fold/unfold
     // ========================================================================
-    test('signals panel toggles visibility', async ({page}) => {
+    // Same two halves per click as test 6, same log on a red.
+    test('signals panel toggles visibility', async ({page, fxPanelLog}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         const toggle = page.getByTestId('fx-detail-signals-toggle');
+        const panel = page.getByTestId('fx-detail-signals-panel');
+        await expect(toggle, 'the page opens with the toggle closed').toHaveAttribute('aria-expanded', 'false');
         await toggle.click();
-        await expect(page.getByTestId('fx-detail-signals-panel')).toBeVisible();
+        await expect(toggle, 'after click 1, the toggle publishes open').toHaveAttribute('aria-expanded', 'true');
+        await expect(panel, 'after click 1, the panel follows the toggle').toBeVisible();
         await toggle.click();
-        await expect(page.getByTestId('fx-detail-signals-panel')).not.toBeVisible();
+        await expect(toggle, 'after click 2, the toggle publishes closed').toHaveAttribute('aria-expanded', 'false');
+        await expect(panel, 'after click 2, the panel follows the toggle').not.toBeVisible();
     });
 
     test('AI Export lives in the page toolbar instead of Signals', async ({page}) => {
@@ -1138,7 +1243,9 @@ test.describe('FX Detail Page', () => {
         const requestedSignals = (rsiRequest.postDataJSON() as MockConvertRequest[]).flatMap((request) => request.signals ?? []);
         expect(requestedSignals).toEqual([expect.objectContaining({signal_code: 'RSI'})]);
 
-        await page.getByTestId('fx-detail-aesthetics-toggle').click();
+        const aestheticsToggle = page.getByTestId('fx-detail-aesthetics-toggle');
+        await aestheticsToggle.click();
+        await expect(aestheticsToggle, 'the toggle publishes open').toHaveAttribute('aria-expanded', 'true');
         const aesthetics = page.getByTestId('fx-detail-aesthetics-panel');
         await expect(aesthetics).toBeVisible();
 
@@ -1240,7 +1347,8 @@ test.describe('FX Detail Page', () => {
         await page.reload();
         await waitForSettled(page.getByTestId('fx-detail-page'), 20_000);
         await expect(chart).toHaveAttribute('data-view-mode', 'percentage');
-        await page.getByTestId('fx-detail-aesthetics-toggle').click();
+        await aestheticsToggle.click();
+        await expect(aestheticsToggle, 'after the reload, the toggle publishes open').toHaveAttribute('aria-expanded', 'true');
         await expect(aesthetics).toBeVisible();
         await expect(percentageRow).toBeVisible();
         await expect(percentageMin).toHaveValue('-12.5');

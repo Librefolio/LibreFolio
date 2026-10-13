@@ -143,4 +143,4 @@ mobile:   <500px — everything stacked and centered
 | DataTable types | `frontend/src/lib/components/table/types.ts` |
 | DataTableToolbar | `frontend/src/lib/components/table/DataTableToolbar.svelte` |
 | Storage utils | `frontend/src/lib/utils/storage.ts` |
-| i18n files | `frontend/src/lib/i18n/{en,it,fr,es}.json` |
+| i18n files | `frontend/src/lib/i18n/base/{en,it,fr,es}.json` |

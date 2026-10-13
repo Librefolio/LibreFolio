@@ -128,7 +128,17 @@ jobs:
         # image can report its version at runtime — the image has no .git/, so
         # git describe cannot run there. Freeze it here on the host (fetch-depth:0
         # gives us tags) reusing the same get_git_version() the app uses.
+        # This freezes the backend's version only: the frontend's is the next step.
         run: pipenv run python -c "from pathlib import Path; from backend.app.utils.runtime.version import get_git_version; get_git_version.cache_clear(); Path('VERSION').write_text(get_git_version())"
+
+      - name: Freeze the app version for the frontend builds
+        # The sidebar's version is not read from VERSION: frontend/vite.config.ts computes
+        # it at every frontend build of this job — the build below, the gallery
+        # webServer's debug rebuild, the production rebuild for the images — each after
+        # steps that may write tracked files, so `git describe --dirty` there read
+        # "-dirty" (the 1.1 screenshots, the nightlies). LF_APP_VERSION, frozen from
+        # VERSION here, takes precedence over git describe in vite.config.ts.
+        run: echo "LF_APP_VERSION=$(cat VERSION)" >> "$GITHUB_ENV"
 
       - name: "[INFO] Environment summary before install"
         run: |
@@ -149,6 +159,11 @@ jobs:
         timeout-minutes: 15
         run: pipenv run ./dev.py install
 
+      # The four "[CHECK] Checkout after …" steps only warn (scripts/ci/warn_if_tree_changed.sh
+      # always exits 0): they name the step that rewrites a tracked file, the cause of "-dirty".
+      - name: "[CHECK] Checkout after dev.py install"
+        run: sh scripts/ci/warn_if_tree_changed.sh "dev.py install"
+
       - name: "[INFO] Playwright installation check"
         run: |
           npm --prefix frontend exec -- playwright --version || true
@@ -156,6 +171,9 @@ jobs:
       - name: Build SvelteKit Frontend
         # Essential for the gallery and the Dockerfile which COPYs frontend/build/
         run: pipenv run ./dev.py front build
+
+      - name: "[CHECK] Checkout after the frontend build"
+        run: sh scripts/ci/warn_if_tree_changed.sh "the frontend build"
 
       - name: Check MkDocs translation structure consistency
         id: check-translate-diff
@@ -183,6 +201,9 @@ jobs:
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs build
 
+      - name: "[CHECK] Checkout after the docs build"
+        run: sh scripts/ci/warn_if_tree_changed.sh "the docs build"
+
       - name: Generate Screenshots with Playwright
         id: gallery
         timeout-minutes: 120
@@ -200,6 +221,9 @@ jobs:
         # with the screenshots that succeeded, and the report below lists it.
         continue-on-error: ${{ github.ref_name == 'dev' }}
         run: pipenv run ./dev.py mkdocs gallery --workers 4
+
+      - name: "[CHECK] Checkout after the gallery"
+        run: sh scripts/ci/warn_if_tree_changed.sh "the gallery"
 
       - name: Rebuild SvelteKit Frontend (production, for the images)
         # The gallery's Playwright webServer is `dev.py server --test`, which

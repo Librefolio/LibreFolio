@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "macd": {
+      "name": "MACD",
+      "description": "Momentum tra medie mobili",
+      "line": "MACD",
+      "lineDescription": "EMA veloce meno EMA lenta.",
+      "signal": "Linea segnale",
+      "signalDescription": "Smussamento EMA della linea MACD.",
+      "histogram": "Istogramma",
+      "histogramDescription": "Distanza tra MACD e linea segnale."
+    }
+  }
+}

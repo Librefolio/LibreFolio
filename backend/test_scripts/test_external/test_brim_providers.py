@@ -24,7 +24,6 @@ import ast
 import atexit
 import csv
 import io
-import json
 import re
 import shutil
 import tempfile
@@ -74,6 +73,7 @@ from backend.app.services.financial_math.portfolio.daily_state import DailyState
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.app.services.provider_registry import BRIMProviderRegistry
+from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
 # CONSTANTS & HELPERS
@@ -5978,19 +5978,20 @@ class TestWindows1252Invariance:
 # THE PLUGINS' NAME AND DESCRIPTION IN THE FOUR UI CATALOGUES
 # =============================================================================
 
-# The checkout this test file belongs to, found from the file itself: the catalogues are read next to it.
+# The checkout this test file belongs to, found from the file itself: the frontend sources below are read next to it.
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_I18N_DIR = _REPO_ROOT / "frontend" / "src" / "lib" / "i18n"
 _TRANSLATED_LANGUAGES = ("it", "fr", "es")
 _UI_LANGUAGES = ("en", *_TRANSLATED_LANGUAGES)
 _PLUGIN_TEXT_FIELDS = ("name", "description")
 
 
 def _brim_plugin_texts(language: str) -> dict:
-    """The ``brimPlugins`` section of one UI catalogue: plugin code → ``{"name": …, "description": …}``."""
-    path = _I18N_DIR / f"{language}.json"
-    section = json.loads(path.read_text(encoding="utf-8")).get("brimPlugins")
-    assert isinstance(section, dict) and section, f"{path.relative_to(_REPO_ROOT)} has no brimPlugins section: every plugin would be shown in English"
+    """The ``brimPlugins`` section of one UI catalogue: plugin code → ``{"name": …, "description": …}``.
+
+    Merged from the catalogue's sources (``scripts/i18n_catalog.py``), never read from a build, and without the English
+    fallback the build ships: a text the language lacks is missing here, not the plugin's English under its name."""
+    section = load_catalog(language, fallback=False).get("brimPlugins")
+    assert isinstance(section, dict) and section, f"{language}.json has no brimPlugins section: every plugin would be shown in English"
     return section
 
 
@@ -6110,6 +6111,52 @@ class TestFallbackPluginPriorityLimit:
             "their icon would come after the portal's favicon, and the wrong-broker check would propose their brokers only when no specific plugin's broker reads the file. "
             f"Rank them {limit} or more, or, if they really are made for no broker in particular, add them to _GENERIC_FALLBACK_PLUGINS"
         )
+
+
+# =============================================================================
+# THE ICONS BUNDLED WITH THE PLUGINS: A FILE INSIDE THE SERVED STATIC FOLDER (45_pluginModules, U-6)
+# =============================================================================
+
+# The URL of a file of the BRIM plugins' static folder: ``BRIMProvider.generate_static_url`` writes it, ``GET /api/v1/uploads/plugin/brim/{path}`` serves it.
+_BRIM_STATIC_URL_PREFIX = "/api/v1/uploads/plugin/brim/"
+
+
+def _served_brim_static_folder() -> Path:
+    """The folder ``GET /api/v1/uploads/plugin/brim/{path}`` serves, ``PLUGIN_STATIC_DIRS["brim"]`` of the uploads API: the files checked here are the
+    files the app serves. Imported here rather than at the top: the uploads module loads the whole API router, which nothing else in this file needs."""
+    from backend.app.api.v1 import uploads  # noqa: PLC0415 — the API router is loaded only by the test that needs the served folder
+
+    return uploads.PLUGIN_STATIC_DIRS["brim"]
+
+
+class TestBundledPluginIcons:
+    """A plugin that bundles its icon names a file inside the static folder the app serves.
+
+    A plugin's ``icon_url`` can be any URL, or a file of the BRIM plugins' static folder named with ``generate_static_url`` and served by
+    ``GET /api/v1/uploads/plugin/brim/{path}`` (``test_api/test_uploads_api.py``, ``TestPluginStatic``). Such a bundled icon must resolve inside that
+    folder, and its file must be there. Today Scalable's two plugins bundle theirs, composed by ``scripts/compose_broker_icons.py``; a plugin that
+    bundles one later is checked the same way, with no change here.
+
+    No server and no network: the plugins, and the files of the folder the app serves.
+    """
+
+    def test_every_bundled_icon_is_a_file_inside_the_served_folder(self):
+        """For every registered plugin whose ``icon_url``, as ``GET /brokers/import/plugins`` lists it, is a file of the BRIM static folder: the path
+        resolves inside the folder and a file is there. Otherwise the endpoint answers 403 or 404 and the broker icon never shows the plugin's: it falls
+        back to the next step of its chain (``frontend/src/lib/utils/broker/brokerIconChain.svelte.ts``)."""
+        folder = _served_brim_static_folder().resolve()
+        bundled = {info.code: info.icon_url.removeprefix(_BRIM_STATIC_URL_PREFIX) for info in BRIMProviderRegistry.list_plugin_info() if (info.icon_url or "").startswith(_BRIM_STATIC_URL_PREFIX)}
+        assert bundled, "premise: one registered plugin at least bundles its icon (broker_scalable and broker_scalable_deposit do), or this check passes on nothing"
+
+        problems = []
+        for code, relative in sorted(bundled.items()):
+            path = (folder / relative).resolve()
+            if not path.is_relative_to(folder):
+                problems.append(f"{code}: {relative!r} resolves outside {folder}, to {path}")
+            elif not path.is_file():
+                problems.append(f"{code}: {relative!r} is not a file of {folder}")
+
+        assert not problems, f"{len(problems)} bundled icon(s) the app cannot serve:\n" + "\n".join(f"  {problem}" for problem in problems)
 
 
 if __name__ == "__main__":

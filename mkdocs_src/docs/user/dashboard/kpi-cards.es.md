@@ -27,7 +27,7 @@ Las tres tarjetas en la parte superior del panel responden tres preguntas de un 
 **Métricas mostradas**
 
 - **P&L período** — el número grande: $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net flows}$, siendo los flujos netos el capital que moviste hacia dentro o hacia fuera → [P&L período](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
-- **La línea debajo** — por ejemplo `+91.31 € (+16.36%)`: cuánto se movió tu P&L Total desde ayer (panel a continuación)
+- **La línea debajo** — por ejemplo `+91,31 € (+16,36 %)`: cuánto se movió tu P&L Total desde ayer (panel a continuación)
 - **Variación no realizada** — cómo se movió la ganancia o pérdida no realizada de tus posiciones durante el periodo, incluido el efecto del tipo de cambio → [Valor contable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 - **Ventas** — la ganancia o pérdida realizada de las ventas del periodo, frente al coste medio de las unidades vendidas → [Precio medio de compra (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Dividendos e intereses** — dividendos, cupones e intereses P2P recibidos → [Dividendo e interés](../../financial-theory/instruments/transaction-types/dividend-interest.md)
@@ -36,7 +36,7 @@ Las tres tarjetas en la parte superior del panel responden tres preguntas de un 
 **Cómo interpretarlo**
 
 - **Verde es ganancia, rojo es pérdida** — y un depósito o un retiro no es ninguna de las dos.
-- **Las cuatro filas explican el número grande.** Lo que no pueden ver va a la [vista Rendimiento](positions.md#performance): lo que los tipos de cambio hicieron con el efectivo que mantienes en otra divisa aparece allí como **Efecto del tipo de cambio sobre el efectivo**, una fila por cada bróker cuyo efectivo movieron los tipos, y el resto — como activos que se mueven entre dos de tus brókeres el primer o el último día — como **Otro / residuo de conciliación**.
+- **Las cuatro filas explican el número grande.** Lo que no pueden ver va a la [vista Periodo](positions.md#performance): lo que los tipos de cambio hicieron con el efectivo que mantienes en otra divisa aparece allí como **Efecto del tipo de cambio sobre el efectivo**, una fila por cada bróker cuyo efectivo movieron los tipos, y el resto — como activos que se mueven entre dos de tus brókeres el primer o el último día — como **Otro / residuo de conciliación**.
 - **La barra más larga** es la fila que más movió tu resultado.
 
 ??? info "📏 La línea bajo el número grande — cómo se calcula"
@@ -47,8 +47,8 @@ Las tres tarjetas en la parte superior del panel responden tres preguntas de un 
     \Delta = \text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}} \qquad \text{percentage} = \frac{\Delta}{\left|\text{Total P}\&\text{L}_{\text{yesterday}}\right|} \times 100
     $$
 
-    - **El signo y el color siguen el cambio**, incluso mientras el P&L Total es una pérdida: de `-558.10 €` a `-466.79 €`, la línea muestra `+91.31 € (+16.36%)` — tu pérdida se redujo en un 16,36%.
-    - **Necesita dos días de historial**; el porcentaje se omite cuando el P&L Total de ayer es exactamente cero, y un día sin cambios muestra `0.00%`.
+    - **El signo y el color siguen el cambio**, incluso mientras el P&L Total es una pérdida: de `-558,10 €` a `-466,79 €`, la línea muestra `+91,31 € (+16,36 %)` — tu pérdida se redujo en un 16,36%.
+    - **Necesita dos días de historial**; el porcentaje se omite cuando el P&L Total de ayer es exactamente cero, y un día sin cambios muestra `0,00 %`.
 
 ### 💱 Variación no realizada por divisa {: #unrealized-change-by-currency }
 
@@ -85,7 +85,7 @@ Hay una fila 📈 para cada divisa, incluido el euro, y una fila 💱 para cada 
 **Métricas mostradas**
 
 - **Efecto timing** — el número grande, en puntos porcentuales (pp): $\text{MWRR}_{\text{cumulative}} - \text{TWRR}$ → [Efecto timing](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)
-- **El porcentaje debajo** — por ejemplo `+0.35%`: el cambio de hoy en tu P&L Total, frente al patrimonio neto de ayer (panel a continuación)
+- **El porcentaje debajo** — por ejemplo `+0,35 %`: el cambio de hoy en tu P&L Total, frente al patrimonio neto de ayer (panel a continuación)
 - **ROI** — la ganancia del periodo frente al capital invertido → [ROI simple](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)
 - **TWRR** — cómo rindieron tus elecciones de activos, independientemente del timing de tus depósitos → [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)
 - **MWRR acumulado** y **MWRR anualizado** — tu rentabilidad personal, incluido el timing de los depósitos, durante el periodo y como tasa anual → [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)
@@ -120,7 +120,7 @@ Hay una fila 📈 para cada divisa, incluido el euro, y una fila 💱 para cada 
 **Métricas mostradas**
 
 - **Patrimonio neto** — el número grande: valores a precio de mercado, más efectivo, más cualquier importe en tránsito entre tus brókeres → [NAV / Patrimonio neto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
-- **La línea debajo** — por ejemplo `+12,450.30 (+24.85%)`: tu **P&L Total** desde el inicio y, entre paréntesis, tu **ROI desde el inicio** → [Capital depositado y P&L Total](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
+- **La línea debajo** — por ejemplo `+12.450,30 (+24,85 %)`: tu **P&L Total** desde el inicio y, entre paréntesis, tu **ROI desde el inicio** → [Capital depositado y P&L Total](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 - **Valor de mercado** — cuánto valen los activos que posees a precios de mercado → [NAV / Patrimonio neto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)
 - **Coste de compra** — cuánto te costaron las posiciones que aún mantienes, cada compra al tipo de cambio de su propia fecha → [Valor contable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 - **Efectivo** — el efectivo en tus brókeres; pasa el cursor para desglosar el capital que depositaste y las rentabilidades que obtuviste → [Grupos de efectivo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)

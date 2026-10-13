@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "simulation": {
+        "name": "Simulación",
+        "description": "Simula percentiles de rendimiento GBM condicionales usando estimaciones históricas de deriva y covarianza."
+      }
+    }
+  }
+}

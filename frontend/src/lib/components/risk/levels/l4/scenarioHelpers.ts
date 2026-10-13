@@ -172,7 +172,12 @@ export function tornadoRows(output: unknown): TornadoRow[] {
             // first would make a 1%-weight bucket look as damaging as a 60% one.
             const value = toNumber(bucket.contribution_return);
             if (value === null) continue;
-            rows.push({key: `bucket:${bucketId}`, bucketId, value, ownReturn: toNumber(bucket.shock), contribution: value, amount: null, weight: shares === null ? null : (shares.get(bucketId) ?? 0)});
+            const weight = shares === null ? null : (shares.get(bucketId) ?? 0);
+            // A bucket nobody holds moved nothing: a row at 0.0% for it only lengthens the table (15 of
+            // the 18 of «Global risk-off» on the test data). The weight is the one the Weight column
+            // shows, so a bucket has its row exactly when the reader holds some of it.
+            if (weight === 0) continue;
+            rows.push({key: `bucket:${bucketId}`, bucketId, value, ownReturn: toNumber(bucket.shock), contribution: value, amount: null, weight});
         }
     } else {
         for (const raw of Array.isArray(stress.impacts) ? stress.impacts : []) {
@@ -380,11 +385,11 @@ export function replaySectionView(result: RiskAnalyticResult | null | undefined)
 }
 
 /** A replay date as the block writes it, e.g. «15 ott 2008». UTC, so the day never shifts. */
-export function formatReplayDate(iso: string, language: string): string {
-    return new Intl.DateTimeFormat(language, {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${iso}T00:00:00Z`));
+export function formatReplayDate(iso: string, locale: string): string {
+    return new Intl.DateTimeFormat(locale, {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${iso}T00:00:00Z`));
 }
 
 /** A share of the value, with one decimal: «12,0%». */
-export function formatReplayShare(fraction: number, language: string): string {
-    return new Intl.NumberFormat(language, {style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1}).format(fraction);
+export function formatReplayShare(fraction: number, locale: string): string {
+    return new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1}).format(fraction);
 }

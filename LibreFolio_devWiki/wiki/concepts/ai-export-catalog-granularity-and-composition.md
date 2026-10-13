@@ -150,5 +150,5 @@ were reread; all 66 are `OPTIMAL`.
 | Asset/FX component builders | `backend/app/services/ai_export/components/asset_fx_registry.py` |
 | Analysis instructions | `frontend/src/lib/features/ai-export/templates/sharedInstructions.ts` |
 | Response contracts | `frontend/src/lib/features/ai-export/templates/responseContracts.ts` |
-| Current Italian UI labels | `frontend/src/lib/i18n/it.json` |
+| Current Italian UI labels | `frontend/src/lib/i18n/base/it.json` |
 | Real-prompt probe implementation | `backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py` |

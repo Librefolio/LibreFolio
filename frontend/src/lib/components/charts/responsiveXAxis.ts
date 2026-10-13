@@ -1,4 +1,5 @@
 import {parseDisplayDate} from '$lib/utils/core/formatAxisDate';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /**
  * The third argument ECharts passes to an axis-label formatter: a time axis sends
@@ -24,6 +25,8 @@ export interface ResponsiveXAxisPolicy {
         showMaxLabel: true;
         rotate: 0;
         interval?: number | 'auto';
+        /** Category axes only: the forced last label ends at its tick instead of spilling past the chart's right edge. */
+        alignMaxLabel?: 'right';
         formatter: ResponsiveXAxisFormatter;
     };
 }
@@ -31,6 +34,7 @@ export interface ResponsiveXAxisPolicy {
 interface ResponsiveXAxisInput {
     width: number;
     values: readonly (number | string)[];
+    /** Default: the interface locale (`uiLocale()`, M-18). */
     locale?: string;
     axisType: 'category' | 'time';
     horizontalPadding?: number;
@@ -45,7 +49,7 @@ interface AxisDateFormats {
 }
 
 function axisDateFormats(locale: string | undefined): AxisDateFormats {
-    const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(locale || undefined, options);
+    const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(locale || uiLocale(), options);
     return {
         dayMonth: format({day: 'numeric', month: 'short'}),
         dayMonthYear: format({day: 'numeric', month: 'short', year: '2-digit'}),
@@ -161,6 +165,11 @@ export function buildResponsiveXAxisPolicy({width, values, locale, axisType, hor
             rotate: 0,
             formatter,
             ...(interval !== undefined ? {interval} : {}),
+            // A centred last label spills half its width past the plot on a phone. Category labels share one priority,
+            // so the forced last one survives `hideOverlap` once it ends at its tick; on a time axis a month or year tick
+            // outranks it and the inward label would be the one hidden. The first label spills at most into the price axis's
+            // label column on the left, which the grid keeps inside the chart.
+            ...(axisType === 'category' ? {alignMaxLabel: 'right' as const} : {}),
         },
     };
 }

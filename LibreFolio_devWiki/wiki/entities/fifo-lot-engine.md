@@ -92,7 +92,7 @@ T-1's rename commit (`1cc9cd8f5`, so `git log --follow` on `fifo/engine.py` keep
 | Date | Change |
 |------|--------|
 | v3 | Quantitative-only replay (open/closed lots, custody, quantity). No income/cost allocation. |
-| 2026-07 (v4/v5, commits `32c902e0`, `e252a022`) | Added economic pooling/allocation (D-1/broker-scoped income, deterministic FEE/TAX ladders, gross/net metrics, 3-state status, inline 3-level audit). Became the single canonical FIFO path — the old service-level income allocator was deleted. See [[sources/fifo-v4-fee-tax-integration]]. |
+| 2026-07 (v4/v5, commits `8ca7b72da`, `29769258e`) | Added economic pooling/allocation (D-1/broker-scoped income, deterministic FEE/TAX ladders, gross/net metrics, 3-state status, inline 3-level audit). Became the single canonical FIFO path — the old service-level income allocator was deleted. See [[sources/fifo-v4-fee-tax-integration]]. |
 | 2026-10-12 (`1cc9cd8f5`, `a57a43fbd`) | T-1: moved into the financial math layer as `financial_math/fifo/`, then cut into `models`, `eligibility`, `engine`; no behaviour change (`roi-fifo-utils` 652 before and after). See [[decisions/financial-math-one-home]]. |
 
 ## Source files

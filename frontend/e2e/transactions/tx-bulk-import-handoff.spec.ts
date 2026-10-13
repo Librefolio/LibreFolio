@@ -79,7 +79,7 @@ const CLOCK_SLACK_MS = 1_000;
 
 /** Where a BRIM todo or notice finds its wording: `importWizard.brimNotice.<reason_code>`. */
 const BRIM_NOTICE_NAMESPACE = 'importWizard.brimNotice.';
-/** The generic CSV plugin's blocker (`broker_generic_csv.py`), worded by the catalogue (decision B). */
+/** The generic CSV plugin's blocker (`broker_generic_csv/plugin.py`), worded by the catalogue (decision B). */
 const WORDED_CODE = 'corporate_action';
 /** A reason code no catalogue words: its message is the plugin's, whatever the UI language. */
 const UNWORDED_CODE = 's19_probe_unworded';
@@ -154,8 +154,8 @@ function cashRows(count: number, firstDay: string, describe: (n: number) => stri
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: UI_TIMEOUT});
     await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /** The wizard is open on step 1, settled. */

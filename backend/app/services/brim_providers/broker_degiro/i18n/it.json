@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_degiro": {
+      "description": "Importa l’Estratto conto di DEGIRO (CSV) in qualsiasi lingua: compravendite, commissioni, dividendi, imposte, interessi, depositi, prelievi e conversioni di valuta, ognuno nella sua valuta.",
+      "name": "DEGIRO"
+    }
+  }
+}

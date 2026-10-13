@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "sma": {
+      "name": "SMA",
+      "description": "Simple average of closing prices",
+      "output": "SMA"
+    }
+  }
+}

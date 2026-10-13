@@ -18,6 +18,7 @@
  * is exactly what the template did before.
  */
 import type {CellContent, ColumnDef, EnumOption, FilterValue} from './types';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /**
  * The value a typed cell sorts and filters *by*, which is not always what it
@@ -315,17 +316,17 @@ const DEFAULT_RELATIVE_LABELS: RelativeDateLabels = {today: 'Today', yesterday: 
 
 /**
  * Render a date cell's value for display. `time`, `datetime` and the default
- * fall through to the platform locale formatters; `relative` is the only branch
- * with real logic — today, yesterday, "Nd ago" under a week, then the full date.
- * The two relative words are passed in (the component supplies the translated
- * ones) so this function needs no i18n store.
+ * are written in the interface locale (`uiLocale()`, M-18); `relative` is the
+ * only branch with real logic — today, yesterday, "Nd ago" under a week, then
+ * the full date. The two relative words are passed in (the component supplies
+ * the translated ones) so this function reads no translation.
  */
 export function formatCellDate(value: Date | string, format?: string, labels: RelativeDateLabels = DEFAULT_RELATIVE_LABELS): string {
     const date = value instanceof Date ? value : new Date(value);
     if (format === 'time') {
-        return date.toLocaleTimeString();
+        return date.toLocaleTimeString(uiLocale());
     } else if (format === 'datetime') {
-        return date.toLocaleString(undefined, {
+        return date.toLocaleString(uiLocale(), {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
@@ -339,7 +340,7 @@ export function formatCellDate(value: Date | string, format?: string, labels: Re
         if (days === 0) return labels.today;
         if (days === 1) return labels.yesterday;
         if (days < 7) return `${days}d ago`;
-        return date.toLocaleDateString();
+        return date.toLocaleDateString(uiLocale());
     }
-    return date.toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'});
+    return date.toLocaleDateString(uiLocale(), {year: 'numeric', month: 'short', day: 'numeric'});
 }

@@ -199,6 +199,9 @@ const lastPatchBody = () => axiosPatch.mock.calls.at(-1)?.[1] as {items: {key: s
 
 const textInput = (key: string) => document.getElementById(key) as HTMLInputElement;
 
+/** Text collapsed the way jest-dom collapses what it reads: Intl may separate with U+00A0 or U+202F. */
+const squash = (text: string): string => text.replace(/\s+/g, ' ').trim();
+
 beforeEach(() => {
     currentLanguage.set('en');
     locale.set('en');
@@ -440,11 +443,14 @@ describe('GlobalSettingsTab — how a value type chooses its control', () => {
         expect(screen.getByRole('button', {name: 'settings.themeAuto'})).toBeInTheDocument();
     });
 
-    it('shows when a setting was last written, and stays quiet when it never was', async () => {
-        await mount([setting('custom_banner', 'hello', 'string', {updated_at: '2024-06-01T08:00:00Z'}), setting('other_banner', 'hi', 'string')]);
+    it('shows when a setting was last written — common.updated, then the date in the interface locale — and stays quiet when it never was', async () => {
+        const UPDATED_AT = '2024-06-01T08:00:00Z';
+        await mount([setting('custom_banner', 'hello', 'string', {updated_at: UPDATED_AT}), setting('other_banner', 'hi', 'string')]);
 
-        expect(textInput('custom_banner').closest('div.bg-gray-50')).toHaveTextContent('Last updated:');
-        expect(textInput('other_banner').closest('div.bg-gray-50')).not.toHaveTextContent('Last updated:');
+        // M-17, M-18 CP2: no more hard-coded "Last updated:". This file's dictionary has no `common.updated`, so
+        // the key reads as itself; the English UI on jsdom's en-US browser writes the date en-US.
+        expect(screen.getByTestId('global-setting-custom_banner')).toHaveTextContent(squash(`common.updated: ${new Date(UPDATED_AT).toLocaleString('en-US')}`));
+        expect(screen.getByTestId('global-setting-other_banner')).not.toHaveTextContent('common.updated');
     });
 });
 
@@ -1140,6 +1146,108 @@ describe('GlobalSettingsTab — the scheduler rows', () => {
         // comes through untranslated, which is enough to pin that the row renders
         // it rather than crashing on a missing value.
         expect(screen.getByTestId('scheduler-config-row')).toHaveTextContent('settings.global.scheduler.status.configSummary');
+    });
+});
+
+// =========================================================================
+/**
+ * M-17, M-18 CP2 — the tab's dates in the interface language.
+ *
+ * Two dates: when a setting was last written (inside `global-setting-{key}`: a hard-coded English
+ * `Last updated:` and `toLocaleString()`), and when the scheduler last ran (`scheduler-status-row`:
+ * `settings.global.scheduler.status.lastRun` and `toLocaleString()`). Both were written in the browser's
+ * notation, the first with an English label in every language (M-17). The rule (the developer's,
+ * 2026-10-12): every figure in the interface language. The cure: `common.updated` of the UI language, then
+ * `: ` and the date in `uiLocale()`; the last run's date in `uiLocale()` too.
+ *
+ * The labels are read from the shipped catalogues: for these cases the translator is the catalogue of the
+ * language the step sets, a plain message read as svelte-i18n's `$_` reads it, and replaced when the
+ * language changes, as svelte-i18n replaces it. The dates are Intl's output for the interface locale,
+ * never typed: jsdom's browser is en-US, so the English UI writes en-US. Both sides are collapsed the way
+ * jest-dom collapses the text it reads. The scheduler's state arrives after the list: its label is the
+ * barrier before its date is read.
+ */
+describe('GlobalSettingsTab — the dates in the interface language (M-17, M-18 CP2)', () => {
+    type UiLanguage = 'en' | 'it';
+    const CATALOGUES: Record<UiLanguage, unknown> = {en, it: itCatalogue};
+    /** The interface locale of each language: jsdom's browser is en-US. */
+    const LOCALE_OF: Record<UiLanguage, string> = {en: 'en-US', it: 'it'};
+    const LAST_RUN = 'settings.global.scheduler.status.lastRun';
+    const UPDATED_AT = '2024-06-01T08:00:00Z';
+    const LAST_RUN_AT = '2024-06-02T16:30:00Z';
+
+    const leaf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+    /** `key` in the shipped catalogue of `lang`; the key itself where the catalogue has none, as svelte-i18n falls back. */
+    const inCatalogue = (lang: UiLanguage, key: string): string => {
+        const value = leaf(CATALOGUES[lang], key);
+        return typeof value === 'string' ? value : key;
+    };
+    /** `label: date`, the label from the catalogue of `lang`, the date in its interface locale. */
+    const dated = (lang: UiLanguage, key: string, instant: string): string => squash(`${inCatalogue(lang, key)}: ${new Date(instant).toLocaleString(LOCALE_OF[lang])}`);
+
+    const settingRow = () => screen.getByTestId('global-setting-custom_banner');
+    const schedulerRow = () => screen.getByTestId('scheduler-status-row');
+
+    /** Change the UI language as the app does: the language, svelte-i18n's locale, and the translator it hands out. */
+    async function useLanguage(lang: UiLanguage): Promise<void> {
+        currentLanguage.set(lang);
+        locale.set(lang);
+        translator.set((key: string) => inCatalogue(lang, key));
+        await tick();
+    }
+
+    /** One string setting written once, and a scheduler that ran: both dates on screen once the state has landed. */
+    async function mountWithDates(lang: UiLanguage): Promise<void> {
+        axiosGet.mockResolvedValue({data: {server_tz: 'Europe/Rome', current_price: {last_run_at: LAST_RUN_AT, last_status: 'ok'}}} as never);
+        await mount([setting('custom_banner', 'hello', 'string', {updated_at: UPDATED_AT})]);
+        await waitFor(() => expect(schedulerRow(), 'premise: the scheduler state has landed').toHaveTextContent(inCatalogue(lang, LAST_RUN)));
+    }
+
+    beforeEach(() => {
+        // Controls: the catalogues have both labels, and Italian writes them and the dates otherwise than English.
+        for (const key of ['common.updated', LAST_RUN]) {
+            expect(inCatalogue('it', key), `control: the Italian catalogue has ${key}`).not.toBe(key);
+            expect(inCatalogue('it', key), `control: ${key} reads otherwise in Italian`).not.toBe(inCatalogue('en', key));
+        }
+        expect(new Date(UPDATED_AT).toLocaleString('it'), 'control: Italian writes the date otherwise').not.toBe(new Date(UPDATED_AT).toLocaleString('en-US'));
+    });
+
+    afterEach(() => {
+        // The language is module-level state shared by every test of the file (the translator is reset by the file's beforeEach).
+        currentLanguage.set('en');
+        locale.set('en');
+    });
+
+    it.each(['en', 'it'] as const)('a setting written once reads common.updated of the UI language, then its date in the interface locale (%s)', async (lang) => {
+        await useLanguage(lang);
+
+        await mountWithDates(lang);
+
+        expect(settingRow()).toHaveTextContent(dated(lang, 'common.updated', UPDATED_AT));
+    });
+
+    it.each(['en', 'it'] as const)('the scheduler’s last run reads its date in the interface locale (%s)', async (lang) => {
+        await useLanguage(lang);
+
+        await mountWithDates(lang);
+
+        expect(schedulerRow()).toHaveTextContent(dated(lang, LAST_RUN, LAST_RUN_AT));
+    });
+
+    it('follows an in-place switch of the UI language, en → it: both dates', async () => {
+        await useLanguage('en');
+        await mountWithDates('en');
+        // Soft: a label still hard-coded at mount must not hide whether the dates follow the switch.
+        expect.soft(settingRow(), 'en, mount').toHaveTextContent(dated('en', 'common.updated', UPDATED_AT));
+        expect.soft(schedulerRow(), 'en, mount').toHaveTextContent(dated('en', LAST_RUN, LAST_RUN_AT));
+
+        await useLanguage('it');
+
+        await waitFor(() => expect(schedulerRow(), 'premise: the label followed the switch').toHaveTextContent(inCatalogue('it', LAST_RUN)));
+        expect({updated: squash(settingRow().textContent ?? ''), lastRun: squash(schedulerRow().textContent ?? '')}).toEqual({
+            updated: expect.stringContaining(dated('it', 'common.updated', UPDATED_AT)),
+            lastRun: expect.stringContaining(dated('it', LAST_RUN, LAST_RUN_AT)),
+        });
     });
 });
 

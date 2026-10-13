@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_avanza": {
+      "description": "Importa las transacciones de la exportación CSV de Avanza. Admite operaciones de compraventa, movimientos de efectivo, dividendos, intereses, impuestos y comisiones.",
+      "name": "Avanza"
+    }
+  }
+}

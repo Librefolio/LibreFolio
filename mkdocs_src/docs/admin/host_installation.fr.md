@@ -79,7 +79,7 @@ pipenv run ./dev.py install
 Dans l'ordre, il installe :
 
 1. à nouveau les paquets Python, avec `pipenv install --dev` ;
-2. les outils du projet, avec `npm install` ;
+2. les outils du projet, avec `npm ci` ;
 3. les dépendances de l'interface web, avec `npm ci` dans `frontend/` ;
 4. le navigateur Chromium de Playwright, utilisé par les tests de bout en bout et les captures d'écran de la documentation. Si seul ce téléchargement échoue, l'installation se termine quand même.
 

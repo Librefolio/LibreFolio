@@ -93,7 +93,7 @@ The 27 July Phase 0 gate retained the corrected denominator through the cross-do
 > `ai_export/assemblers/` and `ai_export/profiles/` still exist as directories, but they
 > contain nothing except `__pycache__` — stale bytecode of files that are gone. That litter
 > is the only reason `ls` still shows them, and it is what makes them look like a move.
-> They were **deleted** in commit **`615a52eb` (2026-08-05)**, *"refactor(ai-export): remove
+> They were **deleted** in commit **`c9f840680` (2026-08-05)**, *"refactor(ai-export): remove
 > legacy runtime"*, which removed **22 233 lines against 1 577 added**: the whole
 > `assemblers/` + `profiles/` + `resolver.py` + `sampling.py` + `technical.py` +
 > `normalization.py` + `service.py` stack, and the tests that covered it.

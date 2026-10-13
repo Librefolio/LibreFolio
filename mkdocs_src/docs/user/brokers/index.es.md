@@ -8,7 +8,7 @@ Un **bróker** es una de tus cuentas — en una casa de bolsa, un banco o un exc
 
 La página **Brókeres** muestra una tarjeta por cada bróker, con su valor (**NAV**) en la divisa elegida en **Divisa** en la parte superior de la página. Haz clic en una tarjeta para abrir el bróker.
 
-**Ganancia/Pérdida** es el NAV menos el capital que entró en el bróker: tus depósitos menos los retiros, más el coste de los títulos que aportaste sin efectivo, más lo que trasladaste desde tus otros brókeres menos lo que trasladaste a ellos, cada movimiento valorado el día en que llegó. Así, mover dinero o títulos entre dos de tus brókeres no es una ganancia en una tarjeta y una pérdida en la otra, y mientras una transferencia está en tránsito, su valor permanece en la tarjeta del bróker que la envió. El efectivo mantenido en otra divisa se valora al último tipo de cambio, así que el efecto del tipo de cambio sobre él cuenta en la Ganancia/Pérdida, no en el capital. El porcentaje entre paréntesis es la ganancia sobre ese capital: muestra 0.00% cuando ese capital es cero o negativo, por ejemplo cuando el bróker ha enviado más de lo que ha recibido. → [Transferencias internas](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
+**Ganancia/Pérdida** es el NAV menos el capital que entró en el bróker: tus depósitos menos los retiros, más el coste de los títulos que aportaste sin efectivo, más lo que trasladaste desde tus otros brókeres menos lo que trasladaste a ellos, cada movimiento valorado el día en que llegó. Así, mover dinero o títulos entre dos de tus brókeres no es una ganancia en una tarjeta y una pérdida en la otra, y mientras una transferencia está en tránsito, su valor permanece en la tarjeta del bróker que la envió. El efectivo mantenido en otra divisa se valora al último tipo de cambio, así que el efecto del tipo de cambio sobre él cuenta en la Ganancia/Pérdida, no en el capital. El porcentaje entre paréntesis es la ganancia sobre ese capital: muestra 0,00 % cuando ese capital es cero o negativo, por ejemplo cuando el bróker ha enviado más de lo que ha recibido. → [Transferencias internas](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
 
 !!! note "Los brókeres compartidos muestran tu participación"
 
@@ -89,10 +89,10 @@ Volver a un bróker que ya abriste muestra sus últimas cifras al instante, actu
 La pestaña **Posiciones** lista lo que tienes en este bróker, en el mismo panel que las [Posiciones del Panel](../dashboard/positions.md):
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-positions" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Posiciones (Tabla)" alt="Vista de tabla de posiciones del bróker">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Posiciones (Mapa / Treemap)" alt="Vista de mapa de posiciones del bróker">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Rendimiento (Tabla)" alt="Vista de tabla de rendimiento del bróker">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Rendimiento (Mapa / Gráfico)" alt="Vista de mapa de rendimiento del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Cartera (Tabla)" alt="Vista de tabla de la cartera del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Cartera (Mapa / Treemap)" alt="Vista de mapa de la cartera del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Periodo (Tabla)" alt="Vista de tabla del período del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Periodo (Mapa / Gráfico)" alt="Vista de mapa del período del bróker">
 </div>
 
 - **Cartera** muestra tus posiciones (cantidad, valor, peso); **Periodo** muestra las ganancias y pérdidas de cada posición en las fechas seleccionadas. Ambos se presentan como **Tabla** o **Mapa**.

@@ -1151,3 +1151,1636 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   > cercando chiamate dirette a bcrypt, I/O su file, `shutil`, `subprocess` e `urlopen`. Ha trovato solo i tre punti di
   > V-16; l'`open` di `uploads.serve_file` gira già in `asyncio.to_thread`. La rassegna non scende nei servizi.
   > `user_service.reset_password` (`:205`, solo CLI) resta com'è.
+
+> Checkpoint V-16 committato dal coordinatore sul mio ramo: `a9e0fe4d9`, `0d6aee67c`, `3aabf0916`. È un commit
+> parziale: solo i 5 file, verificati blob per blob, mentre gli spec della 2b restano sporchi e intatti. Treno 66:
+> `dev_release2` = `b91d6d902`. Il mio ramo resta a `3aabf0916`, perché la worktree ha la 2b in corso. I treni 65 e 66
+> toccano solo wiki, CHANGELOG, la pipeline delle traduzioni e V-16 (12/10).
+
+### 12.8 Passo 2b, avanzamento (dopo V-16)
+
+- **Ordine della corsia**: le prove di A4 (b-tx-commit) e di A5/A6 (b-tx-seed); poi le verifiche di b-brokers,
+  b-tx-commit, b-tx-seed e b-v20; poi i gate di categoria.
+- ✅ **Una riga in più per la 2b** (coordinatore, 12/10; l'ha trovata W). In `frontend/playwright.config.ts:42-45` il
+  commento diceva «fullyParallel is off», mentre il valore è `true` (`:103`) e il commento accanto («On by default, and
+  earned…») lo conferma. Il resto della frase era giusto: il default di 1 worker esiste davvero, e il runner lo alza
+  esportando `E2E_WORKERS` (`_frontend_common.py:316-317`). Ora dice: «fullyParallel is on, but every test of a lane
+  shares one database and one backend, so raising the workers is a decision taken per run (the test runner's
+  `--workers` exports E2E_WORKERS), not a silent default». Prettier pulito.
+  > **⚠️ Fuori pista**: lo stesso blocco elenca il catalogo dei blocchi seriali (`:102`, «Currently: brokers/multi-user,
+  > asset-event-delete, tx-brim-import»), e l'elenco non è più vero. `asset-event-delete` seriale non è più. Mancano
+  > `files-destructive`, `fx-destructive` e il blocco «Saving» di `settings/scheduler.spec.ts`, aggiunto nella 2a. Lo
+  > allineo a fine 2b, quando sarà chiaro se `brokers/multi-user` resta seriale. È il terzo punto di V-17.
+- ✅ **A4, prova del danno** (12/10). b-tx-commit, spec invariati, `--workers 4`. Dopo ogni giro il DB letto in sola
+  lettura, confrontato col seed di P0: 76 righe, id 1-76.
+
+  | Giro | Spec | Esito | Id assegnati | Rimasti |
+  |---|---|---|---|---|
+  | P0 | `tx-wac-unit-toggle "toggle is visible"` (innocuo) | 1/1 | — | seed |
+  | P1 | `tx-commit-all-types` | 19/19 | 24 | **22** (19 su IB, 3 su Directa) |
+  | P2 | `transactions-modals` | 19/19 | 0 | 0 |
+  | P3 | `tx-wac-formmodal` | 10/10 | 3 | **3** (FM6: un BUY di 10 Apple e un TRANSFER IB→Directa) |
+  | P4 | `tx-wac-unit-toggle` | 4/4 | 1 | **1** (ADJUSTMENT +4 su Charles Schwab) |
+
+  - **26 transazioni rimaste a ogni giro** sui broker di `TEST_USER`. Nessuna riga del seed cancellata o modificata.
+  - Log: `/tmp/libreFolio_v_b_txcommit_p{0..4}_*.log`.
+  > **Note implementazione**:
+  > - T1 di `transactions-modals` committa davvero, ma va in rollback: sceglie il primo broker della tendina, Charles
+  >   Schwab, che non ha cassa, e la sua asserzione accetta il rollback. Oggi non lascia niente, ma lascerebbe una riga
+  >   appena quel broker potesse pagare;
+  > - T10 non cancella niente: la sua sonda su `confirm-modal-confirm` risponde sempre falso;
+  > - nei giri di una sola chiave `txHygiene` non è mai attivo, a nessun numero di worker: `LF_TX_HYGIENE` lo imposta
+  >   solo il giro consolidato `all` a 1 worker.
+- ✅ **A5 e A6, prova del danno** (12/10). b-tx-seed, spec invariati, `--workers 1`, il DB letto dopo ogni giro. Base:
+  76 transazioni, 11 eventi, 8 broker, 11 utenti. 43↔44 è la coppia `delete-safe`, 45↔46 la `delete-consume`.
+  - P0, Guard (innocuo) → base invariata.
+  - P1, C3 → **43 e 44 diventano due ADJUSTMENT scollegati** (−0,002 e +0,001), aggiornati durante il test. Gli id
+    non cambiano, quindi nemmeno `txHygiene` la rimetterebbe a posto: lui toglie solo id nuovi, o ripopola quando ne
+    manca uno. Il messaggio d'errore di `tx-bulk-suggest-ux` lo dice già.
+  - P2, TODO-B di `tx-paired-edit` → colpisce la coppia **`delete-consume`**, non la `delete-safe`. Le due descrizioni
+    diventano «E2E-paired-edit-<ts>», e `tx-delete` A2-confirm non la trova più, perché la cerca per descrizione
+    (`findRow(page, 'delete-consume', 'ETH')`).
+  - P3, A6 → **un DIVIDEND nuovo su Apple**, asset condiviso: `asset_events` 12, 1,50 USD, «E2E test event». Nessuna
+    transazione salvata.
+
+  Log: `/tmp/libreFolio_v_b_txseed_proof{0_baseline,1_c3,2_pairededit,3_eventpicker}.log`.
+- ✅ **A7, A7b, A7c: cura e verifica** (12/10). b-brokers; ha toccato solo `brokers/brokers.spec.ts`,
+  `brokers/multi-user.spec.ts`, `transactions/tx-import-resolution.spec.ts` (IWR-009) e
+  `transactions/tx-clone.spec.ts` (`:549`).
+  - **`brokers.spec.ts`**:
+    - «create broker with name» e «full broker CRUD flow» girano su un account usa-e-getta, preso da una fixture
+      locale. Nel teardown la fixture cancella i broker per id e poi l'account, anche dopo un rosso o un timeout;
+    - l'id viene dall'evento `broker.created`;
+    - «can open edit modal» e «can open delete dialog» passavano in silenzio su `if (count > 0)` e sul primo card.
+      Ora agiscono per id sul broker del seed «Interactive Brokers», letto via API, e non scrivono niente.
+  - **`multi-user.spec.ts`**: due account usa-e-getta, registrati in `beforeAll`, al posto di `TEST_USER` e
+    `TEST_USER_2`. `afterAll` cancella i broker per id e poi i due account. Il blocco resta `serial`, con la ragione
+    vera: contesti, account e id sono condivisi in ordine fra i due test.
+  - **IWR-009**: niente più `return`. Il test apre il wizard e lascia un CSV nel passo 1 (resta nel browser). Il
+    selettore diventa una precondizione asserita. Il broker è creato dal modale, confrontato con l'id dell'evento e
+    cancellato per id nel `finally`.
+  - **`tx-clone:549`**: usa il `withOwnedBroker` dello spec, che cancella prima il DEPOSIT e poi il broker per id,
+    anche dopo un rosso. La sonda davanti al FormModal è diventata un'asserzione.
+  - **Verifiche** (`--fresh-run`, a 1 e a 4 worker):
+
+    | Chiave | Esito |
+    |---|---|
+    | `front-broker list` | 9/9 e 9/9 |
+    | `front-user multi-user` | 2/2 e 2/2 (seriale) |
+    | `front-transaction tx-import-resolution` | 15/15 e 15/15 |
+    | `front-transaction tx-clone` | 8/8 e 8/8 |
+
+  - Dopo ogni giro il DB contiene solo il seed: 8 broker, 11 utenti, 76 transazioni, 30 accessi.
+  - Log: `/tmp/libreFolio_v_b_brokers_v{1..8}_*.log`.
+  - Prettier, tsc e `git diff --check` puliti.
+  > **⚠️ Fuori pista**: altre sonde rimaste negli stessi file, che b-brokers non ha toccato:
+  > - `tx-import-resolution`: `openImportWizard` usa un `.first()` senza filtro; IWR-007 e IWR-010 hanno `return`
+  >   condizionali; IWR-006b ha un controllo che ripiega su uno più debole;
+  > - `tx-clone`: righe scelte per posizione, classi CSS, `text=new`; il test «view-only» esce presto.
+  >
+  > Vanno nel backlog come V-21.
+- ⏸️ **STOP chiesto dallo sviluppatore** (12/10, 18:26, via coordinatore). Fermo al primo punto stabile, FROZEN fino a
+  «riparti». Nessun server acceso, porta 6175 libera. Nessun checkpoint della 2b: non era pronto.
+
+  **Stato esatto della 2b al momento dello stop:**
+
+  | Caso | Agente | Prova del danno | Cura nei file | Verifiche | Prossimo passo |
+  |---|---|---|---|---|---|
+  | A4 | b-tx-commit | ✅ 26 transazioni rimaste a giro | ✅ applicata nei 4 spec | **a metà**: V1-V2 `tx-commit-all-types` 19/19 e 19/19; V3-V4 `transactions-modals` 19/19 e 19/19; V5-V6 `tx-wac-formmodal` 10/10 e 10/10. **Da fare**: V7-V8 `tx-wac-unit-toggle` w1 e w4. V7 era partito alle 18:33:58, prima che lo STOP arrivasse all'agente; l'ho fermato io per PID, porta libera alle 18:34:09: non conta | i due giri mancanti, con la lettura del DB |
+  | A5, A6 | b-tx-seed | ✅ coppie 43↔44 e 45↔46 alterate, DIVIDEND su Apple | ✅ applicata nei 3 spec (prettier e tsc puliti) | **da fare**: V1-V6, cioè `tx-split-promote`, `tx-paired-edit`, `tx-event-picker` a 1 e a 4 worker | le sei verifiche |
+  | A7, A7b, A7c | b-brokers | ✅ | ✅ | ✅ V1-V8 verdi, DB pulito | nessuno |
+  | V-20 | b-v20 | evidenza nel gate della 2a e nel triage | ✅ applicata nei 3 spec (prettier e tsc puliti) | **da fare**: 7 giri, cioè una misura di `files "pdf preview"` e `auth`, `app-start-auth`, `files` a 1 e a 4 worker | i sette giri |
+  | Commento di `fullyParallel` | io | — | ✅ `playwright.config.ts:42-45` | prettier pulito | il catalogo seriale di `:102`, dopo la 2b |
+
+  **Da fare dopo le verifiche**:
+  - allineare il catalogo seriale di `playwright.config.ts:102`. Ora è chiaro che `multi-user` resta seriale: l'elenco
+    vero è `brokers/multi-user`, `files-destructive`, `fx-destructive`, `settings/scheduler` «Saving» e
+    `tx-brim-import`;
+  - nel backlog, V-20 ✅ e V-21, le sonde rimaste in `tx-import-resolution` e `tx-clone`;
+  - i gate a 4 worker: `front-transaction all`, `front-broker all`, `front-user all`, `front-utility all`,
+    `front-portfolio all`;
+  - il checkpoint 2b.
+
+  **Worktree**: 16 file sporchi. Sono i 14 spec della 2b, `frontend/playwright.config.ts` e questo piano. Il backlog
+  non è sporco, perché V-16 è già committato.
+- ▶️ **Riparti** (12/10, 19:24, coordinatore). Si riprende la 2b dal punto dello STOP. Stasera lo sviluppatore non c'è:
+  le domande per lui le annota il coordinatore.
+  > **Carico**: in parallelo, sulla corsia 6176, gira la run completa con coverage, quindi la macchina è carica. Le
+  > verifiche di isolamento a 4 worker restano obbligatorie. Un rosso che sa di carico (timeout, attesa scaduta) si
+  > rilancia da solo e a 1 worker prima di cercarne la causa, e il carico si registra qui.
+- ✅ **Catalogo seriale di `playwright.config.ts`** (12/10). La riga «Currently: …» (`:102-103`) ora dice
+  `brokers/multi-user, files-destructive, fx/fx-destructive, settings/scheduler («Saving»),
+  transactions/tx-brim-import`: sono i cinque `configure({mode: 'serial'})` che esistono davvero sotto `frontend/e2e`,
+  galleria compresa (grep). `asset-event-delete` non è più seriale: lo dice il suo stesso commento a `:96`.
+  `multi-user` resta seriale, con la ragione verificata da b-brokers. Prettier pulito. Chiude il terzo punto di V-17.
+- ✅ **A4, cura e verifica** (12/10). b-tx-commit; ha toccato solo i 4 spec (+158/−24).
+  - Ogni test che committa avvia `trackTransactionWrites` dopo il login e lo pulisce in `afterEach`, che gira anche dopo
+    un rosso. Ogni commit aspetta la risposta, così il tracker ha gli id prima della fine del test.
+  - **`tx-wac-formmodal` FM6** apriva la prima coppia sullo schermo, che poteva essere di un vicino o del seed. Ora apre
+    la coppia che ha creato: la rilegge per id, restringe la tabella con `id_min`/`id_max` e seleziona
+    `dt-row-checkbox-tx-<id>`. Spariscono il ciclo `.nth()`, la classe `tx-row-receiver` e il confronto sul testo.
+  - **`transactions-modals` T1** legge la risposta del commit; il rollback resta accettato.
+  - **Verifiche** (`--fresh-run`; dopo ogni giro tutti gli id assegnati sono stati cancellati, e nessuna riga del seed
+    toccata):
+
+    | Spec | w1 | w4 |
+    |---|---|---|
+    | `tx-commit-all-types` | 19/19 | 19/19 |
+    | `transactions-modals` | 19/19 | 19/19 |
+    | `tx-wac-formmodal` | 10/10 | 10/10 |
+    | `tx-wac-unit-toggle` | 4/4 | 4/4 |
+
+  - V7 e V8 sono girati con il carico della coverage sulla 6176 (load average 20-27 su 10 core), senza rossi.
+  - Prettier pulito; tsc offline exit 0.
+  - Log: `/tmp/libreFolio_v_b_txcommit_v{1..8}_*.log`.
+  > **⚠️ Fuori pista**, lasciati intatti e messi nel backlog (V-21):
+  > - **T10** di `transactions-modals` non prova niente: il delete della toolbar ora apre il workspace bulk, quindi la
+  >   sua sonda su `confirm-modal-confirm` risponde sempre falso. In più legge un contatore globale;
+  > - **T1** non mostra mai un commit riuscito: sceglie Charles Schwab, senza cassa, e il BUY va in rollback. Cambiare
+  >   il broker cambierebbe ciò che il test asserisce, quindi è una decisione;
+  > - restano violazioni nel codice non toccato:
+  >   - `.first()` senza filtro in T3/T9/T11 e sonde `isVisible().catch`;
+  >   - classi CSS in `tx-wac-unit-toggle` e in FM10, che usa anche `.nth(count-1)`;
+  >   - `.checkbox-btn` e `tr.row-deleted` in `tx-commit-all-types`, dove il test FX_CONVERSION accetta ancora
+  >     «nessun commit»;
+  > - un commento superato in `tx-commit-all-types` (`expectTransactionGone`) dice che gli id vengono riusati. Le
+  >   transazioni usano `AUTOINCREMENT` dal piano 34.
+- ✅ **A5 e A6, cura e verifica** (12/10). b-tx-seed; ha toccato solo i 3 spec.
+  - **C3** (`tx-split-promote`) e **TODO-B** (`tx-paired-edit`): ciascuno registra un account usa-e-getta con due broker
+    suoi. Via API finanzia il broker che manda e crea una coppia ETH collegata; ETH viene solo letto. Poi seleziona le
+    due metà per id (`dt-row-checkbox-<id>`, `data-state=checked`). Il `afterEach` cancella l'account, e con lui i broker
+    e le transazioni. Titoli invariati.
+  - **C3**: in più asserisce che la divisione è proprio di questa coppia.
+  - **TODO-B**: in più asserisce che ogni id aggiornato è della coppia e che il commit è accettato; aspetta la risposta,
+    non la richiesta.
+  - **A6** (`tx-event-picker`): l'evento va su un asset manuale creato dal test, non su Apple. Cancellarlo da Apple non
+    sarebbe bastato: l'API degli eventi, senza id, aggiorna sul posto l'evento con la stessa data e lo stesso tipo, e
+    avrebbe sovrascritto un dividendo del seed. Il default DIVIDEND si legge dall'icona 💰, non dalla parola tradotta.
+    Il `afterEach` cancella l'asset.
+  - **Verifiche** (`--fresh-run`):
+
+    | Chiave | w1 | w4 |
+    |---|---|---|
+    | `tx-split-promote` | 6/6 | 6/6 |
+    | `tx-paired-edit` | 4/4 | 4/4 |
+    | `tx-event-picker` | 5/5 | 5/5 |
+
+  - Il carico era alto per tutto il tempo (load average 16-55, la coverage sulla 6176), ma nessun rosso. Dopo ogni giro
+    il DB era tornato al seed: 43↔44 e 45↔46 intatte, 76/11/8/11/17. I contatori di SQLite confermano che i dati del
+    test sono stati creati e poi tolti.
+  - Prettier e tsc puliti. Log: `/tmp/libreFolio_v_b_txseed_verify{1..6}_*.log`.
+  > **⚠️ Fuori pista**, lasciati intatti:
+  > - gli helper della coppia sono copiati in due spec, perché le fixture erano in sola lettura;
+  > - sonde e classi CSS rimaste nei test non toccati (Bug 6, Bug 14, NR-1, Guard), e `pickAssetByName`, che se la sonda
+  >   manca clicca il primo asset della lista;
+  > - un commento sbagliato in `selectRow` («a paired row selects both halves»).
+  >
+  > Tutto nel backlog V-21.
+  >
+  > **Domanda sul prodotto**, letta nel codice e non osservata: «+ New event» potrebbe modificare in silenzio un evento
+  > manuale con la stessa data e lo stesso tipo, pur dicendo di averne creato uno. Va al coordinatore come V-22.
+- ✅ **V-20, cura e verifica** (12/10). b-v20; ha toccato solo `auth.spec.ts`, `layout/app-start-auth.spec.ts` e
+  `files.spec.ts`. Ogni attesa di 3 s sulla prima navigazione è diventata un'attesa su uno stato pubblicato, con un
+  limite esplicito:
+  - **`auth.spec.ts`**:
+    - `openLoginPage`: `login-page` visibile, 20 s, perché la pagina radice lo mostra solo dopo GET /auth/me;
+    - `expectLandedOnDashboard`: il path `/dashboard` (15 s), poi `dashboard-page` (10 s). `login()` torna appena il
+      form sparisce, mentre la radice è ancora su `/`; la vecchia regex accettava anche `/welcome?returnTo=%2Fdashboard`;
+    - `expectLandedOnWelcome`, per gli account col benvenuto da fare;
+    - `login-error` a 20 s;
+    - timeout del file a 60 s, perché `login()` da solo può usare 10 + 10 + 20 s;
+    - il test 5 ora aspetta l'atterraggio prima di controllare le assenze: prima passava senza provare niente.
+  - **`app-start-auth.spec.ts:190`**: prima lo stato del layout (`app-auth-checking` o `server-unreachable`, 30 s), poi
+    il poll sul gate con 10 s espliciti.
+  - **`files.spec.ts:854`**:
+    - `openStaticGridView` aspetta `files-page` con `data-busy=false`;
+    - il test ha 60 s;
+    - attese esplicite di 10 s sulla card d'errore e sulla chiusura;
+    - la pulizia passa in un `afterEach`, che ha un suo slot di tempo. Nel giro pieno il file `914c9ec0` era rimasto,
+      perché il timeout aveva tagliato il `finally`.
+  - Prove (`--fresh-run`), con un carico alto (load average 41-56) e nessun rosso:
+
+    | Comando | Esito |
+    |---|---|
+    | `--workers 4 files "pdf preview"` (misura) | 7/7 |
+    | `auth` w1 / w4 | 29/29 e 29/29 (la chiave prende anche `app-start-auth`) |
+    | `app-start-auth` w1 / w4 | 3/3 e 3/3 |
+    | `files` w1 / w4 | 28/28 e 28/28 |
+
+  - Prettier e tsc puliti. Log: `/tmp/libreFolio_v_b_v20_*.log`.
+  > **Note implementazione**: a 4 worker `auth` non ha incontrato lo stallo del ripopolamento (V-17). Con V-16 i primi
+  > login rispondono in circa 1 s. I limiti nuovi sono provati sotto carico alto, ma non contro uno stallo vero.
+  > **⚠️ Fuori pista**, lasciati intatti e messi nel backlog (V-21):
+  > - `logout()` della fixture usa ancora i 3 s di default;
+  > - gli altri test di File Preview: i PDF puliscono ancora in `finally` con 30 s, mentre markdown, immagine,
+  >   dettaglio, zoom e commenti non cancellano mai il loro upload;
+  > - la vista dei file non pubblica il modo griglia/lista: i test usano la classe `active`. Servirebbe `aria-pressed`
+  >   in `files/+page.svelte` (~`:704/707`);
+  > - a 4 worker le anteprime aperte dalla griglia aspettano il loro fetch 5,8-10,9 s, quelle dalla lista 0-0,2 s. È
+  >   plausibile una coda dietro le miniature, ma non è dimostrato.
+- ✅ **Catalogo seriale e gate di categoria della 2b** (12/10, eseguiti da me, `--fresh-run --workers 4`, uno alla
+  volta). Carico molto alto per la coverage sulla 6176: il load average registrato a inizio e fine di ogni gate è
+  andato da 39 a 94, su 10 core.
+
+  | Gate | E2E | Vitest | Load avg (1 min) inizio → fine |
+  |---|---|---|---|
+  | `front-transaction all` | 34 + **326/327** | 881/881 | 48,5 → 48,6 |
+  | `front-broker all` | 2 + 51, verdi | 53/53 | 48,6 → 79,3 |
+  | `front-user all` | 19/19 | 57/57 | 79,3 → 47,4 |
+  | `front-utility all` | **89/90** + **224/226** | 7018/7018 | 47,4 → 72,2 |
+  | `front-portfolio all` | 18 + 159, verdi | 1218/1218 | 72,2 → 94,0 |
+
+  Log: `/tmp/libreFolio_v_2b_gate_<categoria>.log`, riepilogo in `/tmp/libreFolio_v_2b_gates_summary.log`.
+  > **⚠️ Fuori pista: i 4 rossi.** Nessuno sta in un file toccato dalla 2b.
+  > - **`toolbar-width-sweep` `es`, dashboard e assetDetail**: è V-19, già noto e deterministico, assegnato a I.
+  > - **`onboarding-guides.spec.ts:297` T11 [mobile]**: attesa scaduta (15 s) in `completeWelcome`
+  >   (`fixtures/onboarding-accounts.ts:97`), con la pagina ancora su `/welcome?returnTo=…`. Rilanciato da solo a 1
+  >   worker (`--workers 1 front-utility onboarding-guides "T11 broker_page_guide"`, load 54,7 → 46,7): **2/2 verdi**,
+  >   desktop e mobile. Verdetto: **carico**.
+  > - **`tx-wac-bulk.spec.ts:415` WB5**: la cella WAC «auto» resta `empty` per 20 s invece di `ready`. Rilanciato da
+  >   solo a 1 worker (`--workers 1 front-transaction tx-wac-bulk "WB5"`, load 86,9 → 54,7): **di nuovo rosso**, 25,3 s.
+  >   Non è il carico, e non è la 2b: il giro è su una sola chiave con il seed fresco, e `tx-wac-bulk` non è toccato.
+  >   Il test prende per posizione la prima coppia «giver/receiver» del seed su IB o Directa. Le coppie più recenti
+  >   del seed sono le due ETH Coinbase→IB di ieri (`delete-safe`, `delete-consume`), poi AAPL IB→Hidden Admin Broker
+  >   (Asym-d, ricevente nascosto). Triage in corso, solo diagnosi (test-author `b-wb5`).
+  >
+  > Log dei rilanci: `/tmp/libreFolio_v_2b_rerun_{wb5,t11}.log`.
+- ✅ **WB5, triage** (12/10). Test-author `b-wb5`; diagnostica temporanea poi tolta, file identico a HEAD. Verdetto:
+  **assunzione**. Non è un difetto del prodotto.
+  - **La riga scelta**: WB5 prende per posizione `tx-41` → `tx-42`, cioè MSFT IB −2 → DEGIRO +2, seed «Asym-c,
+    OWNER↔VIEWER=view-only». Salta prima le coppie ETH, perché la riga che manda è su Coinbase, e la Asym-d, il cui
+    ricevente sul broker nascosto non arriva all'utente.
+  - **La risposta di validate**: `accessDenied` («EDITOR required for broker 2»), `wac_results: null`. Su DEGIRO
+    `e2e_test_user` è solo VIEWER, e `compute_wac_and_fx_issues` (`transaction_batch_stages.py:833`) non propone costi
+    per un batch con errori. Quindi `empty` è giusto, e il banner lo spiega.
+  - **Perché passava**: dal 14/08 (`9a254f812`) WB5 esige `ready`. Da allora passava solo clonando una coppia lasciata
+    da altri test: per esempio quella IB→Directa che WB4, prima di lui nello stesso file, committa e non cancella.
+    Oppure gli avanzi di `tx-commit-all-types`, che la cura di A4 ora pulisce.
+  - **Esiti per modalità**: da solo fallisce sempre; nel gate a 4 worker parte insieme a WB4 e fallisce; in sequenza
+    passava. **La pulizia della 2b l'ha smascherato**, quindi la cura entra nella 2b.
+  - **Cura in corso** (`b-wb5`, solo `tx-wac-bulk.spec.ts`):
+    - WB5 costruisce la sua coppia: broker e asset propri via API, come WB11; due ADJUSTMENT +10 a 100 e 200 EUR; un
+      TRANSFER collegato −4/+4 a una data fissa vecchia;
+    - la clona per id, e asserisce il valore esatto atteso, 150 EUR per unità;
+    - WB4 cancella ciò che committa.
+  - Log: `/tmp/libreFolio_v_wb5_diag1.log`.
+  > **⚠️ Fuori pista**, osservazioni sul prodotto da `b-wb5`, non curate:
+  > - nel bulk editor il ricevente DEGIRO compare come «To: —», perché `renderBrokerHtml` cerca il broker solo nella
+  >   lista del modale;
+  > - l'errore d'accesso compare sulla riga 1a, anche se riguarda il broker 2;
+  > - `frontend/test-results` e `.testLog` sono condivisi per worktree, non per corsia: un giro successivo ha cancellato
+  >   l'`error-context.md` di WB5.
+- ✅ **WB4 e WB5, cura e verifica** (12/10). `b-wb5`; ha toccato solo `tx-wac-bulk.spec.ts` (+195/−97, quasi tutto WB4
+  reindentato).
+  - **WB5**:
+    - crea via API due broker e un asset EUR propri. Su A salva due ADJUSTMENT +10 a 100 e 200 EUR, poi un TRANSFER
+      collegato A −4 → B +4 del 2024-01-04. Il ricevente ha un costo manuale di 175, così il 150 della copia è per
+      forza calcolato e non copiato;
+    - rilegge lotti, collegamento e costo, apre la tabella sugli id della coppia e verifica per id che la riga che
+      manda stia sopra a quella che riceve;
+    - clona per id e chiama `waitForWacResolved`;
+    - asserisce `ready` e le cifre `15000`, cioè 150,00 EUR per unità;
+    - `cleanupOwned` gira in `finally`.
+  - **WB4**: gira nello stesso involucro di pulizia. `commitBulkModal` registra gli id appena arriva la risposta del
+    commit, e li cancella in `finally`.
+  - **Prove**, file intero, `--fresh-run`:
+    - 1 worker: 11/11, load 32,5 → 28,0;
+    - 4 worker: 11/11, load 24,8 → 36,4.
+  - Dopo ogni giro il DB è tornato al seed; i contatori confermano che i dati del file sono stati creati e tolti.
+  - Prettier e tsc puliti. Log: `/tmp/libreFolio_v_wb5_cure_w{1,4}.log`.
+- ✅ **Gate `front-transaction all` rifatto dopo WB5** (12/10, `--fresh-run --workers 4`, load 37,2 → 40,9): E2E 34 (32
+  skippati) + **327/327**, Vitest 881/881 (`/tmp/libreFolio_v_2b_gate_front-transaction_v2.log`).
+- **Esito dei gate della 2b**:
+  - verdi: `front-transaction`, `front-broker`, `front-user` e `front-portfolio`;
+  - `front-utility`: verde a parte V-19 (`es`, deterministico, assegnato a I) e T11 [mobile], che è carico e da solo
+    a 1 worker è verde;
+  - il gate di utility è girato con le cure di V-20 già nella worktree: `auth`, `app-start-auth` e `files` sono verdi
+    anche nel giro consolidato.
+
+> Checkpoint 2b committato dal coordinatore: 7 commit da `1b1e58fd0` a `3d7635efb`. Poi il ramo è stato portato sul
+> target `b1c8f22df`: ora sono a **`bb2519108`**, pulito (12/10). La base nuova contiene il CP1 di M-18 (numeri nella
+> lingua della UI) e i treni 65-70. Decisioni del coordinatore:
+> - V-22 va nelle domande per lo sviluppatore, e non lo tocco;
+> - V-21 e V-23 restano dopo la 1.2; il T1 di V-21 lo decide lo sviluppatore.
+
+### 12.9 Convalida della revisione combinata e lacune 1.2
+
+- **Convalida** (in corso, 12/10): i 15 spec toccati dalla 2b, `--fresh-run --workers 4`, una chiave alla volta. Dopo
+  ogni giro il DB si confronta col seed della base nuova, fotografato da un giro innocuo
+  (`/tmp/libreFolio_v_combo_dbcheck.py`; riepilogo in `/tmp/libreFolio_v_combo_summary.log`). Un rosso si triagia
+  prima di toccare qualunque cosa.
+- **Lacune**, nell'ordine 2, 1, 6, 4, 7, 5, 3, con un checkpoint ogni due o tre. I test-author scrivono in parallelo,
+  la corsia si dà a turno:
+  - lacuna 2: `g2-fx-on-cash`. Un Vitest della riga «FX on cash» (`OtherPeriodEffectsTable.test.ts`); un E2E su dati
+    veri con cassa in una valuta riservata e tassi MANUAL, con oracolo; la cassa d'intestazione uguale alla somma
+    delle card;
+  - lacuna 1: `g1-risk-real`. Un E2E con il `/risk/query` vero fino allo schermo, L1 (VaR, CVaR) e una cifra L4, con
+    la risposta validata dallo schema Zod generato.
+- ✅ **Convalida della revisione combinata** (12/10, 21:18-21:50, `bb2519108`). 15 spec su 14 chiavi, `--fresh-run
+  --workers 4`, una alla volta. Load average da 23 a 178 su 10 core, per la coverage sulla 6176.
+  - **Esito**: tutto verde.
+    - Transazioni: `tx-commit-all-types` 19, `transactions-modals` 19, `tx-wac-formmodal` 10, `tx-wac-unit-toggle` 4,
+      `tx-split-promote` 6, `tx-paired-edit` 4, `tx-event-picker` 5, `tx-import-resolution` 15, `tx-clone` 8,
+      `tx-wac-bulk` 11.
+    - Broker e utenti: `list` 9, `multi-user` 2.
+    - Utility: `auth` 29, `app-start-auth` 3, `files` 28.
+  - **DB**: dopo 13 chiavi su 14 è identico al seed della base nuova (11 utenti, 8 broker, 30 accessi, 76 transazioni,
+    17 asset, 11 eventi, 24 rotte, 4125 tassi, scheduler e `e2e_test_user` invariati).
+  > **⚠️ Fuori pista: `files` lascia avanzi** (triage letto dal DB, in sola lettura). Restano un broker, «Preview Broker
+  > <ts>» con OWNER `e2e_test_user`, e 6 upload statici (12 file con i metadati). Non vengono dalla 2b:
+  > - `files.spec.ts:886`, «opens table preview for BRIM files», crea il broker e un file BRIM e non li cancella mai.
+  >   È la classe A7, che nell'audit avevo messo per errore in B;
+  > - gli upload sono dei test di File Preview che non cancellano mai, già notati in V-21.
+  >
+  > Ho proposto al coordinatore di curarli nel checkpoint delle lacune 2 e 1, con un commit a parte.
+- **Lacuna 2**: `g2-fx-on-cash` ha scritto `OtherPeriodEffectsTable.test.ts` (Vitest 4/4) e
+  `frontend/e2e/portfolio/foreign-cash-real.spec.ts`.
+  - Valute riservate: NAD su desktop, MZN su mobile.
+  - Oracolo esatto: FX on cash = 1000 × (1/1,6 − 1/1,25) = **−175 EUR**; cassa 1310 → 1135 fra due giorni consecutivi,
+    uguale alla somma delle card.
+  - Registrazioni: `add_test("foreign-cash-real")` in `_frontend_portfolio.py`, e una riga del Vitest nell'elenco
+    `front_component_unit` di `_frontend_utility.py`, che ora è di T. Ho chiesto al coordinatore.
+  - In corsia dalle 21:5x.
+- **Lacuna 1**: `g1-risk-real` ha scritto `frontend/e2e/portfolio/risk-real.spec.ts`, con due test su account
+  usa-e-getta che hanno Apple e Microsoft del seed:
+  - R1, L1: VaR giornaliero, CVaR giornaliero e mensile, bin e osservazioni;
+  - R2, L4: il replay reale, il totale e le righe per asset;
+  - ogni risposta `/risk/*` è validata dallo schema Zod.
+
+  È registrato in `_frontend_portfolio.py`, e aspetta la corsia.
+- **Decisioni del coordinatore sulla convalida** (12/10). La 2b entra nel treno 72 (`bb2519108`) insieme al lotto 48
+  di I.
+  - Gli avanzi di `files` si curano nel checkpoint delle lacune 2 e 1, con un commit a parte. L'agente è
+    `b-files-leak`. Il broker e il file BRIM di `:886` vanno in `try/finally` con `deleteOwnedBrokerAndFiles`; gli
+    upload della File Preview, in `ownedStaticFiles`.
+  - **Classe di `:886`, corretta**: è A, non B. Crea un broker permanente di `TEST_USER` e non ha nessuna pulizia.
+  - `_frontend_utility.py` è di **I** dal treno 70, non di T. La riga del Vitest in `front_component_unit` resta nel
+    mio commit, perché è un'aggiunta. Se al merge si scontra con le righe di I, si tengono tutte e due.
+- In scrittura: le lacune 6 (`g6-account-delete`) e 4 (`g4-yoc`). Ordine della corsia: g2, g1, `files`, g6, g4.
+- ✅ **Lacuna 2, verificata** (12/10). `g2-fx-on-cash`.
+  - **Vitest** `OtherPeriodEffectsTable.test.ts`, 4/4. Controlla l'etichetta dalla chiave `dashboard.fxOnCash`, letta in
+    una lingua finta `⟦key⟧`; il segno (+, −, niente sullo zero, «—» quando manca); la valuta passata; l'ordine e le
+    chiavi; la cella del P&L.
+  - **E2E** `portfolio/foreign-cash-real.spec.ts`, su un account usa-e-getta e con tassi MANUAL, valute riservate NAD
+    e MZN:
+    - `other_effects` è uguale alle righe attese: FX on cash **−175 EUR**, cioè 1000 × (0,625 − 0,8); prima viene il
+      reddito, e non c'è residuo;
+    - in una finestra in cui il tasso non si muove, la riga FX non c'è;
+    - due report a un giorno di distanza danno 1310 → 1135 di cassa e +10 → −165 di guadagno, ogni volta uguali alla
+      somma delle card (`summary.by_broker`), con i saldi nativi invariati;
+    - sullo schermo, net worth `113500` e la riga FX `17500` col meno.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | E2E `--fresh-run --workers 1` | 1/1 | 47 → 38 |
+    | E2E `--fresh-run --workers 4` | 1/1 | 33 → 22 |
+    | `check-orphans` | pulito (112 spec, 353 unit) | — |
+
+  - Nessun avanzo. svelte-check 0 errori; prettier e tsc puliti.
+  - Registrazioni: `foreign-cash-real` in `_frontend_portfolio.py`; il Vitest in `front_component_unit` di
+    `_frontend_utility.py`, file di I, riga aggiunta e tenuta d'accordo col coordinatore.
+  > **Note implementazione**: le card dei broker e la barra della cassa nel KPI non hanno testid. Le card si leggono da
+  > `summary.by_broker`; su un account di sola cassa il net worth è uguale alla cassa. L'attributo possibile è
+  > `broker-card-nav-{id}` in `BrokerCard.svelte`: per ora è solo una nota.
+- ✅ **Lacuna 1, verificata** (12/10). `g1-risk-real`, `frontend/e2e/portfolio/risk-real.spec.ts`. Due test paralleli,
+  ognuno su un account suo con un broker, un deposito USD e 10 Apple e 10 Microsoft del seed, comprati 200 giorni fa al
+  prezzo del seed. Prima il test verifica che i prezzi bastino: almeno 60 giorni e un prezzo recente. **Nessun
+  `page.route`.**
+  - **R1, L1**: CVaR giornaliero e mensile, VaR giornaliero, bin e osservazioni a schermo, uguali al `/risk/query`
+    vero. Nessuno stato d'errore o vuoto, e le quattro analitiche L1 sono `ok`. Valori visti: VaR 2,01%, CVaR 2,40% e
+    11,57%.
+  - **R2, L4**: il replay storico vero. Il totale (−5,00%) e il rendimento e il contributo per asset coincidono con il
+    backend.
+  - Ogni risposta `/risk/*` passa lo schema Zod generato.
+  - Si confronta l'ultima risposta di ogni tipo, a pannello assestato; le cifre per segno e numero, entro mezza unità
+    dell'ultima cifra mostrata.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 2/2 | 16,9 → 24,5 |
+    | `--fresh-run --workers 4` | 2/2 | 25,3 → 32,4 |
+    | `check-orphans` | pulito | — |
+
+  - Nessun avanzo; prettier e tsc puliti. Registrato in `_frontend_portfolio.py` (`risk-real`).
+  > **⚠️ Fuori pista**, osservazioni sul prodotto, non bloccanti:
+  > - L1 non mostra mai il VaR come cifra a sé. Le card mostrano il CVaR, e il VaR giornaliero compare solo nella frase
+  >   dell'istogramma; quello mensile mai. Il `secondaryLoss` calcolato da `buildHurtRows` non viene reso. Sembra
+  >   voluto;
+  > - `risk-replay-total` è una frase tradotta che contiene percentuale e importo. Il test prende la percentuale dal
+  >   `%`, ma per una lettura rigorosa servirebbe un elemento a parte.
+- ✅ **Gate `front-portfolio all` con i due spec nuovi** (12/10, `--fresh-run --workers 4`, load 22,1 → 45,3): E2E 18 +
+  **162/162**, Vitest 1221/1221 (`/tmp/libreFolio_v_cpA_gate_front-portfolio_all.log`). In corso
+  `front-utility component-unit`, dove è registrato il Vitest nuovo.
+- ✅ **Attributi per la lacuna 6** (12/10, aggiunti da me, solo attributi). In
+  `frontend/src/lib/components/settings/tabs/ProfileTab.svelte`, nel dialogo di cancellazione dell'account:
+  `data-testid="profile-delete-confirm-input"` sul campo dello username, `profile-delete-confirm` sul pulsante di
+  conferma e `profile-delete-cancel` su Annulla. Il dialogo chiede lo username, non la password. Prettier pulito,
+  Vitest `ProfileTab.test.ts` 51/51.
+- **Pronti per la corsia**:
+  - `b-files-leak`. `ownedStaticFiles` sale a «Files Page», e ci si iscrive anche «can upload a file to static
+    storage», sesto upload perso. Il broker BRIM di `:886` si cancella in un `afterEach`, che ha un suo slot di tempo:
+    un `finally` sarebbe tagliato dal timeout. `createBroker` usa `uniqueSuffix()`;
+  - `g4-yoc` (`yield-on-cost-real.spec.ts`):
+    - Y1: un asset su due broker, con YOC 3,00% e 1,20% per (asset, broker), contro 2,10% se fosse per asset;
+    - Y2: il percorso P-10 dà «—» con l'icona, poi, dopo un costo esplicito di 0, 4,00%;
+  - `g6-account-delete` (`brokers/account-deletion.spec.ts`), registrato in `_frontend_user.py`.
+- ✅ **Gate `front-utility component-unit`** (12/10, load 45,3 → 99,8): 115 file, **3010/3010**, con il Vitest nuovo della
+  lacuna 2 (`/tmp/libreFolio_v_cpA_gate_front-utility_component-unit.log`).
+- ✅ **Avanzi di `files.spec.ts`, cura** (12/10). `b-files-leak`; ha toccato solo lo spec.
+  - `ownedStaticFiles` e il suo `afterEach` salgono a «Files Page».
+  - Il sesto upload perso era di «can upload a file to static storage»: ora legge la risposta del suo `POST /uploads`
+    e iscrive il file.
+  - I test di anteprima di markdown, immagine, dettaglio, zoom, commento, host, fallback, modifica, menu e comandi
+    iscrivono il loro file. Il `finally` usato solo per cancellare è tolto.
+  - Il broker e il file BRIM di `:886` si cancellano in un `afterEach` di «File Preview» con
+    `deleteOwnedBrokerAndFiles`: un `finally` sarebbe tagliato dal timeout, e la sua `expect` coprirebbe il rosso del
+    test.
+  - `createBroker` usa `uniqueSuffix()`.
+  - **Prove**:
+
+    | Giro | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 28/28 | 72,3 → 34,0 |
+    | `--fresh-run --workers 4` | **24/28** | 32,6 → 52,1 |
+    | i 4 rossi da soli, a 1 worker | 4/4 | 42,4 → 54,8 |
+
+  - Dopo i tre giri il DB è al seed (11/8/30/76/17), `custom-uploads` resta a 137 e nessun upload della run è rimasto;
+    `broker_reports` resta a 16 file di dati.
+  - Prettier e tsc puliti.
+  > **⚠️ Fuori pista: i 4 rossi a 4 worker sono carico.** Sono le prime quattro anteprime aperte dalla griglia
+  > (immagine, immagine con zoom, commento PDF, host PDF), ferme con `file-preview-shell` `data-busy="true"` fino ai 30
+  > s. Cadono prima di qualunque riga cambiata. Erano già le più lente nel giro verde sulla base (11-17 s), e tutto
+  > girava circa due volte più piano. Il meccanismo probabile, non dimostrato, è la coda delle miniature nel thread
+  > pool del backend. Rilancio `files` a 4 worker con meno carico prima del checkpoint. `custom-uploads` parte da 137
+  > e non da 125 perché i 6 upload persi dal giro di convalida delle 21:49 restano: il populate non pulisce quella
+  > cartella.
+- ✅ **Lacuna 4, verificata** (12/10). `g4-yoc`, `frontend/e2e/portfolio/yield-on-cost-real.spec.ts`, registrato come
+  `yield-on-cost-real`. Due test su account usa-e-getta, niente route né mock.
+  - **Y1**: un asset manuale su due broker, con dividendi di 100 giorni fa, fuori dal periodo ma dentro la finestra YOC.
+    - API: un valore per (asset, broker), esatto: 30/10 ÷ 100 = **3,00%** e 12/8 ÷ 125 = **1,20%**, contro 2,10% se
+      fosse per asset;
+    - finestra, `first_pair_transaction_date`, redditi e base di costo coerenti;
+    - lo schermo mostra le cifre `300` e `120`, sulla Dashboard e sulla pagina del broker B.
+  - **Y2**: il percorso P-10, con un costo ignoto e un dividendo di 40.
+    - API: `unavailable`/`missing_wac` con il reddito contato;
+    - la cella mostra il trattino `-` con l'icona, senza cifre;
+    - dopo un costo esplicito di 0, WAC 50 e **4,00%**.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 2/2 | 25,1 → 25,4 |
+    | `--fresh-run --workers 4` | 2/2 | 25,4 → 36,3 |
+    | `check-orphans` | il suo spec registrato; l'unico orfano era lo spec di g7, non ancora registrato | — |
+
+  - Nessun avanzo; prettier e tsc puliti.
+  > **Note implementazione**: il YOC usa il trattino `-`, mentre le altre celle vuote usano `—`. Doc e Vitest dicono
+  > così, quindi è voluto, e lo spec asserisce il trattino. Y2 verifica in apertura che il percorso del costo ignoto
+  > sia ancora aperto, come V-4 per E2.
+- **Lacuna 7**: `g7-pdf-offline` ha scritto `frontend/e2e/files-pdf-offline.spec.ts`.
+  - Ogni richiesta fuori origine è abortita e registrata.
+  - Il PDF latino è costruito nel test.
+  - Asserisce `file-preview-pdf` `data-state="ready"` e zero richieste esterne; un GET del motore pdfium e il rifiuto
+    di jsDelivr confermano che il log vede le richieste.
+  - È registrato in `_frontend_utility.py`, file di I, con righe aggiunte. Aspetta la corsia dopo g6.
+- ✅ **Lacuna 6, verificata** (12/10). `g6-account-delete`, `frontend/e2e/brokers/account-deletion.spec.ts` (categoria
+  `front-user`, registrato in `_frontend_user.py`).
+  - **Setup via API**: utenti A e B usa-e-getta, non admin. Il broker X ha A come unico owner e B come viewer, con un
+    deposito e un report. Il broker Y ha A e B come owner, con un deposito.
+  - **Prima della cancellazione**: accessi e letture verificati come B.
+  - **La cancellazione**: A entra dalla UI e cancella l'account dal dialogo vero, con gli attributi aggiunti. Il
+    pulsante resta disabilitato finché lo username non è esatto, e `DELETE /auth/users/me` risponde 200.
+  - **Dopo**:
+    - A è uscito: `/` e `login-page`; `/auth/me` risponde 401, anche alla vecchia sessione API, e un nuovo login fallisce;
+    - come B: X, i suoi accessi e il suo report rispondono 404, e X sparisce dall'elenco;
+    - Y resta, con B unico owner e nessuna riga di A, e resta leggibile solo il deposito di Y.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 1/1 | 32,5 |
+    | `--fresh-run --workers 4` | 1/1 | 34,1 |
+    | `check-orphans` | pulito: 115 spec, 353 unit, 260 backend | — |
+
+  - Nessun avanzo. Gli id non si riusano, quindi il 404 di X non può essere un broker più nuovo di qualcun altro.
+  - Prettier e tsc puliti.
+- ✅ **Lacuna 7, verificata** (12/10). `g7-pdf-offline`, `frontend/e2e/files-pdf-offline.spec.ts`, registrato come
+  `front-utility files-pdf-offline` in `_frontend_utility.py` (di I, 20 righe aggiunte).
+  - Prima della prima navigazione ogni richiesta del contesto viene registrata, e ogni richiesta fuori origine è
+    rifiutata (`internetdisconnected`), non finta.
+  - Un PDF latino di una pagina, costruito nel test, raggiunge `file-preview-pdf[data-state=ready]`.
+  - **Zero richieste ad altre origini**: 144 richieste, tutte a `localhost:6175`.
+  - Il GET di `pdfium.<hash>.wasm` con 200 dal worker del motore dimostra che il log vede anche il worker; il rifiuto
+    di una sonda jsDelivr è registrato.
+  - Login via API, dopo aver verificato che `TEST_USER` non sia admin: un admin controllerebbe gli aggiornamenti su
+    GitHub.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 1/1 | 26,0 → 22,8 |
+    | `--fresh-run --workers 4` | 1/1 | 15,8 → 13,7 |
+    | `check-orphans` | pulito, 115 spec | — |
+
+  - Nessun avanzo; prettier, tsc, black e ruff puliti.
+  > **Note implementazione**:
+  > - un PDF latino non chiede font di ripiego (PDFium usa i suoi), quindi «font serviti in locale» resta coperto solo
+  >   da `pdfViewerAssets.test.ts`;
+  > - il controllo «requests nothing from third-party hosts» di `files.spec.ts` accetta qualsiasi richiesta `.wasm`,
+  >   anche solo la HEAD del thread principale. È solo una nota.
+- In scrittura: le lacune 5 (`g5-auto-transfer`) e 3 (`g3-pac`). Per il checkpoint rifaccio `files` a 4 worker e i gate
+  di `front-portfolio`, `front-user` e `front-utility`, con il carico ora basso (load 13-14).
+- ✅ **Gate del checkpoint delle lacune** (12/10, `--fresh-run --workers 4`, una chiave alla volta):
+
+  | Gate | Esito | Load |
+  |---|---|---|
+  | `front-utility files` (rifatto con poco carico) | **28/28** | 12,8 → 23,0 |
+  | `front-portfolio all` | 18 + **164/164**, Vitest 1221 | 23,0 → 33,1 |
+  | `front-user all` | **20/20**, Vitest 57 | 31,8 → 50,3 |
+  | `front-utility all` | 90/90 + **227/229**, Vitest 7231 | 50,3 → 102,3 |
+
+  - I due rossi di `front-utility all` sono gli `es` di `toolbar-width-sweep`: V-19, deterministici, di I.
+  - `files-pdf-offline` è verde nel giro consolidato.
+  - Dopo ogni gate il DB è al seed. Il confronto segna solo `uploads` 125 → 137: sono i 12 file persi nel giro di
+    convalida delle 21:49, che il populate non toglie, e nessun giro nuovo ha lasciato upload.
+  - Log: `/tmp/libreFolio_v_cpA2_*.log`.
+  > **Note implementazione**: niente checkpoint parziale. `_frontend_utility.py` contiene le righe delle lacune 2, 7 e
+  > 3, e `_frontend_portfolio.py` quelle di 2, 1 e 4: un checkpoint senza la 3 porterebbe una registrazione verso uno
+  > spec non verificato. Faccio un checkpoint unico con le 7 lacune appena 5 e 3 sono verificate, e l'ho detto al
+  > coordinatore.
+- **Lacune 5 e 3**, scritte:
+  - `g5-auto-transfer`, `tx-transfer-auto-cost.spec.ts`. T1 trasferisce l'intera posizione in Auto, e B deve avere WAC
+    150 e guadagno 600, non 3600. T2 è parziale, 8 unità: B ha 8 @ 150 e A ne tiene 12 @ 150;
+  - `g3-pac`, `pac-allocator-real.spec.ts`, spec di radice in `front-utility`. Asserisce lo stato `ready_incumbent`.
+
+  Verifiche in corsia, una alla volta.
+- ✅ **Lacuna 5, verificata** (12/10). `g5-auto-transfer`, `frontend/e2e/transactions/tx-transfer-auto-cost.spec.ts`,
+  registrato come `tx-transfer-auto-cost` in `_frontend_transaction.py`. Due test, ognuno su un account usa-e-getta,
+  con i broker A e B, un asset EUR manuale e gli acquisti di A fatti via API.
+  - Il trasferimento passa dalla UI: «+», poi il form TRANSFER, con il costo lasciato in Auto, poi Save
+    nell'editor.
+  - Si controllano:
+    - il form propone 150;
+    - la cella dell'editor è `ready` a 150;
+    - il salvataggio manda il ricevente come `auto`, e il server risponde che ha usato la media di A, 150 EUR;
+    - le righe salvate sono collegate, e il ricevente ha 150 per unità;
+    - il report e la tabella, con `pmc` acceso dal menu delle colonne.
+  - **Oracolo**: A compra 10 @ 100 e 10 @ 200, quindi WAC 150, con ultimo prezzo 180.
+    - **T1**, trasferimento di tutta la posizione: B ha 20 / 150 / 3600 / guadagno **600**; nella 1.1 il costo era 0 e
+      il guadagno 3600. A non ha più la posizione.
+    - **T2**, trasferimento parziale di 8: B ha 8 / 150 / 1440 / 240; A tiene 12 / 150 / 2160 / 360.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 2/2 | 71,8 |
+    | `--fresh-run --workers 4` | 2/2 | 32,0 |
+    | `check-orphans` | pulito, 117 spec | 24,8 |
+
+  - Nessun avanzo: controllati il DB vivo e lo snapshot di fine giro 1. Prettier e tsc puliti.
+  > **⚠️ Fuori pista**, osservazione sul prodotto letta nel codice, non vista a schermo, nel backlog come V-24. Appena il
+  > form è applicato, la cella del costo nell'editor può mostrare per un attimo «💡 0.00» come `ready`. Il form passa 0
+  > come segnaposto in Auto, e la cella tratta qualsiasi importo come una proposta pronta. Si corregge quando arriva la
+  > validazione, che dà 150. Per un istante l'utente vede il sintomo della 1.1, e `ready` non vuol dire «calcolato».
+- ✅ **Lacuna 3, verificata** (12/10). `g3-pac`, `frontend/e2e/pac-allocator-real.spec.ts`, registrato come
+  `front-utility pac-allocator-real` in `_frontend_utility.py` (di I, 21 righe aggiunte).
+  - **Setup**: un account usa-e-getta con 5000 EUR e due posizioni manuali, 20 @ 90 e 30 @ 40. Il codice del tool viene
+    da `GET /tools/catalog`; il planner si apre dalla sua card.
+  - **«Copia da LibreFolio»**: la liquidità del broker, i due asset con i prezzi salvati, la distribuzione attuale 60/40.
+  - **Il calcolo**: budget 1000, poi «Calculate plan». Il motore vero gira, e il test cattura il suo `POST
+    /tools/compute`.
+  - **Le verifiche**: la richiesta porta id, prezzi, cassa, pesi e il codice del tool. La risposta è `ready_incumbent`,
+    con prova `optimal_proven`. A schermo coincidono stato, prova, valori per asset, piè di tabella e ordini (debito e
+    commissione), e il totale investito non supera il budget.
+  - **Prove**:
+
+    | Comando | Esito | Load |
+    |---|---|---|
+    | `--fresh-run --workers 1` | 1/1 | 22,8 |
+    | `--fresh-run --workers 4` | 1/1 | 14,3 |
+    | `check-orphans` | pulito, 117 spec e 353 unit | — |
+
+  - Nessun avanzo; prettier, tsc, ruff e black puliti.
+  > **Note implementazione** (UI beta):
+  > - lo stato di successo pubblicato è `ready_incumbent`, non `ok`;
+  > - valore finale, valore ideale, importo e commissione non hanno un testid proprio, e si leggono dagli attributi
+  >   del data table;
+  > - il selettore di valuta non pubblica il valore scelto;
+  > - la data del planner è la minore fra quella locale e quella UTC, quindi lo spec salva i prezzi solo fino a ieri.
+- **Gate finale `front-transaction all`**: in corso.
+- ✅ **Gate finale `front-transaction all`** (12/10, `--fresh-run --workers 4`, load 21,4 → 38,2): 34 (32 skippati) +
+  **329/329**, Vitest 881 (`/tmp/libreFolio_v_cpA2_transaction-all.log`). Contiene la lacuna 5.
+  > **⚠️ Fuori pista: il DB, dopo il giro consolidato delle transazioni, non torna al seed.** Ci sono un broker, un
+  > accesso e un asset in più, e 3 transazioni in meno. Triage letto dal DB e da uno snapshot archiviato del seed:
+  > - la 28 è la FEE `[delete-safe] Platform fee for delete test`: la cancella `tx-delete` «A1-confirm» (`:181-183`),
+  >   per costruzione;
+  > - 45 e 46 sono la coppia `delete-consume`: la consuma «A2-confirm», per costruzione e già nelle note C;
+  > - il broker `T4-delref-<suffix>` (OWNER `e2e_test_user`) e l'asset `T4-delref-asset-<suffix>` sono lasciati di
+  >   proposito da «A1-error» (`:390-393`, «inert reference data»).
+  >
+  > È tutto vecchio e documentato, non viene dalle lacune. È nel backlog come V-25: un broker permanente di `TEST_USER`
+  > è della classe A7.
+- ✅ **Controlli statici del checkpoint** (12/10):
+  - prettier pulito su tutti i file frontend nuovi e cambiati;
+  - svelte-check 0 errori e 0 warning;
+  - ruff: 41 segnalazioni sui quattro file del runner sia a HEAD sia ora, quindi nessuna nuova;
+  - `git diff --check` pulito;
+  - `check-orphans` pulito, con 117 spec, nell'ultimo giro di g3.
+
+> Lacune committate dal coordinatore: `eb269ecde`, `be3e1ed60`, `56830fc79`, `ec488a296`. Poi il ramo è stato portato
+> sul treno 73: ora sono a **`247a9b9bd`**, con merge pulito; `_frontend_utility.py` e il backlog si sono fusi da soli
+> (12/10). La base nuova contiene:
+> - U-2: i cataloghi in `frontend/src/lib/i18n/base/`; `src/lib/i18n/<lang>.json` è generato e in sola lettura;
+> - il lotto 48 di I: clipboard, `BrokerIcon`, la modale del broker sbagliato, il pannello della sicurezza e la cura
+>   di V-19.
+
+### 12.10 Convalida sul treno 73, poi V-25 e V-21
+
+- **Convalida** (in corso, 12/10, una suite alla volta sulla 6175):
+  - `check-orphans`, `front check`, `component-unit`;
+  - i 7 E2E nuovi e `files`, `--fresh-run --workers 4`, ciascuno col confronto del DB col seed;
+  - i due `es` di V-19, che ora devono uscire verdi.
+
+  Poi un riepilogo breve al coordinatore: le lacune entrano nel treno 74.
+- **Mandato successivo** (coordinatore, 12/10): V-25 (gli avanzi di `tx-delete`) e V-21 senza il T1, che resta allo
+  sviluppatore. Un checkpoint, i test tutti via test-author. V-22, V-23 e V-24 restano dopo la 1.2. I quattro agenti
+  scrivono in parallelo, e la corsia arriva dopo la convalida:
+  - `v25-txdelete`: `tx-delete.spec.ts`. A1-confirm e A2-confirm cancellano righe create dal test; A1-error cancella il
+    suo broker e il suo asset;
+  - `v21-tx1`: `transactions-modals` (T10 vuoto da riscrivere; `.first()`, sonde), `tx-wac-unit-toggle`,
+    `tx-wac-formmodal`, `tx-commit-all-types`;
+  - `v21-tx2`: `tx-split-promote`, `tx-paired-edit`, `tx-event-picker`, `tx-import-resolution`, `tx-clone`, più una
+    fixture nuova per la coppia;
+  - `v21-files`: `files.spec.ts` (modo griglia/lista con `aria-pressed`, sonde, il test di upload per id) e l'attesa di
+    `logout()` nella fixture `auth-helpers.ts`.
+- ✅ **Convalida sul treno 73** (12/10, 23:40-23:55, carico in calo: load da 34,6 a 11,9). Tutto verde:
+
+  | Controllo | Esito |
+  |---|---|
+  | `check-orphans` | pulito: 117 spec, 355 unit |
+  | `front check` | svelte-check 0 errori, 0 warning |
+  | `component-unit` | 115 file, 3040/3040 |
+  | 7 E2E nuovi, `--fresh-run --workers 4` | tutti verdi, DB uguale al seed dopo ciascuno |
+  | `files`, `--fresh-run --workers 4` | 28/28, DB uguale al seed |
+  | V-19, `toolbar-width-sweep "es: 1700"` | **5/5**: la cura di I funziona |
+
+  Log: `/tmp/libreFolio_v_combo2_*.log`; riepilogo in `/tmp/libreFolio_v_combo2_summary.log`. Ho mandato il riepilogo
+  al coordinatore: le lacune entrano nel treno 74.
+- ✅ **Attributo per V-21c** (13/10, mio, solo attributi). In `frontend/src/routes/(app)/files/+page.svelte`:
+  `aria-pressed={viewMode === 'grid'}` su `view-mode-grid` e `aria-pressed={viewMode === 'list'}` su `view-mode-list`.
+  `class:active` resta per lo stile. Prettier pulito; la pagina non ha Vitest.
+- **V-21c** (`v21-files`), cura scritta, in corsia per la verifica:
+  - in `files.spec.ts`, i modi vista si aprono senza sonde, e i due test sui modi caricano un loro file;
+  - «can upload a file to static storage» trova la sua riga per id, scorrendo le pagine della tabella;
+  - via `.file-item`/`networkidle` e i 3 s dopo il primo caricamento;
+  - `logout()` aspetta `/` e `login-page` entro 20 s.
+
+  I chiamanti di `logout()` sono `auth.spec.ts` e `ai-export-memory.spec.ts` (`front-ai-export memory`).
+  > **⚠️ Fuori pista**: l'agente ha toccato `auth-helpers.ts` e `files.spec.ts` alle 23:53, mentre girava il mio `files`
+  > di convalida, chiuso alle 23:54 con 28/28. Allora la modifica a `files.spec.ts` erano solo import non usati, e
+  > nessuno dei due spec chiama `logout()`: l'esito non ne risente.
+- ✅ **Attributi per V-21a** (13/10, miei). Vitest dei componenti toccati: 9 file, 159/159; prettier pulito.
+  - `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte`, cella di stato: ogni span ha
+    `data-testid="tx-bulk-row-status"` e `data-status` = `new` | `edited` | `delete` | `original` | `split`. Serve al
+    posto di `tr.row-deleted`.
+  - `frontend/src/lib/components/ui/feedback/Tooltip.svelte`: una prop facoltativa `testId`, che va come
+    `data-testid` sul wrapper del trigger, nei due rami.
+  - `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte`: passa `testId="{testid}-help"` al tooltip
+    d'aiuto del costo. Serve al posto di `.tooltip-wrapper`.
+- **V-21a** (`v21-tx1`), cura scritta:
+  - T10 riscritto: un DEPOSIT suo, cancellato dal flusso vero e verificato per id;
+  - T3, T9 e T11 usano righe proprie, selezionate per id;
+  - T6 e T7b erano vuoti anche loro, ora provano davvero;
+  - sonde tolte da T5, T8, T12 e T13;
+  - `aria-pressed` al posto delle classi;
+  - commit rigoroso, anche nel test FX_CONVERSION;
+  - commento AUTOINCREMENT corretto.
+  > **⚠️ Fuori pista: due decisioni per lo sviluppatore.**
+  > - **T4** di `transactions-modals` oggi non prova niente: due `column-visibility-toggle` mandano `isVisible()` in
+  >   errore di strict mode, la `.catch` lo trasforma in `false`, e i testid `col-toggle-*` non esistono. Reso vero
+  >   diventerebbe rosso, perché il prodotto mette `cost_basis_override` prima di `asset_event_id`
+  >   (`TransactionBulkModal.svelte` `:1825` contro `:1888`), mentre il piano Bugfix-3 M5, passo 10, dice che è stato
+  >   spostato dopo. Resta com'è e va al coordinatore: o il prodotto è regredito, o l'attesa del test è superata.
+  > - **Possibile difetto**, letto nel codice: rimuovere una riga NUOVA accoppiata con `mark-delete` → `removeRow`
+  >   toglie solo l'operazione visibile; la metà nascosta (`pairedWith`) resta in `ops`, senza essere mai inviata. Il
+  >   sintomo atteso è un «Discard changes?» quando si chiude il workspace ormai vuoto. Il giro di evidenza E0 lo
+  >   verifica; se si conferma, STOP e messaggio.
+- ✅ **V-21c** (`v21-files`, 13/10): cura e verifica.
+  - **La cura**:
+    - `files.spec.ts`: il modo griglia/lista si legge da `aria-pressed`;
+    - i due test del modo caricano un file proprio, quindi niente più sonde;
+    - «upload static» trova la riga per id, scorrendo le pagine;
+    - le attese di 3 s dopo il primo caricamento sono diventate attese su `files-page` `data-busy`; anche i controlli
+      della tab BRIM aspettano il caricamento;
+    - via `networkidle` e le classi CSS;
+    - `auth-helpers.ts`: `logout()` aspetta `/` e `login-page`, entro 20 s ciascuno.
+  - **I giri** (6175, `--fresh-run`, coverage della 6176 in corso, loadavg 17–39):
+
+    | giro | esito | loadavg |
+    |---|---|---|
+    | `files`, 1 worker | 28/28 | 26 |
+    | `files`, 4 worker | 28/28 | 27 |
+    | `auth`, 1 worker | 28/29 | 17 |
+    | `auth`, 4 worker | 29/29 | 23 |
+    | `memory`, 1 worker | 4/4 | 39 |
+    | `memory`, 4 worker | 3/4 | 26 |
+
+    Tutti i chiamanti di `logout()` sono verdi a 1 e a 4 worker. Uploads, BRIM e broker sono tornati al seed.
+  > **⚠️ Fuori pista: due rossi fuori dal delta.**
+  > - **`layout/app-start-auth.spec.ts:263`** («a 401 in the middle of a session…»): rosso nel giro intero e anche da
+  >   solo, a 1 worker; verde a 4.
+  >   - Il test non chiama `logout()`, e da `d60937c08` app, API e layout non sono cambiati in modo rilevante.
+  >   - Dopo `clearCookies`, la pagina va a `/?redirect=%2Fassets` (+120 ms e +676 ms) prima che la navigazione arrivi
+  >     a `/brokers`.
+  >   - Ipotesi: «assunzione». Una richiesta di `/assets` è partita prima della pulizia dei cookie ma è rimasta nella
+  >     coda delle route di Playwright, ed esce dopo, senza cookie: il backend risponde 401. L'interceptor (`zodios-client.ts:130`) rimanda allora al login con la pagina
+  >     corrente, e il prodotto rispetta il contratto.
+  >   - Diagnosi in coda: strumentazione temporanea, poi ripristinata.
+  > - **`ai-export/ai-export-memory.spec.ts:66`**: rosso a 4 worker, nel setup. `setLanguage` aspetta 5 s mentre la
+  >   pagina mostra ancora «Loading…». Verde da solo a 1 worker. È della classe di V-20; in coda un secondo giro a 4
+  >   worker e il verdetto.
+- ✅ **V-25, prova del danno** (`v25-txdelete`, 13/10): `--fresh-run --workers 1 front-transaction tx-delete`, sullo spec
+  non modificato. 15/15 verdi in 34 s, loadavg 19,7. Il DB letto dopo il giro:
+
+  | | dopo il giro | seed |
+  |---|---|---|
+  | transazioni | 73: mancano gli id 28, 45 e 46 | 76 |
+  | broker | 9: resta `T4-delref-<suffix>` | 8 |
+  | asset | 18: resta `T4-delref-asset-<suffix>` | 17 |
+
+  È il danno descritto in V-25, numero per numero.
+  - **La cura**, nello spec:
+    - A1-confirm e A2-confirm lavorano su un account usa-e-getta, con una FEE propria e una coppia ETH propria;
+      `afterEach` cancella l'account;
+    - A1-error registra gli id appena esistono, e `afterEach` cancella righe, broker (`force`) e asset per id.
+  - La colonna di stato del bulk editor è visibile di default (`hiddenByDefault: false` a `:1646`; il commento sopra
+    è superato), quindi l'helper `tr.row-deleted` passa a `tx-bulk-row-status[data-status="delete"]`.
+  - In attesa della verifica a 1 e a 4 worker.
+- ✅ **Diagnosi dei due rossi fuori dal delta** (`v21-files`, 13/10; strumentazione temporanea, poi ripristinata: lo
+  sha256 di `app-start-auth.spec.ts` è tornato quello d'origine, `b93aba42…`).
+  - **`app-start-auth:263`**: 3 giri strumentati da solo a 1 worker, tutti verdi, con loadavg 12–17.
+    - Ogni giro mostra lo stesso meccanismo. Appena `data-busy` diventa falso, `/assets` lancia senza `await`
+      `loadFxPairSlugs()`: la GET di `/fx/providers/routes` e 24 `POST /fx/currencies/convert`. Alcune partono a
+      cavallo di `clearCookies`, anche a +0 e +1 ms, e restano in volo fino a +94 ms.
+    - Quando una `convert` esce senza cookie, il primo 401 nasce su `/assets`, e l'interceptor porta giustamente a
+      `/?redirect=%2Fassets`.
+    - Verdetto: **assunzione**; il prodotto è corretto. Non si è vista invece la coda delle route di Playwright.
+    - Cura proposta, solo test: in quel test, prima di `/assets`, rispondere `GET /fx/providers/routes` con zero
+      coppie.
+  - **`ai-export-memory:66`**: rilanciato a 4 worker, 4/4 verdi (loadavg 10).
+    - `setupAiExportPage` fa `login()` e poi `setLanguage('en')`, che dà 5 s alla catena del bootstrap. `login()`
+      ritorna appena sparisce il form, mentre `/` è ancora in `auth-loading`.
+    - Verdetto: **assunzione (tempo)**.
+    - Cura proposta, solo test: tra le due chiamate, aspettare l'URL fuori da `/` e `app-shell` visibile.
+    - Il rimedio strutturale, cioè `login()` che finisce all'arrivo, tocca più di 100 chiamanti.
+  - Mandate al coordinatore come domanda di perimetro: la proposta è V-26 in questo checkpoint, più V-27 nel backlog.
+    Insieme è partita la domanda su T4 per il developer.
+- ✅ **IWR-007** (`v21-tx2`): opzione (A).
+  - La premessa del test, cioè che un secondo import dello stesso file apra il passo «Duplicates», è superata. Il
+    contratto è scritto nella doc utente, `import/index.en.md`, «Duplicate Detection», e in
+    `ImportWizardModal.svelte:3056-3060`: le collisioni col DB arrivano alla revisione non spuntate, e il passo si apre
+    solo per le copie tra file importati insieme.
+  - Il test, oggi sempre uscito presto, asserirà il contratto vero, su un broker suo.
+- ✅ **Decisioni del coordinatore** (13/10, 00:39):
+  - **V-26 approvata**, in questo checkpoint, scritta da test-author (`v21-files`) e provata a 1 e a 4 worker coi
+    vicini. Le cure sono due:
+    - (A) `app-start-auth:263`, con la GET delle route servita localmente a zero coppie;
+    - (B) `setupAiExportPage`, con l'attesa dell'arrivo tra `login()` e `setLanguage`.
+  - **V-27** va nel backlog, dopo la 1.2: `login()` deve finire solo all'arrivo.
+  - **T4** di `transactions-modals` diventa la **domanda 12** per il developer: o l'ordine delle colonne è regredito,
+    o l'attesa del test è superata. I riferimenti: `TransactionBulkModal.svelte:1825` (`cost_basis_override`) contro
+    `:1888` (`asset_event_id`); il piano Bugfix-3 M5, passo 10, dice che la colonna è stata spostata dopo. T4 resta
+    com'è.
+  - Se V-21a conferma un difetto di prodotto: messaggio al coordinatore prima di qualsiasi cura.
+- ✅ **Attributo per IWR-007** (13/10, mio): in `ImportWizardModal.svelte`, ~`:2104-2131`, lo span esterno di ogni badge
+  di confronto ha ora `data-duplicate-status`, con valore `likely`, `pending_duplicate`, `pending_possible_duplicate`
+  o `possible`.
+  - Prima i quattro stati avevano lo stesso testid, `import-wizard-compare-<i>`, e si distinguevano solo per classi CSS
+    e testo tradotto.
+  - Vitest di `transactions/modals` e `utils/transactions`: 794/794; prettier pulito.
+- ✅ **V-21a, giro di evidenza E0** (`v21-tx1`, 13/10): `--fresh-run --workers 1 front-transaction transactions-modals
+  "V21-EVIDENCE"`, un blocco temporaneo, poi tolto, che registra e non asserisce. 5/5 in 1m05, loadavg 11–14; il DB è
+  rimasto al seed (76 tx, sequenza a 76).
+  - **T10, versione vecchia**: il delete non è mai partito, e la riga presa per posizione era la 45, metà della coppia
+    `[delete-consume]`.
+  - **T4, versione vecchia**: non verificava niente (strict mode, poi `.catch`). Nel prodotto l'ordine è
+    `cost_basis_override` alla posizione 9, `asset_event_id` alla 10: domanda 12 per il developer.
+  - **T6, versione vecchia**: il banner c'è, ma il dismiss non è mai stato provato.
+  - **T7b, versione vecchia**: il selettore del delete non trovava niente.
+  - **Il difetto**: chiudendo il workspace vuoto dopo aver rimosso una coppia nuova, compare il prompt di scarto. Il
+    controllo con un DEPOSIT singolo si chiude senza chiedere.
+  > **⚠️ Fuori pista: difetto di prodotto confermato** (letto nel codice, `TransactionBulkModal.svelte`):
+  > - `removeRow` (`:877-879`) toglie solo l'op visibile, e la metà nascosta (`pairedWith`, creata da
+  >   `addDualRowFromForm`, ~`:2477`) resta;
+  > - `resolveOps` (`:1078`) la salta, quindi non va mai al server;
+  > - `serializeOps` la conta, quindi `hasUnsavedChanges()` (`:576`) è vero.
+  >
+  > Riguarda la sola UX, i dati non si toccano. Hanno lo stesso effetto anche gli altri chiamanti di `removeRow`:
+  > `:2106`, `:2569` e `:3159`.
+  >
+  > Mandato al coordinatore. La proposta (a): il rosso su T7b, poi `removeRow` che toglie anche l'op con
+  > `pairedWith === tempId`. L'alternativa (b): backlog V-28. Nessuna cura prima della risposta.
+- **V-21a**: ordine dei giri cambiato. Prima `tx-wac-unit-toggle`, `tx-wac-formmodal` e `tx-commit-all-types`, a 1 e a
+  4 worker; `transactions-modals` dopo la decisione.
+- ✅ **Cura (a) approvata** dal coordinatore (13/10, 00:44).
+  - Prima il rosso via test-author: T7b, più la variante «Delete selected».
+  - Poi la mia cura di una riga in `removeRow`.
+  - Le prove: a 1 e a 4 worker, più `front-transaction all` a 4 worker nei gate.
+  - Va in un **commit a parte**, `fix(transactions): …`.
+- ✅ **Da quando c'è il difetto**: dalla **1.1.0** (`837a8f2c7`, 07/09), quindi è uscito. In quel tag ci sono già tutti i
+  pezzi:
+  - `removeRow` filtra solo `tempId` (`:815-817`), ed è invariato dalla migrazione PendingOp (`96d8d0a4d`, 11/05);
+  - `addDualRowFromForm` crea la partner nascosta, `toOp.pairedWith = fromOp.tempId` (`:2339`); `-S` fa risalire la riga
+    a `8268a44bb`, del 05/06;
+  - `resolveOps` salta le partner (`:1011`);
+  - `serializeOps` serializza tutte le op (`:503`), e `requestClose` (`:517`) apre la conferma.
+
+  Se merita una riga 🐛 nel CHANGELOG lo decide il coordinatore.
+- ✅ **V-21a, giri V3–V8** (13/10, `--fresh-run`): `tx-wac-unit-toggle` 4/4, `tx-wac-formmodal` 10/10 e
+  `tx-commit-all-types` 19/19, ciascuno a 1 e a 4 worker. Nessun rosso e nessun rilancio, loadavg da 18 a 48. Dopo ogni
+  giro il DB era al seed (76 tx, id 1–76), con la sequenza avanzata: le righe dei test sono state create e tolte.
+- ✅ **Attributo per la variante «Delete selected»** (mio): `data-testid="tx-bulk-delete-selected"` sul bottone di
+  cancellazione della toolbar di selezione (`TransactionBulkModal.svelte`, ~`:3539`). Prima aveva solo un `title`
+  tradotto e classi CSS. Prettier lo ha riformattato su più righe.
+- **V-21a, il rosso del difetto**: T7b e la variante «Delete selected» chiudono il workspace svuotato e asseriscono
+  che non chiede di scartare. Il giro rosso a 1 worker è in corsia.
+- ✅ **Il rosso del difetto C3** (`v21-tx1`, 13/10): `--fresh-run --workers 1 front-transaction transactions-modals
+  "removes both halves"`. 2 test, 2 rossi, 2m56, loadavg 11–19; il DB è rimasto al seed, con la sequenza ferma a 76.
+  - Entrambi i percorsi falliscono nello stesso punto, `transactions-modals.spec.ts:258`, in `expectBothHalvesGone`:
+    il kebab «Mark for deletion» (`:629`) e «Delete selected» (`:640`).
+  - L'errore: `Expected: "closed"`, `Received: "asks to discard"`.
+  - I controlli a schermo precedenti passano: nessuna riga, griglia vuota. Il rosso è quindi per la ragione giusta, al
+    passo della chiusura.
+- ✅ **La cura** (mia, 13/10): `removeRow` (`TransactionBulkModal.svelte:877`) toglie anche l'op con
+  `pairedWith === tempId`, con un commento di una riga. Prettier pulito; Vitest dei componenti transazioni e di
+  `utils/transactions` 912/912. È un commit a parte: `fix(transactions): …`.
+- **V-21a**: in corsia `transactions-modals` intero, a 1 e a 4 worker.
+- ✅ **V-21a verificata** (`v21-tx1`, 13/10, `--fresh-run`), dopo la cura: `transactions-modals` **20/20 a 1 worker**
+  (3m23, loadavg 27→17) e **20/20 a 4 worker** (1m27, loadavg 20→41). Sono compresi i due test C3, rossi prima della
+  cura e verdi dopo.
+  - Dopo ogni giro il DB è al seed: 76 tx, id 1–76, impronta delle colonne di business invariata; la sequenza è
+    avanzata a 80.
+  - I residui:
+    - T4 è la domanda 12;
+    - T1, cioè `fillBuyTransaction` che prende la prima opzione: anche T2 e T6 la usano, ed è una decisione del
+      developer;
+    - T5 e T8 asseriscono ancora il testo tradotto dell'etichetta dell'asset: servirebbe uno stato pubblicato, per
+      esempio `data-asset-field` su `tx-form-asset-wrap` (`TransactionFormModal.svelte`, ~`:1900`). Per T8 però il
+      soggetto è la traduzione;
+    - fuori lista: in T13 l'attesa della risposta di validazione parte dopo il click su Apply;
+    - fuori lista: in `tx-wac-formmodal`, `.first()` sulle celle del costo, comunque uniche in un workspace proprio.
+- **V-21b**: in corsia, 10 giri. I giri di `tx-paired-edit` e `tx-split-promote` provano anche la cura di `removeRow`
+  sui vicini.
+- ✅ **V-21b verificata** (13/10). `v21-tx2` è caduto verso le 01:24 per un errore di rete del modello (DNS), dopo 8 dei
+  suoi 10 giri; i tre mancanti li ho lanciati io. Tutti con `--fresh-run`:
+
+  | spec | 1 worker | 4 worker |
+  |---|---|---|
+  | `tx-split-promote` | 6/6 | 6/6 |
+  | `tx-paired-edit` | 4/4 | 4/4 |
+  | `tx-event-picker` | 5/5 | 5/5 |
+  | `tx-import-resolution` | 14/15, poi 15/15 | 15/15 (mio) |
+  | `tx-clone` | 8/8 (mio) | 8/8 (mio) |
+
+  I giri di `tx-split-promote` e `tx-paired-edit` sono verdi dopo la cura di `removeRow`, e valgono come prova sui
+  vicini.
+  > **⚠️ Fuori pista: IWR-006b.** Nel primo giro a 1 worker era rosso: aspettava ancora il compare dentro
+  > `tx-form-modal`. Prima il test usciva presto e non arrivava mai a quel punto. Il prodotto apre invece la
+  > `TransactionCompareModal` N-way, `import-wizard-compare-modal` (`TransactionCompareModal.svelte:155`), come dice la
+  > doc utente («click a duplicate badge to compare the row with its twin»). Alle 01:20:46 l'agente ha corretto il test,
+  > che ora asserisce:
+  > - la colonna della riga del file e quella del gemello nel DB, per id;
+  > - il titolo con 🔍;
+  > - la sola lettura: niente `keep-*` né `apply`;
+  > - la chiusura con Esc.
+  >
+  > Il secondo giro è stato 15/15. È una correzione dell'attesa, non un difetto.
+  > **⚠️ Fuori pista: i tassi FX del seed.** Dopo la mezzanotte il DB ha 4140 tassi invece di 4125. Non è una perdita
+  > dei test: il populate scarica una finestra ECB che finisce oggi, e tutti i 4140 hanno lo stesso `fetched_at`, quello
+  > del populate. Il controllo del DB ora verifica che nessun tasso sia scritto più di 30 s dopo il populate
+  > (`/tmp/libreFolio_v_dbcheck2.py`).
+  - **Il DB.** I giri dell'agente li ho verificati sugli snapshot che il runner archivia a fine invocazione
+    (`.testLog/00_archive/test-db_20261013_01*.tar.xz`). I giri di V-21a e V-21b, da `010243` a `015028`, sono tutti al
+    seed, e la sequenza delle tx avanza solo per le righe create e tolte.
+- **V-25**: verifica a 1 e 4 worker in corsia.
+- ✅ **V-25 verificata** (`v25-txdelete`, 13/10, `--fresh-run`): `tx-delete` 15/15 a 1 worker (loadavg 46→35) e a 4
+  worker (35→28).
+  - Dopo ogni giro il DB è al seed: 76 tx con id 1–76, 8 broker, 17 asset, 30 accessi, 11 utenti, nessun orfano.
+  - L'impronta delle righe 1–76, date escluse, è identica nei due giri (`0e15226dc5095958`).
+  - I contatori mostrano righe, broker, asset e utenti creati e poi tolti. Nessun tasso FX scritto dopo il populate.
+  > **⚠️ Fuori pista: commenti e doc superati.** Diversi testi dicono ancora che `tx-delete` distrugge righe del seed:
+  > - la fixture `playwright.ts` (`:84`, `:96`, `:178`);
+  > - la skill `testing-frontend` (`:484`, `:494`, `:504`);
+  > - `populate_mock_data.py` 9c;
+  > - `tx-paired-edit.spec.ts:231-233`.
+  >
+  > Sono documentazione legata direttamente a V-25, e la corregge `v25-txdelete`, solo nei commenti. La pagina dev
+  > MkDocs `runner_architecture.md` (`:232`, `:561`, `:577`, `:588`) è di M: la segnalo al coordinatore.
+- **V-26**: in corsia, `auth` e `front-ai-export all`, a 1 e a 4 worker.
+- ✅ **V-26 verificata** (`v21-files`, 13/10, `--fresh-run`, loadavg 14–38):
+
+  | chiave | 1 worker | 4 worker |
+  |---|---|---|
+  | `front-utility auth` | 29/29 | 29/29 |
+  | `front-ai-export all` | 18/18 E2E, 426 Vitest | 18/18 E2E, 426 Vitest |
+
+  - Il test del 401 di `app-start-auth`, ora a `:266`, è verde a 1 e a 4 worker. Anche `ai-export-memory:66` è verde,
+    a 4 worker con loadavg 38, più alto di quando era rosso.
+  - Il DB è pulito prima e dopo ogni giro: 11 utenti, 8 broker, nessun tasso FX scritto dopo il populate, upload e
+    BRIM al seed.
+- ✅ **Commenti superati su `tx-delete`** (`v25-txdelete`, solo commenti): fixture `playwright.ts`, skill
+  `testing-frontend`, `populate_mock_data.py` 9a.2 e 9c, `tx-paired-edit:231-235`, più `db-cleanup.ts:15-18` e
+  `tx-clone:279-281`.
+  - prettier e `git diff --check` puliti; `ruff` e `black` puliti sul `.py`.
+  - La skill `SKILL.md` già non passava prettier su HEAD, con 40 differenze nei blocchi `!!!`: lasciata com'è.
+- ✅ **svelte-check** dopo le ultime modifiche ai `.svelte`: 0 errori, 0 avvisi.
+- **Numerazione** (13/10): il coordinatore ha dato **V-28** al teardown di `jsCoverage`, nel lotto successivo. La cura di
+  `removeRow` è quindi **V-29** nel backlog. Il «V-28» citato sopra, nell'alternativa (b), era solo una proposta, mai
+  adottata.
+- **Lotto successivo, assegnato dal coordinatore** (13/10, dopo questo checkpoint): i 27 rossi da carico della run
+  completa di R (rapporto di R, §3.2–3.5). Comprende:
+  - V-28, il teardown di `jsCoverage`, 15 rossi;
+  - V-27 dentro la 1.2, con `login()` che aspetta l'arrivo: 9 rossi;
+  - i budget stretti di `fx-add-pair:219` e CAC-001.
+
+  Va in un checkpoint suo.
+- ✅ **Gate del checkpoint V-25/V-21/V-26/V-29** (13/10, 6175, in sequenza; loadavg 10–18):
+  - `--fresh-run --workers 4 front-transaction all`: E2E 34 + 331 = **365 verdi**, cioè i 363 di prima più i due C3; 32
+    skip voluti, tutti mobile/desktop di `tx-import-report-set`; **Vitest 881/881**; DB al seed.
+  - `front-utility component-unit`: **3040/3040**, 115 file.
+  - `check-orphans`: 117 E2E, 355 unit e 261 backend, tutti raggiungibili.
+  - svelte-check 0/0; prettier pulito su tutto il delta frontend; `git diff --check` pulito; `ruff` e `black` puliti su
+    `populate_mock_data.py`.
+  - `tsc -p tsconfig.e2e.json` dà 2 errori, già presenti e fuori dal delta: `onboarding-tour.spec.ts:863`, un
+    restringimento di tipo, e `src/lib/types/files.ts:9`, l'alias `$lib`, che quel tsconfig non risolve.
+  - Porta 6175 libera.
+- ✅ **Checkpoint pronto** (13/10): 25 file tracciati e 1 nuovo (`fixtures/owned-pair.ts`), in 7 commit proposti.
+  - La cura di `removeRow` è in un commit a parte, come chiesto dal coordinatore.
+  - `TransactionBulkModal.svelte` passa per un blob intermedio con i soli attributi:
+    `/tmp/libreFolio_v_cp_TransactionBulkModal.attrs-only.svelte`, blob `5acaa10a`.
+
+### 12.11 Lotto «rossi da carico della run di R»: V-28, V-27 e due budget (13/10)
+
+**Base**: `273b188ea`, treno 82, verificata con `git rev-parse HEAD`; worktree pulita. Il coordinatore ha integrato il
+checkpoint precedente: C1 `9f8ac58d5` … C7 `452978f2e`. La riga 🐛 di V-29 nel CHANGELOG è `ed8fc5cd7`, portata da M.
+
+**Fonti**:
+- il rapporto di R, `38_postReleaseBacklog/report-R-full-run-coverage-20261012.md`, §3.2–3.5, sulla base `a5653f9ef`
+  (treno 68);
+- le pagine devWiki `problems/jscoverage-teardown-spends-the-test-budget` e
+  `problems/login-returns-before-the-app-has-started`.
+
+**Vincolo fino al via del coordinatore**: solo spec singole a 1 worker; niente categorie intere né sonde di carico.
+Lo sviluppatore non ha chiesto codice di prodotto: se una cura lo richiede, STOP e domanda.
+
+#### Analisi, verificata sul codice
+
+1. **V-28: il teardown di `jsCoverage`** (15 rossi nella run di R).
+   - Il fixture (`e2e/fixtures/playwright.ts:292-334`) è `{scope: 'test', auto: true}`, senza `timeout`. La raccolta
+     che segue `use()` legge `window.__coverage__` e scrive circa 17 MB di JSON, e sta dentro i 30 s del test
+     (`playwright.config.ts:110`).
+   - In Playwright 1.61, un fixture con `timeout` riceve per setup e teardown uno slot suo, `{timeout, elapsed: 0}`
+     (`node_modules/playwright/lib/worker/workerProcessEntry.js:158`).
+   - La cura: un `timeout` dedicato al fixture. Così la raccolta non consuma il budget del test, e una raccolta lenta
+     resta distinguibile da un test lento. Senza coverage il fixture non fa niente.
+   - **La prova del meccanismo, senza carico**: un ritardo temporaneo nel teardown, attivato da una variabile
+     d'ambiente e poi tolto. Prima della cura il rosso «Tearing down "jsCoverage" exceeded the test timeout»; dopo, il
+     verde. Dopo il via, una categoria con `--coverage js` sotto carico, come chiede il coordinatore.
+2. **V-27: `login()` ritorna appena sparisce il form** (9 rossi nella run di R).
+   - **I 9 rossi della run di R sono già curati sul posto.** La base di R, `a5653f9ef`, non conteneva né V-20
+     (`d60937c08`, verificato con `merge-base --is-ancestor`) né V-26.
+     - Oggi `auth.spec.ts` usa `expectLandedOnDashboard` ed `expectLandedOnWelcome`, con 15 s per l'URL e 10 s per la
+       pagina; R ha visto la versione vecchia, con `toHaveURL(/.*dashboard.*/)` e i 3 s di default.
+     - `setupAiExportPage` aspetta l'arrivo da V-26.
+   - Resta la cura strutturale, per tutti i chiamanti: 257 chiamate in 102 file. Restano scoperti, per esempio,
+     `switchUser` di `ai-export-memory` e `support-copy-and-go:146`.
+   - **Gli stati d'arrivo pubblicati** dal layout `(app)` e dalla root, dopo il login:
+     - `app-shell` (`(app)/+layout.svelte:246`);
+     - `welcome-shell` (`:242`);
+     - `onboarding-bootstrap-blocked` (`OnboardingBootstrapBlock.svelte:13`).
+   - **Il rischio**:
+     - `auth.spec.ts` ~`:415` («onboarding bootstrap failure blocks at root…») fa fallire apposta l'onboarding, chiama
+       `login()` e si aspetta `/` con `onboarding-bootstrap-blocked`. `login()` deve quindi chiudere su uno dei tre
+       stati, non solo sulla shell.
+     - Vanno cercati gli altri test che trattengono gli endpoint del bootstrap prima di `login()`, e li rilasciano
+       dopo: con la cura sarebbero uno stallo.
+   - **I commenti che diventano falsi**: `auth.spec.ts:21` e `:32`, `app-start-auth:165`, `toolbar-width-sweep:74` e
+     `:877` (file di K/I, solo commento), `ai-export/helpers.ts:37` e `brokers-detail:1058`.
+   - **Le attese sul posto** (V-20, V-26, K, connection-security) restano: dopo la cura sono innocue.
+   - **M**: `gallery.spec.ts` chiama `login()`, quindi la cura cambia anche il suo comportamento, attendendo di più.
+     Non la eseguo; lo segnalo.
+3. **I due budget stretti dopo una navigazione** (§3.4–3.5).
+   - `fx/fx-add-pair.spec.ts:218`: dopo il click sulla card, `expect(detail).toBeVisible()` usa i 3 s di default.
+   - CAC-001, `tx-import-ca-contract.spec.ts:131` (`goToTransactions`): `tx-table` ha 10 s. Lo snapshot di R mostrava
+     la tabella già resa, appena dopo la scadenza.
+   - Il verdetto di test-triage: **assunzione d'orologio**. La cura sono condizioni pubblicate con un budget da
+     navigazione sotto carico, controllando la catena subito dopo.
+
+#### Superfici
+
+| file | lavoro | proprietà |
+|---|---|---|
+| `frontend/e2e/fixtures/playwright.ts` | V-28: `timeout` del fixture | mio, harness condiviso |
+| `frontend/e2e/fixtures/auth-helpers.ts` | V-27: `login()` | mio |
+| `frontend/e2e/auth.spec.ts`, `layout/app-start-auth.spec.ts`, `ai-export/helpers.ts`, `brokers/brokers-detail.spec.ts`, `layout/toolbar-width-sweep.spec.ts` | V-27: solo commenti | i primi tre miei; sweep di K/I, solo commento |
+| `frontend/e2e/fx/fx-add-pair.spec.ts`, `frontend/e2e/transactions/tx-import-ca-contract.spec.ts` | i due budget | miei, per assegnazione |
+| il backlog, questo piano | V-28 nuova, V-27 nella 1.2 | miei |
+
+Codice di prodotto: nessuno.
+
+#### Ordine e prove
+
+1. **V-28**, con la prova del meccanismo a 1 worker su uno spec singolo, prima e dopo la cura.
+2. **V-27**: prima di toccare `login()`, la ricerca dei test che trattengono il bootstrap. Poi, a 1 worker, `auth`,
+   `ai-export memory`, uno spec che arriva su `welcome` e `brokers-detail`.
+3. **I due budget**: `fx-add-pair` e `tx-ca-contract` da soli, a 1 worker.
+4. **Dopo il via**:
+   - una categoria con `--coverage js` sotto carico, per V-28;
+   - tutte le categorie front a 4 worker, una alla volta, per V-27;
+   - `check-orphans` e `component-unit`.
+
+Due test-author lavorano su file distinti: «v28-budgets» (V-28 e i due budget) e «v27-login».
+
+#### Avanzamento (13/10)
+
+- ✅ **V-28** (`v28-budgets`):
+  - **La cura**: `JS_COVERAGE_TIMEOUT_MS = 120_000`, con un commento, e `timeout` sul fixture (`playwright.ts:49-64`,
+    `:357`). È incondizionata: senza coverage il teardown ritorna subito.
+  - **La prova del meccanismo**, a 1 worker, su un solo test di `fx-settings`, con un ritardo temporaneo
+    `LF_V28_PROOF_DELAY_MS=35000` nel teardown:
+    - senza la cura è rosso: `Tearing down "jsCoverage" exceeded the test timeout of 30000ms`;
+    - con la cura è verde, e il ritardo gira per intero, 35,0 s.
+
+    Il ritardo è stato tolto: la diff contiene solo la cura.
+  > **Precisazione**, verificata nel sorgente di Playwright 1.61. Senza `timeout`, il teardown pesa sullo slot degli
+  > after-hooks, 30 s condivisi con `afterEach` e con gli altri teardown, non sul corpo del test. Per questo le durate
+  > di R erano corpo + 30 s. Con `timeout`, una raccolta lenta fallisce come «Fixture "jsCoverage" timeout of 120000ms
+  > exceeded during teardown».
+- ✅ **I due budget** (`v28-budgets`), entrambi con verdetto «assunzione d'orologio»:
+  - `fx-add-pair`: `NAVIGATION_TIMEOUT_MS = 15_000`, lo stesso di `goToFxDetailPage`. Dopo il click sulla card aspetta
+    prima `data-chart-pair = slug`, poi la visibilità; lo stesso vale per le altre navigazioni dello stesso test
+    (`settings-page`, il ritorno a `fx-page`, il secondo click, `toHaveURL` dopo il link del toast). È verde da solo a
+    1 worker, 11/11.
+  - CAC-001, `goToTransactions`: prima `waitForSettled(transactions-page, 20 s)`, il budget delle sorelle, poi
+    `tx-table`. È verde da solo a 1 worker, 12/12.
+  > **⚠️ Fuori pista: ambiente.** Il primo giro di prova (R1) è caduto all'avvio: «Shared backend did not answer within
+  > 300s», mentre il server ricostruiva frontend e MkDocs dopo il treno 82, con load 31. La build MkDocs è rimasta a
+  > metà: `mkdocs_src/site` pesava 116 MB, senza `fr` né `es`. L'ho ricostruito a parte con `mkdocs build -f
+  > mkdocs_src/mkdocs.yml` non-strict: 41 s, 295 MB. Il rilancio di R1 ha dato il rosso atteso.
+- La stessa attesa da 10 s su `tx-table` c'è in altri 21 spec delle transazioni (22 attese), e in 13 punti della
+  galleria di M. Ho chiesto al coordinatore: (a) curarle in questo lotto, (b) V-30 nel backlog.
+- ✅ **V-27**, scrittura (`v27-login`):
+  - lo scan non ha trovato condizioni di STOP;
+  - `login()` chiude su `app-shell`, `welcome-shell` oppure `onboarding-bootstrap-blocked`, con 30 s. Se l'arrivo non
+    viene, il messaggio nomina la schermata a vista e il suo path;
+  - i commenti diventati falsi sono aggiornati, compreso `default-currency:264`.
+
+  In corsia, 6 giri a 1 worker.
+- ✅ **Decisione del coordinatore** (13/10, 03:15): **(a) approvata**. Le 22 attese di `tx-table` nei 21 spec delle
+  transazioni si curano in questo lotto, come CAC-001, scritte da `v28-budgets`. La prova è `front-transaction all` a 4
+  worker, dopo il via.
+  - Le 13 attese di `gallery.spec.ts` le gira lui a M.
+  - Il via per le prove a 4 worker e con coverage arriva verso le 03:45, a galleria finita.
+  - **Doc superate**: rientrano nella definizione di fatto di V-28.
+  - La formulazione della pagina devWiki la gira a W.
+- ✅ **Doc di V-28, skill e instructions**, mie:
+  - `SKILL.md` `:128`: il timeout passa da «15s per test» a 30 s per test, più i 3 s di `expect`. Verificato: 30 s nel
+    config dal febbraio 2026 (`809667083`). «15 s» non era un'altra soglia; `waitForSettled` ha 15 s di default, ma la
+    frase diceva «per test».
+  - `SKILL.md` §«JS/Svelte Coverage during E2E»: la pipeline istanbul vera, cioè build strumentata (`COVERAGE_INSTRUMENT`,
+    sentinella), `window.__coverage__`, un JSON per test in `coverage-js/e2e-raw/`, il budget del fixture (V-28),
+    `js-coverage-report.js` e i tre report. Tolti V8 e monocart.
+  - Lo stesso file, ancora: `:106-112`, i batch da 8 restano come limite alla vita del worker, mentre l'accumulo V8 non
+    c'è più; `:281`, il wipe giustificato dalle mappe istanbul, non dagli offset V8; `:297`, `coverage_js.py` legge il
+    JSON di `js-coverage-report.js`.
+  - `frontend-testing.instructions.md:100`: le attese si dividono in strette (`expect`, 3 s) e budget da navigazione;
+    il test ha 30 s.
+  - Restano V8 e monocart nei commenti del runner, `_coverage.py:153`, `:163`, `:222`, e nella docstring di
+    `scripts/coverage_js.py:7`. È codice condiviso: segnalato, non toccato.
+- **Doc MkDocs di V-28** (`v28-docs`, docs-writer): `coverage-model.md` §«How JS coverage is collected» e
+  `index.md:64-74`. Non hanno traduzioni, quindi non serve lo stamp. Verifica con `mkdocs build` strict e
+  `check-links`.
+- **Le 22 attese di `tx-table`** (`v28-budgets`): in scrittura.
+- ✅ **Le attese di `tx-table`** (`v28-budgets`, 13/10): **26 siti in 25 file**.
+  - Sono i 22 approvati, più 5 trovati col nuovo grep, a 10 s tramite `UI_TIMEOUT`: `tx-import-broker-mismatch:210`,
+    `tx-bulk-diagnostics:79`, `tx-bulk-import-handoff:157`, `tx-import-degiro:305`, `tx-import-scalable-transfers:317`.
+  - La forma è la stessa ovunque: prima `waitForSettled(transactions-page, 20 s)`, poi `tx-table` o la gara con lo stato
+    vuoto, a 20 s. TT20 (refresh) e CAC-012 (reload) sono navigazioni anche loro, quindi hanno lo stesso gate.
+  - Cambi di comportamento:
+    - il gate di `transactions-modals` non ingoia più il timeout;
+    - `tx-wac-mode` ora aspetta il primo caricamento;
+    - in CAC-001 `tx-table` ha anche lui il budget da navigazione.
+  - prettier e tsc puliti, con solo i 2 errori già presenti; `git diff --check` pulito. Non è stato eseguito: la prova è
+    `front-transaction all` a 4 worker, dopo il via.
+  - **Da guardare**: `transactions-table`, `tx-wac` e `tx-wac-mode` hanno un timeout di test di 20 s, `tx-wac-fx` di
+    25 s, cioè non più del gate.
+  - **Domanda al coordinatore**: 12 siti con la stessa forma ma a 8 s, in 11 file. (a) curarli qui, (b) V-30.
+- ✅ **Decisioni del coordinatore** (13/10, 03:25):
+  - (a) approvata anche per i 12 siti a 8 s, in 11 file, con lo stesso schema e la stessa prova;
+  - i quattro spec col timeout di test non più lungo del gate (`transactions-table`, `tx-wac` e `tx-wac-mode` a 20 s,
+    `tx-wac-fx` a 25 s) si correggono in questo lotto, anche senza un rosso: è aritmetica. Il budget del test diventa
+    gate + il resto, con margine (45–60 s), con un commento. Se il valore basso era voluto: STOP e domanda.
+
+  Scrive `v28-budgets`.
+- ✅ **V-27 verificata a 1 worker** (`v27-login`, 13/10, `--fresh-run`, loadavg 16–22): **6 giri, 102/102 verdi**, DB al
+  seed dopo ognuno, nessun traceback.
+
+  | chiave | esito |
+  |---|---|
+  | `front-utility auth`, con `app-start-auth` | 29/29 |
+  | `front-ai-export memory` | 4/4 |
+  | `front-broker detail` | 37/37 |
+  | `front-portfolio default-currency` | 6/6 |
+  | `front-transaction tx-broker-icon-hydration` | 2/2 |
+  | `front-utility onboarding-guides`, desktop e mobile | 24/24 |
+
+  - Tutti e tre gli stati d'arrivo sono stati esercitati:
+    - `onboarding-bootstrap-blocked`, in `auth.spec:414`, che passa in 1,0 s;
+    - `welcome-shell`, con 5 utenti usa-e-getta e le guide;
+    - `app-shell`, negli altri test.
+  - **Lo scan** di 273 chiamate: nessun test trattiene il bootstrap attorno a `login()`. Le route installate prima
+    rispondono subito (onboarding, impostazioni) oppure bloccano solo le altre origini.
+  - **Ancora aperto**: `auth.spec` ha 60 s per test, e il caso peggiore di `login()` ora vale 70 s (10+10+20+30). Lo si
+    corregge in questo lotto, con la stessa aritmetica decisa dal coordinatore, insieme al controllo di `app-start-auth`.
+  - **Per M**: il commento di `gallery.spec.ts:1456` («subito dopo `login()` il burger spesso non è ancora visibile») è
+    superato. Il codice resta corretto.
+- ✅ **I 12 siti a 8 s** (`v28-budgets`, 13/10): stesso schema, gate da 20 s poi `tx-table` a 20 s.
+  - `tx-split-promote:225`, un reload col filtro nell'URL, ha lo stesso gate.
+  - `tx-bulk-operations` ora aspetta anche il primo caricamento, che prima non aspettava.
+  - In `frontend/e2e/transactions` non resta nessuna attesa breve di `tx-table` subito dopo una navigazione.
+- ✅ **I quattro budget di test** (`v28-budgets`): `transactions-table`, `tx-wac` e `tx-wac-mode` passano da 20 a 45 s,
+  `tx-wac-fx` da 25 a 60 s, con un commento.
+  - Il blame: ogni valore è stato scritto alla nascita dello spec e mai toccato (`4ce8e7f17`, `7526fd448`,
+    `4e5e500c0`).
+  - Solo `transactions-table` dava una ragione («read-view tests, no complex modal flows»). Descrive la durata attesa,
+    non uno scopo diverso, quindi il cambio è legittimo, e il commento è stato sostituito.
+  - Le durate peggiori di questi spec nella run di R, sotto carico, erano 13,7–15,7 s.
+- **La stessa aritmetica negli spec appena toccati**: anche `tx-broker-access` e `tx-tooltips` (15 s), `tx-paired-edit`
+  (20 s) e `tx-clone`, `tx-delete` e `tx-picker-pagination` (25 s) non contengono il gate da 20 s introdotto da questo
+  lotto. Li porto a 45 s, perché è la regola del coordinatore applicata alle conseguenze del lotto stesso; il blame si
+  controlla prima.
+  - Il gruppo a 30 s (default o esplicito) lascia circa 10 s a login e test: resta com'è, sotto osservazione nella
+    prova a 4 worker.
+- ✅ **I sei budget di test** (`v28-budgets`): `tx-broker-access` e `tx-tooltips` passano da 15 a 45 s, `tx-paired-edit`
+  da 20 a 45 s, `tx-clone`, `tx-delete` e `tx-picker-pagination` da 25 a 45 s. I test già a 60 s restano dove sono.
+  - Il blame: valori scritti alla nascita degli spec, a maggio (`aacce7952`, `a6b3a8bb2`, `56a0383b5`), senza
+    commento.
+  - prettier, tsc (solo i 2 errori già presenti) e `git diff --check` puliti.
+  - Sotto osservazione nella prova a 4 worker, il gruppo a 30 s: `tx-bulk-operations`, `tx-bulk-promote-exec`,
+    `tx-bulk-suggest-ux`, `tx-fx-completeness`, `tx-fx-implied-rate`, `tx-import-upload`, `tx-split-promote`, più quelli
+    al default (`transactions-modals`, `tx-commit-all-types`, `tx-crud-full`, `tx-wac-unit-toggle`, gli import senza
+    timeout proprio) e `fx-add-pair`.
+- ✅ **Doc MkDocs di V-28** (`v28-docs`): `coverage-model.md` §«How JS coverage is collected» riscritta sulla pipeline
+  istanbul.
+  - Ci sono un diagramma, la tabella dei file, il fixture col budget da 120 s, vitest con `@vitest/coverage-istanbul`
+    e quattro dettagli verificati.
+  - In `index.md` l'avviso di `--cov-clean-frontend` spiega che i contatori appartengono alla build che li ha prodotti.
+  - `mkdocs build` strict e `check-links` sono puliti, e non ci sono traduzioni né timestamp.
+  - In corso: l'ultima riga di «Cleaning» nella stessa pagina.
+  > **Precisazione del docs-writer**: «already in source coordinates» è impreciso. `vite-plugin-istanbul` gira dopo
+  > le trasformazioni, e ogni voce porta la mappa verso la sorgente, che `js-coverage-report.js` segue. Ho corretto la
+  > skill: «keyed by source file». Il commento del fixture lo corregge `v28-budgets`, insieme a `INSTRUMENTED_BUILD`
+  > (`:27-35`), che dice ancora «V8 is not started», mentre un percorso V8 non c'è più.
+- **V-30** nel backlog: il fixture fonde le pagine di un test con `Object.assign`, quindi può sottocontare. È stato
+  letto nel codice, è fuori dal mandato, e va dopo la 1.2.
+- **Superati, fuori perimetro, da segnalare al coordinatore**:
+  - commenti e help del runner: `_cli.py:437`, `:482` e `:866-869`, `_coverage.py:151-165`, `_consolidate.py:204-211`
+    e `:259`;
+  - `vitest.config.ts:47-48`, che cita `scripts/unit-report.js`, inesistente;
+  - `js-coverage-report.js:35`, che dice «17k lines» (ora sono 23 002);
+  - `coverage_analysis.py` e `src/__tests__/component.ts:17`;
+  - `runner_architecture.md:433-453`, `:716` e `:732`, di M;
+  - la devWiki `problems/svelte-template-branches-not-instrumented.md`, contraddetta da `2e104b919`.
+- ✅ **Le ultime correzioni di commento della definizione di fatto di V-28**:
+  - `coverage-model.md` «Cleaning»: il wipe è giustificato dai contatori legati alla build, con un link alla sezione.
+    `mkdocs build` strict e `check-links` sono puliti.
+  - `playwright.ts`: il commento di `INSTRUMENTED_BUILD` (`:27-38`) ora dice quello che fa il codice. La sentinella
+    decide solo come leggere una raccolta vuota; un percorso V8 non c'è più.
+  - Nello stesso file, i commenti del teardown dicono «keyed by source file», e il «then ran» dei batch è corretto. Nel
+    codice cambiano solo `JS_COVERAGE_TIMEOUT_MS` e `timeout:`.
+- **La sequenza delle prove dopo il via** (6175, una alla volta, `--fresh-run`, DB controllato dopo ciascuna):
+  1. `--workers 4`, ognuna delle 8 categorie front per intero: `front-transaction all`, poi `front-utility`,
+     `front-portfolio`, `front-user`, `front-fx`, `front-asset`, `front-broker`, `front-ai-export`. La galleria è
+     esclusa dai test (`_inventory.py:55`).
+  2. `--coverage js --workers 4 front-fx all`, per V-28 sotto carico con la build strumentata. Va per ultima, così il
+     frontend si ricostruisce una volta sola.
+  3. `check-orphans`.
+- ✅ **I budget di V-27** (`v27-login`): `auth.spec` passa da 60 a 120 s, `app-start-auth` da 60 a 150 s e
+  `ai-export-contract` da 180 a 240 s, ciascuno col commento aggiornato.
+  - La regola: `login()` nel caso peggiore (70 s), più la scadenza più lunga fra le attese del test, più il resto a
+    passo sotto carico.
+  - Il blame: nessun valore era basso per una ragione diversa. Due header dichiarano già «a red must end on its own
+    assertion» (`d60937c08`, `93fd33702`); il terzo era aritmetica fatta prima dell'attesa d'arrivo (`e8d8f9216`).
+  - **Non cambiati, con ragione**: 76 file hanno un budget sotto il caso peggiore di `login()`.
+    - V-27 non allunga l'attesa: la sposta dentro `login()` dai passi successivi, che prima la pagavano allo stesso
+      modo.
+    - Il caso peggiore è una somma di massimi, non un tempo atteso.
+    - Lo stesso vale per `toolbar-width-sweep:339` di K: prima le sue due attese da 30 s seguivano `login()`. È solo
+      un'informazione per il coordinatore.
+- ✅ **Statici su tutto il delta**, 52 file: prettier pulito, `git diff --check` pulito; `tsc -p tsconfig.e2e.json` dà
+  solo i 2 errori già presenti.
+- ✅ **Le 8 categorie front a 4 worker** (13/10, dopo il via delle 03:38; 6175, `--fresh-run`, loadavg 10–28). Tutte
+  verdi:
+
+  | categoria | E2E | Vitest | DB |
+  |---|---|---|---|
+  | `front-transaction` | 365 (34 + 331), più 32 skip voluti | 887 | seed |
+  | `front-utility` | 322 (92 + 230) | 7453 | seed |
+  | `front-portfolio` | 182 (18 + 164) | 1233 | seed |
+  | `front-user` | 20 | 57 | seed |
+  | `front-fx` | 103 | 138 | **non al seed**: vedi sotto |
+  | `front-asset` | 145 | 903 | **non al seed**: vedi sotto |
+  | `front-broker` | 53 (2 + 51) | 57 | seed |
+  | `front-ai-export` | 18 | 433 | seed |
+
+  «Shared backend ignored SIGTERM for 5s», a fine di alcune invocazioni, è ambientale: la porta è sempre libera dopo.
+  > **⚠️ Fuori pista: `front-fx`.** Ci sono due scritture vecchie, del 30-31/08, fuori da questo lotto:
+  > - **`fx-destructive`** dichiara di usare coppie fuori dal seed, ma **EUR/PLN ed EUR/SEK ci sono dal 13/03**
+  >   (`a3a9ead52`), come gambe ECB delle catene GBP/PLN e SEK/USD. Lo spec le cancella, coi loro 2 × 276 tassi, e la
+  >   rete di ripopolamento è spenta sopra 1 worker.
+  > - **`fx-sync-mock`** dice «writes nothing», ma lascia 372 tassi MOCKFX su EUR/ILS, MYR, PHP e TWD. Le route sono
+  >   al seed.
+  >
+  > Decisione del coordinatore: si cura `fx-destructive` in questo lotto (classe di V-25), con coppie proprie,
+  > verificate in `beforeAll`, e il rosso prima della cura; lo scrive `v31-fx`. Di `fx-sync-mock` si corregge solo
+  > l'header, e la pulizia va in **V-31**, dopo la 1.2.
+  > **⚠️ Fuori pista: `front-asset`.** Ci sono 4 asset globali in più, senza transazioni: tre di `asset-classification`
+  > («E2E Geo/Sector/Clear Test») e uno del Test 4 di `asset-modal` («E2E Test Asset»). Nessuno li cancella.
+  > Decisione del coordinatore: (a), si curano in questo lotto, con gli id registrati e cancellati in `afterEach`.
+  > Anche il Test 5 di `asset-modal`, che apre `.first()` per posizione, punta ora a un asset noto o proprio. Lo scrive
+  > `v32-asset`.
+- **Il confine del lotto**, deciso dal coordinatore: si chiude con Broker, AI Export e la coverage su FX. Altri casi
+  della stessa classe vanno in backlog come V-3x; se fanno un rosso o cancellano righe del seed: STOP e domanda.
+- **Restano**:
+  - i giri di `v31-fx` (il rosso, poi la cura);
+  - i giri di `v32-asset`, poi `front-asset all` a 4 worker;
+  - `--coverage js --workers 4 front-fx all`, che prova V-28 sotto carico e la cura di `fx-destructive`;
+  - `check-orphans` e il checkpoint.
+- ✅ **`fx-destructive`** (`v31-fx`, 13/10).
+  - **Il rosso, R1**, sullo spec originale, `--fresh-run --workers 4 front-fx fx-destructive`: 10/10 verdi, ma EUR/PLN
+    ed EUR/SEK passano da 276 tassi a 0 (`fx_rates` 4140 → 3588); le route restano uguali al seed. Il danno nasce dal
+    «clean slate» di `beforeAll`, che cancellava i tassi di ogni coppia che stava per usare, comprese quelle del seed.
+    `dbcheck2` non lo vedeva, perché salta `fx_rates`; lo vede `/tmp/libreFolio_v_fxcheck.py`, che confronta col seed
+    i conteggi per (base, quote, fonte) e le route.
+  - **La cura**: le valute sono NZD, SGD, MXN, ZAR, HKD, **PEN** (era SEK), **QAR** e **UYU** (erano NOK e PLN).
+    - Sono verificate libere: nessuna compare nelle colonne di testo delle 15 tabelle del seed, in
+      `populate_mock_data.py`, negli altri spec, negli script, nei report BRIM di esempio o nelle liste riservate;
+      tutte vengono dopo EUR.
+    - `beforeAll` verifica in sola lettura che ogni coppia non abbia route né tassi; se ne trova, fallisce e non tocca
+      niente.
+    - Le coppie si registrano in `created` prima di crearle, e `afterAll` cancella solo quelle.
+    - La lettura dei tassi fallisce sulle risposte d'errore.
+    - L'header è riscritto.
+  - **Con la cura, R2**: 10/10, FX SEED OK (15 coppie, 4140 righe, 24 route uguali al seed).
+  - `fx-sync-mock`: corretto solo l'header (cosa scrive, perché è tollerato, V-31).
+  - In coda la prova della guardia: SEK temporaneo, deve diventare rosso in `beforeAll` senza cancellare niente.
+- **Asset** (`v32-asset`): la scrittura è fatta. Gli id si prendono dalla risposta del `POST`, e `afterEach` cancella
+  per id; il Test 5 crea un asset suo e lo apre per id; via `assets-count-badge`. I giri a 1 worker sono in corsia.
+- ✅ **Asset** (`v32-asset`, 13/10), giri a 1 worker: `asset-classification` 4/4 e `asset-modal` 17/17, SEED OK dopo
+  ciascuno, loadavg 13–25.
+  - Gli helper sono locali agli spec: `assets-helpers.ts` lo importa anche la galleria.
+  - La pulizia non lascia la pagina: il teardown di `jsCoverage` la legge dopo `afterEach`.
+  - **Solo segnalati**, per il confine del lotto, e messi nel backlog come **V-32**:
+    - il Test 9 di `asset-modal` (`:247`) apre ancora la prima card per posizione, lo stesso difetto del Test 5;
+    - `navigateToAssetByName` (`assets-helpers.ts:52/57`) ripiega sulla prima card o riga;
+    - `asset-detail:292` e lo Scenario 3 di `asset-event-delete` (`:291`) scelgono il primo elemento, chiusi da sonde;
+    - le pulizie che non verificano l'esito: `asset-modal` Bug K, Param, Benchmark e Type Tree; `asset-list` `:604`,
+      `:846` e `:1007`; `dropFixture` di `asset-merge`; le pulizie degli eventi;
+    - **il rischio latente**: lo Scenario 2 di `asset-event-delete` (~`:220-270`) segna da cancellare ogni evento di
+      Apple nella finestra di 3 mesi e salva. Oggi non cancella niente solo perché gli eventi del seed in quella
+      finestra sono collegati a transazioni. Non c'è prova di righe cancellate: `asset_events` era 11 nel controllo
+      del DB, quindi va in backlog e non è uno STOP.
+- ✅ **La guardia di `fx-destructive`** (`v31-fx`): con la coppia del single delete puntata su SEK in via temporanea,
+  `beforeAll` è rosso e nomina `EUR-SEK: 0 route(s), 276 rate(s)`. Un test fallisce, 9 non partono, niente viene
+  creato né cancellato, e risulta FX SEED OK. Il file è stato ripristinato: sha256 `90f8e76b…17ae`, prima e dopo.
+- ✅ **`front-asset all` a 4 worker, dopo la cura**: 145 E2E e 903 Vitest, **SEED OK**; gli asset sono tornati 17.
+- ✅ **V-28 con coverage**: `--fresh-run --coverage js --workers 4 front-fx all` è verde, 103 E2E (76 + 27) e 138
+  Vitest, loadavg 17–22, con la build strumentata ricostruita.
+  - Nessun «Tearing down» né timeout del fixture. Il test più lungo dura 9,6 s: la raccolta ora ha il suo slot.
+  - 97 file raw, 1,8 GB, circa 18 MB per test; i report `e2e/`, `unit-combined/` e `combined/` sono generati.
+  - FX: tutte le coppie e le route sono al seed. EUR/PLN ed EUR/SEK sono a 276, e le coppie usa-e-getta non lasciano
+    traccia. L'unica differenza sono i 372 tassi MOCKFX tollerati di `fx-sync-mock` (V-31).
+- ✅ **`check-orphans`**: 117 E2E, 357 unit e 262 backend, tutti raggiungibili. La porta 6175 è libera.
+- ✅ **Statici sul delta finale**, 56 file, tutti modificati e nessuno nuovo:
+  - prettier pulito; `git diff --check` pulito; `tsc -p tsconfig.e2e.json` dà solo i 2 errori già presenti;
+  - `coverage-js/` è ignorato da git.
+- ✅ **Il backlog**:
+  - V-27 e V-28 chiuse;
+  - V-33 aggiunta già chiusa: i budget dopo una navigazione e le 38 attese di `tx-table` in 36 spec;
+  - V-30, V-31 e V-32 aperte, dopo la 1.2.
+- **Checkpoint**: pronto, in 6 commit proposti, separati per argomento.
+- ✅ **La nota di M, via il coordinatore** (13/10, 05:01): `cleanup()` di `trackTransactionWrites`
+  (`fixtures/db-cleanup.ts`) controlla solo `res.ok()`, e una delete rifiutata dentro una risposta 200 passerebbe in
+  silenzio.
+  - Verificato: nel lotto non ha nascosto niente. I 6 spec che lo usano hanno avuto il DB al seed dopo ogni giro (76
+    transazioni, id massimo 76), anche in `front-transaction all` a 4 worker.
+  - Messa nel backlog come **V-34**, dopo la 1.2.
+  - Nel backlog V-33 è stata spostata nell'ordine numerico, tra V-32 e V-34; il contenuto è invariato.
+
+### 12.12 Due rossi della stessa classe: `fx-detail:923` e `setLanguage` (13/10)
+
+Base `50886d1ca` (treno 88), portata in fast-forward dal coordinatore. Skill `test-triage`.
+
+#### `fx/fx-detail.spec.ts:923` «aesthetics panel toggles visibility»
+
+- **Il rosso**, nei gate del treno 88: corsia 6150, 1 worker, carico 100–158, verso le 06:0x.
+  - Dopo il secondo click, `not.toBeVisible()` a `:929` scade coi 3 s.
+  - Il call log (`/tmp/libreFolio_g88_16_fx_detail.log`, righe 55-80) dice **«10 × locator resolved to <div
+    data-testid="fx-detail-aesthetics-panel" …> unexpected value "visible"»**. Il processo dei test era vivo, e **il
+    pannello è rimasto davvero aperto**.
+  - Rilanciato da solo è verde 17/17. Lo screenshot è perso (C-68).
+- **Lettura del codice** (`fx/[pair]/+page.svelte`):
+  - il toggle (`~:1441-1450`) fa solo `showAesthetics = !showAesthetics`;
+  - il pannello è `{#if showAesthetics}` dentro `{:else if lineData.length > 0}`;
+  - niente `{#key}`, transizioni o async (Svelte 5.48, senza `experimental.async`);
+  - `showAesthetics` torna `true` solo dal toggle o dai ripristini di `savedPanelStates`, e questi esistono solo nei
+    flussi dell'editor, che si apre solo dai suoi bottoni;
+  - le impostazioni dei grafici e lo stato d'inversione sono per sessione del browser: `localStorage` e memoria.
+- **La sonda** (`/tmp/libreFolio_v_fxaes_probe.cjs`, fuori dal repo, 6175, i passi esatti del test, con un registro
+  in pagina di click, toggle, pannello, `data-busy` ed errori): **50 giri, 0 rossi**. Pannello sparito entro ≤ 22 ms
+  dal secondo click, toggle mai rimontato, nessun errore. Le condizioni provate:
+  - CPU ×1, ×8, ×10, ×20 via CDP;
+  - ogni API +500 o +1500 ms;
+  - il catalogo dei segnali +6 s;
+  - 2 s di pausa tra i click;
+  - le quattro richieste tardive +3 s.
+
+  Dati in `/tmp/libreFolio_v_fxaes_probe_*.json`; nota completa in `/tmp/libreFolio_v_fxaes_triage.md`.
+- **Decisione del coordinatore** (opzione 2, più il registro): `aria-expanded` sul toggle dell'estetica (mio, solo un
+  attributo; quello dei segnali l'aveva già, `:1334`). Il test verifica `aria-expanded` dopo ogni click e poi il
+  pannello, e allega al rosso il registro in pagina. Se il meccanismo non si trova: **V-35**, sotto osservazione.
+  Scrive `v35-fxdetail`.
+
+#### `setLanguage` (`fixtures/auth-helpers.ts`) — `toolbar-width-sweep › assetsList › fr`, da M
+
+- **Il rosso**: a carico 60, `setLanguage` aspetta `<html lang="fr">` coi 3 s di default. Il call log dice «2 ×
+  locator resolved to <html lang="en" …> unexpected value "en"». Lo screenshot mostra l'app già in francese subito
+  dopo. Con `--resume` è verde 15/15 a carico 117. Le prove sono in
+  `LibreFolio-cloud-sizing/release-pipeline/runs/b37/sweep_fr_red/`.
+- **Il meccanismo**: `LanguageSelector.svelte` fa `currentLanguage.set(code)`. svelte-i18n sposta `locale` solo dopo
+  aver caricato il chunk del dizionario (`i18n/index.ts:18-21`, `import('./fr.json')`, circa 290 KB); poi
+  `routes/+layout.svelte:43-45` pubblica `lang` e `data-i18n-ready`.
+- **Verdetto**: assunzione d'orologio. Lo stato atteso è quello giusto, ma i 3 s di default scommettono su un
+  caricamento.
+- **Cura**: un budget di caricamento per le attese di `setLanguage`. Il rosso deterministico si ottiene ritardando
+  temporaneamente il chunk del dizionario, riconosciuto dal contenuto, solo durante il cambio. Scrive `v-setlang`.
+- ✅ **`setLanguage`, cura provata** (`v-setlang`, 13/10).
+  - **Il rosso**, deterministico, su `front-utility changelog-locale "Italian UI"` a 1 worker. Un ritardo temporaneo
+    `LF_SETLANG_PROOF_DELAY_MS=5000` trattiene **solo** il chunk del dizionario italiano (`CkV7UwI5.js`, trovato su
+    disco dal contenuto) e poi lo lascia passare intatto con `route.continue()`. Niente `route.fulfill`: la devWiki
+    `problems/i18n-loading-gate-remounts-app` avverte che lascia la pagina vuota.
+    - Risultato: rosso a `auth-helpers.ts:126`, «Expected "it", Received "en", Timeout 3000ms».
+  - **La cura**: `LANGUAGE_SWITCH_MS = 15_000`, con un commento, sulle tre attese di `setLanguage`: il bottone del
+    selettore (era 5 s), `lang` e `data-i18n-ready` (erano 3 s). Le condizioni non cambiano. 15 s è il budget che
+    `navigateTo()` già dà allo stesso `data-i18n-ready`.
+  - **Il verde**: stesso comando, col ritardo di 5 s ancora attivo; `setLanguage` ritorna in 5527 ms, 1/1.
+  - **Il ripristino**: lo sha256 di `changelog-locale.spec.ts` è `01dfb6d3…2a30` prima e dopo, e la diff è pulita.
+  - **I gate**: `--fresh-run --workers 4 front-utility toolbar-width-sweep` 15/15, con `assetsList › fr` in 38 s;
+    `--fresh-run --workers 4 front-ai-export all` 18 E2E e 433 Vitest. SEED OK dopo ciascuno.
+  - È cambiato anche un commento in `ai-export/helpers.ts`: «waits 5 s» non era più vero.
+- ✅ **`fx-detail`, test e registro** (`v35-fxdetail`, 13/10).
+  - I due test dei pannelli («aesthetics» e «signals») controllano lo stato iniziale. Dopo ogni click verificano prima
+    `aria-expanded` del toggle, poi il pannello, con messaggi in inglese; i budget non cambiano.
+  - Un fixture su richiesta, `fxPanelLog`, installa il registratore prima della navigazione. Su un rosso allega e
+    stampa (`[fx-panel-log]`) click, `aria-expanded`, pannelli, `data-busy`, errori non gestiti e una fotografia
+    finale. Costa zero quando è verde.
+  - «persists distinct primary scales…» (`~:1141`, `~:1243`) e `fx-destructive` (`~:210`) verificano
+    `aria-expanded="true"` prima del pannello. In `fx-destructive` era superato il commento che diceva il toggle senza
+    `aria-expanded`.
+  - **Prova del registro**, su un rosso forzato e poi annullato (sha256 `66190480…` identico): il rosso nomina la metà
+    che fallisce. Il registro esce nel log della run come `[fx-panel-log]` e nel report HTML. Contenuto, in ms di
+    pagina:
+    - 428 click sul toggle, 429,6 pannello montato e `aria-expanded` true;
+    - 460,8 click sul toggle, con la toolbar scesa di 280 px; 461,1 pannello smontato e `aria-expanded` false.
+  - **Giri**: `fx-detail` 17/17 a 1 e a 4 worker; `fx-destructive` 10/10 a 1 e a 4 worker (il giro a 4 l'ho fatto io
+    prima del checkpoint, `--fresh-run --workers 4 --log-dir /tmp/libreFolio_v35_destr_w4 front-fx fx-destructive`).
+    SEED OK dopo ciascuno, e FX SEED OK dopo `fx-destructive`.
+  - **Albero combinato**: tutti i giri finali sono successivi all'ultima modifica di ciascun file del delta. Il rosso di
+    `setLanguage` è delle 06:44:23, la cura delle 06:44:43; sweep e ai-export sono finiti alle 06:47 e alle 06:49; i giri
+    di `fx-detail` alle 06:52 e alle 06:54, dopo il ripristino della prova (06:51).
+- **Il backlog**: **V-35**, sotto osservazione, col meccanismo sconosciuto; **V-36** chiusa, `setLanguage`.
+
+### 12.13 T4 di `transactions-modals`: l'ordine delle colonne del bulk editor (13/10)
+
+Base `ef666fdee` (treno 93), portata in fast-forward dal coordinatore; worktree pulita, i commit del §12.12 sono
+nel treno 92.
+
+- **La decisione del developer** (domanda 12, via coordinatore, 13/10): nel bulk editor la colonna «Costo di carico»
+  (`cost_basis_override`) **prima** di «Evento» (`asset_event_id`) è voluta. Non è una regressione. Il passo 10 del
+  piano Bugfix-3 (`RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md`,
+  «`cost_basis_override` spostato dopo `asset_event_id`») è superato. Lo stesso piano, al passo 24, segnava già T4
+  come falso positivo da riscrivere.
+- **Il mandato**: riscrivere T4 perché verifichi quest'ordine, via test-author. Prima il rosso, per esempio invertendo
+  l'ordine atteso, poi il verde. `transactions-modals` a 1 e a 4 worker. Nel backlog, le righe V-21 e T4.
+- **Lo stato verificato** (lettura del codice, base `ef666fdee`):
+  - `TransactionBulkModal.svelte`: `cost_basis_override` a `:1827`, `asset_event_id` a `:1890`. Entrambe hanno
+    `hiddenByDefault: false`, quindi sono **visibili di default**: il commento di T4 («both columns are hidden by
+    default») è superato;
+  - `DataTable.svelte:1006-1012`: un `<th data-testid="dt-header-{column.id}">` per ogni colonna visibile, nell'ordine
+    reso;
+  - ordine e visibilità stanno solo in `localStorage` (`dataTable_tx-bulk-modal_*`, `utils/storage.ts`, nessuna API).
+    Un contesto Playwright nuovo parte quindi dall'ordine di default, e nessun vicino può spostarlo;
+  - la DataTable del workspace è sempre resa (`tx-bulk-body`, `:3566`), anche vuota: T4 non deve creare righe e non
+    scrive niente;
+  - il vecchio T4 non poteva fallire. Due `column-visibility-toggle` mandavano `isVisible()` in strict mode, la `.catch`
+    lo trasformava in falso, e i testid `col-toggle-*` non esistono.
+- **I passi**:
+  1. test-author `v-t4` riscrive T4 sulle intestazioni del workspace;
+  2. il rosso: l'ordine atteso invertito temporaneamente, poi ripristinato con lo sha256 controllato;
+  3. il verde; `transactions-modals` a 1 e a 4 worker, `--fresh-run`, col controllo del DB dopo ogni giro;
+  4. il backlog, V-21 e T4; il checkpoint.
+- ✅ **T1 (domanda 8), spiegata meglio** (13/10): il developer l'ha chiesto, e la spiegazione è andata al coordinatore.
+  - Ricontrollato sulla base `ef666fdee` e sul DB del seed: T1 sceglie il primo broker e il primo asset per posizione.
+    Il primo broker, Charles Schwab (EDITOR, 0 transazioni, niente scoperto), non ha cassa, e il server rifiuta il BUY
+    con `BALANCE_CASH_NEGATIVE` (`transaction_service.py:419`). Dopo il click di salvataggio il test non asserisce
+    niente.
+  - Le scelte proposte:
+    - (A) «un BUY si salva», su un broker del test, consigliata;
+    - (B) «un BUY senza cassa viene rifiutato con un messaggio chiaro»;
+    - (C) entrambi;
+    - (D) com'è, ma rinominato.
+
+    Con A, B o C anche `fillBuyTransaction` (T2, T6) sceglie per nome.
+- ✅ **T4 riscritto** (`v-t4`, 13/10). Tocca solo `transactions-modals.spec.ts`: il blocco di T4 e la riga 5
+  dell'intestazione («column order»). T1 e gli helper sono invariati.
+  - **Il test**, describe `Column order (M5)`, «cost basis column comes before the asset event column»:
+    1. apre il form, lo annulla, e il workspace resta vuoto;
+    2. verifica come precondizione che `dt-header-cost_basis_override` e `dt-header-asset_event_id` si vedano in
+       `tx-bulk-body`;
+    3. legge con `expect.poll` i testid `dt-header-*` nell'ordine del DOM, esclusi `dt-header-tooltip-*`, e tiene
+       solo quei due. Vuole `[cost_basis_override, asset_event_id]`.
+
+    Asserisce solo l'ordine relativo, non l'adiacenza. Il commento cita la decisione e il passo 10 superato.
+  - **Il rosso** (10:42-10:44, 1 worker): `--fresh-run --workers 1 --log-dir /tmp/libreFolio_v_t4/1-red
+    front-transaction transactions-modals "cost basis column comes before"`.
+    - L'ordine atteso era invertito solo nell'array: la diff contro la copia era la sola riga 536.
+    - Rosso all'asserzione dell'ordine (`:536`), dopo le precondizioni passate: «Expected `[asset_event_id,
+      cost_basis_override]`, Received `[cost_basis_override, asset_event_id]`».
+    - La fotografia della pagina dà la griglia: Row, Status, ID, Date, Type, Asset, Qty, Cash, Broker, Cost basis
+      override, Asset event, Description, Tags, Linked TX, Actions.
+  - **Il ripristino**: sha256 `988002cf…5e128d` uguale a quello della versione finale, `cmp` identico, nessuna traccia
+    dell'inversione. Ultima scrittura dello spec alle 10:44:49; i giri verdi partono dopo.
+  - **I giri**, tutti `--fresh-run`:
+
+    | giro | esito | durata Playwright | loadavg |
+    |---|---|---|---|
+    | filtro di T4, 1 worker | 1/1 | 3,5 s | 14 → 10 |
+    | `transactions-modals`, 1 worker | 20/20 | 40,5 s | 8 → 15 |
+    | `transactions-modals`, 4 worker | 20/20 | 25,7 s | 16 → 22 |
+
+    Log in `/tmp/libreFolio_v_t4/{1-red,2-green,3-w1,4-w4}`. SEED OK dopo ogni giro, anche dopo il rosso.
+  - **Statici**: `git diff --check` pulito; prettier pulito; `tsc -p tsconfig.e2e.json` dà solo i 2 errori
+    preesistenti. Porta 6175 libera.
+  > **⚠️ Fuori pista**, visti da `v-t4` e lasciati com'erano; nel backlog, sotto V-21:
+  > - `goToTransactions` ingoia la sua `Promise.race`;
+  > - `optionListReady` usa `.first()` su `[role="listbox"]` senza filtro;
+  > - l'intestazione dello spec dice ancora «port 6041»;
+  > - il commento «T4: no confirm dialog» nel test «Delete» usa un'altra numerazione;
+  > - i `bulkRows.first()` e la `Promise.race(...).catch` di T1 aspettano la decisione su T1.
+  >
+  > Le intestazioni inglesi dicono «Cost basis override» e «Asset event». Il commento del test usa i nomi della
+  > decisione.
+- ✅ **Backlog**: in V-21, T4 è chiusa (✅ 13/10); T1 resta aperta, con le scelte A-D; i residui minori sono in una
+  riga nuova.
+
+### 12.14 T1 di `transactions-modals`: il salvataggio e il rifiuto (13/10)
+
+Base `917ef437f`: i due commit di T4 (`d763657ca`, `917ef437f`) sono sul ramo, ed entrano nel treno 94.
+
+- **La decisione del developer** (domanda 8, testuale): «C: entrambi, due test».
+- **Il mandato** del coordinatore:
+  1. **T1a, il salvataggio**: un BUY arriva nel bulk editor, si salva, e lo si ritrova. Il broker è del test, con
+     cassa, scelto per nome. Il test pulisce quello che crea, e dopo il giro il DB è al seed.
+  2. **T1b, il rifiuto**: un BUY senza cassa viene rifiutato con un messaggio chiaro, e il test verifica che non sia
+     stato salvato niente.
+  3. `fillBuyTransaction` sceglie broker e asset per nome, anche per T2 e T6; T2 e T6 si rigirano.
+  4. I test li scrive test-author, con selettori `data-testid` e senza testo tradotto.
+  5. Se T1b mostra che il messaggio all'utente manca o è sbagliato (un difetto di prodotto): STOP e messaggio, senza
+     toccare l'app.
+- **Lo stato verificato** (lettura del codice, base `917ef437f`):
+  - **Il codice sul filo** è `balanceCashNegative`: è il valore di `TXValidationCode.BALANCE_CASH_NEGATIVE`
+    (`backend/app/schemas/transactions.py:758`), sollevato da `transaction_service.py:419-430` con i parametri
+    `brokerId`, `currency`, `balance` e `date`.
+  - **La UI**, `TransactionBulkModal.svelte`:
+    - su `committed=false` (`:1535-1541`) il modale resta aperto e mostra `tx-bulk-error` (`:3196`);
+    - i problemi di saldo vanno in `tx-bulk-balance-issues`, una voce `tx-bulk-balance-issue` per problema, più il
+      bottone `tx-bulk-balance-rows` che porta alle righe (`:3220-3233`);
+    - nessun attributo pubblica il codice.
+  - **Il messaggio** (`utils/transactions/resolveValidationMessage.ts:140-247`) usa la chiave
+    `transactions.errors.balanceCashNegative`, presente in en, it, fr ed es (`i18n/transactions/*.json:222`). Il
+    resolver mette nel messaggio il **nome** del broker (`brokerId` → nome), la valuta, il saldo formattato e la data
+    ISO.
+    - Il ripiego, se la chiave mancasse, sarebbe il testo inglese del backend, che dice l'**id** del broker.
+    - Il nome del broker creato dal test, dentro la voce, distingue quindi il messaggio giusto dal ripiego, senza
+      leggere testo tradotto.
+  - **Per lettura del codice non c'è un difetto di prodotto**. Lo confermerà il giro di evidenza.
+  - **Le fixture**, già in `fixtures/owned-pair.ts`: `openOwnedAccount`, `createOwnedBroker`, `commitCreates`,
+    `readTransactions`, `seededAssetId` e `cleanupOwnedAccount`.
+- **Il disegno**: T1a e T1b, ciascuno su un account usa-e-getta suo (un broker suo, finanziato per T1a e vuoto per
+  T1b), in un describe proprio, fuori dal `beforeEach` che entra come `TEST_USER`. Il vecchio T1 sparisce.
+  `fillBuyTransaction` prende `broker` e `asset` per nome; T2 e T6 usano `Interactive Brokers` e `Apple`.
+- **Le prove**: per ciascuno, un rosso per la ragione giusta.
+  - T1a: senza il deposito, deve diventare rosso su `committed`.
+  - T1b: col broker finanziato, deve diventare rosso perché il BUY si salva.
+
+  Poi T2 e T6, e lo spec intero a 1 e a 4 worker, col controllo del DB dopo ogni giro.
+- ✅ **T1b, giro di evidenza** (`v-t1`, 13/10, `0-evidence`, 1 worker, SEED OK). Lo STOP di prodotto **non si applica**:
+  il messaggio è risolto.
+  - La richiesta: `{"broker_id":9,"type":"BUY","date":"2026-10-13","quantity":"3","asset_id":1,"cash":{"code":"EUR","amount":"-100"}}`.
+  - Il problema: `code: "balanceCashNegative"`, con `params` `{brokerId: 9, currency: "EUR", balance: "-100.000000",
+    date: "2026-10-13"}`; esito `simulated`.
+  - Il banner, in inglese: «⛔ Save cancelled — This configuration causes data inconsistencies — Saving would cause
+    € 🇪🇺 EUR cash to go negative (-100.00 € 🇪🇺 EUR) on 2026-10-13 at guides-t1b-broker-…», più il bottone «Workspace
+    rows: 1».
+  - Prima del salvataggio, l'avviso di validazione del bulk editor mostrava già la stessa riga.
+- ✅ **T1a e T1b scritti, rosso poi verde** (`v-t1`, 13/10). Il vecchio T1 sparisce.
+  - Un describe nuovo `Transactions` › `Create standalone`, davanti al blocco di `TEST_USER`, con lo stesso titolo:
+    i nomi completi dei test restano nella forma di prima.
+  - Ogni test registra un account suo, e un `afterEach` chiama `cleanupOwnedAccount`. Due helper nel blocco:
+    `stageBuy` e `commitWorkspace`.
+  - **T1a**:
+    - un broker suo con un DEPOSIT di 1000 EUR, poi il BUY dal form (broker per nome, Apple per nome, quantità 3) e
+      Apply;
+    - il bulk editor ha una sola riga, `new`, a validazione finita;
+    - il salvataggio: la richiesta catturata dice BUY, il broker, Apple, 3, `EUR -100`; poi `committed === true`, un
+      id, il modale chiuso;
+    - ritrovato: `readTransactions` per id e `goToTransactionById`.
+  - **T1b**:
+    - il broker è senza deposito;
+    - la risposta: `committed === false`, problemi esattamente `['balanceCashNegative']`, coi `params` del broker e
+      con valuta e data uguali alla richiesta, e il saldo uguale alla cassa del BUY;
+    - la UI: una sola `tx-bulk-balance-issue`, con il nome del broker, la data ISO e `EUR`, e senza
+      `balanceCashNegative`, `Broker #` né `{`;
+    - il modale resta aperto con la riga `new`, e `tx-bulk-balance-rows` evidenzia la riga;
+    - non salva niente: `readTransactions({broker_id})` è vuoto.
+  - **La valuta**: EUR, letta dalla richiesta catturata. L'importo si scrive prima di scegliere l'asset, quindi vale il
+    default della cella di cassa.
+  - **I rossi** (1 worker, SEED OK dopo ciascuno):
+    - T1a senza deposito, a `:413`: «the funded BUY must be saved — issues: […balanceCashNegative…]», Expected true,
+      Received false;
+    - T1b col broker finanziato, a `:442`: «must be refused — results: [{…"ids":[78]…"success"}]». Anche dopo questo
+      rosso la pulizia ha tolto account, broker e riga 78.
+    - Dopo ogni rosso lo sha256 è tornato quello della versione finale.
+  - **Il verde**: T1a e T1b 2/2.
+  - `fillBuyTransaction` prende `broker` e `asset` per nome (`pickBroker`, `pickAsset`); T2 e T6 passano `Interactive
+    Brokers` e `Apple`. T2 è verde.
+  > **⚠️ Fuori pista: T6 è rosso** con Interactive Brokers, a `:707`, perché `info-banner-warning` non c'è. Verdetto:
+  > **assunzione**, verificata da me.
+  > - T6 diceva di provocare l'avviso con una quantità `-1`. Ma il form corregge il segno prima di validare:
+  >   `applySign('-1','positive')` dà `'1'` (`txPayloadHelpers.ts:142-150`, `:243-249`).
+  > - L'avviso nasceva dal primo broker della lista, Charles Schwab, che non ha cassa. Era lo stesso equivoco del
+  >   vecchio T1.
+  > - Lo snapshot (`/tmp/libreFolio_v_t1/4-t2-t6.t6-results/error-context.md`, righe 1510-1535) mostra Qty `[invalid]`
+  >   «must be > 0», «Validate now» → «valid», e Apply disabilitato.
+  >
+  > **La cura**, mia, solo di test, scelta A′: T6 passa su un account suo, con un broker senza cassa. Asserisce che
+  > l'avviso nomina il broker del test, poi lo chiude. Il rosso si prova col broker finanziato.
+  >
+  > **Domanda al developer** (V-37), mandata al coordinatore: il verdetto «valid» accanto a un errore del form che
+  > blocca Apply è voluto?
+- ✅ **T6 curato, A′** (`v-t1`, 13/10). T6 sta nel blocco degli account propri, in un describe `Banner dismissible
+  (M1/M2)`: il nome completo resta lo stesso.
+  - Ha un account suo e un broker suo **senza deposito**. Poi il BUY dal form (broker per nome, Apple, quantità 3),
+    «validate now», e l'attesa di quel giro.
+  - La premessa, asserita: `tx-form-body` › `info-banner-warning` si vede e contiene il nome del broker del test,
+    quindi è l'avviso del saldo. Poi il soggetto, invariato: il bottone di chiusura nasconde l'avviso.
+  - Il commento spiega che il form corregge il segno, e da dove veniva l'avviso prima.
+  - Al suo posto, nel blocco di `TEST_USER`, resta una riga di rimando.
+  - **Il rosso**: col broker finanziato, rosso alla premessa (`:512`, «info-banner-warning … element(s) not found»).
+    Lo snapshot dice quantità 3, cassa coperta, «valid», Apply attivo, nessun avviso. Ripristinato: lo sha256 è tornato
+    quello della versione finale, `c848b358…`.
+- ✅ **I giri finali** (`v-t1`, 13/10). Tutti `--fresh-run`; dopo ogni giro SEED OK, anche dopo i rossi.
+
+  | giro | esito | Playwright | loadavg |
+  |---|---|---|---|
+  | `0-evidence`, T1b | 1/1 | 4,3 s | 17,7 |
+  | `1-t1a-red` | rosso voluto, `:413` | 4,2 s | 13,1 |
+  | `2-t1b-red` | rosso voluto, `:442` | 4,0 s | 10,0 |
+  | `3-t1-green` | 2/2 | 9,2 s | 8,1 |
+  | `4-t2-t6` | 1/2, T6 rosso (assunzione, sopra) | 10,9 s | 9,4 |
+  | `7-t6-red` | rosso voluto, `:512` | 9,6 s | 27,7 |
+  | `8-t2-t6` | 2/2 | 9,3 s | 27,1 |
+  | `9-t1-green` | 2/2 | 10,2 s | 25,4 |
+  | `10-w1`, spec intero, 1 worker | **21/21** | 1,0 min | 23,1 |
+  | `11-w4`, spec intero, 4 worker | **21/21** | 44,0 s | 29,8 |
+
+  - Lo spec ora ha 21 test: il vecchio T1 è diventato T1a e T1b.
+  - L'ultima scrittura dello spec è delle 11:51:48, al ripristino dopo il rosso di T6; i giri da `8` a `11` sono
+    successivi.
+  - In `10-w1` il populate ha preso circa 5¾ minuti, sulla macchina carica dalle altre corsie: è la macchina, non lo
+    spec.
+  - Log in `/tmp/libreFolio_v_t1/<giro>/`.
+  - **Statici**: `git diff --check` pulito; prettier pulito; `tsc -p tsconfig.e2e.json` dà solo i 2 errori
+    preesistenti. Porta 6175 libera.
+  > **⚠️ Fuori pista**:
+  > - V-38, letto nel codice da `v-t1` e verificato da me, non visto a schermo. Il form divide i problemi per `index`
+  >   (`TransactionFormModal.svelte:944-945`), il bulk editor per codice (`bulkDisplay.ts:145`). Un
+  >   `balanceCashNegative` con `index: 0` finisce quindi, nel form, sotto il titolo dei problemi dei campi.
+  > - Restano com'erano: la race ingoiata da `goToTransactions` e l'opzione `skipCash` senza chiamanti. Entrambe sono
+  >   nella riga dei residui minori di V-21.
+- ✅ **Backlog**:
+  - in V-21, T1 è chiusa (✅ 13/10) e la riga dei residui minori è aggiornata;
+  - **V-37**, da decidere: «valid» accanto a un errore del form;
+  - **V-38**, basso: l'avviso di saldo sotto il titolo dei campi.

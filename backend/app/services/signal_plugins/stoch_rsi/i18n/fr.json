@@ -1,0 +1,17 @@
+{
+  "signals": {
+    "stochRsi": {
+      "name": "RSI stochastique",
+      "description": "Position du RSI dans sa plage",
+      "k": "%K",
+      "kDescription": "Ligne rapide du RSI stochastique.",
+      "d": "%D",
+      "dDescription": "Ligne de signal lissée dérivée de %K.",
+      "oversold": "Survendu",
+      "overbought": "Suracheté",
+      "oversoldRegion": "Survendu",
+      "neutralRegion": "Neutre",
+      "overboughtRegion": "Suracheté"
+    }
+  }
+}

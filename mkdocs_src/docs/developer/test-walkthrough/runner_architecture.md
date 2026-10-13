@@ -202,36 +202,56 @@ class of bug expensive.
 
 ### Frontend (E2E)
 
-An E2E test writes over HTTP, so there is no session to roll back. Use
-`frontend/e2e/fixtures/db-cleanup.ts`, which works **by id difference**: photograph before, delete
-what appeared after.
+An E2E test writes over HTTP, so there is no session to roll back. Use `trackTransactionWrites()`
+from `frontend/e2e/fixtures/db-cleanup.ts`: it records the transactions that this page's own commits
+created, and its `cleanup()` deletes exactly those.
 
 ```ts
-import {deleteTransactionsCreatedSince, snapshotTransactionIds} from '../fixtures/db-cleanup';
+import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
 
-let txBefore: Set<number>;
+let txWrites: TransactionWriteTracker | undefined;
 
 test.beforeEach(async ({page}) => {
     await login(page, TEST_USER);
-    txBefore = await snapshotTransactionIds(page);   // after login: page.request shares the cookie jar
+    // After login (it reads through page.request, which needs the session cookie), before any commit.
+    txWrites = await trackTransactionWrites(page);
     await goToTransactions(page);
 });
 
-test.afterEach(async ({page}) => {
-    await deleteTransactionsCreatedSince(page, txBefore);
+test.afterEach(async () => {
+    await txWrites?.cleanup();   // afterEach runs for a red test too
 });
 ```
 
-Prefer the id-difference form over deleting the ids you *think* you created: it also catches rows
-created **indirectly** — the second half of a linked pair, a promoted transfer, a derived event —
-and those are precisely the ones that get forgotten.
+A row is the test's own only when two facts agree: a committed `POST /transactions/commit` made by
+this page reported its id as created (a `create`, `split` or `promote` result), and the id was not
+in the snapshot `trackTransactionWrites()` took when it started. The commit response lists the rows
+created **indirectly** too — the second half of a linked pair, a promoted transfer — so the spec
+never has to name them; the snapshot keeps a split or a promote of fixture data from deleting the
+fixture row it came from. `cleanup()` skips the ids already gone (deleting one half of a linked pair
+removes both) and throws when the delete request fails.
+
+!!! warning "Never delete whatever is new since a snapshot"
+
+    The first version of this helper did exactly that: photograph before, delete what appeared after.
+    It reads "new" as "mine", which holds only while nothing else runs at the same time — the reason
+    the `txHygiene` fixture below works only at one worker. Under concurrent workers the rows a
+    neighbour is still using are new too, and the helper deleted them, or failed with a 500 on a row
+    the neighbour had already removed.
+
+A test that commits rows nobody else should see can also work on an account of its own:
+`openOwnedAccount()` and `openAccountWithPair()` in `frontend/e2e/fixtures/owned-pair.ts` register a
+disposable account, and `cleanupOwnedAccount()` deletes its brokers — their transactions go with
+them — and then the account.
 
 !!! example "The bug this rule was written from"
 
-    `tx-clone.spec.ts` clones "the first paired giver row on editable brokers" and commits it for
-    real. That row is the `delete-safe` ETH transfer. `tx-delete.spec.ts` then deletes that pair and
-    asserts nothing matching survives — and found the clone. Neither test was wrong; the implicit
-    contract between them was.
+    `tx-clone.spec.ts` cloned "the first paired giver row on editable brokers" and committed it for
+    real. That row was the `delete-safe` ETH transfer. `tx-delete.spec.ts` then deleted that pair and
+    asserted nothing matching survived — and found the clone. Neither test was wrong; the implicit
+    contract between them was. Both sides have since been fixed: `tx-clone` commits only onto a
+    broker or an account of its own and deletes what it commits, and `tx-delete` deletes only rows
+    it creates.
 
 #### `--workers` reaches Playwright too
 
@@ -240,33 +260,49 @@ The frontend has **two** worker counts, and they are derived from the same numbe
 ```text
 ./dev.py test front-transaction --workers 4
         │
-        ├─ _apply_parallel  → _common._E2E_WORKERS = 4
-        │                       └─ _run_playwright injects E2E_WORKERS=4
-        │                            └─ playwright.config.ts: workers: 4   (browser contexts)
+        ├─ shared_backend_for → SharedTestServer: max(1, ⌈4 / 2⌉) = 2      (uvicorn processes)
+        │                         └─ playwright.config.ts reuses it instead of starting its own
         │
-        └─ playwright.config.ts: SERVER_WORKERS = max(1, ⌊4 / 2⌋) = 2      (uvicorn processes)
+        └─ _apply_parallel  → _common._E2E_WORKERS = 4
+                                └─ apply_e2e_workers: min(4, max(1, ⌊logical cores / 2⌋)) → E2E_WORKERS
+                                     └─ playwright.config.ts: workers: E2E_WORKERS   (browser contexts)
 ```
 
-One uvicorn worker per two browser workers, minimum one. The ratio is deliberate: browser workers
-spend most of their time rendering and waiting, so pairing them onto a single backend keeps the
-backend *usefully* contended — which is the point. A suite that never makes the backend queue is
-not testing concurrency, it is only testing itself faster.
+`apply_e2e_workers()`, which both Playwright launches call (per unit and consolidated), caps the
+browser workers at half the logical cores, never below one: `--workers 4` gives four from 8 logical
+cores up. It exports `E2E_WORKERS` only when the result is above 1 and the variable is not already
+set; otherwise `playwright.config.ts` runs what the environment says, or 1.
+
+Under the runner the backend is the shared one (`SharedTestServer`), which Playwright reuses, and it
+is sized from `--workers` itself, before that cap: one uvicorn worker per two, rounded up (1 → 1,
+3 → 2, 4 → 2). `--workers 8` on 10 logical cores therefore runs 5 browser workers against 4 uvicorn
+workers. `playwright.config.ts` sizes a backend only when it starts one itself — with
+`--no-shared-server`, for the gallery, or with `npx playwright test` by hand — by the same rule applied
+to the browser count: `SERVER_WORKERS = max(1, ⌈E2E_WORKERS / 2⌉)`, unless `LIBREFOLIO_SERVER_WORKERS`
+or, failing that, `GALLERY_SERVER_WORKERS` (the gallery's one per four) sets it. The ratio is
+deliberate, and `_server.py` gives the reason (`CLIENTS_PER_SERVER_WORKER`): API and E2E workers hit
+the backend hard, hence one uvicorn worker per two of them, while the gallery's one per four rests on
+its browser workers spending most of their time rendering. A suite that never makes the backend queue
+is not testing concurrency, it is only testing itself faster.
 
 !!! warning "The environment variable is not the interface"
 
     `E2E_WORKERS` existed long before `--workers` wrote it. That gap meant
     `./dev.py test front-transaction --workers 4` gave four **uvicorn** workers and one **browser**
     worker: the flag was half-obeyed, silently. If you set `E2E_WORKERS` in your shell it still
-    wins — the runner does not overwrite a value you chose deliberately.
+    wins, uncapped — the runner does not overwrite a value you chose deliberately. The shared backend
+    is still sized from `--workers`, not from that value.
 
 !!! danger "Do not edit the repository while an E2E run is in flight"
 
-    Playwright's `webServer` starts the backend itself, and it must be started with `--no-reload`
-    (it is, since this was found the hard way). Under `--reload` uvicorn watches the **repo root**:
-    a single saved file restarts the backend mid-run, and every test that happens to be logging in
-    at that moment dies at 20 s. The signature is unmistakable — a burst of `login()` timeouts in
-    the tests scheduled first, scattered across unrelated files. It reads exactly like a
-    concurrency bug, and it is not one.
+    Under the runner the backend is started by `SharedTestServer`; Playwright's own `webServer`
+    starts one only when no shared backend is up — with `--no-shared-server`, for the gallery, or
+    with `npx playwright test` by hand. Either way it must be started with `--no-reload` — found the
+    hard way — and both paths pass it, together with `--no-scheduler`. Under `--reload`
+    uvicorn watches the **repo root**: a single saved file restarts the backend mid-run, and every
+    test that happens to be logging in at that moment dies at 20 s. The signature is unmistakable —
+    a burst of `login()` timeouts in the tests scheduled first, scattered across unrelated files. It
+    reads exactly like a concurrency bug, and it is not one.
 
 ---
 
@@ -318,8 +354,9 @@ and a shared `htmlcov-backend/` would be written by every worker at once.
   WRITE-GLOBAL unit stays serial even at `--workers 8`.
 - `--workers auto` resolves to half the cores, because a development machine is not dedicated to tests
   and timing-sensitive tests degrade under load.
-- On a **frontend** category the same flag sets Playwright's browser workers and, derived from it,
-  the number of uvicorn processes behind them (see *[`--workers` reaches Playwright too](#-workers-reaches-playwright-too)*).
+- On a **frontend** category the same flag sets Playwright's browser workers, capped at half the
+  logical cores, and the number of uvicorn processes behind them — the shared backend is sized from
+  the flag itself, not from the capped count (see *[`--workers` reaches Playwright too](#-workers-reaches-playwright-too)*).
 
 The flag belongs to `./dev.py test`, so it goes **before** the category:
 
@@ -357,7 +394,7 @@ bigger `N`.
     for a deterministic number.
 
     Compared file by file, the difference sits entirely in `asset_source.py` and
-    `asset_source_providers/borsa_italiana.py`: the two modules that talk to the live internet. Test
+    `asset_source_providers/borsa_italiana/plugin.py`: the two modules that talk to the live internet. Test
     and skip counts were identical in all three runs, so nothing changed about *what* ran — only
     which branch the provider took given what the site returned that day.
 
@@ -557,35 +594,43 @@ per worker, two calls per file).
 
 !!! danger "Per file, not per test — and the difference is measurable"
 
-    Cleaning after every *test* looks tidier and is wrong. Specs are written sequentially:
-    `tx-commit-all-types` commits a BUY and then sells part of it, `tx-delete` creates a pair in one
-    test and deletes it in the next. Wiping between tests breaks those chains — tried on the full
-    `transactions/` directory, it turned three reds into five.
+    Cleaning after every *test* looks tidier and is wrong. When this was measured, specs were written
+    sequentially: `tx-commit-all-types` committed a BUY and then sold part of it, `tx-delete` created
+    a pair in one test and deleted it in the next. Wiping between tests broke those chains — tried on
+    the full `transactions/` directory, it turned three reds into five. Neither spec chains any more
+    (`tx-commit-all-types` funds each SELL inside its own batch, and `tx-delete` deletes only rows it
+    creates), but state may still accumulate inside a file, and the cleanup must not be what breaks it.
 
     What consolidation removed was the *inter-file* reset: before it, every spec file ran in its own
     process against a freshly populated database. So that is the invariant to restore, and no more
     than that. State accumulates freely inside a file and is rolled back when the file changes.
 
-It is active only under `LF_TX_HYGIENE=1`, which the consolidated pass sets. That is deliberate: the
-invariant "the database is what `populate_mock_data` produced" needs restoring exactly when specs
-share it, and someone running a single spec by hand keeps the old path bit for bit. A cleanup that
-fails never turns the test red — inventing a red in the innocent spec that happened to run first is
-worse than the defect being cured.
+It is active only when `LF_TX_HYGIENE=1` **and** `E2E_WORKERS` is at most 1 (unset counts as 1). The
+consolidated pass sets `LF_TX_HYGIENE=1`, and only when it runs Playwright with one worker. That is
+deliberate: the invariant "the database is what `populate_mock_data` produced" needs restoring exactly
+when specs share it, and someone running a single spec by hand keeps the old path bit for bit. Above
+one worker, tests from different files interleave against one database: "every id that appeared since
+this file started" would also cover rows that other workers' tests are still using, and a repopulate
+would wipe the database under them. So the fixture switches itself off — with a warning, if
+`LF_TX_HYGIENE=1` was set anyway — and each test's own cleanup is all that is left. When the fixture's
+cleanup fails, it never turns the test red — inventing a red in the innocent spec that happened to run
+first is worse than the defect being cured.
 
 #### The rollback has to work in both directions
 
-Deleting what a spec *added* is only half the invariant. `tx-delete` **destroys** mock rows — that is
-its job — and no API call can bring back a row with its original id and its original half of a linked
-pair. What follows is a failure that never names the culprit:
+Deleting what a spec *added* is only half the invariant. A spec that **destroys** mock rows —
+`tx-delete` did, until its confirm tests moved to rows they create on a disposable account — cannot
+be repaired that way: no API call can bring back a row with its original id and its original half of
+a linked pair. What followed was a failure that never named the culprit:
 
-| | `tx-picker-pagination` alone, fresh database | `tx-picker-pagination` on the database the suite leaves behind |
+| | `tx-picker-pagination` alone, fresh database | `tx-picker-pagination` on the database the suite left behind |
 |---|---|---|
 | Outcome | **5 passed** | **4 failed** |
 
-With fewer rows in the table, the spec's first two checkbox clicks land on a *linked pair*; the bulk
-modal treats it as a single entity and opens a form modal by itself; four tests then time out
-clicking a button behind that modal's backdrop. The error talks about a `tx-form-modal` intercepting
-pointer events and says nothing about `tx-delete`, two files earlier in alphabetical order. It is the
+With fewer rows in the table, the spec's first two checkbox clicks landed on a *linked pair*; the bulk
+modal treated it as a single entity and opened a form modal by itself; four tests then timed out
+clicking a button behind that modal's backdrop. The error talked about a `tx-form-modal` intercepting
+pointer events and said nothing about `tx-delete`, which had run earlier in the same pass. It is the
 same family as row inflation, mirrored: **row deflation**.
 
 So `restore()` compares the id set against the opening snapshot. If even one baseline id has gone

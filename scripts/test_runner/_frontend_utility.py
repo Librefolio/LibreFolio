@@ -48,6 +48,9 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/core/__tests__/entityLink.test.ts",
             "src/lib/utils/core/__tests__/translateOr.test.ts",
             "src/lib/utils/core/__tests__/formatPercent.test.ts",
+            "src/lib/utils/core/__tests__/formatFixed.test.ts",
+            "src/lib/stores/app/uiLocale.test.ts",
+            "src/lib/utils/files/upload.test.ts",
             "src/lib/utils/core/__tests__/positionKey.test.ts",
             "src/lib/utils/core/__tests__/finiteNumber.test.ts",
             "src/lib/utils/core/__tests__/formatAxisDate.test.ts",
@@ -107,6 +110,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/routes/documentTitle.guard.test.ts",
             "src/htmlInterpolation.gate.test.ts",
             "src/htmlSink.gate.test.ts",
+            "src/clipboardSink.gate.test.ts",
             "src/lib/api/dashboardReportFixture.test.ts",
             "src/lib/components/brokers/lots/lotChartShared.test.ts",
             "src/lib/components/brokers/lots/lotWacPriceChartHelpers.test.ts",
@@ -133,10 +137,13 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/tools/pac-allocator/planner/modeText.test.ts",
             "src/lib/features/tools/pac-allocator/planner/pluralCountSites.test.ts",
             "src/lib/i18n/catalogIcuLocale.test.ts",
+            "src/lib/i18n/riskGlossary.test.ts",
             "src/lib/components/support/supportLinks.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.test.ts",
+            "src/lib/charts/signals/__tests__/syntheticSignals.languageSwitch.test.ts",
             "src/lib/charts/signals/__tests__/comparisonSignals.test.ts",
+            "src/lib/charts/signals/__tests__/comparisonSignalPages.test.ts",
             "src/lib/charts/signals/__tests__/measureSignal.test.ts",
             "src/lib/charts/signals/__tests__/signalProblemSeverity.test.ts",
             "src/lib/charts/signals/__tests__/catalogPartitions.test.ts",
@@ -199,6 +206,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/modals/ModalBase.test.ts",
             "src/lib/components/ui/modals/ModalBase.escapeLayers.test.ts",
             "src/lib/components/ui/modals/SyncResultRow.test.ts",
+            "src/lib/components/ui/media/FileEditModal.test.ts",
+            "src/lib/components/ui/media/FileUploader.test.ts",
             "src/lib/components/ui/modals/PageSyncModal.test.ts",
             "src/lib/components/ui/feedback/ToastContainer.test.ts",
             "src/lib/components/ui/feedback/Tooltip.test.ts",
@@ -238,6 +247,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/charts/ChartSignalsSection.test.ts",
             "src/lib/components/charts/SignalTreeSelect.test.ts",
             "src/lib/components/charts/MeasurePanel.test.ts",
+            "src/lib/components/charts/PriceChartFull.test.ts",
+            "src/lib/components/charts/LineChart.test.ts",
             "src/lib/components/risk/AssetSetLossComparisonSection.test.ts",
             "src/lib/components/risk/AssetSetRiskReturnSection.test.ts",
             "src/lib/components/charts/ScatterChart.test.ts",
@@ -264,6 +275,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/dashboard/GrowthChart.tooltip.test.ts",
             "src/lib/components/dashboard/ContributionTable.test.ts",
             "src/lib/components/dashboard/PerformanceChart.test.ts",
+            "src/lib/components/dashboard/OtherPeriodEffectsTable.test.ts",
             "src/lib/components/dashboard/AllocationPanel.test.ts",
             "src/lib/components/table/DataTableHeaderTooltip.test.ts",
             "src/lib/components/transactions/import/FixFlaggedStep.test.ts",
@@ -383,6 +395,16 @@ def front_files(verbose: bool = False, ui: bool = False, headed: bool = False, d
     return _run_playwright("files.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_files_pdf_offline(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the PDF preview with every origin but the lane's refused (1.2 gap 7)."""
+    print_section("Frontend Files PDF Offline Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("files-pdf-offline.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_files_uploader(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run uploader URL, list/grid and avatar regressions with synthetic APIs."""
     print_section("Frontend Files Uploader Tests")
@@ -394,7 +416,7 @@ def front_files_uploader(verbose: bool = False, ui: bool = False, headed: bool =
 
 
 def front_support_copy_and_go(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run native popup ordering and denied-copy flows on desktop and mobile."""
+    """Run native popup ordering, denied-copy flows and the legacy-copy limit on desktop and mobile."""
     print_section("Frontend Support Copy And Go Tests")
     if not _ensure_frontend_build():
         return False
@@ -423,6 +445,18 @@ def front_document_title(verbose: bool = False, ui: bool = False, headed: bool =
     return _run_playwright("layout/document-title.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
 
 
+def front_pac_allocator_real(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the PAC allocator (beta) end to end on real data (1.2 gap 3) on the desktop project, the runner default."""
+    print_section("Frontend PAC Allocator Real-Data Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("pac-allocator-real.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_changelog_locale(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the changelog modal's chapter languages in the Italian and English UI (lot CL, desktop)."""
     print_section("Frontend Changelog Locale Tests")
@@ -434,7 +468,7 @@ def front_changelog_locale(verbose: bool = False, ui: bool = False, headed: bool
 
 
 def front_toolbar_width_sweep(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Sweep the five PageToolbar bars 1700 → 320 px in French, Italian and Spanish (K step 13, item 5)."""
+    """Sweep the five PageToolbar bars 1700 → 320 px in English, French, Italian and Spanish, plus the Assets lifecycle pill at phone widths (K step 13, item 5; lot 51)."""
     print_section("Frontend Toolbar Width Sweep Tests")
     if not _ensure_frontend_build():
         return False
@@ -467,6 +501,18 @@ def front_connection_security(verbose: bool = False, ui: bool = False, headed: b
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/connection-security.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
+def front_docs_offline_math(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the documentation's formulas without internet: nested pages in English and Italian, MathJax and its fonts from the site's own copy (M-19)."""
+    print_section("Frontend Docs Offline Math Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/docs-offline-math.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_files_destructive(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -580,7 +626,7 @@ def populate_registry(registry: dict) -> None:
         front_utility_unit,
         test_names=True,
         name="Core Store Unit Tests",
-        desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic, signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, onboarding tour surface contracts and the tour/guide copy gate (no step names a guide or a tour unless its key is registered with a reason), transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch), plus the Asset Global laboratory pure layer (F): correlation banding/symmetric lookup/average-linkage clustering/lower-triangle points where every pair keeps its square even when the payload never mentioned it, and the D19 initial-selection ladder (persisted ∩ existing → owned → a readable handful) with its storage seam, filter composition and mass actions, plus the per-asset comparison arithmetic behind L1° and L3°: a row survives for an asset that could not be measured because a missing row reads as an unselected one, and the scatter can hold no portfolio point at all since the contract has no field to carry one, plus the laboratory's eligibility wording read off the generated reason enum (a reason the engine adds, such as no_price_history, stays red until reasonText words it and all four catalogues carry its sentence, naming only the values reasonText supplies), and the warning-translator gate: every component call of warningSentence, resultReasons or partialNotice, found through the Svelte compiler's AST with aliases and member calls followed, passes a translator as its second argument",
+        desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, the clipboard gate (only the shared helper reaches navigator.clipboard or execCommand('copy'), so every copy button keeps working over plain HTTP), safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic and event markers (a partial last week or month keeps its markers on its bar), signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, onboarding tour surface contracts and the tour/guide copy gate (no step names a guide or a tour unless its key is registered with a reason), transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch), plus the Asset Global laboratory pure layer (F): correlation banding/symmetric lookup/average-linkage clustering/lower-triangle points where every pair keeps its square even when the payload never mentioned it, and the D19 initial-selection ladder (persisted ∩ existing → owned → a readable handful) with its storage seam, filter composition and mass actions, plus the per-asset comparison arithmetic behind L1° and L3°: a row survives for an asset that could not be measured because a missing row reads as an unselected one, and the scatter can hold no portfolio point at all since the contract has no field to carry one, plus the laboratory's eligibility wording read off the generated reason enum (a reason the engine adds, such as no_price_history, stays red until reasonText words it and all four catalogues carry its sentence, naming only the values reasonText supplies), and the warning-translator gate: every component call of warningSentence, resultReasons or partialNotice, found through the Svelte compiler's AST with aliases and member calls followed, passes a translator as its second argument",
         tests=("src/lib/stores/core/entityStore.test.ts", "src/lib/features/onboarding/onboardingTourSurfaces.test.ts"),
     )
     add_test(
@@ -617,10 +663,35 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
     add_test(cat, "files", front_files, name="Files Tests", desc="Files page, tabs, URL filters", prereq="Login working", tests="files.spec.ts")
+    add_test(
+        cat,
+        "files-pdf-offline",
+        front_files_pdf_offline,
+        name="Files PDF Offline Tests",
+        desc="The PDF preview without internet (1.2 gap 7): every origin but the lane's refused and every browser request recorded from before the first navigation; signed in through the API as an ordinary member, a one-page Latin PDF (Helvetica, not embedded) uploaded and previewed from the Files list reaches file-preview-pdf data-state=ready with not one request to another origin; positive controls: the engine's worker fetched /_app/immutable/assets/pdfium.<hash>.wasm from the lane (GET, 200), every viewer fallback font asked for is a 200 from the lane, a jsDelivr probe from the page is refused and recorded",
+        prereq="Test users created (TEST_USER an ordinary member)",
+        tests="files-pdf-offline.spec.ts",
+    )
     add_test(cat, "files-uploader", front_files_uploader, name="Files Uploader Tests", desc="Uploader URL/list-grid/reload parity, unknown/null identities and avatar geometry with synthetic APIs", tests="files-uploader.spec.ts")
-    add_test(cat, "support-copy-and-go", front_support_copy_and_go, name="Support Copy And Go Tests", desc="Icon-to-dialog, fixed public clipboard payload, native blank-tab reservation, safe navigation and denied-copy cleanup", tests="support-copy-and-go.spec.ts")
+    add_test(
+        cat,
+        "support-copy-and-go",
+        front_support_copy_and_go,
+        name="Support Copy And Go Tests",
+        desc="Icon-to-dialog, fixed public clipboard payload, native blank-tab reservation, safe navigation and denied-copy cleanup; a refused secure write falls back once to the legacy copy, which fails explicitly because opening the share tab already consumed the click's user activation (known limit)",
+        tests="support-copy-and-go.spec.ts",
+    )
     add_test(cat, "header-scroll", front_header_scroll, name="Header Scroll Tests", desc="Desktop/mobile document-scroll geometry, retained layout, menu pins and reduced motion with synthetic APIs", tests="layout/header-scroll.spec.ts")
     add_test(cat, "document-title", front_document_title, name="Document Title Tests", desc="No page changes the tab title: direct landing on every main page and a tool page, sidebar hops in one runtime, a Files query change", prereq="Test users created", tests="layout/document-title.spec.ts")
+    add_test(
+        cat,
+        "pac-allocator-real",
+        front_pac_allocator_real,
+        name="PAC Allocator Real-Data Tests",
+        desc="The PAC allocator (beta) end to end on real data (1.2 gap 3): a disposable account holds two priced positions and cash in its own broker; the Tools hub opens the planner (tool code read from the catalogue), «copy from LibreFolio» brings the broker's cash, the positions with their stored prices and their current distribution as the targets, a budget is typed and «Calculate plan» runs the real engine; the tool's own request carries the copied facts, its answer is a proven optimum, and the screen prints it — run state, result state and proof the answer's, per Asset the value after the plan, the ideal value and the signed gap, per order the amount and the fee, on sign and digits at the currency's minor unit — within the budget",
+        prereq="Populated DB + test users (registration enabled)",
+        tests="pac-allocator-real.spec.ts",
+    )
     add_test(
         cat,
         "changelog-locale",
@@ -635,7 +706,7 @@ def populate_registry(registry: dict) -> None:
         "toolbar-width-sweep",
         front_toolbar_width_sweep,
         name="Toolbar Width Sweep",
-        desc="The five PageToolbar bars (assets list and detail, dashboard, broker detail, FX list) swept 1700 → 320 px every 10 px in French, Italian and Spanish: no box past its bar, no sideways page scroll, every violation in one table per bar and language (K step 13, item 5)",
+        desc="The five PageToolbar bars (assets list and detail, dashboard, broker detail, FX list) swept 1700 → 320 px every 10 px in English, French, Italian and Spanish: no box past its bar, no sideways page scroll, every violation in one table per bar and language; then the Assets Active/Inactive pill from 390 to 320 px in the same four languages, both labels whole inside it and Search still usable beside it (K step 13, item 5; lot 51)",
         prereq="Populated DB + test users",
         tests="layout/toolbar-width-sweep.spec.ts",
     )
@@ -656,6 +727,15 @@ def populate_registry(registry: dict) -> None:
         desc="The sidebar's connection indicator from the browser's view and the server's (GET /system/connection): secure on localhost, local network on a mapped .lan name, uncertain on a public name the server sees as local, not secure with the menu dot when the server sees a public source; details, docs link (plan 36)",
         prereq="Populated DB + test users",
         tests="layout/connection-security.spec.ts",
+    )
+    add_test(
+        cat,
+        "docs-offline-math",
+        front_docs_offline_math,
+        name="Docs Offline Math",
+        desc="The documentation draws its formulas without internet: on a nested page in English and its Italian twin a folder deeper, every origin but the lane's refused, lib-loader.js loads MathJax from the site's root (/mkdocs/javascripts/vendor/mathjax/tex-mml-chtml.js, 200), every formula gets its mjx-container, every MathJax font is a 200 from the site's copy (vendor/mathjax/output/chtml/fonts/woff-v2/) with at least one MJX face loaded and none in error, MathJax is never asked of another origin (jsDelivr included), and mathjax.js raises no typesetPromise page error (M-19, batch 25)",
+        prereq="Docs site built with the MathJax copy and its fonts (dev.py cache js, then dev.py mkdocs build)",
+        tests="layout/docs-offline-math.spec.ts",
     )
     add_test(cat, "files-destructive", front_files_destructive, name="Files Destructive Tests", desc="Single + bulk file delete, confirm/cancel, delete failure, BRIM delete + empty state (disposable rows, self-restoring)", prereq="Login working", tests="files-destructive.spec.ts")
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")

@@ -802,8 +802,8 @@
 7. M-19's e2e spec `frontend/e2e/layout/docs-offline-math.spec.ts`: written by test-author in batch 25, which added
    checks on the fonts and on `typesetPromise`. It ran once in M's lane, unregistered: 2 passed, and a negative control
    without the fonts went red on the font assertion. It is parked outside the repo (`release-pipeline/pending/`) because
-   an unregistered spec turns `check-orphans` red. It will be registered in `scripts/test_runner/_frontend_utility.py`
-   after T's checkpoint (the file is T's for M-18's CP1), when the coordinator says so.
+   an unregistered spec turns `check-orphans` red. **Registered in batch 28** (step 17), once T's CP1 of M-18 passed
+   `scripts/test_runner/_frontend_utility.py` to M: `front-utility docs-offline-math`.
    Coordinator 12/10, during batch 23:
    - T (not I) writes the frontend; the modal falls back to English chapter by chapter, with a «not yet translated»
      pill.
@@ -814,3 +814,827 @@
    - The wait for the chapters (`:1978`, 8 s) holds T's lazy loading.
 
    Batch 25 cured the conflict with `CHANGELOG_SEARCH_TERM = 'Docker'`.
+
+### 17. ✅ Batch 28: the M-19 spec registered, and the gallery's price guard after M-18 — 2026-10-12 20:00
+
+Base `d877a4e14` (train 69). The coordinator assigned M `scripts/test_runner/_frontend_utility.py` for this batch, after
+T's CP1 of M-18 (train 68); the file passes to I next, for its `clipboardSink` gate. Both tasks went to test-author.
+
+**17.1 ✅ `docs-offline-math` registered**
+> **Note implementazione**: the parked spec (`release-pipeline/pending/`, sha256 `0edbc5a4…`, 225 lines) is copied
+> byte for byte to `frontend/e2e/layout/docs-offline-math.spec.ts`. `front_docs_offline_math` and its
+> `add_test(cat, "docs-offline-math", …)` follow `connection-security` in `_frontend_utility.py`, with the `desc` and
+> `prereq` written in batch 25 (desktop only, the neighbours' `_ensure_*` guards).
+> - `front-utility docs-offline-math`: 2 passed (English and Italian);
+> - `check-orphans` clean (110 of 110 e2e specs registered and reachable from `all`);
+> - `dev.py lint` clean; ruff on the runner file shows no new finding against HEAD.
+
+**17.2 ✅ The gallery's price guard follows M-18 (proposal A, decided by the coordinator)**
+> **Note implementazione**: `expectOfflinePricesDrawn` (`frontend/e2e/fixtures/galleryReportSets.ts`) expected each
+> asset card to contain `toFixed(2)` of its fixture price. Since T's CP1, the card writes the price through
+> `formatFixed(value, 2)` (`AssetCard.svelte:225`): `toFixed(2)` first, then `toLocaleString(uiLocale())`.
+> - The guard now takes `lang` from its three callers in `gallery.spec.ts` («Asset list page», «table»,
+>   «filtered»). In the page, it computes `Intl.NumberFormat(GALLERY_LOCALES[lang], {2, 2})` of the price rounded by
+>   `toFixed(2)`, so the browser's own ICU writes it (French groups with U+202F), as `brokers-detail.spec.ts`
+>   (`frenchQuota`) does.
+> - **A control:** the expected text must end with the language's decimal mark and two digits (`.dd` in English,
+>   `,dd` in it/fr/es), so a browser without the locale's ICU data fails there, not as a wrong price.
+> - The guard runs only in `dev.py mkdocs gallery`: the runner excludes `gallery.spec.ts`.
+> - **Red before the change:** `dev.py mkdocs gallery --test-port 6158 --workers 2 -f "Asset list"` gave 6 failed
+>   (3 tests × desktop/mobile), all on `Gold Spot Price`, expected `4116.60`, received `4,116.60`.
+> - **⚠️ Fuori pista — the red came in English first**: English groups thousands too, and two fixture prices are
+>   over 1,000 (4,116.60 and 10,956.03), so the it/fr/es iterations were never reached. Proposal A covers English
+>   through `en-US`.
+> - **⚠️ Fuori pista — `Language` comes from `./test-users`**: `galleryLocale.ts` imports it but does not export it.
+> - **⚠️ Fuori pista — the first control was too loose**: `toContain(',')` (M's brief) also held for an `en-US`
+>   fallback on prices over 1,000 (test-author found it). Tightened to the decimal mark at the end.
+> - **Green:** the same command after the change gave 6 passed (3.2 min, 48 shots). With the tightened control, the
+>   first run gave 3 passed and 3 failed, all timeouts outside the guard: two `goToAssetsPage` waits over 20 s for
+>   `data-busy="false"`, and one `page.screenshot` waiting for fonts after the guard had passed. Load was about 90 on
+>   10 cores (another lane's coverage suite); no backend error, and the pages were fully drawn. Re-run once alone, as
+>   the coordinator asked: 6 passed (4.4 min), 48 of 48 shots, the guard green in the four languages, desktop and
+>   mobile. Verdict: environment.
+> - Prettier and a strict `tsc` on the two e2e files: clean.
+
+### 18. ✅ Batch 29: the translation round before the tag — the proposal, and S1 — 2026-10-12 20:40
+
+**18.1 ✅ The proposal (read-only, coordinator's request at 20:28; approved at 20:37, in its order)**
+> **Note implementazione**: on `b063b16ca` (train 70), today's translation debt is zero. Evidence in
+> `release-pipeline/runs/b29/`; the full text is in `release-pipeline/b29_translation_round_proposal.md`.
+> - `translate --dry-run` is empty for the pages and the CHANGELOG.
+> - A scan that ignores the cache (`release-pipeline/scripts/b29_stale_scan.py`) takes, for each EN page and each
+>   it/fr/es, the EN delta since the translation's last commit: 0 pages, so no stamp can hide one.
+> - Since train 44 (`7b3c2b5ab`, the last full round) 9 translated EN pages changed, each with it/fr/es moved in the
+>   same range (batches 21–25).
+> - The stamp audit with the token check: 220 stamped pairs, 0 unported.
+> - The UI-label scan: 370 rows, the same set as batches 23 and 25.
+>
+> **The round, as approved:**
+> - **S1, now:** `financial-theory/fundamentals/day-count.{en,it,fr,es}.md:10`. Its only v1 plugin path among the
+>   translated pages; U's move is in the base.
+> - **I1, after I's batch 48 is in the target:** `user/transactions/import/how-to` §«A file in the wrong broker»
+>   quotes the modal's labels. Port it/fr/es with the catalogues' labels and stamp, then re-run the label scan against
+>   I's catalogues.
+> - **I2, after T's CP2:**
+>   - figures quoted as the UI writes them, still in English format in it/fr/es (it 6, fr 12, es 12, in 4–5 pages:
+>     the privacy table of `user/settings/preferences`, `user/dashboard/kpi-cards`, `positions`,
+>     `user/brokers/index`), corrected only where they are UI output, with the app's own Intl;
+>   - one sentence in `user/settings/preferences`, written by M in EN and in the 3 languages so it describes the final
+>     behaviour: the interface language also decides how numbers and dates are written, and English with no region
+>     uses en-GB. T does not touch the doc pages (coordinator).
+> - **I3:** U-4 changes developer pages only (EN), so it leaves no translation debt.
+> - **I4, last:** the CHANGELOG [1.2.0], ported by hand and stamped, with no pipeline run. The coordinator passes the
+>   M-18 lines at CP2 and M-20's with I's batch. The open chapter becomes blocking with the tag.
+> - **I5, queued as before:** the gallery regenerated after CP2 and I's batch; the `galleryLocale.ts` docstring after
+>   CP2.
+
+**18.2 ✅ S1: `day-count`'s plugin path**
+> **Note implementazione**: in the four languages, line 10's code span
+> `backend/app/services/asset_source_providers/scheduled_investment.py` now reads `…/scheduled_investment/plugin.py`,
+> where `calculate_day_count_fraction()` lives since U's move (`2eed3d26c`).
+> - The edit was by hand, the same path everywhere; the sentence around it still holds.
+> - Before the stamp, the dry-run planned the page ×3 (~8.7K tokens each).
+> - `translate-stamp --file financial-theory/fundamentals/day-count.en.md` stamped it/fr/es, and only that cache entry
+>   changed. Then the dry-run was empty.
+> - Gates (script `b29_final_gates.sh`, load 31–49): `translate-validate` 630 files 0/0, `translate-diff` 642 of 642
+>   clean, strict build 0 (all 3,012 relative asset URLs resolve), `check-links` 95 valid, `git diff --check` clean.
+
+### 19. ✅ Batch 30: I2, the figures as the UI writes them since M-18, and the formats sentence — 2026-10-12 22:00
+
+Base `c57acf510` (train 71). T's CP2 formats (coordinator, 21:44; the full list in `/tmp/libreFolio_m18cp2_examples.txt`):
+
+- `en` → `en-GB` unless the browser is in English; `it`, `fr` and `es` are bare;
+- French groups with U+202F; French and Spanish put U+00A0 before `%`;
+- Italian and Spanish do not group four digits.
+
+The kit was prepared at 21:00, outside the repo (`release-pipeline/i2/`, with a README).
+
+**19.1 ✅ The figures**
+> **Note implementazione**: `release-pipeline/scripts/i2_figures.mjs` scans every figure of the docs (2,979) and computes
+> the text the app writes for it in the page's language, with the app's own formula: `toFixed` first, then `Intl`, as
+> in `formatFixed`, `formatPercent` and the amounts.
+> - **Chromium:** 2,951 of 2,951 expected texts equal in Chromium 149 and in Node (ICU 78.3).
+> - **The decisions** are rules by page and figure (`i2/i2_rules.json`), so they survive line shifts.
+> - **Classes:** UI output (in code spans, or a sentence quoting the UI), input examples, prose, theory.
+>
+> **Written:** 34 figures in 11 files.
+> - `user/dashboard/kpi-cards` fr/es: the lines in code, e.g. `+91,31 € (+16,36 %)`, `-558,10 €`,
+>   `+12 450,30 (+24,85 %)`;
+> - `user/dashboard/positions` and `user/brokers/index`, it/fr/es: `0,00%` / `0,00 %`;
+> - `user/settings/preferences`, it/fr/es: the privacy table's amounts (`1234,56 €`, `1 234,56 €`) and `••• (60 %)`.
+>
+> **Spaces:** plain in the sources (`--spaces plain`), as every translation; the French hook adds U+202F in prose.
+>
+> **The privacy table's third row, by hand, in all four:** `€1,234.56` is the English UI's prefix; the suffix is now
+> written in the page language's format (`1234,56 €`, French `1 234,56 €`).
+>
+> **Left as written:**
+> - prose percentages, the doc's own text;
+> - the CSV values `Italy;12,5`;
+> - IP ranges;
+> - the catalogue's warning *dépasse 100%*;
+> - theory pages (ISO dates, formulas);
+> - `admin/`;
+> - the English pages, which already follow `en-GB`.
+
+**19.2 ✅ The validator accepts a localized percentage in a code span**
+> **Note implementazione**:
+> - **The gap:** `translate-validate`'s `inline-code-missing` compared code spans without the digit grouping, but not
+>   without the space French and Spanish put before `%`, so each localized percentage would have been a warning.
+> - **The fix:** `_PERCENT_SPACE` in `mkdocs_src/aphra-pipeline/validate_translations.py`. An identifier that changes,
+>   a digit, or the sign still warns.
+> - **Tests (test-author):** 12 cases in `test_translation_validator.py`, `utils translation-validator` 186 passed. With
+>   the pattern disabled in memory, the 7 cases with a space before `%` go red.
+
+**19.3 ✅ `user/settings/preferences`: numbers and dates follow the interface language**
+> **Note implementazione**: written by M in EN, it, fr and es, as the coordinator decided (20:37):
+> - a clause at the end of the **Language** cell;
+> - an `!!! info` after the table, giving the same examples in all four pages (T's formats: `14.788,01` /
+>   `12 ott 2026`, `14 788,01` / `12 oct. 2026`, `14.788,01` / `12 oct 2026`) and the region rule (a US-English browser
+>   writes `14,788.01` and `Oct 12, 2026`; a browser in another language gets the British `12 Oct 2026`).
+>
+> Same examples, same order, so the code spans match across the four files. The page is stamped (before: ×3,
+> ~32.7K tokens each).
+
+**19.4 ✅ Gates** (`release-pipeline/scripts/b30_final_gates.sh`, load 14–25)
+> - dry-run empty after the stamp;
+> - `utils translation-validator` 186;
+> - `translate-validate` 630 files 0/0, with the localized percentages in code;
+> - `translate-diff` 642 of 642 clean;
+> - strict build 0 (all 3,012 asset URLs resolve); `check-links` 95; `git diff --check` clean;
+> - the I2 re-scan plans 0 figures, and every UI difference left has its rule;
+> - the label scan: 370 rows, the same set as batch 29 (3 accepted rows moved 8 lines down).
+>
+> **⚠️ Fuori pista — the catalogue is generated now:** since U's split (train 71), `frontend/src/lib/i18n/<lang>.json`
+> exists only after a build. The label scan (M's tool, outside the repo) now reads the catalogue assembled in memory by
+> `scripts/i18n_catalog.py`'s `load_catalog`.
+
+### 20. ✅ Batch 31: I1, the wrong-broker modal's labels; the CHANGELOG's `169bd60f3`; the `galleryLocale.ts` docstring — 2026-10-12 22:10
+
+Base `32d27501c` (train 72: I's batch 48, V's 2b, the CHANGELOG commit `169bd60f3`).
+
+**20.1 ✅ I1**
+> **Note implementazione**: I's batch 48 changed two keys of the catalogue (read with `scripts/i18n_catalog.py`'s
+> `catalogs_at`, before and after the train):
+> - `importWizard.brokerMismatch.move`: «Move to {broker}» → **Move** (it «Sposta», fr «Déplacer», es «Mover»);
+> - `importWizard.brokerMismatch.remove`: «Remove the file» → **Remove** («Rimuovi», «Retirer», «Quitar»).
+>
+> The Move button still shows the chosen broker's icon (`ImportBrokerMismatchModal.svelte`).
+> - `user/transactions/import/how-to.{en,it,fr,es}.md` §«A file in the wrong broker»: «**Move**, with the icon of the
+>   broker chosen under **Move it to**» and «**Remove**», by hand in the four languages, with the catalogues' labels.
+> - `developer/frontend/components/features/import-wizard.md:162` likewise (EN only).
+> - The page is stamped. Before: ×3, ~52.6K tokens each.
+> - The label scan against the new catalogues: 2 more pairs checked per language, all matching; 0 new differing rows
+>   against batch 30.
+
+**20.2 ✅ The CHANGELOG, `169bd60f3`, by hand, then stamped**
+> **Note implementazione**: two edits in `CHANGELOG.{it,fr,es}.md`:
+> - **✨ «Connection security in the sidebar»** gains the clause on the details closing by themselves after 30 seconds
+>   unless the pointer or the focus is on them;
+> - **🐛 «Dialogs and menus»** gains M-20's bullet, «Copy buttons work over plain HTTP too», with the names the files
+>   and the security guide use: «HTTP in chiaro», «HTTP simple», «HTTP sin cifrar», and Settings › About as each file
+>   writes it.
+>
+> `translate-stamp --file CHANGELOG.md` stamped 6 pieces (`1.2.0/added` and `1.2.0/fixed/dialogs-and-menus`, ×3). Before,
+> the dry-run planned them at ~50.7K and ~5.5K tokens each.
+> Script: `release-pipeline/scripts/b31_changelog_port.py`.
+
+**20.3 ✅ `frontend/e2e/fixtures/galleryLocale.ts:4-7`**
+> **Note implementazione**: the docstring now describes the final behaviour: since M-18 the app writes every figure in
+> `uiLocale()` (the interface language, plus the browser's region only when the browser speaks that language). The
+> browser locale still decides the English shots (`Oct 12, 2026` against `12 Oct 2026`), and pinning it per language
+> keeps each shot independent of the machine. Prettier clean.
+> - **⚠️ Fuori pista, to check at I5:** further down, §«Before the page is drawn» says «A language switch redraws no
+>   number already on screen». Since M-18 the figures read `uiLocale()` tracked, so a switch of the interface language
+>   redraws them. The rule the section draws (set the browser locale before the load) and its stamp check still hold.
+>   The sentence was left as it is, outside the assigned lines.
+> - **⚠️ Fuori pista (22:25, I5 preparation, step 21.2):** a probe showed that the gallery's headless Chromium answers
+>   `navigator.language` with en-US whatever the browser locale this file pins. So the pin does not decide the English
+>   shots, and lines 4–9 say otherwise. The corrected text is approved for I5.
+
+**20.4 ✅ Gates** (`release-pipeline/scripts/b31_final_gates.sh`, load 27–50)
+> - dry-run empty after the stamps;
+> - `translate-validate` 630 files 0/0; `translate-diff` 642 of 642 clean;
+> - strict build 0 (all 3,012 asset URLs resolve); `check-links` 95; `git diff --check` clean.
+
+### 21. ✅ I5 prepared, read-only — 2026-10-12 22:25 (approved at 22:26; applied once T's CP3 is in the target)
+
+**21.1 ✅ The security panel's shot (`security/connection-indicator`)**
+> **Note implementazione**: the details' 30 s countdown (I's batch 48, `ConnectionSecurityIndicator.svelte`) is held
+> while the pointer is anywhere on the indicator.
+> - **Before `parkPointer`:** after the click the pointer stays inside the indicator. The sidebar's bottom block is
+>   anchored, so the toggle rises and the pointer lands on the details. The settles before the shot therefore cost
+>   nothing.
+> - **From `parkPointer` (`gallery.spec.ts:1722`):** it moves the pointer to the right edge, out of the indicator, and
+>   the countdown starts.
+>   - Up to the capture: about 1 s typically, about 37 s in the worst case of waits that pass late.
+>   - Up to 20 s of those are inside `screenshot()`, whose waits swallow their timeouts, and they come after the last
+>     check that needs the details. A close there gives a picture of a closed line, with no red.
+> - **Approved fix, for I5:**
+>   - `restPointerOnDetails` rests the pointer on the details' own right padding: on the indicator, and on nothing
+>     with a hover style (checked with `elementFromPoint`);
+>   - `aria-expanded` is asserted after the capture.
+> - **At I5, two controls in the first combination only:** positive (rest + 31 s → green) and negative
+>   (`parkPointer` + 31 s → red).
+> - **Patch:** `release-pipeline/i5/i5_proposed.patch`, with notes in `release-pipeline/i5/I5_PREP.md`. Prettier is
+>   clean, and an in-memory type check gives 0 diagnostics in the two files.
+
+**21.2 ✅ `galleryLocale.ts`, «A language switch redraws no number already on screen»**
+> **Note implementazione**: I probed the gallery's headless Chromium 149 on desktop and mobile, with LANG C, it_IT and
+> en_GB, on macOS in Italian.
+> - **What the override reaches:** `navigator.language` stays en-US whatever the CDP override, the reload or the
+>   machine. The override moves only the locale `Intl` falls back on, at once in the same document, and the
+>   Accept-Language.
+> - **So `uiLocale()` never sees the gallery's browser locale.**
+>   - English shots are en-US.
+>   - The others take the bare language, which writes as it-IT, fr-FR and es-ES do. I checked amounts, percentages,
+>     compact numbers, dates and times.
+> - **The sentence is wrong since M-18:** a switch of the interface language redraws what `uiLocale()` writes. The
+>   approved text replaces it at I5.
+> - **⚠️ Fuori pista:** lines 4–9, written in batch 31 (20.3), say the browser locale this file pins decides the
+>   English shots. `navigator.language` decides them, and the pin does not reach it. The same I5 patch corrects them.
+> - **Backlog, at I5 (coordinator):** an M-* line for a guard on `navigator.language`. It would turn red, instead of
+>   producing British English shots, wherever Chromium answers otherwise.
+
+### 22. ✅ Batch 32: I4's M-18 part — the CHANGELOG's `e7bfa342f`, by hand, then stamped — 2026-10-12 22:55
+
+Base `1bb4abe68`: the target with `e7bfa342f`; T's CP2 and CP3 are not in it yet.
+
+**22.1 ✅ Two lines in `CHANGELOG.{it,fr,es}.md`**
+> **Note implementazione**: the two lines go where the English has them.
+> - **🔄 Changed, first bullet:** «Numbers and dates follow the interface language everywhere.»
+> - **🐛 «Sign-in, language, app icons and small screens»,** after the file-size line: «The last English dates and
+>   dotted decimals are gone.» (M-17 and the exact decimals).
+>
+> **Examples as the UI writes them** (coordinator; Chromium 149's Intl, `release-pipeline/b32/probe_example_bytes.txt`):
+> - the French amount `14 788,01` groups with U+202F, in all three files;
+> - the zero is `0,00%` in Italian and `0,00 %` with U+00A0 in French and Spanish;
+> - dates and the British and US examples are plain.
+>
+> **Names from the catalogues and the files:**
+> - **Admin › Impostazioni globali** / **Admin › Paramètres globaux** / **Administración › Configuración global**;
+> - *Aggiornato* / *Mis à jour* / *Actualizado* (`common.updated`);
+> - rapporti split / ratios de split / ratios de desdoblamiento;
+> - PMC / PRU / PMC;
+> - «correzione / correction / corrección gap-fix»;
+> - the data editor's prices «non aggiornati / obsolètes / obsoletos».
+>
+> **Before the port**, the dry-run planned 2 pieces × 3: `1.2.0/changed` at ~17.2K tokens and
+> `1.2.0/fixed/sign-in-language-app-icons-and-small-screens` at ~16.2K, each.
+> Script: `release-pipeline/scripts/b32_changelog_port.py`.
+>
+> - **⚠️ Fuori pista:** the English example `14 788,01` holds a plain space where the UI writes U+202F. I noted it for
+>   the coordinator, who owns the English file. Changing it would move the piece's md5 and need a new stamp.
+
+**22.2 ✅ Stamp and gates** (`release-pipeline/scripts/b32_final_gates.sh`, load 18–43; logs in `release-pipeline/runs/b32/`)
+> - **Stamp:** `translate-stamp --file CHANGELOG.md` stamped 6 pieces (the two pieces ×3). Only those two cache entries
+>   changed (md5 `ca14a14c`→`d46a1fd9` and `461cc54b`→`53268d15`).
+> - **Dry-run:** empty, for the pages and the CHANGELOG.
+> - **Validation:** `translate-validate --hide-localized` 630 files 0/0. On the CHANGELOG alone (`--file CHANGELOG.md`):
+>   3 files OK, 0 errors, 0 warnings, 0 localized.
+> - **`translate-diff`:** 642 of 642 clean.
+> - **Build:** strict build 0 (all 3,012 relative asset URLs resolve).
+> - **Links:** `check-links` 95 valid.
+> - **`git diff --check`:** clean.
+> - **Ports:** 6158, 6168 and 6042 free.
+
+### 23. ✅ I5, part one: the security shot and `galleryLocale.ts` — on `104ba23d0` (train 75: T's CP2 and CP3, U-3), 2026-10-13 00:15
+
+**23.1 ✅ The approved patch, applied**
+> **Note implementazione**: `gallery.spec.ts` and `galleryLocale.ts` were byte-identical to the patch's base (blobs
+> `67964b8dae3a` and `0d9cf94ee5f1`). The patch applied as it was, and `gallery.spec.ts` is identical to the approved
+> proposal.
+>
+> `galleryLocale.ts` takes two updates for CP3 on top of the approved text:
+> - CP3's `resolveUiLocale` takes the browser's tag only when it names a region (a bare `en` falls back to en-GB), so
+>   the text says «only when it speaks that language and names one»;
+> - after CP3 the app passes a locale wherever it formats: 37 call sites without one on the batch-31 base, 0 now (the 2
+>   left read the time zone). So the last sentence says the pin «still covers whatever formats without one — a library,
+>   the browser's own controls».
+>
+> Prettier is clean. `tsc -p tsconfig.e2e.json` shows the 2 errors of the base, none in the two files.
+> - **⚠️ Fuori pista:** `dev.py mkdocs gallery` does have `--headed` and `--ui` (`dev.py:2541-2545`). The preparation
+>   (21.2) said otherwise, from a search that missed `dev.py`. It weighs on M-24.
+
+**23.2 ✅ The Security test alone, desktop and mobile** (lane 6158, `/tmp/librefolio-r2-m`, load 24–35)
+> - **Frontend built first** (`dev.py front build`: API client, catalogues, svelte-check clean), since `frontend/build`
+>   predated CP2, CP3 and U-3.
+> - **Real run** (`mkdocs gallery --test-port 6158 --workers 2 -f "connection indicator"`, the gallery dataset
+>   populated): 2 passed (desktop 37.1 s, mobile 39.1 s), 16 shots.
+>   - Checked by eye: the details are open, there is no hover on the toggle and no tooltip.
+>   - The French shot writes `+3 785,94 €` and `-4,04 %`.
+> - **Positive control** (temporary: 31 s before the first shot, the pointer on the details): 2 passed, 1.2 min each.
+> - **Negative control** (temporary: `parkPointer` and the same 31 s): 2 failed, both on «the details stayed open
+>   through the shot» (expected `true`, received `false`). The picture shows the line closed: the one that used to pass
+>   silently.
+> - **Reverted:** `gallery.spec.ts` is the approved version again (sha `1238d7342c64`).
+> - **Nothing left in the repo:** the gallery's PNGs are ignored by Git (`.gitignore:79`). The 16 local shots are those
+>   of the real run again.
+> - **Evidence:** `release-pipeline/i5/` and `release-pipeline/runs/i5/`.
+> - **For the full gallery:** the sidebar's version reads `v1.1.0-1489-g104ba23d0-dirty`, because the build ran on an
+>   uncommitted tree. Build from a clean tree first.
+> - **→ Batch 34** ([ReleaseGallery plan](plan-phase00ReleaseGallery.prompt.md), step 30): asked how 1.1 did it, M
+>   found that the release screenshots are CI's, and `-dirty` there too (the published 1.1 gallery, the nightlies).
+>   The app version is now frozen as `LF_APP_VERSION`, which also lets a local build show a chosen version for one
+>   command.
+
+**23.3 ✅ M-24 in the backlog**
+> **Note implementazione**: the guard on `navigator.language`, as the coordinator decided (`BACKLOG_POST_1.2.md` §M).
+
+### 24. ✅ Batch 34 (I4): T-EN's changelog line, by hand, then stamped — on `b1a17b49b` (train 79), 2026-10-13 01:50
+
+Base `b1a17b49b`, fast-forwarded from `e501b9615` for this line. The rest of batch 34 is the frozen app version
+([ReleaseGallery plan](plan-phase00ReleaseGallery.prompt.md), step 30).
+
+**24.1 ✅ The line, by hand**
+> **Note implementazione**: `4e11c2f83` adds a 🐛 line in «Sign-in, language, app icons and small screens», right
+> after M-18's «The last English dates and dotted decimals are gone.». It is ported to `CHANGELOG.{it,fr,es}.md` at
+> the same place.
+>
+> Names from the catalogues (`b1a17b49b`):
+> - the what-if signals are the UI's group «Benchmark Sintetici / Benchmarks Synthétiques / Benchmarks Sintéticos»
+>   (`chartSettings.categories.benchmark`). That keeps them apart from the risk section «E se…? / Et si… ? / ¿Qué
+>   pasaría si…?»;
+> - the three labels are «Lineare, Composta, Sinusoide» / «Linéaire, Composée, Sinusoïde» / «Lineal, Compuesto,
+>   Sinusoide»;
+> - the price chart, the tooltip and the provider check use the files' own words (batch 31).
+>
+> The title follows its neighbours («… seguono la tua lingua» / «… suivent votre langue» / «… siguen tu idioma»).
+>
+> Before the port, the dry-run planned 1 piece ×3 (`1.2.0/fixed/sign-in-language-app-icons-and-small-screens`,
+> ~17.1K tokens each). `translate-stamp --file CHANGELOG.md` stamped those 3, and then the dry-run was empty.
+> Script: `release-pipeline/scripts/b34_changelog_port.py`.
+
+**24.2 ✅ Gates** — the combined-revision gates of batch 34 (ReleaseGallery plan, step 30): CHANGELOG alone 3 files
+OK, 0 localized; `translate-validate` 630 files 0/0; strict build 0; `check-links` 95.
+
+### 25. ✅ I5 part two: the full gallery with `LF_APP_VERSION=v1.2.0` — on `cea8a478d` (train 80), 2026-10-13 02:09–03:31
+
+> **Note implementazione**: the run (full report in `release-pipeline/runs/i5p2/I5P2_REPORT.md`).
+> - The tree was clean.
+> - The frontend was pre-built in debug mode with `LF_APP_VERSION=v1.2.0`: the bundle holds `v1.2.0`, not
+>   `v1.1.0-1528-gcea8a478d`.
+> - Command: `mkdocs gallery --test-port 6158 --workers 2`.
+> - **Result: 242 passed, 9 failed, 1 skipped by design, in 1.4 h.**
+>
+> **By eye:**
+> - `v1.2.0` in the sidebar and in the mobile drawer;
+> - M-18 in fr (`+4 788,01 €`, `-4,04 %`) and es (`+3785,94 €`);
+> - the security details open.
+>
+> The T-EN labels are in no gallery shot: no synthetic benchmark is added, the tooltip shows only on hover, the probe is
+> aborted offline. The coordinator decided no probe: the component tests are enough.
+>
+> **The 9 reds, triaged:**
+> - **A, Files ×4: environment.** www.schwab.com answers Chromium with a 498-byte HTML bot check, which Chromium blocks
+>   (ORB); curl gets the icon. The tests passed on 12/10 in CI and locally.
+> - **B, provider compare ×2: defect** in a test hook since `5b2aad5c4`. `data-dist-pct` follows the UI language; T
+>   restores it.
+> - **C, create modal es/dark: assumption (the clock).** It waited 500 ms; the providers' chips came after the fit.
+> - **D, mobile auth ×2: assumption (the clock).** `openLoginPage` gave the boot 3 s, and the splash was still on
+>   screen.
+>
+> Also found:
+> - an English placeholder hard-coded in `AssetModal.svelte:1949` (to T);
+> - the DU/AU dates stay ISO, on purpose.
+
+### 26. ✅ Batch 35: the [1.2.0] chapter again, five doc fixes, the gallery's waits — on `b2a21bb4a`, 2026-10-13 (checkpoint 04:25)
+
+Base `b2a21bb4a`: fast-forwarded from `cea8a478d`, with `60f734e08`, the coordinator's line-by-line rewrite of the
+[1.2.0] chapter (+132 −140).
+
+**26.1 ✅ The [1.2.0] chapter through the pipeline** (the coordinator: by the pipeline, chapter by chapter, then the
+stamp)
+> **Note implementazione**: the dry-run planned 18 pieces ×3, about 262K tokens per language: every piece changed,
+> and some headings were renamed. The run is `translate --file CHANGELOG.md --workers 6`, started 03:40.
+>
+> **The run:** 03:40–04:00, 54 of 54 translated, 0 failed. Only the [1.2.0] chapter changed (lines 10–319, still
+> line-aligned with the English). No API key in the log: the 12 `sk-` matches are `risk-analysis`.
+>
+> **The review** (`release-pipeline/scripts/b35_changelog_review.py`, plus two new checks):
+> - `b35_label_lines.py`: every **bold** or *italic* span of the English that is a catalogue value must appear on
+>   the same line of the translation as that key's value. The batch 25 check paired only the bold spans.
+> - `b35_struct_check.py`: per line, the bold and code markers, the link targets, the inline code and the numbers
+>   outside code.
+>
+> **The pipeline undid what the earlier reviews had fixed**, and missed the UI's names:
+> - the toolbar labels, e.g. *Sinc. selezione / Sync. sélection / Sinc. selección*, and *Sinc. Tutto*;
+> - the four risk questions and the two asset-set questions;
+> - *What if…?* left in English in Italian;
+> - the asset types, the report-set menus, *Updated* left in English in French and Spanish;
+> - the T-EN labels (*Composto, Sinusoidale / Composé, Sinusoïdal / Seno*);
+> - the M-18 examples: the French amount with a plain space, and the zero as `0.00%`.
+>
+> **136 fixes**, each on one line and matched exactly once (`b35_changelog_fix.py`). The values come from the
+> generated catalogues.
+> - `--check` applies the fixes to the pipeline's raw output (`runs/b35/pipeline_raw/`) and finds the worktree
+>   identical.
+> - Two choices differ from the files before:
+>   - **The paths** are now the UI's, segment by segment: **Impostazioni › Amministrazione › Impostazioni globali /
+>     Paramètres › Administration › Paramètres globaux / Configuración › Administración › Configuración global**. The
+>     English now starts with *Settings ›*, and `settings.admin` is *Amministrazione / Administration*: «Admin» in
+>     Italian and French was the earlier files' word, not the UI's. Also *Impostazioni › Informazioni* (not
+>     «Informazioni su») and *Diagnóstico de plugins*.
+>   - **The data-quality buttons** (`dataQuality.cta.*`) read *Sincronizza / Synchroniser / Sincronizar* for prices
+>     and for rates alike, as the earlier files had them. Where the English names both (`:295`), the translation says
+>     «its **Sincronizza** buttons, for prices and for rates».
+> - Case-only differences are left as they are, like the batch 25 check (*Salva tutto* for *Salva Tutto*).
+> - The Danske Bank line (`:45`) uses the docs' words: *segnalazione / l'issue / incidencia*.
+> - Glossary: French «conversions de devise» again, and «benchmarks synthétiques» on `:225`.
+>
+> **After the fixes:**
+> - labels differing 0;
+> - 19 glossary hits, all in the sense the rule allows (*aperçu* is the preview, *tasa* the risk-free rate) or
+>   quoting the old names;
+> - the structure check differs only where intended: the `:263` examples, and `:295` with one bold fewer;
+> - `translate-validate --file CHANGELOG.md` 3 files OK, 0/0.
+>
+> **The stamp** (after the gallery run, 04:20): `translate-stamp --file CHANGELOG.md` stamped 0 pieces, because the
+> pipeline had already recorded every piece's English md5. The cache after the run is C1's version; it differs from
+> `HEAD` only in CHANGELOG entries.
+
+**26.2 ✅ Five doc fixes**
+> **Note implementazione**:
+> - **(e) done, by hand, translations only, so no stamp:**
+>   - `adjustment.fr.md:55` PMP → PRU;
+>   - `adjustment.es.md:55` PMP → PMC;
+>   - `mutual-fund.fr.md:32` VNI → NAV.
+>
+>   The prose already used the new terms.
+> - **(a)–(d):** the English goes to docs-writer; the translations of (b)–(d) by hand, then the stamps, after the
+>   pipeline.
+>
+> **(a)–(d) done.** docs-writer edited the six English pages and checked each claim against the code; I ported
+> (b)–(d) into it/fr/es by hand.
+> - **(a) `developer/test-walkthrough/runner_architecture.md`, English only:**
+>   - the clone/delete example (`:231`) and the «per file» warning (`:562`) are told in the past, with what changed
+>     since;
+>   - the rollback section (`:581`) says `tx-delete` destroyed seed rows until its confirm tests moved to rows they
+>     create on a disposable account;
+>   - «two files earlier in alphabetical order» was never true and is gone.
+>   - **⚠️ Fuori pista:** the brief named `fixtures/owned-pair.ts`. `tx-delete.spec.ts` does not use it: it has its own
+>     helpers on `fixtures/onboarding-accounts.ts`; `owned-pair.ts` serves `tx-clone`, `tx-paired-edit` and
+>     `tx-split-promote`. The page does not name it.
+> - **(b) `admin/cli_tools.*.md:87`:** `demote` refuses the last active administrator, with the CLI's error (English
+>   in every language, as the CLI prints it), and exits with `1` (`user_service.py:282-283`, `user_cli.py:165-176`).
+> - **(c) «Performance view» → «Period view»**, the tab's label (`dashboard.performanceTab`: *Periodo / Période /
+>   Periodo*). Five places per language: `kpi-cards :39`, dashboard `index :70 :76 :81` (`:64 :70 :75` in Spanish),
+>   `period-pnl :39`. The anchor `positions.md#performance` stays: its heading was not renamed.
+> - **(d) `danske-bank.*.md:5`:** «please open a new issue and mention #26», as in the CHANGELOG; #26 is closed since
+>   08/10.
+>
+> **Found outside the brief, not edited** (docs-writer; backlog M-26 and M-27):
+> - **`runner_architecture.md`:**
+>   - `:205-227` imports `deleteTransactionsCreatedSince`, which no longer exists (now `trackTransactionWrites`,
+>     `db-cleanup.ts:79-140`);
+>   - its «delete what appeared after» advice is what `db-cleanup.ts:27-44` now calls unsafe;
+>   - `:573` omits that the cleanup also needs `E2E_WORKERS` ≤ 1 (`playwright.ts:133`).
+> - **`cli_tools.en.md:70-77`:** `deactivate` also refuses the last active administrator (`user_service.py:239-240`),
+>   and the page does not say so.
+> - **The Positions tab is still «Performance» in places**, while its switch reads «Portfolio / Period»:
+>   - `positions.en.md:6, :20, :78`, and the screenshot titles at `:12-13` and `user/brokers/index.en.md:94-95`;
+>   - the gallery pages («Holdings and Performance»);
+>   - `developer/frontend/state/domain-state.md:114` and `pages/index.md:114`.
+
+**26.3 ✅ The gallery** (A, C, D approved; the waits)
+> **Note implementazione**:
+> - **A, the cause is ours.** The app shows its fallback, never a broken image: `BrokerIcon` keeps its `<img>` at
+>   `opacity-0` with the briefcase on top until the load is acknowledged.
+>   - Since `2412c3fe4` (12/10) the icon acknowledges a load or an error only when the image's `getAttribute('src')`
+>     equals its own URL.
+>   - The gallery's favicon fix writes the URL with `?lf-gallery`, so in the gallery no load and no error was ever
+>     acknowledged. Every broker logo drawn from a favicon stayed a briefcase, in every shot: `brokers/list` shows 8
+>     briefcases, where the published 1.1 gallery shows the logos. Schwab's refused favicon never moved down its
+>     chain.
+>   - **The cure:** `keepFaviconImagesLoading` (`galleryReportSets.ts`) gives the URL back unmarked on read (the
+>     `src` getter and `getAttribute('src')`), while the stored attribute keeps the mark.
+>   - `expectFaviconImagesLoading` now reads the stored value from the attribute node, and also checks that the read
+>     is plain.
+>   - The external route stays as it is.
+> - **C:** the create modal waits for the providers' chips (`[data-testid^="asset-search-provider-"]`) and the dialog's
+>   images instead of 500 ms.
+> - **D:** `openLoginPage` waits 30 s, like the gallery's other waits for the login page.
+> - **The waits:** V's cure, `waitForSettled(transactions-page, 20 s)` before `tx-table`, at **15** sites in 14 tests
+>   (the coordinator counted 13: one more at `:2643`–`:3615`, and one in «Asset create modal from import wizard»).
+>
+> Prettier is clean; `tsc` e2e has the 2 errors of the base, none new.
+>
+> **The run** (the coordinator: only the touched tests, 1 worker, port 6158):
+> - command: `mkdocs gallery --test-port 6158 --data-dir /tmp/librefolio-r2-m --no-populate --workers 1`, with
+>   `LF_APP_VERSION=v1.2.0`; the filter takes the Auth pages, the two Files tests, the two create-modal tests and the
+>   transaction and import tests that hold the 15 waits;
+> - 03:47–04:20, load 27.5 → 10;
+> - **42 passed** (21 tests × desktop and mobile), 0 failed, in 32.0 min (`runs/b35/b35_gallery_targeted.log`).
+>
+> **By eye:** `files/brim-tab` shows the logos again (Coinbase, eToro, Directa, DEGIRO, Interactive Brokers).
+> Schwab, whose favicon Chromium refuses, falls down its chain to the plugin's generic icon. The other favicon logos
+> (`brokers/list` and the rest) come back with the full gallery, item 4.
+
+**26.4 ✅ Gates** (`release-pipeline/scripts/b35_final_gates.sh`, 04:20–04:23, load 10–25; logs in
+`release-pipeline/runs/b35/`)
+> - **Stamps:** `CHANGELOG.md` 0 pieces (above); the five translated English pages, 1 file each: `cli_tools`,
+>   `kpi-cards`, dashboard `index`, `period-pnl`, `danske-bank`. `runner_architecture.md` has no translations.
+> - **Dry-run:** empty, for the pages and the CHANGELOG.
+> - **Validation:** `translate-validate --hide-localized` 630 files 0/0; the CHANGELOG alone 3 files OK, 0/0.
+> - **`translate-diff`:** 642 of 642 clean.
+> - **Build:** strict, 0; tracked icons unchanged. **Links:** `check-links` 95 valid.
+> - **Frontend:** Prettier clean on the two e2e files; `tsc -p tsconfig.e2e.json` the 2 errors of the base
+>   (`onboarding-tour.spec.ts`, `src/lib/types/files.ts`).
+> - **Review scripts:** labels differing 0; the four remaining line misses quote the old text on purpose (`:215`
+>   *Weight %*, `:264` *AI Export*); the pipeline's output plus the 136 fixes gives the worktree.
+> - **`git diff --check`:** clean. Privacy scan of the added lines: no address, path, key or account number.
+> - **Ports:** 6158, 6168 and 6042 free.
+
+### 27. ✅ Batch 36: two distinct sync labels, M-27 and M-26, three changelog lines — on `eb06ab960`, then `d0948f745` (train 85), 2026-10-13 (checkpoint 04:55)
+
+Batch 35 is in the target as `4a1714658`…`40bd288cf` (tree `2cb44d925c89`, as the manifest). The coordinator's
+answers to its two choices:
+- «Amministrazione / Administration» stays: it is the catalogue's word.
+- One label for two buttons is a UI defect, to fix now. In it/fr/es, `dataQuality.cta.sync_asset_prices` and
+  `sync_fx_pair` read the same, while the English says **Sync prices** and **Sync rates**. They appear together in the
+  Correlation tab's banner.
+
+**27.1 ✅ Distinct labels for the two sync buttons**
+> **Note implementazione**: `dev.py i18n update` wrote the two keys in their source,
+> `frontend/src/lib/i18n/dataQuality/{it,fr,es}.json`, 2 lines per language.
+>
+> | | `sync_asset_prices` | `sync_fx_pair` |
+> |---|---|---|
+> | it | Sincronizza prezzi | Sincronizza tassi |
+> | fr | Synchroniser les prix | Synchroniser les taux |
+> | es | Sincronizar precios | Sincronizar tipos de cambio |
+>
+> - **Where the words come from:**
+>   - prices: the asset page's own button (`assetDetail.syncPrices`);
+>   - rates: the glossary's *tasso di cambio / taux de change / tipo de cambio*;
+>   - in it and fr, the same words as the FX page's button (`fxDetail.syncRates`);
+>   - in Spanish, *tipos de cambio* as `common.syncFxRates` already writes it. `fxDetail.syncRates` says «Sincronizar
+>     tasas» instead, and the Spanish catalogue uses both words (29 values with *tasas*, 21 with *tipos de cambio*):
+>     backlog M-28, outside `i18n/dataQuality/`.
+> - **Layout:** the banner's buttons sit in `flex-wrap` rows and may wrap, so the longer Spanish label fits.
+> - **Tests:** none reads the translated labels. The specs and unit tests use the action codes and the
+>   `data-quality-cta-*` testids, and «Sync rates» appears only in English comments.
+> - `dev.py i18n check`: strict, 4359 keys.
+> - `utils gate-i18n-catalog`: 176 passed (04:37, load 25.5).
+>
+> **The texts that name the buttons, translations only (the English does not change):**
+> - `CHANGELOG.{it,fr,es}.md`:
+>   - `:144`, the Dashboard's stale-price warning;
+>   - `:174` and `:178`, the missing rates;
+>   - `:295`, the Correlation banner: it follows the English again, «Its **Sync prices** and **Sync rates** run the
+>     tab's own **Sync selection**». Batch 35 had bent this sentence around the single label.
+> - `user/dashboard/index.*.md` (`:95` and `:99`; `:89` and `:93` in Spanish).
+> - `user/assets/correlation.*.md:157`.
+>
+> 21 fixes, each matched once (`release-pipeline/scripts/b36_cta_port.py`, labels read from the generated catalogue).
+> Every other bold «Sincronizza / Synchroniser / Sincronizar» in the translations stands for the English **Sync**
+> (`common.sync`, the asset and FX pages' button).
+
+**27.2 ✅ M-27: the Positions switch is named as the app names it**
+> **Note implementazione**: the rule (coordinator, 13/10, the CHANGELOG's rule): where the text names a control the
+> user clicks, the catalogue's label; «Holdings» stays where it names the content.
+> - **The labels:** `dashboard.holdingsTab` Portfolio / Portafoglio / Portefeuille / Cartera;
+>   `dashboard.performanceTab` Period / Periodo / Période / Periodo; `viewTable|viewMap` Table / Map,
+>   Tabella / Mappa, Tableau / Carte, Tabla / Mapa.
+> - The English is docs-writer's. The translations were ported by hand: 36 Period captions, then 58 fixes and the
+>   cli_tools bullet (`release-pipeline/scripts/b36_captions_port.py`, `b36_m27_port.py`, each fix matched once).
+>
+> **What changed, in four languages:**
+> - **The 24 captions** of the Positions carousels (`data-title` and `alt`): 8 in `gallery/desktop`, 8 in
+>   `gallery/mobile`, 4 in `user/dashboard/positions` and 4 in `user/brokers/index`. The Period ones and the
+>   Portfolio ones alike: both «performance» shots show the Period view (`gallery.spec.ts`, `semantic: 'performance'`),
+>   the Table one and the Map one. `data-name` and the files stay.
+> - **The gallery intros** «Switch between Portfolio and Period, then compare…». The mobile broker intro also said
+>   something false («Holdings and Performance toggles switch between table and map views»): it now says that the
+>   switch changes the view and the Table / Map icons how it is drawn (`PositionsPanel.svelte:142-171`).
+> - **`positions`:**
+>   - the list item `:6` and the heading `:78` say Period; the anchor `{: #performance }` stays in every language;
+>   - the switch sentence `:20` links the two labels to their sections;
+>   - in Spanish, the switch label at `:20` and `:80` said «Período», where the app says «Periodo».
+> - **Developer pages, English only:** `frontend/pages/index.md` `:106` `:111` `:114` and
+>   `frontend/state/domain-state.md` `:112` `:114`.
+>
+> **Kept, because they name the content:**
+> - the Holdings list item and heading of `positions` (`:5`, `:28`), and `:121`;
+> - «the Holdings table» and «Holdings View» in the financial-theory pages, and `preferences:141`.
+>
+> **Not docs:** two code comments still say «Holdings / Performance» (`PositionsPanel.svelte:142`,
+> `dashboard/+page.svelte:623`).
+
+**27.3 ✅ M-26: the test cleanup helper and `deactivate`**
+> **Note implementazione**:
+> - **`developer/test-walkthrough/runner_architecture.md`, English only (docs-writer):**
+>   - The sample uses `trackTransactionWrites()` (`frontend/e2e/fixtures/db-cleanup.ts:95`): a row is the test's own
+>     when a committed `/transactions/commit` from this page reports it created and it was not in the starting
+>     snapshot.
+>   - A warning replaces the «photograph before, delete what appeared after» advice, which the helper's own comment
+>     now calls unsafe (`db-cleanup.ts:27-44`).
+>   - Disposable accounts are named as the other way (`owned-pair.ts:157`, `:169`, `:201`).
+>   - The activation paragraph now says `LF_TX_HYGIENE=1` **and** `E2E_WORKERS` ≤ 1 (`playwright.ts:133`).
+>   - Every helper the page names was checked to exist; `deleteTransactionsCreatedSince` no longer exists anywhere.
+> - **`admin/cli_tools`, four languages:** a 👑 bullet after the ⏱️ one. `deactivate` refuses the last active
+>   administrator, with the CLI's error (`user_service.py:239-240`, checked byte for byte), and exits with `1`.
+>
+> **Found, not edited** (backlog M-29; docs-writer):
+> - `runner_architecture.md:264` says `E2E_WORKERS=4` is injected; it is now capped at half the logical cores
+>   (`_common.py:90-131`);
+> - `:267` and `:270` show ⌊n/2⌋ server workers, where the config takes `Math.ceil(E2E_WORKERS / 2)`
+>   (`playwright.config.ts:54`).
+>
+> **Code, reported to the coordinator:** `cleanup()` checks only `res.ok()`. A rolled-back delete still answers 200, so
+> a failed cleanup would pass silently.
+
+**27.4 ✅ Three changelog lines from `d0948f745`, by hand, then the stamp**
+> **Note implementazione**:
+> - **Fast-forward:** the coordinator fast-forwarded the worktree to `d0948f745` (train 85, T's batch), between two
+>   commands; the 37 changed files kept their blobs.
+> - **The ported lines** (`release-pipeline/scripts/b36_changelog_lines.py`):
+>   - `:218`: the list of what now follows the language includes the asset dialog's description hint
+>     (`assets.modal.descriptionPlaceholder`);
+>   - `:264`: the maximum drawdown has one name per language, with the catalogue's names (Drawdown massimo /
+>     Perte maximale / Caída máxima, since T-CL);
+>   - `:302`: the shock's rows are the scenario's classes, sectors or regions that you hold, named in your language.
+> - The generated catalogue was rebuilt first (`dev.py i18n build`, 4360 keys), so the review read T's new values.
+> - **Stamp:** `translate-stamp --file CHANGELOG.md` stamped the 3 pieces × 3 languages that changed, and the dry-run
+>   was then empty.
+
+**27.5 ✅ Gates** (`release-pipeline/scripts/b36_final_gates.sh` on `eb06ab960`, 04:45; `b36_final2_gates.sh` on
+`d0948f745`, 04:51–04:53, load 15–29; logs in `release-pipeline/runs/b36/`)
+> - **Stamps:** the four M-27 pages and `cli_tools` (04:45–04:46); the CHANGELOG (above). The cache changes in three
+>   stages, each touching only its own entries: the four M-27 pages, then `cli_tools`, then the three CHANGELOG pieces.
+> - **Dry-run:** empty, for the pages and the CHANGELOG.
+> - **Validation:** `translate-validate --hide-localized` 630 files 0/0; the CHANGELOG alone 3 files OK, 0/0.
+> - **`translate-diff`:** 642 of 642 clean.
+> - **Build:** strict, 0; tracked icons unchanged. **Links:** `check-links` 95 valid.
+> - **i18n:** `dev.py i18n check` strict, 4360 keys; `utils gate-i18n-catalog` 176 passed; Prettier clean on the
+>   `dataQuality` sources.
+> - **Review scripts:**
+>   - the label check: only the four lines that quote the old text on purpose;
+>   - the structure check: only the `:263` examples. `:295` has the English's two bold labels again.
+> - **`git diff --check`:** clean. **Ports:** 6158, 6168 and 6042 free.
+
+### 28. ✅ Batch 37: M-29, then M-28 — on `57773ab1a` (train 86), then `50886d1ca` (train 88: T's batch), 2026-10-13
+
+The coordinator, while the final gallery waits for V, T and I: M-29 now; M-28 in two steps. First the list, without
+writing; then, once T's batch (T-ISO, T-FB) is in the target, apply it. T removes `fxDetail.assetFallback` from the same
+source and adds keys in `charts/` and `common`.
+
+**28.1 ✅ M-29: the worker counts in `developer/test-walkthrough/runner_architecture.md`** (English only, docs-writer)
+> **Note implementazione**: the section «`--workers` reaches Playwright too», against today's code.
+> - **The diagram and its prose** now show the two counts as the code makes them:
+>   - **Browser workers:** `apply_e2e_workers()` caps them at half the logical cores, never below one
+>     (`scripts/test_runner/_common.py:90-111`). It exports `E2E_WORKERS` only above 1 and when not already set
+>     (`:129-130`). It is called by both Playwright launches (`_frontend_common.py:317-318`, `_consolidate.py:186`).
+>   - **The backend:** under the runner it is the shared `SharedTestServer`, started before the tests and reused by
+>     Playwright (`reuseExistingServer`, `playwright.config.ts:73, 192`). It is sized from `--workers` itself, before
+>     the cap: one uvicorn worker per two, rounded up (`_server.py:93-102`; `_cli.py:578-600`).
+>   - **Example:** `--workers 8` on 10 logical cores gives 5 browser workers and 4 uvicorn workers.
+> - **`playwright.config.ts`** sizes a backend only when it starts one itself: with `--no-shared-server`, for the
+>   gallery, or by hand. The size is `max(1, ⌈E2E_WORKERS / 2⌉)`, unless `LIBREFOLIO_SERVER_WORKERS` or
+>   `GALLERY_SERVER_WORKERS` is set (`:54`).
+> - **The old page** said `E2E_WORKERS=4` is injected, and ⌊n/2⌋.
+>
+> - **⚠️ Fuori pista:** the rewrite contradicted three other places, fixed in the same pass:
+>   - the danger admonition said Playwright's `webServer` starts the backend; now: `SharedTestServer` under the
+>     runner, with `--no-reload --no-scheduler` (`_server.py:230-231`);
+>   - the ratio's reason is now the one the code gives (`_server.py:53-58`);
+>   - the Executor's `--workers` entry now names the cap and the shared backend.
+>
+> Left in the code, reported to the coordinator: the docstring at `_common.py:120` names
+> `_consolidate._run_playwright_batch`, which is now `run_playwright_group`.
+>
+> **Gates** (`release-pipeline/scripts/b37_m29_gates.sh`, 05:06–05:07, load 23–36): translate dry-run empty (the page
+> is not translated); strict build 0; `check-links` 95; `git diff --check` clean; ports 6158, 6168 and 6042 free.
+
+**28.2 ✅ M-28: Spanish «tasa(s)» for an exchange rate → «tipo(s) de cambio»** (prepared 05:00, applied 05:52 on `50886d1ca`)
+> **Note implementazione**: read-only (`release-pipeline/scripts/b37_tasas_proposal.py check`; the list is in
+> `runs/b37/b37_tasas_proposal.tsv`).
+> - **The scope:** 64 Spanish values say «tasa(s)», 29 of them in the plural. The glossary keeps «tasa» where it is not
+>   an exchange rate (risk-free rate = *tasa libre de riesgo*).
+> - **To change, 56 values:**
+>   - `fx` 16, `pacAllocator` 20, `transactions` 9, `dataQuality` 5, `base` 3 (`csvImport.*`, the rates CSV),
+>     `aiExport` 2, `assets` 1;
+>   - articles and adjectives follow the masculine *tipo*: «una tasa no válida» → «un tipo de cambio no válido»,
+>     «Introdúcelas» → «Introdúcelos»;
+>   - «Tasas FX» becomes «Tipos de cambio»;
+>   - the two ICU plurals (`fxDetail.invalidRates`, `…refresh.notice.fx`) keep their placeholders, plural heads and
+>     branches (checked).
+> - **To keep, 8 values:** the interest rate (`assets.schedule.rate*`), the growth rate (`chartSettings.*annualRate`),
+>   the risk-free rate (`risk.params.riskFreeRate`, `*riskFreeAnnualRate`) and the money-weighted rate
+>   (`dashboard.mwrrAnnTooltip`).
+> - **Nothing else to correct:**
+>   - no test reads «tasa»;
+>   - no Spanish page or changelog line quotes one of the 56 values;
+>   - the changelog's «tasa» are all the risk-free rate or a rate of return;
+>   - in the docs prose, «tasa de cambio» is the *rate of change* of the MACD and ROC indicators, and «tasa anual» on
+>     the FX page is the CAGR: both right, and they stay.
+> - **Next:** once T's batch is in the target, `b37_tasas_proposal.py apply` writes the 56 values with
+>   `dev.py i18n update`. Then the i18n check and gate, and a checkpoint. The CHANGELOG needs no line.
+>
+> **Applied** (coordinator's go once T's batch was in the target, train 88), 05:52–05:55:
+> - **Re-check first:** all 56 keys still exist, with the same values as at 05:00. T's changes to `fx/` and `charts/`
+>   (`fxDetail.assetFallback` removed, new keys) touch none of them, and no new value says «tasa».
+> - **Write:** `b37_tasas_proposal.py apply`, one `dev.py i18n update` per key. Result: 56 of 56 as proposed, one line
+>   each, in 7 sources (`aiExport`, `assets`, `base`, `dataQuality`, `fx`, `pacAllocator`, `transactions`). Only the 8
+>   kept values still say «tasa».
+> - **i18n gates:** `dev.py i18n check` strict, 4363 keys; `utils gate-i18n-catalog` 176 passed; Prettier clean on the
+>   7 sources.
+>
+> **Width** (the coordinator: «tipo(s) de cambio» is longer than «tasa(s)»):
+> - **`front-utility toolbar-width-sweep`** (1 worker, lane 6158): the five top toolbars swept 1700 → 320 px in French,
+>   Italian and Spanish.
+>   - The bundle was built at 05:58, after the change, and carries the new labels.
+>   - **First run, 05:56–06:04, load 57–62:** 14 passed, 1 failed, `assetsList › fr`, in 7 s, before any measure.
+>     `setLanguage` (`frontend/e2e/fixtures/auth-helpers.ts:126`) waited 3 s for `<html lang="fr">`. Its screenshot
+>     shows the app already in French, a moment later.
+>   - **Verdict: the clock**, in a shared fixture: the first language switch of the run, cold, under load. Not M-28,
+>     which changes only Spanish. Reported to the coordinator.
+>   - **`--resume`, 06:05–06:10, load 117:** 15 passed.
+> - **Probe at 360 px in Spanish** (`release-pipeline/b37/probe_tasas_es_360.mjs`, read-only: signs in, switches to
+>   Spanish, never syncs). The lane's server ran without the scheduler, then was stopped.
+>   - **The 56 values in the app's font** (Inter, 14 px medium): most grow by about 70 px. The PAC's FX tab label is
+>     the same width (−1.3 px).
+>   - **The FX page's empty state, the one tight place:** `?start=1995-01-02&end=1995-12-29` on AUD-EUR and AUD-GBP.
+>     «Sincronizar tipos de cambio» (148 px) beside «Insertar manualmente» (138 px), two lines each, as the unchanged
+>     neighbour already was. 0 px past the card, no page overflow.
+>   - **The dashboard:** no page overflow.
+>   - **Elsewhere:** the PAC distribution cell's new text, 240 px, fits its 260 px column. The other long values are
+>     tooltips, toasts, list items and help text, which wrap.
+>   - **No short form («Tipos») was needed.**
+
+### 29. ✅ Batch 38: the changelog line of `e24831a8a`, by hand, then stamped — on `4ec44c002` (train 89: M-28 in the target), 2026-10-13
+
+M-28 is in the target as `89440c353` and `e22f0943a` (tree `861a3fdc0085`, as the manifest). The coordinator committed
+it on its own base, then fast-forwarded the worktree: a fast-forward before the commit would have moved the base the
+commit is checked against.
+
+**29.1 ✅ `:218` «More of the interface follows your language»** (`release-pipeline/scripts/b38_changelog_line.py`)
+> **Note implementazione**: the English list now also names three things that were always in English:
+> - the name of a comparison line whose asset was deleted;
+> - the loading errors of an asset's page;
+> - *Other* in the bucket rules of its stress test.
+>
+> **Ported with the app's and the docs' words:**
+> - *Other* is the stress rules' bucket since T-ISO (`d017492d8`, `risk.stress.rules.*`): *Altro* / *Autre* / *Otro*;
+> - the bucket is «bucket» / «catégorie» / «grupo», as `user/dashboard/risk.*.md:112` writes it;
+> - the comparison line follows the signals' *Confronto dati / Comparaison de données / Comparación de datos*.
+>
+> **Gates** (`release-pipeline/scripts/b38_gates.sh`, 06:15–06:16, load 118–126):
+> - `translate-stamp --file CHANGELOG.md` stamped the one piece that changed, in the three languages
+>   (`fixed/sign-in-language-app-icons-and-small-screens`); the cache changed only there.
+> - Dry-run empty; `translate-validate --hide-localized` 630 files 0/0; the CHANGELOG alone 3 files OK, 0/0;
+>   `translate-diff` 642 of 642 clean.
+> - Strict build 0; `check-links` 95.
+> - Review scripts: only the intended differences (the `:263` examples, the four quotes of old text).
+> - `git diff --check` clean; ports 6158, 6168 and 6042 free.
+
+### 30. ✅ Batch 39: Tools and the PAC are stable; the changelog's open-period line — on `ef666fdee`, 2026-10-13
+
+The developer's decision (question 14, through the coordinator): Tools and the PAC are neither beta nor experimental.
+They are «da rifinire ma stabili», still to be polished but stable.
+
+**30.1 ✅ No «experimental» left about Tools**
+> **Note implementazione**: the survey, every language.
+> - **The docs** call the platform experimental in only two places:
+>   - `user/tools/index.*.md:10`, in four languages;
+>   - `developer/architecture/patterns/tool_plugins.en.md:10`, English only, outside the translation pipeline.
+> - Nothing else says experimental, beta, alpha, preview or unstable about Tools or the PAC: not the CHANGELOG, the UI
+>   catalogues (`i18n/tools/`, `i18n/pacAllocator/`, every `tools.*`, `nav.*` key in the four catalogues), the code or
+>   the tool plugins' metadata.
+> - The app's other «beta» strings are the financial beta coefficient and the Risk page's own banner.
+> - `user/tools/index.en.md:23` («Both were prototypes and both were removed») is history about removed tools, and
+>   stays.
+>
+> **The English** (docs-writer):
+> - the user page now says «The Tool platform is **stable** and still being refined», and keeps «exactly **one**
+>   tool». The code has one registered tool plugin with one service, and one frontend registration
+>   (`tool_plugins/pac_allocator/plugin.py:134-161`, `features/tools/registry.ts:240-246`);
+> - the developer page says «stable and still being refined», and keeps its list of integrated boundaries, each
+>   checked against the code, and its caveat on runtime evidence.
+>
+> **Ported by hand:** «è **stabile** e ancora in fase di rifinitura» / «est **stable** et encore en cours de
+> perfectionnement» / «es **estable** y todavía se está perfeccionando».
+>
+> **Noticed by docs-writer, not edited** (reported to the coordinator):
+> - `tool_plugins.en.md:283` repeats the runtime caveat without «every». It could be read as «no runtime evidence»,
+>   while the lifecycle tests do reap descendants (`test_tools_executor.py:1187-1239`).
+> - `plugin.py:33-38` calls the solver's 30 s limit provisional: that fits «still being refined».
+
+**30.2 ✅ The 📈 Charts line of `fcc4ac96f`/`ef666fdee`, by hand**
+> **Note implementazione**:
+> - **⚠️ Fuori pista:** the dry-run before the stamp also listed `CHANGELOG.md#1.2.0/fixed/charts`, stale in the three
+>   languages. Two English commits after batch 38 added a 🐛 line: at weekly or monthly resolution, the week or month
+>   not over yet reads right on the asset and FX charts.
+> - The coordinator had not listed it, but porting new English lines by hand keeps `translate-validate` at 0/0 until
+>   the tag, so it is in this batch, as its own commit (`release-pipeline/scripts/b39_changelog_line.py`).
+> - **Placement:** inserted after the lot comparison line (`:160`), so the chapter is line-aligned again.
+> - **Terms as the chapter writes them:** tooltip / infobulle / información emergente; marcatori / marqueurs /
+>   marcadores; FX = tassi di cambio / taux de change / tipos de cambio.
+
+**30.3 ✅ Gates** (`release-pipeline/scripts/b39_gates.sh`, 10:34–10:35, load 5–14)
+> - **Stamps:** the Tools page, 1 file × 3; then the CHANGELOG's `fixed/charts`, 3 pieces. The cache changes in two
+>   stages, each only in its own entry.
+> - Dry-run empty; `translate-validate --hide-localized` 630 files 0/0; the CHANGELOG alone 3 files OK, 0/0;
+>   `translate-diff` 642 of 642 clean.
+> - Strict build 0; `check-links` 95; review scripts: only the intended differences.
+> - `git diff --check` clean; ports 6158, 6168 and 6042 free.

@@ -126,6 +126,8 @@ def _extract_links(text: str) -> list[tuple[str, str]]:
 
 _INLINE_CODE_SPAN = re.compile(r"(`+)(?!`)(.+?)(?<!`)\1(?!`)")
 _DIGIT_GROUPING = re.compile(r"(?<=\d)[.,\u00a0\u202f ](?=\d)")
+# French and Spanish write a space before % (`16,36 %`, U+202F or U+00A0 in the app): number formatting, as the grouping.
+_PERCENT_SPACE = re.compile(r"(?<=\d)[\u00a0\u202f ](?=%)")
 
 
 def _inline_code_texts(text: str) -> list[str]:
@@ -135,11 +137,12 @@ def _inline_code_texts(text: str) -> list[str]:
 
 
 def _without_digit_grouping(span: str) -> str:
-    return _DIGIT_GROUPING.sub("", span)
+    return _DIGIT_GROUPING.sub("", _PERCENT_SPACE.sub("", span))
 
 
 def _inline_code_spans(text: str) -> Counter:
-    """Inline code spans outside fenced blocks; digit grouping ignored, so `1,000.50` matches the localized `1.000,50`."""
+    """Inline code spans outside fenced blocks; digit grouping and the space before % ignored, so `1,000.50` matches the
+    localized `1.000,50` and `+16.36%` the French `+16,36 %`."""
     return Counter(_without_digit_grouping(span) for span in _inline_code_texts(text))
 
 

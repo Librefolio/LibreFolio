@@ -70,6 +70,30 @@ def front_portfolio_data_quality_real(verbose: bool = False, ui: bool = False, h
     return _run_playwright("portfolio/data-quality-real.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_foreign_cash_real(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the foreign-cash E2E test on real data (release 1.2, gap 2: FX on cash row, daily revaluation) on the desktop project, the runner default."""
+    print_section("Frontend Portfolio Foreign Cash Real-Data Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/foreign-cash-real.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_portfolio_yield_on_cost_real(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Yield on Cost E2E tests on real data (release 1.2, gap 4: YOC per asset and broker in the holdings) on the desktop project, the runner default."""
+    print_section("Frontend Portfolio Yield on Cost Real-Data Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/yield-on-cost-real.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_broker_filter_label(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the dashboard broker-filter label E2E test (K step 15, item b) on the desktop project, the runner default."""
     print_section("Frontend Portfolio Broker Filter Label Tests")
@@ -230,7 +254,7 @@ def front_portfolio_risk_levels_component(verbose: bool = False, ui: bool = Fals
     """Run the four-level risk UI component tests (Vitest + jsdom mount)."""
     print(f"\n{Colors.BLUE}Running: Risk levels component Vitest tests{Colors.NC}")
     result = subprocess.run(
-        ["npx", "vitest", "run", "src/lib/components/risk/levels/l4/L4Replay.test.ts", "src/lib/components/risk/levels/RiskPartialNotice.test.ts", "src/lib/components/risk/levels/RiskLevelSection.test.ts", "src/lib/components/risk/levels/L2Diversification.test.ts", "src/lib/components/risk/BenchmarkSelect.test.ts", "src/lib/components/risk/levels/L3RiskAdjusted.test.ts", "src/lib/components/risk/levels/L4WhatIf.test.ts", "src/lib/components/risk/levels/l4/TornadoChart.test.ts"],
+        ["npx", "vitest", "run", "src/lib/components/risk/levels/l4/L4Replay.test.ts", "src/lib/components/risk/levels/l4/L4Shock.test.ts", "src/lib/components/risk/levels/RiskPartialNotice.test.ts", "src/lib/components/risk/levels/RiskLevelSection.test.ts", "src/lib/components/risk/levels/L2Diversification.test.ts", "src/lib/components/risk/BenchmarkSelect.test.ts", "src/lib/components/risk/levels/L3RiskAdjusted.test.ts", "src/lib/components/risk/levels/L4WhatIf.test.ts", "src/lib/components/risk/levels/l4/TornadoChart.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
     )
@@ -290,6 +314,18 @@ def front_portfolio_risk(verbose: bool = False, ui: bool = False, headed: bool =
     if not _ensure_db_populated(): return False
     if not _ensure_test_users(): return False
     return _run_playwright("portfolio/risk-analysis.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_portfolio_risk_real(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Risk E2E tests on real data (release 1.2, gap 1: L1 and L4 from a real /risk/query) on the desktop project, the runner default."""
+    print_section("Frontend Portfolio Risk Real-Data Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/risk-real.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_portfolio_risk_lab(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -379,6 +415,22 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(
         cat,
+        "foreign-cash-real",
+        front_portfolio_foreign_cash_real,
+        name="Foreign Cash Real-Data Tests",
+        desc="Release 1.2, gap 2, on a disposable account with real data: MANUAL EUR-X rates on two days (X reserved per project, NAD on desktop), X cash deposited before the window at one broker and EUR plus an interest at another; the report's other_effects carry one «FX on cash» row of exactly balance × change of the EUR value of 1 X for the X broker, after the unallocated income, none for the EUR broker and no residual (none either over a window where the rate did not move); two reports one day apart show the headline cash, net worth and gain/loss revalued on the day the rate moves, each the sum of the broker cards, with the native balances unchanged; on the Dashboard the net worth reads the revalued cash and Performance × table shows the FX on cash row, keyed by the page's own other_effects order, with the oracle's digits and sign",
+        tests="portfolio/foreign-cash-real.spec.ts",
+    )
+    add_test(
+        cat,
+        "yield-on-cost-real",
+        front_portfolio_yield_on_cost_real,
+        name="Yield on Cost Real-Data Tests",
+        desc="Release 1.2, gap 4, on disposable accounts with real data: one EUR manual asset bought at two brokers at different costs (WAC 100 and 125), each with its own dividend paid before the dashboard period but inside [T-364, T]; the summary report gives each (asset, broker) row its own available YOC, exactly the oracle (sum of income / quantity held the day before / later splits, over the WAC: 3.00% and 1.20%, where one value per asset would read 2.10%), with its window, first pair date, gross income per unit and no FX, and the Holdings table shows those digits, unsigned, in the YOC column shown by default, on the Dashboard and on the broker page; a position with a dividend but an acquisition without cost (P-10: an ADJUSTMENT linked to a SPLIT saved in Auto, the event then retyped) is unavailable / missing_wac with its income counted, a dash with the info icon and no digit, until an explicit cost of 0 per unit makes it the oracle's 4.00%",
+        tests="portfolio/yield-on-cost-real.spec.ts",
+    )
+    add_test(
+        cat,
         "broker-filter-label",
         front_portfolio_broker_filter_label,
         name="Broker Filter Label Tests",
@@ -407,6 +459,14 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "store-unit", front_portfolio_store_unit, test_names=False, name="Portfolio Store Unit Tests", desc="portfolioStore + portfolioMutation vitest units", tests="src/lib/stores/portfolio/portfolioStore.test.ts")
     add_test(cat, "allocation-unit", front_portfolio_allocation_unit, test_names=False, name="Allocation Colour Hierarchy Unit Tests", desc="hexToHsl round-trip on the real palettes, subtype grouping/ordering, measured shade contrast, legacy ordering pin; measured contrast across a whole family on the palettes of the chart that draws it (REAL_ESTATE holding ETF_REAL_ESTATE and CROWDFUND_REAL_ESTATE by content in primaryAssetType, which no chart uses since D15; the pie's ETF family by vehicle, up to seven members, spread on both sides of its colour with alternating saturation, every pair at least as far apart in CIEDE2000 as today's closest pair, and groups of up to three byte-identical to before), with the K2 stub checked against primaryAssetType; two-ring type donut: each subtype inside the base type it contains, a lone subtype shaded by rank, rings aligned by construction, fast path refreshing both series, families resolved through K's own assetTypeFamily and primaryAssetType; the mounted pie (jsdom, ECharts recorded) draws every asset type in the family assetTypeFamily gives it — every ETF subtype in ETF, real-estate crowdfunding in Crowdfund, the cash bucket on its own — with each family's generic member captioned as the generic one and a legend entry hiding a family on both rings, and titles every arc's tooltip with exactly one icon, the type's own, a subtype's being a composite distinct from its family's; the four palettes are read from the two components that declare them, by name, never copied: each is 14 distinct #rrggbb colours and light and dark are paired slot by slot, and the reader refuses a missing, repeated, non-literal, empty or non-hex declaration with the file and the constant named; the mounted history chart (jsdom, ECharts recorded) draws one area per family assetTypeFamily gives, as the pie groups them (I's D15, D375): every ETF subtype summed into ETF, real-estate crowdfunding into Crowdfund, each family on its own base colour with no shade and its subtypes nested under it in the tooltip, and the stack cleared before a redraw whose series order moved", tests="src/lib/components/charts/__tests__/allocationHierarchy.test.ts, src/lib/components/charts/__tests__/allocationRings.test.ts, src/lib/components/charts/AllocationPieChart.test.ts, src/__tests__/sourcePalettes.test.ts, src/lib/components/dashboard/AllocationHistoryChart.test.ts")
     add_test(cat, "risk", front_portfolio_risk, name="Risk Analysis Tests", desc="Portfolio-level risk on Dashboard and Broker Detail", tests="portfolio/risk-analysis.spec.ts")
+    add_test(
+        cat,
+        "risk-real",
+        front_portfolio_risk_real,
+        name="Risk Real-Data Tests",
+        desc="Release 1.2, gap 1, on disposable accounts holding two seeded stocks (Apple, Microsoft) bought 200 days ago, with nothing routed: the Dashboard Risk tab's level 1 prints the engine's daily VaR (histogram cut) and its daily and monthly CVaR, bins and observations, with no error or empty state; level 4's historical replay, run for real, prints the engine's composition return and each holding's return and contribution; every risk answer the page received passes the generated Zod schemas",
+        tests="portfolio/risk-real.spec.ts",
+    )
     add_test(cat, "risk-lab", front_portfolio_risk_lab, name="Asset Global Risk Lab Tests", desc="Asset-set laboratory: the no-money rule asserted by stubbing money in, D19 opening selection by branch rather than by size, bulk actions against the eligible candidates with ineligible assets parked, the \"+\" picker's filter menus that keep their own option clickable, correlation pairs keyed by asset id and matrix ordering, the holdings command loading exactly what is held with no amount crossing, and the price-and-rate sync and the reload in the page toolbar", tests="portfolio/risk-lab.spec.ts")
     add_test(cat, "risk-asset-detail", front_portfolio_risk_asset_detail, name="Risk Asset Detail Net", desc="Asset Detail's Risk tab: the two original nets (Overview preserved with Risk behind its own tab; typed scenarios, replay audit and the simulation view), plus the comparison picker's read-only section of the benchmarks the engine says cannot be measured over the page's period, with their reasons, and a stored benchmark that cannot be measured published as blocked with Compare disabled (D378)", tests="portfolio/risk-asset-detail.spec.ts")
     add_test(cat, "risk-benchmark-shared", front_portfolio_risk_benchmark_shared, name="Risk Shared Benchmark Tests", desc="Asset page Risk tab on the one shared benchmark: the picker opens on the stored choice and Run compares against it, a stored benchmark that is the asset itself stays shown and flagged while nothing is compared, a choice made there (a held asset) becomes the reader's shared key, and with nothing stored the picker is empty and Run waits for a choice — the choice lives only in user-scoped localStorage", tests="portfolio/risk-benchmark-shared.spec.ts")

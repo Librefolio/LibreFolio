@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetVar": {
+        "name": "Riesgo de cola por activo",
+        "description": "La pérdida que alcanzó cada activo seleccionado en sus peores resultados, estimada sobre su propio historial."
+      }
+    }
+  }
+}

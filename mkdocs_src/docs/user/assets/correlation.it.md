@@ -154,7 +154,7 @@ Quando qualcosa non va nei dati, la scheda lo dice una volta, subito sotto la sc
 
 **Come leggerla**
 
-- **Il banner di qualità dei dati** elenca cosa correggere, ogni problema con la sua azione, come **Sincronizza** per i prezzi o **Sincronizza** per i tassi. Cliccalo per aprire l'elenco.
+- **Il banner di qualità dei dati** elenca cosa correggere, ogni problema con la sua azione, come **Sincronizza prezzi** o **Sincronizza tassi**. Cliccalo per aprire l'elenco.
 - **L'avviso** sotto di esso nomina i risultati **parziali** e la loro causa. Un risultato parziale mostra comunque le sue cifre: leggile tenendo presente quella causa.
 - **Un banner ambra proprio di una sezione** significa che un risultato non è tornato affatto, spesso perché il periodo è troppo breve: scegline uno più lungo, o sincronizza i prezzi.
 - **Cosa succede se…?** segnala i suoi problemi all'interno della sua sezione.

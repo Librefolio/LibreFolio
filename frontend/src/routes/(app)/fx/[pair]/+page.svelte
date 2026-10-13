@@ -378,7 +378,7 @@
                 const targetId = Number(cfg.params.assetId);
                 if (!targetId) continue;
                 const targetAsset = allAssets.find((a) => a.id === targetId);
-                instance.params._assetDisplayName = targetAsset?.display_name ?? $t('fxDetail.assetFallback', {values: {id: String(targetId)}});
+                instance.params._assetDisplayName = targetAsset?.display_name ?? $t('chartSettings.signals.assetFallback', {values: {id: String(targetId)}});
                 instance.params._assetIconUrl = targetAsset?.icon_url ?? null;
                 instance.params._assetType = targetAsset?.asset_type ?? null;
                 if (!instance.params._resolvedData) continue;
@@ -435,7 +435,7 @@
         const markers: EventMarker[] = [];
         for (const [aid, evts] of comparisonEvents) {
             const targetAsset = allAssets.find((a) => a.id === aid);
-            const label = targetAsset?.display_name ?? $t('fxDetail.assetFallback', {values: {id: String(aid)}});
+            const label = targetAsset?.display_name ?? $t('chartSettings.signals.assetFallback', {values: {id: String(aid)}});
             const sigColor = overlaySignals.find((s) => s.label === label)?.color;
             for (const ev of evts) {
                 markers.push({
@@ -1440,6 +1440,7 @@
                     </button>
                     <button
                         data-testid="fx-detail-aesthetics-toggle"
+                        aria-expanded={showAesthetics}
                         class="p-1.5 rounded-lg transition-colors {showAesthetics
                             ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
