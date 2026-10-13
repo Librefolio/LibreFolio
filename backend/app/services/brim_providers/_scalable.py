@@ -19,7 +19,9 @@ never by the file name, whose prefix the user can change.
 
 - only executed rows are imported; the others are counted in notices;
 - a trade is booked on its gross ``amount`` (shares x price, as in PRIME and in exporter
-  1.0.1), with the fee and the tax as FEE and TAX transactions of the same security;
+  1.0.1 and later), with the fee and the tax as FEE and TAX transactions of the same security.
+  Exporter 1.0.0, which put the fee and the tax inside ``amount``, is not supported: they
+  would count twice, so its files are exported again with 1.0.1 or later;
 - dividends and interest are booked gross (``amount`` + ``tax``, the tax withheld), with a
   TAX transaction;
 - cash rows follow the sign of ``amount``; an unknown cash type is booked by its sign;
@@ -60,7 +62,6 @@ PRIME_COLUMNS = ("date", "time", "status", "reference", "description", "assettyp
 _TAGS = ("import", "scalable")
 _SEP = " · "
 _TEXT_LIMIT = 350  # the description column holds 500 characters; the id, the reference and a leg prefix follow the text
-_TOLERANCE = Decimal("0.01")
 _DATE_FORMATS = ("%Y-%m-%d",)
 _EXECUTED = {"executed", "settled"}
 _BUY_TYPES = {"buy", "savings plan"}
@@ -73,11 +74,6 @@ _NOTICES: Dict[str, Tuple[str, str, str]] = {
         "warning",
         "{n} rows could not be read and were not imported: a date, an amount, a currency, the shares or the security is missing.",
         "A date, an amount, a currency, the shares or the security of these rows is missing or unreadable.",
-    ),
-    "scalable_fee_in_amount": (
-        "warning",
-        "{n} trades carry the fee inside their amount, as LibreFolio exporter 1.0.0 wrote it: they were imported as they are, without a separate fee. Export them again with exporter 1.0.1 or later to see the fees apart.",
-        "Here amount is shares × price with the fee and the tax already added (or taken away, for a sale).",
     ),
     "scalable_fees_unknown": (
         "warning",
@@ -375,11 +371,6 @@ class _Reader:
             return
         fee = abs(fee or Decimal("0"))
         tax = tax or Decimal("0")
-        charges = fee + max(tax, Decimal("0"))
-        if self.exporter and charges > _TOLERANCE and self._charges_inside(row, abs(shares), amount, charges):
-            self._flag("scalable_fee_in_amount", row)
-            self._create(row, TransactionType.SELL if sell else TransactionType.BUY, -abs(shares) if sell else abs(shares), amount if sell else -amount, asset=True)
-            return
         if not self._create(row, TransactionType.SELL if sell else TransactionType.BUY, -abs(shares) if sell else abs(shares), amount if sell else -amount, asset=True):
             return
         if fee > 0:
@@ -393,15 +384,6 @@ class _Reader:
         elif tax < 0:
             self._flag("scalable_tax_refund", row)
             self._create(row, TransactionType.DEPOSIT, Decimal("0"), -tax, asset=False, prefix="Tax refund")
-
-    @staticmethod
-    def _charges_inside(row: _Row, shares: Decimal, amount: Decimal, charges: Decimal) -> bool:
-        """True when the amount already holds the fee and the tax: shares × price differs from it by exactly those."""
-        price = row.number("price")
-        if price is None:
-            return False
-        gap = abs(amount - shares * price)
-        return gap > _TOLERANCE and abs(gap - charges) <= _TOLERANCE
 
     def _income(self, row: _Row, tx_type: TransactionType) -> None:
         amount = row.number("amount")

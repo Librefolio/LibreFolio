@@ -194,7 +194,6 @@
       "ca_succession_transfer_in": "Des titres transférés depuis un autre dossier ont été identifiés ({n} lignes).\nIls ont été enregistrés comme transactions de type «Ajustement» car ils n'ont aucun mouvement d'espèces associé : on suppose donc qu'ils vous appartenaient déjà chez un autre courtier.\nSi c'est le cas, et si ce courtier est suivi dans LibreFolio, lors de l'import de l'autre moitié de la transaction le système proposera de relier les deux et de les convertir en «Transfert de titres».\nVoici les lignes en détail :",
       "corporate_action": "Il manque le coût unitaire hérité (PRU) : saisissez le coût d’une seule unité, pas le total, pour importer cette ligne.",
       "scalable_unreadable_rows": "{count, plural, one {# ligne n’a pas pu être lue et n’a pas été importée} other {# lignes n’ont pas pu être lues et n’ont pas été importées}} : il manque la date, le montant, la devise, la quantité ou le titre.",
-      "scalable_fee_in_amount": "{count, plural, one {# opération contient} other {# opérations contiennent}} les frais dans le montant, comme l’écrivait l’exportateur LibreFolio 1.0.0 : le montant reste celui du fichier, sans frais séparés. Exportez à nouveau avec l’exportateur 1.0.1 ou ultérieur pour voir les frais à part.",
       "scalable_fees_unknown": "{count, plural, one {# ligne est arrivée} other {# lignes sont arrivées}} sans le détail des frais et des impôts : le montant est celui qu’affiche Scalable, sans frais ni impôts séparés. Exportez à nouveau avec l’option qui inclut les frais et les impôts pour les obtenir.",
       "scalable_open_partial": "{count, plural, one {# ordre est exécuté en partie et encore ouvert : il n’est pas encore importé et arrivera exécuté avec un export ultérieur.} other {# ordres sont exécutés en partie et encore ouverts : ils ne sont pas encore importés et arriveront exécutés avec un export ultérieur.}}",
       "scalable_reversal": "{count, plural, one {# ligne annule une opération déjà enregistrée et n’a pas été importée.} other {# lignes annulent des opérations déjà enregistrées et n’ont pas été importées.}} Vérifiez les opérations annulées et corrigez-les à la main.",
@@ -509,7 +508,6 @@
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "Sur ces lignes, une date, un montant, une devise, les parts ou le titre manque ou est illisible.",
-      "scalable_fee_in_amount": "Ici, la colonne amount vaut parts × prix, avec les frais et l’impôt déjà ajoutés (ou retranchés, pour une vente).",
       "scalable_fees_unknown": "Les colonnes fee et tax sont vides sur ces lignes : valeurs inconnues, pas nulles.",
       "scalable_open_partial": "La colonne shares indique ce qui a été exécuté jusqu’ici ; lf_ordered_shares ce qui a été commandé.",
       "scalable_reversal": "Ces lignes sont des annulations : leur colonne lf_is_cancellation vaut true.",

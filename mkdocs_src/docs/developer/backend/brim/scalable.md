@@ -56,7 +56,7 @@ whose `status` is not `Executed` or `Settled` are left out, and so is a row with
 
 | In the file (`type`) | Imported as |
 |:--|:--|
-| `Buy`, `Savings plan` | `BUY` on the gross `amount` — the value of the shares, as Scalable's CSV and exporter 1.0.1 write it — with `fee` as a `FEE` and a positive `tax` as a `TAX` of the same asset. A negative `tax`, given back, becomes a `DEPOSIT` without asset |
+| `Buy`, `Savings plan` | `BUY` on the gross `amount` — the value of the shares, as Scalable's CSV and exporter 1.0.1 or later write it — with `fee` as a `FEE` and a positive `tax` as a `TAX` of the same asset. A negative `tax`, given back, becomes a `DEPOSIT` without asset |
 | `Sell` | `SELL`, the same way |
 | a type containing `Distribution` | `DIVIDEND`, gross — `amount` plus the tax withheld in `tax` — with that tax as a `TAX` of the same asset; net when `tax` is empty |
 | `Interest` | `INTEREST`, gross, with the tax withheld as a `TAX`, both without asset; net when `tax` is empty |
@@ -72,9 +72,9 @@ whose `status` is not `Executed` or `Settled` are left out, and so is a row with
   (`scalable_not_imported`).
 - **Trades without their details**: in an exporter file, an empty `fee` means the details were
   not read, and the trade is booked on `amount` as it is, without legs (`scalable_fees_unknown`).
-  So is a trade of exporter 1.0.0, whose `amount` already holds the fee and the tax:
-  `_charges_inside` finds that it differs from `shares` × `price` by those charges, within a cent
-  (`scalable_fee_in_amount`).
+- **Exporter 1.0.0** is not supported: its trades carry the fee and the tax inside `amount`
+  (added on a purchase, taken away on a sale), so both would be counted twice; the user exports
+  again with 1.0.1 or later.
 - **Only executed rows** are imported. A `Pending` row with `lf_ordered_shares` and some `shares`
   already executed is an order filled in part (`scalable_open_partial`): it comes, executed, with a
   later export. The other statuses go to `scalable_not_executed`.
@@ -109,7 +109,7 @@ whose `status` is not `Executed` or `Settled` are left out, and so is a row with
 
 ## 🔔 Notices
 
-`_NOTICES` holds the twelve notices in display order, each with its severity, an English message
+`_NOTICES` holds the eleven notices in display order, each with its severity, an English message
 and the comment of its evidence table. A notice comes only when it has rows, with `context.count`
 and one `BRIMEvidence`: those rows under the file's header, with their line numbers and an empty
 `title`, so the wizard captions the table itself. The wizard words the message as
@@ -120,7 +120,6 @@ present in the four catalogues; the English texts are the fallback
 | Code | Severity | Rows |
 |---|---|---|
 | `scalable_unreadable_rows` | warning | A date, an amount, a currency, the shares or the security missing or unreadable: not imported |
-| `scalable_fee_in_amount` | warning | Trades of exporter 1.0.0, with the fee inside `amount`: imported as they are |
 | `scalable_fees_unknown` | warning | Exporter rows without their fee and tax details: imported on the amount shown, without legs |
 | `scalable_open_partial` | warning | Orders filled in part and still open: not imported yet |
 | `scalable_reversal` | warning | Reversals of a transaction already booked: not imported |

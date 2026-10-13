@@ -1,4 +1,4 @@
-# <img src="https://www.schwab.com/favicon.ico" alt=""> Charles Schwab
+# ![](../../../static/icons/brokers/schwab.png) Charles Schwab
 
 !!! info "Beta"
 
