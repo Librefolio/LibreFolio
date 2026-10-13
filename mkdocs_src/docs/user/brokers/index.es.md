@@ -89,10 +89,10 @@ Volver a un bróker que ya abriste muestra sus últimas cifras al instante, actu
 La pestaña **Posiciones** lista lo que tienes en este bróker, en el mismo panel que las [Posiciones del Panel](../dashboard/positions.md):
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-positions" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Posiciones (Tabla)" alt="Vista de tabla de posiciones del bróker">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Posiciones (Mapa / Treemap)" alt="Vista de mapa de posiciones del bróker">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Rendimiento (Tabla)" alt="Vista de tabla de rendimiento del bróker">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Rendimiento (Mapa / Gráfico)" alt="Vista de mapa de rendimiento del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Cartera (Tabla)" alt="Vista de tabla de la cartera del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Cartera (Mapa / Treemap)" alt="Vista de mapa de la cartera del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Periodo (Tabla)" alt="Vista de tabla del período del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Periodo (Mapa / Gráfico)" alt="Vista de mapa del período del bróker">
 </div>
 
 - **Cartera** muestra tus posiciones (cantidad, valor, peso); **Periodo** muestra las ganancias y pérdidas de cada posición en las fechas seleccionadas. Ambos se presentan como **Tabla** o **Mapa**.

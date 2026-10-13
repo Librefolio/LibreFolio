@@ -89,10 +89,10 @@ Revenir sur un courtier que vous avez déjà ouvert affiche immédiatement ses d
 L'onglet **Positions** liste ce que vous détenez chez ce courtier, dans le même panneau que les [Positions du Tableau de bord](../dashboard/positions.md) :
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-positions" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Positions (Tableau)" alt="Vue tableau des positions du courtier">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Positions (Carte / Treemap)" alt="Vue carte des positions du courtier">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Performance (Tableau)" alt="Vue tableau des performances du courtier">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Performance (Carte / Graphique)" alt="Vue carte des performances du courtier">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Portefeuille (Tableau)" alt="Vue tableau du portefeuille du courtier">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portefeuille (Carte / Treemap)" alt="Vue carte du portefeuille du courtier">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Période (Tableau)" alt="Vue tableau de la période du courtier">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Période (Carte / Graphique)" alt="Vue carte de la période du courtier">
 </div>
 
 - **Portefeuille** affiche vos positions (quantité, valeur, poids) ; **Période** affiche les gains et pertes de chaque position sur les dates sélectionnées. Les deux sont disponibles sous forme de **Tableau** ou de **Carte**.

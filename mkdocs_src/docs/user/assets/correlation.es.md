@@ -154,7 +154,7 @@ Cuando algo va mal con los datos, la pestaña lo indica una vez, justo debajo de
 
 **Cómo leerlo**
 
-- **El banner de calidad de datos** enumera lo que hay que corregir, cada problema con su acción, como **Sincronizar** para los precios o **Sincronizar** para los tipos de cambio. Haz clic en él para abrir la lista.
+- **El banner de calidad de datos** enumera lo que hay que corregir, cada problema con su acción, como **Sincronizar precios** o **Sincronizar tipos de cambio**. Haz clic en él para abrir la lista.
 - **El aviso** debajo nombra los resultados **parciales** y su causa. Un resultado parcial sigue mostrando sus cifras: léelas teniendo en cuenta esa causa.
 - **El banner ámbar propio de una sección** significa que un resultado no se obtuvo en absoluto, a menudo porque el periodo es demasiado corto: elige uno más largo o sincroniza los precios.
 - **¿Qué pasa si…?** informa de sus propios problemas dentro de su sección.

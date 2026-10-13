@@ -689,19 +689,38 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
     quando è diversa.
 
   Dettagli: [piano ReleaseGallery](27_releaseImages/plan-phase00ReleaseGallery.prompt.md), passo «30».
-- **M-26 · Due pagine della doc dicono ancora cose vecchie sui test e sulla CLI** — basso; M (docs-writer, lotto 35),
-  13/10, fuori dal perimetro del punto 2.
+- ✅ **M-26 · Due pagine della doc dicono ancora cose vecchie sui test e sulla CLI** — chiusa nella 1.2, M (lotto 36,
+  13/10). Era: basso; M (docs-writer, lotto 35), 13/10, fuori dal perimetro del punto 2. `runner_architecture` ora usa
+  `trackTransactionWrites()` e dice le due condizioni della pulizia; `cli_tools` dice in 4 lingue che anche `deactivate`
+  rifiuta l'ultimo amministratore attivo. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «27.3».
   - `developer/test-walkthrough/runner_architecture.md:205-227` importa `deleteTransactionsCreatedSince`, che non
     esiste più, e consiglia la pulizia per differenza di id che `db-cleanup.ts` chiama non sicura; `:573` non dice che
     serve anche `E2E_WORKERS` ≤ 1.
   - `admin/cli_tools.*.md:70-77` non dice che anche `deactivate` rifiuta l'ultimo amministratore attivo.
 
   Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «26.2».
-- **M-27 · La scheda Posizioni si chiama ancora «Performance» in alcune pagine** — basso; M (docs-writer, lotto 35),
+- ✅ **M-27 · La scheda Posizioni si chiama ancora «Performance» in alcune pagine** — chiusa nella 1.2, M (lotto 36,
+  13/10), con la regola del coordinatore: per i controlli il nome del catalogo, «Holdings» resta dove indica il
+  contenuto. Didascalie, frasi della galleria, `positions` e le due pagine developer, in 4 lingue dove tradotte.
+  Restano due commenti nel codice (`PositionsPanel.svelte:142`, `dashboard/+page.svelte:623`). Dettagli:
+  [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «27.2». Era: basso; M (docs-writer, lotto 35),
   13/10. Il selettore dice «Portafoglio / Periodo»; il lotto 35 ha corretto solo le 5 «Performance view» chieste.
   Restano la sezione e i titoli degli scatti di `user/dashboard/positions.*.md` e `user/brokers/index.*.md`, le pagine
   della galleria («Holdings and Performance») e due pagine developer. Dettagli: [journal del giro
   12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «26.2».
+- **M-28 · Lo spagnolo chiama i tassi di cambio sia «tasas» sia «tipos de cambio»** — basso; M (lotto 36), 13/10.
+  Il glossario dice *tipo de cambio*, e così il nuovo pulsante dei dati mancanti (`dataQuality.cta.sync_fx_pair`,
+  «Sincronizar tipos de cambio») e `common.syncFxRates`. Nel catalogo spagnolo, però, 29 valori dicono *tasas*:
+  per esempio «Sincronizar tasas» sul pulsante della pagina FX (`fxDetail.syncRates`) e altri valori di `fx.*`,
+  `csvImport.*` e `transactions.wac.*`. Sono sorgenti di altre aree (`i18n/fx/`, …), da allineare al glossario
+  con `dev.py i18n update`. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «27.1».
+- **M-29 · `runner_architecture.md` sbaglia ancora i worker** — basso; M (docs-writer, lotto 36), 13/10.
+  - `:264` dice che si inietta `E2E_WORKERS=4`; oggi è al più metà dei core logici, ed è esportato solo sopra 1 e se
+    non è già impostato (`scripts/test_runner/_common.py:90-131`).
+  - `:267` e `:270` danno ⌊n/2⌋ worker del server; la configurazione usa `Math.ceil(E2E_WORKERS / 2)`,
+    sovrascrivibile (`frontend/playwright.config.ts:54`): con 3 worker del browser sono 2, non 1.
+
+  Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «27.3».
 
 ## Q · Documentazione e onboarding (21, 32)
 
