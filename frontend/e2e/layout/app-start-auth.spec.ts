@@ -57,9 +57,12 @@ const REQUESTED_WITH_QUERY = '/assets?view=table&probe=app-start-auth';
 /** Where a sign-out takes an app page: the root login, then the signed-in user's default page. */
 const SIGN_OUT_PATHS: readonly string[] = ['/', '/dashboard'];
 
-// Sign-in, a 5 s wait on /auth/me and the assets page's two load waves exceed the default 30 s on a loaded machine;
-// a red must end on its own assertion, not on the test timeout.
-test.setTimeout(60_000);
+// A red must end on its own assertion, not on the test timeout, so the budget holds the longest chain a red can sit
+// behind: signIn(), whose login() may take 70 s and still return (10 s, then a 10 s retry, on the first paint; 20 s on the
+// sign-in; 30 s on the arrival), then one of this file's waits running out (PAGE_TIMEOUT_MS, 30 s): 100 s. The rest of
+// a test runs on top at a loaded pace — the 5 s of silence on /auth/me and the assets page's two load waves; the first
+// test took 8.4 s at one worker, load 20 (13/10).
+test.setTimeout(150_000);
 
 type MarkedWindow = Window & {__lfAppStartAuthRuntime?: true};
 
@@ -162,7 +165,7 @@ async function holdAuthMe(page: Page): Promise<{held: () => number; open: () => 
 /** Signs in with the shared helper, then waits for the root's post-login routing to leave `/`: the app shell is up. */
 async function signIn(page: Page): Promise<void> {
     await login(page, TEST_USER);
-    // login() returns once the login form is gone, while the root page still loads the bootstrap and routes away.
+    // login() returns once the app has arrived; the two waits below pin which arrival: off `/`, on the app shell.
     await page.waitForURL((url) => url.pathname !== '/', {timeout: PAGE_TIMEOUT_MS});
     await expect(page.getByTestId('app-shell'), 'the app shell is up after the post-login routing').toBeVisible({timeout: PAGE_TIMEOUT_MS});
 }
