@@ -1587,3 +1587,54 @@ commit is checked against.
 > - Strict build 0; `check-links` 95.
 > - Review scripts: only the intended differences (the `:263` examples, the four quotes of old text).
 > - `git diff --check` clean; ports 6158, 6168 and 6042 free.
+
+### 30. ✅ Batch 39: Tools and the PAC are stable; the changelog's open-period line — on `ef666fdee`, 2026-10-13
+
+The developer's decision (question 14, through the coordinator): Tools and the PAC are neither beta nor experimental.
+They are «da rifinire ma stabili», still to be polished but stable.
+
+**30.1 ✅ No «experimental» left about Tools**
+> **Note implementazione**: the survey, every language.
+> - **The docs** call the platform experimental in only two places:
+>   - `user/tools/index.*.md:10`, in four languages;
+>   - `developer/architecture/patterns/tool_plugins.en.md:10`, English only, outside the translation pipeline.
+> - Nothing else says experimental, beta, alpha, preview or unstable about Tools or the PAC: not the CHANGELOG, the UI
+>   catalogues (`i18n/tools/`, `i18n/pacAllocator/`, every `tools.*`, `nav.*` key in the four catalogues), the code or
+>   the tool plugins' metadata.
+> - The app's other «beta» strings are the financial beta coefficient and the Risk page's own banner.
+> - `user/tools/index.en.md:23` («Both were prototypes and both were removed») is history about removed tools, and
+>   stays.
+>
+> **The English** (docs-writer):
+> - the user page now says «The Tool platform is **stable** and still being refined», and keeps «exactly **one**
+>   tool». The code has one registered tool plugin with one service, and one frontend registration
+>   (`tool_plugins/pac_allocator/plugin.py:134-161`, `features/tools/registry.ts:240-246`);
+> - the developer page says «stable and still being refined», and keeps its list of integrated boundaries, each
+>   checked against the code, and its caveat on runtime evidence.
+>
+> **Ported by hand:** «è **stabile** e ancora in fase di rifinitura» / «est **stable** et encore en cours de
+> perfectionnement» / «es **estable** y todavía se está perfeccionando».
+>
+> **Noticed by docs-writer, not edited** (reported to the coordinator):
+> - `tool_plugins.en.md:283` repeats the runtime caveat without «every». It could be read as «no runtime evidence»,
+>   while the lifecycle tests do reap descendants (`test_tools_executor.py:1187-1239`).
+> - `plugin.py:33-38` calls the solver's 30 s limit provisional: that fits «still being refined».
+
+**30.2 ✅ The 📈 Charts line of `fcc4ac96f`/`ef666fdee`, by hand**
+> **Note implementazione**:
+> - **⚠️ Fuori pista:** the dry-run before the stamp also listed `CHANGELOG.md#1.2.0/fixed/charts`, stale in the three
+>   languages. Two English commits after batch 38 added a 🐛 line: at weekly or monthly resolution, the week or month
+>   not over yet reads right on the asset and FX charts.
+> - The coordinator had not listed it, but porting new English lines by hand keeps `translate-validate` at 0/0 until
+>   the tag, so it is in this batch, as its own commit (`release-pipeline/scripts/b39_changelog_line.py`).
+> - **Placement:** inserted after the lot comparison line (`:160`), so the chapter is line-aligned again.
+> - **Terms as the chapter writes them:** tooltip / infobulle / información emergente; marcatori / marqueurs /
+>   marcadores; FX = tassi di cambio / taux de change / tipos de cambio.
+
+**30.3 ✅ Gates** (`release-pipeline/scripts/b39_gates.sh`, 10:34–10:35, load 5–14)
+> - **Stamps:** the Tools page, 1 file × 3; then the CHANGELOG's `fixed/charts`, 3 pieces. The cache changes in two
+>   stages, each only in its own entry.
+> - Dry-run empty; `translate-validate --hide-localized` 630 files 0/0; the CHANGELOG alone 3 files OK, 0/0;
+>   `translate-diff` 642 of 642 clean.
+> - Strict build 0; `check-links` 95; review scripts: only the intended differences.
+> - `git diff --check` clean; ports 6158, 6168 and 6042 free.
