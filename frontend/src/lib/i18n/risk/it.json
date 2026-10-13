@@ -232,7 +232,7 @@
         "geography": "Geografia"
       },
       "auditTitle": "Audit delle esposizioni applicate",
-      "missingMetadataOther": "Per questo asset non erano disponibili dati di settore o geografia. È stato trattato come Other al 100%.",
+      "missingMetadataOther": "Per questo asset non erano disponibili dati di settore o geografia. È stato trattato come Altro al 100%.",
       "exposureBucket": "Bucket di esposizione",
       "exposure": "Esposizione",
       "appliedBucket": "Bucket applicato",
@@ -242,8 +242,8 @@
         "direct": "Diretta",
         "country": "Paese specifico",
         "geography_group": "Gruppo geografico",
-        "other": "Fallback Other",
-        "missing_metadata_other": "Metadata mancanti → Other",
+        "other": "Ripiego su Altro",
+        "missing_metadata_other": "Metadata mancanti → Altro",
         "unconfigured_zero": "Non configurato → shock zero"
       }
     },
