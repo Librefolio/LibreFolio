@@ -35,6 +35,7 @@ rewritten in `60f734e08` (+132 −141).
 - Two small defects went to the backlog: C-70 (the import plugins' refusals only in English, with their code) and C-71
   (two «Rolling Return» indicators with the same name).
 - The reviewers' reports are working files outside the repository; the result is the chapter itself.
+- The release page built on the verified chapter, in draft until the tag: [[sources/release-1.2.0]].
 
 ## Source files
 
