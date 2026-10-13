@@ -7,7 +7,7 @@ description: Qué es una Herramienta, las herramientas disponibles hoy y cómo a
 
 Una **Herramienta** es un cálculo independiente: tú proporcionas los datos para una operación y esta devuelve un resultado o un error estructurado. No es una instrucción para modificar tu cartera.
 
-La plataforma de Herramientas es **experimental**. Actualmente el catálogo ofrece exactamente
+La plataforma de Herramientas es **estable** y todavía se está perfeccionando. Actualmente el catálogo ofrece exactamente
 **una** herramienta:
 
 | Herramienta | Qué hace |
