@@ -114,8 +114,12 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   - Il free-threading (senza GIL) resta una build separata, `python3.15t`, non il default. Non alza il throughput di
     questo server: l'event loop resta uno e SQLite ha un solo scrittore. Aiuterebbe solo il lavoro CPU nei thread.
   - Al 12/10 cvxpy, riskfolio-lib, osqp, arch, ta-lib e PyYAML non hanno wheel per la 3.15.
-  - Consiglio: la 1.2 resta su 3.13 (sicurezza fino a ottobre 2029); dopo la 1.2 la **3.14 con la build normale**;
-    la 3.15 verso il primo trimestre 2027, dopo una nuova verifica delle wheel; il free-threading più avanti.
+  - Consiglio del 12/10: la 1.2 resta su 3.13 (sicurezza fino a ottobre 2029); dopo la 1.2 la **3.14 con la build
+    normale**; la 3.15 verso il primo trimestre 2027, dopo una nuova verifica delle wheel; il free-threading più avanti.
+  - **Decisione del developer (13/10)**: si resta sulla 3.13 finché un salto non porta vantaggi significativi. Il
+    passaggio alla 3.14 dopo la 1.2 non è in calendario. Il rapporto del 12/10 è **il punto di partenza dei prossimi
+    confronti**: si rifanno le stesse verifiche (la tabella delle wheel pacchetto per pacchetto, lo stato del
+    free-threading, le immagini Docker) e si confrontano con le sue tabelle.
   - Dettagli, con la tabella di compatibilità pacchetto per pacchetto: [rapporto di ricerca del 12/10](38_postReleaseBacklog/research-python-3.15-20261012.md).
 - **C-61 · BulkModal: la barra di selezione dopo un import, mai provata** — basso, da verificare; W (lint della
   devWiki), 12/10. La pagina della wiki è aperta dal 25/06: dopo un import BRIM la barra di selezione del BulkModal
@@ -832,9 +836,17 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 - **V-2 · Il pannello lotti non pubblica `data-busy`** — basso; V, 12/10. Parte con `loading` falso
   (`LotsAnalysisPanel.svelte:91`), quindi un'assenza si legge solo dopo un testimone, cioè le righe dei lotti, o sulla
   risposta. Gli spec della 46 fanno così. Dettagli: idem, §9 «Passo 3».
-- **V-3 · TRANSFER orfano: i lotti falliscono, la Dashboard lo conta come capitale in natura** — basso, serve una
-  decisione; test-author di V (B1), 12/10. L'analisi dei lotti risponde `FAILED` con `TRANSFER_PAIR_MISSING`. Nessun
-  test lo fissa. Dettagli: idem, §9 «Passo 1».
+- **V-3 · TRANSFER orfano: i lotti falliscono, la Dashboard lo conta come capitale in natura** — basso, dopo la 1.2
+  (decisione del developer, 13/10); test-author di V (B1), 12/10. L'analisi dei lotti risponde `FAILED` con
+  `TRANSFER_PAIR_MISSING`. Nessun test lo fissa. Dettagli: idem, §9 «Passo 1».
+  - **Come nasce**: cancellando un broker, `delete_by_broker` (`transaction_service.py:334-352`) toglie solo il
+    collegamento `related_transaction_id` alla metà rimasta sull'altro broker, che resta un TRANSFER spaiato. C'era già
+    nella `v1.1.0`.
+  - **Il comportamento giusto, deciso dal developer il 13/10**: il TRANSFER rimasto senza la sua metà torna a essere un
+    semplice **ADJUSTMENT**, con la stessa quantità e lo stesso `cost_basis_override`. Così i lotti FIFO lo leggono come
+    un ADJUSTMENT (`fifo/engine.py`, i rami `ADJUSTMENT_IN`/`ADJUSTMENT_OUT`) e non falliscono più.
+  - Da progettare: la Dashboard (oggi `classifier.py:104`, capitale in natura), gli orfani già presenti nei DB (una
+    migrazione o una conversione alla lettura), e i test della cancellazione del broker.
 - **V-4 · Se si chiude P-10, E2 di `data-quality-real.spec.ts` va ricostruito** — minimo; V, 12/10. E2 ottiene
   `MISSING_COST_BASIS` dall'app riclassificando uno SPLIT in PRICE_ADJUSTMENT. E4 (righe legacy) e B1 restano validi.
   Dettagli: idem, §4.
@@ -860,11 +872,12 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   broker suoi, e `TEST_USER` non viene più toccato. Nel giro consolidato a 4 worker passano 157/157, con
   `dashboard-cache:338` accanto ai test di `broker-filter-label`. La domanda sul 403 continua in V-8. Commit: lotto 2
   di V, indicato dal coordinatore.
-- **V-8 · Il pannello Rischio con un broker sparito: 403 e nessuna rilettura** — basso, serve una decisione; V,
-  12/10. Se un broker posseduto sparisce dopo che la Dashboard ha letto i broker, per esempio cancellato in un'altra
-  scheda, la `risk/query` riceve 403 «Requested portfolio broker subset is not fully accessible» (`risk.py:73,89`).
-  Il tab Rischio mostra «Risk data could not be loaded» finché la pagina non rilegge i broker. Da decidere se il
-  pannello debba rileggere i broker posseduti e riprovare. Dettagli: piano della 46, §9 «Passo 7» e §11.
+- **V-8 · Il pannello Rischio con un broker sparito: 403 e nessuna rilettura** — basso, dopo la 1.2 (decisione del
+  developer, 13/10); V, 12/10. Se un broker posseduto sparisce dopo che la Dashboard ha letto i broker, per esempio
+  cancellato in un'altra scheda, la `risk/query` riceve 403 «Requested portfolio broker subset is not fully accessible»
+  (`risk.py:73,89`). Il tab Rischio mostra «Risk data could not be loaded» finché la pagina non rilegge i broker.
+  Nessun dato è sbagliato o perso. Cura proposta: al 403 il pannello rilegge i broker posseduti e riprova una volta,
+  con un E2E. Dettagli: piano della 46, §9 «Passo 7» e §11.
 - ✅ **V-9 · Due frasi superate nella doc del banner** — minimo; docs-writer di V, 12/10. In
   [data-quality-banner.md](../../../mkdocs_src/docs/developer/frontend/data-quality-banner.md):
   - la sezione «Component Modes → grouped» dice che le prime 3 issue sono visibili e che un pulsante appare quando
