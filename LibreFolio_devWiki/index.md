@@ -298,6 +298,9 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/jscoverage-teardown-spends-the-test-budget]] | **R, full run.** 15 reds: the JS coverage collected at teardown spends the test's 30 s under load; the fixture has no budget of its own. V's next lot | open | e2e, coverage, timeout |
+| [[problems/login-returns-before-the-app-has-started]] | **R, full run; V-27.** 9 reds: `login()` returns before the app has started, and the next 3–5 s wait runs out under load. V's next lot | open | e2e, auth, waits |
+| [[problems/broker-detail-tests-over-budget-under-load]] | **I, lot 50 (train 81); C-58.** The detail tests reloaded the broker list, and a probe passed without clicking; list reused, FIFO block budgeted at 60 s (`c58d48a6a`) | resolved | e2e, brokers, budgets |
 | [[problems/shared-server-rebuilt-the-frontend-past-its-startup-timeout]] | **U, plan 45.** After a production build the test server rebuilt the frontend in debug; under load that outlasted its 300 s startup and `all-backend` gave up before pytest. Build debug first | resolved | testing, build, timeout |
 | [[problems/editing-a-running-bash-script-corrupts-its-run]] | **U, plan 45.** A gate script edited while it ran: bash went on from its old offset in the new file — a lost command, a fragment, a syntax error. Never edit a running script | resolved | bash, tooling |
 | [[problems/release-shots-show-dirty-version]] | **M, train 78.** The 1.1 release shots read `v1.1.0-dirty`: Vite stamped the version with `git describe --dirty` after the workflow had written tracked files; fixed in M's lot 34 (`741310647`, a frozen `LF_APP_VERSION`), to verify on the first nightly | resolved | release, version, gallery |
@@ -487,6 +490,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/r-full-run-coverage-2026-10-12]] | `Release_2/Phase_0/38_postReleaseBacklog/report-R-full-run-coverage-20261012.md` — R's full run with coverage on train 68: 29 reds (27 load, 2 V-19), backend 91.51 %, JS 71.24 % | 2026-10-13 | testing, coverage, triage |
 | [[sources/phase00-ui-polish-2026-10]] | `Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` — workstream I's UI polish before the tag: the broker icon, the import mismatch modal, the security details, the copy buttons, the Spanish toolbar | 2026-10-12 | phase0, workstream-i, ui |
 | [[sources/release2-ai-ideas-2026-07]] | `Release_2/Ai_ideas/` — the July brainstorm: signals and risk in the backend first, an AI assistant through MCP later (deferred: `TODO_FUTURI.md`, QuarkAI) | 2026-10-12 | release2, ai, mcp, roadmap |
 | [[sources/phase00-clean-audit-2026-08]] | `Release_2/phases/05_cleanAudit/` — the August code-cleanliness audit: mostly healthy, the debt in a few places, remediation S1–S3, the full suite made runnable | 2026-10-12 | phase0, audit, cleanliness |
@@ -625,6 +629,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-13 | **Train 81 and R's full run.** I's lot 50 (C-58); R's report: coverage, the triage of 29 reds, two open budgets, C-67 to C-69 | [[sources/r-full-run-coverage-2026-10-12]] *(4 pages — 1 source, 3 problems; see log)* |
 | 2026-10-13 | **Train 80 — U-5 and plan 45 closed; M's batch 34.** Plan 45's four findings; the dirty version of the release shots fixed in the code | [[problems/shared-server-rebuilt-the-frontend-past-its-startup-timeout]] *(2 pages — 2 problems; see log)* |
 | 2026-10-13 | **Train 79 — T-EN1 and T-EN2.** The what-if signals' labels, a price-chart tooltip and a probe count in the interface language; the first keys added after U-3; T-ISO and T-FB for after 1.2 | *(none)* |
 | 2026-10-13 | **Trains 77 and 78 — I's lot 49, M's batch 33, U-4.** The request-counter race, the gallery's security shot and M-24, the developer docs of the split catalogue; a dirty version in the release shots, open | [[problems/request-counter-read-before-the-handler-counted]] *(2 pages — 2 problems; see log)* |
