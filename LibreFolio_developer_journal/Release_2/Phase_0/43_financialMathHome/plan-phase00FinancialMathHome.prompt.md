@@ -3099,3 +3099,144 @@ Correzioni al conteggio automatico:
   3. `/tmp/libreFolio_commit_t_shk_3.txt`, `fix(i18n): one drawdown term, real icon order`;
   4. `/tmp/libreFolio_commit_t_shk_4.txt`, `docs(journal): record T-SHK and T-CL`.
 - I file per commit sono nel manifest `/tmp/libreFolio_shk_manifest.txt`.
+
+### T-ISO + T-FB — via (coordinatore, 2026-10-13 04:34)
+- **Il lotto T-SHK + T-CL è integrato**: `dfc4f9ccc`…`c424562f5`, treno 85; `dev_release2` = `fadf43b01` = la mia HEAD, pulita. «Perte maximale» va bene.
+- **Mandato**. Il coordinatore cambia la decisione di prima: la riga 🔄 «Numbers and dates follow the interface language everywhere» promette «chart axes and tooltips».
+  1. **T-ISO, parte frontend**:
+     - le date del tooltip del grafico dei prezzi, cioè il `{date}` di `chart.tooltip.valueAt`, le righe ↩ e 💱, l'evento nei periodi aggregati e `fxRateDate`;
+     - la data del prezzo corrente nella sonda;
+     - il `date_range` della sonda, solo se il formato del backend è un contratto leggibile senza cambiare l'API, altrimenti diventa T-ISO-b.
+  2. **T-FB**: «Asset #N», «Asset» e «FX Pair», dal catalogo con `ChartSignal.text`.
+  3. **«Other» nelle regole dello stress** (`risk/*.json:245-246`), allineato al nome tradotto che lo shock scrive dopo T-SHK.
+- **Regole**: analisi breve e poi via; ci si ferma per un cambio di API; rossi prima, via test-author; spec singole a 1 worker sulla 6164; checkpoint FROZEN col manifest. Gli scatti dei tooltip non contano per la galleria finale, lo shock sì.
+
+#### T-ISO + T-FB — analisi (2026-10-13)
+**T-ISO, le superfici** (su `fadf43b01`; il formattatore è quello delle date dei tooltip dei lotti: `formatAxisDate(uiLocale(), iso, true)`, cioè `12 ott 2026`, `12 Oct 2026`, `12 oct. 2026`):
+- **`PriceChartFull.svelte`**:
+  - le righe dell'elenco del coordinatore: `formatEventEntry` (`:778`, la data dell'evento nei periodi aggregati), `fxRateDate` (`:789`), `valueAt` (`:1017`, `:1020`, `:1029`), ↩ (`:1018`), 💱 (`:1023`).
+  - **Anche l'intestazione del tooltip** (`buildTooltipHeader`, `:340-352`): il giorno è ISO, la settimana ha `weekRange` con due ISO, il mese ha `valueAt` in ISO. È la data più visibile del tooltip e la promessa del 🔄 la copre: la includo.
+- **Stessa famiglia, stesso difetto**: la includo e lo dico al coordinatore.
+  - `CandlestickChart.svelte:188-201`, l'intestazione: è il grafico a candele della stessa pagina, montato da `PriceChartFull`.
+  - `LineChart.svelte:710` (intestazione) e `:763` (`valueAt`): lo usano `PriceChartCompact`, l'anteprima di `ChartSettingsModal` e i grafici del rischio (`UnderwaterChart`, `L4Simulation`, il pannello legacy).
+  - `formatAxisDate` restituisce il valore così com'è se non è una data, quindi un asse che non è fatto di date resta com'era.
+- **`ProviderAssignmentSection.svelte`**: la data del prezzo corrente (`:335`, `cpDate`).
+  - **Il `date_range` entra**. Il backend lo costruisce sempre nello stesso modo, `f"{min(dates)} → {max(dates)}"` (`asset_sources/provider_management.py:389`), e lo schema lo descrive «start → end» (`schemas/provider.py:377`). Lo leggo con una regex stretta, due ISO separati da « → », e scrivo le due date; se non corrisponde resta com'è.
+  - L'API non cambia.
+
+**T-FB, i ripieghi** (le chiavi esistono già):
+- **In `ChartSignal`** (`ChartSignal.text`):
+  - `AssetComparisonSignal.ts:173-174`: «Asset #N» → la chiave del ripiego numerato, «Asset» → `common.asset` («Asset», «Actif», «Activo»);
+  - `FxPairSignal.ts:94`: «FX Pair» → `chartSettings.signals.fxPair` («Coppia FX», «Paire FX», «Par FX»).
+- **«Asset #{id}» esiste già come `fxDetail.assetFallback`** (en «Asset #{id}», it «Asset n. {id}», fr «Actif n° {id}», es «Activo n.º {id}»), usata dalla pagina FX per lo stesso scopo. Una chiave sola per un significato:
+  - la porto in `chartSettings.signals.assetFallback`, con gli stessi testi;
+  - la pagina FX passa alla chiave nuova (`fx/[pair]/+page.svelte:381`, `:438`), e `fxDetail.assetFallback` si toglie con `dev.py i18n add/remove`.
+- **La pagina dell'asset** (`assets/[id]/+page.svelte`):
+  - `:871` non scrive più «Asset #N» in `_assetDisplayName`: lascia il campo vuoto e il nome lo dà `AssetComparisonSignal`, cioè una fonte sola;
+  - `:690` e `:1004` (gli eventi dell'asset di confronto) e `:895` (il rendimento di calendario) usano `$t('chartSettings.signals.assetFallback', …)`.
+- **Fuori perimetro, da segnalare**: `:1274` è solo un log di debug; `:1585` è l'errore di pagina «Asset #N not found», non un segnale.
+
+**«Other» nelle regole dello stress**: in it, fr ed es il nome del bucket resta inglese in tre testi.
+- `risk.stress.rules.other`: «Fallback Other», «Repli Other» → it «Ripiego su Altro», fr «Repli sur Autre», es «Por defecto: Otro».
+- `risk.stress.rules.missing_metadata_other` → «… → Altro / Autre / Otro».
+- **In più**: la frase `risk.stress.missingMetadataOther` (`:235`, «…trattato come Other al 100%»), stesso difetto.
+- I testi nuovi si costruiscono dai valori attuali, sostituendo solo «Other», così gli spazi insecabili restano. Con `dev.py i18n update`.
+
+**I test (test-author)**:
+- **Rossi in it o fr**:
+  - `PriceChartFull.test.ts`: intestazione giornaliera, settimanale e mensile; `valueAt`; ↩ e 💱; la data dell'evento; `fxRateDate`;
+  - le intestazioni di `CandlestickChart` e `LineChart`, se si montano a costo ragionevole;
+  - `ProviderAssignmentSection.test.ts`: `cpDate` e `date_range` col formato vero del backend, più la guardia di una stringa che non corrisponde;
+  - `comparisonSignals.test.ts`: i tre ripieghi dal catalogo; i test inglesi esistenti avviano i18n;
+  - `riskGlossary.test.ts`: nessun «Other» inglese nei tre testi it, fr, es.
+- **E2E a 1 worker dopo la cura**: `asset-detail`, `fx-detail` o `fx-editor`, `risk-asset-detail`.
+
+**Le decisioni del coordinatore** (2026-10-13, 04:4x): approvati tutti e quattro gli allargamenti.
+- **Aggiunti al lotto**: «Asset #N not found» (`assets/[id]/+page.svelte:1585`), poi `'Failed to load asset info'` (`:1589`) e `'Failed to load prices'` (`:1830`).
+- **Il lotto è chiuso.** Altri ripieghi inglesi vanno nel backlog, salvo quelli coperti dalla promessa «everywhere» della riga 🔄.
+- **I test da far girare in più**: per `LineChart`, `risk-levels-component` e un E2E del rischio.
+- **Precisazione mia**: `dev.py i18n move` cambia la sorgente ma non il nome di una chiave, quindi la rinomina è `i18n add` + `i18n remove`.
+
+#### T-ISO + T-FB — la preparazione (2026-10-13)
+> **Note implementazione**:
+> - **La chiave condivisa**: `chartSettings.signals.assetFallback` aggiunta in `charts/`, con i testi esatti di `fxDetail.assetFallback` (`/tmp/libreFolio_tiso_addkey.sh`).
+> - **La cura del codice**: `/tmp/libreFolio_tiso_apply.py`, 35 operazioni su 9 file, provata a secco.
+>   - In `utils/core/formatAxisDate.ts` nasce `formatDay(value)`: un giorno `YYYY-MM-DD` scritto come in tutti i tooltip, `12 ott 2026`; qualunque altro valore torna com'è.
+>   - Il «com'è» conta: `formatAxisDate` leggerebbe come anno un numero nudo (`new Date("30")`), e `LineChart` ha anche categorie che non sono date.
+> - **Il catalogo**:
+>   - `/tmp/libreFolio_tiso_i18n_a.sh`: le tre «Other» e le tre chiavi `assetDetail.{notFound,loadFailed,pricesLoadFailed}`;
+>   - `/tmp/libreFolio_tiso_i18n_b.sh`: `i18n remove fxDetail.assetFallback`, solo dopo la cura (si ferma se qualcuno la legge ancora).
+> - **I rossi**: in corso, da test-author J (con l'aggiunta dei due «Failed to load»).
+
+#### T-ISO + T-FB passo 1 — i rossi ✅ (2026-10-13)
+> **Note implementazione**: test-author J ha scritto 32 rossi; li ho visti rossi anche io, un file alla volta (log `/tmp/libreFolio_tiso_red_*.log`).
+>
+> | file | rossi | verdi |
+> |---|---|---|
+> | `PriceChartFull.test.ts` (anche `CandlestickChart` a candele) | 19 | 5 |
+> | `LineChart.test.ts` (nuovo, jsdom) | 2 | 1 |
+> | `ProviderAssignmentSection.test.ts` | 4 | 36 |
+> | `comparisonSignals.test.ts` (avvia i18n) | 2 | 27 |
+> | `comparisonSignalPages.test.ts` (nuovo, contratto dei sorgenti delle due pagine) | 4 | 5 |
+> | `riskGlossary.test.ts` | 1 | 7 |
+>
+> - **Nel runner**, `_frontend_utility.py`: `LineChart.test.ts` in `front_component_unit`, `comparisonSignalPages.test.ts` in `front_utility_unit`.
+> - **Le note di test-author**:
+>   - i casi di T-EN1 mascherano ora il giorno;
+>   - `:1274` (il log di debug) è l'unico «Asset #» ammesso, con un motivo scritto;
+>   - `common.asset` è «Asset» anche in italiano, quindi solo il francese distingue quel ripiego.
+> - **Catalogo, parte a** (`/tmp/libreFolio_tiso_i18n_a.sh`): le tre «Other» in it, fr, es; le chiavi `assetDetail.{notFound,loadFailed,pricesLoadFailed}`. `i18n check`: 4 364 chiavi in modalità stretta.
+> - **Aggiunta approvata dal coordinatore**: il tooltip della sonda (`providerProbe.ts:103-130`) ha due date con `formatDay` e «Close» con `dataEditor.col.close`, già nel catalogo base; nessuna chiave nuova. Rosso in corso; 5 operazioni in più nello script della cura.
+> - **Backlog «da verificare»**: gli eventi persi alla risoluzione settimanale o mensile in `PriceChartFull`. Il coordinatore lo fa verificare a runtime da V.
+
+#### T-ISO + T-FB passo 2 — la cura ✅ (2026-10-13)
+> **Note implementazione**:
+> - **I rossi della sonda** (`providerProbe.test.ts`): 4, visti rossi (`/tmp/libreFolio_tiso_red_providerProbe.log`). In tutto 36 rossi.
+> - **La cura**: `/tmp/libreFolio_tiso_apply.py --apply`, 41 operazioni su 10 file, provata prima a secco.
+>   - **`formatDay`** in `utils/core/formatAxisDate.ts`.
+>   - **I tooltip** di `PriceChartFull`, `CandlestickChart` e `LineChart`: le intestazioni di giorno, settimana e mese; `valueAt`; ↩ e 💱; l'evento nei periodi aggregati; `fxRateDate`.
+>     - Le date ISO restano le chiavi delle mappe (`mainPointContext`, `overlayPointMeta`, `bucketInfoByDate`): si formattano solo quando si scrivono.
+>   - **La sonda**:
+>     - `cpDate`;
+>     - `probeDateRange()`, con una regex stretta su `inizio → fine`; una stringa diversa resta com'è;
+>     - nella tabella al passaggio (`providerProbe.ts`), le date con `formatDay` e «Close» da `dataEditor.col.close`.
+>   - **I ripieghi**:
+>     - i segnali li leggono con `ChartSignal.text`;
+>     - le due pagine usano `chartSettings.signals.assetFallback`;
+>     - la pagina dell'asset non scrive più «Asset #N» in `_assetDisplayName` (`:880`): il nome lo dà il segnale.
+>   - **I tre errori della pagina dell'asset** vengono dal catalogo; il banner passa `{id}` a `$t`.
+> - **Catalogo, parte b** (`/tmp/libreFolio_tiso_i18n_b.sh`): `i18n remove fxDetail.assetFallback`, dopo la cura, quando nessuno la leggeva più.
+> - **Verdi dopo la cura**: i 7 file del lotto (`/tmp/libreFolio_tiso_green_*.log`).
+>
+> **⚠️ Fuori pista**:
+> - **`front check`** ha trovato 1 errore: `h.date_range` è tipato `string | (string | null)[]`. Cura: `probeDateRange(String(h.date_range))` (`/tmp/libreFolio_tiso_fix2.py`).
+> - **`i18n audit`** dava per morte le tre chiavi `assetDetail.{notFound,loadFailed,pricesLoadFailed}`. L'audit conta solo una chiave scritta intera, e in `'_i18n:assetDetail.notFound'` non lo è.
+>   - Cura: un helper della pagina, `catalogueError(key)`, restituisce `` `_i18n:${key}` ``. Ogni errore del banner passa da lì con la chiave intera, compresi i due `noData` che c'erano già.
+>   - test-author J ha riallineato `comparisonSignalPages.test.ts` a questa forma (11 verdi). Ha anche provato che i suoi controlli falliscono sulla pagina di HEAD.
+
+#### T-ISO + T-FB passo 3 — i gate ✅ (2026-10-13)
+> **Note implementazione** (spec singole, 1 worker, corsia 6164):
+> - **Vitest del lotto**, dopo l'ultima modifica: `comparisonSignalPages` 11, `ProviderAssignmentSection` 40, `providerProbe` 27, `PriceChartFull` 24, `LineChart` 3, `comparisonSignals` 29, `riskGlossary` 8 (`/tmp/libreFolio_tiso_final_*.log`).
+> - **I vicini**, dopo la cura (`/tmp/libreFolio_tiso_nb_*.log`):
+>   - i 9 file di `risk-levels-component` (272);
+>   - `chartCoreHelpers` 178, `priceChartHelpers` 135, `echartsTooltipHelpers` 47, `candlestickChartHelpers` 39, `registry` 19, `syntheticSignals` 48, `formatAxisDate` 15;
+>   - le guardie `htmlInterpolation` 26, `htmlSink` 7, `moneyRenderSites` 6, `catalogIcuLocale` 17.
+> - **Statici**:
+>   - `front check`: 0 errori, 0 avvisi;
+>   - Prettier pulito sui 32 file del frontend toccati;
+>   - `i18n audit`: 0 chiavi inutilizzate;
+>   - `i18n check`: 4 363 chiavi, in modalità stretta;
+>   - `git diff --check` pulito.
+> - **Backend**: `utils gate-plugin-i18n-ownership` 45, `gate-i18n-usage` 195, `gate-i18n-catalog` 176. `check-orphans` pulito: 361 test del frontend e 262 del backend raggiungibili.
+> - **E2E**: `front-asset asset-detail` 32, `front-fx fx-detail` 17, `front-portfolio risk` 38, `front-portfolio risk-asset-detail` 5. Porta 6164 libera.
+> - **Backlog**: T-ISO e T-FB marcate ✅.
+
+### Checkpoint T-ISO + T-FB 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
+- **Base**: `fadf43b01`.
+- **Commit proposti**:
+  1. `/tmp/libreFolio_commit_t_iso_1.txt`, `fix(charts): tooltip dates follow the UI language`;
+  2. `/tmp/libreFolio_commit_t_iso_2.txt`, `fix(signals): catalogue fallbacks, page errors`;
+  3. `/tmp/libreFolio_commit_t_iso_3.txt`, `fix(i18n): translated Other in stress rules`;
+  4. `/tmp/libreFolio_commit_t_iso_4.txt`, `docs(journal): record T-ISO and T-FB`.
+- **I file per commit** sono nel manifest `/tmp/libreFolio_tiso_manifest.txt`.
+- **Il runner va nel commit 2**, perché registra anche il file nuovo di quel commit. Fra il commit 1 e il 2, `LineChart.test.ts` resta un orfano.
