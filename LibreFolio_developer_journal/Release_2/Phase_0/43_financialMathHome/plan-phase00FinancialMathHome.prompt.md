@@ -3290,7 +3290,7 @@ Correzioni al conteggio automatico:
 #### La riparazione, passo 3 — i gate ✅ (2026-10-13)
 > **Note implementazione** (corsia 6164, un comando alla volta):
 > - **`front-utility component-unit` intera**: 117 file, 3 130 test, tutti verdi (`/tmp/libreFolio_t1_tdr_front-utility_component-unit.log`).
-> - **`providerProbe.test.ts`** (sta in `utility-unit`): 27.
+> - **`providerProbe.test.ts`** (sta in `front-utility core-unit`): 27.
 > - **Statici**:
 >   - `front check`: 0 errori, 0 avvisi;
 >   - Prettier pulito sui 3 file;
@@ -3304,3 +3304,85 @@ Correzioni al conteggio automatico:
   1. `/tmp/libreFolio_commit_t_iso_r1.txt`, `fix(assets): probe rows name their operation`: il componente e i due spec;
   2. `/tmp/libreFolio_commit_t_iso_r2.txt`, `docs(journal): record the T-ISO probe repair`: piano 43 e backlog.
 - **I file per commit** sono nel manifest `/tmp/libreFolio_tdr_manifest.txt`.
+
+### Il tooltip del periodo in corso — via (coordinatore, 2026-10-13 06:42)
+- **Base**: treno 91, `dev_release2` = `fa6299689` = la mia HEAD, pulita. Dentro c'è il lotto 51 di I. La sua R-5 (`1acd1bf10`) mette il marcatore di un evento dell'ultimo periodo parziale, settimanale o mensile, sull'ultima data con un dato.
+- **Il difetto, segnalato da I** (piano della 51, §R-5, «un fratello»): il tooltip di quel punto dice ancora «value at» la fine teorica del periodo (`PriceChartFull.svelte:348-352`). Le due date non coincidono.
+- **Mandato**:
+  - il tooltip del punto aggregato nomina la data del suo ultimo dato, oppure l'intervallo vero se il formato ha un intervallo, con `formatDay`;
+  - rossi prima della cura, via test-author;
+  - poi `front-asset asset-detail` e `front-fx fx-detail`;
+  - dire se il difetto c'era nella `v1.1.0`, e in quel caso la riga 🐛;
+  - checkpoint FROZEN col manifest.
+
+#### Il periodo in corso — analisi (2026-10-13)
+- **Il meccanismo**:
+  - `aggregateLineSeries` e `aggregateOHLCV` (`timeSeriesAggregation.ts:168-182`, `:215-263`) datano ogni punto aggregato col suo ultimo dato. La fine teorica (la domenica, l'ultimo del mese) resta solo in `bucketEnd`.
+  - I due tooltip di `PriceChartFull` passano a `buildTooltipHeader` la data del punto e il `bucketInfo` teorico:
+    - il tooltip dell'asse (`:921-923`);
+    - quello del marcatore d'evento (`:846-849`), con la data del punto dopo la R-5.
+  - La testata usa `bucketEnd`: per la settimana è la fine di `weekRange`, per il mese la data di `valueAt`.
+  - `CandlestickChart` (`:189-201`) fa lo stesso con la candela, che sta all'ultimo dato.
+- **Dove si vede**: la lettura dei prezzi riempie ogni giorno di calendario (`asset_sources/core.py:297-299`). Il cambio arriva da `/fx/currencies/convert`, che dà un risultato per ogni giorno chiesto. Quindi nei periodi pieni l'ultimo dato è la fine teorica e non cambia niente. Il difetto sta solo:
+  - nell'ultimo periodo, ancora aperto (oggi 13/10: «value at 31 ott 2026», un giorno che deve ancora venire; la settimana «12 ott – 18 ott» per un punto del 13);
+  - in una serie che si ferma dentro il periodo (un intervallo scelto che finisce a metà mese).
+- **La `v1.1.0`**: c'era già, con la stessa aggregazione e la stessa testata (`git show v1.1.0:…/PriceChartFull.svelte:314-326`, `CandlestickChart.svelte:181-184`). **Vuole una riga 🐛**, che si può unire a quella della R-5 di I.
+- **La cura**:
+  - una funzione pura in `priceChartHelpers.ts`, accanto a `getBucketInfo`: `bucketSpanUpTo(date, info)`. Restituisce il periodo dal suo primo giorno fino alla data del punto quando questa cade prima della fine; altrimenti il periodo intero, anche per una data fuori dal periodo;
+  - la usano le due testate, di `PriceChartFull` e di `CandlestickChart`:
+    - la settimana va dall'inizio all'ultimo dato;
+    - il mese resta col suo nome, con «value at» l'ultimo dato.
+  - L'inizio resta il primo giorno di calendario del periodo.
+  - Nessuna chiave nuova, nessun cambio di API.
+- **La stessa famiglia, fuori dal mandato: solo segnalati, non toccati**:
+  - `brokers/lots/LotComparisonChart.svelte:391-415`: lo stesso difetto del periodo aperto. Il punto sta a `point.date` (`:309-314`), «value at» e la fine della settimana usano `bucketEnd`. C'era già nella `v1.1.0`.
+  - `dashboard/GrowthChart.svelte:1384-1407` e `dashboard/AllocationHistoryChart.svelte:557-566`: il periodo aperto è già giusto. GrowthChart dice «In progress: 6 of 31 days» e mette in «value at» l'ultimo giorno con un dato; AllocationHistory usa `row.date`. Però scrivono i giorni ISO grezzi (`2026-10-01 → 2026-10-31`). `GrowthChart.test.ts:2171-2189` lo fissa. Contraddice la riga 🔄 «everywhere», che promette anche i tooltip: va detto al coordinatore.
+- **I test (test-author J), rossi prima della cura**:
+  - `priceChartHelpers.test.ts`: la funzione nuova;
+  - `PriceChartFull.test.ts`: in più lingue, una serie di giorni di calendario che finisce dentro la settimana o il mese. Si controllano la testata dell'asse sul punto aperto, il marcatore d'evento nel periodo aperto, e le candele aperte. I casi dei periodi pieni restano la guardia di ciò che non cambia.
+- **I gate**:
+  - i due file, poi `front-utility core-unit` e `component-unit`;
+  - `front check` e Prettier;
+  - gli E2E `front-asset asset-detail` e `front-fx fx-detail`.
+- **Aggiunta del coordinatore (06:53)**: chiudere T-EVW nel backlog, col rimando, perché è la R-5 di I (`1acd1bf10`, treno 91), confermata a runtime da V.
+  > **Note implementazione**: T-EVW ✅ nella sezione T del backlog, coi rimandi al piano della 51 (sezione «R-5») e a questa sezione.
+
+#### Il periodo in corso, passo 1 — i rossi ✅ (2026-10-13)
+> **Note implementazione**: test-author J ha scritto 21 rossi, tutti sui casi nuovi. Li ho visti rossi anch'io, un file alla volta (`/tmp/libreFolio_tbk_red_*.log`).
+> - **`priceChartHelpers.test.ts`**: 9 rossi, 139 verdi. `describe('bucketSpanUpTo')` copre:
+>   - settimana e mese aperti, il punto sul primo giorno;
+>   - settimana e mese interi, una data prima, una dopo, `''`;
+>   - la purezza.
+>
+>   Falliscono tutti sulla barriera dell'export mancante.
+> - **`PriceChartFull.test.ts`**: 12 rossi, 24 verdi, in it e fr. I casi sono la settimana e il mese aperti, sul tooltip dell'asse, del marcatore d'evento e della candela.
+>   - **I fixture**: `OPEN_DAYS` (i giorni di calendario fino a mercoledì 13/3/2024), `OPEN_MONTHLY_PLOT_WIDTH = 2`, `OPEN_DIVIDEND` del 12/3.
+>   - **Ricevuto → atteso**: «Settimana 11 mar 2024 – 17 mar 2024» → «… – 13 mar 2024», «Valore al 31 mar 2024» → «Valore al 13 mar 2024».
+>   - **Il marcatore**: una barriera prova che sta sul punto del 13 (la R-5 di I), e l'atteso si calcola da quel giorno.
+>   - **I periodi interi** (`WEEK_ENDS`, `MONTH_ENDS`) restano la guardia di ciò che non cambia.
+>   - **Riordino interno**: `mountCandles` e `candleHeader` passano a livello di file; `periodTooltipOf` delega a `periodPointOf`.
+
+#### Il periodo in corso, passo 2 — la cura ✅ (2026-10-13)
+> **Note implementazione**: `/tmp/libreFolio_tbk_apply.py --apply`, 5 operazioni su 3 file, provata prima a secco.
+> - `bucketSpanUpTo` in `priceChartHelpers.ts`, dopo `getBucketInfo`. Chiede anche che la data sia un giorno ISO (`ISO_DATE_PATTERN`).
+> - Le testate di `PriceChartFull` e di `CandlestickChart` la applicano a data del punto e `bucketInfo`.
+>
+> **Verdi** (`/tmp/libreFolio_tbk_green_*.log`): `priceChartHelpers` 148, `PriceChartFull` 36, `LineChart` 3, `candlestickChartHelpers` 39.
+
+#### Il periodo in corso, passo 3 — i gate ✅ (2026-10-13)
+> **Note implementazione** (corsia 6164, un comando alla volta):
+> - **`front-utility core-unit`**: 128 file, 4 140 test; **`component-unit`**: 117 file, 3 142 test. Tutti verdi (`/tmp/libreFolio_t1_tbk_front-utility_*.log`).
+> - **Statici**:
+>   - `front check`: 0 errori, 0 avvisi;
+>   - Prettier pulito sui 5 file;
+>   - `git diff --check` pulito.
+> - **E2E**: `front-asset asset-detail` 32, `front-fx fx-detail` 17. `check-orphans` pulito.
+> - **Porta 6164 libera.**
+> - **Riga 🐛 proposta**, da unire a quella della R-5 di I nel blocco `#### 📈 Charts`: vedi il checkpoint.
+
+### Checkpoint del periodo in corso 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
+- **Base**: `fa6299689`.
+- **Commit proposti**:
+  1. `/tmp/libreFolio_commit_t_bkt_1.txt`, `fix(charts): open period tooltip ends on its day`: l'helper, le due testate, i due spec;
+  2. `/tmp/libreFolio_commit_t_bkt_2.txt`, `docs(journal): record the open period tooltip`: piano 43 e backlog (T-EVW ✅).
+- **I file per commit** sono nel manifest `/tmp/libreFolio_tbk_manifest.txt`.
