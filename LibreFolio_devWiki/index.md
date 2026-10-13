@@ -298,6 +298,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/hidden-pair-half-survived-row-removal]] | **V-29, train 82.** Removing a new pair from the bulk editor left its hidden partner: a false «Discard changes?» since 1.1.0; both halves removed (`e6019f349`) | resolved | frontend, bulk-editor, pairs |
 | [[problems/jscoverage-teardown-spends-the-test-budget]] | **R, full run.** 15 reds: the JS coverage collected at teardown spends the test's 30 s under load; the fixture has no budget of its own. V's next lot | open | e2e, coverage, timeout |
 | [[problems/login-returns-before-the-app-has-started]] | **R, full run; V-27.** 9 reds: `login()` returns before the app has started, and the next 3–5 s wait runs out under load. V's next lot | open | e2e, auth, waits |
 | [[problems/broker-detail-tests-over-budget-under-load]] | **I, lot 50 (train 81); C-58.** The detail tests reloaded the broker list, and a probe passed without clicking; list reused, FIFO block budgeted at 60 s (`c58d48a6a`) | resolved | e2e, brokers, budgets |
@@ -629,6 +630,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-13 | **Train 82 — V's §12.10.** V-29 (a product defect since 1.1.0) fixed; V-25 cured with an owned-pair fixture; V-21 in part; V-26; V-27 open | [[problems/hidden-pair-half-survived-row-removal]] *(1 page — 1 problem)* |
 | 2026-10-13 | **Train 81 and R's full run.** I's lot 50 (C-58); R's report: coverage, the triage of 29 reds, two open budgets, C-67 to C-69 | [[sources/r-full-run-coverage-2026-10-12]] *(4 pages — 1 source, 3 problems; see log)* |
 | 2026-10-13 | **Train 80 — U-5 and plan 45 closed; M's batch 34.** Plan 45's four findings; the dirty version of the release shots fixed in the code | [[problems/shared-server-rebuilt-the-frontend-past-its-startup-timeout]] *(2 pages — 2 problems; see log)* |
 | 2026-10-13 | **Train 79 — T-EN1 and T-EN2.** The what-if signals' labels, a price-chart tooltip and a probe count in the interface language; the first keys added after U-3; T-ISO and T-FB for after 1.2 | *(none)* |

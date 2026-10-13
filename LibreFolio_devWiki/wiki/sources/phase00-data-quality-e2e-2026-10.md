@@ -77,6 +77,12 @@ deletion, yield on cost, the PDF preview offline, the transfer in Auto (WAC 150)
 [[decisions/e2e-gaps-of-1-2-before-release]]. The files spec now deletes its uploads (`eb269ecde`); the backlog gained
 V-24 and V-25.
 
+## Train 82 (added 2026-10-13)
+
+§12.10: V-25 cured with an owned-pair fixture, V-21 in part, V-26 (setups off the clock), and a product defect found
+by the E2E and fixed — [[problems/hidden-pair-half-survived-row-removal]] (V-29). V-27 stays open —
+[[problems/login-returns-before-the-app-has-started]].
+
 ## Wiki pages created or updated
 
 - Created: [[decisions/data-quality-proved-on-real-data]], [[problems/open-panels-stale-after-fx-sync]].
