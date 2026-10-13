@@ -1232,7 +1232,11 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
   >
   > Log: `/tmp/libreFolio_u5_check_source_paths.log`, `/tmp/libreFolio_u5_wiki_oldpaths.log`.
 
-### U-6 — L'icona di Schwab dentro l'app, Scalable senza l'esportatore 1.0.0 (chiuso il 13/10, checkpoint inviato)
+### U-6 — L'icona di Schwab dentro l'app, Scalable senza l'esportatore 1.0.0 (chiuso il 13/10; la parte di Schwab è
+annullata in U-6b)
+
+> Committato in `a6d1754ed` e `6084eb1a1`, nel treno 94. **La parte di Schwab è annullata in U-6b**: ci sono l'icona,
+> lo script, le doc dell'icona e i test di Schwab. Restano Scalable senza la 1.0.0, la D4 e `scalable.md`.
 
 > **Lotto deciso dal developer il 13/10**, relayato dal coordinatore alle 10:27: la parte Schwab di U-B3 entra nella
 > 1.2 (domanda 16), e Scalable lascia l'esportatore 1.0.0 (domanda 3: si usa solo la 1.0.1). Base `ef666fdee`
@@ -1426,3 +1430,71 @@ Prefisso: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py 
    - aggiunta U-B8, il passo superato della guida BRIM;
    - aggiunta U-B9, i broker mock senza plugin predefinito;
    - checkpoint FROZEN inviato col manifest.
+
+### U-6b — Si annulla la parte di Schwab di U-6 (chiuso il 13/10, checkpoint inviato)
+
+> Il developer, 13/10, relayato dal coordinatore alle 12:02. Le sue parole, testuali:
+> - «no, evitiamo per ora, anche per schwab, ci blocca solo perchè abbiamo fatto tante richieste tutte assieme. comunque
+>   mostrare la valigetta è accettabile.»
+> - «c'è stato un fraintendimento, pensavo fosse che non avevi l'url, ritorna indietro per favore»
+>
+> Base: `9c1750325`, cioè `dev_release2` del treno 94, con U-6 committato. Worktree pulita, porta 6174 libera.
+> **Restano** Scalable senza la 1.0.0, la D4 («Tagesgeld») e `scalable.md`.
+
+1. ✅ (12:05) **Ripristinati da `ef666fdee`** con `git show ef666fdee:<file> > <file>`; per ognuno
+   `git diff ef666fdee -- <file>` è vuoto. Ho prima verificato che nessun altro commit dopo `ef666fdee` li avesse
+   toccati: solo `a6d1754ed`.
+   - `broker_schwab/plugin.py`: `icon_url` torna `https://www.schwab.com/favicon.ico`;
+   - `scripts/compose_broker_icons.py`;
+   - `user/transactions/import/index.{en,it,fr,es}.md` e `schwab.{en,it,fr,es}.md`;
+   - `developer/architecture/patterns/brim_plugin_guide.md`, compresa la sezione «Favicons».
+2. ✅ **Tolti i 4 PNG** (e la cartella `static/schwab/`):
+   - `brim_providers/static/schwab/broker.png`;
+   - `frontend/static/icons/brokers/schwab.png`;
+   - `mkdocs_src/docs/static/icons/brokers/schwab.png`;
+   - `scripts/assets/brokers/schwab.png`.
+3. ✅ **File misti.**
+   - `providers_list.md` è quello di `ef666fdee` più la sola riga 32 della D4: la riga 11 torna al favicon del sito.
+   - `.translate-hashes.json`: le voci `user/transactions/import/index.en.md` e `schwab.en.md` tornano ai valori esatti di
+     `ef666fdee`, cioè l'`md5` e i tre `stamped_at`, perché le pagine EN tornano identiche. Il JSON è riscritto nel suo
+     formato (indent 2, UTF-8), e le altre voci sono identiche a HEAD, comprese quelle di M.
+4. ✅ **Test** (test-author, lo stesso agente di U-6).
+   - Tolti `test_schwab_s_icon_is_its_logo_bundled_with_the_plugins`,
+     `test_schwab_s_logo_is_a_png_shaped_like_the_other_bundled_broker_icons` e `UPLOAD-010B`.
+   - Tolti anche gli elementi rimasti inutili: `_SCHWAB_ICON`, `_SCALABLE_ICONS`, `_image_shape`, `from PIL import
+     Image` e l'import di `SchwabBrokerProvider` in `test_uploads_api.py`.
+   - Restano la guardia `test_every_bundled_icon_is_a_file_inside_the_served_folder` e `UPLOAD-010C`, con docstring
+     che non nominano Schwab. Il numero `010C` resta, quindi c'è un buco a `010B`.
+   - Le righe `schwab` rimaste nei due file sono quelle di prima di U-6, alle stesse righe (confronto con
+     `a6d1754ed^`).
+   - `py_compile`, black e ruff sono puliti.
+5. ✅ **Backlog**:
+   - U-B3 torna aperta dopo la 1.2, con l'ipotesi del developer: il blocco viene dalle nostre raffiche di richieste,
+     galleria ed E2E, e gli utenti non ne sono toccati;
+   - U-B9 resta dopo la 1.2, con «la valigetta in galleria è accettabile».
+6. ✅ (12:10) **Prove**, tutte verdi (log in `/tmp/libreFolio_u6b/`):
+   - `external brim-providers`, `api uploads`;
+   - `compose_broker_icons --check`, che deve confermare Scalable identico byte per byte;
+   - `mkdocs build`, `check-links` e `translate-validate`, con 0 debito su quelle pagine;
+   - `git diff ef666fdee --stat`, che sui file di U deve mostrare solo Scalable, la D4, le guardie e il journal.
+
+   **I risultati**:
+
+   | Prova | Esito |
+   |---|---|
+   | `external brim-providers` | 706 passati, 1 saltato (708 − 2) |
+   | `api uploads` | 25 passati, 1 saltato (26 − 1); `010C` serve 2 icone, quelle di Scalable |
+   | `external brim-scalable` | 151 passati, invariato |
+   | `compose_broker_icons --check` | «8 broker icons up to date», come prima di U-6 |
+   | `mkdocs build` | 0 avvisi, «All 3012 relative asset URL(s) in the built site resolve»; le pagine costruite usano di
+     nuovo `https://www.schwab.com/favicon.ico` |
+   | `check-links` | 95 link validi |
+   | `translate-validate` | 0 errori, 0 avvisi |
+   | `translate --dry-run` su `index.en.md` e `schwab.en.md` | «up-to-date» |
+
+   - Le icone di Scalable sono identiche byte per byte a `ef666fdee`: `git diff ef666fdee` vuoto sulle 4 cartelle.
+   - `git diff ef666fdee --stat` sui 19 file di U mostra solo Scalable, la D4, le guardie, i cataloghi `importWizard`
+     e il journal. In `.translate-hashes.json` le due voci sono uguali a `ef666fdee`, e il resto del diff è di M.
+   - Gli altri file cambiati dopo `ef666fdee` sono di altri flussi (CHANGELOG, devWiki, M, V, T).
+7. ✅ **Checkpoint FROZEN** inviato, col manifest (`files/u6b_manifest.txt`) e un messaggio di commit ASCII
+   (`/tmp/libreFolio_commit_u6b.txt`).
