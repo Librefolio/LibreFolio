@@ -12,7 +12,7 @@
     "portalUrl": "URL Portale",
     "portalUrlPlaceholder": "https://portale-broker.com",
     "iconUrl": "URL Icona Personalizzata",
-    "iconUrlHint": "Se vuoto, verrà usata la favicon del portale",
+    "iconUrlHint": "Se vuoto, si usa l'icona del plugin di import predefinito, poi la favicon del portale. L'icona di un plugin generico, come Generic CSV, viene per ultima.",
     "defaultImportPlugin": "Plugin di Import Predefinito",
     "defaultImportPluginHint": "Preseleziona questo parser durante l'import delle transazioni",
     "selectPlugin": "Seleziona un plugin...",
