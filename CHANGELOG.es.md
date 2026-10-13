@@ -157,9 +157,9 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 #### 📈 Gráficos
 
-- Los ejes de importes de los gráficos Growth y Performance ya no muestran la misma etiqueta dos veces (`5.5k` mostrado como `6k` junto a un `6k` real, `1.25M` como `1.3M`), y un borde del eje colocado automáticamente más allá de los datos ya no se etiqueta como si fuera un paso normal. El P&L total de la información emergente de Growth ahora se muestra como `EUR -12.00`, al igual que los demás importes, en lugar de `−EUR 12.00`.
+- Los ejes de importes de los gráficos Crecimiento y Performance ya no muestran la misma etiqueta dos veces (`5.5k` mostrado como `6k` junto a un `6k` real, `1.25M` como `1.3M`), y un borde del eje colocado automáticamente más allá de los datos ya no se etiqueta como si fuera un paso normal. El P&L total de la información emergente del gráfico Crecimiento ahora se muestra como `EUR -12.00`, al igual que los demás importes, en lugar de `−EUR 12.00`.
 - El gráfico comparativo de lotes ya no deja una franja vacía a la izquierda de sus importes, algo especialmente visible en móviles.
-- En resolución semanal o mensual, la semana o el mes que aún no ha terminado se lee bien en los gráficos de activos y de tipos de cambio: sus eventos ya no desaparecen, sus marcadores se sitúan en su punto como los demás, y su información emergente fecha el valor en su último día con precio, ya no en el domingo ni en el último día del mes que aún está por llegar. Presente desde la v1.0.0.
+- En resolución semanal o mensual, la semana o el mes que aún no ha terminado se lee bien en los gráficos de activos y de tipos de cambio, el gráfico Crecimiento, el histórico de la asignación y el gráfico comparativo de lotes: su información emergente fecha el valor en su último día con datos, ya no en el domingo ni en el último día del mes que aún está por llegar. En los gráficos de activos y de tipos de cambio sus eventos ya no desaparecen y sus marcadores se sitúan en su punto como los demás; en el gráfico Crecimiento su punto se sitúa en ese día, por lo que la línea ya no llega a una fecha que aún está por llegar. Presente desde la v1.0.0.
 
 #### 📉 Análisis de riesgos
 
