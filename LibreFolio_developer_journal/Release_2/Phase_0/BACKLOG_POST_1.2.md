@@ -134,9 +134,12 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   `execCommand` per l'HTTP, che funziona, invece dell'helper comune `utils/clipboard.ts` (`writeTextToClipboard`);
   FileGrid ignora l'esito di `execCommand` e segna «copiato» anche quando non ha copiato. Cura: passare entrambi
   dall'helper, dopo M-20 (lotto 48 di I). Dettagli: la voce M-20 nella sezione M.
-- **C-64 · Devwiki: il secondo giro di lint** — basso; W, 12/10. Il lint del 12/10 (a base `4d0cedec7`) non ha
-  controllato: date e hash in conflitto fra pagine; le feature `planned` o `in-progress` (F-048, F-077–F-108) contro il
-  codice; il contenuto degli 11 piani di `phases/06_betaTestingReportAndFixing`. Da fare insieme alla voce qui sotto.
+- ✅ **C-64 · Devwiki: il secondo giro di lint** — chiusa da W il 13/10 (devWiki soltanto): date e hash in conflitto
+  e feature `planned` contro il codice (C-64a–e, la mappa degli hash riscritti `8ba2db509`); le pagine feature
+  contro il capitolo [1.2.0] verificato, con la pagina nuova F-114 (`fa93b1777`); i piani di
+  `phases/06_betaTestingReportAndFixing`, con 3 pagine corrette perché contraddicevano il codice e 5 nuove
+  (`2b1734e76`). I rilievi minori non verificati sono elencati nella pagina fonte
+  `sources/beta-testing-2026-08-05`. Ne sono nate C-65 e C-66, qui sotto.
 - **C-65 · Evento → transazione: il resto del collegamento (F-090)** — medio-basso; W (C-64), 12/10. Sono già nel
   codice, sotto F-051: la FK `RESTRICT` (`backend/app/db/models.py:830`), la cancellazione degli eventi che risponde
   con un esito per id e rispetta il `RESTRICT` (`api/v1/assets.py`, `delete_events_bulk`), il selettore degli eventi
