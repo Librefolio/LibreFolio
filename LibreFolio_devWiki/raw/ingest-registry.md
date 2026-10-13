@@ -788,3 +788,14 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` | `db90ecb07` | 2026-10-13 | V-27, V-28, V-33 → [[sources/phase00-data-quality-e2e-2026-10]] and the two resolved problems |
 | `LibreFolio_developer_journal/Release_2/Phase_0/51_narrowFitFixes/plan-phase00NarrowFitFixes.prompt.md` | `5717bf2a8` | 2026-10-13 | lot 51 → [[problems/event-markers-lost-in-the-last-partial-period]], [[concepts/echarts-chart-gotchas]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `0c8d47d0d` | 2026-10-13 | V-30…V-34, M-26…M-29, T-CAT, T-GRP, T-EVW → the pages above |
+
+## 2026-10-13 — trains 92–93 and the coordinator's commits (base `9313f81ee`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` | `de567029c` | 2026-10-13 | V-35, V-36 → [[sources/phase00-data-quality-e2e-2026-10]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` | `fafe68863` | 2026-10-13 | the open period's tooltip → [[problems/event-markers-lost-in-the-last-partial-period]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `9313f81ee` | 2026-10-13 | C-60, V-3, V-8, V-22, C-72, T-EVW → [[decisions/python-stays-on-3-13]], [[decisions/orphan-transfer-becomes-an-adjustment]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/research-python-3.15-20261012.md` | `426d9e1b7` | 2026-10-13 | [[decisions/python-stays-on-3-13]] (the baseline) |
+| `.github/agents/release-coordinator.agent.md` | `6e1a2ef3e` | 2026-10-13 | [[problems/git-merge-stash-failed-on-locked-index]] |
+| `CHANGELOG.md` | `4de042cfe` | 2026-10-13 | R-5's line, the risk API → [[sources/release-1.2.0]] |

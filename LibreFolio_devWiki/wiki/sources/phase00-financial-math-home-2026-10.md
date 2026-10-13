@@ -85,6 +85,9 @@ was deleted. Pages: [[features/F-109]] (registered in step B8) and [[decisions/c
   was repaired with `data-operation` (`8684d29fe`, train 90).
 - Left in the backlog: T-CAT (two renderings of the same categories), T-GRP (geography groups that stay raw ids) and
   T-EVW, which is the defect workstream I cured as R-5 — [[problems/event-markers-lost-in-the-last-partial-period]].
+- **The open period's tooltip** (`341c77811`, train 93): the tooltip of an aggregated point names its period up to the
+  point's own day (`bucketSpanUpTo`), no longer the Sunday or the month's end still to come; T-EVW closed with a
+  pointer to R-5 — [[problems/event-markers-lost-in-the-last-partial-period]].
 
 ## Source files
 
