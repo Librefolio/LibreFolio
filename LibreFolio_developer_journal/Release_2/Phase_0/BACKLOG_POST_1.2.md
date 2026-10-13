@@ -1408,13 +1408,16 @@ plugin.
 - **U-B3 · Le icone dentro la cartella del plugin** — basso; U, 12/10, decisione D-7, che le lascia dove sono nella 1.2.
   Servono `static/` nella cartella, la rotta di `uploads.py` e `generate_static_url` nelle 3 basi. Dettagli: piano della
   45, sezione «9».
-  - **La parte di Schwab è fatta in U-6** (13/10, decisione del developer). Il sito rifiuta il favicon ai browser, quindi
-    il logo è nel pacchetto come quello di Scalable:
-    - `scripts/assets/brokers/schwab.png`;
-    - la mappa `SINGLE_PLUGIN` di `scripts/compose_broker_icons.py`;
-    - `brim_providers/static/schwab/broker.png`.
+  - **Schwab resta dopo la 1.2** (U-6b, 13/10). U-6 aveva messo nel pacchetto il logo di Schwab, e il developer l'ha
+    annullato: «ci blocca solo perchè abbiamo fatto tante richieste tutte assieme. comunque mostrare la valigetta è
+    accettabile».
+    - L'ipotesi del developer: il controllo anti-bot di www.schwab.com risponde alle nostre raffiche di richieste, cioè
+      galleria ed E2E, e gli utenti non ne sono toccati.
+    - L'`icon_url` resta `https://www.schwab.com/favicon.ico`.
+    - La strada provata in U-6 è nella storia, nel commit `a6d1754ed`: il logo, la mappa `SINGLE_PLUGIN` di
+      `compose_broker_icons.py` e `generate_static_url`. Si riprende se il blocco tocca gli utenti.
 
-    Resta da fare lo spostamento delle icone nelle cartelle dei plugin. Dettagli: piano della 45, sezione «10», U-6.
+    Dettagli: piano della 45, sezione «10», U-6 e U-6b.
 - **U-B4 · `sample_reports/` per plugin** — basso-medio; U, 12/10, decisione D-7. Ci sono 25 percorsi fra E2E e test
   backend. Dettagli: piano della 45, sezione «9».
 - ✅ **U-B5 · I vecchi percorsi `<famiglia>/<nome>.py` fuori da U** — basso; U, 12/10. Chiusa: le due parti erano già
@@ -1456,8 +1459,9 @@ plugin.
   occhio di U-6.
   - `populate_mock_data.py:300-369` scrive `brim_plugin_key` nei dizionari dei broker, ma `Broker(**broker_data)` lo
     scarta senza dirlo, e il campo viene solo stampato. Il campo vero è `default_import_plugin`.
-  - Così nel DB di test e nella galleria il broker «Charles Schwab» non usa l'icona del plugin, che U-6 ha messo nel
-    pacchetto: resta sul favicon del portale, bloccato, e mostra la valigetta.
+  - Così nel DB di test e nella galleria nessun broker mock usa l'icona del suo plugin: ognuno resta sul favicon del
+    portale. Per «Charles Schwab» questo vuol dire la valigetta, quando il sito blocca le nostre raffiche.
+  - **Dopo la 1.2.** Il developer, 13/10: «mostrare la valigetta è accettabile», anche in galleria.
   - La correzione è di M (galleria) o dei dati di test: rinominare la chiave cambia le icone di tutti i broker mock.
 
-  Dettagli: piano della 45, sezione «10», U-6, passo 8.
+  Dettagli: piano della 45, sezione «10», U-6 (passo 8) e U-6b.
