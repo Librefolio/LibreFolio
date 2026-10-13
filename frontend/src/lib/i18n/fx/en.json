@@ -94,7 +94,6 @@
     "aiExport": "AI Export",
     "syncFailed": "Sync failed: {error}",
     "loadFailed": "Failed to load rates",
-    "assetFallback": "Asset #{id}",
     "invalidRates": "{n, plural, one {# row has an invalid rate} other {# rows have an invalid rate}}: a rate must be strictly greater than zero (0 is not allowed).",
     "savedSummary": "FX rates: {details}",
     "savedCount": "{n} saved",

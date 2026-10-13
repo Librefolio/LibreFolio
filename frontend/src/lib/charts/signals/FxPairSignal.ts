@@ -91,7 +91,7 @@ export class FxPairSignal extends ChartSignal {
     getLabel(): string {
         const slug = String(this.params.pairSlug || '');
         const isInverted = Boolean(this.params._inverted);
-        if (!slug) return 'FX Pair';
+        if (!slug) return ChartSignal.text('chartSettings.signals.fxPair', {});
         const [a, b] = slug.split('-');
         const base = isInverted ? b : a;
         const quote = isInverted ? a : b;

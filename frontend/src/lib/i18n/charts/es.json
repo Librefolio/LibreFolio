@@ -76,7 +76,8 @@
       "fxPairDesc": "Superponer el tipo de cambio de un par FX en este gráfico para comparación",
       "linearLabel": "Lineal {rate}/año",
       "compoundLabel": "Compuesto {rate}/año",
-      "sineLabel": "Sinusoide ±{amplitude} / {period}d"
+      "sineLabel": "Sinusoide ±{amplitude} / {period}d",
+      "assetFallback": "Activo n.º {id}"
     },
     "params": {
       "annualRate": "Tasa Anual",
