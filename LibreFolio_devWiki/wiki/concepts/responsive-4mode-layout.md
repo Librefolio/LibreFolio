@@ -57,13 +57,14 @@ below their own widths (labels first shrink via `labelShrink.ts`); `noExtraLabel
 | brokerDetail | 800 → **840** | 470 → **530** | 370 → **660** |
 | fxList | 930 → **1030** | 440 → **560** | — |
 
-Also: the asset-list filters became `flex-1 min-w-0` in `oneColumn`, and the asset-detail header containers got
-`min-w-0` after red bands at 330→320 and 1060→1030 px.
+Also: the asset-list filters became `flex-1 min-w-0` in `oneColumn` (the Active/Inactive pill left that rule on
+2026-10-13, see *Phones* below), and the asset-detail header containers got `min-w-0` after red bands at 330→320 and
+1060→1030 px.
 
 ## The gate and its measuring rule
 
-`frontend/e2e/layout/toolbar-width-sweep.spec.ts` sweeps every bar in FR/IT/ES from 1700 px down to 320 + g px in
-10 px steps and fails on any overflow of the bar or of the page, named by testid.
+`frontend/e2e/layout/toolbar-width-sweep.spec.ts` sweeps every bar in EN/FR/IT/ES (English since 2026-10-13) from
+1700 px down to 320 + g px in 10 px steps and fails on any overflow of the bar or of the page, named by testid.
 
 - **The gutter.** `app.css` sets `html { scrollbar-gutter: stable }`; on a host with classic scrollbars the gutter
   takes ~15 px even headless. Measure it as `innerWidth − document.documentElement.getBoundingClientRect().width` —
@@ -93,6 +94,21 @@ asset detail's by up to 11.8 px (at 1210 px). Deterministic — red at one worke
   compare the bar's width, and the scrollbar gutter moved the red by 15 px —
   [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]].
 
+## Phones: the lifecycle pill keeps its labels (2026-10-13)
+
+In `oneColumn` the Assets filters share each row, so Search and the Active/Inactive pill took half of it each
+(`3e5313d3e`, 2026-09-30 — new in 1.2). The pill clips its content (`overflow-hidden`) and its labels never wrap: where
+half a row was narrower than the two labels, the pill cut them. Red on the base, measured as how far the Inactive
+button ran past the pill: Spanish at 320–360 px layouts (up to 21.7 px), English at 320–330 (up to 8.4), French at
+320 (3.0), Italian never. The sweep could not see it: it skips the content of clipping containers by design.
+
+- **The cure** (workstream I's plan 51): in `oneColumn` the pill is `flex-1 min-w-max`, so it never goes below its two
+  labels and Search takes the rest; the other filters keep `flex-1 min-w-0`, the wider tiers `w-44 min-w-[160px]`.
+- **Rejected**: `truncate` with a `title` — a tooltip does not exist on a touch screen, and «Inact…» does not read.
+- **The gate**: the same spec pins the pill at 390–320 px layouts in the four languages — both toggles inside the
+  edges the pill clips at, no label wider than its button (`scrollWidth ≤ clientWidth`), the pill inside its row and
+  the bar, Search at least 72 px wide.
+
 ## History — the April 2026 model
 
 The first version (Phase 6, `responsiveLayout` born in Step 2c) used four global modes at fixed widths: `wide`
@@ -107,13 +123,13 @@ values.
 |------|------|
 | Tier logic, thresholds, `__lfLayouts` live tuning | `frontend/src/lib/utils/layout/responsiveLayout.svelte.ts` |
 | Toolbar component | `frontend/src/lib/components/ui/toolbar/PageToolbar.svelte` |
-| Assets list thresholds | `frontend/src/routes/(app)/assets/+page.svelte` |
+| Assets list thresholds, phone pill width | `frontend/src/routes/(app)/assets/+page.svelte` |
 | Asset detail thresholds | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |
 | Dashboard thresholds | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | Broker detail thresholds | `frontend/src/routes/(app)/brokers/[id]/+page.svelte` |
 | FX list thresholds | `frontend/src/routes/(app)/fx/+page.svelte` |
 | Scrollbar gutter | `frontend/src/app.css` |
-| Width sweep gate | `frontend/e2e/layout/toolbar-width-sweep.spec.ts` |
+| Width sweep gate, phone pill test | `frontend/e2e/layout/toolbar-width-sweep.spec.ts` |
 | The Spanish label that expired the calibration (`aiExport`) | `frontend/src/lib/i18n/base/es.json` |
 | Long broker label | `frontend/e2e/portfolio/dashboard-broker-filter-label.spec.ts` |
 | Calibration (step 13 §5) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep13DevNotesFixes.prompt.md` |
