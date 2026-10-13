@@ -36,7 +36,7 @@ Combien d'argent vos investissements ont-ils généré sur la période sélectio
 **Comment la lire**
 
 - **Le vert est un gain, le rouge une perte** — et un dépôt ou un retrait n'est ni l'un ni l'autre.
-- **Les quatre lignes expliquent le grand nombre.** Ce qu'elles ne peuvent pas voir va dans la [vue Performance](positions.md#performance) : l'effet des taux de change sur les liquidités que vous détenez dans une autre devise y apparaît comme **Effet de change sur les liquidités**, une ligne pour chaque courtier dont les taux ont fait bouger les liquidités, et le reste — comme des actifs passant d'un de vos courtiers à un autre le premier ou le dernier jour — comme **Autre / résidu de réconciliation**.
+- **Les quatre lignes expliquent le grand nombre.** Ce qu'elles ne peuvent pas voir va dans la [vue Période](positions.md#performance) : l'effet des taux de change sur les liquidités que vous détenez dans une autre devise y apparaît comme **Effet de change sur les liquidités**, une ligne pour chaque courtier dont les taux ont fait bouger les liquidités, et le reste — comme des actifs passant d'un de vos courtiers à un autre le premier ou le dernier jour — comme **Autre / résidu de réconciliation**.
 - **La barre la plus longue** est la ligne qui a le plus fait bouger votre résultat.
 
 ??? info "📏 La ligne sous le grand nombre — comment elle est calculée"
