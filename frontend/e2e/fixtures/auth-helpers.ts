@@ -44,7 +44,11 @@ export async function login(page: Page, user = TEST_USER) {
 export async function logout(page: Page) {
     // Sidebar is visible on desktop, click logout button directly
     await page.getByTestId('logout-button').click();
-    await expect(page).toHaveURL('/');
+    // The click POSTs /auth/logout and only then routes to `/`, whose page asks GET /auth/me again before it shows the
+    // login: round trips a busy lane delays, which the 3 s expect default bets against. Each is awaited as the state
+    // the app publishes once it is over — the URL, then the login page — with the budgets login() gives a sign-in.
+    await expect(page).toHaveURL('/', {timeout: 20_000});
+    await expect(page.getByTestId('login-page')).toBeVisible({timeout: 20_000});
 }
 
 /**
