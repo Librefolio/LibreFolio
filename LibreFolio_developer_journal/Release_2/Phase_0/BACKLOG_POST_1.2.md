@@ -514,6 +514,11 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
 
   Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «T-EN — analisi» e
   «T-ISO + T-FB».
+
+  **Riparazione dopo il treno 88**: il test del ciclo di vita dell'AssetModal riconosceva la riga dello storico dal
+  `date_range` grezzo nel testo, e ha dato 8 rossi in `component-unit`. Le righe della sonda pubblicano ora
+  `data-operation` (`current_price`, `history`, `probe`). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
+  sezione «T-ISO, la riparazione di `component-unit`».
 - ✅ **T-FB · I ripieghi inglesi dei segnali di confronto** — chiusa nella 1.2 da T, checkpoint T-ISO + T-FB del 13/10,
   per decisione del coordinatore. «Asset #N» ha ora una chiave sola, `chartSettings.signals.assetFallback`. Prima
   era `fxDetail.assetFallback`, che è stata tolta. I segnali la leggono con `ChartSignal.text`, le due pagine con `$t`.
