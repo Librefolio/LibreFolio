@@ -3336,3 +3336,47 @@ Base `273b188ea` (fast-forward). Sources: plan 46 §12.10, the backlog, the code
 part, the calendar-driven seed rates), [[concepts/test-isolation-classes]] (the owned-pair fixture),
 [[problems/login-returns-before-the-app-has-started]] (V-27 now in the backlog; V-26 closed), [[features/F-048]],
 [[sources/phase00-data-quality-e2e-2026-10]]. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Train 83 — the 1.2 CHANGELOG reviewed line by line; M's full gallery
+Base `9686ee1f2`. Sources: the chapter [1.2.0] after `60f734e08`, the summaries of T's and I's review reports (working
+files outside the repository), the backlog (`b2a21bb4a`), M's gallery report of I5 part two (outside the repository),
+V's correction on the jsCoverage teardown; the code checked for the WAC endpoint, the fixture and `data-dist-pct`.
+**Created** [[decisions/changelog-entry-rules]], [[problems/portfolio-wac-endpoint-answered-anyone]] (resolved),
+[[problems/schwab-favicon-blocked-by-orb]] (open). **Updated** [[problems/jscoverage-teardown-spends-the-test-budget]]
+(the teardown counts against the after-hooks slot, not the body; V-28), [[decisions/figures-in-the-interface-language]]
+(`data-dist-pct`). Graph: not updated (P-6).
+
+## [2026-10-13] lint | The feature pages against the verified 1.2.0 CHANGELOG
+Base `34b9593c6`. An explore agent mapped the 46 items of the chapter [1.2.0] — 43 under ✨ Added, sub-items included,
+and three under 🔄 Changed (Risk out of beta, the purchase cost, the figures) — to the feature pages; every match and
+every commit cited was checked. **Updated**: 23 feature pages each gained a row dated 2026-10-13 that names the
+CHANGELOG line by section and beginning, with the commit or the train. No page had a lagging status. **Created**
+[[features/F-114]] (Benchmark assets, `00d8c735b`), with the registry (114 features), the ASSETS domain and the index.
+Left: five items whose commit is not identified (asset types, allocation families, the ‹ › arrows, the FX route
+metadata, the banners that lead to their rows); the Scalable importers have no page of their own (F-013 and a
+decision cover them); the plans of `phases/06_betaTestingReportAndFixing` (C-64's last part). Graph: not updated (P-6).
+
+## [2026-10-13] lint | C-64 closed: the plans of phases/06_betaTestingReportAndFixing against the wiki
+Base `fa93b1777`. Three read-only agents read the ten plans and the F1–F17 classification in full; every gap and every
+commit was re-checked on the code and on git history (one claimed contradiction, the drawdown default, was false:
+`DrawdownParams.full_history` is `True`). **Corrected**, pages that contradicted the code: [[features/F-083]]
+(parsing is concurrent since `d1e04b2b8`), [[concepts/txstore-pattern]] (a clone keeps its date, `59087c74a`),
+[[entities/portfolio-engine]] (the blob cache key has no dates and carries the access fingerprint; a hit needs the
+exact end). **Created** [[decisions/asset-identity-quoted-code-leads]] (D1–D11), [[decisions/import-row-split-legs-sum-to-the-row]]
+(B5-lite), [[problems/fx-error-dedup-went-quadratic-under-full-history]], [[problems/asset-merge-cascade-deleted-the-migrated-events]],
+[[problems/portfolio-cache-ignored-role-and-share]]. **Updated** [[features/F-024]] (merge, inactive assets),
+[[features/F-049]], [[features/F-062]] (F13, the 2 GB image), [[concepts/transaction-hygiene-fixture]] (D-3.3),
+[[concepts/derived-test-inventory]] (detour 15), [[decisions/drawdown-full-history-warmup]] and
+[[sources/beta-testing-2026-08-05]] (the check, and the smaller findings listed but not paged). Found on the way: the
+[1.1.0] CHANGELOG line «Wizard rework» puts corrections before unification, while `v1.1.0` already had `assets`
+before `fix`. With this part, C-64 is complete. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | The release page of 1.2.0, in draft
+Base `2b1734e76`. **Created** [[sources/release-1.2.0]], status draft, «tag date: pending». From the verified chapter
+[1.2.0] of `CHANGELOG.md` (`60f734e08`: 25 ✨ with 27 sub-items, 149 🐛 in 13 groups, 32 🔄, 7 ⚠️), the feature pages
+that carry a 1.2.0 row (24, grouped by area), the 60 decision pages dated 2026-09-07 → 2026-10-13 (grouped by theme),
+the problem pages still open, workaround or recurring (14) with their backlog ids, and the checks already on record:
+R's full run ([[sources/r-full-run-coverage-2026-10-12]]) and M's full gallery of 2026-10-13 (242 passed, 9 failed,
+1 skipped). Left to fill at the tag: the tag date, R's final run, the gates and the gallery at the tagged commit, the
+first nightly after the push (M-25) and the final CHANGELOG counts. Inbound links from
+[[decisions/changelog-entry-rules]] and the R source page. Graph: not updated (P-6).

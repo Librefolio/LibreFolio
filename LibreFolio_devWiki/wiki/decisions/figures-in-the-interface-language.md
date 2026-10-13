@@ -64,6 +64,8 @@ rischio sulla 1.2».
   region, collation, dead code — and two found with T-EN: T-ISO (observation dates still ISO in the price chart's
   tooltips and in the probe) and T-FB (the English fallbacks of the comparison signals).
 - The developer guide explains the rule: `developer/frontend/i18n.md`, «Numbers, amounts and dates» (`133259913`).
+- A test hook that read the displayed figure follows the language too: `data-dist-pct` in
+  `ProviderComparisonModal.svelte` — found by M's full gallery run (2026-10-13), to be cured by T.
 - A test that pins a figure as `toFixed` writes it breaks under the rule: the gallery's price guard went red in English
   on prices over 1,000, and since M's batch 28 (`e8d5a5668`, train 70) it expects the figure as the shot's locale
   writes it — [[problems/gallery-price-guard-expected-tofixed-text]].

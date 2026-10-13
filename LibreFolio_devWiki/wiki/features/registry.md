@@ -2,7 +2,7 @@
 
 > Authoritative list of all LibreFolio features with permanent codes.
 > Codes are assigned at first mention and **never change** even if the feature is renamed/split/superseded.
-> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git); 2026-10-12 (step B5: F-105 guided onboarding; step B6a: F-106 Tool platform; step B6b: F-107 PAC allocator, F-108 Rebalancer planned; step C: F-078 implemented); 2026-10-12 (step B8: F-109 in-app changelog, localized by chapter); 2026-10-12 (folder 02, step R0: F-110–F-113 Risk); 2026-10-12 (C-64, status check: F-048 documented; the planned and idea rows checked against the code, unchanged)
+> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git); 2026-10-12 (step B5: F-105 guided onboarding; step B6a: F-106 Tool platform; step B6b: F-107 PAC allocator, F-108 Rebalancer planned; step C: F-078 implemented); 2026-10-12 (step B8: F-109 in-app changelog, localized by chapter); 2026-10-12 (folder 02, step R0: F-110–F-113 Risk); 2026-10-12 (C-64, status check: F-048 documented; the planned and idea rows checked against the code, unchanged); 2026-10-13 (the pages checked against the 1.2.0 CHANGELOG: F-114 Benchmark assets added)
 >
 > **Macro-level navigation**: for product-level domain narratives (what each domain does, how features cluster, data-flow diagrams), see [`wiki/domains/`](../domains/) — 11 domain pages covering all features.
 
@@ -93,6 +93,7 @@
 | [[F-034]] | Scheduled Investment Provider (synthetic yield) | backend | `implemented` | `user/assets/providers/` |
 | [[F-035]] | CSS Scraper Provider (arbitrary web scraping) | backend | `implemented` | `user/assets/providers/` |
 | [[F-036]] | Provider Comparison Modal (diff provider vs DB) | frontend | `implemented` | — |
+| [[F-114]] | Benchmark assets — a switch that offers an asset as a comparison benchmark | fullstack | `implemented` | — |
 
 ---
 
@@ -233,7 +234,7 @@
 | LAYOUT & SETTINGS | 9 | 9 | 0 | 0 | 0 | 0 |
 | BROKERS | 7 | 7 | 0 | 0 | 0 | 0 |
 | FX | 9 | 9 | 0 | 0 | 0 | 0 |
-| ASSETS | 13 | 13 | 0 | 0 | 0 | 0 |
+| ASSETS | 14 | 14 | 0 | 0 | 0 | 0 |
 | SIGNALS | 9 | 9 | 0 | 0 | 0 | 0 |
 | TRANSACTIONS | 6 | 6 | 0 | 0 | 0 | 0 |
 | SCHEDULER | 2 | 2 | 0 | 0 | 0 | 0 |
@@ -241,7 +242,7 @@
 | CALCULATIONS | 5 | 5 | 0 | 0 | 0 | 0 |
 | INFRASTRUCTURE | 17 | 17 | 0 | 0 | 0 | 0 |
 | PLANNED/IDEA (first registered) | 26 | 12 | 0 | 10 | 3 | 1 |
-| **TOTAL** | **113** | **99** | **0** | **10** | **3** | **1** |
+| **TOTAL** | **114** | **100** | **0** | **10** | **3** | **1** |
 
 ## Key source files
 

@@ -14,7 +14,7 @@
 | [[domains/layout-settings]] | LAYOUT & SETTINGS | F-004–F-008, F-101, F-104, F-105, F-109 | stable |
 | [[domains/brokers]] | BROKERS | F-009–F-014, F-103 | stable |
 | [[domains/fx]] | FX (Foreign Exchange) | F-015–F-023 | stable |
-| [[domains/assets]] | ASSETS | F-024–F-036 | stable |
+| [[domains/assets]] | ASSETS | F-024–F-036, F-114 | stable |
 | [[domains/signals]] | TECHNICAL ANALYSIS (Signals) | F-037–F-045 | stable |
 | [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | implemented (F-048 recognised as shipped, C-64, 2026-10-12) |
 | [[domains/scheduler]] | SCHEDULER | F-052–F-053 | implemented (registry corrected 2026-10-09) |
@@ -28,7 +28,7 @@
 
 | Page | Description |
 |------|-------------|
-| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (113 features across 12 domains, 2026-10-12) |
+| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (114 features across 12 domains, 2026-10-13) |
 
 ## Individual Feature Pages
 
@@ -47,6 +47,7 @@
 | [[features/F-111]] | Risk tab of the Dashboard and broker pages — four progressive levels; only the simulation rung stays beta | Dashboard | documented |
 | [[features/F-112]] | Risk Lab of Asset Global — correlation, losses, risk–return against a benchmark, replay | Dashboard | documented |
 | [[features/F-113]] | Risk tab of Asset Detail — the legacy panel, still beta, to be rebuilt after 1.2 | Dashboard | implemented |
+| [[features/F-114]] | Benchmark assets — a switch that offers an asset as a comparison benchmark (`00d8c735b`) | Assets | implemented |
 | [[features/F-109]] | In-app changelog — the bundled CHANGELOG in a modal; each release in the UI language when translated, English with a label otherwise | Layout & Settings | documented |
 | [[features/F-107]] | PAC allocator — a purchase planner in broker increments: SCIP searches, an exact Decimal replay certifies, a fixed-reference L2 first | Calculations | documented |
 | [[features/F-108]] | Portfolio Rebalancer — the PAC engine with existing positions, sales and a tax reserve; designed, contract without a service | Planned | planned |
@@ -90,6 +91,9 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/asset-identity-quoted-code-leads]] | **Beta P3, D1–D11.** One asset per security: the quoted ISIN in `identifier_isin`, every other code (a bond's CUM placement ISIN) in `identifier_other`; the user elects the primary only against saved assets; unify before repairing; inactive assets selectable, never reactivated; token-aware similarity; merge of database duplicates (`0e07359b4`, `d1e04b2b8`, 1.1.0) | 2026-08-08 | assets, identifiers, import, merge |
+| [[decisions/import-row-split-legs-sum-to-the-row]] | **Beta B5-lite (developer, 08/08).** No generic leg editor: the user names the charges of a bundled row and the trade leg is the remainder, so the legs add up to the row by construction; accrued interest books as a `FEE`; fixed-point arithmetic (`d1e04b2b8`) | 2026-08-08 | import, brim, bonds, fees |
+| [[decisions/changelog-entry-rules]] | **T and I, the 1.2 review.** A 🐛 fixes a defect of the last release, a ✨ is new since it, «Present since» names the birth release, UI names from the English catalogue, an upgrade break also in ⚠️; 227 lines checked, rewritten in `60f734e08` | 2026-10-13 | changelog, release |
 | [[decisions/clipboard-through-one-helper-with-a-gate]] | **I, M-20 and C-63 (train 72).** Every copy goes through `writeTextToClipboard()`, with a fallback that works on plain HTTP; a gate forbids other transports, AI Export's typed writer excepted (`65d20910e`) | 2026-10-12 | frontend, clipboard, gate |
 | [[decisions/security-details-close-after-30-seconds]] | **I, plan 48 (train 72).** The connection-security details close after 30 s; the pointer on the indicator or the focus inside the details holds the count — the coordinator's choice (b) (`5e9eff52d`) | 2026-10-12 | frontend, connection-security, ux |
 | [[decisions/web-link-finder-ddgs]] | **Folder 04.** The web link finder uses `ddgs` instead of a DuckDuckGo HTML scraper whose 202 «anomaly» pages were cached as empty results; SearXNG dropped (`ae417b9ab`) | 2026-07-28 | backend, search, ddgs |
@@ -298,6 +302,11 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/portfolio-cache-ignored-role-and-share]] | **Beta F2.** Both portfolio caches (24 h, 30 min) were keyed without role and share, so a changed ownership % showed old figures; the first share fix zeroed editors and viewers; access fingerprint in both keys (`3e3f9c41f`, `f32e460ca`) | resolved | portfolio, cache, sharing |
+| [[problems/fx-error-dedup-went-quadratic-under-full-history]] | **Beta E1 follow-up.** `get_prices_bulk` deduplicated FX errors with a list lookup per failed point; a full-history load spun the worker for minutes and tripped the 30 s timeout; set dedup and a cap of 10 (`59087c74a`) | resolved | prices, fx, performance |
+| [[problems/asset-merge-cascade-deleted-the-migrated-events]] | **Beta P3, the merge.** Deleting the source's provider assignment cascaded onto the events just moved; a RESTRICT key forbade dropping duplicate events before their transactions moved; tests AM-009 and AM-006 (`0e07359b4`) | resolved | database, foreign-keys, merge |
+| [[problems/schwab-favicon-blocked-by-orb]] | **M, gallery (2026-10-13).** www.schwab.com answers headless Chromium with a bot check; the favicon is blocked (`ERR_BLOCKED_BY_ORB`), 4 gallery reds; cure U-B3 (a bundled icon), question 16 | open | broker-icon, third-party, gallery |
+| [[problems/portfolio-wac-endpoint-answered-anyone]] | **Security, found by the 1.2 CHANGELOG review.** `POST /portfolio/wac` answered without a session for any broker; closed in `0088748a8` (2026-09-18) without a line; now in 🔒 | resolved | security, api |
 | [[problems/hidden-pair-half-survived-row-removal]] | **V-29, train 82.** Removing a new pair from the bulk editor left its hidden partner: a false «Discard changes?» since 1.1.0; both halves removed (`e6019f349`) | resolved | frontend, bulk-editor, pairs |
 | [[problems/jscoverage-teardown-spends-the-test-budget]] | **R, full run.** 15 reds: the JS coverage collected at teardown spends the test's 30 s under load; the fixture has no budget of its own. V's next lot | open | e2e, coverage, timeout |
 | [[problems/login-returns-before-the-app-has-started]] | **R, full run; V-27.** 9 reds: `login()` returns before the app has started, and the next 3–5 s wait runs out under load. V's next lot | open | e2e, auth, waits |
@@ -491,6 +500,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/release-1.2.0]] | `CHANGELOG.md` `## [1.2.0]` — **draft, tag date pending**: the features of 1.2.0 linked to their pages, the 60 decisions of the cycle by theme, the open problems and the backlog it leaves, the checks (R's run, the gallery, the gates); the final numbers are filled at the tag | 2026-10-13 | release, release-1.2, changelog |
 | [[sources/r-full-run-coverage-2026-10-12]] | `Release_2/Phase_0/38_postReleaseBacklog/report-R-full-run-coverage-20261012.md` — R's full run with coverage on train 68: 29 reds (27 load, 2 V-19), backend 91.51 %, JS 71.24 % | 2026-10-13 | testing, coverage, triage |
 | [[sources/phase00-ui-polish-2026-10]] | `Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` — workstream I's UI polish before the tag: the broker icon, the import mismatch modal, the security details, the copy buttons, the Spanish toolbar | 2026-10-12 | phase0, workstream-i, ui |
 | [[sources/release2-ai-ideas-2026-07]] | `Release_2/Ai_ideas/` — the July brainstorm: signals and risk in the backend first, an AI assistant through MCP later (deferred: `TODO_FUTURI.md`, QuarkAI) | 2026-10-12 | release2, ai, mcp, roadmap |
@@ -541,7 +551,7 @@
 | [[sources/coverage-fase012-and-branch-lanes]] | Phases 0-1-2 plus the sync and pure-logic lanes; the night run, the five metrics, `sortFn` never read | 2026-08-31 | testing, coverage, frontend, sync |
 | [[sources/settings-lane-and-sixteen-defects]] | The sixteen tracked defects and the user's answers — the densest source of product decisions in the campaign | 2026-08-31 | settings, brokers, scheduler, fx, product-decisions |
 | [[sources/coda-beta-parametric-forkserver]] | The beta coda: four discarded questions, forkserver orphans, the BRIM race, and how a slow endpoint is ruled out | 2026-08-31 | testing, parallelism, backend, method |
-| [[sources/beta-testing-2026-08-05]] | First external beta: 34 findings adjudicated 30/2/2/3; `COMPRAVENDITA TITOLI` unhandled cost a ~50k hole | 2026-08-31 | beta-testing, brim, credit-agricole, reconciliation |
+| [[sources/beta-testing-2026-08-05]] | First external beta: 34 findings adjudicated 30/2/2/3; `COMPRAVENDITA TITOLI` unhandled cost a ~50k hole; its ten plans checked against the wiki on 2026-10-13 (C-64) | 2026-08-31 | beta-testing, brim, credit-agricole, reconciliation |
 | [[sources/mkdocs-audit-2026-08-05]] | Read-only 182-page published EN MkDocs audit; 64 evidence-backed discrepancies, developer guide explicitly deferred | 2026-08-05 | audit, mkdocs, documentation, backend, frontend, ai-export, fx, admin |
 | [[sources/phase00-risk-analysis-backend]] | Completed and audited `Release_2/Phase_0/02_riskfolioIntegration/` backend G0-G5 chain; G6 reconciled but not executed | 2026-07-28 | phase0, backend, risk, quantlib, riskfolio |
 | [[sources/phase00-ai-export-backend-snapshot]] | Completed AI Export chain through first public V1, single runtime, separated semantic probes, 114/114 closure evidence, and zero orphan tests | 2026-08-05 | phase0, ai-export, snapshot, composition, runtime, testing, mcp |
@@ -630,6 +640,10 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-13 | **The release page of 1.2.0, in draft.** What the release brings, the decisions of its cycle, what it leaves open and how it was checked; tag date and final numbers pending | [[sources/release-1.2.0]] *(1 page — 1 source)* |
+| 2026-10-13 | **C-64 closed — the plans of `phases/06_betaTestingReportAndFixing` against the wiki.** Ten plans and the F1–F17 classification read in full; three pages that contradicted the code corrected; eight gaps covered, smaller findings listed on the source page | [[decisions/asset-identity-quoted-code-leads]] *(5 pages — 2 decisions, 3 problems; see log)* |
+| 2026-10-13 | **The feature pages against the verified 1.2.0 CHANGELOG.** 46 items mapped; 23 pages say what 1.2.0 brought, with the CHANGELOG line and the commit or train; no status lagged; Benchmark assets got their page | [[features/F-114]] *(1 page — 1 feature)* |
+| 2026-10-13 | **Train 83 — the 1.2 CHANGELOG reviewed; M's full gallery.** The rules of a changelog line; a security fix that shipped without one; Schwab's favicon blocked; the jsCoverage page corrected | [[decisions/changelog-entry-rules]] *(3 pages — 1 decision, 2 problems; see log)* |
 | 2026-10-13 | **Train 82 — V's §12.10.** V-29 (a product defect since 1.1.0) fixed; V-25 cured with an owned-pair fixture; V-21 in part; V-26; V-27 open | [[problems/hidden-pair-half-survived-row-removal]] *(1 page — 1 problem)* |
 | 2026-10-13 | **Train 81 and R's full run.** I's lot 50 (C-58); R's report: coverage, the triage of 29 reds, two open budgets, C-67 to C-69 | [[sources/r-full-run-coverage-2026-10-12]] *(4 pages — 1 source, 3 problems; see log)* |
 | 2026-10-13 | **Train 80 — U-5 and plan 45 closed; M's batch 34.** Plan 45's four findings; the dirty version of the release shots fixed in the code | [[problems/shared-server-rebuilt-the-frontend-past-its-startup-timeout]] *(2 pages — 2 problems; see log)* |
