@@ -1561,3 +1561,29 @@ source and adds keys in `charts/` and `common`.
 >   - **Elsewhere:** the PAC distribution cell's new text, 240 px, fits its 260 px column. The other long values are
 >     tooltips, toasts, list items and help text, which wrap.
 >   - **No short form («Tipos») was needed.**
+
+### 29. ✅ Batch 38: the changelog line of `e24831a8a`, by hand, then stamped — on `4ec44c002` (train 89: M-28 in the target), 2026-10-13
+
+M-28 is in the target as `89440c353` and `e22f0943a` (tree `861a3fdc0085`, as the manifest). The coordinator committed
+it on its own base, then fast-forwarded the worktree: a fast-forward before the commit would have moved the base the
+commit is checked against.
+
+**29.1 ✅ `:218` «More of the interface follows your language»** (`release-pipeline/scripts/b38_changelog_line.py`)
+> **Note implementazione**: the English list now also names three things that were always in English:
+> - the name of a comparison line whose asset was deleted;
+> - the loading errors of an asset's page;
+> - *Other* in the bucket rules of its stress test.
+>
+> **Ported with the app's and the docs' words:**
+> - *Other* is the stress rules' bucket since T-ISO (`d017492d8`, `risk.stress.rules.*`): *Altro* / *Autre* / *Otro*;
+> - the bucket is «bucket» / «catégorie» / «grupo», as `user/dashboard/risk.*.md:112` writes it;
+> - the comparison line follows the signals' *Confronto dati / Comparaison de données / Comparación de datos*.
+>
+> **Gates** (`release-pipeline/scripts/b38_gates.sh`, 06:15–06:16, load 118–126):
+> - `translate-stamp --file CHANGELOG.md` stamped the one piece that changed, in the three languages
+>   (`fixed/sign-in-language-app-icons-and-small-screens`); the cache changed only there.
+> - Dry-run empty; `translate-validate --hide-localized` 630 files 0/0; the CHANGELOG alone 3 files OK, 0/0;
+>   `translate-diff` 642 of 642 clean.
+> - Strict build 0; `check-links` 95.
+> - Review scripts: only the intended differences (the `:263` examples, the four quotes of old text).
+> - `git diff --check` clean; ports 6158, 6168 and 6042 free.
