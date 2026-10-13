@@ -1066,7 +1066,7 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     Verdi `front-utility auth` 29/29 e `front-ai-export all` (18 E2E e 426 Vitest), a 1 e a 4 worker, col DB pulito.
     Dettagli: piano della 46, §12.10.
 
-- **V-27 · `login()` ritorna appena sparisce il form, prima dell'arrivo** — basso; V (triage di V-26), 13/10.
+- ✅ **V-27 · `login()` ritorna appena sparisce il form, prima dell'arrivo** — basso; V (triage di V-26), 13/10.
   - `auth-helpers.ts` `login()` ritorna quando il form sparisce, mentre `/` carica ancora il bootstrap: impostazioni
     utente, onboarding, impostazioni globali. Solo dopo porta a `/dashboard`.
   - Ogni chiamante che ha bisogno dell'arrivo deve compensare da sé: `signIn()` di `app-start-auth`,
@@ -1074,8 +1074,45 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   - Non compensa ancora `switchUser` di `ai-export-memory`, che fa `login()` e subito `setLanguage` per `TEST_USER_2`
     e `TEST_ADMIN`.
   - Cura strutturale: `login()` finisce all'arrivo, cioè URL fuori da `/` e `app-shell` (o `welcome-shell`) visibile.
-    I chiamanti sono più di 100, quindi serve una validazione dell'intera suite. Dopo la 1.2, decisione del coordinatore
-    del 13/10. Dettagli: piano della 46, §12.10.
+    I chiamanti sono più di 100, quindi serve una validazione dell'intera suite. Dettagli: piano della 46, §12.10.
+  - **Portata nella 1.2** dal coordinatore il 13/10: nella run completa di R è la causa di 9 rossi (auth ×5, AI Export
+    ×4). Quei 9 erano su `a5653f9ef`, prima di V-20 e V-26, che li curano già sul posto. La cura strutturale resta per
+    tutti i chiamanti, che sono 257 chiamate in 102 file.
+  - `login()` deve chiudere anche su `onboarding-bootstrap-blocked`, che un test di `auth.spec` provoca apposta.
+    Dettagli: piano della 46, §12.11.
+
+  ✅ **Chiusa il 13/10**, nel lotto «rossi da carico» di V, via test-author.
+  - `login()` (`frontend/e2e/fixtures/auth-helpers.ts`) ritorna solo quando è visibile uno dei tre stati d'arrivo:
+    `app-shell`, `welcome-shell` o `onboarding-bootstrap-blocked`. Ha 30 s, e se l'arrivo non viene il messaggio nomina
+    la schermata a vista e il suo path.
+  - Lo scan delle 273 chiamate non ha trovato test che trattengano il bootstrap attorno a `login()`.
+  - I commenti diventati falsi sono aggiornati, e le attese sul posto restano.
+  - I budget dei test sono alzati dove l'header dichiara «a red must end on its own assertion»: `auth.spec` 120 s,
+    `app-start-auth` 150 s, `ai-export-contract` 240 s.
+  - Verde: 6 giri a 1 worker (102/102), poi le 8 categorie front a 4 worker.
+- ✅ **V-28 · Il teardown di `jsCoverage` consuma i 30 s del test** — medio, perché blocca il gate di rilascio con coverage;
+  run completa di R, 12/10, assegnata a V dal coordinatore il 13/10.
+  - Il fixture (`frontend/e2e/fixtures/playwright.ts`, `jsCoverage`) è `{scope: 'test', auto: true}` senza un
+    `timeout` suo. Raccoglie `window.__coverage__` e scrive circa 17 MB di JSON per test dentro il budget del test,
+    che è di 30 s.
+  - Sotto carico (load 45–112) questo è costato 15 rossi, «Tearing down "jsCoverage" exceeded the test timeout», con
+    durate di 40–49 s. Da soli sono tutti verdi, in 11–19 s.
+  - Esiste solo con `--coverage js`.
+  - Cura: un `timeout` dedicato al fixture. In Playwright 1.61 setup e teardown hanno allora uno slot loro.
+  - Fonti: rapporto di R, §3.2; devWiki `problems/jscoverage-teardown-spends-the-test-budget`. Dettagli: piano della
+    46, §12.11.
+
+  ✅ **Chiusa il 13/10**, nel lotto «rossi da carico» di V, via test-author.
+  - La cura: `JS_COVERAGE_TIMEOUT_MS = 120_000` sul fixture. Precisazione, verificata nel sorgente di Playwright: senza
+    `timeout` il teardown pesava sullo slot degli after-hooks, 30 s condivisi.
+  - La prova del meccanismo: un ritardo temporaneo di 35 s nel teardown. Senza la cura è rosso, «Tearing down
+    "jsCoverage" exceeded the test timeout»; con la cura è verde. Il ritardo è stato tolto.
+  - La prova con coverage: `--coverage js --workers 4 front-fx all` ha 103 E2E verdi, nessun teardown in timeout, test
+    più lungo 9,6 s, 97 file raw da circa 18 MB.
+  - Doc allineate: la skill `testing-frontend`, `frontend-testing.instructions.md`, e in MkDocs
+    `test-walkthrough/coverage-model.md` e `index.md`. Descrivono la pipeline istanbul vera; V8 e monocart non ci
+    sono più.
+  - La pagina devWiki la riallinea W, su indicazione del coordinatore.
 - ✅ **V-29 · Togliere una coppia nuova dal bulk editor lasciava la metà nascosta: «Discard changes?» su un workspace
   vuoto** — basso, UX; evidenza E0 di V-21a, 13/10.
   - Il caso: si aggiunge una coppia nuova (TRANSFER o FX_CONVERSION dal form), poi la si toglie con «Mark for
@@ -1092,6 +1129,76 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     - Dopo la cura: `transactions-modals` 20/20 a 1 e a 4 worker, e i vicini `tx-paired-edit` e `tx-split-promote`
       verdi a 1 e a 4 worker.
   - Se merita una riga 🐛 nel CHANGELOG lo decide il coordinatore. Dettagli: piano della 46, §12.10.
+- **V-30 · Il fixture `jsCoverage` fonde le pagine di un test con `Object.assign`: può sottocontare** — basso, misura;
+  visto dal docs-writer di V (lotto V-28), 13/10, letto nel codice e non misurato.
+  - Il teardown (`frontend/e2e/fixtures/playwright.ts`, `jsCoverage`) scrive
+    `JSON.stringify(Object.assign({}, ...entries))`: un oggetto per test, con le coverage delle sue pagine fuse per
+    chiave di file.
+  - Se due pagine dello stesso test caricano lo stesso file, i contatori dell'ultima sostituiscono quelli della prima,
+    invece di sommarsi. Il report sottostima allora le righe raggiunte solo dalla prima pagina.
+  - Cura possibile: un file per pagina, perché `js-coverage-report.js` fonde già per file con `istanbul-lib-coverage`;
+    oppure la fusione con `createCoverageMap().merge()` nel fixture.
+  - Fuori dal mandato di V-28, che riguarda solo il budget del teardown: dopo la 1.2. Dettagli: piano della 46, §12.11.
+- **V-31 · `fx-sync-mock` lascia i tassi MOCKFX che il suo sync scrive** — basso; gate `front-fx all` a 4 worker di V,
+  13/10. Dopo la 1.2, decisione del coordinatore.
+  - `frontend/e2e/fx/fx-sync-mock.spec.ts` sincronizza le coppie MOCKFX del seed. Le route sono del seed, ma i tassi
+    li scrive il test: dopo la categoria restano 372 righe (EUR/ILS, MYR, PHP e TWD, 93 ciascuna).
+  - Il suo header diceva «this file writes nothing». In questo lotto si corregge solo l'header.
+  - Oggi è tollerato: nessuno spec legge i tassi di quelle coppie, e il populate seguente li riscrive.
+  - Cura possibile: togliere i tassi scritti, per coppia e finestra di date, in `afterAll`; oppure route proprie. Il
+    motivo dell'header per non usarle, la rete di ripopolamento che le cancellava a metà giro, non regge più: la rete
+    è spenta sopra 1 worker, e dopo V-25 nessuno spec distrugge più righe del seed.
+  - Nello stesso gate, `fx-destructive` cancellava EUR/PLN ed EUR/SEK del seed: è curato in questo lotto. Dettagli:
+    piano della 46, §12.11.
+- **V-32 · Gli spec degli asset: scelte per posizione, pulizie che non verificano l'esito, un rischio latente** —
+  basso; `v32-asset` di V, 13/10. Dopo la 1.2, per il confine del lotto deciso dal coordinatore.
+  - In questo lotto sono curati i 4 asset mai cancellati (`asset-classification` ×3, `asset-modal` Test 4) e il
+    `.first()` del Test 5 di `asset-modal`.
+  - **Restano, per posizione**:
+    - il Test 9 di `asset-modal` (`:247`), lo stesso difetto del Test 5: gli helper per curarlo sono già nel file;
+    - `navigateToAssetByName` (`frontend/e2e/assets/assets-helpers.ts:52/57`) ripiega sulla prima card o riga dopo
+      una ricerca sondata. La usa anche la galleria;
+    - `asset-detail:292` sceglie la prima opzione di confronto;
+    - lo Scenario 3 di `asset-event-delete` (`:291/:295`) prende la prima card, e il resto dipende da sonde.
+  - **Restano, pulizie che non verificano l'esito**: `asset-modal` Bug K (`await createResponse` fuori dal `try`),
+    Param, Benchmark e Type Tree; `asset-list` `:604`, `:846` e `:1007`; `dropFixture` di `asset-merge` (`:100`,
+    anche lui con id per posizione); le pulizie degli eventi di `asset-event-delete` e `asset-data-editor`.
+  - **Il rischio latente**: lo Scenario 2 di `asset-event-delete` (~`:220-270`) segna da cancellare ogni evento di Apple
+    nella finestra di 3 mesi e salva. Oggi non cancella niente solo perché gli eventi del seed in quella finestra sono
+    collegati a transazioni. Un evento scollegato, di un vicino a 4 worker o di un seed futuro, verrebbe cancellato
+    davvero.
+  - Nel Test 3 di `asset-classification`, la cancellazione della voce dipende da una sonda su `row-actions-*`.
+    Dettagli: piano della 46, §12.11.
+- ✅ **V-33 · Budget stretti dopo una navigazione: il dettaglio FX e la tabella delle transazioni** — basso; run
+  completa di R, §3.4–3.5, 12/10; esteso dal coordinatore il 13/10.
+  - **I rossi di R**:
+    - `fx/fx-add-pair.spec.ts:219` aspettava `fx-detail-page` coi 3 s di default dopo il click sulla card;
+    - CAC-001, `tx-import-ca-contract.spec.ts:131`, aspettava `tx-table` con 10 s, e la tabella è arrivata appena dopo.
+  - Il verdetto di test-triage: assunzione d'orologio.
+  - **Chiusa il 13/10**, via test-author.
+    - `fx-add-pair`: 15 s di navigazione, e `data-chart-pair` prima della visibilità.
+    - **Le attese di `tx-table`** dopo una navigazione: 38 siti in 36 spec delle transazioni, a 10 s o a 8 s. Ora
+      aspettano prima `waitForSettled(transactions-page, 20 s)`, poi `tx-table` a 20 s.
+    - **I budget di test** che non contenevano il gate: `transactions-table`, `tx-wac`, `tx-wac-mode`,
+      `tx-broker-access`, `tx-tooltips`, `tx-paired-edit`, `tx-clone`, `tx-delete` e `tx-picker-pagination` passano a
+      45 s; `tx-wac-fx` a 60 s. Il blame non dava nessuna ragione contraria.
+    - Le 13 attese della galleria le gira il coordinatore a M.
+  - Verde: `front-transaction all` a 4 worker, 365 E2E, al seed, e `front-fx all` a 4 worker.
+  - Sotto osservazione nella run finale: il gruppo a 30 s, che lascia circa 10 s a login e test. Dettagli: piano della
+    46, §12.11.
+- **V-34 · La pulizia di `trackTransactionWrites` controlla solo lo stato HTTP** — basso; segnalato da M tramite il
+  coordinatore, 13/10. Dopo la 1.2.
+  - `cleanup()` in `frontend/e2e/fixtures/db-cleanup.ts` (~`:130-141`) cancella le righe create dalla pagina con un
+    `POST /transactions/commit` e verifica solo `res.ok()`.
+  - Non legge `committed` né gli esiti per id. Una delete rifiutata dentro una risposta 200 passerebbe quindi in
+    silenzio, e la pulizia fallita non si vedrebbe: un esito negativo per id, per esempio un `RESTRICT`, o un commit
+    respinto dalla validazione (saldo, accesso).
+  - Lo usano 6 spec: `transactions-modals`, `tx-bulk-promote-exec`, `tx-clone`, `tx-commit-all-types`,
+    `tx-wac-formmodal`, `tx-wac-unit-toggle`.
+  - **Nel lotto V-27/V-28/V-33 non ha nascosto niente**: dopo ogni giro di quegli spec, e dopo `front-transaction all` a
+    4 worker, il DB era al seed (76 transazioni, id massimo 76).
+  - Cura possibile: richiedere `committed === true` e il successo di ogni esito di delete, nominando gli id rimasti,
+    come fanno già le pulizie di V-25 e degli asset.
 
 ## 09 · Feedback e backlog strutturale
 
