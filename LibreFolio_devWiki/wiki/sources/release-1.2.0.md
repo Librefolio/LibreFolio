@@ -60,7 +60,9 @@ with the commit or the train.
   the 1.1.0 image ([[problems/devpy-unusable-in-docker-image]]); the 1.1 images with a debug frontend
   ([[problems/release-images-shipped-debug-frontend]]); event markers lost in the last, open period at weekly or monthly
   resolution, since v1.0.0 (R-5, [[problems/event-markers-lost-in-the-last-partial-period]]; its 🐛 line, with the open
-  period's tooltip, is in the chapter since `fcc4ac96f` and `ef666fdee`).
+  period's tooltip and every chart's running period, is in the chapter since `fcc4ac96f`, `ef666fdee` and `10e646f79`);
+  the transaction form that saved a refused date and said *valid* next to a red field, since v1.1.0
+  ([[problems/transaction-form-saved-a-refused-date]], V-37, two 🐛 lines in `f8dbdddaf`).
 - **🔄 Changed**: besides the three lines in the table, the risk API, `/api/v1/risk`, leaves beta with the panels: from
   1.2 it changes only with a major version, except the simulation (`4de042cfe`); the figures of CVaR and Sharpe change
   on purpose, so they stay in 🔄; ids are never reused after the database conversion; the server compresses its responses
@@ -93,7 +95,7 @@ Sixty-two decision pages are dated between 2026-09-07 and 2026-10-13:
 | Page | Open part | Backlog |
 |---|---|---|
 | [[problems/e2e-writes-leaked-into-shared-state]] | the rest of V-21, V-17's two runner points, V-18 | V-21, V-17, V-18 |
-| [[problems/schwab-favicon-blocked-by-orb]] | Schwab's favicon blocked by a bot check | U-B3 |
+| [[problems/schwab-favicon-blocked-by-orb]] | accepted (developer, 13/10): the site blocks our bursts of requests, the briefcase is acceptable | U-B3, without Schwab |
 | [[problems/dirty-days-ignore-fx-only-moves]] | the securities half of the FX-only days | T-U1, T-U5 |
 | [[problems/broker-icon-race-condition]] | the icon loading race | C-56, C-57 |
 | [[problems/bulk-modal-sticky-z-index]] | the row-selector toolbar after an import | C-61 |
@@ -115,7 +117,9 @@ wait for the next red ([[sources/phase00-data-quality-e2e-2026-10]]).
 
 `BACKLOG_POST_1.2.md` keeps the open work by workstream (C coordinator, Risk, D PAC and Tools, I broker P&L,
 P transactions and bulk, T financial maths, M translations and gallery, Q docs and onboarding, S Scalable, V E2E data
-quality, 09 feedback, U plugins); `TODO_FUTURI.md` keeps the deliberate future. In the feature registry, ten features
+quality, 09 feedback, U plugins) — among them every PAC test lot, after 1.2 by the developer's decision, with the
+defects C-73…C-76 ([[features/F-107]]), and V-37b, the form's full pre-step; `TODO_FUTURI.md` keeps the deliberate
+future. In the feature registry, ten features
 stay `planned` ([[features/F-077]], [[features/F-079]], [[features/F-081]], [[features/F-082]], [[features/F-084]], [[features/F-087]], [[features/F-090]], [[features/F-091]], [[features/F-094]], [[features/F-108]]) and three are ideas.
 
 ## Verification
@@ -130,7 +134,10 @@ stay `planned` ([[features/F-077]], [[features/F-079]], [[features/F-081]], [[fe
   cured in `6bb79fecd` — [[problems/schwab-favicon-blocked-by-orb]]), a test hook that read `data-dist-pct` in the
   interface language (2, cured in `dfc4f9ccc` — [[problems/test-hooks-read-the-localized-text]]), and two fixed waits
   (1 and 2, the clock, cured in `6bb79fecd`). The targeted rerun of the touched tests passed 42 of 42. M's report is
-  kept outside the repository.
+  kept outside the repository. **The final gallery** (2026-10-13, on `baabbf7a2`, frontend built as `v1.2.0`): 251
+  passed, 0 failed, 1 skipped; after I's lot 52 the nine groups it changed were shot again: 20 passed, 0 failed
+  ([[sources/phase00-translation-round12-2026-10]]). One defect lived in the shots only, never in the app: the
+  allocation-history stacks — [[problems/gallery-fixture-normalizer-scaled-ratios]].
 - **The gates**: `./dev.py test utils` runs five — `gate-i18n-catalog`, `gate-i18n-usage`,
   `gate-plugin-i18n-ownership`, `gate-plugin-layout`, `gate-docs-links` — and vitest runs the `*.gate.test.ts` files
   (clipboard sink, flag font, HTML interpolation and HTML sink, the layout guards). Their state at the tagged commit
@@ -144,7 +151,7 @@ stay `planned` ([[features/F-077]], [[features/F-079]], [[features/F-081]], [[fe
 | R's final run (counts, coverage, reds and their triage) | pending |
 | Gates at the tagged commit | pending |
 | Gallery at the tagged commit | pending |
-| First nightly after the push (the dirty version, M-25) | pending |
+| First pipeline after the push (the dirty version) | done: run 77, on PR #42's merge into `main`, reports `v1.1.0-1648-g1ee978788`, no `-dirty` — question 11 closed ([[problems/release-shots-show-dirty-version]]) |
 | CHANGELOG counts and header date at the tag | pending |
 
 ## Source files

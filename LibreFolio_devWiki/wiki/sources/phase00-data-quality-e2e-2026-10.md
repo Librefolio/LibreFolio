@@ -114,6 +114,17 @@ The two budgets of R's run, and the leaks next to them:
   V-8 (the risk tab after a broker vanished: a 403 and no reload) and V-22 («+ New event» that can modify an existing
   event) after 1.2.
 
+## Trains 94–96 (added 2026-10-13)
+
+- **T4** (`d763657ca`) could never fail: two `column-visibility-toggle` buttons made `isVisible()` throw under strict
+  mode, a `.catch` turned the throw into `false`, and the test's body was skipped. It now reads the column headers in
+  DOM order and requires the order the developer confirmed (question 12); proven red with the order inverted.
+- **T1** (`12402625b`), the developer: «C: entrambi, due test» — T1a saves a purchase on a funded broker, T1b is
+  refused with exactly the negative-balance code on an unfunded one, and nothing is saved.
+- **V-37** (`b77885f0b`), a product defect since v1.1.0 — [[problems/transaction-form-saved-a-refused-date]]; V-37b,
+  the full pre-step, after 1.2. **V-38**, to verify on screen: the form files a balance problem under the field
+  problems.
+
 ## Wiki pages created or updated
 
 - Created: [[decisions/data-quality-proved-on-real-data]], [[problems/open-panels-stale-after-fx-sync]].

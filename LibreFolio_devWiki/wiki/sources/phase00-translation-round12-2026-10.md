@@ -138,6 +138,22 @@ closed two items that had waited for the shared runner file and for T's CP1 of M
 - M-26 to M-29 are closed in 1.2. Left: two code comments named by M-27, and a docstring in the runner that names a
   renamed function.
 
+## Batches 39–42 and the final gallery (2026-10-13, added at the train-99 ingest)
+
+- **Batch 39** (`61c1468ab`): the Tool platform and the PAC are «stable and still being refined» in the user and
+  developer docs — the developer's answer to question 14, «da rifinire ma stabili» ([[features/F-106]]).
+- **Batches 40–41**: CHANGELOG lines ported to Italian, French and Spanish — the risk API out of beta, Scalable's
+  exporter version, the transaction form's refused date and false *valid* ([[problems/transaction-form-saved-a-refused-date]]).
+- **The final gallery** (2026-10-13, 20:40–21:46, on `baabbf7a2`, frontend built as `v1.2.0`): **251 passed, 0
+  failed, 1 skipped**, 2 825 screenshots. Left over: the Growth chart's last axis label, cut on phones — handed to
+  I's lot 52 ([[concepts/echarts-chart-gotchas]]).
+- **Batch 42**, after lot 52: the nine groups whose shots it changes — the main dashboard, the Growth chart's P&L
+  modes, the allocation charts, the FIFO lots on the dashboard and on a broker's page, the broker detail, privacy
+  mode, the two data-quality banners, the connection indicator — redone: **20 passed, 0 failed**, the last labels
+  whole. The broker detail shot now picks its broker by name (`21571006e`) and sits in the brokers page's «Inside a
+  broker» section (`0e0f1c1ea`); M-31 and M-32 closed. Left: M-30, the allocation-history stacks that stopped short of
+  100 % — [[problems/gallery-fixture-normalizer-scaled-ratios]].
+
 ## Not ingested
 
 - The rest of round 12 (batches 11–18: the pipeline runs, the label and register reviews, the glossary) — operational,
