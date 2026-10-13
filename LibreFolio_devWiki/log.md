@@ -3322,3 +3322,9 @@ backlog, the code of `741310647`, `428bf27d1` and `b816adc6c`. **Created**
 [[problems/release-shots-show-dirty-version]] (resolved in the code: `LF_APP_VERSION`, the tree checks, the icons by
 the logo's hash; to verify on the first nightly; M-25), [[sources/phase00-translation-round12-2026-10]]. Graph: not
 updated (P-6).
+
+## [2026-10-13] ingest | Train 81 (I's lot 50) and R's full run with coverage
+Base `5b169189d` (train 81 and the coordinator's `588223c6f`). Sources: plan 50 and the code of `c58d48a6a`; R's
+report, archived in the post-1.2 backlog folder (§0, §3.2, §3.3). **Created** [[sources/r-full-run-coverage-2026-10-12]],
+[[problems/jscoverage-teardown-spends-the-test-budget]] (open), [[problems/login-returns-before-the-app-has-started]]
+(open, V-27), [[problems/broker-detail-tests-over-budget-under-load]] (C-58, resolved). Graph: not updated (P-6).
