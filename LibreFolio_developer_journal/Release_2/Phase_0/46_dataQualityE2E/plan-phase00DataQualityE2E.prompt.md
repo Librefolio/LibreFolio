@@ -2561,3 +2561,86 @@ Base `50886d1ca` (treno 88), portata in fast-forward dal coordinatore. Skill `te
     `setLanguage` è delle 06:44:23, la cura delle 06:44:43; sweep e ai-export sono finiti alle 06:47 e alle 06:49; i giri
     di `fx-detail` alle 06:52 e alle 06:54, dopo il ripristino della prova (06:51).
 - **Il backlog**: **V-35**, sotto osservazione, col meccanismo sconosciuto; **V-36** chiusa, `setLanguage`.
+
+### 12.13 T4 di `transactions-modals`: l'ordine delle colonne del bulk editor (13/10)
+
+Base `ef666fdee` (treno 93), portata in fast-forward dal coordinatore; worktree pulita, i commit del §12.12 sono
+nel treno 92.
+
+- **La decisione del developer** (domanda 12, via coordinatore, 13/10): nel bulk editor la colonna «Costo di carico»
+  (`cost_basis_override`) **prima** di «Evento» (`asset_event_id`) è voluta. Non è una regressione. Il passo 10 del
+  piano Bugfix-3 (`RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round4-5/plan-phase07-transaction-Part4_Round5_Bugfix3_TestWalkFixes.prompt.md`,
+  «`cost_basis_override` spostato dopo `asset_event_id`») è superato. Lo stesso piano, al passo 24, segnava già T4
+  come falso positivo da riscrivere.
+- **Il mandato**: riscrivere T4 perché verifichi quest'ordine, via test-author. Prima il rosso, per esempio invertendo
+  l'ordine atteso, poi il verde. `transactions-modals` a 1 e a 4 worker. Nel backlog, le righe V-21 e T4.
+- **Lo stato verificato** (lettura del codice, base `ef666fdee`):
+  - `TransactionBulkModal.svelte`: `cost_basis_override` a `:1827`, `asset_event_id` a `:1890`. Entrambe hanno
+    `hiddenByDefault: false`, quindi sono **visibili di default**: il commento di T4 («both columns are hidden by
+    default») è superato;
+  - `DataTable.svelte:1006-1012`: un `<th data-testid="dt-header-{column.id}">` per ogni colonna visibile, nell'ordine
+    reso;
+  - ordine e visibilità stanno solo in `localStorage` (`dataTable_tx-bulk-modal_*`, `utils/storage.ts`, nessuna API).
+    Un contesto Playwright nuovo parte quindi dall'ordine di default, e nessun vicino può spostarlo;
+  - la DataTable del workspace è sempre resa (`tx-bulk-body`, `:3566`), anche vuota: T4 non deve creare righe e non
+    scrive niente;
+  - il vecchio T4 non poteva fallire. Due `column-visibility-toggle` mandavano `isVisible()` in strict mode, la `.catch`
+    lo trasformava in falso, e i testid `col-toggle-*` non esistono.
+- **I passi**:
+  1. test-author `v-t4` riscrive T4 sulle intestazioni del workspace;
+  2. il rosso: l'ordine atteso invertito temporaneamente, poi ripristinato con lo sha256 controllato;
+  3. il verde; `transactions-modals` a 1 e a 4 worker, `--fresh-run`, col controllo del DB dopo ogni giro;
+  4. il backlog, V-21 e T4; il checkpoint.
+- ✅ **T1 (domanda 8), spiegata meglio** (13/10): il developer l'ha chiesto, e la spiegazione è andata al coordinatore.
+  - Ricontrollato sulla base `ef666fdee` e sul DB del seed: T1 sceglie il primo broker e il primo asset per posizione.
+    Il primo broker, Charles Schwab (EDITOR, 0 transazioni, niente scoperto), non ha cassa, e il server rifiuta il BUY
+    con `BALANCE_CASH_NEGATIVE` (`transaction_service.py:419`). Dopo il click di salvataggio il test non asserisce
+    niente.
+  - Le scelte proposte:
+    - (A) «un BUY si salva», su un broker del test, consigliata;
+    - (B) «un BUY senza cassa viene rifiutato con un messaggio chiaro»;
+    - (C) entrambi;
+    - (D) com'è, ma rinominato.
+
+    Con A, B o C anche `fillBuyTransaction` (T2, T6) sceglie per nome.
+- ✅ **T4 riscritto** (`v-t4`, 13/10). Tocca solo `transactions-modals.spec.ts`: il blocco di T4 e la riga 5
+  dell'intestazione («column order»). T1 e gli helper sono invariati.
+  - **Il test**, describe `Column order (M5)`, «cost basis column comes before the asset event column»:
+    1. apre il form, lo annulla, e il workspace resta vuoto;
+    2. verifica come precondizione che `dt-header-cost_basis_override` e `dt-header-asset_event_id` si vedano in
+       `tx-bulk-body`;
+    3. legge con `expect.poll` i testid `dt-header-*` nell'ordine del DOM, esclusi `dt-header-tooltip-*`, e tiene
+       solo quei due. Vuole `[cost_basis_override, asset_event_id]`.
+
+    Asserisce solo l'ordine relativo, non l'adiacenza. Il commento cita la decisione e il passo 10 superato.
+  - **Il rosso** (10:42-10:44, 1 worker): `--fresh-run --workers 1 --log-dir /tmp/libreFolio_v_t4/1-red
+    front-transaction transactions-modals "cost basis column comes before"`.
+    - L'ordine atteso era invertito solo nell'array: la diff contro la copia era la sola riga 536.
+    - Rosso all'asserzione dell'ordine (`:536`), dopo le precondizioni passate: «Expected `[asset_event_id,
+      cost_basis_override]`, Received `[cost_basis_override, asset_event_id]`».
+    - La fotografia della pagina dà la griglia: Row, Status, ID, Date, Type, Asset, Qty, Cash, Broker, Cost basis
+      override, Asset event, Description, Tags, Linked TX, Actions.
+  - **Il ripristino**: sha256 `988002cf…5e128d` uguale a quello della versione finale, `cmp` identico, nessuna traccia
+    dell'inversione. Ultima scrittura dello spec alle 10:44:49; i giri verdi partono dopo.
+  - **I giri**, tutti `--fresh-run`:
+
+    | giro | esito | durata Playwright | loadavg |
+    |---|---|---|---|
+    | filtro di T4, 1 worker | 1/1 | 3,5 s | 14 → 10 |
+    | `transactions-modals`, 1 worker | 20/20 | 40,5 s | 8 → 15 |
+    | `transactions-modals`, 4 worker | 20/20 | 25,7 s | 16 → 22 |
+
+    Log in `/tmp/libreFolio_v_t4/{1-red,2-green,3-w1,4-w4}`. SEED OK dopo ogni giro, anche dopo il rosso.
+  - **Statici**: `git diff --check` pulito; prettier pulito; `tsc -p tsconfig.e2e.json` dà solo i 2 errori
+    preesistenti. Porta 6175 libera.
+  > **⚠️ Fuori pista**, visti da `v-t4` e lasciati com'erano; nel backlog, sotto V-21:
+  > - `goToTransactions` ingoia la sua `Promise.race`;
+  > - `optionListReady` usa `.first()` su `[role="listbox"]` senza filtro;
+  > - l'intestazione dello spec dice ancora «port 6041»;
+  > - il commento «T4: no confirm dialog» nel test «Delete» usa un'altra numerazione;
+  > - i `bulkRows.first()` e la `Promise.race(...).catch` di T1 aspettano la decisione su T1.
+  >
+  > Le intestazioni inglesi dicono «Cost basis override» e «Asset event». Il commento del test usa i nomi della
+  > decisione.
+- ✅ **Backlog**: in V-21, T4 è chiusa (✅ 13/10); T1 resta aperta, con le scelte A-D; i residui minori sono in una
+  riga nuova.
