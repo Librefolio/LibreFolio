@@ -2,7 +2,7 @@
  * Transaction E2E Tests — Phase 07 · Bugfix 3+
  *
  * Covers: CRUD, BulkModal, FormModal, paired transactions, sign-flip,
- * column visibility, banner dismissal, i18n labels.
+ * column order, banner dismissal, i18n labels.
  *
  * Prerequisites: backend in test mode (port 6041), at least 1 broker seeded.
  */
@@ -506,36 +506,34 @@ test.describe('Transactions', () => {
     });
 
     // ===================================================================
-    // T4 — Column visibility defaults (M4/M5)
+    // T4 — Column order (M5): in the bulk editor «Cost basis» comes before
+    // «Event». Intended — developer decision of 13/10 (question 12), which
+    // supersedes the Bugfix-3 plan's step 10 note ("cost_basis_override moved
+    // after asset_event_id"). Relative order only, not adjacency.
     // ===================================================================
-    test.describe('Column defaults (M4/M5)', () => {
-        test('cost_basis_override appears after asset_event_id when both visible', async ({page}) => {
+    test.describe('Column order (M5)', () => {
+        test('cost basis column comes before the asset event column', async ({page}) => {
             await openCreateFlow(page);
-            // Close form to see bulk table
             await page.getByTestId('tx-form-cancel').click();
-
-            // The BulkModal should be visible
             await expect(page.getByTestId('tx-bulk-modal')).toBeVisible();
+            await expect(page.getByTestId('tx-form-modal')).toBeHidden({timeout: 5_000});
 
-            // Verify the column ordering: asset_event_id should come before cost_basis_override
-            // by checking the column visibility toggle list order.
-            const bulkTitle = page.getByTestId('tx-bulk-title');
-            await expect(bulkTitle).toBeVisible();
+            // The grid draws its headers with no row staged. Column order and visibility
+            // live only in localStorage, so this fresh context shows the defaults.
+            const bulkBody = page.getByTestId('tx-bulk-body');
+            await expect(bulkBody.getByTestId('dt-header-cost_basis_override'), 'precondition: the cost basis column is shown by default').toBeVisible({timeout: 5_000});
+            await expect(bulkBody.getByTestId('dt-header-asset_event_id'), 'precondition: the asset event column is shown by default').toBeVisible({timeout: 5_000});
 
-            // Both columns are hidden by default — their existence in the columns
-            // array (with correct order) is the assertion. We verify via the
-            // column visibility toggle if available.
-            const colToggle = page.locator('[data-testid="column-visibility-toggle"]');
-            if (await colToggle.isVisible({timeout: 1_000}).catch(() => false)) {
-                await colToggle.click();
-                await expect(page.locator('[data-testid^="col-toggle-"]').first()).toBeVisible({timeout: 5_000});
-                const labels = await page.locator('[data-testid^="col-toggle-"]').allTextContents();
-                const eventIdx = labels.findIndex((l) => /event/i.test(l));
-                const costIdx = labels.findIndex((l) => /cost.*basis/i.test(l));
-                if (eventIdx >= 0 && costIdx >= 0) {
-                    expect(eventIdx).toBeLessThan(costIdx);
-                }
-            }
+            // One `dt-header-<id>` per shown column, in drawn order. The ⓘ icons
+            // `dt-header-tooltip-<id>` share the prefix but are not columns.
+            const headers = bulkBody.locator('[data-testid^="dt-header-"]:not([data-testid^="dt-header-tooltip-"])');
+            const compared = new Set(['dt-header-cost_basis_override', 'dt-header-asset_event_id']);
+            await expect
+                .poll(async () => (await headers.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-testid') ?? ''))).filter((id) => compared.has(id)), {
+                    message: 'the cost basis column must come before the asset event column (developer decision 13/10, question 12)',
+                    timeout: 5_000,
+                })
+                .toEqual(['dt-header-cost_basis_override', 'dt-header-asset_event_id']);
         });
     });
 
