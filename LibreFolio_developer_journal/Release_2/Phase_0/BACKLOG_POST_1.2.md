@@ -159,6 +159,16 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   12/10 (`features/tools/pac-allocator`), perché nessuna E2E lo attraversava (la galleria è esclusa); senza
   `features/tools` il JS è al 78,4 %. La lacuna 3 di V (`pac-allocator-real`, treno 76) ne copre una parte: da
   rimisurare nella run finale. Dettagli: come C-67, §4.2.
+- **C-70 · I rifiuti di lettura dei plugin di import sono solo in inglese** — basso; T, 13/10, controllo del
+  CHANGELOG (D13). Il messaggio che il Generic CSV dà per un file che non sa leggere, e quelli della lettura di L108,
+  arrivano in inglese in ogni lingua, e il rifiuto del Generic CSV nomina il codice `broker_generic_csv` invece del
+  nome del plugin. Da fare: codici d'errore con parametri, tradotti nel frammento i18n del plugin. Dettagli:
+  `/tmp/libreFolio_changelog_audit_T.md` §3 D13 (copia nella sessione del coordinatore).
+- **C-71 · Due «Rolling Return» con lo stesso nome** — minimo; I, 13/10, controllo del CHANGELOG (D-I1). L'indicatore
+  della 1.1 (`rolling_return`, finestra in osservazioni) resta nel catalogo dei segnali e usa la stessa chiave di nome,
+  `signals.riskRollingReturn.name`, del modo nuovo del grafico dell'asset (`calendar_rolling_return`, giorni di
+  calendario, nascosto dal catalogo). Chi viene dalla 1.1 può leggerli come un doppione. Da fare: un nome che dica la
+  finestra («… (observations)» contro «… (calendar days)»), oppure ritirare l'indicatore vecchio.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6).
 
 ## Risk · Rischio (02)
