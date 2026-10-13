@@ -3345,3 +3345,13 @@ V's correction on the jsCoverage teardown; the code checked for the WAC endpoint
 [[problems/schwab-favicon-blocked-by-orb]] (open). **Updated** [[problems/jscoverage-teardown-spends-the-test-budget]]
 (the teardown counts against the after-hooks slot, not the body; V-28), [[decisions/figures-in-the-interface-language]]
 (`data-dist-pct`). Graph: not updated (P-6).
+
+## [2026-10-13] lint | The feature pages against the verified 1.2.0 CHANGELOG
+Base `34b9593c6`. An explore agent mapped the 46 items of the chapter [1.2.0] — 43 under ✨ Added, sub-items included,
+and three under 🔄 Changed (Risk out of beta, the purchase cost, the figures) — to the feature pages; every match and
+every commit cited was checked. **Updated**: 23 feature pages each gained a row dated 2026-10-13 that names the
+CHANGELOG line by section and beginning, with the commit or the train. No page had a lagging status. **Created**
+[[features/F-114]] (Benchmark assets, `00d8c735b`), with the registry (114 features), the ASSETS domain and the index.
+Left: five items whose commit is not identified (asset types, allocation families, the ‹ › arrows, the FX route
+metadata, the banners that lead to their rows); the Scalable importers have no page of their own (F-013 and a
+decision cover them); the plans of `phases/06_betaTestingReportAndFixing` (C-64's last part). Graph: not updated (P-6).
