@@ -89,10 +89,10 @@ Tornando a un broker che hai già aperto, vengono mostrate subito le sue ultime 
 La scheda **Posizioni** elenca ciò che detieni presso questo broker, nello stesso pannello delle [Posizioni della Dashboard](../dashboard/positions.md):
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-positions" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Posizioni (Tabella)" alt="Vista tabella posizioni broker">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Posizioni (Mappa / Treemap)" alt="Vista mappa posizioni broker">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Performance (Tabella)" alt="Vista tabella performance broker">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Performance (Mappa / Grafico)" alt="Vista mappa performance broker">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Portafoglio (Tabella)" alt="Vista tabella portafoglio broker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portafoglio (Mappa / Treemap)" alt="Vista mappa portafoglio broker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Periodo (Tabella)" alt="Vista tabella periodo broker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Periodo (Mappa / Grafico)" alt="Vista mappa periodo broker">
 </div>
 
 - **Portafoglio** mostra le tue posizioni (quantità, valore, peso); **Periodo** mostra i guadagni e le perdite di ogni posizione sulle date selezionate. Entrambi sono disponibili come **Tabella** o **Mappa**.

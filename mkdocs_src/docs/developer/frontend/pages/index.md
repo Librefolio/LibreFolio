@@ -103,15 +103,15 @@ frontend/src/routes/
     - each card's help icon is a `DocsLink` to `user/dashboard/kpi-cards/#card-1-period-pl`,
       `#card-2-returns` and `#card-3-net-worth`: keep these explicit anchors in every language
 - **Positions tab** — `PositionsPanel`, also mounted on the broker detail Positions tab:
-    - Holdings / Performance (labelled **Portfolio** / **Period**) × Table / Map: `ExposureTable`,
+    - **Portfolio** / **Period** (modes `holdings` / `performance`) × Table / Map: `ExposureTable`,
       `ExposureTreemap`, `ContributionTable` with `OtherPeriodEffectsTable`, `PerformanceChart`;
       both toggles persist per user in `localStorage` (`dashboard-positions-semantic`,
       `dashboard-positions-visual`)
     - the table layouts (`dashboard-holdings-v5`, `dashboard-performance-v2`) are shared with the
-      broker detail page; the Performance Status filter is a hidden-by-default enum column of
+      broker detail page; the Period view's Status filter is a hidden-by-default enum column of
       `ContributionTable`, not a panel toggle, and `PerformanceChart` shows an Open / Closed badge
     - `positions_contribution` is fetched apart, on demand: `PositionsPanel` asks for it the first
-      time the Performance view is shown; a cached copy shows at once and is refreshed when stale
+      time the Period view is shown; a cached copy shows at once and is refreshed when stale
     - the lots panel opens from the **Analyze Lots** row action (⋮) or the right-click menu of
       every view — there is no plain-click trigger — and is mirrored in `?asset=<id>`;
       `LotsAnalysisPanel` renders inline below, with a slide transition, and scrolls itself into

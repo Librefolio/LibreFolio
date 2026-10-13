@@ -128,13 +128,13 @@ Desglose por tipo, sector y geografía: instantánea actual o evolución histór
 
 ### 📋 Posiciones
 
-Cambia entre Posiciones y Rendimiento, luego compara datos en vistas de tabla o mapa, agregados en toda tu cartera.
+Cambia entre Cartera y Periodo, luego compara datos en vistas de tabla o mapa, agregados en toda tu cartera.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-mobile-11" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Posiciones / Tabla" alt="Posiciones — Tabla de posiciones">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Posiciones / Mapa" alt="Posiciones — Mapa de posiciones">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Rendimiento / Tabla" alt="Posiciones — Tabla de rendimiento">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Rendimiento / Mapa" alt="Posiciones — Mapa de rendimiento">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Cartera / Tabla" alt="Posiciones — Tabla de la cartera">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Cartera / Mapa" alt="Posiciones — Mapa de la cartera">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Periodo / Tabla" alt="Posiciones — Tabla del período">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Periodo / Mapa" alt="Posiciones — Mapa del período">
 </div>
 
 ### 💸 Pestaña de transacciones
@@ -531,13 +531,13 @@ Gestiona la copropiedad y los roles de acceso con el modal de compartir, optimiz
 
 ### 📊 Posiciones del bróker
 
-Los interruptores táctiles de Posiciones y Rendimiento cambian entre vistas de tabla y mapa en móvil.
+El selector Cartera / Periodo cambia la vista; los iconos Tabla / Mapa la muestran como tabla o como gráfico.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-mobile-8" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Posiciones / Tabla" alt="Posiciones del bróker — Tabla de posiciones">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Posiciones / Mapa" alt="Posiciones del bróker — Mapa de posiciones">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Rendimiento / Tabla" alt="Posiciones del bróker — Tabla de rendimiento">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Rendimiento / Mapa" alt="Posiciones del bróker — Mapa de rendimiento">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Cartera / Tabla" alt="Posiciones del bróker — Tabla de la cartera">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Cartera / Mapa" alt="Posiciones del bróker — Mapa de la cartera">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Periodo / Tabla" alt="Posiciones del bróker — Tabla del período">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Periodo / Mapa" alt="Posiciones del bróker — Mapa del período">
 </div>
 
 ### ℹ️ Información del bróker

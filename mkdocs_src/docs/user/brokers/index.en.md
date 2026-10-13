@@ -89,10 +89,10 @@ Coming back to a broker you already opened shows its last figures at once, refre
 The **Positions** tab lists what you hold at this broker, in the same panel as the [Dashboard Positions](../dashboard/positions.md):
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-positions" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Holdings (Table)" alt="Broker Holdings Table View">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Holdings (Map / Treemap)" alt="Broker Holdings Map View">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Performance (Table)" alt="Broker Performance Table View">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Performance (Map / Chart)" alt="Broker Performance Map View">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Portfolio (Table)" alt="Broker Portfolio Table View">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portfolio (Map / Treemap)" alt="Broker Portfolio Map View">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Period (Table)" alt="Broker Period Table View">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Period (Map / Chart)" alt="Broker Period Map View">
 </div>
 
 - **Portfolio** shows your holdings (quantity, value, weight); **Period** shows each position's gains and losses over the selected dates. Both come as a **Table** or a **Map**.
