@@ -166,10 +166,23 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
 - **C-68 · Gli artefatti di Playwright spariscono alla categoria successiva** — basso; R, 13/10. `test-results/` si
   svuota a ogni invocazione: `error-context.md` e gli screenshot dei rossi di una categoria si perdono quando parte la
   successiva. In una run completa vanno copiati via mano a mano. Dettagli: come C-67.
-- **C-69 · Il planner del PAC non ha coverage JS** — medio-basso; R, 13/10. 7 008 statement al 14 % nella run del
-  12/10 (`features/tools/pac-allocator`), perché nessuna E2E lo attraversava (la galleria è esclusa); senza
-  `features/tools` il JS è al 78,4 %. La lacuna 3 di V (`pac-allocator-real`, treno 76) ne copre una parte: da
-  rimisurare nella run finale. Dettagli: come C-67, §4.2.
+- **C-69 · Il planner del PAC non ha coverage JS** — medio-basso; R, 13/10; aggiornata da T il 13/10 con l'analisi
+  T-PAC. Il developer: «Tutto dopo la 1.2».
+  - **Le misure** (corsia di T, base `6a12f9a06`): unit al 17,40 % (788 statement su 4 528, istanbul in Vitest).
+    La logica TS è al 34 %, i componenti al 4 %; 61 file su 84 sono allo 0 %. La run del 12/10 dava il 14 % su
+    7 008 statement della build strumentata.
+  - **I1, la misura E2E è falsata.** La lacuna 3 di V (`pac-allocator-real`) è verde ma raccoglie zero coverage JS.
+    La fixture `jsCoverage` (`frontend/e2e/fixtures/playwright.ts:311-360`) legge `window.__coverage__` solo al
+    teardown, e lo spec ha già portato la pagina su `about:blank` (`frontend/e2e/pac-allocator-real.spec.ts:283`).
+    I contatori si perdono a ogni navigazione, e 47 punti degli E2E finiscono su `about:blank`: le cifre E2E del JS
+    sono limiti inferiori, e una nuova misura non vedrà lo spec di V. La fixture è di V.
+  - **Da fare, dopo la 1.2**:
+    - lotto A, ~3,5 g: percentuali, riequilibrio dei target, badge della prova, `localProblems`, rinforzo dello spec
+      di V con la coverage raccolta prima dello smontaggio, perimetro dal vivo;
+    - lotto B, ~5 g: i componenti;
+    - lotto C, ~4 g: un E2E «FX e commissioni» e il backend fine.
+
+  Dettagli: [piano della 53](53_pacTests/plan-phase00PacTests.prompt.md), §1, §6 e §9; rapporto di R come C-67, §4.2.
 - **C-70 · I rifiuti di lettura dei plugin di import sono solo in inglese** — basso; T, 13/10, controllo del
   CHANGELOG (D13). Il messaggio che il Generic CSV dà per un file che non sa leggere, e quelli della lettura di L108,
   arrivano in inglese in ogni lingua, e il rifiuto del Generic CSV nomina il codice `broker_generic_csv` invece del
@@ -189,6 +202,84 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   - `mkdocs_src/docs/developer/test-walkthrough/runner_architecture.md:433-453`, `:716`, `:732`;
   - la pagina devWiki `problems/svelte-template-branches-not-instrumented.md`, contraddetta da `2e104b919`.
   Da fare: un giro solo sui testi, senza toccare il comportamento.
+- **C-73 · Le percentuali del planner del PAC arrotondano male i pareggi (D1)** — basso; T, 13/10 (T-PAC); dopo la
+  1.2. `planner/` sta per `frontend/src/lib/features/tools/pac-allocator/planner/`.
+  - **Il difetto**: `formatPlannerPercent` e `formatPlannerPercentUnits` (`planner/format.ts:223-235`) passano da
+    `formatPercent(Number(…))` (`frontend/src/lib/utils/core/formatPercent.ts:82-90`: `value * scale`, poi
+    `toFixed`). Il planner invece dichiara «half away from zero, exactly» (`planner/decimal.ts:106`, R14).
+  - **Le prove**: una quota esatta di 0,30595 appare «30,59 %» invece di «30,60 %»; fra 0,1 e 0,9 sbaglia 3 864
+    pareggi su 8 000. Tocca pesi, quote, esposizioni, spread e margini.
+  - **Non è l'arrotondamento prudente del piano**: quello sta nel calcolo (`constraints.py:417-418` e il margine
+    d'esecuzione), non nella visualizzazione.
+  - **Da fare**: il rosso in `format.test.ts` (TP-2), poi `roundDecimal` prima di formattare.
+
+  Dettagli: [piano della 53](53_pacTests/plan-phase00PacTests.prompt.md), §5 D1.
+- **C-74 · L'aiuto di «Value after the plan» è sbagliato per il PAC (D2)** — basso; T, 13/10 (T-PAC); dopo la 1.2.
+  - **Il difetto**: l'aiuto dice «the units you had plus the ones bought» (`planner/result/AssetTable.svelte:79-83`,
+    chiave `…finalValueHelp`). Nel PAC invece `final_value = buy_mid_value` e `current_invested = 0`: lo impone lo
+    schema (`backend/app/schemas/pac_allocator.py:1976-1981`, `:2026-2027`), e la stessa tabella lo dice in
+    `buyMidHelp`.
+  - **Anche «Ideal value»** nomina «already invested», che nel PAC vale sempre 0.
+  - **Da fare**: i due testi nei 4 cataloghi con `dev.py i18n update`, senza chiavi nuove.
+
+  Dettagli: piano della 53, §5 D2.
+- **C-75 · Un limite di SCIP a -0.0 farebbe fallire la validazione del risultato (D3)** — basso; T, 13/10 (T-PAC);
+  dopo la 1.2.
+  - **Il difetto**: `_float_text` (`backend/app/services/pac_allocator/planner_report.py:1044-1059`) scrive -0.0
+    come «-0» (`_decimal_text`, `:1086-1091`). `PlannerFixedDecimal` (`backend/app/schemas/pac_allocator.py:47`)
+    rifiuta «-0» in `primal` e `dual`.
+  - **L'effetto**: non è mai stato visto, ma un piano valido diventerebbe un risultato che non passa la validazione.
+  - **Da fare**: il rosso con un limite -0.0 (TP-11), poi lo zero negativo scritto come «0».
+
+  Dettagli: piano della 53, §5 D3.
+- **C-76 · Il cancello locale del planner non controlla segno e zero (D4)** — basso; T, 13/10 (T-PAC); dopo la 1.2.
+  - **Il difetto**: `localProblems` (`planner/request.ts:154-175`) controlla solo «vuoto» e «non è un numero» per
+    l'importo da usare, il contributo e il passo dell'ordine. Un negativo o uno zero arriva al codec o al backend.
+    L'utente legge l'errore generico «A field does not match the planner contract: {path}», non un messaggio sul
+    passo.
+  - **In più**: il backend riporta un importo selezionato negativo sul percorso di `available`
+    (`backend/app/services/pac_allocator/normalize.py:449-450`).
+  - **Da fare**: `localProblems` a tabella (TP-12) e i controlli, con chiavi nuove per i messaggi.
+
+  Dettagli: piano della 53, §5 D4.
+- **C-77 · Test del PAC che dichiarano più di quanto verificano** — medio-basso; T, 13/10 (T-PAC); dopo la 1.2.
+  - **Backend**:
+    - **B1**: «requires owner» (`backend/test_scripts/test_services/test_portfolio_allocation_source.py:398-444`).
+      Con EDITOR e VIEWER la sessione finta non restituisce righe, a prescindere dal codice; della produzione si
+      controlla solo che `OWNER` sia fra i parametri (`:404`). Un filtro `role IN (OWNER, EDITOR)` passerebbe.
+      L'unico test dal vivo usa VIEWER.
+    - **B2**: «superuser has no implicit bypass» (`backend/test_scripts/test_api/test_portfolio_api.py:1565-1596`)
+      mocka il builder perché sollevi sempre.
+    - **Altri tre**: i filtri `broker_id IN` di posizioni e cassa (`portfolio_allocation_source.py:61-66`,
+      `:127-131`) non girano in nessun test; la mappa congelata dei codici d'errore non chiama la produzione; 42
+      rifiuti dello schema non controllano la ragione.
+  - **Frontend**:
+    - l'E2E `pac-allocator-real` («printed as the engine answered») non confronta istruzioni (quantità), pesi né
+      «Verified in Decimal»;
+    - `printed()` scarta «≈» e separatori (`frontend/e2e/pac-allocator-real.spec.ts:150-155`), il filo passa da
+      `Number()` (`:528-537`), e i dati in euro interi non arrotondano mai;
+    - `request.test.ts:30` promette i problemi locali per id ma controlla solo la lista vuota;
+    - `ResultCell.test.ts` monta 3 varianti su 11.
+  - **Da fare**: TP-17 (perimetro dal vivo con EDITOR, selezione mista, SQL vero) e TP-18 (rinforzo dello spec); il
+    resto nei lotti B e C.
+
+  Dettagli: piano della 53, §4.
+- **C-78 · Minori del PAC** — minimo; T, 13/10 (T-PAC); tutti dopo la 1.2.
+  - **D5**: denaro e prezzi del planner passano da un double (`planner/format.ts:109`,
+    `frontend/src/lib/utils/currency/currencyFormat.ts:46`). Oltre circa 15 cifre significative le ultime cifre sono
+    inventate, senza «≈».
+  - **D6**: `AssetEditor` riscrive i pesi delle esposizioni dalle frazioni float del `DistributionEditor` condiviso
+    (`planner/steps/AssetEditor.svelte:82-104`, `toFixed(6)`), quindi tiene 4 decimali di percentuale.
+  - **Backend, dall'audit, da riverificare**:
+    - i limiti del plugin (256/512 KiB) abbassati in silenzio ai default della piattaforma (128/256 KiB);
+    - `rounding_delta` pubblicato da `rounding_adjustment`, col segno degli accrediti invertito rispetto al testo
+      del contratto (`schemas/pac_allocator.py:1553`, `planner_report.py:703-722`);
+    - `request_fingerprint = snapshot_id` nei risultati di fallimento (`planner.py:167`);
+    - «-0» negli importi economici della copia (`portfolio_allocation_source.py:598`).
+  - **Testi vecchi**: i commenti di `test_pac_planner_normalize.py:544-552`, `test_pac_planner_wire_numbers.py:10-15`,
+    `modeText.test.ts:11-16`, `pluralCountSites.test.ts:13-19` e `pac-allocator-real.spec.ts:19`.
+
+  Dettagli: piano della 53, §4 e §5.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6).
 
 ## Risk · Rischio (02)
