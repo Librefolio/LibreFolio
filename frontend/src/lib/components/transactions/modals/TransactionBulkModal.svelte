@@ -1648,18 +1648,18 @@
                     const st = deriveStatus(row);
                     // B5: split-queued badge takes priority
                     if (row.op === 'edit' && splitTxIdsSet.has((row as any).txId)) {
-                        return {type: 'html', html: '<span class="px-1.5 py-0.5 text-[10px] rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">✂️ split</span>'};
+                        return {type: 'html', html: '<span data-testid="tx-bulk-row-status" data-status="split" class="px-1.5 py-0.5 text-[10px] rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">✂️ split</span>'};
                     }
                     return {
                         type: 'html',
                         html:
                             st === 'new'
-                                ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">new</span>'
+                                ? '<span data-testid="tx-bulk-row-status" data-status="new" class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">new</span>'
                                 : st === 'edited'
-                                  ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">edit</span>'
+                                  ? '<span data-testid="tx-bulk-row-status" data-status="edited" class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">edit</span>'
                                   : st === 'delete'
-                                    ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">🔴 del</span>'
-                                    : '<span class="text-gray-300 dark:text-gray-600">·</span>',
+                                    ? '<span data-testid="tx-bulk-row-status" data-status="delete" class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">🔴 del</span>'
+                                    : '<span data-testid="tx-bulk-row-status" data-status="original" class="text-gray-300 dark:text-gray-600">·</span>',
                     };
                 },
             },
@@ -3536,7 +3536,13 @@
                                 <Undo2 size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.resetSelected') || 'Reset'}</span>
                             </button>
                         {/if}
-                        <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-[11px]" onclick={executeBulkDeleteOnSelected} title={$t('transactions.bulk.deleteSelected') || 'Delete selected'}>
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1 px-2 py-1 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-[11px]"
+                            onclick={executeBulkDeleteOnSelected}
+                            title={$t('transactions.bulk.deleteSelected') || 'Delete selected'}
+                            data-testid="tx-bulk-delete-selected"
+                        >
                             <Trash2 size={12} /> <span class="hidden sm:inline">{$t('common.delete') || 'Delete'}</span>
                         </button>
                         {#if selectedForPromote}
