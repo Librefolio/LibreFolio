@@ -1815,3 +1815,35 @@ I. Gallery only, and no long runs: R's final coverage run is on 6176.
 >
 > **Seen, outside the scope:** `user/brokers/index.*.md:29` shows this shot under «Click **Create**», with the alt of
 > the edit form above it («Broker Edit Form», «Modulo di modifica broker», …). Backlog M-32.
+
+### 35. ✅ Batch 44: the broker detail shot under «Inside a broker» (M-32) — on `8963861ec`, 2026-10-13 evening
+
+Batch 43 is committed (`21571006e`, `8963861ec`). Batches 42, 43 and 44 go into train 98 together.
+
+**35.1 ✅ The page** (`user/brokers/index.{en,it,fr,es}.md`; port: `release-pipeline/scripts/b44_port.py`)
+> **Note implementazione**:
+> - **Where it was:** under step 3 of «Create a broker» («Click **Create**: the broker appears in your list…»), with
+>   the alt of the edit form above it.
+> - **Where it is:** at the top of «🗂️ Inside a broker», the section on the toolbar and the five tabs, which the shot
+>   shows; on a desktop it also shows the Overview's blocks, described in the next section. Step 3 keeps its text.
+> - **Alt:** Broker Detail / Dettaglio broker / Détail du courtier / Detalle del bróker, as in the gallery pages.
+> - **The caption:** a single image has no visible caption on this site, because the gallery loader draws titles only
+>   in carousels (`gallery-img-loader.js:215`). The sentence that introduces the image is its caption, like the
+>   gallery's heading and sentence.
+>   - EN (docs-writer): «A broker's card opens its detail page on the **Overview** tab:». It is true: the card links to
+>     `/brokers/{id}` with no `tab` parameter, and the tab defaults to Overview (`brokers/[id]/+page.svelte:142`, `:164`).
+>   - By hand, it: «Dall'elenco, ogni broker si apre sulla scheda **Panoramica** della sua pagina di dettaglio:». The
+>     Italian page calls both the card and the tab *scheda*, so «the list» stands for the card.
+>   - fr: «La carte d'un courtier ouvre sa page de détail sur l'onglet **Vue d'ensemble** :».
+>   - es: «La tarjeta de un bróker abre su página de detalle en la pestaña **Resumen**:».
+>   - *Pagina di dettaglio / page de détail / página de detalle*, as in `ai-export/broker`.
+> - The four pages stay line for line: `b44_port.py` checks the skeleton against the EN.
+>
+> **Gates** (`release-pipeline/scripts/b44_gates.sh`, 22:38–22:40, load 6–17):
+> - **Stamp:** the dry-run named the page for it, fr and es; `translate-stamp --file user/brokers/index.en.md`, 1 file
+>   × 3. The cache changed only there (its md5 and three `stamped_at`); then the dry-run is empty.
+> - **Validation:** `translate-validate --hide-localized` 630 files 0/0, no INFO; the page alone 3 files OK;
+>   `translate-diff` 642 of 642 clean.
+> - **Docs:** strict build with no warning; `check-links` 95. In the built pages the shot is under the «Inside a
+>   broker» heading in all four languages, with its alt, not escaped.
+> - `git diff --check` clean; ports free.

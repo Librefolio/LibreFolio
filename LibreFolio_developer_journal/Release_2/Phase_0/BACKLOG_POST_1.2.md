@@ -872,12 +872,12 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   sezione «34». Era: basso; M (lotto 42), 13/10: il test prendeva la prima card della lista
   (`frontend/e2e/gallery.spec.ts:3104`), Charles Schwab, tutto a 0,00 sul periodo predefinito 3M, con «Nessun dato
   disponibile» in Crescita e Allocazione.
-- **M-32 · L'alt dello scatto del dettaglio nella pagina dei broker** — minimo; M (lotto 43), 13/10:
-  `mkdocs_src/docs/user/brokers/index.{en,it,fr,es}.md:29` mostra lo scatto `brokers/detail` sotto «Click **Create**»
-  con l'alt del modulo di modifica, copiato dall'immagine sopra: «Broker Edit Form», «Modulo di modifica broker»,
-  «Formulaire de modification du courtier», «Formulario de edición del bróker». Le pagine della galleria lo chiamano
-  «Broker Detail», «Dettaglio broker», «Détail du courtier», «Detalle del bróker». Da decidere insieme se il passo 3,
-  che parla della lista, debba mostrare il dettaglio. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «34.2».
+- ✅ **M-32 · L'alt dello scatto del dettaglio nella pagina dei broker** — chiusa nella 1.2, M (lotto 44, 13/10): lo
+  scatto è passato dal passo 3 di «Create a broker» all'inizio di «🗂️ Inside a broker», con l'alt «Broker Detail»
+  (Dettaglio broker, Détail du courtier, Detalle del bróker) e una frase che lo introduce e fa da didascalia; nelle
+  quattro lingue, con lo stamp. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «35». Era: minimo; M (lotto 43), 13/10:
+  `mkdocs_src/docs/user/brokers/index.{en,it,fr,es}.md:29` mostrava lo scatto `brokers/detail` sotto «Click
+  **Create**», con l'alt del modulo di modifica copiato dall'immagine sopra («Broker Edit Form», …).
 
 ## Q · Documentazione e onboarding (21, 32)
 
