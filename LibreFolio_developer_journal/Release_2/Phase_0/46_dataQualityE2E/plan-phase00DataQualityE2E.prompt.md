@@ -2644,3 +2644,143 @@ nel treno 92.
   > decisione.
 - ✅ **Backlog**: in V-21, T4 è chiusa (✅ 13/10); T1 resta aperta, con le scelte A-D; i residui minori sono in una
   riga nuova.
+
+### 12.14 T1 di `transactions-modals`: il salvataggio e il rifiuto (13/10)
+
+Base `917ef437f`: i due commit di T4 (`d763657ca`, `917ef437f`) sono sul ramo, ed entrano nel treno 94.
+
+- **La decisione del developer** (domanda 8, testuale): «C: entrambi, due test».
+- **Il mandato** del coordinatore:
+  1. **T1a, il salvataggio**: un BUY arriva nel bulk editor, si salva, e lo si ritrova. Il broker è del test, con
+     cassa, scelto per nome. Il test pulisce quello che crea, e dopo il giro il DB è al seed.
+  2. **T1b, il rifiuto**: un BUY senza cassa viene rifiutato con un messaggio chiaro, e il test verifica che non sia
+     stato salvato niente.
+  3. `fillBuyTransaction` sceglie broker e asset per nome, anche per T2 e T6; T2 e T6 si rigirano.
+  4. I test li scrive test-author, con selettori `data-testid` e senza testo tradotto.
+  5. Se T1b mostra che il messaggio all'utente manca o è sbagliato (un difetto di prodotto): STOP e messaggio, senza
+     toccare l'app.
+- **Lo stato verificato** (lettura del codice, base `917ef437f`):
+  - **Il codice sul filo** è `balanceCashNegative`: è il valore di `TXValidationCode.BALANCE_CASH_NEGATIVE`
+    (`backend/app/schemas/transactions.py:758`), sollevato da `transaction_service.py:419-430` con i parametri
+    `brokerId`, `currency`, `balance` e `date`.
+  - **La UI**, `TransactionBulkModal.svelte`:
+    - su `committed=false` (`:1535-1541`) il modale resta aperto e mostra `tx-bulk-error` (`:3196`);
+    - i problemi di saldo vanno in `tx-bulk-balance-issues`, una voce `tx-bulk-balance-issue` per problema, più il
+      bottone `tx-bulk-balance-rows` che porta alle righe (`:3220-3233`);
+    - nessun attributo pubblica il codice.
+  - **Il messaggio** (`utils/transactions/resolveValidationMessage.ts:140-247`) usa la chiave
+    `transactions.errors.balanceCashNegative`, presente in en, it, fr ed es (`i18n/transactions/*.json:222`). Il
+    resolver mette nel messaggio il **nome** del broker (`brokerId` → nome), la valuta, il saldo formattato e la data
+    ISO.
+    - Il ripiego, se la chiave mancasse, sarebbe il testo inglese del backend, che dice l'**id** del broker.
+    - Il nome del broker creato dal test, dentro la voce, distingue quindi il messaggio giusto dal ripiego, senza
+      leggere testo tradotto.
+  - **Per lettura del codice non c'è un difetto di prodotto**. Lo confermerà il giro di evidenza.
+  - **Le fixture**, già in `fixtures/owned-pair.ts`: `openOwnedAccount`, `createOwnedBroker`, `commitCreates`,
+    `readTransactions`, `seededAssetId` e `cleanupOwnedAccount`.
+- **Il disegno**: T1a e T1b, ciascuno su un account usa-e-getta suo (un broker suo, finanziato per T1a e vuoto per
+  T1b), in un describe proprio, fuori dal `beforeEach` che entra come `TEST_USER`. Il vecchio T1 sparisce.
+  `fillBuyTransaction` prende `broker` e `asset` per nome; T2 e T6 usano `Interactive Brokers` e `Apple`.
+- **Le prove**: per ciascuno, un rosso per la ragione giusta.
+  - T1a: senza il deposito, deve diventare rosso su `committed`.
+  - T1b: col broker finanziato, deve diventare rosso perché il BUY si salva.
+
+  Poi T2 e T6, e lo spec intero a 1 e a 4 worker, col controllo del DB dopo ogni giro.
+- ✅ **T1b, giro di evidenza** (`v-t1`, 13/10, `0-evidence`, 1 worker, SEED OK). Lo STOP di prodotto **non si applica**:
+  il messaggio è risolto.
+  - La richiesta: `{"broker_id":9,"type":"BUY","date":"2026-10-13","quantity":"3","asset_id":1,"cash":{"code":"EUR","amount":"-100"}}`.
+  - Il problema: `code: "balanceCashNegative"`, con `params` `{brokerId: 9, currency: "EUR", balance: "-100.000000",
+    date: "2026-10-13"}`; esito `simulated`.
+  - Il banner, in inglese: «⛔ Save cancelled — This configuration causes data inconsistencies — Saving would cause
+    € 🇪🇺 EUR cash to go negative (-100.00 € 🇪🇺 EUR) on 2026-10-13 at guides-t1b-broker-…», più il bottone «Workspace
+    rows: 1».
+  - Prima del salvataggio, l'avviso di validazione del bulk editor mostrava già la stessa riga.
+- ✅ **T1a e T1b scritti, rosso poi verde** (`v-t1`, 13/10). Il vecchio T1 sparisce.
+  - Un describe nuovo `Transactions` › `Create standalone`, davanti al blocco di `TEST_USER`, con lo stesso titolo:
+    i nomi completi dei test restano nella forma di prima.
+  - Ogni test registra un account suo, e un `afterEach` chiama `cleanupOwnedAccount`. Due helper nel blocco:
+    `stageBuy` e `commitWorkspace`.
+  - **T1a**:
+    - un broker suo con un DEPOSIT di 1000 EUR, poi il BUY dal form (broker per nome, Apple per nome, quantità 3) e
+      Apply;
+    - il bulk editor ha una sola riga, `new`, a validazione finita;
+    - il salvataggio: la richiesta catturata dice BUY, il broker, Apple, 3, `EUR -100`; poi `committed === true`, un
+      id, il modale chiuso;
+    - ritrovato: `readTransactions` per id e `goToTransactionById`.
+  - **T1b**:
+    - il broker è senza deposito;
+    - la risposta: `committed === false`, problemi esattamente `['balanceCashNegative']`, coi `params` del broker e
+      con valuta e data uguali alla richiesta, e il saldo uguale alla cassa del BUY;
+    - la UI: una sola `tx-bulk-balance-issue`, con il nome del broker, la data ISO e `EUR`, e senza
+      `balanceCashNegative`, `Broker #` né `{`;
+    - il modale resta aperto con la riga `new`, e `tx-bulk-balance-rows` evidenzia la riga;
+    - non salva niente: `readTransactions({broker_id})` è vuoto.
+  - **La valuta**: EUR, letta dalla richiesta catturata. L'importo si scrive prima di scegliere l'asset, quindi vale il
+    default della cella di cassa.
+  - **I rossi** (1 worker, SEED OK dopo ciascuno):
+    - T1a senza deposito, a `:413`: «the funded BUY must be saved — issues: […balanceCashNegative…]», Expected true,
+      Received false;
+    - T1b col broker finanziato, a `:442`: «must be refused — results: [{…"ids":[78]…"success"}]». Anche dopo questo
+      rosso la pulizia ha tolto account, broker e riga 78.
+    - Dopo ogni rosso lo sha256 è tornato quello della versione finale.
+  - **Il verde**: T1a e T1b 2/2.
+  - `fillBuyTransaction` prende `broker` e `asset` per nome (`pickBroker`, `pickAsset`); T2 e T6 passano `Interactive
+    Brokers` e `Apple`. T2 è verde.
+  > **⚠️ Fuori pista: T6 è rosso** con Interactive Brokers, a `:707`, perché `info-banner-warning` non c'è. Verdetto:
+  > **assunzione**, verificata da me.
+  > - T6 diceva di provocare l'avviso con una quantità `-1`. Ma il form corregge il segno prima di validare:
+  >   `applySign('-1','positive')` dà `'1'` (`txPayloadHelpers.ts:142-150`, `:243-249`).
+  > - L'avviso nasceva dal primo broker della lista, Charles Schwab, che non ha cassa. Era lo stesso equivoco del
+  >   vecchio T1.
+  > - Lo snapshot (`/tmp/libreFolio_v_t1/4-t2-t6.t6-results/error-context.md`, righe 1510-1535) mostra Qty `[invalid]`
+  >   «must be > 0», «Validate now» → «valid», e Apply disabilitato.
+  >
+  > **La cura**, mia, solo di test, scelta A′: T6 passa su un account suo, con un broker senza cassa. Asserisce che
+  > l'avviso nomina il broker del test, poi lo chiude. Il rosso si prova col broker finanziato.
+  >
+  > **Domanda al developer** (V-37), mandata al coordinatore: il verdetto «valid» accanto a un errore del form che
+  > blocca Apply è voluto?
+- ✅ **T6 curato, A′** (`v-t1`, 13/10). T6 sta nel blocco degli account propri, in un describe `Banner dismissible
+  (M1/M2)`: il nome completo resta lo stesso.
+  - Ha un account suo e un broker suo **senza deposito**. Poi il BUY dal form (broker per nome, Apple, quantità 3),
+    «validate now», e l'attesa di quel giro.
+  - La premessa, asserita: `tx-form-body` › `info-banner-warning` si vede e contiene il nome del broker del test,
+    quindi è l'avviso del saldo. Poi il soggetto, invariato: il bottone di chiusura nasconde l'avviso.
+  - Il commento spiega che il form corregge il segno, e da dove veniva l'avviso prima.
+  - Al suo posto, nel blocco di `TEST_USER`, resta una riga di rimando.
+  - **Il rosso**: col broker finanziato, rosso alla premessa (`:512`, «info-banner-warning … element(s) not found»).
+    Lo snapshot dice quantità 3, cassa coperta, «valid», Apply attivo, nessun avviso. Ripristinato: lo sha256 è tornato
+    quello della versione finale, `c848b358…`.
+- ✅ **I giri finali** (`v-t1`, 13/10). Tutti `--fresh-run`; dopo ogni giro SEED OK, anche dopo i rossi.
+
+  | giro | esito | Playwright | loadavg |
+  |---|---|---|---|
+  | `0-evidence`, T1b | 1/1 | 4,3 s | 17,7 |
+  | `1-t1a-red` | rosso voluto, `:413` | 4,2 s | 13,1 |
+  | `2-t1b-red` | rosso voluto, `:442` | 4,0 s | 10,0 |
+  | `3-t1-green` | 2/2 | 9,2 s | 8,1 |
+  | `4-t2-t6` | 1/2, T6 rosso (assunzione, sopra) | 10,9 s | 9,4 |
+  | `7-t6-red` | rosso voluto, `:512` | 9,6 s | 27,7 |
+  | `8-t2-t6` | 2/2 | 9,3 s | 27,1 |
+  | `9-t1-green` | 2/2 | 10,2 s | 25,4 |
+  | `10-w1`, spec intero, 1 worker | **21/21** | 1,0 min | 23,1 |
+  | `11-w4`, spec intero, 4 worker | **21/21** | 44,0 s | 29,8 |
+
+  - Lo spec ora ha 21 test: il vecchio T1 è diventato T1a e T1b.
+  - L'ultima scrittura dello spec è delle 11:51:48, al ripristino dopo il rosso di T6; i giri da `8` a `11` sono
+    successivi.
+  - In `10-w1` il populate ha preso circa 5¾ minuti, sulla macchina carica dalle altre corsie: è la macchina, non lo
+    spec.
+  - Log in `/tmp/libreFolio_v_t1/<giro>/`.
+  - **Statici**: `git diff --check` pulito; prettier pulito; `tsc -p tsconfig.e2e.json` dà solo i 2 errori
+    preesistenti. Porta 6175 libera.
+  > **⚠️ Fuori pista**:
+  > - V-38, letto nel codice da `v-t1` e verificato da me, non visto a schermo. Il form divide i problemi per `index`
+  >   (`TransactionFormModal.svelte:944-945`), il bulk editor per codice (`bulkDisplay.ts:145`). Un
+  >   `balanceCashNegative` con `index: 0` finisce quindi, nel form, sotto il titolo dei problemi dei campi.
+  > - Restano com'erano: la race ingoiata da `goToTransactions` e l'opzione `skipCash` senza chiamanti. Entrambe sono
+  >   nella riga dei residui minori di V-21.
+- ✅ **Backlog**:
+  - in V-21, T1 è chiusa (✅ 13/10) e la riga dei residui minori è aggiornata;
+  - **V-37**, da decidere: «valid» accanto a un errore del form;
+  - **V-38**, basso: l'avviso di saldo sotto il titolo dei campi.
