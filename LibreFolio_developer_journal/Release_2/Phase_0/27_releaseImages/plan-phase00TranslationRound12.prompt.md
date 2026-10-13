@@ -1773,7 +1773,7 @@ line (`10e646f79`). The coordinator fast-forwarded the worktree to it.
 >   open: batch 52's unit tests cover the running period's dates.
 >
 > **Seen, not from batch 52** (identical in batch 41), passed to the coordinator:
-> - the allocation history's stack tops out near 75 %, not 100 %, by type, sector and geography;
+> - the allocation history's stack stops short of 100 %, by type, sector and geography;
 > - `brokers/detail` shows Charles Schwab empty over 3M, so it holds no broker Growth chart with data.
 
 ### 34. ✅ Batch 43: the broker detail shot picks its broker by name (M-31) — on `0ae4a92cd`, 2026-10-13 evening
@@ -1847,3 +1847,39 @@ Batch 43 is committed (`21571006e`, `8963861ec`). Batches 42, 43 and 44 go into 
 > - **Docs:** strict build with no warning; `check-links` 95. In the built pages the shot is under the «Inside a
 >   broker» heading in all four languages, with its alt, not escaped.
 > - `git diff --check` clean; ports free.
+
+### 36. ✅ Batch 45: the allocation and positions shots again, after I-M30 (M-30) — on `bae15c3cf` (train 99), 2026-10-14 night
+
+Train 98 (batches 42–44) and train 99 are in the target. Train 99 is I-M30: `a26051686`, `a08e208b4`, plan 54. The
+gallery fixture, `frontend/e2e/dashboard-report.json`, had scaled its allocation shares and YoCs together with the money,
+in the privacy normalization; I recomputed them. Gallery only.
+
+**36.1 ✅ The groups** (report: `release-pipeline/runs/b45/B45_GALLERY_REPORT.md`)
+> **Note implementazione**:
+> - **Which:** of the 10 tests that install the fixture (`setupDashboardMockReport`), the 5 whose shots show a share
+>   or the YoC:
+>   - main dashboard, growth P&L submodes and privacy mode, with the pie in the frame;
+>   - allocation charts;
+>   - positions tab.
+> - **Left out, frames checked:** the two data-quality banners, the connection indicator, the transactions tab and the
+>   mobile menu show no share. `price_change_1d`, I-M30's third family, has no reader in the frontend.
+> - **The bundle:** rebuilt in debug with `LF_APP_VERSION=v1.2.0` (00:19–00:21). The fast-forward wrote
+>   `src/lib/api/dashboardReportFixture.test.ts`, newer than the bundle, and the gallery's webServer
+>   (`dev.py server --test`) would have rebuilt it by itself.
+> - **Result, 00:21–00:25, load 10 → 6:** **10 passed** (5 tests × desktop and mobile), 4.1 min; 272 screenshots.
+>
+> **By eye:**
+> - **The history stack reaches 100 %** by type, sector and geography (desktop en, desktop it dark, mobile fr). In the
+>   fixture every day's shares add up to 100, give or take the rounding, in the three dimensions.
+> - **The pie by type prints the fixture's correct shares**, which add up to 100 with the slices it leaves unlabelled.
+>   The same pie in `main.png`, in each language's format.
+> - **The YoC is in no frame.** It is the table's seventh column: the desktop frame ends at P&L %, the phone at the
+>   first column. On the fixture's values it is plausible: a bond's coupon, a crowdfunding loan's interest, no income
+>   on accumulating ETFs; I's Vitest checks YoC = gross income / WAC. Backlog M-33.
+>
+> M-30 is closed in the backlog, pointing to I-M30.
+>
+> **⚠️ Fuori pista — privacy:** the first version of this checkpoint quoted the fixture's shares before and after the
+> cure, and their ratio: with that ratio the snapshot's real wealth comes back. The coordinator (14/10) asked for no
+> fixture number in the versioned files. This entry, 33.2 (from batch 42) and M-30 now say «stops short of 100 %» and
+> «the correct shares»; the numbers stay in the report, outside the repo.

@@ -871,11 +871,12 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
     sovrascrivibile (`frontend/playwright.config.ts:54`): con 3 worker del browser sono 2, non 1.
 
   Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «27.3».
-- **M-30 · Lo storico dell'allocazione arriva a circa il 75 %, non al 100 %** — da verificare; M (lotto 42), 13/10:
-  nelle tre viste (tipo, settore, geografia), in ogni lingua e tema, uguale nella galleria del lotto 41 e in quella del
-  lotto 42. Il grafico è uno stack al 100 % (`AllocationHistoryChart.svelte:2`, `max: 100` a `:802`): o una famiglia
-  manca dallo stack, o i pesi non sommano a 100. È l'area dei grafici: da girare a chi la possiede. Scatti:
-  `gallery/*/*/*/dashboard/allocation-{type,sector,geo}-history.png`. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «33.2».
+- ✅ **M-30 · Lo storico dell'allocazione non arriva al 100 %** — chiusa nella 1.2 da I (I-M30, piano 54:
+  `a26051686`, `a08e208b4`, treno 99), verificata da M (lotto 45, 14/10). La causa era la fixture della galleria
+  (`frontend/e2e/dashboard-report.json`): la normalizzazione di privacy scalava anche le quote dell'allocazione e lo
+  YoC. Ora lo stack arriva al 100 % in tipo, settore e geografia, e la torta stampa le quote corrette. Dettagli: [piano
+  della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md); la verifica: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «36». Era:
+  da verificare; M (lotto 42), 13/10: lo stack non arrivava al 100 % nelle tre viste, in ogni lingua e tema.
 - ✅ **M-31 · Lo scatto `brokers/detail` mostra un broker vuoto** — chiusa nella 1.2, M (lotto 43, 13/10): il test
   apre Interactive Brokers per nome (`openBrokerCardByName`, come gli altri scatti della pagina del broker), che ha
   liquidità e titoli in tutta la finestra di 3 mesi; 16 scatti con Crescita e Allocazione piene. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
@@ -888,6 +889,12 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   quattro lingue, con lo stamp. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «35». Era: minimo; M (lotto 43), 13/10:
   `mkdocs_src/docs/user/brokers/index.{en,it,fr,es}.md:29` mostrava lo scatto `brokers/detail` sotto «Click
   **Create**», con l'alt del modulo di modifica copiato dall'immagine sopra («Broker Edit Form», …).
+- **M-33 · Nessuno scatto mostra la colonna YOC** — basso; M (lotto 45), 14/10: nella tabella delle posizioni lo YoC è
+  la settima colonna (`frontend/src/lib/components/dashboard/ExposureTable.svelte:5`). Lo scatto desktop finisce a
+  P&L %, con Annualizzato tagliato; quello mobile alla prima colonna; la vista Periodo non la ha. Le pagine che la
+  descrivono (`user/dashboard/positions.*.md:40` e `:59`, `user/brokers/index.*.md:102`) non hanno un'immagine che la
+  mostri. Una via: nello scatto della tabella, scorrere fino alla colonna, o nasconderne qualcuna col selettore (👁).
+  Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «36.1».
 
 ## Q · Documentazione e onboarding (21, 32)
 
