@@ -89,11 +89,18 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
 - **C-57 · La lista dei plugin per le icone non si ritenta dopo un errore (H2)** — basso, da verificare; I, 12/10. Se la
   prima richiesta fallisce (`frontend/src/lib/utils/broker/brokerHelpers.ts`, `ensurePluginIconsLoaded`), le icone dei
   plugin mancano fino al ricaricamento della pagina. Dettagli: come C-56.
-- **C-58 · Dettaglio broker: un test sfora i 30 s sotto carico** — basso; coordinatore, 12/10. Nel gate del treno 59,
+- ✅ **C-58 · Dettaglio broker: un test sfora i 30 s sotto carico** — chiusa nella 1.2 da I, lotto 50 (13/10): era
+  un'assunzione di tempo, non un difetto. Ogni test del blocco esterno ricaricava la lista dei broker che il
+  `beforeEach` aveva appena lasciato pronta. Ora gli helper aprono il broker dalla lista sullo schermo e ne asseriscono
+  l'indirizzo, e il blocco FIFO ha un budget esplicito di 60 s, come i blocchi axisBuilder e P&L; nessuna asserzione
+  tolta o allentata. La prova, sul test (ora `:429`): con ogni risposta dell'API ritardata di 2,5 s la base scade a
+  30,0 s e la cura passa in 23,1 s; con 3,8 s la cura passa in 34,6 s, grazie ai 60 s. La spec intera è verde a 1
+  worker (carico 16 → 44) e a 4 worker (carico 46 → 34). Era: basso; coordinatore, 12/10. Nel gate del treno 59,
   con carico ~56, «the lot detail modal renders its three sections and the net breakdown»
   (`frontend/e2e/brokers/brokers-detail.spec.ts:410`) è scaduto durante la navigazione, prima del pannello (40,1 s);
   rilanciato con carico 30, è passato in 2,9 s. Nei 30 s stanno login, `ensureBrokerExists`, due navigazioni e il
-  pannello. Da valutare con `test-triage`: un budget esplicito o una navigazione in meno.
+  pannello. Da valutare con `test-triage`: un budget esplicito o una navigazione in meno. Dettagli:
+  [piano della 50](50_brokerDetailBudget/plan-phase00BrokerDetailBudget.prompt.md).
 - **C-59 · L'immagine Docker installa `uvicorn[standard]` fuori dal lock** — medio-basso; coordinatore, 12/10, dalla
   ricerca su Python. `Dockerfile:70` esegue `pip install uvicorn[standard]` senza versione dopo `requirements.txt`:
   `uvloop`, `httptools` e gli altri extra arrivano in produzione all'ultima versione del giorno della build, mentre il
@@ -140,6 +147,18 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   comune a cambi e asset: `SyncModalBase`, con `FxSyncModal`, `AssetSyncModal` (lista degli asset) e `PageSyncModal`
   (pagine di dettaglio), che sincronizzano l'intervallo della pagina. Manca solo l'avviso quando l'intervallo scelto
   copre dati che esistono già, per i cambi come per gli asset. Dettagli: [F-094](../../../LibreFolio_devWiki/wiki/features/F-094.md).
+- **C-67 · Coverage JS: ogni invocazione ricostruisce il frontend due volte** — basso; R, 13/10, run completa §3.6.
+  `dev.py server --test` forza il modo debug (`dev.py:197`, `:228`), quindi una build di produzione strumentata è
+  «del modo sbagliato» e viene ricostruita in debug; poi `_ensure_frontend_build` (`_frontend_common.py:71-74`) rifà
+  la strumentata. Nella run completa non costa nulla, nei rilanci di una singola azione 5–7 minuti. Dettagli:
+  [rapporto di R del 12/10](38_postReleaseBacklog/report-R-full-run-coverage-20261012.md), §3.6.
+- **C-68 · Gli artefatti di Playwright spariscono alla categoria successiva** — basso; R, 13/10. `test-results/` si
+  svuota a ogni invocazione: `error-context.md` e gli screenshot dei rossi di una categoria si perdono quando parte la
+  successiva. In una run completa vanno copiati via mano a mano. Dettagli: come C-67.
+- **C-69 · Il planner del PAC non ha coverage JS** — medio-basso; R, 13/10. 7 008 statement al 14 % nella run del
+  12/10 (`features/tools/pac-allocator`), perché nessuna E2E lo attraversava (la galleria è esclusa); senza
+  `features/tools` il JS è al 78,4 %. La lacuna 3 di V (`pac-allocator-real`, treno 76) ne copre una parte: da
+  rimisurare nella run finale. Dettagli: come C-67, §4.2.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6).
 
 ## Risk · Rischio (02)
