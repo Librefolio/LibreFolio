@@ -3328,3 +3328,11 @@ Base `5b169189d` (train 81 and the coordinator's `588223c6f`). Sources: plan 50 
 report, archived in the post-1.2 backlog folder (§0, §3.2, §3.3). **Created** [[sources/r-full-run-coverage-2026-10-12]],
 [[problems/jscoverage-teardown-spends-the-test-budget]] (open), [[problems/login-returns-before-the-app-has-started]]
 (open, V-27), [[problems/broker-detail-tests-over-budget-under-load]] (C-58, resolved). Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Train 82 — V's §12.10: V-29, V-25, V-21 in part, V-26
+Base `273b188ea` (fast-forward). Sources: plan 46 §12.10, the backlog, the code of `e6019f349` and `5d5c7caed`.
+**Created** [[problems/hidden-pair-half-survived-row-removal]] (V-29: `removeRow` left the hidden partner, a false
+«Discard changes?» since 1.1.0). **Updated** [[problems/e2e-writes-leaked-into-shared-state]] (V-25 cured, V-21 in
+part, the calendar-driven seed rates), [[concepts/test-isolation-classes]] (the owned-pair fixture),
+[[problems/login-returns-before-the-app-has-started]] (V-27 now in the backlog; V-26 closed), [[features/F-048]],
+[[sources/phase00-data-quality-e2e-2026-10]]. Graph: not updated (P-6).
