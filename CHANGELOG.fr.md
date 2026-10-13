@@ -157,6 +157,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 - Sur les graphiques Croissance et Performance, les axes des montants n'affichent plus la même étiquette en double (`5.5k` affichée comme `6k` à côté d'un véritable `6k`, `1.25M` comme `1.3M`), et un bord d'axe placé automatiquement au-delà des données n'est plus étiqueté comme s'il s'agissait d'un pas régulier. Le total P&L de l'infobulle Croissance affiche désormais `EUR -12.00` comme les autres montants, au lieu de `−EUR 12.00`.
 - Le graphique de comparaison des lots ne laisse plus de bande vide à gauche de ses montants, ce qui se voit surtout sur téléphone.
+- En résolution hebdomadaire ou mensuelle, la semaine ou le mois pas encore terminé se lit correctement sur les graphiques des actifs et des taux de change : ses événements ne disparaissent plus, leurs marqueurs se placent sur son point comme les autres, et son infobulle date la valeur de son dernier jour avec un prix, et non plus du dimanche ou du dernier jour du mois encore à venir. Présent depuis la v1.0.0.
 
 #### 📉 Analyse des risques
 
