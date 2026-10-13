@@ -861,6 +861,15 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
     sovrascrivibile (`frontend/playwright.config.ts:54`): con 3 worker del browser sono 2, non 1.
 
   Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «27.3».
+- **M-30 · Lo storico dell'allocazione arriva a circa il 75 %, non al 100 %** — da verificare; M (lotto 42), 13/10:
+  nelle tre viste (tipo, settore, geografia), in ogni lingua e tema, uguale nella galleria del lotto 41 e in quella del
+  lotto 42. Il grafico è uno stack al 100 % (`AllocationHistoryChart.svelte:2`, `max: 100` a `:802`): o una famiglia
+  manca dallo stack, o i pesi non sommano a 100. È l'area dei grafici: da girare a chi la possiede. Scatti:
+  `gallery/*/*/*/dashboard/allocation-{type,sector,geo}-history.png`. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «33.2».
+- **M-31 · Lo scatto `brokers/detail` mostra un broker vuoto** — basso; M (lotto 42), 13/10: il test prende la prima
+  card della lista (`frontend/e2e/gallery.spec.ts:3104`), oggi Charles Schwab, che sul periodo predefinito 3M è tutto
+  a 0,00, con «Nessun dato disponibile» in Crescita e Allocazione. Per mostrare i grafici del broker serve un broker
+  con dati nel periodo, scelto per nome. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «33.2».
 
 ## Q · Documentazione e onboarding (21, 32)
 
