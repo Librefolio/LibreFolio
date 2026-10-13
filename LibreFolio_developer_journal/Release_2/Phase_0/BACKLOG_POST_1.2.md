@@ -52,6 +52,14 @@
 | [Piano della 45](45_pluginModules/plan-phase00PluginModules.prompt.md) | Plugin in cartelle e traduzioni modulari, passi U-0…U-5 | aperto: U-1 (una cartella per plugin) nel treno 61; le voci aperte nella sezione U |
 | [Piano della 46](46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md) | Le voci 21–23 della checklist del server: E2E su dati reali e righe legacy, il pannello lotti dopo il sync | chiuso nel treno 56; le voci aperte nella sezione V |
 | [Piano della 47](47_chartAxisDayLabels/plan-phase00ChartAxisDayLabels.prompt.md) | Gli assi x dei grafici: il giorno nelle etichette, le linee dei broker del P&L che restavano | chiuso nel treno 59; 47-1 nella sezione I |
+| [Piano della 48](48_uiPolish/plan-phase00UiPolish.prompt.md) | La rifinitura UI: BrokerIcon, la modale del broker sbagliato, il pannello della sicurezza, M-20, V-19 | chiuso nella 1.2 |
+| [Piano della 49](49_requestCountRace/plan-phase00RequestCountRace.prompt.md) | La corsa dei contatori di richieste in `asset-detail.spec.ts` | chiuso nella 1.2 |
+| [Piano della 50](50_brokerDetailBudget/plan-phase00BrokerDetailBudget.prompt.md) | Il dettaglio broker sotto carico (C-58) | chiuso nella 1.2 |
+| [Piano della 51](51_narrowFitFixes/plan-phase00NarrowFitFixes.prompt.md) | Quello che non entra sui telefoni (R-1, R-2, R-4) e i marcatori persi nel periodo in corso (R-5) | chiuso nel treno 91 |
+| [Piano della 52](52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md) | L'ultima etichetta degli assi del tempo sui telefoni, le date dei tooltip, il periodo in corso di Growth, Alloc e lotti | chiuso nel treno 97 |
+| [Piano della 53](53_pacTests/plan-phase00PacTests.prompt.md) | I test del PAC (T-PAC): mappa, coperture, test che mentono, difetti D1–D4, lotti A–C | aperto: tutto dopo la 1.2 (C-69, C-73…C-78) |
+| [Piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md) | La fixture della galleria: quote, YoC e variazione di un giorno non più scalate (I-M30) | chiuso nel treno 99; la privacy resta una domanda del developer |
+| [Rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md) | La run completa con coverage sull'albero candidato al tag (`10e646f79`): 0 rossi | C-79 |
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
 | [`TODO_FUTURI.md`](../../../TODO_FUTURI.md) | Il futuro deliberato, non backlog | 52 temi |
 
@@ -280,6 +288,11 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
     `modeText.test.ts:11-16`, `pluralCountSites.test.ts:13-19` e `pac-allocator-real.spec.ts:19`.
 
   Dettagli: piano della 53, §4 e §5.
+- **C-79 · Cancellare un broker lascia il suo lock e la sua cartella vuota in `broker_reports`** — minimo; R, 14/10, run
+  finale. Alla cancellazione di un broker restano `.locks/broker_N.lock` e la cartella vuota `uploaded/broker_N/`: nella
+  run finale, 89 lock e circa 107 cartelle dei broker temporanei delle spec di import. Nessun file di report resta
+  orfano. Cura: la pulizia del file system nella cancellazione del broker (BRIM/import), dopo la 1.2. Dettagli:
+  [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md), §3.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6).
 
 ## Risk · Rischio (02)
