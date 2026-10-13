@@ -941,7 +941,7 @@
     "last_translated": "2026-10-10T00:03:32.770989+00:00"
   },
   "admin/cli_tools.en.md": {
-    "md5": "31e2ed362aa33b87d9165ca7e630619d",
+    "md5": "8fb3bbd223701fb5cb699dec2cb325d2",
     "langs_done": [
       "es",
       "fr",
@@ -960,7 +960,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology (mandatory glossary):** `route di conversione FX` must be `percorso di conversione FX`. The glossary maps *conversion route* → *percorso di conversione*. Correct the sentence to: `... transazione, percorso di conversione FX o evento asset eliminati ...`\n- **Semantic/grammar accuracy:** In `assicura che l'id di un utente, broker, asset, transazione, route di conversione FX o evento asset eliminato non venga mai assegnato a uno nuovo`, the singular `eliminato` only agrees with the last item and can imply that only the asset event was deleted. Source `deleted` applies to all listed items. Use `eliminati` or rephrase to make the scope clear: `... percorso di conversione FX o evento asset eliminati ...`\n- **Semantic accuracy:** `Più worker servono più richieste contemporaneamente` is ambiguous because `servono` can read as “need.” Better: `Più worker gestiscono più richieste contemporaneamente` or `soddisfano più richieste contemporaneamente`.\n- **Meaning accuracy:** `rigenera le sue schermate` should be `rigenera i suoi screenshot`. Source is *screenshots*; `schermate` means screens/pages, not captured images. Correct to: `... e `pipenv run ./dev.py mkdocs gallery` rigenera i suoi screenshot con Playwright ...`\n- **Ambiguous reference:** `L'avviso fornisce l'errore e la copia del database conservata accanto ad esso finché non la elimini` — `esso` could refer to `avviso` or `database`. Source means next to the database. Replace with `accanto al database`: `... la copia del database conservata accanto al database finché non la elimini ...`\n- **Minor title accuracy:** `Test Walkthrough` → `Procedura guidata dei test` is understandable but slightly misleading; `walkthrough` is better rendered as `Procedura dettagliata dei test` or `Guida passo passo ai test`. This only affects link text, not the target.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 241.3
+        "elapsed_s": 241.3,
+        "stamped_at": "2026-10-13T02:20:31.524328+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:04:24.368174+00:00",
@@ -971,7 +973,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminologie obligatoire — FX conversion :** « route de conversion de devises » viole le glossaire (`FX conversion → conversion FX`). Remplacez par « route de conversion FX ». Exemple : « … transaction, route de conversion FX ou événement d’actif… ».\n- **Précision sémantique :** dans « l’id d’un utilisateur, courtier, actif, transaction, route de conversion FX ou événement d’actif supprimé », « supprimé » ne s’applique clairement qu’au dernier élément. Reformulez pour couvrir toute la liste : « garantit que l’id d’une entité supprimée — utilisateur, courtier, actif, transaction, route de conversion FX ou événement d’actif — n’est jamais attribué à une nouvelle entité. »\n- **Cohérence terminologique — broker report :** « les rapports de courtiers » devrait reprendre la forme du glossaire (`broker report → rapport de courtier`) : « les rapports de courtier restent sur le disque ». Si l’on veut insister sur plusieurs courtiers, « les rapports des courtiers » est plus naturel, mais s’écarte du composé imposé.\n- **Libellés d’interface à localiser :** **Register here** et **Forgot Password?** sont laissés en anglais. Comme les autres libellés d’interface du glossaire sont traduits, utilisez **S’inscrire ici** et **Mot de passe oublié ?** (avec espace insécable avant « ? »). Corrigez aussi la phrase : « L’écran **Mot de passe oublié ?** de l’application affiche cette commande… »\n- **Anglicismes :** « une build de débogage » → « une compilation de débogage » ou « une version de débogage ». « depuis un checkout source » → « depuis une copie des sources » ou « depuis un dépôt source ».\n- **Clarté :** « Plus de workers servent plus de requêtes simultanément » est ambigu. Préférez « Davantage de workers permettent de traiter plus de requêtes simultanément. » De même, « Les commandes utilisateur » dans la note Docker gagnerait à être précisé : « Les commandes de gestion des utilisateurs » s’il s’agit du groupe `user`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 260.5
+        "elapsed_s": 260.5,
+        "stamped_at": "2026-10-13T02:20:31.524328+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:04:24.368404+00:00",
@@ -982,7 +986,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Glossary deviation — FX conversion route**: “ruta de conversión de FX” should be “ruta de conversión FX”. The glossary mandates `FX conversion → conversión FX` and `conversion route → ruta de conversión`, so the extra “de” is incorrect. Correct the sentence to: “...transacción, ruta de conversión FX o evento de activo eliminado...”.\n- **Glossary deviation — broker report**: “informes de brókers” does not match the mandatory mapping `broker report → informe del bróker`. In “Los archivos subidos y los informes de brókers permanecen en el disco”, use “los informes del bróker”. If the plural refers to several brokers, phrase it as “los informes de los brókers”, but keep the glossary form for the report term.\n- **Terminology consistency — Global Settings**: The translation uses both “Configuración global” and “Configuraciones globales” for the same feature. The glossary maps `settings → configuración`, so use one consistent form. Suggested fixes:\n  - Heading: “Añadir configuraciones globales faltantes” → “Añadir configuración global faltante”.\n  - Sentence: “Cada inicio añade las [Configuraciones globales](settings.md) faltantes...” → “Cada inicio añade los valores faltantes de la [Configuración global](settings.md)...”.\n- **Untranslated UI labels**: **Register here** and **Forgot Password?** are app UI strings left in English. If the application has Spanish UI, they should be translated consistently with the real interface. Suggested:\n  - **Register here** → **Regístrate aquí** (or the exact Spanish label used in the app).\n  - **Forgot Password?** → **¿Olvidaste tu contraseña?** (or the exact Spanish label used in the app).\n- **Code comments left in English**: The shell comments inside code blocks are explanatory documentation, not executable code, and should be translated while keeping commands, paths, options and filenames unchanged. Examples:\n  - `# Standard start, one worker` → `# Inicio estándar, un worker`\n  - `# Size the workers to the CPUs (`auto` and `0` do the same)` → `# Ajusta los workers a las CPU (`auto` y `0` hacen lo mismo)`\n  - `# Kill whatever already holds the port, then start` → `# Mata lo que ya ocupe el puerto y luego inicia`\n  - `# Apply pending migrations` → `# Aplica las migraciones pendientes`\n  - `# Look for missing CHECK constraints: changes nothing, exits with 1 if any` → `# Busca restricciones CHECK faltantes: no cambia nada, sale con 1 si hay alguna`\n  - `# Every command, by category` → `# Todos los comandos, por categoría`\n  - Keep literal log output such as `Post-migration fixes applied and verified` unchanged, since it is exact program output.\n- **Awkward literal translation**: “Una ruta nombra otro archivo SQLite” is a calque of “A path names another SQLite file”. Use “Una ruta designa otro archivo SQLite” or “Una ruta hace referencia a otro archivo SQLite”.\n- **Ambiguous reference**: “se le rechazará desde su siguiente solicitud” is unclear about what is rejected. Rephrase as “se rechazará la cuenta desde su siguiente petición” or “la cuenta será rechazada desde su siguiente solicitud”.\n- **Naturalness — one-off container**: “contenedor puntual” is understandable but not the most natural technical phrase. Prefer “contenedor de un solo uso” or “contenedor temporal”.\n- **Plural agreement**: “$n$ CPU” should be “$n$ CPUs” or “varias CPU” to match the source’s “$n$ CPUs”.\n- **Minor wording — once**: “ese inicio es más lento, una vez” is slightly awkward. Better: “ese inicio es más lento, una sola vez” or “ese inicio es más lento durante una única vez”.\n- **Autoincrement sentence ambiguity**: In “el id de un usuario, bróker, activo, transacción, ruta de conversión FX o evento de activo eliminado”, “eliminado” can be read as modifying only “evento de activo”. To apply deletion to all list items, use “...usuario, bróker, activo, transacción, ruta de conversión FX o evento de activo eliminados” or rephrase: “el id de cualquier usuario, bróker, activo, transacción, ruta de conversión FX o evento de activo que se elimine...”.\n- **Naturalness — Docker note**: “Ahí no hay `pipenv run`” → “Allí no se usa `pipenv run`”.\n- **Naturalness — password rule**: “La contraseña necesita al menos 8 caracteres” → “La contraseña debe tener al menos 8 caracteres”.\n- **Naturalness — run after shell**: “para ejecutar después de `pipenv shell`” → “para ejecutarse después de `pipenv shell`”.\n- **Minor consistency — request**: In server/web contexts, “solicitudes” can be used, but “peticiones” is more standard in Spanish technical documentation. Consider replacing “solicitudes” with “peticiones” where it refers to HTTP/server requests.\n- **Optional — workers**: “workers” is left in English throughout. This is acceptable as a technical term, but for consistency in a Spanish document, consider “trabajadores” or “procesos worker” once and then use the chosen term consistently. This is not a glossary-mandated term, but it affects readability.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 199.9
+        "elapsed_s": 199.9,
+        "stamped_at": "2026-10-13T02:20:31.524328+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -5272,7 +5278,7 @@
     }
   },
   "user/dashboard/index.en.md": {
-    "md5": "1b06170c209ccb82c49228c7c235e8e6",
+    "md5": "b8b776df932c682b15b32cb7fba6d284",
     "langs_done": [
       "es",
       "fr",
@@ -5294,7 +5300,7 @@
         "elapsed_s": 209.8,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=52, translated=53 (Δ+1)\n  L57: src=0 trn=1\n    EN: level** (Compact, Standard, or Full). The backend snapshot follows the active\n    TR: **livello di dettaglio** (Compact, Standard o Full). Lo snapshot del backend segue il filtro\n  L70: src=5 trn=6\n    EN: The dashboard counts only the brokers you **own** with a share above 0%, and every amount from them is **scaled by your \n    TR: La dashboard conta solo i broker che **possiedi** con una quota superiore allo 0%, e ogni importo da essi è **scalato in\n\nSOURCE_OUTLINE (for reference):\n  # 📊 Dashboard\n    ## 🗂️ Tabbed Layout\n    ## 📈 Overview Tab\n      ### 🪙 Cash Balances\n    ## 🛡️ Risk Tab {: #risk-tab }\n    ## 🎛️ Date Range, Filters & AI Export\n    ## 🔄 Coming back and refreshing {: #coming-back-and-refreshing }\n    ## 🌡️ Data Quality Banner\n    ## 🔗 In this section\n    ## 🔗 Related theory",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-12T02:45:05.894909+00:00",
+        "stamped_at": "2026-10-13T02:20:41.922016+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5307,7 +5313,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 155.9,
-        "stamped_at": "2026-10-12T02:45:05.894909+00:00",
+        "stamped_at": "2026-10-13T02:20:41.922016+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5320,7 +5326,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 187.7,
-        "stamped_at": "2026-10-12T02:45:05.894909+00:00",
+        "stamped_at": "2026-10-13T02:20:41.922016+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6352,7 +6358,7 @@
     "analysis_model": "deepseek-ai/DeepSeek-V4.1-Flash"
   },
   "user/dashboard/kpi-cards.en.md": {
-    "md5": "6ec76bc2edb969459b716f9a5f6d1dd4",
+    "md5": "715f106f11369133b6657ee96f7a9e32",
     "langs_done": [
       "es",
       "fr",
@@ -6372,7 +6378,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 252.4,
-        "stamped_at": "2026-10-12T02:45:07.879691+00:00",
+        "stamped_at": "2026-10-13T02:20:37.543145+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6385,7 +6391,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 333.3,
-        "stamped_at": "2026-10-12T02:45:07.879691+00:00",
+        "stamped_at": "2026-10-13T02:20:37.543145+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6400,7 +6406,7 @@
         "elapsed_s": 219.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=70, translated=77 (Δ+7)\n  L67: src=0 trn=1\n    EN: During the period you bought 10 units for €400, when they were worth 500 USD. At the end of the period they are worth 55\n    TR: Durante el periodo compraste 10 unidades por €400, cuando valían 500 USD. Al final del periodo valen 550 USD, y 1 USD = \n  L90: src=1 trn=2\n    EN: - **TWRR** — how your asset choices performed, whatever the timing of your deposits → [TWRR](../../financial-theory/tech\n    TR: - **TWRR** — cómo rindieron tus elecciones de activos, independientemente del timing de tus **depósitos** → [TWRR](../..\n  L95: src=3 trn=5\n    EN: - **Favorable timing** (green): you tended to deposit before prices rose. **Unfavorable timing** (red): you tended to de\n    TR: - **Timing favorable** (verde): tendiste a **depositar** antes de que subieran los precios. **Timing desfavorable** (roj\n  L98: src=1 trn=2\n    EN: - **`—` means no value**: a return LibreFolio cannot compute for the period shows `—` instead of a number. The timing ef\n    TR: - **`—` significa sin valor**: una rentabilidad que LibreFolio no puede calcular para el periodo muestra `—` en lugar de\n  L122: src=1 trn=2\n    EN: - **Net Worth** — the big number: securities at market value, plus cash, plus anything in transit between your brokers →\n    TR: - **Patrimonio neto** — el número grande: valores a precio de mercado, más efectivo, más cualquier importe **en tránsito\n  L127: src=1 trn=2\n    EN: - **Deposited Capital (Period)** — deposits minus withdrawals in the period, green to the right and red to the left; hov\n    TR: - **Capital depositado (Periodo)** — **depósitos** menos retiros en el periodo, verde a la derecha y rojo a la izquierda\n\nSOURCE_OUTLINE (for reference):\n  # 💰 KPI Cards\n    ## 📉 Card 1 — Period P&L {: #card-1-period-pl }\n      ### 💱 Unrealized change by currency {: #unrealized-change-by-currency }\n    ## 📈 Card 2 — Returns {: #card-2-returns }\n    ## 💰 Card 3 — Net Worth {: #card-3-net-worth }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-12T02:45:07.879691+00:00",
+        "stamped_at": "2026-10-13T02:20:37.543145+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6860,7 +6866,7 @@
     }
   },
   "financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.en.md": {
-    "md5": "718832b7cb21cbb8e030045fd1718aea",
+    "md5": "8dda32ff4073c1878584f5651f87c7e9",
     "langs_done": [
       "es",
       "fr",
@@ -6878,7 +6884,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 209.9,
-        "stamped_at": "2026-10-12T02:44:59.878346+00:00",
+        "stamped_at": "2026-10-13T02:20:47.557407+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6891,7 +6897,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 183.4,
-        "stamped_at": "2026-10-12T02:44:59.878346+00:00",
+        "stamped_at": "2026-10-13T02:20:47.557407+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6904,7 +6910,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 240.1,
-        "stamped_at": "2026-10-12T02:44:59.878346+00:00",
+        "stamped_at": "2026-10-13T02:20:47.557407+00:00",
         "stamped_by": "translate-stamp"
       }
     },
@@ -9648,11 +9654,11 @@
     }
   },
   "user/transactions/import/danske-bank.en.md": {
-    "md5": "a0c65081fc9b70aa0838350ef6d65a69",
+    "md5": "6aa7d94bfd683f9a8e8ede4f49246815",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-10-10T00:06:32.380941+00:00",
     "analysis": "[{\"name\": \"Alpha\", \"keywords\": [\"software release stage alpha beta terminology translation\"]}, {\"name\": \"equity savings account (osakesäästötili)\", \"keywords\": [\"osakesäästötili Finnish equity savings account tax-advantaged account translation\"]}, {\"name\": \"Danske Bank Finland\", \"keywords\": [\"Danske Bank Finland proper noun broker banking\"]}, {\"name\": \"securities transactions\", \"keywords\": [\"securities transactions XLSX broker export translation\"]}, {\"name\": \"cash statement\", \"keywords\": [\"cash statement CSV bank account transactions translation\"]}, {\"name\": \"report set\", \"keywords\": [\"LibreFolio report set importer combined export translation\"]}, {\"name\": \"combined file\", \"keywords\": [\"LibreFolio combined file parse import report set\"]}, {\"name\": \"Matching securities ↔ cash\", \"keywords\": [\"matching securities cash trade payment pairing UI detail\"]}, {\"name\": \"Import Wizard\", \"keywords\": [\"LibreFolio import wizard UI workflow translation\"]}, {\"name\": \"Upload\", \"keywords\": [\"LibreFolio upload UI step import wizard\"]}, {\"name\": \"Select Files\", \"keywords\": [\"LibreFolio select files UI step import wizard\"]}, {\"name\": \"Parse\", \"keywords\": [\"LibreFolio parse UI action import wizard\"]}, {\"name\": \"Review\", \"keywords\": [\"LibreFolio review UI step import transactions\"]}, {\"name\": \"Import N transactions\", \"keywords\": [\"LibreFolio import N transactions UI action\"]}, {\"name\": \"Corrections\", \"keywords\": [\"LibreFolio corrections step import wizard trade fees\"]}, {\"name\": \"asset mapping\", \"keywords\": [\"LibreFolio asset mapping importer security identification\"]}, {\"name\": \"Read as\", \"keywords\": [\"LibreFolio read as UI label importer detection\"]}, {\"name\": \"Danske Bank (detected)\", \"keywords\": [\"LibreFolio detected plugin importer read as\"]}, {\"name\": \"Complete\", \"keywords\": [\"LibreFolio set card status complete import\"]}, {\"name\": \"A file is missing\", \"keywords\": [\"LibreFolio set card missing file status import\"]}, {\"name\": \"Upload the missing file\", \"keywords\": [\"LibreFolio upload missing file action report set\"]}, {\"name\": \"Remove from the set\", \"keywords\": [\"LibreFolio remove from set action importer\"]}, {\"name\": \"Other files of this broker\", \"keywords\": [\"LibreFolio other files broker plugin unassigned\"]}, {\"name\": \"Plugin\", \"keywords\": [\"LibreFolio plugin column importer selection\"]}, {\"name\": \"Read the files one by one\", \"keywords\": [\"LibreFolio read files one by one importer option\"]}, {\"name\": \"checkbox shows a dash\", \"keywords\": [\"LibreFolio indeterminate checkbox partial selection UI\"]}, {\"name\": \"duplicate detection\", \"keywords\": [\"LibreFolio duplicate detection import hidden transactions\"]}, {\"name\": \"N already in LibreFolio (hidden)\", \"keywords\": [\"LibreFolio duplicate hidden review already imported\"]}, {\"name\": \"Gaps\", \"keywords\": [\"LibreFolio gaps securities exports missing period\"]}, {\"name\": \"starting point\", \"keywords\": [\"LibreFolio starting point first import balance summary\"]}, {\"name\": \"After the gap\", \"keywords\": [\"LibreFolio after the gap corrections import\"]}, {\"name\": \"Align with the bank\", \"keywords\": [\"LibreFolio align with the bank import reconciliation\"]}, {\"name\": \"End-of-period check\", \"keywords\": [\"LibreFolio end-of-period check cash balance comparison\"]}, {\"name\": \"gap_fix\", \"keywords\": [\"LibreFolio gap_fix tag correction code identifier\"]}, {\"name\": \"cost per share\", \"keywords\": [\"tax cost basis cost per share demerger adjustments\"]}, {\"name\": \"cost to enter\", \"keywords\": [\"LibreFolio cost to enter position editor correction\"]}, {\"name\": \"invested capital\", \"keywords\": [\"invested capital portfolio accounting tax basis\"]}, {\"name\": \"negative position correction\", \"keywords\": [\"negative position correction invested capital demerger\"]}, {\"name\": \"value date\", \"keywords\": [\"value date banking transaction date settlement\"]}, {\"name\": \"business days\", \"keywords\": [\"business days settlement trade payment banking\"]}, {\"name\": \"broker\", \"keywords\": [\"LibreFolio broker financial institution importer\"]}, {\"name\": \"eBanking\", \"keywords\": [\"Danske Bank eBanking online banking UI\"]}, {\"name\": \"Sijoitukset → Tapahtumat\", \"keywords\": [\"Danske Bank Finland Sijoitukset Tapahtumat investments transactions\"]}, {\"name\": \"Määrä\", \"keywords\": [\"Finnish bank export Määrä quantity amount securities\"]}, {\"name\": \"Osto …\", \"keywords\": [\"Finnish bank export Osto purchase buy payment\"]}, {\"name\": \"Myynti …\", \"keywords\": [\"Finnish bank export Myynti sale sell payment\"]}, {\"name\": \"Tuotto\", \"keywords\": [\"Finnish bank export Tuotto dividend return income\"]}, {\"name\": \"Nosto osakesäästötililtä\", \"keywords\": [\"Finnish bank export Nosto withdrawal equity savings account\"]}, {\"name\": \"Vero osakesäästötililtä\", \"keywords\": [\"Finnish bank export Vero tax equity savings account\"]}, {\"name\": \"Palvelumaksu…\", \"keywords\": [\"Finnish bank export Palvelumaksu service fee commission\"]}, {\"name\": \"Korko…\", \"keywords\": [\"Finnish bank export Korko interest cash account\"]}, {\"name\": \"Jakautuminen, vanha / uusi\", \"keywords\": [\"Finnish bank export Jakautuminen demerger old new shares\"]}, {\"name\": \"Buy / Sell / Dividend / Withdrawal / Tax / Fee / Interest / Deposit / Adjustments\", \"keywords\": [\"LibreFolio transaction type labels import translation\"]}, {\"name\": \"Separate the price from the charges?\", \"keywords\": [\"LibreFolio corrections commission fees trade amount\"]}, {\"name\": \"Apply correction\", \"keywords\": [\"LibreFolio apply correction UI action\"]}, {\"name\": \"Keep as recorded</keyword>\", \"keywords\": [\"LibreFolio keep as recorded trade amount commission\"]}, {\"name\": \"Keep the remaining N rows as read\", \"keywords\": [\"LibreFolio corrections bulk action import\"]}, {\"name\": \"Save All\", \"keywords\": [\"LibreFolio save all editor action import\"]}, {\"name\": \"Select All / Select visible / Deselect All\", \"keywords\": [\"LibreFolio selection UI corrections import\"]}, {\"name\": \"Matches / Does not match\", \"keywords\": [\"LibreFolio reconciliation balance comparison status\"]}, {\"name\": \"Finnish Tax Administration\", \"keywords\": [\"Finnish Tax Administration vero.fi demerger tax\"]}, {\"name\": \"vero.fi\", \"keywords\": [\"vero.fi Finnish Tax Administration official website\"]}, {\"name\": \"ISIN\", \"keywords\": [\"ISIN security identifier acronym translation\"]}, {\"name\": \"ticker\", \"keywords\": [\"ticker symbol security identifier finance translation\"]}, {\"name\": \"XLSX\", \"keywords\": [\"XLSX Excel file format acronym\"]}, {\"name\": \"CSV\", \"keywords\": [\"CSV file format acronym translation\"]}, {\"name\": \"Next: Select Files\", \"keywords\": [\"LibreFolio next select files UI button\"]}, {\"name\": \"Uploaded Reports\", \"keywords\": [\"LibreFolio uploaded reports broker page import\"]}, {\"name\": \"Developer Reference\", \"keywords\": [\"LibreFolio developer reference documentation section\"]}, {\"name\": \"brim\", \"keywords\": [\"LibreFolio brim backend broker import module code identifier\"]}, {\"name\": \"trade confirmation\", \"keywords\": [\"trade confirmation bank document commission price\"]}, {\"name\": \"payment (of a trade)\", \"keywords\": [\"trade payment settlement cash securities matching\"]}, {\"name\": \"order not executed\", \"keywords\": [\"order not executed skipped row broker export\"]}, {\"name\": \"cash account\", \"keywords\": [\"cash account equity savings account bank statement\"]}, {\"name\": \"holding\", \"keywords\": [\"holding portfolio position average purchase price\"]}, {\"name\": \"position\", \"keywords\": [\"position portfolio security holding translation\"]}, {\"name\": \"securities\", \"keywords\": [\"securities financial instruments stocks shares translation\"]}, {\"name\": \"demerger\", \"keywords\": [\"demerger corporate action Jakautuminen tax cost\"]}]",
@@ -9667,7 +9673,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology glossary violation — “securities transactions”**: the mandatory mapping is `securities transactions → movimenti titoli`. The translation uses “Transazioni titoli” / “transazioni titoli” in the intro, table, and bullets. Replace all such occurrences with “Movimenti titoli” / “movimenti titoli”. Examples: “le **transazioni titoli** (XLSX)” → “i **movimenti titoli** (XLSX)”; “| **Transazioni titoli** (`Transactions.xlsx`) |” → “| **Movimenti titoli** (`Transactions.xlsx`) |”; “**Transazioni titoli**: l'**intero anno**” → “**Movimenti titoli**: l'**intero anno**”.\n- **Terminology glossary violation — “cash statement”**: the mandatory mapping is `cash statement → estratto del conto`. The translation uses “estratto conto di cassa” / “Estratto conto di cassa”. Replace with “estratto del conto” / “Estratto del conto” wherever it refers to the CSV export. Examples: “l'**estratto conto di cassa** (CSV)” → “l'**estratto del conto** (CSV)”; “| **Estratto conto di cassa** |” → “| **Estratto del conto** |”; alt text “l'estratto conto di cassa mancante” → “l'estratto del conto mancante”. Also adjust related references: “saldo dell'estratto conto” → “saldo dell'estratto del conto”; “dopo la fine dell'estratto conto” → “dopo la fine dell'estratto del conto”.\n- **Terminology glossary violation — “holding”**: the mandatory mapping is `holding → posizione`. In “il prezzo medio di acquisto di ogni partecipazione”, “partecipazione” should be “posizione”: “il prezzo medio di acquisto di ogni posizione”.\n- **Grammar/gender agreement**: “finché uno di essi è selezionato” refers to “esportazioni” (feminine plural). Correct to “finché una di esse è selezionata”.\n- **Grammar/UI label “Align with the bank”**: “Allineati con la banca” is not the correct form for a step/UI label. Use “Allinea con la banca” or, if a noun phrase is preferred, “Allineamento con la banca”. Apply consistently in the heading “Primo import: allineati con la banca” and in the body/alt text. For example: “Primo import: allinea con la banca”; “può aprire **Allinea con la banca**”; alt “Allinea con la banca: le schede...”.\n- **Accuracy/naturalness — “contante” for account cash**: in a brokerage/account context, “contante” normally means physical cash. The source’s “cash” often means account liquidity/cash balance. Prefer “liquidità” or “saldo di cassa” where appropriate. Examples: “(in entrambi i casi il tuo contante è corretto)” → “(in entrambi i casi la tua liquidità è corretta)”; “porta il contante al saldo dell'estratto conto di cassa” → “porta la liquidità al saldo dell'estratto del conto”; “mancanti dal tuo contante fino ad allora” → “mancanti dalla tua liquidità fino ad allora”; “il contante viene conteggiato due volte” → “la liquidità viene conteggiata due volte”.\n- **Consistency for “securities export”**: since the glossary fixes “securities transactions” as “movimenti titoli”, consider using “esportazione dei movimenti titoli” instead of bare “esportazione titoli” where the source refers to that export, to avoid ambiguity. Example: “L'esportazione titoli va indietro solo di un anno” → “L'esportazione dei movimenti titoli va indietro solo di un anno”.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 197.4
+        "elapsed_s": 197.4,
+        "stamped_at": "2026-10-13T02:20:53.739397+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:06:32.380879+00:00",
@@ -9680,7 +9688,9 @@
         "structural_issues": 0,
         "elapsed_s": 239.4,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=98, translated=99 (Δ+1)\n  L121: src=2 trn=3\n    EN: 3. In the editor, enter the **cost per share** of each position marked *cost to enter* — the bank's website shows each h\n    TR: 3. Dans l'éditeur, saisissez le **coût par action** de chaque position marquée *cost to enter* — le site web de la banqu\n\nSOURCE_OUTLINE (for reference):\n  # 📥 <img src=\"https://danskebank.fi/favicon.ico\" alt=\"\"> Danske Bank\n    ## 📤 What to export\n    ## 🧺 Upload both files together\n      ### 🧩 If one file is missing\n      ### 🔀 How the set is read {: #how-the-set-is-read }\n    ## 🗓️ Import at least once a year\n    ## 📝 What is imported\n      ### 💶 Fees are included in the trade amounts\n      ### ✂️ Demergers {: #demergers }\n    ## 🏁 First import: align with the bank {: #first-import-align-with-the-bank }\n      ### ✅ End-of-period check\n    ## 🕳️ Gaps between securities exports {: #gaps }\n    ## ⚠️ Limits {: #limits }\n    ## 🔗 Developer Reference",
-        "final_structural_issues": 1
+        "final_structural_issues": 1,
+        "stamped_at": "2026-10-13T02:20:53.739397+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:06:32.380943+00:00",
@@ -9691,7 +9701,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Mandatory glossary term: `securities transactions` → `movimientos de valores`.** The translation uses “transacciones de valores”, which violates the required mapping. Replace all occurrences referring to the export/term:\n  - “las **transacciones de valores** (XLSX)” → “los **movimientos de valores** (XLSX)”\n  - table row “**Transacciones de valores** (`Transactions.xlsx`)” → “**Movimientos de valores** (`Transactions.xlsx`)”\n  - bullet “Transacciones de valores: el **año completo**…” → “Movimientos de valores: el **año completo**…”\n\n- **Mandatory glossary term: `cash statement` → `extracto de la cuenta de efectivo`.** The translation uses “extracto de efectivo”, which is a deviation. Replace consistently:\n  - “el **extracto de efectivo** (CSV)” → “el **extracto de la cuenta de efectivo** (CSV)”\n  - table row “**Extracto de efectivo**” → “**Extracto de la cuenta de efectivo**”\n  - “Extracto de efectivo: el mismo periodo…” → “Extracto de la cuenta de efectivo: el mismo periodo…”\n  - “el extracto de efectivo que falta” → “el extracto de la cuenta de efectivo que falta”\n  - “del extracto de efectivo” (alt text) → “del extracto de la cuenta de efectivo”\n  - “mientras el extracto de efectivo muestra operaciones…” → “mientras el extracto de la cuenta de efectivo muestra operaciones…”\n  - “al saldo del extracto de efectivo” → “al saldo del extracto de la cuenta de efectivo”\n  - “el saldo del extracto” in the end-of-period check → “el saldo del extracto de la cuenta de efectivo”\n\n- **Mandatory glossary term: `withdrawal` → `retiro`.** The translation uses “Retirada”/“retiradas”. Correct all:\n  - “sin ingresos, retiradas ni saldo” → “sin depósitos, retiros ni saldo”\n  - table row “**Retirada**” → “**Retiro**”\n  - “un **Ingreso** o una **Retirada**” → “un **Depósito** o un **Retiro**”\n  - “los ingresos, retiradas, impuestos…” → “los depósitos, retiros, impuestos…”\n\n- **Mandatory glossary term: `deposit` → `depósito`.** The translation uses “Ingreso”/“ingresos”. Correct all:\n  - “sin ingresos, retiradas ni saldo” → “sin depósitos, retiros ni saldo”\n  - table row “**Ingreso**” → “**Depósito**”\n  - “un **Ingreso** o una **Retirada**” → “un **Depósito** o un **Retiro**”\n  - “los ingresos, retiradas, impuestos…” → “los depósitos, retiros, impuestos…”\n  - “Cualquier otro abono … | **Ingreso**” → “Cualquier otro abono … | **Depósito**”\n\n- **Semantic addition:** “desde el formulario **Informes subidos** de un bróker” adds “formulario”, which is not in the source. The English says “a broker's **Uploaded Reports**”. Prefer “desde **Informes subidos** de un bróker” or “desde la sección **Informes subidos** de un bróker”.\n\n- **Accuracy nuance:** “el asistente mantiene **Analizar** deshabilitado mientras se selecciona una de ellas” is ambiguous. The source means “while one of them is selected”. Better: “mientras una de ellas esté seleccionada”.\n\n- **Clarity:** “Extracto de efectivo: el mismo periodo, desde el día anterior, y idealmente unos días más allá de su final…” can be clarified as “Extracto de la cuenta de efectivo: el mismo periodo, desde el día anterior a este, y idealmente unos días después de su final…”.\n\n- **Naturalness:** The table header “Hasta cuándo atrás” is awkward. Consider “Antigüedad máxima” or “Hasta qué fecha atrás”.\n\n- **Structure check:** Headings, anchors, links, HTML blocks, emojis, and `data-*` attributes are preserved correctly. No structural fixes are required.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 252.5
+        "elapsed_s": 252.5,
+        "stamped_at": "2026-10-13T02:20:53.739397+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },

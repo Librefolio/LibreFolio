@@ -36,7 +36,7 @@ $$
 \mathrm{Other} = \mathrm{PnL}_{\text{period}} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Because the cost basis keeps its historical exchange rates (see [Book Value](book-value.md)), the effect of exchange rates on foreign assets is part of $\Delta\mathrm{UGL}$, not of Other. Cash held in another currency is different: NAV and Book both value it at each day's rate, so its exchange-rate effect cancels in the unrealized gain/loss and is not in $\Delta\mathrm{UGL}$. It is the first part of Other, the [FX on cash](#fx-on-cash) of each broker $b$, which the Performance view shows per broker:
+Because the cost basis keeps its historical exchange rates (see [Book Value](book-value.md)), the effect of exchange rates on foreign assets is part of $\Delta\mathrm{UGL}$, not of Other. Cash held in another currency is different: NAV and Book both value it at each day's rate, so its exchange-rate effect cancels in the unrealized gain/loss and is not in $\Delta\mathrm{UGL}$. It is the first part of Other, the [FX on cash](#fx-on-cash) of each broker $b$, which the Period view shows per broker:
 
 $$
 \mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
