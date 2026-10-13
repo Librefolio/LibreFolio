@@ -1284,6 +1284,38 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     4 worker, il DB era al seed (76 transazioni, id massimo 76).
   - Cura possibile: richiedere `committed === true` e il successo di ogni esito di delete, nominando gli id rimasti,
     come fanno già le pulizie di V-25 e degli asset.
+- **V-35 · `fx-detail:923`: il pannello «aesthetics» resta aperto dopo il secondo click, una volta, sotto carico** —
+  medio, perché il meccanismo è sconosciuto; gate del treno 88 (6150, 1 worker, carico 100–158), triage di V, 13/10.
+  **Sotto osservazione.**
+  - **Il rosso**: dopo il secondo click, `not.toBeVisible()` scade coi 3 s. Il call log dice «10 × locator resolved to
+    <div data-testid="fx-detail-aesthetics-panel" …> unexpected value "visible"»: il processo era vivo, e il pannello è
+    rimasto davvero aperto. Da solo è verde 17/17.
+  - **Nel codice** (`frontend/src/routes/(app)/fx/[pair]/+page.svelte`) il toggle fa solo
+    `showAesthetics = !showAesthetics`. Il pannello è un `{#if}` semplice, senza `{#key}`, transizioni o async.
+    `showAesthetics` torna `true` solo dal toggle, o dai ripristini dell'editor dei dati, che si apre solo dai suoi
+    bottoni. Nessun meccanismo trovato.
+  - **50 giri di sonda, tutti verdi**, coi passi esatti del test, sotto CPU ×1–20, API ritardate, pause e richieste
+    tardive (`/tmp/libreFolio_v_fxaes_*`).
+  - **Quello che c'è ora**, decisione del coordinatore:
+    - `aria-expanded` sul toggle dell'estetica; quello dei segnali l'aveva già;
+    - i due test di `fx-detail` (e `fx-destructive`) verificano `aria-expanded` dopo ogni click e poi il pannello;
+    - su un rosso allegano e stampano il registro in pagina, `[fx-panel-log]`: click, `aria-expanded`, pannelli,
+      `data-busy`, errori.
+
+    Il prossimo rosso dirà da solo se il click non è arrivato o se lo stato si è ribaltato.
+  - Se succede: leggere il registro; se lo stato torna `true` senza un click, è un difetto di prodotto. Dettagli: piano
+    della 46, §12.12.
+- ✅ **V-36 · `setLanguage` scommetteva 3 s sul caricamento del dizionario** — basso; rosso di M nella
+  `toolbar-width-sweep` (`assetsList › fr`, carico 60), 13/10.
+  - `setLanguage` (`frontend/e2e/fixtures/auth-helpers.ts`) aspetta lo stato giusto: `<html lang>` e
+    `data-i18n-ready`, pubblicati da `routes/+layout.svelte` quando svelte-i18n ha caricato il chunk del dizionario,
+    circa 290 KB. Lo faceva però coi 3 s di default, e il bottone del selettore con 5 s.
+  - **Chiusa il 13/10** in un checkpoint di V.
+    - Il rosso deterministico: il chunk del dizionario trattenuto 5 s dà «Expected "it", Received "en", Timeout 3000ms».
+    - La cura: `LANGUAGE_SWITCH_MS = 15_000` sulle tre attese. Col ritardo ancora attivo è verde.
+    - `toolbar-width-sweep` 15/15 e `front-ai-export all` sono verdi a 4 worker.
+
+    Dettagli: piano della 46, §12.12.
 
 ## 09 · Feedback e backlog strutturale
 
