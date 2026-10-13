@@ -1440,6 +1440,7 @@
                     </button>
                     <button
                         data-testid="fx-detail-aesthetics-toggle"
+                        aria-expanded={showAesthetics}
                         class="p-1.5 rounded-lg transition-colors {showAesthetics
                             ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-300 dark:ring-emerald-700'
                             : 'bg-white/80 dark:bg-slate-700/80 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-600 hover:text-gray-700 dark:hover:text-gray-200'}"
