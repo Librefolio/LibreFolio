@@ -260,33 +260,49 @@ The frontend has **two** worker counts, and they are derived from the same numbe
 ```text
 ./dev.py test front-transaction --workers 4
         │
-        ├─ _apply_parallel  → _common._E2E_WORKERS = 4
-        │                       └─ _run_playwright injects E2E_WORKERS=4
-        │                            └─ playwright.config.ts: workers: 4   (browser contexts)
+        ├─ shared_backend_for → SharedTestServer: max(1, ⌈4 / 2⌉) = 2      (uvicorn processes)
+        │                         └─ playwright.config.ts reuses it instead of starting its own
         │
-        └─ playwright.config.ts: SERVER_WORKERS = max(1, ⌊4 / 2⌋) = 2      (uvicorn processes)
+        └─ _apply_parallel  → _common._E2E_WORKERS = 4
+                                └─ apply_e2e_workers: min(4, max(1, ⌊logical cores / 2⌋)) → E2E_WORKERS
+                                     └─ playwright.config.ts: workers: E2E_WORKERS   (browser contexts)
 ```
 
-One uvicorn worker per two browser workers, minimum one. The ratio is deliberate: browser workers
-spend most of their time rendering and waiting, so pairing them onto a single backend keeps the
-backend *usefully* contended — which is the point. A suite that never makes the backend queue is
-not testing concurrency, it is only testing itself faster.
+`apply_e2e_workers()`, which both Playwright launches call (per unit and consolidated), caps the
+browser workers at half the logical cores, never below one: `--workers 4` gives four from 8 logical
+cores up. It exports `E2E_WORKERS` only when the result is above 1 and the variable is not already
+set; otherwise `playwright.config.ts` runs what the environment says, or 1.
+
+Under the runner the backend is the shared one (`SharedTestServer`), which Playwright reuses, and it
+is sized from `--workers` itself, before that cap: one uvicorn worker per two, rounded up (1 → 1,
+3 → 2, 4 → 2). `--workers 8` on 10 logical cores therefore runs 5 browser workers against 4 uvicorn
+workers. `playwright.config.ts` sizes a backend only when it starts one itself — with
+`--no-shared-server`, for the gallery, or with `npx playwright test` by hand — by the same rule applied
+to the browser count: `SERVER_WORKERS = max(1, ⌈E2E_WORKERS / 2⌉)`, unless `LIBREFOLIO_SERVER_WORKERS`
+or, failing that, `GALLERY_SERVER_WORKERS` (the gallery's one per four) sets it. The ratio is
+deliberate, and `_server.py` gives the reason (`CLIENTS_PER_SERVER_WORKER`): API and E2E workers hit
+the backend hard, hence one uvicorn worker per two of them, while the gallery's one per four rests on
+its browser workers spending most of their time rendering. A suite that never makes the backend queue
+is not testing concurrency, it is only testing itself faster.
 
 !!! warning "The environment variable is not the interface"
 
     `E2E_WORKERS` existed long before `--workers` wrote it. That gap meant
     `./dev.py test front-transaction --workers 4` gave four **uvicorn** workers and one **browser**
     worker: the flag was half-obeyed, silently. If you set `E2E_WORKERS` in your shell it still
-    wins — the runner does not overwrite a value you chose deliberately.
+    wins, uncapped — the runner does not overwrite a value you chose deliberately. The shared backend
+    is still sized from `--workers`, not from that value.
 
 !!! danger "Do not edit the repository while an E2E run is in flight"
 
-    Playwright's `webServer` starts the backend itself, and it must be started with `--no-reload`
-    (it is, since this was found the hard way). Under `--reload` uvicorn watches the **repo root**:
-    a single saved file restarts the backend mid-run, and every test that happens to be logging in
-    at that moment dies at 20 s. The signature is unmistakable — a burst of `login()` timeouts in
-    the tests scheduled first, scattered across unrelated files. It reads exactly like a
-    concurrency bug, and it is not one.
+    Under the runner the backend is started by `SharedTestServer`; Playwright's own `webServer`
+    starts one only when no shared backend is up — with `--no-shared-server`, for the gallery, or
+    with `npx playwright test` by hand. Either way it must be started with `--no-reload` — found the
+    hard way — and both paths pass it, together with `--no-scheduler`. Under `--reload`
+    uvicorn watches the **repo root**: a single saved file restarts the backend mid-run, and every
+    test that happens to be logging in at that moment dies at 20 s. The signature is unmistakable —
+    a burst of `login()` timeouts in the tests scheduled first, scattered across unrelated files. It
+    reads exactly like a concurrency bug, and it is not one.
 
 ---
 
@@ -338,8 +354,9 @@ and a shared `htmlcov-backend/` would be written by every worker at once.
   WRITE-GLOBAL unit stays serial even at `--workers 8`.
 - `--workers auto` resolves to half the cores, because a development machine is not dedicated to tests
   and timing-sensitive tests degrade under load.
-- On a **frontend** category the same flag sets Playwright's browser workers and, derived from it,
-  the number of uvicorn processes behind them (see *[`--workers` reaches Playwright too](#-workers-reaches-playwright-too)*).
+- On a **frontend** category the same flag sets Playwright's browser workers, capped at half the
+  logical cores, and the number of uvicorn processes behind them — the shared backend is sized from
+  the flag itself, not from the capped count (see *[`--workers` reaches Playwright too](#-workers-reaches-playwright-too)*).
 
 The flag belongs to `./dev.py test`, so it goes **before** the category:
 
