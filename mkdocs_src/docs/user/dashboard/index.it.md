@@ -67,18 +67,18 @@ L'intervallo temporale, il filtro broker e la valuta target rimangono come li ha
 
 !!! note "La condivisione influisce su questi numeri"
 
-    La dashboard conta solo i broker che **possiedi** con una quota superiore allo 0%, e ogni importo da essi è **scalato in base alla tua quota di proprietà**: un proprietario con una quota del 50% vede metà del valore, del reddito e del P&L di quel broker conteggiati nei totali. I broker in cui sei un **Editor** o un **Visualizzatore** — che per regola hanno sempre una quota dello 0% — sono esclusi, come quelli che possiedi con una quota dello 0%: mancano dai totali, dal filtro broker, dalla scheda Posizioni (vista Performance e pannello lotti inclusi), dalla scheda Rischio e dalla scheda Transazioni. Li vedi nella loro pagina broker dedicata, dove Editor e Visualizzatori ottengono gli importi **completi** del broker. Vedi [Condivisione broker](../brokers/sharing.md) per i dettagli.
+    La dashboard conta solo i broker che **possiedi** con una quota superiore allo 0%, e ogni importo da essi è **scalato in base alla tua quota di proprietà**: un proprietario con una quota del 50% vede metà del valore, del reddito e del P&L di quel broker conteggiati nei totali. I broker in cui sei un **Editor** o un **Visualizzatore** — che per regola hanno sempre una quota dello 0% — sono esclusi, come quelli che possiedi con una quota dello 0%: mancano dai totali, dal filtro broker, dalla scheda Posizioni (vista Periodo e pannello lotti inclusi), dalla scheda Rischio e dalla scheda Transazioni. Li vedi nella loro pagina broker dedicata, dove Editor e Visualizzatori ottengono gli importi **completi** del broker. Vedi [Condivisione broker](../brokers/sharing.md) per i dettagli.
 
 ---
 
 ## 🔄 Tornare indietro e aggiornare {: #coming-back-and-refreshing }
 
-Torna alla Dashboard — dalla barra laterale, oppure con il pulsante **←** indietro di una pagina di un asset — e mostra subito ciò che mostrava quando l'hai lasciata: le schede KPI, i grafici, la scheda Posizioni con la sua vista Performance e il pannello [Analisi Lotti FIFO](positions.md#fifo-lots-analysis), e la scheda Rischio. Non ci sono segnaposto di caricamento, e le cifre dei KPI appaiono al loro valore invece di aumentare partendo da zero. Se nel frattempo hai cambiato l'intervallo temporale su un'altra pagina, la Dashboard si apre su quell'intervallo.
+Torna alla Dashboard — dalla barra laterale, oppure con il pulsante **←** indietro di una pagina di un asset — e mostra subito ciò che mostrava quando l'hai lasciata: le schede KPI, i grafici, la scheda Posizioni con la sua vista Periodo e il pannello [Analisi Lotti FIFO](positions.md#fifo-lots-analysis), e la scheda Rischio. Non ci sono segnaposto di caricamento, e le cifre dei KPI appaiono al loro valore invece di aumentare partendo da zero. Se nel frattempo hai cambiato l'intervallo temporale su un'altra pagina, la Dashboard si apre su quell'intervallo.
 
 - **Se nel frattempo non è cambiato nulla**, è tutto: LibreFolio non ricalcola niente.
 - **Se qualcosa è cambiato** — ad esempio una transazione; prezzi, tassi o eventi inseriti a mano o importati da una sincronizzazione; un asset modificato o unito; una modifica a uno dei tuoi broker o al tuo accesso ad esso; oppure il prezzo live che una pagina di un asset controlla mentre è aperta — le vecchie cifre restano a schermo mentre LibreFolio ricalcola in background, poi i numeri passano ai nuovi valori. Una sincronizzazione di prezzi o tassi che non ha portato nulla di nuovo non è un cambiamento.
 
-Il pulsante **Aggiorna** ricalcola tutto, anche quando non è cambiato nulla: le cifre, la vista Performance, il pannello lotti e la scheda Rischio. Nel frattempo ciò che vedi resta a schermo.
+Il pulsante **Aggiorna** ricalcola tutto, anche quando non è cambiato nulla: le cifre, la vista Periodo, il pannello lotti e la scheda Rischio. Nel frattempo ciò che vedi resta a schermo.
 
 Se un ricalcolo fallisce, le cifre già a schermo restano e un messaggio te lo segnala. Nella scheda Rischio, questo vale solo per le cifre del periodo e della valuta che stai visualizzando: se passi a un periodo o a una valuta per cui la scheda non ha ancora cifre e il calcolo fallisce, mostra *Impossibile caricare i dati di rischio.* al posto dei suoi livelli, invece delle cifre della tua scelta precedente.
 
