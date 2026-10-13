@@ -741,3 +741,10 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/report-R-full-run-coverage-20261012.md` | `588223c6f` | 2026-10-13 | [[sources/r-full-run-coverage-2026-10-12]] and its two open problems |
 | `LibreFolio_developer_journal/Release_2/Phase_0/50_brokerDetailBudget/plan-phase00BrokerDetailBudget.prompt.md` | `f351293c4` | 2026-10-13 | [[problems/broker-detail-tests-over-budget-under-load]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `588223c6f` | 2026-10-13 | C-58 closed; C-67, C-68, C-69 → [[sources/r-full-run-coverage-2026-10-12]] |
+
+## 2026-10-13 — train 82, V's §12.10 (base `273b188ea`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` | `452978f2e` | 2026-10-13 | §12.10 → [[problems/hidden-pair-half-survived-row-removal]], [[problems/e2e-writes-leaked-into-shared-state]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `73d083e46` | 2026-10-13 | V-21, V-25, V-26, V-27, V-29 → the pages above |
