@@ -100,6 +100,20 @@ The two budgets of R's run, and the leaks next to them:
 - The developer docs follow: `coverage-model.md` (one JSON per test, the teardown slot) and
   `runner_architecture.md` (the shared backend's workers).
 
+## Train 92 and the developer's calls (added 2026-10-13)
+
+- **V-36, closed** (`fccf0bee1`): `setLanguage` waits up to 15 s for the chosen dictionary instead of the default 3 s —
+  the red M met in the French width sweep; see [[problems/login-returns-before-the-app-has-started]], «Prevention».
+- **V-35, under observation**: once, under load (train 88's gate), the FX page's aesthetics panel stayed open after its
+  second click; alone it is green, and 50 probe rounds under CPU throttling, delayed APIs and late requests stayed
+  green. Nothing in the code reopens it. The coordinator chose instruments over a guess: `aria-expanded` on the toggle
+  (`a67f89661`), and the two `fx-detail` tests (and `fx-destructive`) check it after every click and, on a red, attach
+  a log of clicks, states, panels and errors (`84cdf6dbb`) — the next red will tell whether the click did not arrive
+  or the state flipped.
+- **The developer's calls of 13/10**: V-3, the orphan TRANSFER — [[decisions/orphan-transfer-becomes-an-adjustment]];
+  V-8 (the risk tab after a broker vanished: a 403 and no reload) and V-22 («+ New event» that can modify an existing
+  event) after 1.2.
+
 ## Wiki pages created or updated
 
 - Created: [[decisions/data-quality-proved-on-real-data]], [[problems/open-panels-stale-after-fx-sync]].

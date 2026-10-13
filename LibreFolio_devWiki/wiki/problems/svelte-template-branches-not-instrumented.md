@@ -1,7 +1,7 @@
 ---
-title: "Svelte template branches are not instrumented"
+title: "Svelte template branches were invisible to V8 coverage: an empty `branchMap` for `{#if}` — istanbul instrumentation of the source counts them (`2e104b919`)"
 category: problem
-status: accepted
+status: resolved
 date: 2026-08-31
 tags: [frontend, testing, coverage, svelte, istanbul, measurement]
 related: [concepts/coverage-rate-vs-volume]
@@ -29,10 +29,14 @@ branchMap: {}          ← empty
 hits b   : {}
 ```
 
-**Istanbul registers no branch at all for an `{#if}` in a Svelte template.** The
-branches that *do* appear in a `.svelte` file come from its `<script>` block,
-which is ordinary JavaScript. Conditional markup is invisible to the measurement,
-and where it does appear it is mis-attributed.
+**V8 registers no branch at all for an `{#if}` in a Svelte template**: the compiler turns conditional markup into
+closures that V8 does not recognise as decisions. The branches that *do* appear in a `.svelte` file come from its
+`<script>` block, which is ordinary JavaScript. Conditional markup was invisible to the measurement, and where it did
+appear it was mis-attributed.
+
+> *Corrected on 2026-10-13 (backlog C-72)*: this paragraph said «Istanbul registers no branch». The empty `branchMap`
+> was V8's, read back through sourcemaps; istanbul instrumentation applied to the source **before** the Svelte
+> compiler does count the template's branches — on the same minimal component, V8 saw none where istanbul saw two.
 
 Three lanes hit this independently — `table` reported "branches demonstrably
 executed yet reported uncovered", `assets` measured "36 % and 58 %
@@ -64,10 +68,15 @@ noise. The real matrix has to be counted by hand.
 
 ## Status
 
-**Accepted, not fixed.** No workaround was attempted: instrumenting Svelte
-markup would mean changing the compile pipeline. The mitigation is editorial —
-read `.ts` branch figures, treat `.svelte` ones as hints, and extract logic when
-a branch matters.
+**Resolved** by `2e104b919` (2026-08-30, shipped in 1.1.0), the day before this page was written from the earlier
+measurement: the build is instrumented by `vite-plugin-istanbul`, which reads the source before the compiler
+rewrites it, and the branches counted on `.svelte` files went from 0 to 11 620. The same commit made the JS pipeline
+istanbul end to end and stopped a double count of shared files. Points 1 and 2 of the consequences describe the V8
+measurement; point 3 stands. What remains is weaker and documented: the remap from compiled closures is reliable about
+*whether a component was reached*, much less about *whether line X is covered* (`coverage-model.md`, «Coverage is a
+map, not a grade»).
+
+Until 2026-10-13 this section read «Accepted, not fixed»; the backlog's C-72 found it contradicted by `2e104b919`.
 
 ## Source files
 
@@ -78,6 +87,7 @@ a branch matters.
 | Build instrumentation | `frontend/vite.config.ts` — `vite-plugin-istanbul`, gated on `COVERAGE_INSTRUMENT=1` |
 | Vitest coverage provider | `frontend/vitest.config.ts` — `provider: 'istanbul'` (V8 reports an **empty branch map** for a Svelte template; that is the whole reason for this page) |
 | Report classification | `scripts/test_runner/_coverage.py` — `coverage-report --lang js` |
+| Developer docs, «Why istanbul, and no monocart any more» | `mkdocs_src/docs/developer/test-walkthrough/coverage-model.md` |
 | Extraction precedent | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
 
 > **Path note (2026-09-01)**: this table cited `frontend/mcr.config.js`. **That file
