@@ -37,7 +37,6 @@ from typing import Any, List, Set
 from unittest.mock import MagicMock
 
 import pytest
-from PIL import Image
 from pydantic import BaseModel
 
 from backend.app.config import PROJECT_ROOT
@@ -6115,68 +6114,36 @@ class TestFallbackPluginPriorityLimit:
 
 
 # =============================================================================
-# THE ICONS BUNDLED WITH THE PLUGINS: SERVED BY LIBREFOLIO, NEVER ASKED OF A BROKER'S SITE (45_pluginModules, U-6)
+# THE ICONS BUNDLED WITH THE PLUGINS: A FILE INSIDE THE SERVED STATIC FOLDER (45_pluginModules, U-6)
 # =============================================================================
 
 # The URL of a file of the BRIM plugins' static folder: ``BRIMProvider.generate_static_url`` writes it, ``GET /api/v1/uploads/plugin/brim/{path}`` serves it.
 _BRIM_STATIC_URL_PREFIX = "/api/v1/uploads/plugin/brim/"
-# Charles Schwab's logo, bundled with the plugins (the developer's decision of 13/10): since 13/10 Chromium blocks the favicon www.schwab.com serves
-# (``ERR_BLOCKED_BY_ORB``, devWiki problems/schwab-favicon-blocked-by-orb). Nothing in this file asks anything of the site.
-_SCHWAB_ICON = "schwab/broker.png"
-# The broker icons ``scripts/compose_broker_icons.py`` wrote first, Scalable's two: what a bundled broker icon looks like (a 192×192 RGBA PNG on 13/10).
-_SCALABLE_ICONS = ("scalable/broker.png", "scalable/deposit.png")
 
 
 def _served_brim_static_folder() -> Path:
     """The folder ``GET /api/v1/uploads/plugin/brim/{path}`` serves, ``PLUGIN_STATIC_DIRS["brim"]`` of the uploads API: the files checked here are the
     files the app serves. Imported here rather than at the top: the uploads module loads the whole API router, which nothing else in this file needs."""
-    from backend.app.api.v1 import uploads  # noqa: PLC0415 — the API router is loaded only by the tests that need the served folder
+    from backend.app.api.v1 import uploads  # noqa: PLC0415 — the API router is loaded only by the test that needs the served folder
 
     return uploads.PLUGIN_STATIC_DIRS["brim"]
 
 
-def _image_shape(path: Path) -> tuple:
-    """An image as compared: the format Pillow reads in its bytes, its size in pixels, its mode."""
-    with Image.open(path) as image:
-        return image.format, image.size, image.mode
-
-
 class TestBundledPluginIcons:
-    """45_pluginModules, U-6: a plugin made for a broker bundles the broker's logo instead of linking the broker's site.
+    """A plugin that bundles its icon names a file inside the static folder the app serves.
 
-    A plugin's ``icon_url`` is step 2 of the broker icon chain (``frontend/src/lib/utils/broker/brokerIconChain.svelte.ts``), before the portal's
-    favicon. A link to the broker's site is at the site's mercy: since 13/10 www.schwab.com answers a browser with a bot check, and Chromium blocks the
-    favicon the Schwab plugin linked (``ERR_BLOCKED_BY_ORB``). So Schwab's plugin does what Scalable's two do: its icon is a file of the BRIM plugins'
-    static folder, composed by ``scripts/compose_broker_icons.py`` on the canvas of the other broker icons (one plugin, so no badge), named with
-    ``generate_static_url`` and served by ``GET /api/v1/uploads/plugin/brim/{path}`` (``test_api/test_uploads_api.py``, ``TestPluginStatic``). And
-    whatever plugin names a bundled icon, the file is there, inside the folder.
+    A plugin's ``icon_url`` can be any URL, or a file of the BRIM plugins' static folder named with ``generate_static_url`` and served by
+    ``GET /api/v1/uploads/plugin/brim/{path}`` (``test_api/test_uploads_api.py``, ``TestPluginStatic``). Such a bundled icon must resolve inside that
+    folder, and its file must be there. Today Scalable's two plugins bundle theirs, composed by ``scripts/compose_broker_icons.py``; a plugin that
+    bundles one later is checked the same way, with no change here.
 
     No server and no network: the plugins, and the files of the folder the app serves.
     """
 
-    def test_schwab_s_icon_is_its_logo_bundled_with_the_plugins(self):
-        """``icon_url``, and the ``icon_url`` of ``to_plugin_info`` that ``GET /brokers/import/plugins`` lists, are the static URL of ``schwab/broker.png``."""
-        plugin = SchwabBrokerProvider()
-        expected = f"{_BRIM_STATIC_URL_PREFIX}{_SCHWAB_ICON}"
-
-        declared = (plugin.icon_url, plugin.to_plugin_info().icon_url)
-
-        assert declared == (expected, expected), f"broker_schwab's icon (icon_url, to_plugin_info().icon_url) is {declared}, not its logo bundled with the plugins {expected!r}"
-
-    def test_schwab_s_logo_is_a_png_shaped_like_the_other_bundled_broker_icons(self):
-        """``schwab/broker.png`` is a file of the served folder: a PNG of the size and the mode of Scalable's two icons, which share theirs."""
-        folder = _served_brim_static_folder()
-        references = {name: _image_shape(folder / name) for name in _SCALABLE_ICONS if (folder / name).is_file()}
-        assert len(references) == len(_SCALABLE_ICONS) and len(set(references.values())) == 1 and {shape[0] for shape in references.values()} == {"PNG"}, f"premise: Scalable's two icons are PNGs of one shape in {folder}, a bundled broker icon's: {references}"
-        expected = references[_SCALABLE_ICONS[0]]
-        path = folder / _SCHWAB_ICON
-
-        assert path.is_file(), f"{path} is missing: broker_schwab's logo, composed by scripts/compose_broker_icons.py"
-        assert _image_shape(path) == expected, f"{_SCHWAB_ICON} is {_image_shape(path)} (format, size, mode), the other bundled broker icons {expected}"
-
     def test_every_bundled_icon_is_a_file_inside_the_served_folder(self):
         """For every registered plugin whose ``icon_url``, as ``GET /brokers/import/plugins`` lists it, is a file of the BRIM static folder: the path
-        resolves inside the folder and a file is there. Otherwise the plugin's broker shows a broken icon, or the endpoint refuses the path."""
+        resolves inside the folder and a file is there. Otherwise the endpoint answers 403 or 404 and the broker icon never shows the plugin's: it falls
+        back to the next step of its chain (``frontend/src/lib/utils/broker/brokerIconChain.svelte.ts``)."""
         folder = _served_brim_static_folder().resolve()
         bundled = {info.code: info.icon_url.removeprefix(_BRIM_STATIC_URL_PREFIX) for info in BRIMProviderRegistry.list_plugin_info() if (info.icon_url or "").startswith(_BRIM_STATIC_URL_PREFIX)}
         assert bundled, "premise: one registered plugin at least bundles its icon (broker_scalable and broker_scalable_deposit do), or this check passes on nothing"
