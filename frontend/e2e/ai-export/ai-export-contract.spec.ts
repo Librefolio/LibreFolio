@@ -178,8 +178,11 @@ async function holdBrokerList(page: Page): Promise<BrokerListGate> {
 // One test here exports four surfaces in sequence, so the whole-test budget has to
 // clear API_TIMEOUT plus three ordinary exports — otherwise a single slow response
 // gets reported as "test timeout", which names nothing, instead of "waitForResponse
-// timed out", which names the endpoint that stalled.
-test.setTimeout(180_000);
+// timed out", which names the endpoint that stalled. The beforeEach's sign-in shares
+// the budget, and login() may take 70 s and still return (V-27): API_TIMEOUT (90 s)
+// + 70 s, then the pages, the setup and three ordinary exports at the instrumented
+// pace (the whole spec measured 44.8 s, helpers.ts): 205 s, 240 s with margin.
+test.setTimeout(240_000);
 
 // Earned parallel: this file's blocks own the data they touch and wait on published
 // state, so they share the backend with their neighbours instead of queueing behind

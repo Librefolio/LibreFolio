@@ -18,9 +18,12 @@ const LANDED_MS = 10_000;
 /** The path, not just the word: a welcome forced on the user would read `/welcome?returnTo=%2Fdashboard`. */
 const DASHBOARD_URL = /\/dashboard(?:[/?#]|$)/;
 
-// login() alone may spend 10 s + 10 s on the first paint and 20 s on the sign-in, and the landing adds its own budgets:
-// past the 30 s default on a loaded machine. A red must end on its own assertion, not on the test timeout.
-test.setTimeout(60_000);
+// A budget below the waits it contains cannot work under load: a red ends on the test timeout, which names nothing,
+// instead of on its own assertion. A sign-in is the longest chain here: login() may take 70 s and still return (10 s,
+// then a 10 s retry, on the first paint; 20 s on the sign-in; 30 s on the arrival), and the landing checks add
+// ROUTED_MS + LANDED_MS (25 s): 95 s. The other 25 s are the rest of a test at a loaded pace — the longest, 3b, signs
+// in twice and took 3.6 s at one worker, load 20 (13/10).
+test.setTimeout(120_000);
 
 /** Open `/` and end on the login: `login-page` renders only once the root page's GET /auth/me has answered. */
 async function openLoginPage(page: Page): Promise<void> {
@@ -29,8 +32,8 @@ async function openLoginPage(page: Page): Promise<void> {
 }
 
 /**
- * A sign-in that has landed. login() returns as soon as the form is gone, while the root page — still on `/`, showing
- * `auth-loading` — loads the bootstrap and only then routes to /dashboard: the URL, then the page that renders there.
+ * A sign-in that has landed on the Dashboard. login() returns once the app has arrived, on whichever of its three arrival
+ * screens; this pins the one expected here: the /dashboard URL, then the page that renders there.
  */
 async function expectLandedOnDashboard(page: Page): Promise<void> {
     await expect(page).toHaveURL(DASHBOARD_URL, {timeout: ROUTED_MS});

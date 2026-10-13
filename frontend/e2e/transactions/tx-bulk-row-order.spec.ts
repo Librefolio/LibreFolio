@@ -73,8 +73,8 @@ async function jsonFrom<T>(response: HttpResponse, purpose: string): Promise<T> 
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    await expect(page.getByTestId('tx-table')).toBeVisible({timeout: 10_000});
     await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await expect(page.getByTestId('tx-table')).toBeVisible({timeout: 20_000});
 }
 
 /** The id the seeded broker has in this database — read, never assumed. */

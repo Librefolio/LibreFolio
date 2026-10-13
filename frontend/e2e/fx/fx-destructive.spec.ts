@@ -13,13 +13,25 @@
  * (bulk refresh, confirmed delete) "because they mutate shared FX data … that
  * other specs read". This file is that missing half, done the safe way.
  *
- * Strategy: disposable pairs, never mock pairs. Every pair here uses a currency
- * that is not in the mock and not touched by any sibling fx spec (NZD, SGD, MXN,
- * ZAR, HKD, SEK, NOK, PLN — all EUR-first so `base < quote` holds), priced by the
- * deterministic MOCKFX provider. Each test deletes only its own pair; the mock
- * baseline is never touched, so nothing needs resurrecting and the database is
- * left exactly as found. The `afterAll` repopulate is a net, not the plan — see
- * `fixtures/mock-restore.ts`.
+ * Strategy: disposable pairs, never mock pairs. Every pair here is EUR-first, so
+ * `base < quote` holds and the slug reads `EUR-X`, on a currency the seed never
+ * names — no rate, no route, no chain step — and that no other spec uses: NZD,
+ * SGD, MXN, ZAR, HKD, PEN, QAR, UYU. `beforeAll` gives each a MOCKFX route and
+ * five manual rates; each test deletes only its own pair, and `afterAll` deletes
+ * only the pairs `beforeAll` created, so the database is left exactly as found.
+ *
+ * Ownership is verified, not declared. This header once claimed it for SEK, NOK
+ * and PLN, and from 2026-03-13 (`a3a9ead52`) the claim was false: the seed stores
+ * EUR/PLN and EUR/SEK rates, the ECB legs of its GBP/PLN and SEK/USD chains, and
+ * a NOK/SEK manual route. Every run deleted those 2 × 276 seed rates, starting
+ * with a "clean slate" sweep in `beforeAll`, and nothing noticed: the net below
+ * watches only EUR-USD and is off above one worker (measured 2026-10-13, this
+ * file alone at four workers: both pairs left without a single rate). So
+ * `beforeAll` now asserts that every pair holds no route and no rate before it
+ * writes anything, and fails having touched nothing if one does — whether a seed
+ * change, a neighbour or an aborted run of this file put it there (a fresh
+ * populate clears the last). The `afterAll` repopulate is a net, not the plan —
+ * see `fixtures/mock-restore.ts`.
  */
 import {expect, test, type APIRequestContext} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
@@ -45,7 +57,7 @@ test.describe.configure({mode: 'serial'});
 
 const API = '/api/v1';
 
-/** All disposable pairs — created once in `beforeAll`, swept in `afterAll`. */
+/** All disposable pairs — verified empty, then created, once in `beforeAll`. */
 const P_DETAIL = {base: 'EUR', quote: 'NZD'}; // non-destructive detail interactions
 const P_EDIT_DEL = {base: 'EUR', quote: 'SGD'}; // editor: delete one rate + save
 const P_SWAP_EDIT = {base: 'EUR', quote: 'MXN'}; // swap-while-editing confirm gate
@@ -53,12 +65,16 @@ const P_BULK_REFRESH = [
     {base: 'EUR', quote: 'ZAR'},
     {base: 'EUR', quote: 'HKD'},
 ];
-const P_SINGLE_DEL = {base: 'EUR', quote: 'SEK'}; // confirmed single delete
+const P_SINGLE_DEL = {base: 'EUR', quote: 'PEN'}; // confirmed single delete
 const P_BULK_DEL = [
-    {base: 'EUR', quote: 'NOK'},
-    {base: 'EUR', quote: 'PLN'},
+    {base: 'EUR', quote: 'QAR'},
+    {base: 'EUR', quote: 'UYU'},
 ];
 const ALL_DISPOSABLE = [P_DETAIL, P_EDIT_DEL, P_SWAP_EDIT, ...P_BULK_REFRESH, P_SINGLE_DEL, ...P_BULK_DEL];
+
+/** The pairs `beforeAll` took ownership of — the only ones `afterAll` may delete.
+ *  Still empty if the ownership check failed, so a refused setup deletes nothing. */
+const created: Array<{base: string; quote: string}> = [];
 
 /** Five stored rates per pair, spread across the last three weeks (well inside
  *  the detail page's default 3-month range, so every one renders in the editor). */
@@ -92,12 +108,35 @@ async function deletePair(req: APIRequestContext, base: string, quote: string): 
     await req.delete(`${API}/fx/currencies/rate`, {data: [{from: base, to: quote, delete_all: true}]}).catch(() => {});
 }
 
-/** The stored rate dates for a pair, read straight from the backup stream. */
+/** The stored rate dates for a pair, read straight from the backup stream. An
+ *  empty pair answers 200 with no rows, so a failed read is an error, never "no
+ *  rates": the ownership check and the delete proofs below rely on that. */
 async function ratesDates(req: APIRequestContext, base: string, quote: string): Promise<string[]> {
     const res = await req.get(`${API}/backup/fx/${base}/${quote}/rates?format=json`);
-    if (!res.ok()) return [];
+    expect(res.ok(), `read ${base}-${quote} rates: HTTP ${res.status()}`).toBeTruthy();
     const body = (await res.json()) as {rows: Array<{date: string}>};
     return body.rows.map((r) => r.date);
+}
+
+/**
+ * The rows already stored on `pairs` — routes of any priority, rates of any
+ * source — one line per pair that holds any. Read-only. The tests and `afterAll`
+ * delete whole pairs, so a pair that is not empty before `beforeAll` writes is
+ * not this file's to use.
+ */
+async function rowsAlreadyOn(req: APIRequestContext, pairs: ReadonlyArray<{base: string; quote: string}>): Promise<string[]> {
+    const res = await req.get(`${API}/fx/providers/routes`);
+    expect(res.ok(), `list FX routes: HTTP ${res.status()}`).toBeTruthy();
+    const routes = ((await res.json()) as {items?: Array<{base: string; quote: string; priority: number}>}).items ?? [];
+    const taken: string[] = [];
+    for (const {base, quote} of pairs) {
+        // Routes are stored with the two codes sorted, like the rates.
+        const [b, q] = [base, quote].sort();
+        const priorities = routes.filter((r) => r.base === b && r.quote === q).map((r) => r.priority);
+        const rates = (await ratesDates(req, base, quote)).length;
+        if (priorities.length > 0 || rates > 0) taken.push(`${base}-${quote}: ${priorities.length} route(s) [priority ${priorities.join(', ')}], ${rates} rate(s)`);
+    }
+    return taken;
 }
 
 /** Switch the list page into table view and wait for a specific disposable row to
@@ -130,9 +169,16 @@ test.beforeAll(async () => {
             const items = ((await res.json()) as {items?: Array<{base: string; quote: string}>}).items ?? [];
             mockRouteBaseline = items.some((r) => r.base === 'EUR' && r.quote === 'USD');
         }
-        // Clean slate, then create every disposable pair up front.
-        for (const p of ALL_DISPOSABLE) await deletePair(api, p.base, p.quote);
-        for (const p of ALL_DISPOSABLE) await createPair(api, p.base, p.quote);
+        // Ownership first, writes after. A row already on one of these pairs belongs
+        // to someone else — the seed, a neighbour, an aborted run of this file — and
+        // the tests delete whole pairs: refuse here, having touched nothing, rather
+        // than sweep it. This replaced a "clean slate" delete that wiped seed rates.
+        const taken = await rowsAlreadyOn(api, ALL_DISPOSABLE);
+        expect(taken, 'fx-destructive deletes whole pairs, so it must own them, and these already hold rows it did not create: pick a currency that populate_mock_data.py and every other spec leave alone (or repopulate, if an aborted run of this file left them)').toEqual([]);
+        for (const p of ALL_DISPOSABLE) {
+            created.push(p); // empty a moment ago: whatever lands on it from here is this file's
+            await createPair(api, p.base, p.quote);
+        }
     } finally {
         await api.dispose();
     }
@@ -353,8 +399,9 @@ test.afterAll(async () => {
     const api = await apiLogin();
     if (!api) return;
     try {
-        // 1. Precise cleanup: delete only the disposable pairs this file created.
-        for (const p of ALL_DISPOSABLE) await deletePair(api, p.base, p.quote);
+        // 1. Precise cleanup: delete only the pairs `beforeAll` created — none, if
+        //    its ownership check refused the setup.
+        for (const p of created) await deletePair(api, p.base, p.quote);
 
         // 2. The net. Only if a *mock* route vanished (it never should — we only
         //    ever touch disposables) and only when no sibling worker could be

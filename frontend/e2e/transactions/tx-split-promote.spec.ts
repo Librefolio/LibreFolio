@@ -52,10 +52,10 @@ const EDITABLE_STANDALONE = 'Initial EUR funding from bank';
 
 async function goToTransactions(page: Page, query = '?page_size=200') {
     await navigateTo(page, `/transactions${query}`);
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
     // The table being VISIBLE is not the table being LOADED: it renders empty
     // and fills in. The page publishes data-busy, so wait on that instead.
-    await waitForSettled(page.getByTestId('transactions-page'));
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /** The table row of transaction `id`. */
@@ -222,8 +222,8 @@ test.describe('Split & Promote', () => {
 
         // Refresh the page: the URL keeps the narrowing, and the table loads again from nothing.
         await page.reload();
-        await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-        await waitForSettled(page.getByTestId('transactions-page'));
+        await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+        await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
         // The table being settled does not mean THIS row has been re-rendered into it.
         await expect(txRow(page, standalone.id)).toBeVisible({timeout: 8_000});
 

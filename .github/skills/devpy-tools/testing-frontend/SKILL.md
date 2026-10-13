@@ -104,11 +104,12 @@ the whole run rather than once per action.
 what the 8 categories are verified against (629 Playwright + 687 vitest passing).
 
 !!! warning "Under `--coverage js` the groups are split into batches of 8"
-    A consolidated worker accumulates V8 coverage for its whole lifetime. Measured: 8 specs finish
-    comfortably, 25 specs die at the heap limit — and the failure lands on an innocent test with a
-    duration of `0ms`. So with JS coverage on, a group runs in batches of `_JS_COVERAGE_CHUNK` (8)
-    specs. If a run starts dying again, lower that constant; do **not** raise
-    `--max-old-space-size`, which only postpones the crash.
+    The batches date from the V8 era, when a consolidated worker accumulated coverage for its whole lifetime.
+    Measured then: 8 specs finish comfortably, 25 specs die at the heap limit — and the failure lands on an innocent
+    test with a duration of `0ms`. Today the `jsCoverage` fixture writes one file per test and keeps nothing in memory,
+    but the batches of `_JS_COVERAGE_CHUNK` (8, `scripts/test_runner/_consolidate.py`) stay as a bound on how long a
+    worker lives. If a run starts dying again, lower that constant; do **not** raise `--max-old-space-size`, which only
+    postpones the crash.
 
 !!! warning "Never run two Playwright invocations in one lane"
     Consolidation reduces the number of invocations; it does not make them concurrent. Within a lane
@@ -125,7 +126,7 @@ what the 8 categories are verified against (629 Playwright + 687 vitest passing)
 
 - **2 projects**: `desktop` (1280×720, Chrome) + `mobile` (iPhone 14 Pro Max viewport, Chromium)
 - **Workers**: 1 (sequential — shared DB state)
-- **Timeout**: 15s per test (localhost — fast responses expected)
+- **Timeout**: 30 s per test (`playwright.config.ts`); `expect` defaults to 3 s (localhost assertions)
 - **Web Server**: owned by `./dev.py test`, started without `--force` on the
   lane `TEST_PORT` (default 6041); an occupied lane fails closed
 - **Retry**: 0 local, 2 in CI
@@ -237,8 +238,10 @@ it measured frontend code, which it never did).
 
 ## JS/Svelte Coverage during E2E
 
-Collected via Chromium V8 (`page.coverage`) and remapped to `.svelte`/`.ts` through
-the build's sourcemaps. Enabled by `--coverage js|all`, which sets `COVERAGE_JS=1`.
+`--coverage js|all` sets `COVERAGE_JS=1` and builds the frontend instrumented by `vite-plugin-istanbul`
+(`COVERAGE_INSTRUMENT=1`; the sentinel `build/.coverage-instrumented` tells that build apart). The counters live in
+the page as `window.__coverage__`, keyed by source file — `.svelte` templates included, branch map and all — and each
+entry carries the map back to its source, which `js-coverage-report.js` follows; V8 plays no part.
 
 **All specs must import from the barrel, not from `@playwright/test`:**
 
@@ -247,16 +250,22 @@ import {test, expect} from '../fixtures/playwright';
 import type {Page} from '../fixtures/playwright';
 ```
 
-`e2e/fixtures/playwright.ts` re-exports the same symbols and adds an `auto` fixture
-that collects coverage only when the flag is on — at flag off the cost is zero.
+`e2e/fixtures/playwright.ts` re-exports the same symbols and adds the `auto` fixture `jsCoverage`, which works only
+when the flag is on — at flag off it returns at once and costs nothing. In its teardown it reads `window.__coverage__`
+from every page of the test and writes one JSON file per test into `frontend/coverage-js/e2e-raw/` (about 17 MB on
+the instrumented build); nothing is accumulated in memory. The teardown has a budget of its own,
+`JS_COVERAGE_TIMEOUT_MS` (120 s): without it the collection was charged to the test's after-hooks slot (30 s) and,
+under load, turned green tests red (V-28). A collection that overruns fails as «Fixture "jsCoverage" timeout …
+exceeded during teardown», never as a slow test.
 
 Key files:
-- `frontend/mcr.shared.js`: filters + external sourcemap resolution (read from `build/`)
-- `frontend/mcr.e2e.config.js`: E2E config — `cleanCache: false`, the fixture only calls `add()`
-- `frontend/scripts/mcr-generate.js`: turns the accumulated cache into the report
+- `frontend/vite.config.ts`: the istanbul instrumentation, on with `COVERAGE_INSTRUMENT=1`
+- `frontend/e2e/fixtures/playwright.ts`: the `jsCoverage` fixture
+- `frontend/scripts/js-coverage-report.js`: merges the per-test files (and the vitest `coverage-final.json`) with
+  `istanbul-lib-coverage` into a report
 
-Reports: `frontend/coverage-js/e2e/`, merged with the vitest level into
-`frontend/coverage-js/combined/`. Open with `./dev.py test coverage show js`.
+Reports: `frontend/coverage-js/e2e/` (Playwright only), `frontend/coverage-js/unit-combined/` (vitest only), and
+`frontend/coverage-js/combined/` (both). Open with `./dev.py test coverage show js` (or `js-e2e`, `js-unit`).
 
 ### The cleaning flags, and why there are only three
 
@@ -270,8 +279,9 @@ Reports: `frontend/coverage-js/e2e/`, merged with the vitest level into
 last thing in the system calling a Python measurement "frontend".
 
 `--cov-clean-js` is a **manual convenience only**. During any run with `--coverage js|all` the JS
-directories are wiped unconditionally anyway, because V8 offsets belong to one specific bundle: kept
-across a rebuild they would be remapped onto moved sources and the report would lie without failing.
+directories are wiped unconditionally anyway, because the counters belong to one specific build: istanbul's
+statement maps follow the sources that build instrumented, and kept across a rebuild old counts would be merged
+onto moved statements — the report would lie without failing.
 There is no separate flag for vitest — its data lives in `coverage-js/unit/`, under the same roof.
 
 > **No blocking thresholds**: Svelte 5 compiles templates into closures, so the data
@@ -286,7 +296,7 @@ There is no separate flag for vitest — its data lives in `coverage-js/unit/`, 
 ```
 
 Same analyser as the backend (`scripts/coverage_analysis.py`); `scripts/coverage_js.py`
-converts monocart's istanbul JSON and supplies the frontend categories
+reads the istanbul JSON that `scripts/js-coverage-report.js` writes and supplies the frontend categories
 (`JS_FEATURE`, `JS_STORE`, `JS_API`, `JS_UTILITY`, `JS_CHART`, `SVELTE_UI`, `JS_ROUTE`, …).
 
 Two caveats when reading it:

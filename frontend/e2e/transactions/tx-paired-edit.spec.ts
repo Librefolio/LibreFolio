@@ -29,7 +29,8 @@ import {uniqueSuffix} from '../fixtures/unique';
 import {createOwnedBroker} from '../fixtures/onboarding-accounts';
 import {cleanupOwnedAccount, commitCreates, emptyOwnedAccount, listBrokers, openAccountWithPair, openOwnedAccount, readTransactions, seededPair, type SeededPair} from '../fixtures/owned-pair';
 
-test.setTimeout(20_000);
+// 45 s: login and the 20 s transactions-page gate share this budget; the old 20 s left the test no time under load.
+test.setTimeout(45_000);
 
 const COMMIT_PATH = '/api/v1/transactions/commit';
 
@@ -39,10 +40,10 @@ const COMMIT_PATH = '/api/v1/transactions/commit';
 
 async function goToTransactions(page: Page, query = '') {
     await navigateTo(page, `/transactions${query}`);
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
     // The table being VISIBLE is not the table being LOADED: it renders empty
     // and fills in. The page publishes data-busy, so wait on that instead.
-    await waitForSettled(page.getByTestId('transactions-page'));
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /** The table row of transaction `id`. */
