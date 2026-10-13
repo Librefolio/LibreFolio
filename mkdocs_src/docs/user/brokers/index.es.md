@@ -25,9 +25,6 @@ La página **Brókeres** muestra una tarjeta por cada bróker, con su valor (**N
     </div>
 
 3. Haz clic en **Crear**: el bróker aparece en tu lista, listo para transacciones e informes.
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="detail" alt="Formulario de edición del bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
 
 ??? info "⚙️ Los campos opcionales: qué hace cada uno"
 
@@ -54,6 +51,12 @@ La página **Brókeres** muestra una tarjeta por cada bróker, con su valor (**N
 ---
 
 ## 🗂️ Dentro de un bróker
+
+La tarjeta de un bróker abre su página de detalle en la pestaña **Resumen**:
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="detail" alt="Detalle del bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 La barra de herramientas de la parte superior se aplica a todas las pestañas:
 
