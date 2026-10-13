@@ -35,7 +35,8 @@ import {todayIso} from '../fixtures/dates';
 import {uniqueSuffix} from '../fixtures/unique';
 import {cleanupOwnedAccount, emptyOwnedAccount, listBrokers, openAccountWithPair, readTransactions, seededPair, seededRow} from '../fixtures/owned-pair';
 
-test.setTimeout(25_000);
+// 45 s: login and the 20 s transactions-page gate share this budget; the old 25 s left the test no time under load.
+test.setTimeout(45_000);
 
 /** The seeded pair and standalone row the editor-only tests clone: e2e_test_user can edit them, and neither is dated today. */
 const CLONE_PAIR = '[Asym-a]';
@@ -49,10 +50,10 @@ const VIEWER_BROKER = 'DEGIRO';
 
 async function goToTransactions(page: Page, query = '') {
     await navigateTo(page, `/transactions${query}`);
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
     // The table being VISIBLE is not the table being LOADED: it renders empty
     // and fills in. The page publishes data-busy, so wait on that instead.
-    await waitForSettled(page.getByTestId('transactions-page'));
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /** The table row of transaction `id`. */

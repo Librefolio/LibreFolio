@@ -154,8 +154,8 @@ function cashRows(count: number, firstDay: string, describe: (n: number) => stri
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: UI_TIMEOUT});
     await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /** The wizard is open on step 1, settled. */

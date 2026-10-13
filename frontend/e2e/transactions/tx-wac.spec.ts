@@ -18,7 +18,8 @@ import {TEST_USER} from '../fixtures/test-users';
 import {optionsClosed} from '../fixtures/probe';
 import {waitForSettled} from '../fixtures/app-events';
 
-test.setTimeout(20_000);
+// 45 s: login and the 20 s transactions-page gate share this budget; at 20 s they left the form-modal steps no time under load.
+test.setTimeout(45_000);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -26,11 +27,11 @@ test.setTimeout(20_000);
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
     // Wait for either the table or the loading state to resolve
-    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {
+    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 20_000})]).catch(() => {
         /* either is fine */
     });
-    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 async function openNewTransactionForm(page: Page) {

@@ -19,8 +19,8 @@ import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {appears} from '../fixtures/probe';
 
-// Shorter timeout — these are read-view tests, no complex modal flows.
-test.setTimeout(20_000);
+// 45 s: login and the 20 s transactions-page gate share this budget; at 20 s they left the read-view checks no time under load.
+test.setTimeout(45_000);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,11 +28,10 @@ test.setTimeout(20_000);
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    // Wait for table to appear (short timeout — data is pre-populated).
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
     // The table being VISIBLE is not the table being LOADED: it renders empty
     // and fills in. The page publishes data-busy, so wait on that instead.
-    await waitForSettled(page.getByTestId('transactions-page'));
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 // ---------------------------------------------------------------------------
@@ -284,8 +283,10 @@ test.describe('TransactionsTable (main read-view)', () => {
         const btn = page.getByTestId('tx-refresh-button');
         await expect(btn).toBeVisible();
         await btn.click();
-        // Wait for table to re-render
-        await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+        // A hard reload: the click flips `data-busy` to true at once, and the table
+        // re-renders when the page reports false again — the same gate as a navigation.
+        await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+        await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
         await expect(page.getByTestId('tx-error')).not.toBeVisible({timeout: 2_000});
     });
 

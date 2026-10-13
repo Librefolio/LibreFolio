@@ -76,8 +76,8 @@ async function jsonFrom<T>(response: HttpResponse, purpose: string): Promise<T> 
 
 async function goToTransactions(page: Page): Promise<void> {
     await navigateTo(page, '/transactions?page_size=200');
-    await expect(page.getByTestId('tx-table')).toBeVisible({timeout: UI_TIMEOUT});
-    await waitForSettled(page.getByTestId('transactions-page'));
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await expect(page.getByTestId('tx-table')).toBeVisible({timeout: 20_000});
 }
 
 async function createOwnedBroker(page: Page, label: string): Promise<number> {

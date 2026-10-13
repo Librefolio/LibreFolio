@@ -64,8 +64,8 @@ test.setTimeout(30_000);
 
 async function goToTransactions(page: Page): Promise<void> {
     await navigateTo(page, '/transactions');
-    await expect(page.getByTestId('tx-table')).toBeVisible({timeout: 10_000});
-    await waitForSettled(page.getByTestId('transactions-page'));
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await expect(page.getByTestId('tx-table')).toBeVisible({timeout: 20_000});
 }
 
 /** Open the create flow: BulkModal (intent 'create') auto-opens a nested,

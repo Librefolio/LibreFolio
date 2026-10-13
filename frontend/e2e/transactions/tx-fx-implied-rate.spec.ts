@@ -24,10 +24,10 @@ test.setTimeout(30_000);
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
     // The table being VISIBLE is not the table being LOADED: it renders empty
     // and fills in. The page publishes data-busy, so wait on that instead.
-    await waitForSettled(page.getByTestId('transactions-page'));
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 20_000})]).catch(() => {});
 }
 
 /** Select a transaction type in the FormModal type search-select. */

@@ -207,8 +207,8 @@ function responseTo(page: Page, method: string, pathname: string | RegExp, what:
 
 async function goToTransactions(page: Page): Promise<void> {
     await navigateTo(page, '/transactions');
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: UI_TIMEOUT});
     await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /** Open the wizard from the toolbar; return step 1 once it has settled (its broker list loaded). */

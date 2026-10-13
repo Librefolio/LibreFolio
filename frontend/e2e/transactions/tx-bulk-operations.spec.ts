@@ -37,7 +37,8 @@ test.setTimeout(30_000);
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /** Select a row by its row-id checkbox. */
