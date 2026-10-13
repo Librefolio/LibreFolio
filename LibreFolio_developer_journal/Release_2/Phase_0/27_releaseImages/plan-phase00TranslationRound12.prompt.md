@@ -1472,3 +1472,61 @@ answers to its two choices:
 >   - the label check: only the four lines that quote the old text on purpose;
 >   - the structure check: only the `:263` examples. `:295` has the English's two bold labels again.
 > - **`git diff --check`:** clean. **Ports:** 6158, 6168 and 6042 free.
+
+### 28. ⏳ Batch 37: M-29 done, M-28 prepared — on `57773ab1a` (train 86: batch 36 in the target), 2026-10-13
+
+The coordinator, while the final gallery waits for V, T and I: M-29 now; M-28 in two steps. First the list, without
+writing; then, once T's batch (T-ISO, T-FB) is in the target, apply it. T removes `fxDetail.assetFallback` from the same
+source and adds keys in `charts/` and `common`.
+
+**28.1 ✅ M-29: the worker counts in `developer/test-walkthrough/runner_architecture.md`** (English only, docs-writer)
+> **Note implementazione**: the section «`--workers` reaches Playwright too», against today's code.
+> - **The diagram and its prose** now show the two counts as the code makes them:
+>   - **Browser workers:** `apply_e2e_workers()` caps them at half the logical cores, never below one
+>     (`scripts/test_runner/_common.py:90-111`). It exports `E2E_WORKERS` only above 1 and when not already set
+>     (`:129-130`). It is called by both Playwright launches (`_frontend_common.py:317-318`, `_consolidate.py:186`).
+>   - **The backend:** under the runner it is the shared `SharedTestServer`, started before the tests and reused by
+>     Playwright (`reuseExistingServer`, `playwright.config.ts:73, 192`). It is sized from `--workers` itself, before
+>     the cap: one uvicorn worker per two, rounded up (`_server.py:93-102`; `_cli.py:578-600`).
+>   - **Example:** `--workers 8` on 10 logical cores gives 5 browser workers and 4 uvicorn workers.
+> - **`playwright.config.ts`** sizes a backend only when it starts one itself: with `--no-shared-server`, for the
+>   gallery, or by hand. The size is `max(1, ⌈E2E_WORKERS / 2⌉)`, unless `LIBREFOLIO_SERVER_WORKERS` or
+>   `GALLERY_SERVER_WORKERS` is set (`:54`).
+> - **The old page** said `E2E_WORKERS=4` is injected, and ⌊n/2⌋.
+>
+> - **⚠️ Fuori pista:** the rewrite contradicted three other places, fixed in the same pass:
+>   - the danger admonition said Playwright's `webServer` starts the backend; now: `SharedTestServer` under the
+>     runner, with `--no-reload --no-scheduler` (`_server.py:230-231`);
+>   - the ratio's reason is now the one the code gives (`_server.py:53-58`);
+>   - the Executor's `--workers` entry now names the cap and the shared backend.
+>
+> Left in the code, reported to the coordinator: the docstring at `_common.py:120` names
+> `_consolidate._run_playwright_batch`, which is now `run_playwright_group`.
+>
+> **Gates** (`release-pipeline/scripts/b37_m29_gates.sh`, 05:06–05:07, load 23–36): translate dry-run empty (the page
+> is not translated); strict build 0; `check-links` 95; `git diff --check` clean; ports 6158, 6168 and 6042 free.
+
+**28.2 ⏳ M-28 prepared: Spanish «tasa(s)» for an exchange rate → «tipo(s) de cambio»**
+> **Note implementazione**: read-only (`release-pipeline/scripts/b37_tasas_proposal.py check`; the list is in
+> `runs/b37/b37_tasas_proposal.tsv`).
+> - **The scope:** 64 Spanish values say «tasa(s)», 29 of them in the plural. The glossary keeps «tasa» where it is not
+>   an exchange rate (risk-free rate = *tasa libre de riesgo*).
+> - **To change, 56 values:**
+>   - `fx` 16, `pacAllocator` 20, `transactions` 9, `dataQuality` 5, `base` 3 (`csvImport.*`, the rates CSV),
+>     `aiExport` 2, `assets` 1;
+>   - articles and adjectives follow the masculine *tipo*: «una tasa no válida» → «un tipo de cambio no válido»,
+>     «Introdúcelas» → «Introdúcelos»;
+>   - «Tasas FX» becomes «Tipos de cambio»;
+>   - the two ICU plurals (`fxDetail.invalidRates`, `…refresh.notice.fx`) keep their placeholders, plural heads and
+>     branches (checked).
+> - **To keep, 8 values:** the interest rate (`assets.schedule.rate*`), the growth rate (`chartSettings.*annualRate`),
+>   the risk-free rate (`risk.params.riskFreeRate`, `*riskFreeAnnualRate`) and the money-weighted rate
+>   (`dashboard.mwrrAnnTooltip`).
+> - **Nothing else to correct:**
+>   - no test reads «tasa»;
+>   - no Spanish page or changelog line quotes one of the 56 values;
+>   - the changelog's «tasa» are all the risk-free rate or a rate of return;
+>   - in the docs prose, «tasa de cambio» is the *rate of change* of the MACD and ROC indicators, and «tasa anual» on
+>     the FX page is the CAGR: both right, and they stay.
+> - **Next:** once T's batch is in the target, `b37_tasas_proposal.py apply` writes the 56 values with
+>   `dev.py i18n update`. Then the i18n check and gate, and a checkpoint. The CHANGELOG needs no line.
