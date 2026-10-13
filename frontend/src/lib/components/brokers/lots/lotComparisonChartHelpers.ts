@@ -326,6 +326,34 @@ export function tooltipTimestamp(params: ReadonlyArray<CallbackParam>): number |
     return parseTimeMs(tooltipRawDate(params));
 }
 
+/** A bare ISO calendar day, the only shape a coarse point's own day is read from. */
+const ISO_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The day a coarse point is drawn on: its plotted x (`value[0]`), else its `name`, when either is an ISO day. */
+function pointOwnDay(data: {name?: unknown; value?: unknown}): string | null {
+    const plotted = Array.isArray(data.value) ? data.value[0] : undefined;
+    if (typeof plotted === 'string' && ISO_DAY_PATTERN.test(plotted)) return plotted;
+    return typeof data.name === 'string' && ISO_DAY_PATTERN.test(data.name) ? data.name : null;
+}
+
+/**
+ * The bucket the tooltip header names, read from the first hovered param whose `data` carries the bucket
+ * meta of a coarse series point; the internal series (axis anchor, hover dots, income markers) carry none.
+ * `date` is the point's own day, the bucket's last day with data, which comes before `bucketEnd` in the
+ * period still running or for a lot that stops inside one; `bucketEnd` when no day can be read.
+ */
+export function tooltipBucketInfo(params: ReadonlyArray<CallbackParam>): BucketInfo | null {
+    for (const param of params) {
+        const data = param?.data;
+        if (data == null || typeof data !== 'object') continue;
+        const {bucketStart, bucketEnd, resolution} = data as {bucketStart?: unknown; bucketEnd?: unknown; resolution?: unknown};
+        if (typeof bucketStart !== 'string' || typeof bucketEnd !== 'string') continue;
+        if (resolution !== 'daily' && resolution !== 'weekly' && resolution !== 'monthly') continue;
+        return {date: pointOwnDay(data) ?? bucketEnd, bucketStart, bucketEnd, resolution};
+    }
+    return null;
+}
+
 /**
  * The last point whose date is at or before `timestampMs`, scanning a
  * date-ordered array forward and stopping at the first point past the target.

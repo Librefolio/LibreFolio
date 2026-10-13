@@ -17,7 +17,8 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {parseDisplayDate} from '$lib/utils/core/formatAxisDate';
-    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
+    import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
+    import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
@@ -44,10 +45,10 @@
         pointKey,
         safeValueSource,
         seriesValue,
+        tooltipBucketInfo,
         tooltipRawDate,
         tooltipTimestamp,
         tooltipXValue,
-        type BucketInfo,
         type AggregateReturnPoint,
         type AggregatedValuePoint,
         type LotValueSeriesPoint,
@@ -388,29 +389,19 @@
         }).format(new Date(Date.UTC(year, month - 1, 1)));
     }
 
-    function tooltipBucketInfo(params: any[]): BucketInfo | null {
-        for (const param of params) {
-            const data = param?.data;
-            if (!data || typeof data !== 'object') continue;
-            const bucketStart = typeof data.bucketStart === 'string' ? data.bucketStart : null;
-            const bucketEnd = typeof data.bucketEnd === 'string' ? data.bucketEnd : null;
-            const resolution = data.resolution === 'weekly' || data.resolution === 'monthly' || data.resolution === 'daily' ? data.resolution : null;
-            if (bucketStart && bucketEnd && resolution) return {date: bucketEnd, bucketStart, bucketEnd, resolution};
-        }
-        return null;
-    }
-
     function buildTooltipBucketHeader(params: any[], fallbackDate: number | string, theme: ReturnType<typeof buildTooltipTheme>): string {
         const bucket = tooltipBucketInfo(params);
         if (!bucket || bucket.resolution === 'daily') return buildTooltipHeader(escapeHtml(formatLongDate(fallbackDate)), theme.textColor);
 
-        const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml($_('chart.tooltip.valueAt', {values: {date: formatLongDate(bucket.bucketEnd)}}))}</div>`;
+        // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
+        const span = bucketSpanUpTo(bucket.date, bucket);
+        const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml($_('chart.tooltip.valueAt', {values: {date: formatLongDate(span.bucketEnd)}}))}</div>`;
         if (bucket.resolution === 'weekly') {
-            const label = $_('chart.tooltip.weekRange', {values: {start: formatLongDate(bucket.bucketStart), end: formatLongDate(bucket.bucketEnd)}});
+            const label = $_('chart.tooltip.weekRange', {values: {start: formatLongDate(span.bucketStart), end: formatLongDate(span.bucketEnd)}});
             return `${buildTooltipHeader(escapeHtml(label), theme.textColor)}${contextLine}`;
         }
 
-        const month = formatTooltipMonth(bucket.bucketEnd);
+        const month = formatTooltipMonth(span.bucketEnd);
         const label = $_('chart.tooltip.monthLabel', {values: {month}});
         return `${buildTooltipHeader(escapeHtml(label), theme.textColor)}${contextLine}`;
     }
@@ -1107,10 +1098,18 @@
             ...CHART_ANIMATION_CONFIG,
             // With `containLabel: true`, `left` is only the empty inset BEFORE the y labels
             // (ECharts adds the label width itself). 24 px left a visible empty strip on a phone
-            // (developer review, 2026-09-29): 10 px keeps the labels off the card edge.
+            // (developer review, 2026-09-29): 10 px keeps the labels off the card edge. `right` holds
+            // half the widest time label past the last tick (plan 52): a px base does not follow the
+            // width, so the resize leaves it alone.
             grid: {
                 top: 62,
-                right: 18,
+                right: timeAxisGridRight({
+                    width: chartContainer?.clientWidth ?? 0,
+                    values: axisDateRange ? [axisDateRange.min, axisDateRange.max] : [],
+                    locale: uiLocale(),
+                    base: 18,
+                    measure: axisLabelMeasure(chartInstance, 12),
+                }),
                 bottom: 34,
                 left: 10,
                 containLabel: true,
