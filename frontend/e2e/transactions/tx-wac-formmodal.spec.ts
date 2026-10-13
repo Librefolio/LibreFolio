@@ -89,14 +89,15 @@ async function pickBrokerInPanel(page: Page, panelTestid: string, brokerName: st
 async function pickAssetByName(page: Page, name: string) {
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
     await assetWrap.locator('button, [role="combobox"]').first().click();
-    const searchInput = page.locator('[data-testid="tx-form-asset-wrap"] input[type="text"], [data-testid="tx-form-asset-wrap"] input[role="combobox"]').first();
-    if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
-        await searchInput.fill(name);
-        // The list is debounced; the named entry arriving *is* the settle.
-        await expect(page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first()).toBeVisible({timeout: 5_000});
-    }
-    const option = page.locator('[data-testid^="search-select-option-"]').first();
-    await expect(option).toBeVisible({timeout: 3_000});
+    // The asset select searches inline: its search box is the open trigger itself, so
+    // it is always there. Probing for it, and clicking "the first asset" when the probe
+    // expired, picked whatever sorted first — a neighbour's asset, under concurrency.
+    const searchInput = page.getByTestId('tx-form-asset-search');
+    await expect(searchInput).toBeVisible({timeout: 3_000});
+    await searchInput.fill(name);
+    // The list is debounced; the named entry arriving *is* the settle.
+    const option = page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first();
+    await expect(option).toBeVisible({timeout: 5_000});
     await option.click();
     await optionListClosed(page);
 }
@@ -450,12 +451,15 @@ test.describe('FormModal WAC Payload Tests', () => {
         // TRANSFER share a date, so which of the two is "last" is not ours to assume.
         await dblClickBulkRow(page, transferMarker);
 
-        // Toggle to manual mode
+        // Toggle to manual mode. That toggle is the subject, and the receiver's cost-basis
+        // section renders it whenever the form is editable (WacPreviewSection hides it only
+        // when disabled, i.e. in view mode): assert it rather than probe for it — a probe
+        // that expired skipped the toggle, and the amount typed below would still have
+        // carried the test through.
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
-        if (await manualToggle.isVisible({timeout: 2_000}).catch(() => false)) {
-            await manualToggle.click();
-            await expect(manualToggle).toHaveAttribute('aria-pressed', 'true');
-        }
+        await expect(manualToggle).toBeVisible({timeout: 3_000});
+        await manualToggle.click();
+        await expect(manualToggle).toHaveAttribute('aria-pressed', 'true');
 
         // Fill manual cost basis amount
         const amountInput = page.getByTestId('tx-form-cost-basis-input-amount');
@@ -524,22 +528,24 @@ test.describe('FormModal WAC Payload Tests', () => {
     });
 
     test('FM10 — ADJUSTMENT mode persist: manual stays manual on re-edit', async ({page}) => {
+        // The row is re-opened twice; it is found by a description only this test
+        // knows, never as "the last row" of the grid.
+        const marker = `FM10 adjustment ${uniqueSuffix()}`;
+
         // Step 1: Create ADJUSTMENT+ with auto mode (default)
         await openCreateFlow(page);
         await selectType(page, 'ADJUSTMENT');
         await pickFirstBroker(page);
         await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '5');
+        await fillDescription(page, marker);
         await applyFormModal(page);
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
         await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
 
         // Step 2: Re-edit and switch to manual with value 50
-        const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        const lastIdx = (await rows.count()) - 1;
-        await rows.nth(lastIdx).dblclick();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        await dblClickBulkRow(page, marker);
 
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
         await expect(manualToggle).toBeVisible({timeout: 3_000});
@@ -553,15 +559,13 @@ test.describe('FormModal WAC Payload Tests', () => {
         await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
 
         // Step 3: Re-edit again — should show manual mode with value 50
-        const rows2 = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        const lastIdx2 = (await rows2.count()) - 1;
-        await rows2.nth(lastIdx2).dblclick();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        await dblClickBulkRow(page, marker);
 
-        // Assert: manual toggle active
+        // Assert: manual toggle active. aria-pressed is the component saying which mode
+        // it is in; the `font-medium` class it used to read was a guess about the look.
         const manualToggle2 = page.getByTestId('tx-form-cost-basis-toggle-manual');
         await expect(manualToggle2).toBeVisible({timeout: 3_000});
-        await expect(manualToggle2).toHaveClass(/font-medium/);
+        await expect(manualToggle2).toHaveAttribute('aria-pressed', 'true');
 
         // Assert: input still has 50
         const input = page.getByTestId('tx-form-cost-basis-input-amount');

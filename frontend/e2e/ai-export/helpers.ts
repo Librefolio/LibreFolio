@@ -34,6 +34,13 @@ export interface AiExportResult {
 
 export async function setupAiExportPage(page: Page): Promise<void> {
     await login(page, TEST_USER);
+    // login() returns as soon as its form is gone, while `/` still loads the bootstrap and only then routes to the user's
+    // page — and the language selector setLanguage() waits 5 s for is in the app shell, still to come. So the landing is
+    // awaited first, with the budgets signIn() gives it in layout/app-start-auth.spec.ts. TEST_USER, the only user this
+    // helper signs in, is grandfathered completed on every onboarding flow (populate_mock_data): it lands on the app
+    // shell, never on the welcome shell. The structural fix, login() itself ending on the landing, is backlog V-27.
+    await page.waitForURL((url) => url.pathname !== '/', {timeout: 30_000});
+    await expect(page.getByTestId('app-shell'), 'the app shell is up after the post-login routing').toBeVisible({timeout: 30_000});
     await setLanguage(page, 'en');
 }
 
