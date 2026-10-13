@@ -16,19 +16,22 @@ What is pinned:
   asset), descriptions with the transaction id and the reference, tags, broker, fake assets in order of first
   imported use, notices with the lines they list and their evidence; the internal transfers of the two exporter
   files mirror each other;
-- D. the rules on synthetic files: statuses and reversals, trades with their FEE and TAX legs, the fee inside the
-  amount of exporter 1.0.0, tax refunds, dividends and interest gross or net, cash rows by their sign, rows not
+- D. the rules on synthetic files: statuses and reversals, trades with their FEE and TAX legs whatever the gap between
+  their amount and shares x price, tax refunds, dividends and interest gross or net, cash rows by their sign, rows not
   imported or unreadable, several overnight accounts in one file, an export without rows, descriptions, assets
-  without an ISIN;
+  without an ISIN. Exporter 1.0.0, which wrote the fee and the tax inside a trade's amount, is no longer read: the
+  developer's decision of 13/10, only 1.0.1 and later;
 - E. what the wizard words in the UI language: every notice and the comment under its evidence table have their key
-  in the four catalogues, and the evidence tables carry no title of their own, so the wizard captions them.
+  in the four catalogues, no catalogue keeps a key for a notice the plugins no longer give, and the evidence tables
+  carry no title of their own, so the wizard captions them.
 
 Every input is a sample of ``sample_reports/`` or is written in ``tmp_path``; every value of the synthetic files is
 invented (the ISINs are public securities). No server and no database: this module is pure. The endpoint that asks a
 plugin about an uploaded file (``GET /import/files/{file_id}/plugin-check``) is tested in ``test_api/test_brim_api.py``,
 category 17; the contract of ``cannot_parse_detail`` for every plugin, in ``test_brim_providers.py``, category 4d.
 
-Plan: LibreFolio_developer_journal/Release_2/Phase_0/37_brimScalable/plan-phase00BrimScalable.prompt.md
+Plan: LibreFolio_developer_journal/Release_2/Phase_0/37_brimScalable/plan-phase00BrimScalable.prompt.md; exporter 1.0.0
+dropped: LibreFolio_developer_journal/Release_2/Phase_0/45_pluginModules/plan-phase00PluginModules.prompt.md, U-6.
 """
 
 from __future__ import annotations
@@ -78,7 +81,7 @@ LEG_REFUND = "Tax refund"
 BOM = b"\xef\xbb\xbf"
 TRANSFER_SUBTYPES = ("CASH_TRANSFER_IN", "CASH_TRANSFER_OUT")
 
-# The notices of the two plugins (plan §4.5) and the severity of each.
+# The notices of the two plugins (plan §4.5) and the severity of each. Exporter 1.0.0's ``scalable_fee_in_amount`` is gone with it (U-6, 13/10).
 NOT_EXECUTED = "scalable_not_executed"
 OPEN_PARTIAL = "scalable_open_partial"
 FEES_UNKNOWN = "scalable_fees_unknown"
@@ -88,7 +91,6 @@ CASH_BY_SIGN = "scalable_cash_by_sign"
 TAX_REFUND = "scalable_tax_refund"
 INTERNAL_TRANSFERS = "scalable_internal_transfers"
 SEVERAL_ACCOUNTS = "scalable_several_overnight_accounts"
-FEE_IN_AMOUNT = "scalable_fee_in_amount"
 UNREADABLE_ROWS = "scalable_unreadable_rows"
 DIVIDENDS_NET = "scalable_dividends_net"
 SEVERITY = {
@@ -102,7 +104,6 @@ SEVERITY = {
     REVERSAL: "warning",
     NOT_IMPORTED: "warning",
     SEVERAL_ACCOUNTS: "warning",
-    FEE_IN_AMOUNT: "warning",
     UNREADABLE_ROWS: "warning",
 }
 
@@ -1059,18 +1060,20 @@ class TestStatusesAndReversals:
         _run(tmp_path, PRIME, cases)
 
 
-# Exporter 1.0.0 wrote the fee (and the tax) inside a trade's amount; 1.0.1 writes shares x price, as Scalable's own CSV does.
-FEE_IN_AMOUNT_CASES = [
-    pytest.param(BROKER_EXPORT, _trade("Buy", APPLE, "5", "150,1", "-751,49", fee="0,99"), (Leg("BUY", "-751.49", "5", asset=True),), FEE_IN_AMOUNT, id="exporter-1.0.0-buy"),
-    pytest.param(BROKER_EXPORT, _trade("Sell", APPLE, "5", "180,4", "876,44", fee="0,99", tax="24,57"), (Leg("SELL", "876.44", "-5", asset=True),), FEE_IN_AMOUNT, id="exporter-1.0.0-sell"),
-    pytest.param(BROKER_EXPORT, _trade("Buy", APPLE, "5", "150,1", "-760", fee="0,99"), (Leg("BUY", "-760", "5", asset=True), Leg("FEE", "-0.99", asset=True, prefix=LEG_FEE)), None, id="exporter-gap-other-than-the-charges"),
-    pytest.param(PRIME, _trade("Buy", APPLE, "5", "150,1", "-751,49", fee="0,99"), (Leg("BUY", "-751.49", "5", asset=True), Leg("FEE", "-0.99", asset=True, prefix=LEG_FEE)), None, id="prime-is-never-1.0.0"),
+# A trade's |amount| can differ from shares x price: by the fee, by the fee and the tax, by anything else. Whatever the gap, the trade is booked
+# on its amount, then its legs. Exporter 1.0.0 wrote the charges inside the amount: it is no longer read (the developer's decision of 13/10, only
+# 1.0.1 and later), so a gap that equals the charges is taken for nothing more than any other gap. The same rows in both layouts.
+AMOUNT_GAP_CASES = [
+    pytest.param(_trade("Buy", APPLE, "5", "150,1", "-751,49", fee="0,99"), (Leg("BUY", "-751.49", "5", asset=True), Leg("FEE", "-0.99", asset=True, prefix=LEG_FEE)), id="buy-gap-equal-to-the-fee"),
+    pytest.param(_trade("Sell", APPLE, "5", "180,4", "876,44", fee="0,99", tax="24,57"), (Leg("SELL", "876.44", "-5", asset=True), Leg("FEE", "-0.99", asset=True, prefix=LEG_FEE), Leg("TAX", "-24.57", asset=True, prefix=LEG_TAX)), id="sell-gap-equal-to-the-fee-and-the-tax"),
+    pytest.param(_trade("Buy", APPLE, "5", "150,1", "-760", fee="0,99"), (Leg("BUY", "-760", "5", asset=True), Leg("FEE", "-0.99", asset=True, prefix=LEG_FEE)), id="buy-gap-other-than-the-charges"),
 ]
 
 
 class TestTrades:
-    """D — a trade is booked on its gross amount, then its fee and its tax as legs on the same security; an exporter trade without details, or with the
-    charges already inside its amount (exporter 1.0.0), is booked as it is."""
+    """D — a trade is booked on its gross amount, then its fee and its tax as legs on the same security, whatever the gap between its amount and
+    shares x price; an exporter trade without details is booked as it is. Exporter 1.0.0, which wrote the charges inside the amount, is no longer
+    read: the developer's decision of 13/10, only 1.0.1 and later."""
 
     @pytest.mark.parametrize("layout", BROKER_LAYOUTS)
     def test_a_trade_books_its_gross_amount_then_its_fee_and_its_tax(self, layout: Layout, tmp_path: Path):
@@ -1115,11 +1118,13 @@ class TestTrades:
 
         _run(tmp_path, BROKER_EXPORT, cases)
 
-    @pytest.mark.parametrize(("layout", "row", "legs", "notice"), FEE_IN_AMOUNT_CASES)
-    def test_charges_inside_the_amount_are_left_there(self, layout: Layout, row: Row, legs: Tuple[Leg, ...], notice: Optional[str], tmp_path: Path):
-        """Exporter trade whose ``|amount|`` differs from shares x price by more than a cent, and by the fee plus the positive tax within a cent: booked on
-        its amount as it is, no FEE or TAX leg, ``scalable_fee_in_amount``. A gap of another size, or Scalable's own CSV: the usual trade and legs."""
-        _run(tmp_path, layout, [(row, legs, notice)])
+    @pytest.mark.parametrize(("row", "legs"), AMOUNT_GAP_CASES)
+    @pytest.mark.parametrize("layout", BROKER_LAYOUTS)
+    def test_a_trade_is_booked_on_its_amount_whatever_the_gap_to_shares_times_price(self, layout: Layout, row: Row, legs: Tuple[Leg, ...], tmp_path: Path):
+        """``|amount|`` differs from shares x price by the fee, by the fee and the positive tax, or by anything else: the trade is booked on its amount
+        all the same, then FEE ``-|fee|`` and TAX ``-tax`` as legs, and no notice lists the row — in the exporter's file as in Scalable's own CSV. No gap
+        is taken for charges already inside the amount: exporter 1.0.0 is no longer read (until 13/10 that gap gave ``scalable_fee_in_amount``)."""
+        _run(tmp_path, layout, [(row, legs, None)])
 
 
 class TestIncome:
@@ -1356,8 +1361,9 @@ class TestWhatTheWizardWords:
     to the plugin's English when a key is missing. It captions an evidence table itself (``importWizard.evidenceRowsTitle``) only when the
     plugin leaves the title empty — which is why the Scalable tables carry none."""
 
-    def test_the_notices_read_from_the_module_are_the_twelve_of_the_plan(self):
-        """Positive control for the catalogue checks below: the codes they walk are read from ``_scalable._NOTICES``, and they are this file's."""
+    def test_the_notices_read_from_the_module_are_those_of_this_file(self):
+        """Positive control for the catalogue checks below: the codes they walk are read from ``_scalable._NOTICES``, and they are this file's — the
+        twelve of the plan but exporter 1.0.0's ``scalable_fee_in_amount``, no longer given since 13/10."""
         assert sorted(_notice_codes()) == sorted(SEVERITY), f"_scalable._NOTICES has {sorted(_notice_codes())}, this file knows {sorted(SEVERITY)}"
 
     @pytest.mark.parametrize("language", UI_LANGUAGES)
@@ -1370,6 +1376,19 @@ class TestWhatTheWizardWords:
         missing = [key for key in keys if not _is_worded(_entry(catalogue, key))]
 
         assert not missing, f"{language}.json: {len(missing)} of {len(keys)} key(s) missing or empty — the wizard would show the plugin's English: {missing}"
+
+    @pytest.mark.parametrize("language", UI_LANGUAGES)
+    def test_no_catalogue_keeps_the_wording_of_a_notice_the_plugins_no_longer_give(self, language: str):
+        """The other way round: every ``scalable_*`` key under ``importWizard.brimNotice`` and ``importWizard.brimEvidence`` is the code of a notice of
+        ``_scalable._NOTICES``. A notice the plugins stop giving takes its two keys out of the four catalogues with it (``dev.py i18n remove``)."""
+        codes = set(_notice_codes())
+        sections = {family: _entry(_catalogue(language), f"importWizard.{family}") for family in ("brimNotice", "brimEvidence")}
+        keyed = {family: sorted(code for code in section if code.startswith("scalable_")) for family, section in sections.items() if isinstance(section, dict)}
+        assert codes and len(keyed) == len(sections) and all(keyed.values()), f"presence barrier: {language}.json words no Scalable notice under importWizard.brimNotice and importWizard.brimEvidence: {keyed}"
+
+        stale = [f"importWizard.{family}.{code}" for family, keys in keyed.items() for code in keys if code not in codes]
+
+        assert not stale, f"{language}.json: {len(stale)} key(s) for a notice no Scalable plugin gives any more — remove them with dev.py i18n remove: {stale}"
 
     @pytest.mark.parametrize("language", UI_LANGUAGES)
     def test_the_catalogue_captions_an_evidence_table_that_has_no_title(self, language: str):
