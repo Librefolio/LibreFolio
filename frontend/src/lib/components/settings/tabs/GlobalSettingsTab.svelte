@@ -24,6 +24,7 @@
     import SchedulerLogModal from '$lib/components/settings/SchedulerLogModal.svelte';
     import CachePanel from '$lib/components/settings/CachePanel.svelte';
     import {ConfirmModal} from '$lib/components/table';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // Props
     interface Props {
@@ -723,7 +724,7 @@
                             {/if}
                             {#if setting.updated_at && typeof setting.updated_at === 'string'}
                                 <p class="text-xs text-gray-400 mt-2">
-                                    Last updated: {new Date(setting.updated_at).toLocaleString()}
+                                    {$_('common.updated')}: {new Date(setting.updated_at).toLocaleString(uiLocale())}
                                 </p>
                             {/if}
                         </div>
@@ -752,7 +753,7 @@
                                     </span>
                                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                         {#if schedulerState?.current_price?.last_run_at}
-                                            {$_('settings.global.scheduler.status.lastRun')}: {new Date(schedulerState.current_price.last_run_at).toLocaleString()}
+                                            {$_('settings.global.scheduler.status.lastRun')}: {new Date(schedulerState.current_price.last_run_at).toLocaleString(uiLocale())}
                                             <span class="inline-block w-2 h-2 rounded-full ml-1 {schedulerState.current_price.last_status === 'ok' ? 'bg-green-500' : schedulerState.current_price.last_status === 'partial' ? 'bg-yellow-500' : 'bg-red-500'}"></span>
                                         {:else}
                                             {$_('settings.global.scheduler.status.neverRun')}

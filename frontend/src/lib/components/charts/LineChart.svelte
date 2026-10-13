@@ -27,8 +27,11 @@
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
     import {truncateName} from '$lib/utils/text';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
 
     // =========================================================================
     // Types
@@ -195,7 +198,7 @@
             void yAxisMin;
             void yAxisMax;
             void secondaryAxisScales;
-            void $currentLanguage;
+            void uiLocale();
             tick().then(renderChart);
         }
     });
@@ -266,7 +269,7 @@
                 const policy = buildResponsiveXAxisPolicy({
                     width: chartContainer.clientWidth,
                     values: currentRenderedData.map((point) => point.date),
-                    locale: $currentLanguage,
+                    locale: uiLocale(),
                     axisType: 'category',
                 });
                 const wasCompact = responsiveXAxisCompact;
@@ -610,7 +613,7 @@
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: rect.width,
             values: dates,
-            locale: $currentLanguage,
+            locale: uiLocale(),
             axisType: 'category',
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
@@ -671,11 +674,11 @@
                             color: isDark ? '#94a3b8' : '#6b7280',
                             fontSize: compact && showMiniAxis ? 9 : 11,
                             formatter: isPercentage
-                                ? (v: number) => `${v.toFixed(1)}%`
+                                ? (v: number) => formatPercent(v, {digits: 1, signed: false})
                                 : (v: number) => {
-                                      if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
-                                      if (Math.abs(v) >= 1) return v.toFixed(2);
-                                      return v.toFixed(4).replace(/\.?0+$/, '');
+                                      if (Math.abs(v) >= 1000) return `${formatFixed(v / 1000, 1)}k`;
+                                      if (Math.abs(v) >= 1) return formatFixed(v, 2);
+                                      return formatFixed(v, 4, {trim: true});
                                   },
                         },
                         splitLine: {
@@ -705,7 +708,7 @@
                           const items = Array.isArray(params) ? params : [params];
                           if (!items.length) return '';
                           const date = items[0].axisValue || items[0].name;
-                          let html = `<strong>${date}</strong>`;
+                          let html = `<strong>${formatDay(String(date))}</strong>`;
 
                           // Build a set of band helper series names to skip in tooltip
                           const bandHelperNames = new Set<string>();
@@ -755,10 +758,10 @@
                               const valueSuffix = axisIdx === 0 ? suffix : '';
                               const axisLabel = signalAxisLabelMap.get(axisIdx);
                               const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${escapeHtml(axisLabel)}]</span>` : '';
-                              html += `<br/>${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${Number(value).toFixed(4)}${valueSuffix}${axisNoteHtml}`;
+                              html += `<br/>${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`;
                               const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                               if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
-                                  html += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: representativePoint.representativeDate}})})</span>`;
+                                  html += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
                               }
 
                               // For band signals, also show upper/lower in the tooltip
@@ -766,7 +769,7 @@
                               if (bandSignal?.bandData) {
                                   const dataIdx = bandSignal.data.findIndex((d) => d.date === date);
                                   if (dataIdx >= 0) {
-                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:#94a3b8">${$t('chart.tooltip.upper')}: ${bandSignal.bandData.upper[dataIdx].toFixed(4)}${suffix} · ${$t('chart.tooltip.lower')}: ${bandSignal.bandData.lower[dataIdx].toFixed(4)}${suffix}</span>`;
+                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:#94a3b8">${$t('chart.tooltip.upper')}: ${formatFixed(bandSignal.bandData.upper[dataIdx], 4)}${suffix} · ${$t('chart.tooltip.lower')}: ${formatFixed(bandSignal.bandData.lower[dataIdx], 4)}${suffix}</span>`;
                                   }
                               }
                           }

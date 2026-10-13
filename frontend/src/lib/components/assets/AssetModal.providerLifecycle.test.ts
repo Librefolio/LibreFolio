@@ -427,16 +427,18 @@ function expectResults(statuses: ResultStatus[], price?: string) {
     expect(rows).toHaveLength(statuses.length);
     for (const row of rows) expect(row).toBeVisible();
     expect(rows.map((row) => row.getAttribute('data-status')).sort()).toEqual([...statuses].sort());
-    // Identify history by the response-owned range, not its translated label
-    // or position. An unordered error/success pair alone could hide swapped
-    // operation statuses in the real child.
-    const historyRows = rows.filter((row) => row.textContent?.includes('2025-02-17 → 2025-02-18'));
-    expect(historyRows).toHaveLength(1);
-    for (const row of historyRows) expect(row).toHaveAttribute('data-status', 'success');
+    // Identify each row by the operation it publishes (`data-operation`, the backend's own operation names, the
+    // ones the request sends), never by its translated text or its position. An unordered error/success pair
+    // alone could hide swapped operation statuses in the real child: here each status is read on its own row.
+    expect(rows.map((row) => row.getAttribute('data-operation')).sort(), 'the rows are not exactly the response’s operations, one current_price and one history').toEqual(['current_price', 'history']);
+    const rowOf = (operation: 'current_price' | 'history') => rows.find((row) => row.getAttribute('data-operation') === operation);
+    expect(statuses, 'premise: the response’s history always succeeds').toContain('success');
+    const currentPriceStatus = [...statuses];
+    currentPriceStatus.splice(currentPriceStatus.indexOf('success'), 1);
+    expect(rowOf('history'), 'the history row').toHaveAttribute('data-status', 'success');
+    expect(rowOf('current_price'), 'the current-price row').toHaveAttribute('data-status', currentPriceStatus[0]);
     if (price !== undefined) {
-        const priceRow = rows.find((row) => row.textContent?.includes(price));
-        expect(priceRow, `owned current-price value ${price}`).toBeDefined();
-        expect(priceRow).toHaveAttribute('data-status', 'success');
+        expect(rowOf('current_price')?.textContent, `owned current-price value ${price}`).toContain(price);
     }
 }
 

@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "sma": {
+      "name": "SMA",
+      "description": "Media semplice delle chiusure",
+      "output": "SMA"
+    }
+  }
+}

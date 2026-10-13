@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "comparison": {
+        "name": "Comparación",
+        "description": "Compara el rendimiento y el riesgo con un activo real."
+      }
+    }
+  }
+}

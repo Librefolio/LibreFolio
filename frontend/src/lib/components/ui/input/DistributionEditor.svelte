@@ -379,7 +379,7 @@
             type: 'number',
             cell: (row) => {
                 if (isReadonly || disabled) {
-                    return formatPercent(row.weight, {signed: false, suffix: '', locale: $currentLanguage});
+                    return formatPercent(row.weight, {signed: false, suffix: ''});
                 }
                 return {
                     type: 'editable-number' as const,
@@ -525,14 +525,14 @@
         <div class="flex items-center justify-end gap-1.5 text-xs font-medium pt-1">
             <span class="text-gray-500 dark:text-gray-400">{$t('assets.distribution.total')}:</span>
             <span data-testid="distribution-total-{kind}" class="{isValid ? 'text-green-600 dark:text-green-400' : isExcess ? 'text-red-500' : 'text-amber-500'} font-mono">
-                {formatPercent(totalPercent, {signed: false, locale: $currentLanguage})}
+                {formatPercent(totalPercent, {signed: false})}
             </span>
             {#if isValid}
                 <span class="text-green-500">✅</span>
             {:else if isExcess}
-                <span class="text-red-500">⚠ ({formatPercent(totalPercent - 100, {locale: $currentLanguage})} {$t('assets.distribution.excess')})</span>
+                <span class="text-red-500">⚠ ({formatPercent(totalPercent - 100)} {$t('assets.distribution.excess')})</span>
             {:else if isMissing}
-                <span class="text-amber-500">⚠ ({formatPercent(100 - totalPercent, {signed: false, locale: $currentLanguage})} {$t('assets.distribution.missing')})</span>
+                <span class="text-amber-500">⚠ ({formatPercent(100 - totalPercent, {signed: false})} {$t('assets.distribution.missing')})</span>
             {/if}
         </div>
     {:else if isReadonly || disabled}

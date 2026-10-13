@@ -197,15 +197,15 @@ const REGISTRY: Site[] = [
     },
     {
         file: 'lib/components/transactions/events/EventCreateMiniModal.svelte',
-        snippet: '`${amt.toFixed(2)} ${assetCurrency}`',
+        snippet: '`${formatFixed(amt, 2)} ${assetCurrency}`',
         status: 'public',
         why: "The success toast for a created asset event. Asset events are asset-level, not the user's (backend/app/db/models.py, class AssetEvent: «Events are NOT transactions — they describe what happens to the asset globally, not what happens in a user's portfolio»), so the amount is public under the 2026-09-22 rule. It was registered as unmasked until that rule existed.",
     },
     {
         file: 'lib/components/transactions/events/AssetEventPicker.svelte',
-        snippet: "`${diff >= 0 ? '+' : ''}${diff.toFixed(2)}${crossCurrency ? ' ≠' : ''}`",
+        snippet: "`${formatFixed(diff, 2, {signed: true})}${crossCurrency ? ' ≠' : ''}`",
         status: 'not-money',
-        why: 'A cash delta rendered with no currency marker, used to rank candidate matches. Judgement site in the class of MeasurePanel: catching it would mean chasing toFixed over arbitrary numbers, and a gate that fires on arbitrary numbers is a gate someone switches off.',
+        why: 'A cash delta rendered with no currency marker, used to rank candidate matches; it matches form B only through the crossCurrency flag, a boolean, beside the number. Judgement site in the class of MeasurePanel: catching it would mean chasing every decimal formatter (formatFixed, toFixed) over arbitrary numbers, and a gate that fires on arbitrary numbers is a gate someone switches off.',
     },
     {
         file: 'lib/features/tools/pac-allocator/planner/format.ts',
@@ -215,9 +215,9 @@ const REGISTRY: Site[] = [
     },
     {
         file: 'lib/components/charts/PriceChartFull.svelte',
-        snippet: '`${currencyHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNoteHtml}`',
+        snippet: '`${currencyHtml}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`',
         status: 'public',
-        why: "The value part of a price-chart tooltip row (asset and FX detail): the price, or the percentage return, of an asset, an FX pair or an overlay signal at the hovered date — market data, never the user's holdings, so public by the rule that keeps prices, rates and percentages readable. It matches only since K step 16 (06/10) moved the currency badge out of the label and next to the value, so that a phone can shrink the label and keep both whole; before that the same value rendered as `${labelHtml}: ${Number(value).toFixed(4)}…` with no currency token beside it.",
+        why: "The value part of a price-chart tooltip row (asset and FX detail): the price, or the percentage return, of an asset, an FX pair or an overlay signal at the hovered date — market data, never the user's holdings, so public by the rule that keeps prices, rates and percentages readable. It matches only since K step 16 (06/10) moved the currency badge out of the label and next to the value, so that a phone can shrink the label and keep both whole; before that the same value rendered as `${labelHtml}: ${Number(value).toFixed(4)}…` with no currency token beside it. Since M-18 (12/10) the value is written through formatFixed, the localized toFixed, in the interface language: the same figure, so the same status.",
     },
 ];
 

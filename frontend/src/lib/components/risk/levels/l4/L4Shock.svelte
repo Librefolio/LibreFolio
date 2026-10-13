@@ -1,16 +1,21 @@
 <script lang="ts">
     import {SlidersHorizontal} from 'lucide-svelte';
+    import {untrack} from 'svelte';
 
     import {schemas} from '$lib/api';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
+    import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
+    import {ensureSectorsLoaded, getSectorEmoji} from '$lib/stores/reference/sectorStore';
     import {riskMetadata, riskOutput, singleValue} from '$lib/risk/riskTypes';
     import {buildHypotheticalShockParameters, type RiskScenarioDimension} from '$lib/risk/riskRequest';
     import type {RiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
 
-    import {formatCurrencyAmount} from '../../riskAnalysisHelpers';
+    import {formatCurrencyAmount, stressImpactDimension} from '../../riskAnalysisHelpers';
+    import {stressBucketLabel} from '../../stressBucketLabel';
     import TornadoChart from './TornadoChart.svelte';
     import {shockOptions, shockScenario, tornadoRows, type TornadoRow} from './scenarioHelpers';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     /**
      * L4 rung 2 — hypothetical shock: deterministic, on an assumption stated.
@@ -65,6 +70,37 @@
     let rows = $derived(tornadoRows(output));
     let buckets = $derived(Object.keys(bucketShocks).sort((left, right) => left.localeCompare(right)));
 
+    /** Bumped once the country and sector names of the current language have arrived. */
+    let referenceVersion = $state(0);
+    /** The dimension the answer stressed, which names the table's rows and its first column. */
+    let answeredDimension = $derived(stressImpactDimension(output?.dimension, dimension));
+    /** A bucket as the reader names it, rebuilt on a language switch and when the reference data lands. */
+    let bucketName = $derived.by(() => {
+        void referenceVersion;
+        const words = {translate: $t, sectorEmoji: getSectorEmoji, country: getCountryInfo};
+        return (bucket: string, bucketDimension: RiskScenarioDimension) => stressBucketLabel(bucket, bucketDimension, words);
+    });
+    let rowLabel = $derived.by(() => {
+        const name = bucketName;
+        const stressed = answeredDimension;
+        const names = assetNames;
+        return (row: TornadoRow): string => (row.bucketId !== undefined ? name(row.bucketId, stressed) : (names[row.assetId ?? 0] ?? `#${row.assetId}`));
+    });
+    let nameHeader = $derived($t(`risk.stress.dimensions.${answeredDimension}`));
+
+    $effect(() => {
+        const language = $currentLanguage;
+        untrack(() => {
+            Promise.all([ensureCountriesLoaded(language), ensureSectorsLoaded()])
+                .then(() => {
+                    referenceVersion += 1;
+                })
+                .catch(() => {
+                    // The codes stay readable as they are; the next language change tries again.
+                });
+        });
+    });
+
     $effect(() => {
         controller.registerLauncher('stress', run);
     });
@@ -94,14 +130,6 @@
         // to: a named scenario that has been edited is no longer that scenario.
         presetId = '';
         controller.resetAnalysis('stress');
-    }
-
-    function rowLabel(row: TornadoRow): string {
-        // Bucket ids are already the reader's vocabulary (STOCK, Financials, ITA);
-        // the sector/country prettifying the legacy panel does is a separate
-        // concern and is listed as debt rather than half-done here.
-        if (row.bucketId !== undefined) return row.bucketId;
-        return assetNames[row.assetId ?? 0] ?? `#${row.assetId}`;
     }
 
     function rowAmount(row: TornadoRow): string {
@@ -136,15 +164,16 @@
     {#if showDetail}
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="risk-shock-buckets">
             {#each buckets as bucket (bucket)}
+                {@const name = bucketName(bucket, dimension)}
                 <div class="flex items-center gap-1.5 text-xs">
-                    <span class="min-w-0 flex-1 truncate text-gray-600 dark:text-gray-300" title={bucket}>{bucket}</span>
+                    <span class="min-w-0 flex-1 truncate text-gray-600 dark:text-gray-300" title={name}>{name}</span>
                     <input
                         type="number"
                         step="1"
                         value={(bucketShocks[bucket] * 100).toFixed(0)}
                         class="w-16 rounded border border-gray-200 px-1 py-0.5 text-right dark:border-slate-600 dark:bg-slate-700"
                         onchange={(event) => editBucket(bucket, Number(event.currentTarget.value))}
-                        aria-label={bucket}
+                        aria-label={name}
                         data-testid="risk-shock-bucket"
                         data-bucket-id={bucket}
                     />
@@ -161,18 +190,18 @@
         <p class="text-sm text-gray-700 dark:text-gray-200" data-testid="risk-shock-total">
             {$t('risk.levels.l4.shockTotal', {
                 values: {
-                    percent: output.portfolio_return == null ? '—' : `${output.portfolio_return < 0 ? '−' : '+'}${(Math.abs(output.portfolio_return) * 100).toFixed(2)}%`,
+                    percent: output.portfolio_return == null ? '—' : `${output.portfolio_return < 0 ? '−' : '+'}${formatPercent(Math.abs(output.portfolio_return), {scale: 100, signed: false})}`,
                     amount: !showMoney || output.impact_amount == null ? '' : formatCurrencyAmount(output.impact_amount, currency),
                 },
             })}
         </p>
-        <TornadoChart {rows} label={rowLabel} amount={rowAmount} testId="risk-shock-tornado" />
+        <TornadoChart {rows} label={rowLabel} {nameHeader} amount={rowAmount} testId="risk-shock-tornado" />
         {#if output.classification_coverage != null && output.classification_coverage < 1}
             <!-- Coverage below one means some holdings had no bucket to fall in.
                  Unstated, the total would silently speak for less than the whole
                  portfolio while looking as if it spoke for all of it. -->
             <p class="text-xs text-amber-700 dark:text-amber-300" data-testid="risk-shock-coverage">
-                {$t('risk.levels.l4.shockCoverage', {values: {percent: `${(output.classification_coverage * 100).toFixed(0)}%`}})}
+                {$t('risk.levels.l4.shockCoverage', {values: {percent: formatPercent(output.classification_coverage, {scale: 100, signed: false, digits: 0})}})}
             </p>
         {/if}
     {/if}

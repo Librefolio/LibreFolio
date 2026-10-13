@@ -104,11 +104,12 @@ the whole run rather than once per action.
 what the 8 categories are verified against (629 Playwright + 687 vitest passing).
 
 !!! warning "Under `--coverage js` the groups are split into batches of 8"
-    A consolidated worker accumulates V8 coverage for its whole lifetime. Measured: 8 specs finish
-    comfortably, 25 specs die at the heap limit — and the failure lands on an innocent test with a
-    duration of `0ms`. So with JS coverage on, a group runs in batches of `_JS_COVERAGE_CHUNK` (8)
-    specs. If a run starts dying again, lower that constant; do **not** raise
-    `--max-old-space-size`, which only postpones the crash.
+    The batches date from the V8 era, when a consolidated worker accumulated coverage for its whole lifetime.
+    Measured then: 8 specs finish comfortably, 25 specs die at the heap limit — and the failure lands on an innocent
+    test with a duration of `0ms`. Today the `jsCoverage` fixture writes one file per test and keeps nothing in memory,
+    but the batches of `_JS_COVERAGE_CHUNK` (8, `scripts/test_runner/_consolidate.py`) stay as a bound on how long a
+    worker lives. If a run starts dying again, lower that constant; do **not** raise `--max-old-space-size`, which only
+    postpones the crash.
 
 !!! warning "Never run two Playwright invocations in one lane"
     Consolidation reduces the number of invocations; it does not make them concurrent. Within a lane
@@ -125,7 +126,7 @@ what the 8 categories are verified against (629 Playwright + 687 vitest passing)
 
 - **2 projects**: `desktop` (1280×720, Chrome) + `mobile` (iPhone 14 Pro Max viewport, Chromium)
 - **Workers**: 1 (sequential — shared DB state)
-- **Timeout**: 15s per test (localhost — fast responses expected)
+- **Timeout**: 30 s per test (`playwright.config.ts`); `expect` defaults to 3 s (localhost assertions)
 - **Web Server**: owned by `./dev.py test`, started without `--force` on the
   lane `TEST_PORT` (default 6041); an occupied lane fails closed
 - **Retry**: 0 local, 2 in CI
@@ -237,8 +238,10 @@ it measured frontend code, which it never did).
 
 ## JS/Svelte Coverage during E2E
 
-Collected via Chromium V8 (`page.coverage`) and remapped to `.svelte`/`.ts` through
-the build's sourcemaps. Enabled by `--coverage js|all`, which sets `COVERAGE_JS=1`.
+`--coverage js|all` sets `COVERAGE_JS=1` and builds the frontend instrumented by `vite-plugin-istanbul`
+(`COVERAGE_INSTRUMENT=1`; the sentinel `build/.coverage-instrumented` tells that build apart). The counters live in
+the page as `window.__coverage__`, keyed by source file — `.svelte` templates included, branch map and all — and each
+entry carries the map back to its source, which `js-coverage-report.js` follows; V8 plays no part.
 
 **All specs must import from the barrel, not from `@playwright/test`:**
 
@@ -247,16 +250,22 @@ import {test, expect} from '../fixtures/playwright';
 import type {Page} from '../fixtures/playwright';
 ```
 
-`e2e/fixtures/playwright.ts` re-exports the same symbols and adds an `auto` fixture
-that collects coverage only when the flag is on — at flag off the cost is zero.
+`e2e/fixtures/playwright.ts` re-exports the same symbols and adds the `auto` fixture `jsCoverage`, which works only
+when the flag is on — at flag off it returns at once and costs nothing. In its teardown it reads `window.__coverage__`
+from every page of the test and writes one JSON file per test into `frontend/coverage-js/e2e-raw/` (about 17 MB on
+the instrumented build); nothing is accumulated in memory. The teardown has a budget of its own,
+`JS_COVERAGE_TIMEOUT_MS` (120 s): without it the collection was charged to the test's after-hooks slot (30 s) and,
+under load, turned green tests red (V-28). A collection that overruns fails as «Fixture "jsCoverage" timeout …
+exceeded during teardown», never as a slow test.
 
 Key files:
-- `frontend/mcr.shared.js`: filters + external sourcemap resolution (read from `build/`)
-- `frontend/mcr.e2e.config.js`: E2E config — `cleanCache: false`, the fixture only calls `add()`
-- `frontend/scripts/mcr-generate.js`: turns the accumulated cache into the report
+- `frontend/vite.config.ts`: the istanbul instrumentation, on with `COVERAGE_INSTRUMENT=1`
+- `frontend/e2e/fixtures/playwright.ts`: the `jsCoverage` fixture
+- `frontend/scripts/js-coverage-report.js`: merges the per-test files (and the vitest `coverage-final.json`) with
+  `istanbul-lib-coverage` into a report
 
-Reports: `frontend/coverage-js/e2e/`, merged with the vitest level into
-`frontend/coverage-js/combined/`. Open with `./dev.py test coverage show js`.
+Reports: `frontend/coverage-js/e2e/` (Playwright only), `frontend/coverage-js/unit-combined/` (vitest only), and
+`frontend/coverage-js/combined/` (both). Open with `./dev.py test coverage show js` (or `js-e2e`, `js-unit`).
 
 ### The cleaning flags, and why there are only three
 
@@ -270,8 +279,9 @@ Reports: `frontend/coverage-js/e2e/`, merged with the vitest level into
 last thing in the system calling a Python measurement "frontend".
 
 `--cov-clean-js` is a **manual convenience only**. During any run with `--coverage js|all` the JS
-directories are wiped unconditionally anyway, because V8 offsets belong to one specific bundle: kept
-across a rebuild they would be remapped onto moved sources and the report would lie without failing.
+directories are wiped unconditionally anyway, because the counters belong to one specific build: istanbul's
+statement maps follow the sources that build instrumented, and kept across a rebuild old counts would be merged
+onto moved statements — the report would lie without failing.
 There is no separate flag for vitest — its data lives in `coverage-js/unit/`, under the same roof.
 
 > **No blocking thresholds**: Svelte 5 compiles templates into closures, so the data
@@ -286,7 +296,7 @@ There is no separate flag for vitest — its data lives in `coverage-js/unit/`, 
 ```
 
 Same analyser as the backend (`scripts/coverage_analysis.py`); `scripts/coverage_js.py`
-converts monocart's istanbul JSON and supplies the frontend categories
+reads the istanbul JSON that `scripts/js-coverage-report.js` writes and supplies the frontend categories
 (`JS_FEATURE`, `JS_STORE`, `JS_API`, `JS_UTILITY`, `JS_CHART`, `SVELTE_UI`, `JS_ROUTE`, …).
 
 Two caveats when reading it:
@@ -480,9 +490,10 @@ Snapshot the ids and delete the difference — don't delete the ids you *think* 
 difference also catches rows created indirectly (the other half of a linked pair, a promoted
 transfer), and those are the ones that get forgotten.
 
-Real case: `tx-clone` commits a clone of "the first paired giver row on editable brokers" — which is
-the `delete-safe` ETH transfer — and `tx-delete` then asserts no such row survives its own delete.
-Neither spec was wrong; the implicit contract between them was.
+Real case, since fixed on both sides: `tx-clone` committed a clone of "the first paired giver row on editable
+brokers" — which was the `delete-safe` ETH transfer — and `tx-delete` then asserted that no such row survived its
+own delete. Neither spec was wrong; the implicit contract between them was. Today `tx-clone` deletes the rows it
+commits, and `tx-delete` deletes only rows it creates (V-25, 13/10).
 
 #### The automatic net, and why it works per file
 
@@ -490,32 +501,37 @@ Under a consolidated run (`LF_TX_HYGIENE=1`, set by `./dev.py test front-transac
 `txHygiene` fixture in `e2e/fixtures/playwright.ts` does this for every spec without any per-spec
 code — but **between spec files, not between tests**.
 
-That distinction is not a detail. Specs are written sequentially: `tx-commit-all-types` commits a BUY
-and then sells part of it; `tx-delete` creates a pair in one test and deletes it in the next.
-Cleaning between tests breaks those chains — measured on the whole `transactions/` directory, it
-turned three reds into five. What consolidation removed was the reset *between files*, so that is
-what gets restored and nothing more.
+That distinction is not a detail. When it was measured, specs were written sequentially:
+`tx-commit-all-types` committed a BUY and then sold part of it; `tx-delete` created a pair in one test
+and deleted it in the next. Cleaning between tests broke those chains — measured on the whole
+`transactions/` directory, it turned three reds into five. Neither chains any more (`tx-commit-all-types`
+funds each SELL inside its own batch; `tx-delete` stopped at V-25, 13/10 — its confirm tests now delete
+rows they create), but state may still accumulate inside a file. What consolidation removed was the reset
+*between files*, so that is what gets restored and nothing more.
 
 So the explicit `db-cleanup.ts` recipe above is still the right tool when a spec needs finer control
 than "restore at the end of the file". The automatic fixture is the floor, not a replacement.
 
 #### If a spec *destroys* mock rows, the fixture repopulates
 
-Dropping what a spec added is only half the invariant. `tx-delete` destroys mock rows by design, and
-no API call resurrects a row with its original id and its original half of a linked pair. So
+Dropping what a spec added is only half the invariant. A spec that destroys mock rows cannot be undone
+through the API: no call resurrects a row with its original id and its original half of a linked pair.
+`tx-delete` did, by design, until V-25 (13/10): its confirm tests now delete rows they create. So
 `restore()` compares against the opening snapshot: if a baseline id has vanished it runs the full
 `populate_mock_data --force --with-reports`, replays `initGlobalSettings()` (the global settings are
 the one part of `globalSetup` that `populate_mock_data` does not recreate) and logs the worker API
 context back in, because the users get new ids.
 
-Why it matters: on the database the suite leaves behind, `tx-picker-pagination` fails 4 tests; on a
-fresh one it passes 5. With fewer rows its first two clicks land on a linked pair, the bulk modal
-auto-opens a form modal, and the tests time out clicking behind a backdrop. The error blames
-`tx-form-modal` and never mentions `tx-delete`. Row *deflation*, the mirror of row inflation.
+Why it matters, measured while `tx-delete` still destroyed rows: on the database the suite left behind,
+`tx-picker-pagination` failed 4 tests; on a fresh one it passed 5. With fewer rows its first two clicks
+landed on a linked pair, the bulk modal auto-opened a form modal, and the tests timed out clicking behind
+a backdrop. The error blamed `tx-form-modal` and never mentioned `tx-delete`. Row *deflation*, the mirror
+of row inflation.
 
 The repopulate costs ~20 s, charged to whichever test triggers it, so the fixture grants
 `testInfo.setTimeout(+25 s)` **only when it actually ran** — a blanket increase would mask real
-slowness.
+slowness. Since V-25 no spec in `transactions/` triggers it (the 12/10 category gate found `tx-delete`'s
+rows the only seed rows missing); it remains the guard for the next spec that does.
 
 ## Test Runner Architecture (`scripts/test_runner/`)
 

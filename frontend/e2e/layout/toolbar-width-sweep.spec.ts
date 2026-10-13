@@ -10,9 +10,13 @@
  * threshold the tier's content no longer fits and buttons stick out of the bar. Measured on 30/09 on the
  * developer's data, in Italian: up to 14 px on /assets, 25 px on /fx, the broker tab row 8 px, a page 11 px
  * wider than a 330 px viewport on an asset. D5 recalibrates every bar on its longest-label language, with a
- * margin. The calibration on the prod copy (30/09, all four languages) found Spanish the longest for most bars,
- * French next, and English dominated everywhere. So every bar runs in French, Italian (the developer's own) and
- * Spanish, one test per (bar, language): a red bar never hides another.
+ * margin. The calibration on the prod copy (30/09, all four languages) found Spanish the longest for most bars
+ * and French next, and read English as dominated everywhere. The runtime probe of 13/10 (lot 51, R-4) proved
+ * that last reading wrong: on /assets, at a 320 px layout, English pushes a toggle of the Active/Inactive pill
+ * 7.4 px out of it, where Italian never does. So every bar runs in all four UI languages, one test per (bar,
+ * language): a red bar never hides another. That pill clips its content, and the sweep skips the content of
+ * clipping containers by design (below), so the sweep never saw that overflow: the pill's labels have their own
+ * test at the end of the file (R-1).
  *
  * The sweep. One page load, then the viewport narrows from 1700 to 320 + g px in 10 px steps at a fixed height
  * of 1000, like a window being dragged; g is the scrollbar gutter (below), and the last width is exactly 320 + g
@@ -71,9 +75,9 @@
  *
  * Language. `setLanguage` goes through the header selector, which writes `librefolio-locale` in this
  * context's localStorage and nothing on the server; the account's saved language is applied only at login,
- * which happens before the switch. There is nothing to restore. `login()` returns once the login form is gone,
- * while the root page still loads the bootstrap and has yet to route to /dashboard, whose header holds the
- * selector: the switch waits for that routing, not for a guess at its duration.
+ * which happens before the switch. There is nothing to restore. `login()` returns once the app has arrived:
+ * for this user, the app shell on /dashboard, whose header holds the selector. The switch still waits for the
+ * selector itself, never for a guess at a duration.
  *
  * Subjects. /assets, /dashboard and /fx need none. The detail pages choose theirs over the API, by property.
  * The asset is the header's worst case: its title is capped at 15ch inside two flex wrappers that cannot
@@ -121,7 +125,7 @@ const MAX_SETTLE_ROUNDS = 60;
 const MAX_NAMED = 3;
 /** Wall-clock budget of the sweep itself, below the test timeout: a slow run still prints what it measured. */
 const SWEEP_BUDGET_MS = 240_000;
-const LANGUAGES: readonly Language[] = ['fr', 'it', 'es'];
+const LANGUAGES: readonly Language[] = ['en', 'fr', 'it', 'es'];
 const TIER_ORDER: readonly string[] = ['oneRow', 'denseRow', 'stackFilters', 'oneColumn'];
 /** The positive control's box, hung this far past the bar's right edge: further than any real spill. */
 const PROBE_ID = 'toolbar-sweep-probe';
@@ -874,8 +878,8 @@ test.describe('Top toolbars: every control inside its bar at every width (K step
                     if (!baseURL) throw new Error('The sweep needs the runner-provided baseURL');
                     await keepOffline(page, new URL(baseURL).origin);
                     await login(page, TEST_USER);
-                    // login() returns once the login form is gone: the root page still loads the bootstrap, then routes
-                    // to /dashboard, whose header holds the language selector. Wait for that routing, then the selector.
+                    // login() returns once the app has arrived (V-27): for TEST_USER, the app shell on /dashboard, whose
+                    // header holds the language selector. The two waits below re-check that landing, then the selector.
                     await page.waitForURL((url) => url.pathname !== '/', {timeout: 30_000});
                     await expect(page.getByTestId('language-selector-button'), 'the app shell is up after the post-login redirect').toBeVisible({timeout: 30_000});
                     await setLanguage(page, lang);
@@ -929,6 +933,210 @@ test.describe('Top toolbars: every control inside its bar at every width (K step
                     expect(steps.filter(violates).length + (stoppedAt === null ? 0 : 1), report(bar, lang, subject, range, steps, stoppedAt)).toBe(0);
                 });
             }
+        });
+    }
+});
+
+// =============================================================================
+// The Assets lifecycle pill at phone widths (lot 51, R-1)
+// =============================================================================
+
+/**
+ * The Active/Inactive pill of /assets at phone widths — lot 51, R-1, written RED-FIRST.
+ *
+ * The defect. In oneColumn the filters share each row (`flex-1 min-w-0`): Search and the pill get half of it
+ * each. The pill clips its content (`overflow-hidden`) and its two buttons never wrap their labels, so where half
+ * a row is narrower than the labels the pill cuts them. The runtime probe of 13/10 measured a button up to 20.7 px
+ * past the pill in Spanish at a 320 px layout, 7.4 px in English, 2.0 px in French, never in Italian. The sweep
+ * above cannot see it: it skips the content of clipping containers by design.
+ *
+ * The measure. Each language loads /assets once at a phone width, then narrows the layout through PILL_LAYOUTS_PX,
+ * the viewport being the layout width plus the scrollbar gutter measured as the sweep measures it. Each width is
+ * read once it has settled (`measureAt`, the sweep's rounds) and only in the oneColumn tier, with the pill, both
+ * toggles and Search each in the page once, visible and labelled. There:
+ *   - both toggles lie inside the edges the pill clips at (±0.5 px), and neither the pill nor a toggle has more
+ *     content than room (scrollWidth ≤ clientWidth): no label is cut by the pill or truncated in its button;
+ *   - the pill ends inside its row (`asset-page-filters`) and inside the bar's content box: a pill that kept its
+ *     labels by growing past the row would only move the cut to the toolbar card, which clips too;
+ *   - Search, the neighbour that yields the pill its room, keeps a usable width (SEARCH_MIN_WIDTH_PX).
+ * Every width is measured before anything is asserted, so a red width never hides another; one test per
+ * language, so a red language never hides another. Read-only: it writes no row, and the language switch writes
+ * only this context's localStorage (see Language, above), so there is nothing to restore.
+ */
+const PILL_LANGUAGES: readonly Language[] = ['en', 'it', 'fr', 'es'];
+/** Layout widths, px, widest first: all in oneColumn, the bar being the layout minus 66 px below 1024 px. */
+const PILL_LAYOUTS_PX: readonly number[] = [390, 360, 340, 330, 320];
+/** Layout boxes are fractional: a toggle up to this far past the pill's clip edge is rounding, not a cut label. */
+const PILL_EDGE_TOLERANCE_PX = 0.5;
+/**
+ * The narrowest Search still worth typing in: its own chrome takes 46 px (`pl-8` for the icon, `pr-3`, two 1 px
+ * borders), so 72 px leaves about 26 px, three or four characters of `text-sm`.
+ */
+const SEARCH_MIN_WIDTH_PX = 72;
+
+interface PillIds {
+    pill: string;
+    toggles: string[];
+    search: string;
+    /** The pill's row container. */
+    filters: string;
+    /** The PageToolbar row the tiers are measured on. */
+    bar: string;
+}
+
+const PILL_IDS: PillIds = {pill: 'assets-active-filter', toggles: ['assets-active-toggle', 'assets-inactive-toggle'], search: 'assets-search-input', filters: 'asset-page-filters', bar: 'assets-filter-bar'};
+
+/** One width's geometry of the pill and its neighbours, px. Crosses `page.evaluate`, so plain data only. */
+interface PillReading {
+    /** Every reason this width cannot be measured: an element missing, repeated, hidden or unlabelled. Empty when it can. */
+    missing: string[];
+    /** `innerLeft`/`innerRight`: the edges the pill clips its content at, inside its border. */
+    pill: {left: number; right: number; innerLeft: number; innerRight: number; scrollWidth: number; clientWidth: number};
+    toggles: Array<{id: string; left: number; right: number; scrollWidth: number; clientWidth: number}>;
+    filtersRight: number;
+    /** The right edge of the bar row's content box: its border box minus its padding and border. */
+    barContentRight: number;
+    searchWidth: number;
+}
+
+interface PillStep {
+    layoutPx: number;
+    vw: number;
+    barWidth: number;
+    reading: PillReading;
+}
+
+/** Runs inside the page: serialised by `page.evaluate`, so it references nothing outside itself. */
+function readPillInPage(ids: PillIds): PillReading {
+    const missing: string[] = [];
+    const one = (id: string): HTMLElement | null => {
+        const found = document.querySelectorAll<HTMLElement>(`[data-testid="${id}"]`);
+        if (found.length !== 1) {
+            missing.push(`[data-testid="${id}"] is in the page ${found.length} times, not once`);
+            return null;
+        }
+        // The only match, by the check above.
+        const element = found[0];
+        const box = element.getBoundingClientRect();
+        if (box.width <= 0 || box.height <= 0 || !element.checkVisibility({checkOpacity: true, checkVisibilityCSS: true})) missing.push(`[data-testid="${id}"] is not visible`);
+        return element;
+    };
+    const pill = one(ids.pill);
+    const search = one(ids.search);
+    const filters = one(ids.filters);
+    const bar = one(ids.bar);
+    const toggles: Array<{id: string; element: HTMLElement}> = [];
+    for (const id of ids.toggles) {
+        const element = one(id);
+        if (!element) continue;
+        if (!element.textContent?.trim()) missing.push(`[data-testid="${id}"] has no label`);
+        if (pill && !pill.contains(element)) missing.push(`[data-testid="${id}"] is not inside [data-testid="${ids.pill}"]`);
+        toggles.push({id, element});
+    }
+    if (!pill || !search || !filters || !bar || toggles.length !== ids.toggles.length) {
+        return {missing, pill: {left: NaN, right: NaN, innerLeft: NaN, innerRight: NaN, scrollWidth: NaN, clientWidth: NaN}, toggles: [], filtersRight: NaN, barContentRight: NaN, searchWidth: NaN};
+    }
+
+    const pillBox = pill.getBoundingClientRect();
+    const pillStyle = getComputedStyle(pill);
+    const barBox = bar.getBoundingClientRect();
+    const barStyle = getComputedStyle(bar);
+    return {
+        missing,
+        pill: {
+            left: pillBox.left,
+            right: pillBox.right,
+            innerLeft: pillBox.left + parseFloat(pillStyle.borderLeftWidth),
+            innerRight: pillBox.right - parseFloat(pillStyle.borderRightWidth),
+            scrollWidth: pill.scrollWidth,
+            clientWidth: pill.clientWidth,
+        },
+        toggles: toggles.map(({id, element}) => {
+            const box = element.getBoundingClientRect();
+            return {id, left: box.left, right: box.right, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth};
+        }),
+        filtersRight: filters.getBoundingClientRect().right,
+        barContentRight: barBox.right - parseFloat(barStyle.paddingRight) - parseFloat(barStyle.borderRightWidth),
+        searchWidth: search.getBoundingClientRect().width,
+    };
+}
+
+/** What is wrong with the pill at one width: one line per finding, each naming the language, the width and the numbers. */
+function pillFindings(lang: Language, {layoutPx, vw, barWidth, reading}: PillStep): string[] {
+    const at = `${lang} · ${layoutPx} px layout (viewport ${vw}, bar ${px(barWidth)} px)`;
+    const {pill} = reading;
+    const findings: string[] = [];
+    for (const toggle of reading.toggles) {
+        const past = Math.max(toggle.right - pill.innerRight, pill.innerLeft - toggle.left);
+        if (past > PILL_EDGE_TOLERANCE_PX) findings.push(`${at}: ${toggle.id} spans ${px(toggle.left)}–${px(toggle.right)}, ${px(past)} px past the pill, which clips at ${px(pill.innerLeft)}–${px(pill.innerRight)}`);
+        if (toggle.scrollWidth > toggle.clientWidth) findings.push(`${at}: ${toggle.id} has ${toggle.scrollWidth} px of content in ${toggle.clientWidth} px: its label is truncated in its own button`);
+    }
+    if (pill.scrollWidth > pill.clientWidth) findings.push(`${at}: the pill has ${pill.scrollWidth} px of content in ${pill.clientWidth} px, and hides the rest`);
+    if (pill.right - reading.filtersRight > PILL_EDGE_TOLERANCE_PX) findings.push(`${at}: the pill ends at ${px(pill.right)}, ${px(pill.right - reading.filtersRight)} px past its row (asset-page-filters ends at ${px(reading.filtersRight)})`);
+    if (pill.right - reading.barContentRight > PILL_EDGE_TOLERANCE_PX) findings.push(`${at}: the pill ends at ${px(pill.right)}, ${px(pill.right - reading.barContentRight)} px past the content box of ${PILL_IDS.bar} (${px(reading.barContentRight)})`);
+    if (reading.searchWidth < SEARCH_MIN_WIDTH_PX) findings.push(`${at}: Search is ${px(reading.searchWidth)} px wide, under the ${SEARCH_MIN_WIDTH_PX} px it needs to stay usable`);
+    return findings;
+}
+
+test.describe('Assets lifecycle pill at phone widths (lot 51, R-1)', () => {
+    for (const lang of PILL_LANGUAGES) {
+        test(`assets lifecycle pill keeps both labels whole at phone widths (${lang})`, async ({page, baseURL}, testInfo) => {
+            const bar = BARS.find((candidate) => candidate.name === 'assetsList');
+            if (!bar) throw new Error('BARS has no assetsList bar: the pill is measured on its tiers and settle rounds');
+            if (!baseURL) throw new Error('The pill check needs the runner-provided baseURL');
+            await keepOffline(page, new URL(baseURL).origin);
+            await login(page, TEST_USER);
+            // As in the sweep: login() returns before the post-login routing that brings the language selector.
+            await page.waitForURL((url) => url.pathname !== '/', {timeout: 30_000});
+            await expect(page.getByTestId('language-selector-button'), 'the app shell is up after the post-login redirect').toBeVisible({timeout: 30_000});
+            await setLanguage(page, lang);
+
+            // Loaded at a phone width: the content column's margin transition across 1024 px never runs.
+            await page.setViewportSize({width: Math.max(...PILL_LAYOUTS_PX), height: VIEWPORT_HEIGHT_PX});
+            const arrival = recordArrival(page);
+            try {
+                await navigateTo(page, '/assets');
+                await bar.ready(page);
+            } catch (error: unknown) {
+                const evidence = await arrival.read();
+                throw new Error(`precondition: /assets finished loading — the page is at ${evidence.url} instead.\n${describeArrival(evidence)}\n${String(error)}`);
+            } finally {
+                arrival.stop();
+            }
+            await expect(page.locator('html'), `precondition: /assets renders in ${lang}`).toHaveAttribute('lang', lang);
+            // The labels measured below are this dictionary's, not keys or a fallback language still loading.
+            await expect(page.locator('html'), `precondition: the ${lang} dictionary has landed on /assets`).toHaveAttribute('data-i18n-ready', 'true');
+            for (const id of [PILL_IDS.pill, ...PILL_IDS.toggles, PILL_IDS.search]) await expect(page.getByTestId(id), `precondition: [data-testid="${id}"] is on screen`).toBeVisible();
+            await expect
+                .poll(() => page.evaluate((name) => Boolean((window as unknown as {__lfLayouts?: Record<string, unknown>}).__lfLayouts?.[name]), bar.name), {
+                    message: `precondition: PageToolbar registers window.__lfLayouts.${bar.name}`,
+                })
+                .toBe(true);
+            await page.evaluate(() => document.fonts.ready.then(() => undefined));
+            // Parked away from the bar, as in the sweep: no hover transition starts on a toggle that moves under it.
+            await page.mouse.move(1, 1);
+
+            const {gutter} = await measureSweepRange(page);
+            await installFrameHook(page);
+            // From here the page is only resized and read, as in the sweep: no locator action, whose waits would run on the page clock.
+            await page.clock.install();
+            const steps: PillStep[] = [];
+            for (const layoutPx of PILL_LAYOUTS_PX) {
+                const vw = layoutPx + Math.ceil(gutter);
+                const at = `${lang} · ${layoutPx} px layout (viewport ${vw}, gutter ${gutter} px)`;
+                const settled = await measureAt(page, bar, vw);
+                expect(settled.settled, `precondition: ${at} settles within ${MAX_SETTLE_ROUNDS} rounds (${settled.reading.notReady.join('; ') || 'the boxes kept moving'})`).toBe(true);
+                expect(settled.reading.layoutMode, `precondition: ${at} puts the Assets bar (${px(settled.reading.barWidth)} px) in its phone tier, window.__lfLayouts.${bar.name}.layoutMode`).toBe('oneColumn');
+                const reading = await page.evaluate(readPillInPage, PILL_IDS);
+                expect(reading.missing, `precondition: ${at} shows the pill, both toggles and Search, each once, visible and labelled`).toEqual([]);
+                steps.push({layoutPx, vw, barWidth: settled.reading.barWidth, reading});
+            }
+
+            await testInfo.attach(`assets-pill-${lang}.json`, {body: JSON.stringify({lang, gutter, steps}, null, 1), contentType: 'application/json'});
+            expect(
+                steps.flatMap((step) => pillFindings(lang, step)),
+                `R-1: in ${lang}, at layouts of ${PILL_LAYOUTS_PX.join(', ')} px, the pill keeps both labels whole and inside it, stays inside its row and the bar, and leaves Search usable`,
+            ).toEqual([]);
         });
     }
 });

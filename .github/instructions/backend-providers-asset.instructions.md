@@ -32,20 +32,24 @@ All provider calls go through `_run_provider_in_thread()` in `asset_source.py` �
 
 | Provider | File | Identifier | `provider_params` | Search |
 |----------|------|-----------|-------------------|--------|
-| **yfinance** | `yahoo_finance.py` | Ticker (AAPL) | None | ✅ |
-| **justetf** | `justetf.py` | ISIN (IE00B4L5Y983) | None | ✅ |
-| **borsa_italiana** | `borsa_italiana.py` | ISIN (IT0003128367) | None | ✅ |
-| **cssscraper** | `css_scraper.py` | Web page URL | `{current_css_selector, currency, decimal_format?}` | ❌ |
-| **scheduled_investment** | `scheduled_investment.py` | asset_id | `FAScheduledInvestmentSchedule` | ❌ |
-| **mockprov** | `mockprov.py` | any | None | ✅ (testing only, hidden from UI) |
+| **yfinance** | `yahoo_finance/plugin.py` | Ticker (AAPL) | None | ✅ |
+| **justetf** | `justetf/plugin.py` | ISIN (IE00B4L5Y983) | None | ✅ |
+| **borsa_italiana** | `borsa_italiana/plugin.py` | ISIN (IT0003128367) | None | ✅ |
+| **cssscraper** | `css_scraper/plugin.py` | Web page URL | `{current_css_selector, currency, decimal_format?}` | ❌ |
+| **scheduled_investment** | `scheduled_investment/plugin.py` | asset_id | `FAScheduledInvestmentSchedule` | ❌ |
+| **mockprov** | `mockprov/plugin.py` | any | None | ✅ (testing only, hidden from UI) |
 
 ## Adding a New Provider
 
-1. Create `backend/app/services/asset_source_providers/my_provider.py`
+1. Create the folder `backend/app/services/asset_source_providers/my_provider/` with `__init__.py` (the provider's
+   docstring only, no re-export) and `plugin.py` (the code); helpers private to it go beside as `_*.py`
 2. Extend `AssetSourceProvider`
 3. Decorate with `@register_provider(AssetProviderRegistry)`
 4. Implement required abstract methods
-5. Set `params_schema` property if provider needs extra config
+5. Set `params_schema` property if provider needs extra config. Its UI texts (`assets.providerParams.my_provider.*`) live
+   in the provider's own `i18n/` fragment: `./dev.py i18n add <key> --en … --it … --fr … --es …
+   --into asset_source_providers/my_provider` (see skill `devpy-i18n`)
 6. Add icon in `static/` directory
-7. Provider is auto-discovered — no manual registration needed
+7. Provider is auto-discovered — no manual registration needed. Import its names, and patch them, from
+   `backend.app.services.asset_source_providers.my_provider.plugin`
 

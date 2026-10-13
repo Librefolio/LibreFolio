@@ -2,7 +2,7 @@
 
 !!! info "Alpha"
 
-    Este importador está en **Alpha**: se creó a partir de las exportaciones de una sola cuenta, compartidas en [la incidencia #26](https://github.com/Librefolio/LibreFolio/issues/26). Si tus archivos se ven diferentes, o una fila se importa de una forma que parece incorrecta, avísanos allí.
+    Este importador está en **Alpha**: se creó a partir de las exportaciones de una sola cuenta, compartidas en [la incidencia #26](https://github.com/Librefolio/LibreFolio/issues/26). Si tus archivos se ven diferentes, o una fila se importa de una forma que parece incorrecta, abre una nueva incidencia y menciona la #26.
 
 LibreFolio importa la **cuenta de ahorro de acciones** (*osakesäästötili*) de **Danske Bank Finlandia**. El banco la divide en **dos exportaciones**, y ninguna es suficiente por sí sola:
 

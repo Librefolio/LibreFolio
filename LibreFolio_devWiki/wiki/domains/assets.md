@@ -1,7 +1,7 @@
 ---
 title: "Domain: ASSETS"
 category: domain
-features: [F-024, F-025, F-026, F-027, F-028, F-029, F-030, F-031, F-032, F-033, F-034, F-035, F-036]
+features: [F-024, F-025, F-026, F-027, F-028, F-029, F-030, F-031, F-032, F-033, F-034, F-035, F-036, F-114]
 status: stable
 mkdocs: "developer/backend/assets/architecture.md"
 ---

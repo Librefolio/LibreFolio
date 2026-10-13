@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "drawdownSummary": {
+        "name": "Synthèse des replis",
+        "description": "Épisodes de repli courant et maximal par rapport au pic, datés et avec statut de récupération, à partir des rendements canoniques du périmètre sélectionné."
+      }
+    }
+  }
+}

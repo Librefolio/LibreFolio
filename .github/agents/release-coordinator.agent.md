@@ -248,6 +248,54 @@ target -> child while developing
 child  -> target after final validation
 ```
 
+## When `git merge` dies with «stash failed»
+
+On a shared checkout, `git merge` can die before it starts with `fatal: stash failed`.
+Since Git 2.53, a merge that is not a fast-forward first runs `git stash create`. That
+command must take `index.lock`, and an IDE, a file watcher or another Git command on the
+same checkout may be holding it. Nothing has been written yet: there is no `MERGE_HEAD`,
+no conflict and nothing to abort. Background: devWiki
+`problems/git-merge-stash-failed-on-locked-index`.
+
+**Ask the developer first.** If the developer is present, stop and ask before retrying:
+they may be working in that checkout, for example with an IDE commit, a refresh or a Git
+command of their own. Retry on your own only when the developer has said they are away
+and has delegated the merges, as in an overnight train. In that case, record what
+happened in the journal and report it when they return.
+
+How to resolve it:
+
+1. Classify the stop without writing anything. All three must hold:
+   - `git -C <checkout> rev-parse --git-path MERGE_HEAD` points to a file that does not
+     exist;
+   - HEAD is still the SHA recorded before the merge;
+   - `git status --porcelain` shows the same set as before.
+
+   If `MERGE_HEAD` exists, this is a real merge stop: follow the conflicted merge path.
+2. Find who holds the lock:
+   - `lsof -- "$(git -C <checkout> rev-parse --git-path index.lock)"`;
+   - `ps -axo pid,comm | grep -i -E 'git|pycharm|fsnotifier|fsmonitor'`.
+
+   The usual holders are the IDE's VCS refresh, the app's fsmonitor daemon, or a Git
+   command of another agent on the same checkout.
+3. Keep your own commands off the lock. Run read-only Git commands with
+   `GIT_OPTIONAL_LOCKS=0`, so that `git status` does not refresh the index, and never
+   run them while the merge is running.
+4. Retry the identical merge command up to 5 times, 3 s apart. Before each retry, check
+   step 1 again. Stop if `MERGE_HEAD` appears or HEAD moves.
+5. If the merge still does not start:
+   - **the holder is alive**: ask the developer to pause it, for example by closing the
+     IDE project or stopping its VCS refresh, then retry;
+   - **`index.lock` exists but no process holds it**: the lock is stale, left by a Git
+     process that crashed. Only the developer removes it, after confirming that no Git
+     process is running;
+   - **as a last resort**, the developer can run the merge in a clean clone that no IDE
+     or watcher reads.
+6. Never use `--force`, `git reset`, `git stash` or `git stash drop`, and never delete
+   `index.lock` yourself.
+7. After the merge, verify its parents and its tree against the merge simulation, and
+   add a `Fuori pista` note in the journal.
+
 ## Dependent workstreams
 
 When workstream D depends on platform C:

@@ -1,9 +1,10 @@
 <script lang="ts">
     import {AlertTriangle, LoaderCircle, RefreshCw} from 'lucide-svelte';
-    import {locale, t} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import type {ToolClientError, ToolDiagnosticsResponse} from './contracts';
     import {toolDocumentationPath, toolErrorMessage, toolName} from './presentation';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Props {
         snapshot: ToolDiagnosticsResponse | null;
@@ -62,7 +63,7 @@
         invalid_operation_policy: 'Invalid operation policy',
     } satisfies Record<DiscoveryReason, string>;
 
-    const numberFormat = $derived(new Intl.NumberFormat($locale ?? 'en'));
+    const numberFormat = $derived(new Intl.NumberFormat(uiLocale()));
     const errorCopy = $derived(error ? toolErrorMessage(error) : null);
     const degraded = $derived(snapshot !== null && (snapshot.failures.length > 0 || !snapshot.pool.available || snapshot.pool.degraded_lanes > 0));
 

@@ -72,6 +72,23 @@ red tests, the cure (`8f67f89de`), the runner's rebuild on a changelog change (`
 (`b02bf6c54`). A synthetic `CHANGELOG.it.md`, never tracked, proved the translated branch in the build and the E2E, then
 was deleted. Pages: [[features/F-109]] (registered in step B8) and [[decisions/changelog-translated-by-chapter]].
 
+## T-SHK, T-CL, T-ISO and T-FB (trains 85, 88 and 90, added 2026-10-13)
+
+- **T-SHK** (`97810317a`): the hypothetical shock's table names its buckets — a translated class, a sector with its
+  emoji, a country with its flag, a translated «Other» — under a header that names the dimension, and, when the
+  weights are known, a bucket at weight 0 is no longer a row ([[features/F-111]]). The replay keeps «Asset»; the API does not change.
+- **T-CL** (`dfc4f9ccc`, `08c0a7a85`): `data-dist-pct` back to a machine form —
+  [[problems/test-hooks-read-the-localized-text]]; one term for the maximum drawdown per language, taken from the
+  documentation glossary (Italian «Drawdown massimo», French «Perte maximale»), guarded by `riskGlossary.test.ts`.
+- **T-ISO** (`2a17ae3af`) and **T-FB** (`03dba53f8`, `d017492d8`): the charts' tooltip dates and the comparison
+  signals' fallbacks follow the language — [[decisions/figures-in-the-interface-language]]. The probe test they broke
+  was repaired with `data-operation` (`8684d29fe`, train 90).
+- Left in the backlog: T-CAT (two renderings of the same categories), T-GRP (geography groups that stay raw ids) and
+  T-EVW, which is the defect workstream I cured as R-5 — [[problems/event-markers-lost-in-the-last-partial-period]].
+- **The open period's tooltip** (`341c77811`, train 93): the tooltip of an aggregated point names its period up to the
+  point's own day (`bucketSpanUpTo`), no longer the Sunday or the month's end still to come; T-EVW closed with a
+  pointer to R-5 — [[problems/event-markers-lost-in-the-last-partial-period]].
+
 ## Source files
 
 | Role | Path |

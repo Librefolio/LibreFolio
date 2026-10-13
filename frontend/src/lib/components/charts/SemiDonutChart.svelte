@@ -24,6 +24,9 @@
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Types
@@ -80,6 +83,8 @@
         const slices = data.map((slice) => ({...slice}));
         const label = availableLabel;
         void height;
+        // The labels are written in the interface locale: a language switch redraws them (M-18).
+        void uiLocale();
 
         if (container) {
             const generation = ++renderGeneration;
@@ -233,7 +238,7 @@
                     height: totalIconSize,
                     align: 'center',
                 };
-                formatter = `{avatar| }\n{pct|${slice.percentage.toFixed(1)}%}`;
+                formatter = `{avatar| }\n{pct|${formatPercent(slice.percentage, {digits: 1, signed: false})}}`;
             } else {
                 rich['avatar'] = {
                     fontSize: 18,
@@ -248,7 +253,7 @@
                     borderColor: isDark ? '#334155' : '#ffffff',
                     borderWidth: 2,
                 };
-                formatter = `{avatar|${initial}}\n{pct|${slice.percentage.toFixed(1)}%}`;
+                formatter = `{avatar|${initial}}\n{pct|${formatPercent(slice.percentage, {digits: 1, signed: false})}}`;
             }
 
             chartData.push({
@@ -283,7 +288,10 @@
             color: PALETTE,
             tooltip: {
                 trigger: 'item',
-                formatter: '{b}: {c}%',
+                formatter: (params: unknown) => {
+                    const item = params as {name?: string; value?: number};
+                    return `${escapeHtml(String(item.name ?? ''))}: ${formatPercent(Number(item.value), {digits: 1, signed: false})}`;
+                },
                 position: tooltipPositionAboveFinger,
                 backgroundColor: isDark ? '#1e293b' : '#fff',
                 borderColor: isDark ? '#334155' : '#e2e8f0',

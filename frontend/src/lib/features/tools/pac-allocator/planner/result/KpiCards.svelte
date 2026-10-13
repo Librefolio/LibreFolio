@@ -5,13 +5,14 @@
   plan (infeasible, nothing found within the limits) only the box is shown.
 -->
 <script lang="ts">
-    import {locale, t} from '$lib/i18n';
+    import {t} from '$lib/i18n';
     import type {ToolItemMetrics} from '$lib/features/tools/contracts';
     import HelpTip from '../shared/HelpTip.svelte';
     import {formatExactMoneyPlain, formatObjectiveValue, type CurrencyDigits} from '../format';
     import type {PacCosts, PacExactMoney, PacReadyResult, PacSolution} from '../types';
     import {BADGE, CARD, HINT, SECTION_TITLE} from '../ui';
     import {exactSign, objectiveStage} from './model';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Props {
         solution: PacSolution | null;
@@ -110,7 +111,7 @@
     const engines = $derived([...new Set(stages.map((stage) => `${stage.engine} ${stage.version}`))].join(', '));
 
     const formats = $derived.by(() => {
-        const tag = $locale ?? 'en';
+        const tag = uiLocale();
         return {
             milliseconds: new Intl.NumberFormat(tag, {style: 'unit', unit: 'millisecond', unitDisplay: 'short', maximumFractionDigits: 0}),
             seconds: new Intl.NumberFormat(tag, {style: 'unit', unit: 'second', unitDisplay: 'short', maximumFractionDigits: 1}),

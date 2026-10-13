@@ -1,13 +1,14 @@
 ---
 title: "Five copy buttons call the Clipboard API directly and copy nothing over plain HTTP (M-20)"
 category: problem
-status: open
+status: resolved
 date: 2026-10-12
 tags: [frontend, clipboard, http, secure-context, tailscale, connection-security, ux, workstream-m, workstream-i]
 related:
   - features/F-102
   - decisions/connection-security-server-never-upgrades
   - sources/phase00-translation-round12-2026-10
+  - decisions/clipboard-through-one-helper-with-a-gate
 ---
 
 # Problem: copy buttons that need a secure context
@@ -42,6 +43,10 @@ warning on the Tailscale-over-HTTP case, which as a risk is equal to HTTPS ([[fe
 assigned by the coordinator to workstream I, in the UI polish batch of release 1.2: route the five buttons through the
 shared helper.
 
+*Update (train 72)*: fixed in `65d20910e`. The five buttons, and the two of the file list and grid that had their
+own fallback (C-63, done in the same commit), go through `writeTextToClipboard()`, which now copies on plain HTTP; a
+gate keeps every other copy out — [[decisions/clipboard-through-one-helper-with-a-gate]].
+
 ## Prevention
 
 Copy through `writeTextToClipboard()`, never through `navigator.clipboard` directly: the helper is the one place that
@@ -52,10 +57,10 @@ knows about secure contexts. A test over plain HTTP from a non-localhost origin 
 | Role | Path |
 |------|------|
 | Shared helper with the fallback | `frontend/src/lib/utils/clipboard.ts` |
-| Direct call (system info) | `frontend/src/lib/components/settings/tabs/AboutTab.svelte` |
-| Direct call (lot id) | `frontend/src/lib/components/brokers/lots/UnifiedLotsTable.svelte` |
-| Direct call (administrator e-mail) | `frontend/src/lib/components/auth/AskAdminModal.svelte` |
-| Direct call (previewed text) | `frontend/src/lib/components/files/FilePreviewModal.svelte` |
-| Direct call (provider error detail) | `frontend/src/lib/components/assets/ProviderAssignmentSection.svelte` |
+| A direct call until train 72 (system info) | `frontend/src/lib/components/settings/tabs/AboutTab.svelte` |
+| A direct call until train 72 (lot id) | `frontend/src/lib/components/brokers/lots/UnifiedLotsTable.svelte` |
+| A direct call until train 72 (administrator e-mail) | `frontend/src/lib/components/auth/AskAdminModal.svelte` |
+| A direct call until train 72 (previewed text) | `frontend/src/lib/components/files/FilePreviewModal.svelte` |
+| A direct call until train 72 (provider error detail) | `frontend/src/lib/components/assets/ProviderAssignmentSection.svelte` |
 | The guide's warning | `mkdocs_src/docs/user/connection-security.en.md` |
 | Backlog (M-20) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

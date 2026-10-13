@@ -5,9 +5,8 @@
  * than one year and the day alone would be ambiguous). An unparseable input is
  * echoed back through `String(value)` rather than rendered as "Invalid Date".
  *
- * The locale is passed in (the `$currentLanguage` store value) so this stays a
- * pure function; an empty locale falls back to the environment default, matching
- * the original `toLocaleDateString($currentLanguage || undefined, …)` call.
+ * The locale is passed in; an empty one falls back to the interface locale
+ * (`uiLocale()`, M-18), never to the browser's.
  *
  * The three lot charts each carried this verbatim — twice as `formatAxisDate`
  * and once, confusingly, as `formatShortDate`. Note it is NOT the same as
@@ -30,6 +29,8 @@
  * `LotCustodyModal` was the one copy that already did this; the others rendered
  * the wrong day for half the planet.
  */
+
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /** A bare calendar day: no time, no zone, nothing to convert. */
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -67,8 +68,18 @@ export function parseDisplayDate(value: number | string): Date | null {
     return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/**
+ * A calendar day, `YYYY-MM-DD`, as the interface writes a date in a tooltip or a detail line:
+ * `12 ott 2026`, `12 Oct 2026`, `12 oct. 2026` (M-18). Anything else comes back unchanged — a
+ * chart category that is not a day stays what it is, where `formatAxisDate` would read a bare
+ * number as a year.
+ */
+export function formatDay(value: string, locale: string = uiLocale()): string {
+    return DATE_ONLY.test(value) ? formatAxisDate(locale, value, true) : value;
+}
+
 export function formatAxisDate(locale: string | undefined, value: number | string, withYear = false): string {
     const date = parseDisplayDate(value);
     if (!date) return String(value);
-    return date.toLocaleDateString(locale || undefined, withYear ? {year: 'numeric', month: 'short', day: 'numeric'} : {month: 'short', day: 'numeric'});
+    return date.toLocaleDateString(locale || uiLocale(), withYear ? {year: 'numeric', month: 'short', day: 'numeric'} : {month: 'short', day: 'numeric'});
 }

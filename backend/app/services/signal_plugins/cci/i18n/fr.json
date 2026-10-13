@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "cci": {
+      "name": "CCI",
+      "description": "Écart par rapport au prix moyen",
+      "output": "CCI",
+      "oversold": "Survendu",
+      "overbought": "Suracheté",
+      "oversoldRegion": "Survendu",
+      "neutralRegion": "Neutre",
+      "overboughtRegion": "Suracheté"
+    }
+  }
+}

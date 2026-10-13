@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "macd": {
+      "name": "MACD",
+      "description": "Momentum entre moyennes mobiles",
+      "line": "MACD",
+      "lineDescription": "EMA rapide moins EMA lente.",
+      "signal": "Ligne de signal",
+      "signalDescription": "Lissage EMA de la ligne MACD.",
+      "histogram": "Histogramme",
+      "histogramDescription": "Distance entre MACD et sa ligne de signal."
+    }
+  }
+}

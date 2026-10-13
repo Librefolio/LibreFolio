@@ -23,6 +23,7 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled, waitForValidateRun} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
+import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
 
 test.setTimeout(60_000);
 
@@ -38,10 +39,10 @@ const ASSET_NAME = 'Apple';
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function goToTransactions(page: Page) {
-    await navigateTo(page, '/transactions?page_size=200');
-    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
+async function goToTransactions(page: Page, query = '?page_size=200') {
+    await navigateTo(page, `/transactions${query}`);
     await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 20_000})]).catch(() => {});
 }
 
 async function openCreateFlow(page: Page) {
@@ -88,14 +89,15 @@ async function pickBrokerInPanel(page: Page, panelTestid: string, brokerName: st
 async function pickAssetByName(page: Page, name: string) {
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
     await assetWrap.locator('button, [role="combobox"]').first().click();
-    const searchInput = page.locator('[data-testid="tx-form-asset-wrap"] input[type="text"], [data-testid="tx-form-asset-wrap"] input[role="combobox"]').first();
-    if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
-        await searchInput.fill(name);
-        // The list is debounced; the named entry arriving *is* the settle.
-        await expect(page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first()).toBeVisible({timeout: 5_000});
-    }
-    const option = page.locator('[data-testid^="search-select-option-"]').first();
-    await expect(option).toBeVisible({timeout: 3_000});
+    // The asset select searches inline: its search box is the open trigger itself, so
+    // it is always there. Probing for it, and clicking "the first asset" when the probe
+    // expired, picked whatever sorted first — a neighbour's asset, under concurrency.
+    const searchInput = page.getByTestId('tx-form-asset-search');
+    await expect(searchInput).toBeVisible({timeout: 3_000});
+    await searchInput.fill(name);
+    // The list is debounced; the named entry arriving *is* the settle.
+    const option = page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first();
+    await expect(option).toBeVisible({timeout: 5_000});
     await option.click();
     await optionListClosed(page);
 }
@@ -171,7 +173,8 @@ async function dblClickBulkRow(page: Page, marker: string) {
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
 }
 
-async function commitBulkModal(page: Page) {
+/** Commit the open BulkModal; returns the ids of the rows the commit created. */
+async function commitBulkModal(page: Page): Promise<number[]> {
     const commitBtn = page.getByTestId('tx-bulk-commit');
     await expect(commitBtn).toBeEnabled({timeout: 8_000});
 
@@ -182,6 +185,24 @@ async function commitBulkModal(page: Page) {
     expect(body.committed).toBe(true);
 
     await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 10_000});
+    const results = (body.results ?? []) as Array<{operation: string; ids?: number[]; status?: string}>;
+    return results.filter((r) => r.operation === 'create' && r.status === 'success').flatMap((r) => r.ids ?? []);
+}
+
+/**
+ * The TRANSFER pair among the rows a commit created, read back from the backend.
+ * The giver is the leg leaving the source broker — negative quantity, the same
+ * rule the table uses to put it first.
+ */
+async function committedTransferPair(page: Page, createdIds: number[]): Promise<{giverId: number; receiverId: number}> {
+    const res = await page.request.get(`/api/v1/transactions?${createdIds.map((id) => `ids=${id}`).join('&')}`);
+    expect(res.ok(), `GET /transactions?ids=… answered ${res.status()}`).toBe(true);
+    const rows = (await res.json()) as Array<{id: number; type: string; quantity: string | number; related_transaction_id?: number | null}>;
+    const giver = rows.find((t) => t.type === 'TRANSFER' && Number(t.quantity) < 0);
+    expect(giver, `the commit must have created a TRANSFER giver (created ids: ${createdIds.join(', ')})`).toBeTruthy();
+    const receiverId = giver!.related_transaction_id;
+    expect(receiverId != null && createdIds.includes(receiverId), `the giver's partner ${receiverId} must be a row this commit created`).toBe(true);
+    return {giverId: giver!.id, receiverId: receiverId!};
 }
 
 /** Intercept the next validate request and return the parsed JSON body. */
@@ -205,9 +226,26 @@ async function captureValidateResponse(page: Page, action: () => Promise<void>):
 // ---------------------------------------------------------------------------
 
 test.describe('FormModal WAC Payload Tests', () => {
+    // Whoever commits, cleans up. FM6 commits a real BUY and a TRANSFER pair into
+    // TEST_USER's seeded brokers, and `Transaction` is global: left there, they
+    // shift the NAV, positions, counts and pages of every later test, and the
+    // txHygiene net that used to hide them exists only at one worker. The tracker
+    // records the rows this page's commits create and deletes exactly those, at any
+    // worker count. It starts after login (it reads through `page.request`, which
+    // needs the session cookie) and so before any commit; `afterEach` runs for a
+    // red test too.
+    let txWrites: TransactionWriteTracker | undefined;
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
+        txWrites = await trackTransactionWrites(page);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async () => {
+        const tracker = txWrites;
+        txWrites = undefined;
+        await tracker?.cleanup();
     });
 
     test('FM1 — BUY via FormModal → cost_basis_mode ABSENT', async ({page}) => {
@@ -360,30 +398,21 @@ test.describe('FormModal WAC Payload Tests', () => {
         await applyFormModal(page);
         await waitForWacResolved(page);
 
-        // Commit to DB
-        await commitBulkModal(page);
+        // Commit to DB — the answer names the rows this test now owns.
+        const createdIds = await commitBulkModal(page);
 
-        // Reload and find the committed paired row (newest rows at top, search by ASSET_NAME)
-        await goToTransactions(page);
-        const allRows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
-        const count = await allRows.count();
-        let giverRowId: string | null = null;
-
-        for (let i = 0; i < count - 1; i++) {
-            const nextCls = (await allRows.nth(i + 1).getAttribute('class')) ?? '';
-            if (nextCls.includes('tx-row-receiver')) {
-                const text = (await allRows.nth(i).textContent()) ?? '';
-                if (text.includes(ASSET_NAME) && (text.includes(BROKER_FROM) || text.includes(BROKER_TO))) {
-                    giverRowId = await allRows.nth(i).getAttribute('data-row-id');
-                    break;
-                }
-            }
-        }
-        expect(giverRowId, 'Must find the committed paired row from today').toBeTruthy();
+        // Open the committed pair by those ids. Scanning the table for "the first
+        // Apple pair from today" took whichever pair sorted first: a neighbour's
+        // under concurrency — one its owner may delete while this test reads it — or
+        // a seeded one, and then the manual cell asserted below was somebody else's.
+        const {giverId, receiverId} = await committedTransferPair(page, createdIds);
+        await goToTransactions(page, `?id_min=${Math.min(giverId, receiverId)}&id_max=${Math.max(giverId, receiverId)}`);
 
         // Select and open in BulkModal (Edit)
-        const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${giverRowId}"]`);
-        await row.locator('.checkbox-btn').first().click();
+        const giverCheckbox = page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${giverId}`);
+        await expect(giverCheckbox, 'the committed giver row must be on screen').toBeVisible({timeout: 10_000});
+        await giverCheckbox.click();
+        await expect(giverCheckbox).toHaveAttribute('data-state', 'checked');
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeVisible({timeout: 2_000});
         await editBtn.click();
@@ -422,12 +451,15 @@ test.describe('FormModal WAC Payload Tests', () => {
         // TRANSFER share a date, so which of the two is "last" is not ours to assume.
         await dblClickBulkRow(page, transferMarker);
 
-        // Toggle to manual mode
+        // Toggle to manual mode. That toggle is the subject, and the receiver's cost-basis
+        // section renders it whenever the form is editable (WacPreviewSection hides it only
+        // when disabled, i.e. in view mode): assert it rather than probe for it — a probe
+        // that expired skipped the toggle, and the amount typed below would still have
+        // carried the test through.
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
-        if (await manualToggle.isVisible({timeout: 2_000}).catch(() => false)) {
-            await manualToggle.click();
-            await expect(manualToggle).toHaveAttribute('aria-pressed', 'true');
-        }
+        await expect(manualToggle).toBeVisible({timeout: 3_000});
+        await manualToggle.click();
+        await expect(manualToggle).toHaveAttribute('aria-pressed', 'true');
 
         // Fill manual cost basis amount
         const amountInput = page.getByTestId('tx-form-cost-basis-input-amount');
@@ -496,22 +528,24 @@ test.describe('FormModal WAC Payload Tests', () => {
     });
 
     test('FM10 — ADJUSTMENT mode persist: manual stays manual on re-edit', async ({page}) => {
+        // The row is re-opened twice; it is found by a description only this test
+        // knows, never as "the last row" of the grid.
+        const marker = `FM10 adjustment ${uniqueSuffix()}`;
+
         // Step 1: Create ADJUSTMENT+ with auto mode (default)
         await openCreateFlow(page);
         await selectType(page, 'ADJUSTMENT');
         await pickFirstBroker(page);
         await pickAssetByName(page, ASSET_NAME);
         await fillQuantity(page, '5');
+        await fillDescription(page, marker);
         await applyFormModal(page);
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
         await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
 
         // Step 2: Re-edit and switch to manual with value 50
-        const rows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        const lastIdx = (await rows.count()) - 1;
-        await rows.nth(lastIdx).dblclick();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        await dblClickBulkRow(page, marker);
 
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
         await expect(manualToggle).toBeVisible({timeout: 3_000});
@@ -525,15 +559,13 @@ test.describe('FormModal WAC Payload Tests', () => {
         await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
 
         // Step 3: Re-edit again — should show manual mode with value 50
-        const rows2 = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
-        const lastIdx2 = (await rows2.count()) - 1;
-        await rows2.nth(lastIdx2).dblclick();
-        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        await dblClickBulkRow(page, marker);
 
-        // Assert: manual toggle active
+        // Assert: manual toggle active. aria-pressed is the component saying which mode
+        // it is in; the `font-medium` class it used to read was a guess about the look.
         const manualToggle2 = page.getByTestId('tx-form-cost-basis-toggle-manual');
         await expect(manualToggle2).toBeVisible({timeout: 3_000});
-        await expect(manualToggle2).toHaveClass(/font-medium/);
+        await expect(manualToggle2).toHaveAttribute('aria-pressed', 'true');
 
         // Assert: input still has 50
         const input = page.getByTestId('tx-form-cost-basis-input-amount');

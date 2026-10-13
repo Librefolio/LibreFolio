@@ -126,10 +126,19 @@ async function deleteOwnedBrokers(page: Page, owned: OwnedBroker[]): Promise<voi
     expect(failures, 'cleanup deletes every broker this test created, and its files with it').toEqual([]);
 }
 
+/**
+ * Budget for the transactions page to land and finish its first load: the 20 s the sibling import specs give
+ * `waitForSettled(transactions-page)` (tx-import-flow, tx-import-degiro, …) and tx-wac-bulk its busy gate.
+ */
+const NAVIGATION_TIMEOUT_MS = 20_000;
+
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
-    await waitForSettled(page.getByTestId('transactions-page'));
+    // The page publishes its first load through `data-busy` and renders the table only once that load has ended
+    // without an error: wait for the gate with the navigation budget, then check the table. A fixed 10 s on the
+    // table itself lost by a hair under load (R, 12/10: the table was already on screen in the failure snapshot).
+    await waitForSettled(page.getByTestId('transactions-page'), NAVIGATION_TIMEOUT_MS);
+    await expect(page.getByTestId('tx-table')).toBeVisible({timeout: NAVIGATION_TIMEOUT_MS});
 }
 
 async function openImportWizard(page: Page) {
@@ -491,7 +500,9 @@ test.describe('Import Wizard — plugin contract', () => {
         const late = await createBrokerWithFixture(page, ownedBrokers, {label: 'CA Late', filePrefix: 'ca-late', openedAt: '2026-08-01'});
 
         await page.reload();
-        await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
+        // A full reload is a navigation: same gate, same budget as goToTransactions.
+        await waitForSettled(page.getByTestId('transactions-page'), NAVIGATION_TIMEOUT_MS);
+        await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: NAVIGATION_TIMEOUT_MS});
         await openImportWizard(page);
         const parsed = await parseFixture(page, late);
         await continueToReview(page, parsed);

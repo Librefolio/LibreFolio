@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_traderepublic": {
+      "description": "Importe les transactions de l’export CSV de Trade Republic. Prend en charge les achats et ventes, les dividendes, les intérêts, les mouvements de liquidités, les frais et les impôts en EUR.",
+      "name": "Trade Republic"
+    }
+  }
+}

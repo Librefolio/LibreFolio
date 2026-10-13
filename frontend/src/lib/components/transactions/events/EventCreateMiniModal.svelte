@@ -18,6 +18,8 @@
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {X} from 'lucide-svelte';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Props {
         open: boolean;
@@ -152,9 +154,9 @@
             // Build descriptive toast
             const typeLabel = $t(`assetDetail.eventType.${eventType}`) || eventType;
             const emoji = typeOptions.find((o) => o.value === eventType)?.icon || '📋';
-            const fmtDate = new Date(eventDate + 'T00:00:00').toLocaleDateString(undefined, {day: 'numeric', month: 'short', year: 'numeric'});
+            const fmtDate = new Date(eventDate + 'T00:00:00').toLocaleDateString(uiLocale(), {day: 'numeric', month: 'short', year: 'numeric'});
             const amt = parseFloat(normalizeDecimalInput(eventAmount));
-            const fmtAmt = !isNaN(amt) ? `${amt.toFixed(2)} ${assetCurrency}` : '';
+            const fmtAmt = !isNaN(amt) ? `${formatFixed(amt, 2)} ${assetCurrency}` : '';
             const toastMsg = `${emoji} ${typeLabel} · ${fmtDate}${fmtAmt ? ` · ${fmtAmt}` : ''}${eventNotes ? ` · 📝 ${eventNotes}` : ''}`;
             toasts.success(toastMsg);
             if (created?.id) {

@@ -28,6 +28,8 @@ import {singleValue, type RiskDataQualityReport} from '$lib/risk/riskTypes';
 import {maskCurrencyParts} from '$lib/utils/privacy/maskable';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /**
  * The scenario description in the user's current language. A scenario carries a
@@ -139,7 +141,7 @@ export function normalizeQualityIssue(issue: NonNullable<RiskDataQualityReport['
 
 /** A ratio metric to two decimals, or an em-dash when the value is absent. */
 export function formatRatio(value: number | null | undefined): string {
-    return value == null ? '—' : value.toFixed(2);
+    return value == null ? '—' : formatFixed(value, 2);
 }
 
 /**
@@ -158,7 +160,7 @@ export function formatRatio(value: number | null | undefined): string {
  * keeps its em-dash. Masking it would turn "there is no figure here" into "there
  * is a figure here and you may not see it", which is a different statement.
  */
-export function formatCurrencyAmount(value: string | readonly (string | null)[] | null | undefined, currency: string, locale?: string): string {
+export function formatCurrencyAmount(value: string | readonly (string | null)[] | null | undefined, currency: string, locale: string = uiLocale()): string {
     const scalar = singleValue(value);
     if (scalar == null) return '—';
     const amount = Number(scalar);
@@ -179,7 +181,7 @@ export function formatCurrencyAmount(value: string | readonly (string | null)[] 
  * appears to fire. It exists for the day the backend starts sending a number,
  * which is the day nothing else would stop it from being printed.
  */
-export function formatScopedCurrencyAmount(value: string | readonly (string | null)[] | null | undefined, currency: string, scopeKind: string, locale?: string): string {
+export function formatScopedCurrencyAmount(value: string | readonly (string | null)[] | null | undefined, currency: string, scopeKind: string, locale: string = uiLocale()): string {
     if (scopeKind !== 'portfolio') return '—';
     return formatCurrencyAmount(value, currency, locale);
 }

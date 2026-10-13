@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "obv": {
+      "name": "OBV",
+      "description": "Pression prix-volume",
+      "output": "OBV"
+    }
+  }
+}

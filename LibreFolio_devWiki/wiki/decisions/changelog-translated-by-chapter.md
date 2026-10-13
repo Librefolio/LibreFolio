@@ -75,6 +75,6 @@ English ones; a chapter not yet translated is simply absent from the file.
 | HTML sink gate | `frontend/src/htmlSink.gate.test.ts` |
 | E2E | `frontend/e2e/layout/changelog-locale.spec.ts` |
 | Rebuild on a changelog change | `scripts/cli_base.py` |
-| The label key (English catalogue) | `frontend/src/lib/i18n/en.json` |
+| The label key (English catalogue) | `frontend/src/lib/i18n/base/en.json` |
 | Journal (CL, plan 43) | `LibreFolio_developer_journal/Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` |
 | Journal (the developer's approval, §16) | `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` |

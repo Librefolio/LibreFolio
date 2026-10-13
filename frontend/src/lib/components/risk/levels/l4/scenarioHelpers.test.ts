@@ -405,7 +405,12 @@ describe('tornadoRows — a configured bucket’s weight is its share of the sco
         const sent = RISK_OFF_LANE.configured_buckets ?? [];
         expect(Object.fromEntries(sent.filter((bucket) => bucket.applied_asset_count > 0).map((bucket) => [bucket.bucket_id, bucket.asset_exposure_total])), 'premise: the lane’s unweighted totals, above 1').toEqual({CROWDFUND: 2, CRYPTO: 2, STOCK: 4});
         const rows = shockRows(RISK_OFF_LANE);
-        expect(rows, 'premise: every configured bucket is drawn').toHaveLength(sent.length);
+        // Since T-SHK (D5) a bucket nobody holds is not a row (see the case below): the bounds are read
+        // on the rows that are drawn, and the three held buckets must be among them.
+        expect(
+            rows.map((row) => row.bucketId),
+            'premise: every held bucket is drawn',
+        ).toEqual(expect.arrayContaining(['STOCK', 'CROWDFUND', 'CRYPTO']));
         expect(
             rows.filter((row) => row.weight === null || row.weight < 0 || row.weight > 1).map((row) => `${row.bucketId}: ${row.weight}`),
             'a bucket states more than the whole scope, or no share at all',
@@ -427,8 +432,14 @@ describe('tornadoRows — a configured bucket’s weight is its share of the sco
         const rules = new Set((RISK_OFF_LANE.impacts ?? []).flatMap((impact) => (impact.bucket_audit ?? []).map((line) => line.rule)));
         expect([...rules], 'premise: every exposure is applied directly').toEqual(['direct']);
         const sent = new Map((RISK_OFF_LANE.configured_buckets ?? []).map((bucket) => [bucket.bucket_id, bucket]));
+        const held = [...sent.values()].filter((bucket) => bucket.applied_asset_count > 0).map((bucket) => bucket.bucket_id);
         const rows = shockRows(RISK_OFF_LANE);
-        expect(rows.map((row) => row.bucketId).sort(), 'premise: every configured bucket is drawn').toEqual([...sent.keys()]);
+        // Since T-SHK (D5) only the held buckets are rows: the identity is checked on each of them.
+        expect(held, 'premise: the lane holds three of the configured buckets').toHaveLength(3);
+        expect(
+            rows.map((row) => row.bucketId),
+            'premise: every held bucket is drawn',
+        ).toEqual(expect.arrayContaining(held));
         for (const row of rows) {
             const bucket = sent.get(row.bucketId ?? '');
             expect(row.weight, `${row.bucketId} states no weight`).not.toBeNull();
@@ -436,19 +447,23 @@ describe('tornadoRows — a configured bucket’s weight is its share of the sco
         }
     });
 
-    it('states 0, not null, for a configured bucket nobody holds, and still draws its row — beside the shares measured on the lane', () => {
+    it('draws no row for a configured bucket nobody holds — 15 of the 18 of «Global risk-off» — and keeps the three held ones, worst first, at the shares measured on the lane (T-SHK, D5)', () => {
         // The Dashboard sends every bucket of a preset, so most of them hold nothing in a given
-        // portfolio. On a weighted scope such a bucket has a share, and it is 0; its row stays, with the
-        // 0 contribution the backend sends for it. A null would blank the cell as if the share were unknown.
+        // portfolio. On a weighted scope the share of such a bucket is known, and it is 0: its row was a
+        // 0.0% line, fifteen of them around the three that matter (D5). Since T-SHK it is not drawn. The
+        // cure is the frontend's: the API keeps sending every configured bucket, as `sent` shows.
+        // (This case replaces «states 0, not null, for a configured bucket nobody holds, and still draws
+        // its row», which pinned the 0.0% rows D5 removes.)
         const sent = RISK_OFF_LANE.configured_buckets ?? [];
+        expect(sent, 'premise: the backend sends the eighteen buckets of «Global risk-off»').toHaveLength(18);
         const nobody = sent.filter((bucket) => bucket.applied_asset_count === 0).map((bucket) => bucket.bucket_id);
         expect(nobody, 'premise: the preset names fifteen classes this portfolio does not hold').toHaveLength(15);
-        const rows = new Map(shockRows(RISK_OFF_LANE).map((row) => [row.bucketId, row]));
+        const rows = shockRows(RISK_OFF_LANE);
         expect(
-            nobody.map((id) => [id, rows.get(id)?.contribution, rows.get(id)?.weight]),
-            'a bucket nobody holds lost its row, or states no share instead of 0',
-        ).toEqual(nobody.map((id) => [id, 0, 0]));
-        expect(Object.fromEntries(['STOCK', 'CROWDFUND', 'CRYPTO'].map((id) => [id, rows.get(id)?.weight])), 'the held buckets do not state the shares measured on the lane: 25.2%, 25.0% and 6.4%').toEqual({
+            rows.map((row) => row.key),
+            'a configured bucket nobody holds — a share of exactly 0 on a weighted scope — is still drawn as a 0.0% row; or a held one was lost; or the order is no longer the signed damage',
+        ).toEqual(['bucket:STOCK', 'bucket:CROWDFUND', 'bucket:CRYPTO']);
+        expect(Object.fromEntries(rows.map((row) => [row.bucketId, row.weight])), 'the held buckets do not state the shares measured on the lane: 25.2%, 25.0% and 6.4%').toEqual({
             STOCK: expect.closeTo(0.2516, 12),
             CROWDFUND: expect.closeTo(0.25, 12),
             CRYPTO: expect.closeTo(0.064, 12),
@@ -538,6 +553,95 @@ describe('tornadoRows — a configured bucket’s weight is its share of the sco
             rows.map((row) => row.weight),
             'a bucket states a weight on a scope that has none',
         ).toEqual([null, null]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// T-SHK (D5, 13/10/2026) — a configured bucket nobody holds is not a row
+// ---------------------------------------------------------------------------
+//
+// The rule lives in the bucket branch of `tornadoRows`, and only where the shares are known
+// (`bucketShares(...) !== null`, i.e. the holdings carry weights): a bucket whose share is exactly 0 is
+// not a row. Its first red is the «Global risk-off» case above; the one below is its edge, a portfolio
+// that holds none of the shocked classes. The guards say what the rule must leave alone, and are green
+// before the cure as after it: a held bucket stays whatever its shock and however small its share, the
+// per-asset rows of a replay keep their zeros (D151), and a scope without weights has no share that
+// could be 0. The API does not change: the backend keeps sending every configured bucket.
+
+describe('tornadoRows — a configured bucket nobody holds is not a row (T-SHK, D5)', () => {
+    it('draws no row at all for a weighted portfolio that holds none of the shocked classes', () => {
+        // «Equity crash» narrowed to two classes, over a portfolio of bonds: the bonds' exposure is applied
+        // to no bucket (`unconfigured_zero`), so both buckets have a share of 0, and neither is a row.
+        const shocks = {ETF: -0.25, STOCK: -0.35};
+        const output = shockOutput('asset_class', shocks, [classHolding(71, 0.6, 'BOND', shocks), classHolding(72, 0.3, 'BOND', shocks)]);
+        expect(
+            (output.configured_buckets ?? []).map((bucket) => [bucket.bucket_id, bucket.applied_asset_count, bucket.contribution_return]),
+            'premise: two configured buckets, nobody in them, each sent with a 0 contribution',
+        ).toEqual([
+            ['ETF', 0, 0],
+            ['STOCK', 0, 0],
+        ]);
+        expect(
+            shockRows(output).map((row) => row.key),
+            'a weighted portfolio that holds none of the shocked classes still draws their buckets, at 0.0%',
+        ).toEqual([]);
+    });
+
+    it('keeps a held bucket whose shock is zero: the rule reads the share, not the contribution (guard)', () => {
+        // «Global risk-off» shocks ETF_MONETARY by 0. A money-market ETF the portfolio holds is a held
+        // bucket with a 0 contribution, and its row says so: held, and untouched by this scenario.
+        const output = shockOutput('asset_class', GLOBAL_RISK_OFF, [classHolding(81, 0.5, 'STOCK', GLOBAL_RISK_OFF), classHolding(82, 0.2, 'ETF_MONETARY', GLOBAL_RISK_OFF)]);
+        const sent = (output.configured_buckets ?? []).find((bucket) => bucket.bucket_id === 'ETF_MONETARY');
+        expect(sent && [sent.applied_asset_count, sent.contribution_return], 'premise: ETF_MONETARY is held, and sent with a 0 contribution').toEqual([1, 0]);
+        const monetary = shockRows(output).find((row) => row.bucketId === 'ETF_MONETARY');
+        expect(monetary && {contribution: monetary.contribution, weight: monetary.weight}, 'a held bucket shocked by 0 lost its row: the rule must read the share, not the contribution').toEqual({contribution: 0, weight: expect.closeTo(0.2, 12)});
+    });
+
+    it('keeps a held bucket however small its share — one the Weight column prints as 0.0% included (guard)', () => {
+        // The rule is «a share of exactly 0», never «a share that rounds to 0»: a holding of 0.04% is
+        // held, and dropping it would let the rounding of the Weight column decide what exists.
+        const output = shockOutput('asset_class', GLOBAL_RISK_OFF, [classHolding(91, 0.6, 'STOCK', GLOBAL_RISK_OFF), classHolding(92, 0.0004, 'CRYPTO', GLOBAL_RISK_OFF)]);
+        expect(scenarioHelpers.formatReplayShare(0.0004, 'en'), 'premise: the Weight column prints this share as it prints 0').toBe(scenarioHelpers.formatReplayShare(0, 'en'));
+        const crypto = shockRows(output).find((row) => row.bucketId === 'CRYPTO');
+        expect(crypto?.weight, 'a held bucket whose share prints as 0.0% lost its row').toBeCloseTo(0.0004, 12);
+    });
+
+    it('keeps every row of a replay, a holding weighing 0 included: the rule is the bucket branch’s alone (guard)', () => {
+        // A replay has no dimension, so its rows are the assets, each with its own weight (D151 keeps the
+        // flat ones). Nothing about buckets applies to them.
+        const rows = tornadoRows({
+            impacts: [
+                {asset_id: 7, weight: 0.6, shock_return: -0.1, contribution_return: -0.06, impact_amount: '-600.00'},
+                {asset_id: 8, weight: 0, shock_return: -0.3, contribution_return: 0, impact_amount: '0.00'},
+                {asset_id: 9, weight: 0.4, shock_return: 0.05, contribution_return: 0.02, impact_amount: '200.00'},
+            ],
+        });
+        expect(
+            rows.map((row) => [row.key, row.weight]),
+            'a replayed asset weighing 0 lost its row: the zero-share rule leaked into the per-asset branch',
+        ).toEqual([
+            ['asset:7', 0.6],
+            ['asset:8', 0],
+            ['asset:9', 0.4],
+        ]);
+    });
+
+    it('keeps every configured bucket on a scope without weights, one nobody holds included: without weights no share is 0 (guard)', () => {
+        // As in the Weight-column case above: an asset set sends no contribution, so its buckets are given
+        // their own shock to be drawn at all, which an asset set never sends. BOND is configured and held
+        // by nobody; without the holdings' weights its share is unknown, not 0, and the rule does not apply.
+        const shocks = {BOND: -0.05, CRYPTO: -0.3, STOCK: -0.2};
+        const sent = shockOutput('asset_class', shocks, [classHolding(61, null, 'STOCK', shocks), classHolding(63, null, 'CRYPTO', shocks)]);
+        const drawn: RiskStressOutput = {...sent, configured_buckets: (sent.configured_buckets ?? []).map((bucket) => ({...bucket, contribution_return: bucket.shock}))};
+        expect((drawn.configured_buckets ?? []).find((bucket) => bucket.bucket_id === 'BOND')?.applied_asset_count, 'premise: nobody holds BOND').toBe(0);
+        expect(
+            shockRows(drawn).map((row) => [row.key, row.weight]),
+            'a scope without weights lost a configured bucket: the zero-share rule applied where no share is known',
+        ).toEqual([
+            ['bucket:CRYPTO', null],
+            ['bucket:STOCK', null],
+            ['bucket:BOND', null],
+        ]);
     });
 });
 

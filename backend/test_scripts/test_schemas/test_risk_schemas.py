@@ -79,6 +79,7 @@ from backend.app.schemas.risk_scenarios import (
     RiskScenarioLocalizedText,
     RiskScenarioMissingHistoryPolicy,
 )
+from scripts.i18n_catalog import load_catalog
 
 
 def make_valuation(
@@ -1452,22 +1453,22 @@ def test_var_cvar_chart_fields_are_omissible_because_the_additive_design_rests_o
 
 
 def _i18n_catalogue(language: str) -> dict:
-    """One frontend translation catalogue, read from disk.
+    """One frontend translation catalogue, merged from its sources without the English fallback.
 
-    Resolved by walking UP from this file rather than from the process CWD,
-    because pytest is invoked from the repository root in the runner and from
-    the file's own directory when a developer runs one test — a CWD-relative
-    path silently reads nothing in the second case, which is the failure mode
-    this whole test exists to prevent.
+    Read through ``scripts/i18n_catalog.py`` from the sources of the checkout this file belongs to — the library finds
+    them from its own file, never from the process CWD, because pytest is invoked from the repository root in the
+    runner and from the file's own directory when a developer runs one test, and a CWD-relative path silently reads
+    nothing in the second case, which is the failure mode this whole test exists to prevent. Never the generated
+    ``frontend/src/lib/i18n/<lang>.json``: it exists only after a frontend build, and its English fallback would show
+    every sentence a language lacks as present.
     """
-    root = Path(__file__).resolve().parents[3]
-    path = root / "frontend" / "src" / "lib" / "i18n" / f"{language}.json"
     # A MISSING catalogue must be a RED, never a skip. The defect this test
     # guards against is "a code that renders as a generic fallback because no
     # key exists"; a test that quietly passes when it cannot find the
     # catalogues at all would be the same defect wearing the test's name.
-    assert path.is_file(), f"translation catalogue not found: {path}"
-    return json.loads(path.read_text(encoding="utf-8"))
+    # load_catalog raises (CatalogError, KeyError for a language the sources
+    # do not have) rather than returning an empty catalogue.
+    return load_catalog(language, fallback=False)
 
 
 #: The controller that emits the frontend-owned on-demand error code (F9).
@@ -1479,7 +1480,7 @@ _STRING_PAIR = re.compile(r"\[\s*'([a-z][a-z0-9_]*)'\s*,\s*'([a-z][a-z0-9_]*)'\s
 
 
 def _frontend_source(relative_path: str) -> str:
-    """One frontend source file, read from disk — resolved like ``_i18n_catalogue``, and a RED when missing."""
+    """One frontend source file, read from disk — found from this file, never from the CWD, and a RED when missing."""
     path = Path(__file__).resolve().parents[3] / "frontend" / relative_path
     assert path.is_file(), f"frontend source not found: {path}"
     return path.read_text(encoding="utf-8")

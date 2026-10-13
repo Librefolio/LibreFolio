@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "ppo": {
+      "name": "PPO",
+      "description": "Momentum en pourcentage entre moyennes",
+      "line": "PPO",
+      "lineDescription": "Écart en pourcentage entre moyenne rapide et lente.",
+      "signal": "Ligne de signal",
+      "signalDescription": "Lissage EMA de la ligne PPO.",
+      "histogram": "Histogramme",
+      "histogramDescription": "Distance entre PPO et sa ligne de signal."
+    }
+  }
+}

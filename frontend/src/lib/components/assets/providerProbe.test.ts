@@ -8,8 +8,16 @@
  *
  * The currency store is mocked so `formatCurrencyForTooltip` is deterministic and
  * every flag/symbol branch is reachable without loading real currency metadata.
+ *
+ * The tooltip's days and its history header are the last describe's (T-ISO): the
+ * structural cases above it compare a day with its notation set aside (`sansDay`,
+ * ISO or the house notation), so they hold before and after that cure. The last
+ * describe boots svelte-i18n to word the caller's labels from the catalogue, and
+ * switches the interface language as the selector does (`currentLanguage`).
  */
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {get} from 'svelte/store';
+import {waitLocale} from 'svelte-i18n';
 
 vi.mock('$lib/stores/reference/currencyStore', () => ({
     getCurrencyInfo: vi.fn((code: string) => {
@@ -25,7 +33,37 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
     }),
 }));
 
-import {SOFT_FAIL_CODES, isSoftProbeFailure, isRealProbeError, summarizeProbeError, formatCurrencyForTooltip, buildProbeTooltipHtml} from './providerProbe';
+import {setupI18n} from '$test/component';
+import {_} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
+import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
+import {SOFT_FAIL_CODES, isSoftProbeFailure, isRealProbeError, summarizeProbeError, formatCurrencyForTooltip, buildProbeTooltipHtml, type ProbeTooltipLabels} from './providerProbe';
+
+/** The labels a caller passes the tooltip — `close` among them, as `ProbeTooltipLabels` reads after T-ISO. */
+type CallerLabels = ProbeTooltipLabels & {close: string};
+
+/**
+ * The calendar day `iso` (`YYYY-MM-DD`) in the house notation of a tooltip day, as Intl writes it in `locale`:
+ * numeric year, short month, numeric day — `2 gen 2024`, `2 janv. 2024`, `Jan 2, 2024`. The oracle, never a typed date.
+ */
+function houseDay(iso: string, locale: string): string {
+    const [year, month, day] = iso.split('-').map(Number);
+    return new Intl.DateTimeFormat(locale, {year: 'numeric', month: 'short', day: 'numeric'}).format(new Date(year, month - 1, day));
+}
+
+/** Where a day stands once its notation is set aside. */
+const DAY = '⟨day⟩';
+
+/** `text` with the day `iso` replaced by `DAY`, written as ISO or in the house notation of the interface locale. */
+function sansDay(text: string, iso: string): string {
+    return text.split(houseDay(iso, uiLocale())).join(DAY).split(iso).join(DAY);
+}
+
+/** A tooltip table's rows as text: each `<tr>`'s `<th>`/`<td>` cells, in order. */
+function rowsOf(html: string): string[][] {
+    return [...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map(([, row]) => [...row.matchAll(/<(th|td)\b[^>]*>([\s\S]*?)<\/\1>/g)].map((cell) => cell[2]));
+}
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -120,7 +158,8 @@ describe('providerProbe — formatCurrencyForTooltip', () => {
 });
 
 describe('providerProbe — buildProbeTooltipHtml', () => {
-    const labels = {date: 'Date', currentPrice: 'Current Price'};
+    // The English labels; `close` heads the history's price column after T-ISO — the word the module writes today.
+    const labels: CallerLabels = {date: 'Date', currentPrice: 'Current Price', close: 'Close'};
 
     it('returns the raw detail (or Error) for a failed result', () => {
         expect(buildProbeTooltipHtml({success: false, detail: 'boom'}, labels)).toBe('boom');
@@ -131,7 +170,8 @@ describe('providerProbe — buildProbeTooltipHtml', () => {
         const html = buildProbeTooltipHtml({success: true, priceValue: 12.5, priceCurrency: 'USD', priceDate: '2024-01-02'}, labels);
         expect(html).toContain('<table');
         expect(html).toContain('Current Price');
-        expect(html).toContain('2024-01-02');
+        // The day in either notation: how it is written is the T-ISO describe's.
+        expect(sansDay(html, '2024-01-02')).toContain(`>${DAY}<`);
         expect(html).toContain('12.50 🇺🇸 USD $');
     });
 
@@ -153,7 +193,8 @@ describe('providerProbe — buildProbeTooltipHtml', () => {
             labels,
         );
         expect(html).toContain('Close (🇪🇺 EUR €)');
-        expect(html).toContain('2024-01-01');
+        // The day in either notation: how it is written is the T-ISO describe's.
+        expect(sansDay(html, '2024-01-01')).toContain(`>${DAY}<`);
         expect(html).toContain('11.00');
     });
 
@@ -166,5 +207,96 @@ describe('providerProbe — buildProbeTooltipHtml', () => {
         expect(buildProbeTooltipHtml({success: true, detail: 'metadata ok'}, labels)).toBe('metadata ok');
         expect(buildProbeTooltipHtml({success: true}, labels)).toBe('—');
         expect(buildProbeTooltipHtml({success: true, samplePrices: []}, labels)).toBe('—'); // empty array → fallthrough
+    });
+});
+
+describe('providerProbe — buildProbeTooltipHtml: its days and its price column’s header in the interface language (T-ISO)', () => {
+    /*
+     * The hover table of a probe result writes days: the current price's (`priceDate`) and each history sample's
+     * (`p.date`). Today both are ISO (`2024-01-02`) whatever the interface language, and the history's price column
+     * is headed `💰 Close`, an English word written in the module.
+     *
+     * The contract, after the cure: both days go through `formatDay` — a `YYYY-MM-DD` day in the house notation of a
+     * tooltip day, `formatAxisDate(uiLocale(), day, true)` (`2 gen 2024`, `2 janv. 2024`), anything else unchanged —
+     * and a missing `priceDate` still reads `—`. `ProbeTooltipLabels` gains `close`: the history header is
+     * `💰 ${labels.close}` before the currency in brackets, and the caller passes `$t('dataEditor.col.close')`.
+     *
+     * Expected days come from Intl in the interface locale (`houseDay`, tied to `formatAxisDate` by a control); the
+     * labels are the caller's own, worded by the catalogue in the interface language — a close label distinct from
+     * the English word. The table is read cell by cell (`rowsOf`). Red today in Italian and French; green today and
+     * after: the missing day's `—`.
+     */
+    const LANGUAGES = ['it', 'fr'] as const;
+    type UiLanguage = 'en' | (typeof LANGUAGES)[number];
+
+    /** Switch the interface language in place, as the language selector does; answer the locale it now writes days in. */
+    async function speak(lang: UiLanguage): Promise<string> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        const locale = uiLocale();
+        expect(new Intl.Locale(locale).language, `control: the interface locale follows the ${lang} interface`).toBe(lang);
+        return locale;
+    }
+
+    /** A catalogue message as the interface language words it. */
+    function catalogue(key: string): string {
+        return get(_)(key);
+    }
+
+    /** The labels the caller passes, as the catalogue words them in the interface language. */
+    function callerLabels(): CallerLabels {
+        return {date: catalogue('common.date'), currentPrice: catalogue('common.currentPrice'), close: catalogue('dataEditor.col.close')};
+    }
+
+    beforeAll(async () => {
+        await setupI18n('en');
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every case of the file.
+        await speak('en');
+    });
+
+    it.each(LANGUAGES)('%s interface: the current price’s day is written in the house notation', async (lang) => {
+        const locale = await speak(lang);
+        expect(houseDay('2024-01-02', locale), 'control: the oracle is the lot charts’ tooltip day').toBe(formatAxisDate(locale, '2024-01-02', true));
+
+        const rows = rowsOf(buildProbeTooltipHtml({success: true, priceValue: 12.5, priceCurrency: 'USD', priceDate: '2024-01-02'}, callerLabels()));
+        expect(rows, 'barrier: a header row and one price row, two cells each').toEqual([expect.any(Array), [expect.any(String), expect.any(String)]]);
+
+        expect(rows[1][0], `the current price’s day is not in the ${lang} interface’s notation: the table writes the ISO day`).toBe(houseDay('2024-01-02', locale));
+    });
+
+    it.each(LANGUAGES)('%s interface: the history’s price column is headed by the caller’s close label, and each sample’s day is written in the house notation', async (lang) => {
+        const locale = await speak(lang);
+        const labels = callerLabels();
+        expect(labels.close, `premise: the ${lang} close label is not the English word`).not.toBe(get(_)('dataEditor.col.close', {locale: 'en'}));
+
+        const rows = rowsOf(
+            buildProbeTooltipHtml(
+                {
+                    success: true,
+                    priceCurrency: 'EUR',
+                    samplePrices: [
+                        {date: '2024-01-01', close: 10},
+                        {date: '2024-01-02', close: 11},
+                    ],
+                },
+                labels,
+            ),
+        );
+
+        expect({header: rows[0], days: rows.slice(1).map(([day]) => day)}, `the history table is not in the ${lang} interface’s words and notation: «Close» is written in English, the days as ISO`).toEqual({
+            header: [`📅 ${labels.date}`, `💰 ${labels.close} (${formatCurrencyForTooltip('EUR')})`],
+            days: [houseDay('2024-01-01', locale), houseDay('2024-01-02', locale)],
+        });
+    });
+
+    it.each(LANGUAGES)('%s interface: a missing price day still reads — (guard)', async (lang) => {
+        await speak(lang);
+
+        const rows = rowsOf(buildProbeTooltipHtml({success: true, priceValue: 1, priceCurrency: 'USD'}, callerLabels()));
+
+        expect(rows[1]?.[0], 'the missing day is no longer the em dash').toBe('—');
     });
 });

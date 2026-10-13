@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "portfolioOptimization": {
+        "name": "Allocazione di portafoglio",
+        "description": "Costruisce una composizione ipotetica degli asset dal campione, dalla strategia, dagli stimatori e dai vincoli selezionati."
+      }
+    }
+  }
+}

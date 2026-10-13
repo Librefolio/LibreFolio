@@ -60,12 +60,12 @@
 <div class="broker-icon rounded-full bg-libre-green/10 dark:bg-libre-green/20 flex items-center justify-center shrink-0 overflow-hidden" style="width:{sizeConfig.container}px;height:{sizeConfig.container}px">
     {#if chain.currentDisplayUrl}
         {#key chain.currentDisplayUrl}
-            <img src={chain.currentDisplayUrl} alt={altText} class="w-full h-full object-contain {chain.imageLoaded ? '' : 'opacity-0'}" onload={chain.handleLoad} onerror={chain.handleError} referrerpolicy="no-referrer" />
+            <img src={chain.currentDisplayUrl} alt={altText} class="w-full h-full object-contain {chain.imageLoaded ? '' : 'opacity-0'}" onload={chain.handleLoad} onerror={chain.handleError} referrerpolicy="no-referrer" data-testid="broker-icon-img" />
         {/key}
     {/if}
 
     {#if !chain.imageLoaded || !chain.currentDisplayUrl}
-        <div class="absolute inset-0 flex items-center justify-center">
+        <div class="absolute inset-0 flex items-center justify-center" data-testid="broker-icon-fallback">
             <Briefcase size={sizeConfig.icon} class="text-libre-green dark:text-green-400" />
         </div>
     {/if}

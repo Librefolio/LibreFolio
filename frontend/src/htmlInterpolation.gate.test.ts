@@ -52,10 +52,12 @@
  * A value read through a **computed key** — `r.values[col.key]`, `labels[code]`, `cells[i]` — is a
  * violation too, whatever the names around it: the key is known only at run time, so the gate cannot
  * tell a note from a number, and such a value is escaped or reported. Two kinds of read are let
- * through, both because they render a number: a read that is itself the value of a number format
- * (`upper[i].toFixed(4)`, `(totals[i] ?? 0).toLocaleString(…)`: `NUMERIC_FORMATS`), and a read the
- * flow rules below already discard (`Number(x[k])`, `String(x[k]).length`, `x[k].length`, the test of
- * a ternary). A literal key names its field, so `x['tags']` and `x[0]` stay under the name rule.
+ * through, both because they render a number: a read that is itself the value of a number format —
+ * the receiver of a method (`upper[i].toFixed(4)`, `(totals[i] ?? 0).toLocaleString(…)`:
+ * `NUMERIC_FORMATS`) or the first argument of a formatter (`formatFixed(upper[i], 4)`,
+ * `formatPercent(x[k] ?? 0, …)`: `NUMERIC_FORMAT_CALLS`) — and a read the flow rules below already
+ * discard (`Number(x[k])`, `String(x[k]).length`, `x[k].length`, the test of a ternary). A literal key
+ * names its field, so `x['tags']` and `x[0]` stay under the name rule.
  *
  * Some helpers take HTML in their **first parameter**: `buildTooltipRow(label, …)`,
  * `buildTooltipHeader(title, …)`, `buildFittedTooltipRow(labelHtml, …)` and `fitTooltipToWidth(html, …)`
@@ -134,7 +136,10 @@
  *   - the fallback of `translateOr(translate, key, fallback)`: a literal of the code, in no catalog, so
  *     the catalog check never reads it;
  *   - a label bundle is known by its name, not by its content: a `…Labels` object that also carried
- *     user text would be let through — keep bundles to translations.
+ *     user text would be let through — keep bundles to translations;
+ *   - a number formatter is known by its name too: a function called `formatFixed` or `formatPercent`
+ *     that wrote its first argument as text would have a computed read let through there — keep those
+ *     names for the shared formatters and the local wrappers that hand them a number.
  * When the rule grows, grow the forms in the same change.
  *
  * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`).
@@ -190,6 +195,21 @@ const FRAGMENT_NAME = /(?:Html|Icon|icon|Badge|badge)$/;
  * trusted to be a number; formatting text with `toLocaleString` would hand it back unchanged.
  */
 const NUMERIC_FORMATS = new Set(['toFixed', 'toLocaleString']);
+
+/**
+ * The same number formats, called as functions: `formatFixed`, the localized `toFixed`
+ * (`$lib/utils/core/formatFixed.ts`), and `formatPercent`, the percent formatter
+ * (`$lib/utils/core/formatPercent.ts`) — what M-18 made of `x.toFixed(n)`, so that every figure is written
+ * in the interface language. Their output is digits, the locale's separators, a sign and a unit: of their
+ * first argument they write only its value as a number. So a read through a computed key that is their
+ * FIRST argument — `formatFixed(x[k], 4)`, or through a fallback, `formatPercent(x[k] ?? 0, …)` — is let
+ * through by the computed-key rule exactly as `x[k].toFixed(4)` is. Only that argument: the others are
+ * digits and options, and `formatPercent`'s `empty` and `suffix` are text the caller supplies, so a
+ * computed read there is still reported. Only those two names: `someOtherFn(x[k])` keeps its finding.
+ * And only that rule: `formatFixed(row.display_name, 2)` keeps the name rule's, as
+ * `row.display_name.toLocaleString()` does.
+ */
+const NUMERIC_FORMAT_CALLS = new Set(['formatFixed', 'formatPercent']);
 
 /**
  * Helpers whose FIRST parameter is HTML by contract. `buildTooltipRow(label, …)`,
@@ -638,6 +658,8 @@ function scanTree(sf: ts.SourceFile, offsetOf: (node: ts.Node) => number, lineAt
             return;
         }
         if (ts.isIdentifier(callee)) {
+            // `formatFixed(x[k], 4)`: the computed read of the first argument is the number being formatted.
+            if (NUMERIC_FORMAT_CALLS.has(callee.text) && args.length > 0) for (const read of formattedReads(args[0])) numericReads.add(read);
             if (NO_TEXT_CALLS.has(callee.text)) {
                 for (const arg of args) code(arg, null);
             } else if (I18N_CALLS.has(callee.text)) {
@@ -806,6 +828,9 @@ describe('HTML built by hand escapes user and provider text (K step 13, item 0 g
         expect(caught('a.ts', 'const h = `<i>${labels[row.currency]}</i><b>${row.cells[i]}</b>`;\nconst f = `${iconHtml}${names[id]}`;')).toEqual(['1  labels[row.currency]', '1  row.cells[i]', '2  names[id]']);
         // The value of a number format, directly or through a fallback: a number, not a finding.
         expect(caught('a.ts', 'const h = `<span>${band.upper[dataIdx].toFixed(4)}</span><b>${(totals[i]!).toLocaleString(undefined, {maximumFractionDigits: 2})}</b><i>${(r.values[k] ?? 0).toFixed(2)}</i>`;')).toEqual([]);
+        // The same formats called as functions — the localized `toFixed` and the percent formatter (M-18) —
+        // on their first argument, directly or through a fallback: a number too.
+        expect(caught('a.ts', 'const h = `<span>${formatFixed(band.upper[dataIdx], 4)}</span><b>${formatPercent((r.values[k] ?? 0), {digits: 1})}</b>`;')).toEqual([]);
         // Discarded by the flow rules — a number, a length, a ternary test — or escaped, or not HTML.
         expect(caught('a.ts', 'const h = `<b>${Number(r.values[k])}</b><i>${String(r.values[k]).length}</i><u>${r.values[k].length}</u><s>${flags[k] ? 1 : 0}</s>`;')).toEqual([]);
         expect(caught('a.ts', "const h = `<b>${escapeHtml(String(r.values[col.key] ?? '—'))}</b>`;\nconst p = `${r.values[col.key]} (${n})`;")).toEqual([]);
@@ -814,6 +839,14 @@ describe('HTML built by hand escapes user and provider text (K step 13, item 0 g
         // Only the formatted read itself is let through: text made into text keeps its finding, and a
         // named text field formatted with `toLocaleString` keeps the name rule's.
         expect(caught('a.ts', 'const h = `<b>${String(labels[k]).toLocaleString()}</b><i>${row.display_name.toLocaleString()}</i>`;')).toEqual(['1  String(labels[k]).toLocaleString()', '1  row.display_name.toLocaleString()']);
+        // The function form trusts that read and nothing more: any other function keeps the read's
+        // finding, so does a computed read among a formatter's options, and a named text field handed to
+        // a formatter keeps the name rule's.
+        expect(caught('a.ts', 'const h = `<b>${someOtherFn(r.values[k])}</b><i>${formatPercent(share, {empty: placeholders[k]})}</i><u>${formatFixed(row.display_name, 2)}</u>`;')).toEqual([
+            '1  someOtherFn(r.values[k])',
+            '1  formatPercent(share, {empty: placeholders[k]})',
+            '1  formatFixed(row.display_name, 2)',
+        ]);
     });
 
     it('checks the first argument of a helper that takes HTML there, as it checks an interpolation', () => {

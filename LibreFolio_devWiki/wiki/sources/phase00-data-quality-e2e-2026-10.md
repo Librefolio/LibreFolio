@@ -61,6 +61,59 @@ The plan grew after this page was written (registered now at `262515898`):
 - **Open in section V** after train 64: V-2, V-3, V-4, V-8 (the Risk panel with a vanished broker: a 403 and no
   re-read; needs a decision), V-11…V-20; checkpoint 2b (A4–A7) to come.
 
+## Step 2b (train 72, added 2026-10-12)
+
+The E2E specs that wrote into shared state now clean up, each with its damage proved first: A4 to A7, V-20 and the
+notes of the Playwright configuration — [[problems/e2e-writes-leaked-into-shared-state]]. The cleanup unmasked WB5,
+which passed only on other tests' leftovers — [[problems/test-passed-only-on-leftovers-of-other-tests]]. The
+backlog gained V-21 (probes, forbidden selectors and undeleted uploads left in the specs), V-22 («+ New event» can
+change an existing event while saying it created one — a product question) and V-23 (the bulk editor hides the
+read-only broker and puts the access error on the wrong row); V-20 is closed.
+
+## The seven gaps of 1.2 (train 76, added 2026-10-13)
+
+§12.9: the seven gaps, each with its spec on real data — FX on cash (−175 EUR), Risk from a real query, account
+deletion, yield on cost, the PDF preview offline, the transfer in Auto (WAC 150), the PAC allocator —
+[[decisions/e2e-gaps-of-1-2-before-release]]. The files spec now deletes its uploads (`eb269ecde`); the backlog gained
+V-24 and V-25.
+
+## Train 82 (added 2026-10-13)
+
+§12.10: V-25 cured with an owned-pair fixture, V-21 in part, V-26 (setups off the clock), and a product defect found
+by the E2E and fixed — [[problems/hidden-pair-half-survived-row-removal]] (V-29). V-27 stays open —
+[[problems/login-returns-before-the-app-has-started]].
+
+## Train 87 (added 2026-10-13)
+
+The two budgets of R's run, and the leaks next to them:
+
+- V-28 (`d1a149afa`): the `jsCoverage` fixture has its own timeout — [[problems/jscoverage-teardown-spends-the-test-budget]].
+- V-27 (`4ebbaab20`): `login()` returns once the app has arrived — [[problems/login-returns-before-the-app-has-started]].
+- V-33 (`d9ff03a35`): navigation budgets — 15 s for the FX pair page, 20 s with a settled wait for the transactions
+  page, extended to every `tx-table` wait the batch found; the tests' own budgets raised to 45–60 s by the
+  coordinator's rule (gate plus rest).
+- `fx-destructive` owns its currencies (`586fd8aca`): its «clean slate» deleted the rates of two seed pairs; and the
+  asset specs delete what they create (`ba1c34d64`) — [[problems/e2e-writes-leaked-into-shared-state]].
+- Backlog after 1.2: V-30 (the coverage fixture merges a test's pages with `Object.assign`, read in the code), V-31
+  (the mock FX sync leaves its rates), V-32 (asset specs that pick rows by position), V-34 (a cleanup that checks only
+  the HTTP status).
+- The developer docs follow: `coverage-model.md` (one JSON per test, the teardown slot) and
+  `runner_architecture.md` (the shared backend's workers).
+
+## Train 92 and the developer's calls (added 2026-10-13)
+
+- **V-36, closed** (`fccf0bee1`): `setLanguage` waits up to 15 s for the chosen dictionary instead of the default 3 s —
+  the red M met in the French width sweep; see [[problems/login-returns-before-the-app-has-started]], «Prevention».
+- **V-35, under observation**: once, under load (train 88's gate), the FX page's aesthetics panel stayed open after its
+  second click; alone it is green, and 50 probe rounds under CPU throttling, delayed APIs and late requests stayed
+  green. Nothing in the code reopens it. The coordinator chose instruments over a guess: `aria-expanded` on the toggle
+  (`a67f89661`), and the two `fx-detail` tests (and `fx-destructive`) check it after every click and, on a red, attach
+  a log of clicks, states, panels and errors (`84cdf6dbb`) — the next red will tell whether the click did not arrive
+  or the state flipped.
+- **The developer's calls of 13/10**: V-3, the orphan TRANSFER — [[decisions/orphan-transfer-becomes-an-adjustment]];
+  V-8 (the risk tab after a broker vanished: a 403 and no reload) and V-22 («+ New event» that can modify an existing
+  event) after 1.2.
+
 ## Wiki pages created or updated
 
 - Created: [[decisions/data-quality-proved-on-real-data]], [[problems/open-panels-stale-after-fx-sync]].

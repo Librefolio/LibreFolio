@@ -663,7 +663,7 @@ function replayProblem(response: APIResponse, item: RiskItem | undefined, assetI
 
 /**
  * `risk/lab-replay`: edit the lab's historical replay so that `asset` is left out of it, as
- * `stress.py::_historical` and `RiskService._verified_replay_range` report an asset whose first quote
+ * `stress/plugin.py::_historical` and `RiskService._verified_replay_range` report an asset whose first quote
  * came 60 days into the window: no impact row, the audit listing it (`starts_after_window_start`,
  * omitted from the replay, as on any selection without weights) with the common period that brings it
  * back, the result's own exclusion and the block's warning, the result `partial`. The other rows, the

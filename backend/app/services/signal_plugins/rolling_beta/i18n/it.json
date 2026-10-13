@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskRollingBeta": {
+      "name": "Beta mobile",
+      "description": "Sensibilità mobile a un asset reale di confronto su un calendario congiunto dei rendimenti.",
+      "output": "Beta",
+      "outputDescription": "Covarianza campionaria divisa per la varianza campionaria dell’asset di confronto.",
+      "referenceOne": "Sensibilità uno a uno"
+    }
+  }
+}

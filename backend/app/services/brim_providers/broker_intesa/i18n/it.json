@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_intesa": {
+      "description": "Importa dagli export di Intesa Sanpaolo (CSV o XLSX). Gestisce la lista movimenti (cedole e commissioni di custodia; le righe di operatività bancaria non riconosciute vengono saltate) e la fotografia del portafoglio (patrimonio), importata come un deposito di liquidità più una rettifica del costo per ogni posizione, per avviare un conto con la sua storia.",
+      "name": "Intesa Sanpaolo"
+    }
+  }
+}
