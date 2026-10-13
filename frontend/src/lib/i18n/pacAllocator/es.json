@@ -95,9 +95,9 @@
           "manualName": "Bróker manual {count}",
           "noFunding": "ninguno aún",
           "stepUnits": "{count, plural, one {{step} título} other {{step} títulos}}",
-          "conversionHelp": "Cuando una compra necesita una divisa que aquí no tienes, el dinero se convierte a la tasa y con el spread del paso Cambio. Si conviertes tú, el plan indica la conversión como paso numerado antes de las órdenes; si el bróker convierte al comprar, el plan la muestra junto a sus órdenes. El cálculo es el mismo en ambos casos.",
+          "conversionHelp": "Cuando una compra necesita una divisa que aquí no tienes, el dinero se convierte al tipo de cambio y con el spread del paso Cambio. Si conviertes tú, el plan indica la conversión como paso numerado antes de las órdenes; si el bróker convierte al comprar, el plan la muestra junto a sus órdenes. El cálculo es el mismo en ambos casos.",
           "conversionLabel": "Conversión de divisa",
-          "conversionValue": "Conviertes antes de comprar, a la tasa del paso Cambio menos el spread.",
+          "conversionValue": "Conviertes antes de comprar, al tipo de cambio del paso Cambio menos el spread.",
           "feeHelp": "Lo que el bróker cobra en cada compra: el porcentaje del importe, mantenido entre el mínimo y el máximo, más la parte fija. Sin compra, no hay comisión. Se paga con tu liquidez y no se invierte.\n\nEjemplos, en la divisa de la compra:\n• 0,19 %, mínimo 1,50, máximo 18: sobre 500 pagas 1,50, sobre 2000 pagas 3,80, sobre 20.000 pagas 18.\n• Solo una parte fija de 2,95: 2,95 en cualquier compra.\n• Parte fija 1 más 0,10 %: sobre 1000 pagas 2.\n• Todo a 0: sin comisión.",
           "feeMax": "máx. {amount}",
           "feeMin": "mín. {amount}",
@@ -106,7 +106,7 @@
           "incrementHelp": "Cada orden propuesta es un múltiplo de este valor. Por número de títulos: un número entero, por ejemplo 1. Por importe: el importe más pequeño que puedes introducir, por ejemplo 0,01; así es como se compran fracciones de título.",
           "orderKindHelp": "Cómo introduces una orden en este bróker: por número de títulos (compras 3 títulos) o por importe (inviertes 150). Fija la unidad del incremento y de los límites de cada orden.",
           "fundingChipHelp": "{kind, select, local {La liquidez en {currency} que ya está en {name}: el plan la usa aquí, sin transferencias.} account {La liquidez en {currency} de {name}: has permitido usarla para las compras en este bróker.} other {La aportación {name}: has permitido usarla para las compras en este bróker.}}",
-          "conversionValueAuto": "El bróker convierte al comprar, a la tasa del paso Cambio menos el spread."
+          "conversionValueAuto": "El bróker convierte al comprar, al tipo de cambio del paso Cambio menos el spread."
         },
         "busy": {
           "locked": "La configuración está bloqueada mientras esta solicitud está activa.",
@@ -161,7 +161,7 @@
             "brokers": "Nada copiado para: {names}.",
             "classifications": "Ninguna clasificación completa para: {names}.",
             "distribution": "Nada copiado para: {names}.",
-            "fx": "Ninguna tasa publicada para: {names}.",
+            "fx": "Ningún tipo de cambio publicado para: {names}.",
             "liquidity": "Nada copiado para: {names}.",
             "prices": "Ningún precio publicado para: {names}. Se quedan en el borrador; el cálculo los pedirá."
           },
@@ -181,11 +181,11 @@
           "confirmTitle": "¿Reemplazar los objetivos que has definido?",
           "denominator": "Denominador: los activos del escenario; el efectivo no entra.",
           "differs": "En el Panel, el peso de un activo se mide sobre toda la cartera, efectivo incluido, así que puede diferir del que se muestra aquí.",
-          "incomplete": "Un activo que tienes no tiene precio o tasa: no se publica ningún peso y ningún objetivo cambia.",
+          "incomplete": "Un activo que tienes no tiene precio o tipo de cambio: no se publica ningún peso y ningún objetivo cambia.",
           "lastTrade": "precio de la última operación {date}",
           "manual": "manual · no está en la cartera",
           "marketPrice": "precio de mercado {date}",
-          "missing": "sin precio o tasa: sin peso",
+          "missing": "sin precio o tipo de cambio: sin peso",
           "noHoldings": "No tienes ninguno de estos activos: sin peso, ningún objetivo cambia.",
           "notHeld": "no poseído",
           "quantum": "Pesos a {quantum} puntos; la suma exacta viene del backend.",
@@ -254,9 +254,9 @@
             "fee_schedule_missing": "Falta el esquema de comisiones.",
             "fiscal_currency_missing": "Falta la divisa fiscal.",
             "funding_cap_negative": "El límite de financiación no puede ser negativo.",
-            "fx_rate_missing": "Falta una tasa de cambio.",
+            "fx_rate_missing": "Falta un tipo de cambio.",
             "fx_spread_rate_out_of_range": "El spread de cambio está fuera de rango.",
-            "identity_fx_rate_not_allowed": "No se admite una tasa de cambio entre la misma divisa.",
+            "identity_fx_rate_not_allowed": "No se admite un tipo de cambio entre la misma divisa.",
             "invalid_quote_basis": "La base del precio no es válida.",
             "negative_cash_unsupported": "No se admite un saldo de efectivo negativo.",
             "negative_contribution": "Una aportación no puede ser negativa.",
@@ -265,7 +265,7 @@
             "no_additional_buy_feasible": "No es posible ninguna otra compra con la liquidez disponible.",
             "no_positive_order_fundable": "La liquidez no alcanza para pagar ninguna orden.",
             "no_selected_funding": "No hay liquidez seleccionada.",
-            "nonpositive_fx_rate": "Una tasa de cambio debe ser mayor que cero.",
+            "nonpositive_fx_rate": "Un tipo de cambio debe ser mayor que cero.",
             "nonpositive_order_amount_step": "El paso del importe debe ser mayor que cero.",
             "nonpositive_price": "El precio debe ser mayor que cero.",
             "nonpositive_quantity_step": "El paso de la cantidad debe ser mayor que cero.",
@@ -284,18 +284,18 @@
             "required_buy_sell_conflict": "El mismo activo debe comprarse y venderse a la vez.",
             "required_min_notional_unfunded": "Las órdenes mínimas obligatorias cuestan más que la liquidez disponible.",
             "route_priority_negative": "La prioridad de la ruta no puede ser negativa.",
-            "saved_fx_invalid": "La tasa de cambio guardada no es válida.",
-            "saved_fx_missing": "Falta la tasa de cambio guardada.",
+            "saved_fx_invalid": "El tipo de cambio guardado no es válido.",
+            "saved_fx_missing": "Falta el tipo de cambio guardado.",
             "solver_limit_no_incumbent": "El solver alcanzó su límite antes de encontrar un plan.",
             "target_total_not_one": "Los objetivos no suman el 100 %.",
             "target_weight_missing": "Falta un objetivo.",
             "target_weight_out_of_range": "Un objetivo debe estar entre 0 y 100 %.",
             "tax_netting_unsupported": "No se admite la compensación fiscal.",
             "valuation_currency_missing": "Falta la divisa de valoración.",
-            "wac_fx_missing": "Falta la tasa de cambio necesaria para el precio medio de compra.",
+            "wac_fx_missing": "Falta el tipo de cambio necesario para el precio medio de compra.",
             "wac_missing": "Falta el precio medio de compra.",
             "zero_selected_funding": "La liquidez seleccionada es cero.",
-            "fx_rate_inconsistent": "Esta tasa de cambio no es coherente con las tasas de {source_currency} y {destination_currency} frente a {valuation_currency}: convertir {source_currency} a {destination_currency} crearía valor. Alinea las tasas o define un spread de conversión."
+            "fx_rate_inconsistent": "Este tipo de cambio no es coherente con los tipos de cambio de {source_currency} y {destination_currency} frente a {valuation_currency}: convertir {source_currency} a {destination_currency} crearía valor. Alinea los tipos de cambio o define un spread de conversión."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "Esta herramienta no acepta posiciones existentes.",
@@ -399,7 +399,7 @@
           "fundingCapInvalid": "El tope de transferencia no es un número.",
           "fundingPriorityInvalid": "La prioridad de la financiación debe ser un número entero desde 0.",
           "fundingSourceMissing": "Una ruta de financiación apunta a una fuente que ya no existe.",
-          "fxRateInvalid": "La tasa no es un número.",
+          "fxRateInvalid": "El tipo de cambio no es un número.",
           "fxSpreadInvalid": "El spread de conversión está vacío o no es un número.",
           "identifierTooLong": "Un identificador es demasiado largo para el planificador.",
           "modeDuplicateCurrency": "Dos modos de orden usan la misma divisa.",
@@ -452,7 +452,7 @@
             "targetShareHelp": "La parte que elegiste para este activo en el paso Objetivos.",
             "finalShareHelp": "La parte del activo en el valor de todos estos activos después del plan. Compárala con la parte objetivo para ver cómo cambia el equilibrio entre los activos.",
             "targetValueHelp": "Lo que valdría el activo con exactamente su parte objetivo: parte objetivo × base de los objetivos (lo ya invertido en estos activos más el efectivo utilizable).",
-            "finalValueHelp": "Lo que vale el activo después del plan: las unidades que tenías más las compradas, al precio de cotización y, cuando hace falta, a la tasa del paso Cambio."
+            "finalValueHelp": "Lo que vale el activo después del plan: las unidades que tenías más las compradas, al precio de cotización y, cuando hace falta, al tipo de cambio del paso Cambio."
           },
           "badges": {
             "decimalVerified": "Verificado en Decimal",
@@ -502,7 +502,7 @@
           },
           "domains": {
             "broker": "Bróker",
-            "fx": "Tasas de cambio",
+            "fx": "Tipos de cambio",
             "market_data": "Datos de mercado",
             "portfolio": "Cartera",
             "wac": "Coste medio (PMC)"
@@ -563,7 +563,7 @@
               "shortfall": "La parte de la base que no acaba en los activos: efectivo que queda libre, costes y redondeos.",
               "explicitCost": "Comisiones de los brókeres, spreads de cambio de divisa y márgenes de precio que fijaste, en todo el plan.",
               "orders": "Cuántas órdenes te pide el plan que coloques.",
-              "selectedFunding": "El efectivo que elegiste para el plan, existente y nuevo, a las tasas del paso Cambio. Una parte que no puede llegar a un bróker donde puedes comprar se marca como no alcanzable y queda fuera de la base de los objetivos."
+              "selectedFunding": "El efectivo que elegiste para el plan, existente y nuevo, a los tipos de cambio del paso Cambio. Una parte que no puede llegar a un bróker donde puedes comprar se marca como no alcanzable y queda fuera de la base de los objetivos."
             },
             "parts": {
               "currentInvested": "Ya invertido",
@@ -653,10 +653,10 @@
               "deposit": "Aportación"
             },
             "conversionFor": "para las órdenes en {currency}",
-            "fxEstimateHelp": "Introduce el importe en {source} en la conversión del bróker. Lo que recibes en {destination} depende de la tasa en ese momento: el plan usa la tasa y el spread del paso Cambio.",
+            "fxEstimateHelp": "Introduce el importe en {source} en la conversión del bróker. Lo que recibes en {destination} depende del tipo de cambio en ese momento: el plan usa el tipo de cambio y el spread del paso Cambio.",
             "autoConversion": "Conversión automática",
             "autoConversionAmounts": "aprox. {debit} → {credit}",
-            "autoConversionHelp": "No tienes que hacer nada: el bróker convierte cuando introduces las órdenes en {destination}. Toma aproximadamente este importe de tu efectivo en {source}; la cifra exacta depende de su tasa en ese momento, mientras que el plan usa la tasa y el spread del paso Cambio."
+            "autoConversionHelp": "No tienes que hacer nada: el bróker convierte cuando introduces las órdenes en {destination}. Toma aproximadamente este importe de tu efectivo en {source}; la cifra exacta depende de su tipo de cambio en ese momento, mientras que el plan usa el tipo de cambio y el spread del paso Cambio."
           },
           "platform": {
             "draftIntact": "El borrador está intacto.",
@@ -971,7 +971,7 @@
           "notice": {
             "summary": "Datos copiados releídos de LibreFolio: {changes}.",
             "prices": "{count, plural, one {# precio actualizado} other {# precios actualizados}}",
-            "fx": "{count, plural, one {# tasa de cambio actualizada} other {# tasas de cambio actualizadas}}",
+            "fx": "{count, plural, one {# tipo de cambio actualizado} other {# tipos de cambio actualizados}}",
             "cash": "{count, plural, one {# saldo actualizado} other {# saldos actualizados}}",
             "unchanged": "ningún valor ha cambiado",
             "missing": "No encontrados, se mantiene el valor copiado: {names}."

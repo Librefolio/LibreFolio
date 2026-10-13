@@ -18,7 +18,7 @@
     "syncDisabledManual": "Sincronización desactivada — sin proveedor configurado",
     "syncDisabledInactive": "Sincronización no disponible — el activo está inactivo",
     "fxPairMissing": "Par FX {base}/{quote} no configurado — conversión no disponible",
-    "pageSyncDescription": "Sincronizar precios de activos y tasas de cambio para esta página.",
+    "pageSyncDescription": "Sincronizar precios de activos y tipos de cambio para esta página.",
     "eventType": {
       "DIVIDEND": "Dividendo",
       "INTEREST": "Interés",
