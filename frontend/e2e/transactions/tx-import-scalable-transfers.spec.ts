@@ -314,8 +314,8 @@ async function responsesDuring(page: Page, matches: (response: Response) => bool
 
 async function goToTransactions(page: Page): Promise<void> {
     await navigateTo(page, '/transactions');
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: UI_TIMEOUT});
     await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /** Open the wizard from the toolbar (inside a fresh, empty editor); return step 1 once it has settled. */
