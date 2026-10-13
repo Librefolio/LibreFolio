@@ -37,7 +37,7 @@ export async function setupAiExportPage(page: Page): Promise<void> {
     // login() returns once the app has arrived (V-27): for TEST_USER, the only user this helper signs in and grandfathered
     // completed on every onboarding flow (populate_mock_data), that is the app shell — never the welcome shell or the
     // bootstrap block. The two waits below pin that landing as this helper's precondition (the language selector
-    // setLanguage() waits 5 s for is in the app shell's header), and cost nothing once login() has returned.
+    // setLanguage() waits for is in the app shell's header), and cost nothing once login() has returned.
     await page.waitForURL((url) => url.pathname !== '/', {timeout: 30_000});
     await expect(page.getByTestId('app-shell'), 'the app shell is up after the post-login routing').toBeVisible({timeout: 30_000});
     await setLanguage(page, 'en');

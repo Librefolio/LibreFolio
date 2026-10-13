@@ -206,12 +206,16 @@ test('detail: signals / aesthetics / measures panels toggle', async ({page}) => 
     await signals.click();
     await expect(signals).toHaveAttribute('aria-expanded', sigBefore === 'true' ? 'false' : 'true');
 
-    // Aesthetics: no aria-expanded, so assert the panel it gates appears then goes.
+    // Aesthetics: the toggle publishes aria-expanded too. Each click asserts the
+    // state first and then the panel it gates, so a red says which half failed.
     const aesthetics = page.getByTestId('fx-detail-aesthetics-toggle');
+    const aestheticsPanel = page.getByTestId('fx-detail-aesthetics-panel');
     await aesthetics.click();
-    await expect(page.getByTestId('fx-detail-aesthetics-panel')).toBeVisible();
+    await expect(aesthetics).toHaveAttribute('aria-expanded', 'true');
+    await expect(aestheticsPanel).toBeVisible();
     await aesthetics.click();
-    await expect(page.getByTestId('fx-detail-aesthetics-panel')).toBeHidden();
+    await expect(aesthetics).toHaveAttribute('aria-expanded', 'false');
+    await expect(aestheticsPanel).toBeHidden();
 
     // Measures: the panel is always in the DOM but `hidden` when off, so visibility
     // is the honest signal.

@@ -2478,3 +2478,86 @@ Due test-author lavorano su file distinti: «v28-budgets» (V-28 e i due budget)
     transazioni, id massimo 76), anche in `front-transaction all` a 4 worker.
   - Messa nel backlog come **V-34**, dopo la 1.2.
   - Nel backlog V-33 è stata spostata nell'ordine numerico, tra V-32 e V-34; il contenuto è invariato.
+
+### 12.12 Due rossi della stessa classe: `fx-detail:923` e `setLanguage` (13/10)
+
+Base `50886d1ca` (treno 88), portata in fast-forward dal coordinatore. Skill `test-triage`.
+
+#### `fx/fx-detail.spec.ts:923` «aesthetics panel toggles visibility»
+
+- **Il rosso**, nei gate del treno 88: corsia 6150, 1 worker, carico 100–158, verso le 06:0x.
+  - Dopo il secondo click, `not.toBeVisible()` a `:929` scade coi 3 s.
+  - Il call log (`/tmp/libreFolio_g88_16_fx_detail.log`, righe 55-80) dice **«10 × locator resolved to <div
+    data-testid="fx-detail-aesthetics-panel" …> unexpected value "visible"»**. Il processo dei test era vivo, e **il
+    pannello è rimasto davvero aperto**.
+  - Rilanciato da solo è verde 17/17. Lo screenshot è perso (C-68).
+- **Lettura del codice** (`fx/[pair]/+page.svelte`):
+  - il toggle (`~:1441-1450`) fa solo `showAesthetics = !showAesthetics`;
+  - il pannello è `{#if showAesthetics}` dentro `{:else if lineData.length > 0}`;
+  - niente `{#key}`, transizioni o async (Svelte 5.48, senza `experimental.async`);
+  - `showAesthetics` torna `true` solo dal toggle o dai ripristini di `savedPanelStates`, e questi esistono solo nei
+    flussi dell'editor, che si apre solo dai suoi bottoni;
+  - le impostazioni dei grafici e lo stato d'inversione sono per sessione del browser: `localStorage` e memoria.
+- **La sonda** (`/tmp/libreFolio_v_fxaes_probe.cjs`, fuori dal repo, 6175, i passi esatti del test, con un registro
+  in pagina di click, toggle, pannello, `data-busy` ed errori): **50 giri, 0 rossi**. Pannello sparito entro ≤ 22 ms
+  dal secondo click, toggle mai rimontato, nessun errore. Le condizioni provate:
+  - CPU ×1, ×8, ×10, ×20 via CDP;
+  - ogni API +500 o +1500 ms;
+  - il catalogo dei segnali +6 s;
+  - 2 s di pausa tra i click;
+  - le quattro richieste tardive +3 s.
+
+  Dati in `/tmp/libreFolio_v_fxaes_probe_*.json`; nota completa in `/tmp/libreFolio_v_fxaes_triage.md`.
+- **Decisione del coordinatore** (opzione 2, più il registro): `aria-expanded` sul toggle dell'estetica (mio, solo un
+  attributo; quello dei segnali l'aveva già, `:1334`). Il test verifica `aria-expanded` dopo ogni click e poi il
+  pannello, e allega al rosso il registro in pagina. Se il meccanismo non si trova: **V-35**, sotto osservazione.
+  Scrive `v35-fxdetail`.
+
+#### `setLanguage` (`fixtures/auth-helpers.ts`) — `toolbar-width-sweep › assetsList › fr`, da M
+
+- **Il rosso**: a carico 60, `setLanguage` aspetta `<html lang="fr">` coi 3 s di default. Il call log dice «2 ×
+  locator resolved to <html lang="en" …> unexpected value "en"». Lo screenshot mostra l'app già in francese subito
+  dopo. Con `--resume` è verde 15/15 a carico 117. Le prove sono in
+  `LibreFolio-cloud-sizing/release-pipeline/runs/b37/sweep_fr_red/`.
+- **Il meccanismo**: `LanguageSelector.svelte` fa `currentLanguage.set(code)`. svelte-i18n sposta `locale` solo dopo
+  aver caricato il chunk del dizionario (`i18n/index.ts:18-21`, `import('./fr.json')`, circa 290 KB); poi
+  `routes/+layout.svelte:43-45` pubblica `lang` e `data-i18n-ready`.
+- **Verdetto**: assunzione d'orologio. Lo stato atteso è quello giusto, ma i 3 s di default scommettono su un
+  caricamento.
+- **Cura**: un budget di caricamento per le attese di `setLanguage`. Il rosso deterministico si ottiene ritardando
+  temporaneamente il chunk del dizionario, riconosciuto dal contenuto, solo durante il cambio. Scrive `v-setlang`.
+- ✅ **`setLanguage`, cura provata** (`v-setlang`, 13/10).
+  - **Il rosso**, deterministico, su `front-utility changelog-locale "Italian UI"` a 1 worker. Un ritardo temporaneo
+    `LF_SETLANG_PROOF_DELAY_MS=5000` trattiene **solo** il chunk del dizionario italiano (`CkV7UwI5.js`, trovato su
+    disco dal contenuto) e poi lo lascia passare intatto con `route.continue()`. Niente `route.fulfill`: la devWiki
+    `problems/i18n-loading-gate-remounts-app` avverte che lascia la pagina vuota.
+    - Risultato: rosso a `auth-helpers.ts:126`, «Expected "it", Received "en", Timeout 3000ms».
+  - **La cura**: `LANGUAGE_SWITCH_MS = 15_000`, con un commento, sulle tre attese di `setLanguage`: il bottone del
+    selettore (era 5 s), `lang` e `data-i18n-ready` (erano 3 s). Le condizioni non cambiano. 15 s è il budget che
+    `navigateTo()` già dà allo stesso `data-i18n-ready`.
+  - **Il verde**: stesso comando, col ritardo di 5 s ancora attivo; `setLanguage` ritorna in 5527 ms, 1/1.
+  - **Il ripristino**: lo sha256 di `changelog-locale.spec.ts` è `01dfb6d3…2a30` prima e dopo, e la diff è pulita.
+  - **I gate**: `--fresh-run --workers 4 front-utility toolbar-width-sweep` 15/15, con `assetsList › fr` in 38 s;
+    `--fresh-run --workers 4 front-ai-export all` 18 E2E e 433 Vitest. SEED OK dopo ciascuno.
+  - È cambiato anche un commento in `ai-export/helpers.ts`: «waits 5 s» non era più vero.
+- ✅ **`fx-detail`, test e registro** (`v35-fxdetail`, 13/10).
+  - I due test dei pannelli («aesthetics» e «signals») controllano lo stato iniziale. Dopo ogni click verificano prima
+    `aria-expanded` del toggle, poi il pannello, con messaggi in inglese; i budget non cambiano.
+  - Un fixture su richiesta, `fxPanelLog`, installa il registratore prima della navigazione. Su un rosso allega e
+    stampa (`[fx-panel-log]`) click, `aria-expanded`, pannelli, `data-busy`, errori non gestiti e una fotografia
+    finale. Costa zero quando è verde.
+  - «persists distinct primary scales…» (`~:1141`, `~:1243`) e `fx-destructive` (`~:210`) verificano
+    `aria-expanded="true"` prima del pannello. In `fx-destructive` era superato il commento che diceva il toggle senza
+    `aria-expanded`.
+  - **Prova del registro**, su un rosso forzato e poi annullato (sha256 `66190480…` identico): il rosso nomina la metà
+    che fallisce. Il registro esce nel log della run come `[fx-panel-log]` e nel report HTML. Contenuto, in ms di
+    pagina:
+    - 428 click sul toggle, 429,6 pannello montato e `aria-expanded` true;
+    - 460,8 click sul toggle, con la toolbar scesa di 280 px; 461,1 pannello smontato e `aria-expanded` false.
+  - **Giri**: `fx-detail` 17/17 a 1 e a 4 worker; `fx-destructive` 10/10 a 1 e a 4 worker (il giro a 4 l'ho fatto io
+    prima del checkpoint, `--fresh-run --workers 4 --log-dir /tmp/libreFolio_v35_destr_w4 front-fx fx-destructive`).
+    SEED OK dopo ciascuno, e FX SEED OK dopo `fx-destructive`.
+  - **Albero combinato**: tutti i giri finali sono successivi all'ultima modifica di ciascun file del delta. Il rosso di
+    `setLanguage` è delle 06:44:23, la cura delle 06:44:43; sweep e ai-export sono finiti alle 06:47 e alle 06:49; i giri
+    di `fx-detail` alle 06:52 e alle 06:54, dopo il ripristino della prova (06:51).
+- **Il backlog**: **V-35**, sotto osservazione, col meccanismo sconosciuto; **V-36** chiusa, `setLanguage`.
