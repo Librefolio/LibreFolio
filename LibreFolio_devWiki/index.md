@@ -91,6 +91,8 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/asset-identity-quoted-code-leads]] | **Beta P3, D1–D11.** One asset per security: the quoted ISIN in `identifier_isin`, every other code (a bond's CUM placement ISIN) in `identifier_other`; the user elects the primary only against saved assets; unify before repairing; inactive assets selectable, never reactivated; token-aware similarity; merge of database duplicates (`0e07359b4`, `d1e04b2b8`, 1.1.0) | 2026-08-08 | assets, identifiers, import, merge |
+| [[decisions/import-row-split-legs-sum-to-the-row]] | **Beta B5-lite (developer, 08/08).** No generic leg editor: the user names the charges of a bundled row and the trade leg is the remainder, so the legs add up to the row by construction; accrued interest books as a `FEE`; fixed-point arithmetic (`d1e04b2b8`) | 2026-08-08 | import, brim, bonds, fees |
 | [[decisions/changelog-entry-rules]] | **T and I, the 1.2 review.** A 🐛 fixes a defect of the last release, a ✨ is new since it, «Present since» names the birth release, UI names from the English catalogue, an upgrade break also in ⚠️; 227 lines checked, rewritten in `60f734e08` | 2026-10-13 | changelog, release |
 | [[decisions/clipboard-through-one-helper-with-a-gate]] | **I, M-20 and C-63 (train 72).** Every copy goes through `writeTextToClipboard()`, with a fallback that works on plain HTTP; a gate forbids other transports, AI Export's typed writer excepted (`65d20910e`) | 2026-10-12 | frontend, clipboard, gate |
 | [[decisions/security-details-close-after-30-seconds]] | **I, plan 48 (train 72).** The connection-security details close after 30 s; the pointer on the indicator or the focus inside the details holds the count — the coordinator's choice (b) (`5e9eff52d`) | 2026-10-12 | frontend, connection-security, ux |
@@ -300,6 +302,9 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/portfolio-cache-ignored-role-and-share]] | **Beta F2.** Both portfolio caches (24 h, 30 min) were keyed without role and share, so a changed ownership % showed old figures; the first share fix zeroed editors and viewers; access fingerprint in both keys (`3e3f9c41f`, `f32e460ca`) | resolved | portfolio, cache, sharing |
+| [[problems/fx-error-dedup-went-quadratic-under-full-history]] | **Beta E1 follow-up.** `get_prices_bulk` deduplicated FX errors with a list lookup per failed point; a full-history load spun the worker for minutes and tripped the 30 s timeout; set dedup and a cap of 10 (`59087c74a`) | resolved | prices, fx, performance |
+| [[problems/asset-merge-cascade-deleted-the-migrated-events]] | **Beta P3, the merge.** Deleting the source's provider assignment cascaded onto the events just moved; a RESTRICT key forbade dropping duplicate events before their transactions moved; tests AM-009 and AM-006 (`0e07359b4`) | resolved | database, foreign-keys, merge |
 | [[problems/schwab-favicon-blocked-by-orb]] | **M, gallery (2026-10-13).** www.schwab.com answers headless Chromium with a bot check; the favicon is blocked (`ERR_BLOCKED_BY_ORB`), 4 gallery reds; cure U-B3 (a bundled icon), question 16 | open | broker-icon, third-party, gallery |
 | [[problems/portfolio-wac-endpoint-answered-anyone]] | **Security, found by the 1.2 CHANGELOG review.** `POST /portfolio/wac` answered without a session for any broker; closed in `0088748a8` (2026-09-18) without a line; now in 🔒 | resolved | security, api |
 | [[problems/hidden-pair-half-survived-row-removal]] | **V-29, train 82.** Removing a new pair from the bulk editor left its hidden partner: a false «Discard changes?» since 1.1.0; both halves removed (`e6019f349`) | resolved | frontend, bulk-editor, pairs |
@@ -545,7 +550,7 @@
 | [[sources/coverage-fase012-and-branch-lanes]] | Phases 0-1-2 plus the sync and pure-logic lanes; the night run, the five metrics, `sortFn` never read | 2026-08-31 | testing, coverage, frontend, sync |
 | [[sources/settings-lane-and-sixteen-defects]] | The sixteen tracked defects and the user's answers — the densest source of product decisions in the campaign | 2026-08-31 | settings, brokers, scheduler, fx, product-decisions |
 | [[sources/coda-beta-parametric-forkserver]] | The beta coda: four discarded questions, forkserver orphans, the BRIM race, and how a slow endpoint is ruled out | 2026-08-31 | testing, parallelism, backend, method |
-| [[sources/beta-testing-2026-08-05]] | First external beta: 34 findings adjudicated 30/2/2/3; `COMPRAVENDITA TITOLI` unhandled cost a ~50k hole | 2026-08-31 | beta-testing, brim, credit-agricole, reconciliation |
+| [[sources/beta-testing-2026-08-05]] | First external beta: 34 findings adjudicated 30/2/2/3; `COMPRAVENDITA TITOLI` unhandled cost a ~50k hole; its ten plans checked against the wiki on 2026-10-13 (C-64) | 2026-08-31 | beta-testing, brim, credit-agricole, reconciliation |
 | [[sources/mkdocs-audit-2026-08-05]] | Read-only 182-page published EN MkDocs audit; 64 evidence-backed discrepancies, developer guide explicitly deferred | 2026-08-05 | audit, mkdocs, documentation, backend, frontend, ai-export, fx, admin |
 | [[sources/phase00-risk-analysis-backend]] | Completed and audited `Release_2/Phase_0/02_riskfolioIntegration/` backend G0-G5 chain; G6 reconciled but not executed | 2026-07-28 | phase0, backend, risk, quantlib, riskfolio |
 | [[sources/phase00-ai-export-backend-snapshot]] | Completed AI Export chain through first public V1, single runtime, separated semantic probes, 114/114 closure evidence, and zero orphan tests | 2026-08-05 | phase0, ai-export, snapshot, composition, runtime, testing, mcp |
@@ -634,6 +639,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-13 | **C-64 closed — the plans of `phases/06_betaTestingReportAndFixing` against the wiki.** Ten plans and the F1–F17 classification read in full; three pages that contradicted the code corrected; eight gaps covered, smaller findings listed on the source page | [[decisions/asset-identity-quoted-code-leads]] *(5 pages — 2 decisions, 3 problems; see log)* |
 | 2026-10-13 | **The feature pages against the verified 1.2.0 CHANGELOG.** 46 items mapped; 23 pages say what 1.2.0 brought, with the CHANGELOG line and the commit or train; no status lagged; Benchmark assets got their page | [[features/F-114]] *(1 page — 1 feature)* |
 | 2026-10-13 | **Train 83 — the 1.2 CHANGELOG reviewed; M's full gallery.** The rules of a changelog line; a security fix that shipped without one; Schwab's favicon blocked; the jsCoverage page corrected | [[decisions/changelog-entry-rules]] *(3 pages — 1 decision, 2 problems; see log)* |
 | 2026-10-13 | **Train 82 — V's §12.10.** V-29 (a product defect since 1.1.0) fixed; V-25 cured with an owned-pair fixture; V-21 in part; V-26; V-27 open | [[problems/hidden-pair-half-survived-row-removal]] *(1 page — 1 problem)* |

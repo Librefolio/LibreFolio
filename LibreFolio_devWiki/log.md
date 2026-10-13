@@ -3355,3 +3355,18 @@ CHANGELOG line by section and beginning, with the commit or the train. No page h
 Left: five items whose commit is not identified (asset types, allocation families, the ‹ › arrows, the FX route
 metadata, the banners that lead to their rows); the Scalable importers have no page of their own (F-013 and a
 decision cover them); the plans of `phases/06_betaTestingReportAndFixing` (C-64's last part). Graph: not updated (P-6).
+
+## [2026-10-13] lint | C-64 closed: the plans of phases/06_betaTestingReportAndFixing against the wiki
+Base `fa93b1777`. Three read-only agents read the ten plans and the F1–F17 classification in full; every gap and every
+commit was re-checked on the code and on git history (one claimed contradiction, the drawdown default, was false:
+`DrawdownParams.full_history` is `True`). **Corrected**, pages that contradicted the code: [[features/F-083]]
+(parsing is concurrent since `d1e04b2b8`), [[concepts/txstore-pattern]] (a clone keeps its date, `59087c74a`),
+[[entities/portfolio-engine]] (the blob cache key has no dates and carries the access fingerprint; a hit needs the
+exact end). **Created** [[decisions/asset-identity-quoted-code-leads]] (D1–D11), [[decisions/import-row-split-legs-sum-to-the-row]]
+(B5-lite), [[problems/fx-error-dedup-went-quadratic-under-full-history]], [[problems/asset-merge-cascade-deleted-the-migrated-events]],
+[[problems/portfolio-cache-ignored-role-and-share]]. **Updated** [[features/F-024]] (merge, inactive assets),
+[[features/F-049]], [[features/F-062]] (F13, the 2 GB image), [[concepts/transaction-hygiene-fixture]] (D-3.3),
+[[concepts/derived-test-inventory]] (detour 15), [[decisions/drawdown-full-history-warmup]] and
+[[sources/beta-testing-2026-08-05]] (the check, and the smaller findings listed but not paged). Found on the way: the
+[1.1.0] CHANGELOG line «Wizard rework» puts corrections before unification, while `v1.1.0` already had `assets`
+before `fix`. With this part, C-64 is complete. Graph: not updated (P-6).
