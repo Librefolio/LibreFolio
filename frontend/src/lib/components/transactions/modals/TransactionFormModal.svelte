@@ -370,6 +370,11 @@
     let inaccessiblePartnerBrokerId = $state<number | null>(null);
     /** ExactQuantityInput owns the locale-specific edit buffer; the draft stays normalized. */
     let quantityInputValid = $state(true);
+    /** V-37: each date picker's verdict on its typed text. A refused text never reaches the draft, so the draft
+     *  alone cannot tell that the field on screen shows another date. Not reset on open: the picker is the source
+     *  of truth for its own text, and reports it on mount, on every change, and once more if it unmounts refusing. */
+    let dateMainValid = $state(true);
+    let dateToValid = $state(true);
 
     // Reset draft on open; broker store must be loaded first.
     $effect(() => {
@@ -845,14 +850,36 @@
         return null;
     });
 
+    // Cash sign validation — paired mode uses 'positive' (user enters positive, flip negates FROM).
+    // Single mode uses the type's cashSign rule.
+    let effectiveCashRule = $derived(pairLayout != null ? 'positive' : rule.cashSign);
+    let cashSignResult = $derived(computeSignHint(parseFloat(draft.cash?.amount ?? '0'), effectiveCashRule));
+    let cashToSignViolation = $derived(pairLayout === 'fx' && computeSignHint(parseFloat(dualTo.cash?.amount ?? '0'), 'positive').bad);
+
+    // Block submit for an invalid exact quantity (syntax, 12+6 budget, range or
+    // sign) and for the legacy cash-sign checks.
+    let hasSignViolation = $derived((rule.quantityMode !== 'forbidden' && !quantityInputValid) || cashSignResult.bad || cashToSignViolation);
+
+    /** A date picker shows a date it refused: the draft still holds the previous one. */
+    let hasDateError = $derived(!dateMainValid || !dateToValid);
+    /**
+     * V-37: the errors the form sees on its own — a quantity or cash sign it refuses, two sides that must differ, a
+     * typed date the picker refused. While any is on screen the server is not asked: the payload would carry the
+     * sign-corrected quantity or the previous date, and its verdict would be about a draft that is not the one shown.
+     * So no automatic run, no manual one, no «valid» and no Apply. Declared before the scheduler, whose constructor
+     * already reads `enabled`.
+     */
+    let hasLocalErrors = $derived(hasSignViolation || !!dualValidationError || hasDateError);
+
     // =========================================================================
     // Validate scheduler — debounced/manual/idle, always enabled (1 row).
     // =========================================================================
 
     const scheduler = createValidateScheduler({
-        // Auto-fire only when the form is fully complete (both sides for paired).
-        // Manual dispatch bypasses debounce; its button uses the same completeness gate.
-        enabled: () => !isReadonly && isFormComplete,
+        // Auto-fire only when the form is fully complete (both sides for paired) and holds
+        // no error of its own (V-37). The manual dispatch ignores `enabled`: «Validate now»
+        // checks `hasLocalErrors` itself, in `validateNow`.
+        enabled: () => !isReadonly && isFormComplete && !hasLocalErrors,
         draftKey: () => lastDraftKey,
         validateFn: async () => {
             if (isReadonly) return {issuesCount: 0};
@@ -939,7 +966,7 @@
     /** Bugfix-4 §U16: track validate freshness for the green/warning banner UX. */
     let lastValidatedDraftKey = $state('');
     let issuesDismissed = $state(false);
-    let isFreshlyValid = $derived(!isReadonly && scheduler.state.lastValidatedAt != null && issues.length === 0 && lastValidatedDraftKey === lastDraftKey && lastDraftKey !== '');
+    let isFreshlyValid = $derived(!isReadonly && !hasLocalErrors && scheduler.state.lastValidatedAt != null && issues.length === 0 && lastValidatedDraftKey === lastDraftKey && lastDraftKey !== '');
     let showIssuesBanner = $derived(issues.length > 0 && !issuesDismissed);
     let fieldIssues = $derived(issues.filter((i) => i.index >= 0));
     let balanceIssues = $derived(issues.filter((i) => i.index < 0));
@@ -967,6 +994,15 @@
         lastDraftKey = key;
         commitFailed = false;
         scheduler.trigger('change');
+    });
+    // V-37: when the form's own errors clear, ask the scheduler again. The change that cleared them can reach it
+    // while they still stand — the quantity input and the date picker report their validity after the draft
+    // moves — and the scheduler drops a change it is not enabled for. Either order ends in one debounced run.
+    let hadLocalErrors = false;
+    $effect(() => {
+        const blocked = hasLocalErrors;
+        if (hadLocalErrors && !blocked && open && !isReadonly) scheduler.trigger('change');
+        hadLocalErrors = blocked;
     });
 
     // -------------------------------------------------------------------------
@@ -1092,6 +1128,40 @@
     }
 
     // =========================================================================
+    // Local errors (V-37): «Validate now» and the first field to fix
+    // =========================================================================
+
+    /** The scrollable form body, searched by `focusFirstLocalError`. */
+    let formBodyEl = $state<HTMLDivElement | undefined>(undefined);
+
+    /**
+     * Moves the focus to the first field, in screen order, that holds one of the form's own errors. Each selector
+     * matches what that control publishes — the date picker's `data-invalid` root, the quantity input's test id — or,
+     * for the cells that publish nothing, the test id this form gives them. `querySelector` on the list returns the
+     * first match in document order, whatever the layout (single, pair, FX).
+     */
+    function focusFirstLocalError() {
+        if (!formBodyEl) return;
+        const selectors: string[] = [];
+        if (hasDateError) selectors.push('[data-invalid="true"] input[type="text"]');
+        if (rule.quantityMode !== 'forbidden' && !quantityInputValid) selectors.push('input[data-testid="tx-form-quantity"]');
+        if (cashSignResult.bad) selectors.push('input[data-testid="tx-form-cash-amount"]', 'input[data-testid="tx-form-cash-from-amount"]');
+        if (cashToSignViolation) selectors.push('input[data-testid="tx-form-cash-to-amount"]');
+        if (dualValidationError) selectors.push(pairLayout === 'fx' ? '[data-testid="tx-form-cash-to"] [role="combobox"]' : '[data-testid="tx-form-dual-to"] [role="combobox"]');
+        if (selectors.length === 0) return;
+        formBodyEl.querySelector<HTMLElement>(selectors.join(', '))?.focus();
+    }
+
+    /** «Validate now» asks the server, unless the form holds an error of its own: then it leads to that field. */
+    function validateNow() {
+        if (hasLocalErrors) {
+            focusFirstLocalError();
+            return;
+        }
+        scheduler.trigger('manual');
+    }
+
+    // =========================================================================
     // Commit
     // =========================================================================
 
@@ -1100,6 +1170,12 @@
         // Client-side dual validation
         if (pairLayout && dualValidationError) {
             formError = dualValidationError;
+            return;
+        }
+        // V-37: Apply is disabled while the form holds an error of its own; this guard
+        // covers a click that lands before the button repaints.
+        if (hasLocalErrors) {
+            focusFirstLocalError();
             return;
         }
         // Bugfix-5 §A4: when wired from the BulkModal, "Apply" pushes the draft
@@ -1224,6 +1300,12 @@
     function onQuantityValidityChange(state: {valid: boolean}) {
         quantityInputValid = state.valid;
     }
+    function onDateMainValidityChange(state: {valid: boolean}) {
+        dateMainValid = state.valid;
+    }
+    function onDateToValidityChange(state: {valid: boolean}) {
+        dateToValid = state.valid;
+    }
     function onDescriptionInput(e: Event) {
         draft = {...draft, description: (e.currentTarget as HTMLTextAreaElement).value};
     }
@@ -1293,15 +1375,8 @@
         return 'any';
     });
 
-    // Cash sign validation — paired mode uses 'positive' (user enters positive, flip negates FROM).
-    // Single mode uses the type's cashSign rule.
-    let effectiveCashRule = $derived(pairLayout != null ? 'positive' : rule.cashSign);
-    let cashSignResult = $derived(computeSignHint(parseFloat(draft.cash?.amount ?? '0'), effectiveCashRule));
-    let cashToSignViolation = $derived(pairLayout === 'fx' && computeSignHint(parseFloat(dualTo.cash?.amount ?? '0'), 'positive').bad);
-
-    // Block submit for an invalid exact quantity (syntax, 12+6 budget, range or
-    // sign) and for the legacy cash-sign checks.
-    let hasSignViolation = $derived((rule.quantityMode !== 'forbidden' && !quantityInputValid) || cashSignResult.bad || cashToSignViolation);
+    // The cash sign checks and `hasSignViolation` live above the validate scheduler, with
+    // `hasLocalErrors`: the scheduler's constructor already reads them.
 
     // =========================================================================
     // W39: Inline broker / asset creation modals
@@ -1384,7 +1459,7 @@
         <!-- ============================================================= -->
         <!-- Body (scrollable) -->
         <!-- ============================================================= -->
-        <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-4" data-testid="tx-form-body" data-guide-scroll-root>
+        <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-4" data-testid="tx-form-body" data-guide-scroll-root bind:this={formBodyEl}>
             <!-- Inline banners: red ⛔ for commit failure, green ✓ for valid,
                  yellow for validate issues. Both error types show categorized lists. -->
             {#if formError}
@@ -1571,7 +1646,7 @@
                                 {#if isReadonly}
                                     <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{draft.date || '—'}</div>
                                 {:else}
-                                    <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} />
+                                    <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} onvaliditychange={onDateMainValidityChange} />
                                 {/if}
                             </div>
                             {#if pairLayout === 'fx'}
@@ -1619,7 +1694,7 @@
                                     {#if isReadonly}
                                         <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{effectiveDualTo.date || '—'}</div>
                                     {:else}
-                                        <SingleDatePicker value={effectiveDualTo.date} label="" inputStyle={true} onchange={setDateTo} />
+                                        <SingleDatePicker value={effectiveDualTo.date} label="" inputStyle={true} onchange={setDateTo} onvaliditychange={onDateToValidityChange} />
                                     {/if}
                                 </div>
                             {/if}
@@ -1757,7 +1832,7 @@
                             {#if isReadonly}
                                 <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-date-readonly">{draft.date || '—'}</div>
                             {:else}
-                                <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} />
+                                <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} onvaliditychange={onDateMainValidityChange} />
                             {/if}
                         </div>
 
@@ -2072,7 +2147,7 @@
                         type="button"
                         class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
                         disabled={!isFormComplete}
-                        onclick={() => scheduler.trigger('manual')}
+                        onclick={validateNow}
                         data-testid="tx-form-validate-now"
                         title={$t('transactions.validate.now')}
                     >
@@ -2100,7 +2175,7 @@
                     <button
                         type="button"
                         class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5"
-                        disabled={committing || loadingPartner || !!dualValidationError || hasSignViolation || (!commitOnSave && !isFormComplete)}
+                        disabled={committing || loadingPartner || hasLocalErrors || (!commitOnSave && !isFormComplete)}
                         onclick={commit}
                         data-testid="tx-form-save"
                         use:guideAnchor={'transaction.create.save'}
@@ -2166,7 +2241,9 @@
         dateEnd={fxSyncDateEnd}
         pairs={fxSyncPairs}
         zIndex={zIndex + 10}
-        onsynced={() => scheduler.trigger('manual')}
+        onsynced={() => {
+            if (!hasLocalErrors) scheduler.trigger('manual');
+        }}
         onclose={() => {
             showFxSyncModal = false;
         }}
