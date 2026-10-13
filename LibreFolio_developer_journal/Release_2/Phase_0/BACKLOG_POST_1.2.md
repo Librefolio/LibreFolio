@@ -407,6 +407,16 @@ debito di traduzione di F-5 (di M).
   (`dev.py:1841`, `:1848`). Nel runner intero sono 149 errori ruff in 17 file, e black riformatterebbe 15 file su 30:
   se pulirlo in una volta sola lo decide il coordinatore. Dettagli:
   [piano della 49](49_requestCountRace/plan-phase00RequestCountRace.prompt.md), §6.
+- **54-1 · Con la liquidità negativa la storia dell'allocazione sfora il 100 % e il grafico la taglia** — basso,
+  preesistente; I, 13/10 (piano 54, passo 8). La liquidità entra in Tipo e Settore col suo segno, non in Geografia
+  (`daily_state.py:715-717`, `cumulative_cash + it_cash`), e ogni lista divide per il totale con segno
+  (`derived_views.py:231-243`): un saldo negativo porta le quote positive sopra 100. ECharts impila i negativi sotto lo
+  zero (`stackStrategy` di default `samesign`, `echarts/lib/processor/dataStack.js:103`, `:132`) e `max: 100` taglia
+  la cima (`AllocationHistoryChart.svelte:703`, `:802`). Tooltip e famiglie scartano le voci fino a 0,01 (`:623`,
+  `:626`, `:775`), la torta quelle fino a 0 (`AllocationPanel.svelte:60-67`): la liquidità negativa non compare da
+  nessuna parte. Nessun caso nella corsia né nella fixture. Da decidere se mostrare la leva o togliere la liquidità
+  negativa dal totale. Dettagli: [piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md),
+  passo 8.
 
 ## P · Transazioni e Bulk (42)
 
