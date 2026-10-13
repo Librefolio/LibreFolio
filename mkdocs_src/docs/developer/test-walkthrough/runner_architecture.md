@@ -202,29 +202,47 @@ class of bug expensive.
 
 ### Frontend (E2E)
 
-An E2E test writes over HTTP, so there is no session to roll back. Use
-`frontend/e2e/fixtures/db-cleanup.ts`, which works **by id difference**: photograph before, delete
-what appeared after.
+An E2E test writes over HTTP, so there is no session to roll back. Use `trackTransactionWrites()`
+from `frontend/e2e/fixtures/db-cleanup.ts`: it records the transactions that this page's own commits
+created, and its `cleanup()` deletes exactly those.
 
 ```ts
-import {deleteTransactionsCreatedSince, snapshotTransactionIds} from '../fixtures/db-cleanup';
+import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
 
-let txBefore: Set<number>;
+let txWrites: TransactionWriteTracker | undefined;
 
 test.beforeEach(async ({page}) => {
     await login(page, TEST_USER);
-    txBefore = await snapshotTransactionIds(page);   // after login: page.request shares the cookie jar
+    // After login (it reads through page.request, which needs the session cookie), before any commit.
+    txWrites = await trackTransactionWrites(page);
     await goToTransactions(page);
 });
 
-test.afterEach(async ({page}) => {
-    await deleteTransactionsCreatedSince(page, txBefore);
+test.afterEach(async () => {
+    await txWrites?.cleanup();   // afterEach runs for a red test too
 });
 ```
 
-Prefer the id-difference form over deleting the ids you *think* you created: it also catches rows
-created **indirectly** — the second half of a linked pair, a promoted transfer, a derived event —
-and those are precisely the ones that get forgotten.
+A row is the test's own only when two facts agree: a committed `POST /transactions/commit` made by
+this page reported its id as created (a `create`, `split` or `promote` result), and the id was not
+in the snapshot `trackTransactionWrites()` took when it started. The commit response lists the rows
+created **indirectly** too — the second half of a linked pair, a promoted transfer — so the spec
+never has to name them; the snapshot keeps a split or a promote of fixture data from deleting the
+fixture row it came from. `cleanup()` skips the ids already gone (deleting one half of a linked pair
+removes both) and throws when the delete request fails.
+
+!!! warning "Never delete whatever is new since a snapshot"
+
+    The first version of this helper did exactly that: photograph before, delete what appeared after.
+    It reads "new" as "mine", which holds only while nothing else runs at the same time — the reason
+    the `txHygiene` fixture below works only at one worker. Under concurrent workers the rows a
+    neighbour is still using are new too, and the helper deleted them, or failed with a 500 on a row
+    the neighbour had already removed.
+
+A test that commits rows nobody else should see can also work on an account of its own:
+`openOwnedAccount()` and `openAccountWithPair()` in `frontend/e2e/fixtures/owned-pair.ts` register a
+disposable account, and `cleanupOwnedAccount()` deletes its brokers — their transactions go with
+them — and then the account.
 
 !!! example "The bug this rule was written from"
 
@@ -570,11 +588,16 @@ per worker, two calls per file).
     process against a freshly populated database. So that is the invariant to restore, and no more
     than that. State accumulates freely inside a file and is rolled back when the file changes.
 
-It is active only under `LF_TX_HYGIENE=1`, which the consolidated pass sets. That is deliberate: the
-invariant "the database is what `populate_mock_data` produced" needs restoring exactly when specs
-share it, and someone running a single spec by hand keeps the old path bit for bit. A cleanup that
-fails never turns the test red — inventing a red in the innocent spec that happened to run first is
-worse than the defect being cured.
+It is active only when `LF_TX_HYGIENE=1` **and** `E2E_WORKERS` is at most 1 (unset counts as 1). The
+consolidated pass sets `LF_TX_HYGIENE=1`, and only when it runs Playwright with one worker. That is
+deliberate: the invariant "the database is what `populate_mock_data` produced" needs restoring exactly
+when specs share it, and someone running a single spec by hand keeps the old path bit for bit. Above
+one worker, tests from different files interleave against one database: "every id that appeared since
+this file started" would also cover rows that other workers' tests are still using, and a repopulate
+would wipe the database under them. So the fixture switches itself off — with a warning, if
+`LF_TX_HYGIENE=1` was set anyway — and each test's own cleanup is all that is left. When the fixture's
+cleanup fails, it never turns the test red — inventing a red in the innocent spec that happened to run
+first is worse than the defect being cured.
 
 #### The rollback has to work in both directions
 

@@ -1344,3 +1344,131 @@ stamp)
 >   *Weight %*, `:264` *AI Export*); the pipeline's output plus the 136 fixes gives the worktree.
 > - **`git diff --check`:** clean. Privacy scan of the added lines: no address, path, key or account number.
 > - **Ports:** 6158, 6168 and 6042 free.
+
+### 27. ✅ Batch 36: two distinct sync labels, M-27 and M-26, three changelog lines — on `eb06ab960`, then `d0948f745` (train 85), 2026-10-13 (checkpoint 04:55)
+
+Batch 35 is in the target as `4a1714658`…`40bd288cf` (tree `2cb44d925c89`, as the manifest). The coordinator's
+answers to its two choices:
+- «Amministrazione / Administration» stays: it is the catalogue's word.
+- One label for two buttons is a UI defect, to fix now. In it/fr/es, `dataQuality.cta.sync_asset_prices` and
+  `sync_fx_pair` read the same, while the English says **Sync prices** and **Sync rates**. They appear together in the
+  Correlation tab's banner.
+
+**27.1 ✅ Distinct labels for the two sync buttons**
+> **Note implementazione**: `dev.py i18n update` wrote the two keys in their source,
+> `frontend/src/lib/i18n/dataQuality/{it,fr,es}.json`, 2 lines per language.
+>
+> | | `sync_asset_prices` | `sync_fx_pair` |
+> |---|---|---|
+> | it | Sincronizza prezzi | Sincronizza tassi |
+> | fr | Synchroniser les prix | Synchroniser les taux |
+> | es | Sincronizar precios | Sincronizar tipos de cambio |
+>
+> - **Where the words come from:**
+>   - prices: the asset page's own button (`assetDetail.syncPrices`);
+>   - rates: the glossary's *tasso di cambio / taux de change / tipo de cambio*;
+>   - in it and fr, the same words as the FX page's button (`fxDetail.syncRates`);
+>   - in Spanish, *tipos de cambio* as `common.syncFxRates` already writes it. `fxDetail.syncRates` says «Sincronizar
+>     tasas» instead, and the Spanish catalogue uses both words (29 values with *tasas*, 21 with *tipos de cambio*):
+>     backlog M-28, outside `i18n/dataQuality/`.
+> - **Layout:** the banner's buttons sit in `flex-wrap` rows and may wrap, so the longer Spanish label fits.
+> - **Tests:** none reads the translated labels. The specs and unit tests use the action codes and the
+>   `data-quality-cta-*` testids, and «Sync rates» appears only in English comments.
+> - `dev.py i18n check`: strict, 4359 keys.
+> - `utils gate-i18n-catalog`: 176 passed (04:37, load 25.5).
+>
+> **The texts that name the buttons, translations only (the English does not change):**
+> - `CHANGELOG.{it,fr,es}.md`:
+>   - `:144`, the Dashboard's stale-price warning;
+>   - `:174` and `:178`, the missing rates;
+>   - `:295`, the Correlation banner: it follows the English again, «Its **Sync prices** and **Sync rates** run the
+>     tab's own **Sync selection**». Batch 35 had bent this sentence around the single label.
+> - `user/dashboard/index.*.md` (`:95` and `:99`; `:89` and `:93` in Spanish).
+> - `user/assets/correlation.*.md:157`.
+>
+> 21 fixes, each matched once (`release-pipeline/scripts/b36_cta_port.py`, labels read from the generated catalogue).
+> Every other bold «Sincronizza / Synchroniser / Sincronizar» in the translations stands for the English **Sync**
+> (`common.sync`, the asset and FX pages' button).
+
+**27.2 ✅ M-27: the Positions switch is named as the app names it**
+> **Note implementazione**: the rule (coordinator, 13/10, the CHANGELOG's rule): where the text names a control the
+> user clicks, the catalogue's label; «Holdings» stays where it names the content.
+> - **The labels:** `dashboard.holdingsTab` Portfolio / Portafoglio / Portefeuille / Cartera;
+>   `dashboard.performanceTab` Period / Periodo / Période / Periodo; `viewTable|viewMap` Table / Map,
+>   Tabella / Mappa, Tableau / Carte, Tabla / Mapa.
+> - The English is docs-writer's. The translations were ported by hand: 36 Period captions, then 58 fixes and the
+>   cli_tools bullet (`release-pipeline/scripts/b36_captions_port.py`, `b36_m27_port.py`, each fix matched once).
+>
+> **What changed, in four languages:**
+> - **The 24 captions** of the Positions carousels (`data-title` and `alt`): 8 in `gallery/desktop`, 8 in
+>   `gallery/mobile`, 4 in `user/dashboard/positions` and 4 in `user/brokers/index`. The Period ones and the
+>   Portfolio ones alike: both «performance» shots show the Period view (`gallery.spec.ts`, `semantic: 'performance'`),
+>   the Table one and the Map one. `data-name` and the files stay.
+> - **The gallery intros** «Switch between Portfolio and Period, then compare…». The mobile broker intro also said
+>   something false («Holdings and Performance toggles switch between table and map views»): it now says that the
+>   switch changes the view and the Table / Map icons how it is drawn (`PositionsPanel.svelte:142-171`).
+> - **`positions`:**
+>   - the list item `:6` and the heading `:78` say Period; the anchor `{: #performance }` stays in every language;
+>   - the switch sentence `:20` links the two labels to their sections;
+>   - in Spanish, the switch label at `:20` and `:80` said «Período», where the app says «Periodo».
+> - **Developer pages, English only:** `frontend/pages/index.md` `:106` `:111` `:114` and
+>   `frontend/state/domain-state.md` `:112` `:114`.
+>
+> **Kept, because they name the content:**
+> - the Holdings list item and heading of `positions` (`:5`, `:28`), and `:121`;
+> - «the Holdings table» and «Holdings View» in the financial-theory pages, and `preferences:141`.
+>
+> **Not docs:** two code comments still say «Holdings / Performance» (`PositionsPanel.svelte:142`,
+> `dashboard/+page.svelte:623`).
+
+**27.3 ✅ M-26: the test cleanup helper and `deactivate`**
+> **Note implementazione**:
+> - **`developer/test-walkthrough/runner_architecture.md`, English only (docs-writer):**
+>   - The sample uses `trackTransactionWrites()` (`frontend/e2e/fixtures/db-cleanup.ts:95`): a row is the test's own
+>     when a committed `/transactions/commit` from this page reports it created and it was not in the starting
+>     snapshot.
+>   - A warning replaces the «photograph before, delete what appeared after» advice, which the helper's own comment
+>     now calls unsafe (`db-cleanup.ts:27-44`).
+>   - Disposable accounts are named as the other way (`owned-pair.ts:157`, `:169`, `:201`).
+>   - The activation paragraph now says `LF_TX_HYGIENE=1` **and** `E2E_WORKERS` ≤ 1 (`playwright.ts:133`).
+>   - Every helper the page names was checked to exist; `deleteTransactionsCreatedSince` no longer exists anywhere.
+> - **`admin/cli_tools`, four languages:** a 👑 bullet after the ⏱️ one. `deactivate` refuses the last active
+>   administrator, with the CLI's error (`user_service.py:239-240`, checked byte for byte), and exits with `1`.
+>
+> **Found, not edited** (backlog M-29; docs-writer):
+> - `runner_architecture.md:264` says `E2E_WORKERS=4` is injected; it is now capped at half the logical cores
+>   (`_common.py:90-131`);
+> - `:267` and `:270` show ⌊n/2⌋ server workers, where the config takes `Math.ceil(E2E_WORKERS / 2)`
+>   (`playwright.config.ts:54`).
+>
+> **Code, reported to the coordinator:** `cleanup()` checks only `res.ok()`. A rolled-back delete still answers 200, so
+> a failed cleanup would pass silently.
+
+**27.4 ✅ Three changelog lines from `d0948f745`, by hand, then the stamp**
+> **Note implementazione**:
+> - **Fast-forward:** the coordinator fast-forwarded the worktree to `d0948f745` (train 85, T's batch), between two
+>   commands; the 37 changed files kept their blobs.
+> - **The ported lines** (`release-pipeline/scripts/b36_changelog_lines.py`):
+>   - `:218`: the list of what now follows the language includes the asset dialog's description hint
+>     (`assets.modal.descriptionPlaceholder`);
+>   - `:264`: the maximum drawdown has one name per language, with the catalogue's names (Drawdown massimo /
+>     Perte maximale / Caída máxima, since T-CL);
+>   - `:302`: the shock's rows are the scenario's classes, sectors or regions that you hold, named in your language.
+> - The generated catalogue was rebuilt first (`dev.py i18n build`, 4360 keys), so the review read T's new values.
+> - **Stamp:** `translate-stamp --file CHANGELOG.md` stamped the 3 pieces × 3 languages that changed, and the dry-run
+>   was then empty.
+
+**27.5 ✅ Gates** (`release-pipeline/scripts/b36_final_gates.sh` on `eb06ab960`, 04:45; `b36_final2_gates.sh` on
+`d0948f745`, 04:51–04:53, load 15–29; logs in `release-pipeline/runs/b36/`)
+> - **Stamps:** the four M-27 pages and `cli_tools` (04:45–04:46); the CHANGELOG (above). The cache changes in three
+>   stages, each touching only its own entries: the four M-27 pages, then `cli_tools`, then the three CHANGELOG pieces.
+> - **Dry-run:** empty, for the pages and the CHANGELOG.
+> - **Validation:** `translate-validate --hide-localized` 630 files 0/0; the CHANGELOG alone 3 files OK, 0/0.
+> - **`translate-diff`:** 642 of 642 clean.
+> - **Build:** strict, 0; tracked icons unchanged. **Links:** `check-links` 95 valid.
+> - **i18n:** `dev.py i18n check` strict, 4360 keys; `utils gate-i18n-catalog` 176 passed; Prettier clean on the
+>   `dataQuality` sources.
+> - **Review scripts:**
+>   - the label check: only the four lines that quote the old text on purpose;
+>   - the structure check: only the `:263` examples. `:295` has the English's two bold labels again.
+> - **`git diff --check`:** clean. **Ports:** 6158, 6168 and 6042 free.
