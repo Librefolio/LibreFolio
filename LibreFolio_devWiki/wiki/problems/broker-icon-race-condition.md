@@ -75,6 +75,9 @@ chain does not read the store when its props are empty — latent, since every s
 `settledIconFieldIds`, which stops the loop) and **C-57** (`ensurePluginIconsLoaded` in `brokerHelpers.ts` never retries
 after a failed first request, so plugin icons stay missing until the page reloads — to verify).
 
+*2026-10-13*: another way to the fallback icon, from outside the app — a broker's site that answers the browser with a
+bot check: [[problems/schwab-favicon-blocked-by-orb]].
+
 ## Prevention
 
 - Any page that displays broker icons must call `ensurePluginIconsLoaded()` in `onMount` AND ensure its derived computations that use plugin icons re-run after the call resolves.

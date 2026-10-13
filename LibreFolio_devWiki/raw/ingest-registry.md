@@ -748,3 +748,33 @@ are each file's last commit at the base. Paths are relative to the repository ro
 |-------------|-------------------|------|-----------|
 | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` | `452978f2e` | 2026-10-13 | §12.10 → [[problems/hidden-pair-half-survived-row-removal]], [[problems/e2e-writes-leaked-into-shared-state]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `73d083e46` | 2026-10-13 | V-21, V-25, V-26, V-27, V-29 → the pages above |
+
+## 2026-10-13 — train 83, the CHANGELOG review and M's gallery (base `9686ee1f2`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `b2a21bb4a` | 2026-10-13 | C-70, C-71 → [[decisions/changelog-entry-rules]] |
+
+## 2026-10-13 — C-64 last part, the plans of `phases/06_betaTestingReportAndFixing` (base `fa93b1777`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md` | `91e88b8d1` | 2026-10-13 | D1–D11 → [[decisions/asset-identity-quoted-code-leads]]; the merge traps → [[problems/asset-merge-cascade-deleted-the-migrated-events]] |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetLifecycleAndIdentifiers.prompt.md` | `91e88b8d1` | 2026-10-13 | superseded by P3; D4 → [[decisions/asset-identity-quoted-code-leads]], [[features/F-024]] |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00BrimCreditAgricoleTrades.prompt.md` | `91e88b8d1` | 2026-10-13 | B5-lite → [[decisions/import-row-split-legs-sum-to-the-row]]; detours listed on [[sources/beta-testing-2026-08-05]] |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00EngineAccountingAndSignals.prompt.md` | `91e88b8d1` | 2026-10-13 | E1 detour → [[problems/fx-error-dedup-went-quadratic-under-full-history]] |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/03_feedback_utenti_F1-F17_classificazione_e_fix.md` | `91e88b8d1` | 2026-10-13 | F2 → [[problems/portfolio-cache-ignored-role-and-share]]; F13 → [[features/F-062]] |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00TestRunnerMigration.prompt.md` | `91e88b8d1` | 2026-10-13 | D-3.3 → [[concepts/transaction-hygiene-fixture]]; detour 15 → [[concepts/derived-test-inventory]] |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00ImportWizardUx.prompt.md` | `91e88b8d1` | 2026-10-13 | W9 → [[features/F-083]] (corrected) |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00TransactionsUxPolish.prompt.md` | `91e88b8d1` | 2026-10-13 | T3 → [[concepts/txstore-pattern]] (corrected) |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00ImportFlowStepRestructure.prompt.md` | `91e88b8d1` | 2026-10-13 | findings listed on [[sources/beta-testing-2026-08-05]] |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00I18nAndDocsAssets.prompt.md` | `91e88b8d1` | 2026-10-13 | findings listed on [[sources/beta-testing-2026-08-05]] |
+| `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00FrontendCoverage.prompt.md` | `91e88b8d1` | 2026-10-13 | findings listed on [[sources/beta-testing-2026-08-05]] |
+
+## 2026-10-13 — the release page of 1.2.0, draft (base `2b1734e76`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `CHANGELOG.md` | `60f734e08` | 2026-10-13 | [[sources/release-1.2.0]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `b2a21bb4a` | 2026-10-13 | [[sources/release-1.2.0]] |
+| `backend/alembic/versions/004_release_1_2_0_schema.py` | `f1047f766` | 2026-10-13 | [[sources/release-1.2.0]] |
