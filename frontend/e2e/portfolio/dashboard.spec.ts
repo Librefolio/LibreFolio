@@ -392,8 +392,14 @@ const PLAIN_AMOUNT = /^[A-Z]{3}\s[-\u2212]?[\d.,]+$/;
 const PNL_AMOUNT = /^[A-Z]{3}\s[+\-\u2212]?[\d.,]+$/;
 /** A P&L line tooltip value: an amount as above, or `—` for a broker with no value that day. */
 const PNL_LINE_VALUE = /^(?:[A-Z]{3}\s[+\-\u2212]?[\d.,]+|—)$/;
-/** The ISO date every tooltip header carries, whatever the bucket width. */
-const TOOLTIP_DATE = /\d{4}-\d{2}-\d{2}/;
+/**
+ * The year every tooltip header carries, in every interface language and at every bucket width: the day, the week, the
+ * month and the ladder span all write it, ISO before plan 52 C2 and in the interface locale after. The day and the
+ * month around it follow the browser region (en-US or en-GB), so they are no anchor. Nothing else in the `growth-chart`
+ * card carries four digits in a row: the card's own texts are labels, its axes are drawn on the canvas, and amounts are
+ * grouped by three.
+ */
+const TOOLTIP_YEAR = /\b\d{4}\b/;
 /** GrowthChart's `LADDER_MIN_BODY_PX`: the narrowest candle body the ladder offers. */
 const LADDER_MIN_BODY_PX = 2.5;
 
@@ -660,7 +666,7 @@ test.describe('GrowthChart P&L mode — dashboard', () => {
         // Raised on the header, not on the rows: a bucket without a candle prints the
         // no-data line instead of the quad, and that case must fail below with its
         // own name rather than as a tooltip that "never appeared".
-        await showChartTooltip(page, chart, chart.getByText(TOOLTIP_DATE), 10_000, 1);
+        await showChartTooltip(page, chart, chart.getByText(TOOLTIP_YEAR), 10_000, 1);
         await expect(ohlcRows, 'no candle under the pointer — the formatter printed its no-data line in place of the OHLC quad').not.toHaveCount(0);
         await expect(ohlcRows, 'open, close, high and low — exactly one OHLC quad').toHaveCount(4);
         await expect(ohlcRows.locator('xpath=./b'), 'each of the four is a real amount').toHaveText([PLAIN_AMOUNT, PLAIN_AMOUNT, PLAIN_AMOUNT, PLAIN_AMOUNT]);

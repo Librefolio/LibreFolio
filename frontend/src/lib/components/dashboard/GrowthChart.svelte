@@ -29,11 +29,11 @@
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {_} from '$lib/i18n';
-    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
+    import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
     import {clampGrowthLogicalRange, type GrowthLogicalRange} from './growthChartRange';
     import {planLadderAxis, ladderAxisOption, type LadderAxisPlan} from './growthLadderAxis';
     import {buildCalendarLadder, countCalendarBuckets, type CalendarPeriod, type LadderRung} from './growthLadderBuckets';
-    import {todayIso} from '$lib/utils/dateOnly';
+    import {daysBetween, todayIso} from '$lib/utils/dateOnly';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
     import {aggregateLineSeries, mapDateToBucket, cascadeResolution, chooseInitialResolution, computeDensity, type ChartGrammar} from '$lib/components/charts/timeSeriesAggregation';
     import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
@@ -44,8 +44,10 @@
     import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
     import {buildOhlcQuad} from '$lib/components/charts/candlestickChartHelpers';
+    import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {ChartLine, ChartCandlestick, Coins} from 'lucide-svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
@@ -293,6 +295,8 @@
     let lastDomainKey: string | null = null;
     let lastSyncedGrammar: ChartGrammar | null = null;
     let responsiveXAxisCompact = false;
+    /** The grid's right edge on screen: the time-axis inset that keeps the last label whole (plan 52), or the '4%' base. */
+    let appliedGridRight: number | string = '4%';
     const resizeWatcher = createResizeWatcher(() => {
         chartInstance?.resize();
         if (chartContainer) containerWidthPx = chartContainer.clientWidth;
@@ -312,6 +316,20 @@
                 chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
             } else if (wasCompact) {
                 renderChart(true);
+            }
+            // The '4%' base stands for other pixels at another width, so the inset may change with it.
+            const gridRight = timeAxisGridRight({
+                width: chartContainer.clientWidth,
+                values: activeChartData.dates,
+                locale: uiLocale(),
+                base: '4%',
+                measure: axisLabelMeasure(chartInstance, 14),
+            });
+            if (gridRight !== appliedGridRight) {
+                appliedGridRight = gridRight;
+                // Not lazy: syncPlotGeometry() reads the grid this call lays out.
+                chartInstance.setOption({grid: {right: gridRight}});
+                syncPlotGeometry();
             }
         }
         scheduleResolutionSync();
@@ -821,10 +839,16 @@
 
         for (const date of dates) {
             const {bucketStart, bucketEnd} = mapDateToBucket(date, resolution);
-            if (bucketEnd === lastBucketEnd) continue;
+            // The point stands on the last day of its bucket the history holds, where the
+            // aggregators put its value: a whole period's calendar end, the running one's last
+            // day with data. The calendar end of a period still running has not happened yet.
+            if (bucketEnd === lastBucketEnd) {
+                buckets[buckets.length - 1].date = date;
+                continue;
+            }
 
             buckets.push({
-                date: bucketEnd,
+                date,
                 bucketStart,
                 bucketEnd,
                 resolution,
@@ -1192,6 +1216,52 @@
         return {start: 0, end: 100};
     }
 
+    /** How close, in days, a cascade window edge may fall to a drawn point and still stand on it: float and DST error, never a day the user chose. */
+    const ZOOM_EDGE_SNAP_DAYS = 0.1;
+    const cascadeDayOffsets = new WeakMap<AggregatedResolutionData, number[]>();
+
+    /**
+     * Each cascade point, in days from the first one. The cascade draws on a time axis,
+     * where ECharts maps a dataZoom percent to time over the drawn extent, not to a bucket
+     * index: the two agree only while the points are evenly spaced, which a running
+     * period, drawn on its last day, or a gap in the history breaks.
+     */
+    function cascadeDayOffsetsOf(entry: AggregatedResolutionData): number[] {
+        let offsets = cascadeDayOffsets.get(entry);
+        if (!offsets) {
+            const first = entry.buckets[0]?.date ?? '';
+            offsets = entry.buckets.map((bucket) => daysBetween(first, bucket.date));
+            cascadeDayOffsets.set(entry, offsets);
+        }
+        return offsets;
+    }
+
+    /** The ladder buckets a dataZoom window shows. ECharts snaps a category window's edge to the NEAREST bucket, so it is read the way it is drawn. */
+    function ladderIndicesAt(entry: AggregatedResolutionData, start: number, end: number): {startIndex: number; endIndex: number} {
+        const maxIndex = Math.max(entry.buckets.length - 1, 0);
+        const startIndex = Math.max(0, Math.min(maxIndex, Math.round((start / 100) * maxIndex)));
+        const endIndex = Math.max(startIndex, Math.min(maxIndex, Math.round((end / 100) * maxIndex)));
+        return {startIndex, endIndex};
+    }
+
+    /** The cascade buckets a dataZoom window shows, widened to the points at or outside its edges, so a partly visible period is never lost. */
+    function cascadeIndicesAt(entry: AggregatedResolutionData, start: number, end: number): {startIndex: number; endIndex: number} {
+        const offsets = cascadeDayOffsetsOf(entry);
+        const maxIndex = offsets.length - 1;
+        const span = offsets[maxIndex] ?? 0;
+        if (maxIndex <= 0 || span <= 0) return {startIndex: 0, endIndex: Math.max(maxIndex, 0)};
+
+        const startDay = (start / 100) * span;
+        const endDay = (end / 100) * span;
+        const startIndex = Math.max(
+            0,
+            offsets.findLastIndex((day) => day <= startDay + ZOOM_EDGE_SNAP_DAYS),
+        );
+        const firstAtEnd = offsets.findIndex((day) => day >= endDay - ZOOM_EDGE_SNAP_DAYS);
+        const endIndex = Math.max(startIndex, firstAtEnd < 0 ? maxIndex : firstAtEnd);
+        return {startIndex, endIndex};
+    }
+
     function getLogicalRangeFromChart(): {startDate: string; endDate: string} | null {
         const entry = activeChartData;
         // A cascade entry is only readable at the resolution it was built for; a ladder
@@ -1200,12 +1270,9 @@
         if (entry.buckets.length === 0) return null;
 
         const {start, end} = getZoomPercent();
-        const maxIndex = Math.max(entry.buckets.length - 1, 0);
-        // On the ladder's category axis ECharts snaps a window edge to the NEAREST bucket,
-        // so the window is read the way it is drawn. The cascade keeps its widening
-        // floor/ceil, which never loses a partly visible day.
-        const startIndex = Math.max(0, Math.min(maxIndex, entry.ladder ? Math.round((start / 100) * maxIndex) : Math.floor((start / 100) * maxIndex)));
-        const endIndex = Math.max(startIndex, Math.min(maxIndex, entry.ladder ? Math.round((end / 100) * maxIndex) : Math.ceil((end / 100) * maxIndex)));
+        // Each window is read the way its axis draws it: the ladder's categories by index,
+        // the cascade's time axis in time.
+        const {startIndex, endIndex} = entry.ladder ? ladderIndicesAt(entry, start, end) : cascadeIndicesAt(entry, start, end);
         const startBucket = entry.buckets[startIndex];
         const endBucket = entry.buckets[endIndex];
 
@@ -1227,6 +1294,15 @@
             startIndex,
             entry.buckets.findLastIndex((bucket) => bucket.bucketStart <= endDate),
         );
+        // The cascade's percent is time over its drawn extent, the ladder's an index.
+        const offsets = entry.ladder ? null : cascadeDayOffsetsOf(entry);
+        const span = offsets?.at(-1) ?? 0;
+        if (offsets && span > 0) {
+            return {
+                start: (offsets[startIndex] / span) * 100,
+                end: (offsets[endIndex] / span) * 100,
+            };
+        }
         const denominator = entry.buckets.length - 1;
 
         return {
@@ -1377,34 +1453,38 @@
         return `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml(text)}</div>`;
     }
 
+    /** Every day of the header is written in the interface language, never as raw ISO (plan 52, C2). */
     function buildTooltipBucketHeader(bucket: BucketInfo, theme: ReturnType<typeof buildTooltipTheme>): string {
         const partialHtml = buildPartialBucketLine(bucket, theme);
         // A one-day bucket has nothing to span, so it keeps the plain date. A ladder bucket is
         // judged by its period: a week the series covers for one day still prints its week.
         const span = bucket.period ?? {start: bucket.bucketStart, end: bucket.bucketEnd};
         if (span.start === span.end) {
-            return `${buildTooltipHeader(bucket.bucketEnd, theme.textColor)}${partialHtml}`;
+            return `${buildTooltipHeader(formatDay(bucket.bucketEnd), theme.textColor)}${partialHtml}`;
         }
 
         if (ladderActive) {
-            // "1M  2026-10-01 → 2026-10-31": the calendar period the bucket stands for. The
+            // "1M - Oct 1, 2026 → Oct 31, 2026": the calendar period the bucket stands for. The
             // old form said "Week" for every bucket wider than a day, which was simply false
             // on a three-day or fourteen-day rung.
-            const headerHtml = `${buildTooltipHeader(`${candleWidthLabel(candleWidth)} - ${span.start} → ${span.end}`, theme.textColor)}${partialHtml}`;
+            const headerHtml = `${buildTooltipHeader(`${candleWidthLabel(candleWidth)} - ${formatDay(span.start)} → ${formatDay(span.end)}`, theme.textColor)}${partialHtml}`;
             // "Value at <date>" is true of a closing level and false of a sum, so the
             // Income submode — whose bars are sums over the bucket — does not claim it. The
             // date is the last day with data, never a day of the period still to come.
             if (pnlSubmode === 'income') return headerHtml;
-            return `${headerHtml}<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: bucket.bucketEnd}})}</div>`;
+            return `${headerHtml}<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: formatDay(bucket.bucketEnd)}})}</div>`;
         }
 
-        const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: bucket.bucketEnd}})}</div>`;
+        // The point stands for its bucket up to its own day, the last one with data: the
+        // period still running ends there.
+        const upTo = bucketSpanUpTo(bucket.date, bucket);
+        const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: formatDay(upTo.bucketEnd)}})}</div>`;
 
         if (bucket.resolution === 'weekly') {
-            return `${buildTooltipHeader($_('chart.tooltip.weekRange', {values: {start: bucket.bucketStart, end: bucket.bucketEnd}}), theme.textColor)}${contextLine}`;
+            return `${buildTooltipHeader($_('chart.tooltip.weekRange', {values: {start: formatDay(upTo.bucketStart), end: formatDay(upTo.bucketEnd)}}), theme.textColor)}${contextLine}`;
         }
 
-        return `${buildTooltipHeader($_('chart.tooltip.monthLabel', {values: {month: formatTooltipMonth(bucket.bucketEnd)}}), theme.textColor)}${contextLine}`;
+        return `${buildTooltipHeader($_('chart.tooltip.monthLabel', {values: {month: formatTooltipMonth(upTo.bucketEnd)}}), theme.textColor)}${contextLine}`;
     }
 
     /** ECharts candlestick data point for a `category` xAxis: a flat `[open, close,
@@ -1786,6 +1866,7 @@
         }
 
         let xAxis: Record<string, unknown>;
+        let gridRight: number | string | undefined;
         if (entry.ladder) {
             // A category axis takes its positions from `data` alone, so the bucket closings
             // travel with every update: a rung change replaces all of them. The labels are
@@ -1806,6 +1887,14 @@
             }
             responsiveXAxisCompact = xAxisPolicy.compact;
             xAxis = xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber, axisLabel: xAxisPolicy.axisLabel} : {axisLabel: {formatter: xAxisPolicy.formatter}};
+            gridRight = timeAxisGridRight({
+                width: chartContainer?.clientWidth ?? 0,
+                values: entry.dates,
+                locale: uiLocale(),
+                base: '4%',
+                measure: axisLabelMeasure(chartInstance, 14),
+            });
+            appliedGridRight = gridRight;
         }
 
         const series = seriesData.map((seriesEntry) => ({
@@ -1822,6 +1911,8 @@
                       }
                     : CHART_ANIMATION_CONFIG),
                 dataZoom: [{type: 'inside', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG, start: zoomWindow.start, end: zoomWindow.end}],
+                // New dates are new labels: the inset travels with the axis they are drawn on.
+                ...(gridRight === undefined ? {} : {grid: {right: gridRight}}),
                 xAxis,
                 series,
             },
@@ -2107,6 +2198,18 @@
                   axisType: 'time',
               });
         responsiveXAxisCompact = xAxisPolicy?.compact ?? false;
+        // The time axis widens the right inset to keep its last label whole (plan 52); the
+        // ladder's category axis ends each label at its slot and keeps the base.
+        const gridRight = xAxisPolicy
+            ? timeAxisGridRight({
+                  width: chartContainer?.clientWidth ?? 0,
+                  values: activeChartData?.dates ?? dates,
+                  locale: uiLocale(),
+                  base: '4%',
+                  measure: axisLabelMeasure(chartInstance, 14),
+              })
+            : '4%';
+        appliedGridRight = gridRight;
         // Planned for the window this option is about to send. Before the first layout
         // the grid is unmeasured and the plan is empty; refreshLadderAxis() below fills
         // it in as soon as syncPlotGeometry() has read the grid.
@@ -2187,7 +2290,7 @@
             // `top` stays 10px in every mode: the toggle is an OVERLAY and must float on
             // the plot, not push it down (developer review — reserving a band shortened
             // the chart, which was never what was asked for).
-            grid: {left: '3%', right: '4%', bottom: '30px', top: '10px', containLabel: true},
+            grid: {left: '3%', right: gridRight, bottom: '30px', top: '10px', containLabel: true},
             tooltip: {
                 trigger: 'axis',
                 // Bugfix: `appendToBody` moves the tooltip DOM to `document.body`, which
