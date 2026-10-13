@@ -390,7 +390,8 @@ test.describe('Gallery Screenshots', () => {
          */
         async function openLoginPage(page: Page, lang?: Language): Promise<void> {
             await page.goto('/');
-            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 3000});
+            // The app's first load (the splash, then the catalogue) took more than 3 s on a loaded machine's phone.
+            await expect(page.getByTestId('login-page')).toBeVisible({timeout: 30_000});
             if (lang) await expect(page.locator('html'), 'the language survived the load').toHaveAttribute('lang', lang);
             await freezeAnimations(page);
         }
@@ -2640,6 +2641,7 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await navigateTo(page, '/transactions');
+                await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                 await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                 await waitForNetworkSettled(page);
                 await freezeAnimations(page);
@@ -2656,6 +2658,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
@@ -2758,6 +2761,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     // Open Add form ONCE for this combo
@@ -2795,6 +2799,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
@@ -2838,6 +2843,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
@@ -2889,6 +2895,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
@@ -2937,6 +2944,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions?types=WITHDRAWAL,DEPOSIT&page_size=50');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await waitForNetworkSettled(page);
                     await page.waitForTimeout(1500); // Wait for type store to load
@@ -3012,6 +3020,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
@@ -3309,6 +3318,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await freezeAnimations(page);
 
@@ -3344,6 +3354,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     // Open ImportWizardModal
@@ -3385,6 +3396,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     // Open ImportWizardModal
@@ -3458,6 +3470,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     await page.getByTestId('tx-import-button').click();
@@ -3533,6 +3546,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
                     await waitForNetworkSettled(page);
                     await freezeAnimations(page);
@@ -3612,6 +3626,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     try {
@@ -5581,7 +5596,11 @@ test.describe('Gallery Screenshots', () => {
                     // Open create modal
                     await page.getByTestId('assets-add-button').click();
                     await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
-                    await page.waitForTimeout(500);
+                    // The search providers' chips come with the catalogue, after the form: a fit measured before them
+                    // left their row (32 px) hidden in the dialog's body.
+                    const createModal = page.getByTestId('asset-modal');
+                    await expect(createModal.locator('[data-testid^="asset-search-provider-"]').first(), 'the search providers never arrived').toBeVisible({timeout: 15_000});
+                    await imagesSettled(createModal);
                     // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the body is the form's box.
                     if (viewport === 'desktop') await fitScreenToDialog(page, page.getByTestId('asset-modal'), `desktop/${lang}/${theme}/assets/create-modal`, {body: page.getByTestId('asset-modal-form').locator('..')});
                     await screenshot(page, viewport, lang, theme, 'assets', 'create-modal');
@@ -5762,6 +5781,7 @@ test.describe('Gallery Screenshots', () => {
                     await navigateTo(page, '/transactions');
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
+                    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     // Open wizard from transactions import button
