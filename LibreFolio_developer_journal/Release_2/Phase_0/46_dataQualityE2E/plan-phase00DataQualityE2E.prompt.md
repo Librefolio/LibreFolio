@@ -2120,3 +2120,361 @@ La tabella è stata mandata il 12/10. La bozza intera è nei file di sessione di
   - La cura di `removeRow` è in un commit a parte, come chiesto dal coordinatore.
   - `TransactionBulkModal.svelte` passa per un blob intermedio con i soli attributi:
     `/tmp/libreFolio_v_cp_TransactionBulkModal.attrs-only.svelte`, blob `5acaa10a`.
+
+### 12.11 Lotto «rossi da carico della run di R»: V-28, V-27 e due budget (13/10)
+
+**Base**: `273b188ea`, treno 82, verificata con `git rev-parse HEAD`; worktree pulita. Il coordinatore ha integrato il
+checkpoint precedente: C1 `9f8ac58d5` … C7 `452978f2e`. La riga 🐛 di V-29 nel CHANGELOG è `ed8fc5cd7`, portata da M.
+
+**Fonti**:
+- il rapporto di R, `38_postReleaseBacklog/report-R-full-run-coverage-20261012.md`, §3.2–3.5, sulla base `a5653f9ef`
+  (treno 68);
+- le pagine devWiki `problems/jscoverage-teardown-spends-the-test-budget` e
+  `problems/login-returns-before-the-app-has-started`.
+
+**Vincolo fino al via del coordinatore**: solo spec singole a 1 worker; niente categorie intere né sonde di carico.
+Lo sviluppatore non ha chiesto codice di prodotto: se una cura lo richiede, STOP e domanda.
+
+#### Analisi, verificata sul codice
+
+1. **V-28: il teardown di `jsCoverage`** (15 rossi nella run di R).
+   - Il fixture (`e2e/fixtures/playwright.ts:292-334`) è `{scope: 'test', auto: true}`, senza `timeout`. La raccolta
+     che segue `use()` legge `window.__coverage__` e scrive circa 17 MB di JSON, e sta dentro i 30 s del test
+     (`playwright.config.ts:110`).
+   - In Playwright 1.61, un fixture con `timeout` riceve per setup e teardown uno slot suo, `{timeout, elapsed: 0}`
+     (`node_modules/playwright/lib/worker/workerProcessEntry.js:158`).
+   - La cura: un `timeout` dedicato al fixture. Così la raccolta non consuma il budget del test, e una raccolta lenta
+     resta distinguibile da un test lento. Senza coverage il fixture non fa niente.
+   - **La prova del meccanismo, senza carico**: un ritardo temporaneo nel teardown, attivato da una variabile
+     d'ambiente e poi tolto. Prima della cura il rosso «Tearing down "jsCoverage" exceeded the test timeout»; dopo, il
+     verde. Dopo il via, una categoria con `--coverage js` sotto carico, come chiede il coordinatore.
+2. **V-27: `login()` ritorna appena sparisce il form** (9 rossi nella run di R).
+   - **I 9 rossi della run di R sono già curati sul posto.** La base di R, `a5653f9ef`, non conteneva né V-20
+     (`d60937c08`, verificato con `merge-base --is-ancestor`) né V-26.
+     - Oggi `auth.spec.ts` usa `expectLandedOnDashboard` ed `expectLandedOnWelcome`, con 15 s per l'URL e 10 s per la
+       pagina; R ha visto la versione vecchia, con `toHaveURL(/.*dashboard.*/)` e i 3 s di default.
+     - `setupAiExportPage` aspetta l'arrivo da V-26.
+   - Resta la cura strutturale, per tutti i chiamanti: 257 chiamate in 102 file. Restano scoperti, per esempio,
+     `switchUser` di `ai-export-memory` e `support-copy-and-go:146`.
+   - **Gli stati d'arrivo pubblicati** dal layout `(app)` e dalla root, dopo il login:
+     - `app-shell` (`(app)/+layout.svelte:246`);
+     - `welcome-shell` (`:242`);
+     - `onboarding-bootstrap-blocked` (`OnboardingBootstrapBlock.svelte:13`).
+   - **Il rischio**:
+     - `auth.spec.ts` ~`:415` («onboarding bootstrap failure blocks at root…») fa fallire apposta l'onboarding, chiama
+       `login()` e si aspetta `/` con `onboarding-bootstrap-blocked`. `login()` deve quindi chiudere su uno dei tre
+       stati, non solo sulla shell.
+     - Vanno cercati gli altri test che trattengono gli endpoint del bootstrap prima di `login()`, e li rilasciano
+       dopo: con la cura sarebbero uno stallo.
+   - **I commenti che diventano falsi**: `auth.spec.ts:21` e `:32`, `app-start-auth:165`, `toolbar-width-sweep:74` e
+     `:877` (file di K/I, solo commento), `ai-export/helpers.ts:37` e `brokers-detail:1058`.
+   - **Le attese sul posto** (V-20, V-26, K, connection-security) restano: dopo la cura sono innocue.
+   - **M**: `gallery.spec.ts` chiama `login()`, quindi la cura cambia anche il suo comportamento, attendendo di più.
+     Non la eseguo; lo segnalo.
+3. **I due budget stretti dopo una navigazione** (§3.4–3.5).
+   - `fx/fx-add-pair.spec.ts:218`: dopo il click sulla card, `expect(detail).toBeVisible()` usa i 3 s di default.
+   - CAC-001, `tx-import-ca-contract.spec.ts:131` (`goToTransactions`): `tx-table` ha 10 s. Lo snapshot di R mostrava
+     la tabella già resa, appena dopo la scadenza.
+   - Il verdetto di test-triage: **assunzione d'orologio**. La cura sono condizioni pubblicate con un budget da
+     navigazione sotto carico, controllando la catena subito dopo.
+
+#### Superfici
+
+| file | lavoro | proprietà |
+|---|---|---|
+| `frontend/e2e/fixtures/playwright.ts` | V-28: `timeout` del fixture | mio, harness condiviso |
+| `frontend/e2e/fixtures/auth-helpers.ts` | V-27: `login()` | mio |
+| `frontend/e2e/auth.spec.ts`, `layout/app-start-auth.spec.ts`, `ai-export/helpers.ts`, `brokers/brokers-detail.spec.ts`, `layout/toolbar-width-sweep.spec.ts` | V-27: solo commenti | i primi tre miei; sweep di K/I, solo commento |
+| `frontend/e2e/fx/fx-add-pair.spec.ts`, `frontend/e2e/transactions/tx-import-ca-contract.spec.ts` | i due budget | miei, per assegnazione |
+| il backlog, questo piano | V-28 nuova, V-27 nella 1.2 | miei |
+
+Codice di prodotto: nessuno.
+
+#### Ordine e prove
+
+1. **V-28**, con la prova del meccanismo a 1 worker su uno spec singolo, prima e dopo la cura.
+2. **V-27**: prima di toccare `login()`, la ricerca dei test che trattengono il bootstrap. Poi, a 1 worker, `auth`,
+   `ai-export memory`, uno spec che arriva su `welcome` e `brokers-detail`.
+3. **I due budget**: `fx-add-pair` e `tx-ca-contract` da soli, a 1 worker.
+4. **Dopo il via**:
+   - una categoria con `--coverage js` sotto carico, per V-28;
+   - tutte le categorie front a 4 worker, una alla volta, per V-27;
+   - `check-orphans` e `component-unit`.
+
+Due test-author lavorano su file distinti: «v28-budgets» (V-28 e i due budget) e «v27-login».
+
+#### Avanzamento (13/10)
+
+- ✅ **V-28** (`v28-budgets`):
+  - **La cura**: `JS_COVERAGE_TIMEOUT_MS = 120_000`, con un commento, e `timeout` sul fixture (`playwright.ts:49-64`,
+    `:357`). È incondizionata: senza coverage il teardown ritorna subito.
+  - **La prova del meccanismo**, a 1 worker, su un solo test di `fx-settings`, con un ritardo temporaneo
+    `LF_V28_PROOF_DELAY_MS=35000` nel teardown:
+    - senza la cura è rosso: `Tearing down "jsCoverage" exceeded the test timeout of 30000ms`;
+    - con la cura è verde, e il ritardo gira per intero, 35,0 s.
+
+    Il ritardo è stato tolto: la diff contiene solo la cura.
+  > **Precisazione**, verificata nel sorgente di Playwright 1.61. Senza `timeout`, il teardown pesa sullo slot degli
+  > after-hooks, 30 s condivisi con `afterEach` e con gli altri teardown, non sul corpo del test. Per questo le durate
+  > di R erano corpo + 30 s. Con `timeout`, una raccolta lenta fallisce come «Fixture "jsCoverage" timeout of 120000ms
+  > exceeded during teardown».
+- ✅ **I due budget** (`v28-budgets`), entrambi con verdetto «assunzione d'orologio»:
+  - `fx-add-pair`: `NAVIGATION_TIMEOUT_MS = 15_000`, lo stesso di `goToFxDetailPage`. Dopo il click sulla card aspetta
+    prima `data-chart-pair = slug`, poi la visibilità; lo stesso vale per le altre navigazioni dello stesso test
+    (`settings-page`, il ritorno a `fx-page`, il secondo click, `toHaveURL` dopo il link del toast). È verde da solo a
+    1 worker, 11/11.
+  - CAC-001, `goToTransactions`: prima `waitForSettled(transactions-page, 20 s)`, il budget delle sorelle, poi
+    `tx-table`. È verde da solo a 1 worker, 12/12.
+  > **⚠️ Fuori pista: ambiente.** Il primo giro di prova (R1) è caduto all'avvio: «Shared backend did not answer within
+  > 300s», mentre il server ricostruiva frontend e MkDocs dopo il treno 82, con load 31. La build MkDocs è rimasta a
+  > metà: `mkdocs_src/site` pesava 116 MB, senza `fr` né `es`. L'ho ricostruito a parte con `mkdocs build -f
+  > mkdocs_src/mkdocs.yml` non-strict: 41 s, 295 MB. Il rilancio di R1 ha dato il rosso atteso.
+- La stessa attesa da 10 s su `tx-table` c'è in altri 21 spec delle transazioni (22 attese), e in 13 punti della
+  galleria di M. Ho chiesto al coordinatore: (a) curarle in questo lotto, (b) V-30 nel backlog.
+- ✅ **V-27**, scrittura (`v27-login`):
+  - lo scan non ha trovato condizioni di STOP;
+  - `login()` chiude su `app-shell`, `welcome-shell` oppure `onboarding-bootstrap-blocked`, con 30 s. Se l'arrivo non
+    viene, il messaggio nomina la schermata a vista e il suo path;
+  - i commenti diventati falsi sono aggiornati, compreso `default-currency:264`.
+
+  In corsia, 6 giri a 1 worker.
+- ✅ **Decisione del coordinatore** (13/10, 03:15): **(a) approvata**. Le 22 attese di `tx-table` nei 21 spec delle
+  transazioni si curano in questo lotto, come CAC-001, scritte da `v28-budgets`. La prova è `front-transaction all` a 4
+  worker, dopo il via.
+  - Le 13 attese di `gallery.spec.ts` le gira lui a M.
+  - Il via per le prove a 4 worker e con coverage arriva verso le 03:45, a galleria finita.
+  - **Doc superate**: rientrano nella definizione di fatto di V-28.
+  - La formulazione della pagina devWiki la gira a W.
+- ✅ **Doc di V-28, skill e instructions**, mie:
+  - `SKILL.md` `:128`: il timeout passa da «15s per test» a 30 s per test, più i 3 s di `expect`. Verificato: 30 s nel
+    config dal febbraio 2026 (`809667083`). «15 s» non era un'altra soglia; `waitForSettled` ha 15 s di default, ma la
+    frase diceva «per test».
+  - `SKILL.md` §«JS/Svelte Coverage during E2E»: la pipeline istanbul vera, cioè build strumentata (`COVERAGE_INSTRUMENT`,
+    sentinella), `window.__coverage__`, un JSON per test in `coverage-js/e2e-raw/`, il budget del fixture (V-28),
+    `js-coverage-report.js` e i tre report. Tolti V8 e monocart.
+  - Lo stesso file, ancora: `:106-112`, i batch da 8 restano come limite alla vita del worker, mentre l'accumulo V8 non
+    c'è più; `:281`, il wipe giustificato dalle mappe istanbul, non dagli offset V8; `:297`, `coverage_js.py` legge il
+    JSON di `js-coverage-report.js`.
+  - `frontend-testing.instructions.md:100`: le attese si dividono in strette (`expect`, 3 s) e budget da navigazione;
+    il test ha 30 s.
+  - Restano V8 e monocart nei commenti del runner, `_coverage.py:153`, `:163`, `:222`, e nella docstring di
+    `scripts/coverage_js.py:7`. È codice condiviso: segnalato, non toccato.
+- **Doc MkDocs di V-28** (`v28-docs`, docs-writer): `coverage-model.md` §«How JS coverage is collected» e
+  `index.md:64-74`. Non hanno traduzioni, quindi non serve lo stamp. Verifica con `mkdocs build` strict e
+  `check-links`.
+- **Le 22 attese di `tx-table`** (`v28-budgets`): in scrittura.
+- ✅ **Le attese di `tx-table`** (`v28-budgets`, 13/10): **26 siti in 25 file**.
+  - Sono i 22 approvati, più 5 trovati col nuovo grep, a 10 s tramite `UI_TIMEOUT`: `tx-import-broker-mismatch:210`,
+    `tx-bulk-diagnostics:79`, `tx-bulk-import-handoff:157`, `tx-import-degiro:305`, `tx-import-scalable-transfers:317`.
+  - La forma è la stessa ovunque: prima `waitForSettled(transactions-page, 20 s)`, poi `tx-table` o la gara con lo stato
+    vuoto, a 20 s. TT20 (refresh) e CAC-012 (reload) sono navigazioni anche loro, quindi hanno lo stesso gate.
+  - Cambi di comportamento:
+    - il gate di `transactions-modals` non ingoia più il timeout;
+    - `tx-wac-mode` ora aspetta il primo caricamento;
+    - in CAC-001 `tx-table` ha anche lui il budget da navigazione.
+  - prettier e tsc puliti, con solo i 2 errori già presenti; `git diff --check` pulito. Non è stato eseguito: la prova è
+    `front-transaction all` a 4 worker, dopo il via.
+  - **Da guardare**: `transactions-table`, `tx-wac` e `tx-wac-mode` hanno un timeout di test di 20 s, `tx-wac-fx` di
+    25 s, cioè non più del gate.
+  - **Domanda al coordinatore**: 12 siti con la stessa forma ma a 8 s, in 11 file. (a) curarli qui, (b) V-30.
+- ✅ **Decisioni del coordinatore** (13/10, 03:25):
+  - (a) approvata anche per i 12 siti a 8 s, in 11 file, con lo stesso schema e la stessa prova;
+  - i quattro spec col timeout di test non più lungo del gate (`transactions-table`, `tx-wac` e `tx-wac-mode` a 20 s,
+    `tx-wac-fx` a 25 s) si correggono in questo lotto, anche senza un rosso: è aritmetica. Il budget del test diventa
+    gate + il resto, con margine (45–60 s), con un commento. Se il valore basso era voluto: STOP e domanda.
+
+  Scrive `v28-budgets`.
+- ✅ **V-27 verificata a 1 worker** (`v27-login`, 13/10, `--fresh-run`, loadavg 16–22): **6 giri, 102/102 verdi**, DB al
+  seed dopo ognuno, nessun traceback.
+
+  | chiave | esito |
+  |---|---|
+  | `front-utility auth`, con `app-start-auth` | 29/29 |
+  | `front-ai-export memory` | 4/4 |
+  | `front-broker detail` | 37/37 |
+  | `front-portfolio default-currency` | 6/6 |
+  | `front-transaction tx-broker-icon-hydration` | 2/2 |
+  | `front-utility onboarding-guides`, desktop e mobile | 24/24 |
+
+  - Tutti e tre gli stati d'arrivo sono stati esercitati:
+    - `onboarding-bootstrap-blocked`, in `auth.spec:414`, che passa in 1,0 s;
+    - `welcome-shell`, con 5 utenti usa-e-getta e le guide;
+    - `app-shell`, negli altri test.
+  - **Lo scan** di 273 chiamate: nessun test trattiene il bootstrap attorno a `login()`. Le route installate prima
+    rispondono subito (onboarding, impostazioni) oppure bloccano solo le altre origini.
+  - **Ancora aperto**: `auth.spec` ha 60 s per test, e il caso peggiore di `login()` ora vale 70 s (10+10+20+30). Lo si
+    corregge in questo lotto, con la stessa aritmetica decisa dal coordinatore, insieme al controllo di `app-start-auth`.
+  - **Per M**: il commento di `gallery.spec.ts:1456` («subito dopo `login()` il burger spesso non è ancora visibile») è
+    superato. Il codice resta corretto.
+- ✅ **I 12 siti a 8 s** (`v28-budgets`, 13/10): stesso schema, gate da 20 s poi `tx-table` a 20 s.
+  - `tx-split-promote:225`, un reload col filtro nell'URL, ha lo stesso gate.
+  - `tx-bulk-operations` ora aspetta anche il primo caricamento, che prima non aspettava.
+  - In `frontend/e2e/transactions` non resta nessuna attesa breve di `tx-table` subito dopo una navigazione.
+- ✅ **I quattro budget di test** (`v28-budgets`): `transactions-table`, `tx-wac` e `tx-wac-mode` passano da 20 a 45 s,
+  `tx-wac-fx` da 25 a 60 s, con un commento.
+  - Il blame: ogni valore è stato scritto alla nascita dello spec e mai toccato (`4ce8e7f17`, `7526fd448`,
+    `4e5e500c0`).
+  - Solo `transactions-table` dava una ragione («read-view tests, no complex modal flows»). Descrive la durata attesa,
+    non uno scopo diverso, quindi il cambio è legittimo, e il commento è stato sostituito.
+  - Le durate peggiori di questi spec nella run di R, sotto carico, erano 13,7–15,7 s.
+- **La stessa aritmetica negli spec appena toccati**: anche `tx-broker-access` e `tx-tooltips` (15 s), `tx-paired-edit`
+  (20 s) e `tx-clone`, `tx-delete` e `tx-picker-pagination` (25 s) non contengono il gate da 20 s introdotto da questo
+  lotto. Li porto a 45 s, perché è la regola del coordinatore applicata alle conseguenze del lotto stesso; il blame si
+  controlla prima.
+  - Il gruppo a 30 s (default o esplicito) lascia circa 10 s a login e test: resta com'è, sotto osservazione nella
+    prova a 4 worker.
+- ✅ **I sei budget di test** (`v28-budgets`): `tx-broker-access` e `tx-tooltips` passano da 15 a 45 s, `tx-paired-edit`
+  da 20 a 45 s, `tx-clone`, `tx-delete` e `tx-picker-pagination` da 25 a 45 s. I test già a 60 s restano dove sono.
+  - Il blame: valori scritti alla nascita degli spec, a maggio (`aacce7952`, `a6b3a8bb2`, `56a0383b5`), senza
+    commento.
+  - prettier, tsc (solo i 2 errori già presenti) e `git diff --check` puliti.
+  - Sotto osservazione nella prova a 4 worker, il gruppo a 30 s: `tx-bulk-operations`, `tx-bulk-promote-exec`,
+    `tx-bulk-suggest-ux`, `tx-fx-completeness`, `tx-fx-implied-rate`, `tx-import-upload`, `tx-split-promote`, più quelli
+    al default (`transactions-modals`, `tx-commit-all-types`, `tx-crud-full`, `tx-wac-unit-toggle`, gli import senza
+    timeout proprio) e `fx-add-pair`.
+- ✅ **Doc MkDocs di V-28** (`v28-docs`): `coverage-model.md` §«How JS coverage is collected» riscritta sulla pipeline
+  istanbul.
+  - Ci sono un diagramma, la tabella dei file, il fixture col budget da 120 s, vitest con `@vitest/coverage-istanbul`
+    e quattro dettagli verificati.
+  - In `index.md` l'avviso di `--cov-clean-frontend` spiega che i contatori appartengono alla build che li ha prodotti.
+  - `mkdocs build` strict e `check-links` sono puliti, e non ci sono traduzioni né timestamp.
+  - In corso: l'ultima riga di «Cleaning» nella stessa pagina.
+  > **Precisazione del docs-writer**: «already in source coordinates» è impreciso. `vite-plugin-istanbul` gira dopo
+  > le trasformazioni, e ogni voce porta la mappa verso la sorgente, che `js-coverage-report.js` segue. Ho corretto la
+  > skill: «keyed by source file». Il commento del fixture lo corregge `v28-budgets`, insieme a `INSTRUMENTED_BUILD`
+  > (`:27-35`), che dice ancora «V8 is not started», mentre un percorso V8 non c'è più.
+- **V-30** nel backlog: il fixture fonde le pagine di un test con `Object.assign`, quindi può sottocontare. È stato
+  letto nel codice, è fuori dal mandato, e va dopo la 1.2.
+- **Superati, fuori perimetro, da segnalare al coordinatore**:
+  - commenti e help del runner: `_cli.py:437`, `:482` e `:866-869`, `_coverage.py:151-165`, `_consolidate.py:204-211`
+    e `:259`;
+  - `vitest.config.ts:47-48`, che cita `scripts/unit-report.js`, inesistente;
+  - `js-coverage-report.js:35`, che dice «17k lines» (ora sono 23 002);
+  - `coverage_analysis.py` e `src/__tests__/component.ts:17`;
+  - `runner_architecture.md:433-453`, `:716` e `:732`, di M;
+  - la devWiki `problems/svelte-template-branches-not-instrumented.md`, contraddetta da `2e104b919`.
+- ✅ **Le ultime correzioni di commento della definizione di fatto di V-28**:
+  - `coverage-model.md` «Cleaning»: il wipe è giustificato dai contatori legati alla build, con un link alla sezione.
+    `mkdocs build` strict e `check-links` sono puliti.
+  - `playwright.ts`: il commento di `INSTRUMENTED_BUILD` (`:27-38`) ora dice quello che fa il codice. La sentinella
+    decide solo come leggere una raccolta vuota; un percorso V8 non c'è più.
+  - Nello stesso file, i commenti del teardown dicono «keyed by source file», e il «then ran» dei batch è corretto. Nel
+    codice cambiano solo `JS_COVERAGE_TIMEOUT_MS` e `timeout:`.
+- **La sequenza delle prove dopo il via** (6175, una alla volta, `--fresh-run`, DB controllato dopo ciascuna):
+  1. `--workers 4`, ognuna delle 8 categorie front per intero: `front-transaction all`, poi `front-utility`,
+     `front-portfolio`, `front-user`, `front-fx`, `front-asset`, `front-broker`, `front-ai-export`. La galleria è
+     esclusa dai test (`_inventory.py:55`).
+  2. `--coverage js --workers 4 front-fx all`, per V-28 sotto carico con la build strumentata. Va per ultima, così il
+     frontend si ricostruisce una volta sola.
+  3. `check-orphans`.
+- ✅ **I budget di V-27** (`v27-login`): `auth.spec` passa da 60 a 120 s, `app-start-auth` da 60 a 150 s e
+  `ai-export-contract` da 180 a 240 s, ciascuno col commento aggiornato.
+  - La regola: `login()` nel caso peggiore (70 s), più la scadenza più lunga fra le attese del test, più il resto a
+    passo sotto carico.
+  - Il blame: nessun valore era basso per una ragione diversa. Due header dichiarano già «a red must end on its own
+    assertion» (`d60937c08`, `93fd33702`); il terzo era aritmetica fatta prima dell'attesa d'arrivo (`e8d8f9216`).
+  - **Non cambiati, con ragione**: 76 file hanno un budget sotto il caso peggiore di `login()`.
+    - V-27 non allunga l'attesa: la sposta dentro `login()` dai passi successivi, che prima la pagavano allo stesso
+      modo.
+    - Il caso peggiore è una somma di massimi, non un tempo atteso.
+    - Lo stesso vale per `toolbar-width-sweep:339` di K: prima le sue due attese da 30 s seguivano `login()`. È solo
+      un'informazione per il coordinatore.
+- ✅ **Statici su tutto il delta**, 52 file: prettier pulito, `git diff --check` pulito; `tsc -p tsconfig.e2e.json` dà
+  solo i 2 errori già presenti.
+- ✅ **Le 8 categorie front a 4 worker** (13/10, dopo il via delle 03:38; 6175, `--fresh-run`, loadavg 10–28). Tutte
+  verdi:
+
+  | categoria | E2E | Vitest | DB |
+  |---|---|---|---|
+  | `front-transaction` | 365 (34 + 331), più 32 skip voluti | 887 | seed |
+  | `front-utility` | 322 (92 + 230) | 7453 | seed |
+  | `front-portfolio` | 182 (18 + 164) | 1233 | seed |
+  | `front-user` | 20 | 57 | seed |
+  | `front-fx` | 103 | 138 | **non al seed**: vedi sotto |
+  | `front-asset` | 145 | 903 | **non al seed**: vedi sotto |
+  | `front-broker` | 53 (2 + 51) | 57 | seed |
+  | `front-ai-export` | 18 | 433 | seed |
+
+  «Shared backend ignored SIGTERM for 5s», a fine di alcune invocazioni, è ambientale: la porta è sempre libera dopo.
+  > **⚠️ Fuori pista: `front-fx`.** Ci sono due scritture vecchie, del 30-31/08, fuori da questo lotto:
+  > - **`fx-destructive`** dichiara di usare coppie fuori dal seed, ma **EUR/PLN ed EUR/SEK ci sono dal 13/03**
+  >   (`a3a9ead52`), come gambe ECB delle catene GBP/PLN e SEK/USD. Lo spec le cancella, coi loro 2 × 276 tassi, e la
+  >   rete di ripopolamento è spenta sopra 1 worker.
+  > - **`fx-sync-mock`** dice «writes nothing», ma lascia 372 tassi MOCKFX su EUR/ILS, MYR, PHP e TWD. Le route sono
+  >   al seed.
+  >
+  > Decisione del coordinatore: si cura `fx-destructive` in questo lotto (classe di V-25), con coppie proprie,
+  > verificate in `beforeAll`, e il rosso prima della cura; lo scrive `v31-fx`. Di `fx-sync-mock` si corregge solo
+  > l'header, e la pulizia va in **V-31**, dopo la 1.2.
+  > **⚠️ Fuori pista: `front-asset`.** Ci sono 4 asset globali in più, senza transazioni: tre di `asset-classification`
+  > («E2E Geo/Sector/Clear Test») e uno del Test 4 di `asset-modal` («E2E Test Asset»). Nessuno li cancella.
+  > Decisione del coordinatore: (a), si curano in questo lotto, con gli id registrati e cancellati in `afterEach`.
+  > Anche il Test 5 di `asset-modal`, che apre `.first()` per posizione, punta ora a un asset noto o proprio. Lo scrive
+  > `v32-asset`.
+- **Il confine del lotto**, deciso dal coordinatore: si chiude con Broker, AI Export e la coverage su FX. Altri casi
+  della stessa classe vanno in backlog come V-3x; se fanno un rosso o cancellano righe del seed: STOP e domanda.
+- **Restano**:
+  - i giri di `v31-fx` (il rosso, poi la cura);
+  - i giri di `v32-asset`, poi `front-asset all` a 4 worker;
+  - `--coverage js --workers 4 front-fx all`, che prova V-28 sotto carico e la cura di `fx-destructive`;
+  - `check-orphans` e il checkpoint.
+- ✅ **`fx-destructive`** (`v31-fx`, 13/10).
+  - **Il rosso, R1**, sullo spec originale, `--fresh-run --workers 4 front-fx fx-destructive`: 10/10 verdi, ma EUR/PLN
+    ed EUR/SEK passano da 276 tassi a 0 (`fx_rates` 4140 → 3588); le route restano uguali al seed. Il danno nasce dal
+    «clean slate» di `beforeAll`, che cancellava i tassi di ogni coppia che stava per usare, comprese quelle del seed.
+    `dbcheck2` non lo vedeva, perché salta `fx_rates`; lo vede `/tmp/libreFolio_v_fxcheck.py`, che confronta col seed
+    i conteggi per (base, quote, fonte) e le route.
+  - **La cura**: le valute sono NZD, SGD, MXN, ZAR, HKD, **PEN** (era SEK), **QAR** e **UYU** (erano NOK e PLN).
+    - Sono verificate libere: nessuna compare nelle colonne di testo delle 15 tabelle del seed, in
+      `populate_mock_data.py`, negli altri spec, negli script, nei report BRIM di esempio o nelle liste riservate;
+      tutte vengono dopo EUR.
+    - `beforeAll` verifica in sola lettura che ogni coppia non abbia route né tassi; se ne trova, fallisce e non tocca
+      niente.
+    - Le coppie si registrano in `created` prima di crearle, e `afterAll` cancella solo quelle.
+    - La lettura dei tassi fallisce sulle risposte d'errore.
+    - L'header è riscritto.
+  - **Con la cura, R2**: 10/10, FX SEED OK (15 coppie, 4140 righe, 24 route uguali al seed).
+  - `fx-sync-mock`: corretto solo l'header (cosa scrive, perché è tollerato, V-31).
+  - In coda la prova della guardia: SEK temporaneo, deve diventare rosso in `beforeAll` senza cancellare niente.
+- **Asset** (`v32-asset`): la scrittura è fatta. Gli id si prendono dalla risposta del `POST`, e `afterEach` cancella
+  per id; il Test 5 crea un asset suo e lo apre per id; via `assets-count-badge`. I giri a 1 worker sono in corsia.
+- ✅ **Asset** (`v32-asset`, 13/10), giri a 1 worker: `asset-classification` 4/4 e `asset-modal` 17/17, SEED OK dopo
+  ciascuno, loadavg 13–25.
+  - Gli helper sono locali agli spec: `assets-helpers.ts` lo importa anche la galleria.
+  - La pulizia non lascia la pagina: il teardown di `jsCoverage` la legge dopo `afterEach`.
+  - **Solo segnalati**, per il confine del lotto, e messi nel backlog come **V-32**:
+    - il Test 9 di `asset-modal` (`:247`) apre ancora la prima card per posizione, lo stesso difetto del Test 5;
+    - `navigateToAssetByName` (`assets-helpers.ts:52/57`) ripiega sulla prima card o riga;
+    - `asset-detail:292` e lo Scenario 3 di `asset-event-delete` (`:291`) scelgono il primo elemento, chiusi da sonde;
+    - le pulizie che non verificano l'esito: `asset-modal` Bug K, Param, Benchmark e Type Tree; `asset-list` `:604`,
+      `:846` e `:1007`; `dropFixture` di `asset-merge`; le pulizie degli eventi;
+    - **il rischio latente**: lo Scenario 2 di `asset-event-delete` (~`:220-270`) segna da cancellare ogni evento di
+      Apple nella finestra di 3 mesi e salva. Oggi non cancella niente solo perché gli eventi del seed in quella
+      finestra sono collegati a transazioni. Non c'è prova di righe cancellate: `asset_events` era 11 nel controllo
+      del DB, quindi va in backlog e non è uno STOP.
+- ✅ **La guardia di `fx-destructive`** (`v31-fx`): con la coppia del single delete puntata su SEK in via temporanea,
+  `beforeAll` è rosso e nomina `EUR-SEK: 0 route(s), 276 rate(s)`. Un test fallisce, 9 non partono, niente viene
+  creato né cancellato, e risulta FX SEED OK. Il file è stato ripristinato: sha256 `90f8e76b…17ae`, prima e dopo.
+- ✅ **`front-asset all` a 4 worker, dopo la cura**: 145 E2E e 903 Vitest, **SEED OK**; gli asset sono tornati 17.
+- ✅ **V-28 con coverage**: `--fresh-run --coverage js --workers 4 front-fx all` è verde, 103 E2E (76 + 27) e 138
+  Vitest, loadavg 17–22, con la build strumentata ricostruita.
+  - Nessun «Tearing down» né timeout del fixture. Il test più lungo dura 9,6 s: la raccolta ora ha il suo slot.
+  - 97 file raw, 1,8 GB, circa 18 MB per test; i report `e2e/`, `unit-combined/` e `combined/` sono generati.
+  - FX: tutte le coppie e le route sono al seed. EUR/PLN ed EUR/SEK sono a 276, e le coppie usa-e-getta non lasciano
+    traccia. L'unica differenza sono i 372 tassi MOCKFX tollerati di `fx-sync-mock` (V-31).
+- ✅ **`check-orphans`**: 117 E2E, 357 unit e 262 backend, tutti raggiungibili. La porta 6175 è libera.
+- ✅ **Statici sul delta finale**, 56 file, tutti modificati e nessuno nuovo:
+  - prettier pulito; `git diff --check` pulito; `tsc -p tsconfig.e2e.json` dà solo i 2 errori già presenti;
+  - `coverage-js/` è ignorato da git.
+- ✅ **Il backlog**:
+  - V-27 e V-28 chiuse;
+  - V-33 aggiunta già chiusa: i budget dopo una navigazione e le 38 attese di `tx-table` in 36 spec;
+  - V-30, V-31 e V-32 aperte, dopo la 1.2.
+- **Checkpoint**: pronto, in 6 commit proposti, separati per argomento.
+- ✅ **La nota di M, via il coordinatore** (13/10, 05:01): `cleanup()` di `trackTransactionWrites`
+  (`fixtures/db-cleanup.ts`) controlla solo `res.ok()`, e una delete rifiutata dentro una risposta 200 passerebbe in
+  silenzio.
+  - Verificato: nel lotto non ha nascosto niente. I 6 spec che lo usano hanno avuto il DB al seed dopo ogni giro (76
+    transazioni, id massimo 76), anche in `front-transaction all` a 4 worker.
+  - Messa nel backlog come **V-34**, dopo la 1.2.
+  - Nel backlog V-33 è stata spostata nell'ordine numerico, tra V-32 e V-34; il contenuto è invariato.

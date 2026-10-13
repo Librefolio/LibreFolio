@@ -15,10 +15,69 @@ import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {uniqueSuffix} from '../fixtures/unique';
-import {goToAssetsPage, openCreateAssetModal} from './assets-helpers';
+import {API_BASE, goToAssetsPage, openCreateAssetModal} from './assets-helpers';
 
-/** Helper: create asset, return to detail page, open edit modal */
-async function createAssetAndOpenEdit(page: import('@playwright/test').Page, name: string) {
+/**
+ * Every asset a test saved, by the unique name it gave it: its id once the create response has
+ * named it, `null` until then — a save whose answer never came back is still findable by name.
+ */
+type OwnedAssets = Map<string, number | null>;
+type HttpResponse = {status(): number; json(): Promise<unknown>};
+type CreateBody = {results?: Array<{asset_id?: number | null; display_name?: string; success?: boolean; message?: string | null}>};
+type DeleteBody = {results?: Array<{asset_id: number; success: boolean; message?: string | null}>};
+
+/**
+ * Click Save on the open create modal and record the id of the asset it creates, read from the
+ * POST /assets response — the moment the asset exists, before anything that follows can fail.
+ */
+async function saveAndRecordCreated(page: Page, owned: OwnedAssets | undefined, name: string, save: () => Promise<void>): Promise<number> {
+    owned?.set(name, null);
+    const [response] = await Promise.all([page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === `${API_BASE}/assets`, {timeout: 15_000}), save()]);
+    return recordCreated(response, owned, name);
+}
+
+/** Read a POST /assets answer: record the id it gives `name`, then require that the create succeeded. */
+async function recordCreated(response: HttpResponse, owned: OwnedAssets | undefined, name: string): Promise<number> {
+    const body = (await response.json().catch(() => null)) as CreateBody | null;
+    const result = body?.results?.find((item) => item.display_name === name);
+    // Recorded before any assertion can throw: whatever was created gets deleted.
+    if (typeof result?.asset_id === 'number') owned?.set(name, result.asset_id);
+    expect(response.status(), `POST ${API_BASE}/assets creates "${name}": ${JSON.stringify(body)}`).toBe(201);
+    if (!result?.success || typeof result.asset_id !== 'number') throw new Error(`"${name}" was not created: ${JSON.stringify(body)}`);
+    return result.asset_id;
+}
+
+/** The ids of the assets carrying exactly `name` — a unique name, so only ever the test's own. */
+async function assetIdsNamed(page: Page, name: string): Promise<number[]> {
+    const response = await page.request.get(`${API_BASE}/assets/query?search=${encodeURIComponent(name)}`);
+    if (!response.ok()) throw new Error(`asset query answered ${response.status()}: ${await response.text()}`);
+    return ((await response.json()) as Array<{id: number; display_name: string}>).filter((asset) => asset.display_name === name).map((asset) => asset.id);
+}
+
+/**
+ * Delete what the test created, by id: the id each create response named, or — for a save whose
+ * answer never arrived — the asset found by the unique name it was given. Every asset is tried
+ * whatever happened to the previous one, and every failure is named.
+ */
+async function deleteOwnedAssets(page: Page, owned: OwnedAssets): Promise<void> {
+    const failures: string[] = [];
+    for (const [name, recordedId] of owned) {
+        try {
+            const ids = recordedId !== null ? [recordedId] : await assetIdsNamed(page, name);
+            for (const id of ids) {
+                const response = await page.request.delete(`${API_BASE}/assets?asset_ids=${id}`);
+                const body = (await response.json().catch(() => null)) as DeleteBody | null;
+                if (!response.ok() || body?.results?.find((result) => result.asset_id === id)?.success !== true) failures.push(`asset ${id} "${name}": HTTP ${response.status()} ${JSON.stringify(body)}`);
+            }
+        } catch (error) {
+            failures.push(`"${name}": ${String(error)}`);
+        }
+    }
+    expect(failures, 'cleanup deletes every asset this test created').toEqual([]);
+}
+
+/** Helper: create asset, return to detail page, open edit modal. `owned` records the asset the moment it exists. */
+async function createAssetAndOpenEdit(page: import('@playwright/test').Page, name: string, owned?: OwnedAssets) {
     await goToAssetsPage(page);
     await openCreateAssetModal(page);
 
@@ -26,10 +85,10 @@ async function createAssetAndOpenEdit(page: import('@playwright/test').Page, nam
     const nameInput = page.getByTestId('asset-modal-display-name');
     await nameInput.fill(name);
 
-    // Save
+    // Save — the create response names the new asset's id, recorded for the afterEach
     const saveBtn = page.getByTestId('asset-modal-save');
     await expect(saveBtn).toBeEnabled({timeout: 5000});
-    await saveBtn.click();
+    await saveAndRecordCreated(page, owned, name, () => saveBtn.click());
     await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
 
     // Navigate to the new asset via search
@@ -66,16 +125,27 @@ async function expandMoreInfo(page: import('@playwright/test').Page) {
 }
 
 test.describe('Asset Classification Round-Trip', () => {
+    // Each test creates one asset through the modal: its id is recorded the moment the create
+    // response names it, and the afterEach deletes exactly that asset, by id.
+    let owned: OwnedAssets = new Map();
+
     test.beforeEach(async ({page}) => {
+        owned = new Map();
         await login(page, TEST_USER);
+    });
+
+    // afterEach, not `finally`: it runs after a timeout too, while the page can still reach the
+    // API, and an error of its own is reported beside the test's instead of replacing it.
+    test.afterEach(async ({page}) => {
+        await deleteOwnedAssets(page, owned);
     });
 
     // ========================================================================
     // Test 1: Set geographic distribution → save → reopen → present
     // ========================================================================
     test('geo distribution persists after save and reopen', async ({page}) => {
-        const assetName = `E2E Geo Test ${Date.now()}`;
-        await createAssetAndOpenEdit(page, assetName);
+        const assetName = `E2E Geo Test ${uniqueSuffix()}`;
+        await createAssetAndOpenEdit(page, assetName, owned);
 
         // Expand More Info
         await expandMoreInfo(page);
@@ -115,8 +185,8 @@ test.describe('Asset Classification Round-Trip', () => {
     // Test 2: Set sector distribution → save → reopen → present
     // ========================================================================
     test('sector distribution persists after save and reopen', async ({page}) => {
-        const assetName = `E2E Sector Test ${Date.now()}`;
-        await createAssetAndOpenEdit(page, assetName);
+        const assetName = `E2E Sector Test ${uniqueSuffix()}`;
+        await createAssetAndOpenEdit(page, assetName, owned);
 
         // Expand More Info
         await expandMoreInfo(page);
@@ -151,8 +221,8 @@ test.describe('Asset Classification Round-Trip', () => {
     // Test 3: Clear distribution → save → reopen → empty
     // ========================================================================
     test('clearing distribution persists after save', async ({page}) => {
-        const assetName = `E2E Clear Test ${Date.now()}`;
-        await createAssetAndOpenEdit(page, assetName);
+        const assetName = `E2E Clear Test ${uniqueSuffix()}`;
+        await createAssetAndOpenEdit(page, assetName, owned);
 
         // Expand More Info
         await expandMoreInfo(page);

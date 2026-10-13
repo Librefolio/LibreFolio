@@ -41,8 +41,8 @@ const ASSET_NAME = 'Apple';
 
 async function goToTransactions(page: Page, query = '?page_size=200') {
     await navigateTo(page, `/transactions${query}`);
-    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
     await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 20_000})]).catch(() => {});
 }
 
 async function openCreateFlow(page: Page) {
