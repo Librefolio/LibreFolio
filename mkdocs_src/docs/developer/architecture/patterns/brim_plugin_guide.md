@@ -1510,7 +1510,7 @@ icon is the same for every broker (`FALLBACK_PLUGIN_PRIORITY_LIMIT` in
 `frontend/src/lib/utils/brim/pluginKind.ts`, used by `brokerIconChain.svelte.ts` and
 `getBrokerIconCandidates`).
 
-Three failure modes to check for:
+Two failure modes to check for:
 
 - **Cloudflare / bot block** — the domain returns `403`/`404` to non-browser requests but the
   icon still loads in a real browser. `curl -sI` is *not* conclusive here; if it renders in the
@@ -1533,23 +1533,7 @@ Three failure modes to check for:
     When you place that proxy URL in an HTML `<img src="…">` inside the docs, escape the
     ampersand as `&amp;sz=64`; the raw `&` is fine in the Python `icon_url` string.
 
-- **Bot check served to browsers** — the domain answers a browser with a bot check, a small HTML
-  page with status `200`, instead of the icon: Chromium refuses it as an image
-  (`net::ERR_BLOCKED_BY_ORB`) and the broker falls back to the generic icon (the Schwab case,
-  since 2026-10-13). `curl` is *not* conclusive: it may still get the icon. The cure, for any
-  site that refuses browsers, is to bundle the icon, as Scalable's is:
-
-    1. put the favicon, unchanged, in `scripts/assets/brokers/<broker>.png`;
-    2. add the broker to `SINGLE_PLUGIN` in `scripts/compose_broker_icons.py` (or to `ACCOUNTS`,
-       with an account badge, when the broker has one plugin per account) and run it: it writes
-       the plugin's 192×192 icon in `brim_providers/static/<broker>/` and the logo for the guides
-       in `frontend/static/icons/brokers/` and `mkdocs_src/docs/static/icons/brokers/`;
-    3. return `self.generate_static_url("<broker>/<file>.png")` from `icon_url`, served by
-       LibreFolio itself: `"schwab/broker.png"` for `broker_schwab`;
-    4. point the docs at `static/icons/brokers/<broker>.png` instead of the favicon, as the
-       Scalable rows and cards do.
-
-If no remote icon works, bundle one as above, or ship `icon_url = None` and mark the broker in
+If no working icon exists, ship `icon_url = None` and mark the broker in
 [Providers List](../../backend/brim/providers_list.md) for a maintainer to fill in.
 
 ## 📚 Register the user-facing docs

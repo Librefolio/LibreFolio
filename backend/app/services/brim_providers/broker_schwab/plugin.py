@@ -192,8 +192,7 @@ class SchwabBrokerProvider(BRIMProvider):
 
     @property
     def icon_url(self) -> str:
-        """Schwab's logo, bundled by ``scripts/compose_broker_icons.py``: since 2026-10-13 www.schwab.com answers browsers with a bot check, not its favicon."""
-        return self.generate_static_url("schwab/broker.png")
+        return "https://www.schwab.com/favicon.ico"
 
     def can_parse(self, file_path: Path) -> bool:
         """Detect Schwab format by checking for distinctive headers."""

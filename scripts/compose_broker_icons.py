@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Compose the icons of the broker import plugins: the broker's logo, with an account badge when the broker has two.
+Compose the icons of the broker import plugins: the broker's logo + an account badge.
 
 A broker with two accounts gets one LibreFolio broker per account, and one BRIM plugin each:
 Scalable Capital's broker account (``broker_scalable``) and its overnight account
@@ -9,10 +9,6 @@ with a badge showing the account's icon in the LibreFolio exporter, the browser 
 exports both accounts. As on the exporter's account tiles, the glyph is white on the account's
 colour: ``chart-line-fill`` on blue for the broker account, ``piggy-bank-fill`` on orange for the
 overnight account.
-
-A broker with one plugin needs no badge: its logo, untouched on the same canvas, is the plugin's
-icon. Charles Schwab (``broker_schwab``) is one: since 2026-10-13 its site answers a browser with a
-bot check instead of the favicon the plugin linked, and Chromium blocks it (``ERR_BLOCKED_BY_ORB``).
 
 The app crops broker icons to a circle (``BrokerIcon``), which would cut a badge drawn in the
 corner. So the badge sits on the bottom-right diagonal, just inside that circle.
@@ -25,11 +21,10 @@ needs Pillow only. After changing an SVG, rerender its mask:
 Outputs:
 - ``backend/app/services/brim_providers/static/<broker>/<account>.png``: the plugin's
   ``icon_url`` (``BRIMProvider.generate_static_url``), served by
-  ``/api/v1/uploads/plugin/brim/``; for a broker with one plugin, the logo itself. A broker
-  without an icon of its own shows the icon of its default import plugin, so choosing the plugin
-  is enough;
+  ``/api/v1/uploads/plugin/brim/``. A broker without an icon of its own shows the icon of its
+  default import plugin, so choosing the plugin is enough;
 - ``frontend/static/icons/brokers/<broker>.png`` and ``<broker>-<account>.png``: the logo and the
-  composites, for the user guide; a broker with one plugin has the logo only. ``dev.py mkdocs build`` copies ``frontend/static/icons/`` over
+  composites, for the user guide. ``dev.py mkdocs build`` copies ``frontend/static/icons/`` over
   ``mkdocs_src/docs/static/icons/``, so they are written to both, like the asset-type composites.
 
 The logos live in ``scripts/assets/brokers/``, so building never depends on the network. They
@@ -73,11 +68,6 @@ DEPOSIT_ORANGE = (232, 120, 30, 255)  # #e8781e, the exporter's overnight tile
 ACCOUNTS = {
     "scalable": {"broker": ("chart-line-fill", BROKER_BLUE), "deposit": ("piggy-bank-fill", DEPOSIT_ORANGE)},
 }
-# broker logo (scripts/assets/brokers/<broker>.png) → its only plugin's icon file, the logo without a badge
-SINGLE_PLUGIN = {
-    # The 256 px PNG frame of https://www.schwab.com/themes/custom/sch_beacon_retail/favicons/favicon.ico, unchanged.
-    "schwab": "broker",
-}
 
 
 def logo(broker: str) -> Image.Image:
@@ -115,11 +105,6 @@ def plan() -> dict[Path, Image.Image]:
             icons[PLUGIN_STATIC_DIR / broker / f"{account}.png"] = image
             for docs_dir in DOCS_DIRS:
                 icons[docs_dir / f"{broker}-{account}.png"] = image
-    for broker, account in SINGLE_PLUGIN.items():
-        image = logo(broker)
-        icons[PLUGIN_STATIC_DIR / broker / f"{account}.png"] = image
-        for docs_dir in DOCS_DIRS:
-            icons[docs_dir / f"{broker}.png"] = image
     return icons
 
 
