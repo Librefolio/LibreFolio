@@ -4796,7 +4796,7 @@
     }
   },
   "user/transactions/import/schwab.en.md": {
-    "md5": "fc153df97b1c9f6cce5505418d1b17b5",
+    "md5": "c3f49a9c4ad51259f6e6ecc050e8004f",
     "langs_done": [
       "es",
       "fr",
@@ -4816,7 +4816,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 96.7,
-        "stamped_at": "2026-09-04T15:31:22.757140+00:00",
+        "stamped_at": "2026-10-13T09:25:45.212240+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -4829,7 +4829,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 122.6,
-        "stamped_at": "2026-09-04T15:31:22.757140+00:00",
+        "stamped_at": "2026-10-13T09:25:45.212240+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -4842,7 +4842,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 83.4,
-        "stamped_at": "2026-09-04T15:31:22.757140+00:00",
+        "stamped_at": "2026-10-13T09:25:45.212240+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -5332,7 +5332,7 @@
     }
   },
   "user/transactions/import/index.en.md": {
-    "md5": "34fd2e9e75d72373adb7cd16e492350f",
+    "md5": "b15d9df39487eca0d06df4df45d1deb1",
     "langs_done": [
       "es",
       "fr",
@@ -5352,7 +5352,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 184.8,
-        "stamped_at": "2026-10-12T10:53:12.220391+00:00",
+        "stamped_at": "2026-10-13T09:25:40.349797+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5365,7 +5365,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 142.0,
-        "stamped_at": "2026-10-12T10:53:12.220391+00:00",
+        "stamped_at": "2026-10-13T09:25:40.349797+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5378,7 +5378,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 126.6,
-        "stamped_at": "2026-10-12T10:53:12.220391+00:00",
+        "stamped_at": "2026-10-13T09:25:40.349797+00:00",
         "stamped_by": "translate-stamp"
       }
     }
