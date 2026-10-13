@@ -725,7 +725,10 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   Restano la sezione e i titoli degli scatti di `user/dashboard/positions.*.md` e `user/brokers/index.*.md`, le pagine
   della galleria («Holdings and Performance») e due pagine developer. Dettagli: [journal del giro
   12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «26.2».
-- **M-28 · Lo spagnolo chiama i tassi di cambio sia «tasas» sia «tipos de cambio»** — basso; M (lotto 36), 13/10.
+- ✅ **M-28 · Lo spagnolo chiama i tassi di cambio sia «tasas» sia «tipos de cambio»** — chiusa nella 1.2, M (lotto 37,
+  13/10): 56 valori ora dicono *tipo(s) de cambio*, gli 8 che non sono un cambio tengono *tasa*; larghezze verificate
+  (`toolbar-width-sweep` 15/15, sonda a 360 px). Dettagli: [journal del giro
+  12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «28.2». Era: basso; M (lotto 36), 13/10.
   Il glossario dice *tipo de cambio*, e così il nuovo pulsante dei dati mancanti (`dataQuality.cta.sync_fx_pair`,
   «Sincronizar tipos de cambio») e `common.syncFxRates`. Nel catalogo spagnolo, però, 29 valori dicono *tasas*:
   per esempio «Sincronizar tasas» sul pulsante della pagina FX (`fxDetail.syncRates`) e altri valori di `fx.*`,
