@@ -21,7 +21,9 @@
  * so those figures are found by structure — inside the row, and in the list that
  * holds the rows — and the labels that tell the rows apart are compared through
  * the catalogue (`$_`), never as literals. Every expected figure is written by
- * `Intl` itself.
+ * `Intl` itself. Its days (T-ISO) — the current price's day and the history's
+ * range as the backend writes it — are written in the house notation of a
+ * tooltip day, every expected day written by `Intl` too.
  *
  * The pure probe classifiers/formatters (`isSoftProbeFailure`,
  * `summarizeProbeError`, `buildProbeTooltipHtml`, …) are covered exhaustively in
@@ -97,6 +99,7 @@ import {_} from '$lib/i18n';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
 
 // --- Provider fixtures --------------------------------------------------
 // mockprov must be filtered out of the options; yahoo has an icon + help url +
@@ -445,6 +448,14 @@ describe('ProviderAssignmentSection — the probe figures in the interface langu
      * the currency in brackets and the date range, which do not move. The last cases read it; the M-18 cases
      * read only the figure.
      *
+     * The days (T-ISO). The current price's day, in brackets at the end of its detail, is written in the house
+     * notation of a tooltip day — the lot charts' `formatAxisDate(uiLocale(), day, true)`: `2 gen 2024`,
+     * `2 janv. 2024` — and so is the history's range when it is what the backend always writes,
+     * `f"{min(dates)} → {max(dates)}"` (`provider_management.py`): a string that is exactly
+     * `YYYY-MM-DD → YYYY-MM-DD` becomes `<start> → <end>`, each day in the house notation. Any other range is
+     * shown as it came (the fixtures' `2020-01-01..2024-01-01` and `2020..2024` among them). Expected days come
+     * from Intl (`houseDay`); red today in Italian and French, where both days are ISO.
+     *
      * Handles. The rows are `provider-test-result` and nothing finer is published, so the rest is
      * structure: a row is its label, its detail and its time — three spans, in that order — and the
      * total is the one line of the rows' list that holds no row. The labels only prove which row is
@@ -452,12 +463,14 @@ describe('ProviderAssignmentSection — the probe figures in the interface langu
      */
     type ProbeResponse = z.infer<typeof schemas.FAProviderProbeResponse>;
 
-    /** What the synthetic probe answers: the price as the backend sends it (a decimal string), the history's point count, each operation's time and the total. */
+    /** What the synthetic probe answers: the price as the backend sends it (a decimal string), the history's point count, each operation's time and the total; the current price's day and the history's range when a case names them. */
     interface ProbeInput {
         price: string;
         count: number;
         resultMs: number;
         totalMs: number;
+        asOfDate?: string;
+        dateRange?: string;
     }
 
     /** The probe's figures, as read off the section or as the expectation writes them. */
@@ -472,13 +485,13 @@ describe('ProviderAssignmentSection — the probe figures in the interface langu
         total: string;
     }
 
-    function figuresResponse({price, count, resultMs, totalMs}: ProbeInput): ProbeResponse {
+    function figuresResponse({price, count, resultMs, totalMs, asOfDate = '2024-01-02', dateRange = '2020-01-01..2024-01-01'}: ProbeInput): ProbeResponse {
         return {
             provider_code: 'yahoo',
             identifier: 'AAPL',
             total_execution_time_ms: totalMs,
-            current_price: {success: true, value: price, currency: 'USD', as_of_date: '2024-01-02', execution_time_ms: resultMs},
-            history: {success: true, points_count: count, date_range: '2020-01-01..2024-01-01', execution_time_ms: resultMs},
+            current_price: {success: true, value: price, currency: 'USD', as_of_date: asOfDate, execution_time_ms: resultMs},
+            history: {success: true, points_count: count, date_range: dateRange, execution_time_ms: resultMs},
         };
     }
 
@@ -681,6 +694,69 @@ describe('ProviderAssignmentSection — the probe figures in the interface langu
         await probeWith({price: '123.456', count: 12345, resultMs: 1234, totalMs: 2468});
 
         expect(countPhrase(historyDetail()), 'the English plural moved').toBe(pointsPhrase(12345, 'en-US'));
+    });
+
+    /** The calendar day `iso` in the house notation of a tooltip day, as Intl writes it in `locale`: numeric year, short month, numeric day. */
+    function houseDay(iso: string, locale: string): string {
+        const [year, month, day] = iso.split('-').map(Number);
+        return new Intl.DateTimeFormat(locale, {year: 'numeric', month: 'short', day: 'numeric'}).format(new Date(year, month - 1, day));
+    }
+
+    /** The detail of the result labelled `labelKey` (read through the catalogue), as the section wrote it. */
+    function detailOf(labelKey: string): string {
+        const parts = screen
+            .getAllByTestId('provider-test-result')
+            .map((row) => partsOf(row))
+            .find((candidate) => candidate.label === `${word(labelKey)}:`);
+        if (!parts) throw new Error(`No result row is labelled ${labelKey}`);
+        return parts.detail;
+    }
+
+    /** The current price's day: what its detail says in the brackets closing it. */
+    function priceDay(): string | undefined {
+        return /\(([^()]*)\)$/.exec(detailOf('common.currentPrice'))?.[1];
+    }
+
+    /** The history's range: what its detail says after its last dash. */
+    function historyRange(): string {
+        const detail = detailOf('assets.probe.history');
+        const dash = detail.lastIndexOf(' — ');
+        expect(dash, 'barrier: the history succeeded, and its detail ends on its date range after a dash').toBeGreaterThan(0);
+        return detail.slice(dash + ' — '.length);
+    }
+
+    /** An Italian or a French UI: the catalogue and the language store together, as the language selector moves them. */
+    async function speakAs(lang: 'it' | 'fr'): Promise<string> {
+        await setupI18n(lang);
+        currentLanguage.set(lang);
+        const locale = uiLocale();
+        expect(locale, `control: a ${lang} UI on jsdom’s en-US browser writes bare ${lang}`).toBe(lang);
+        return locale;
+    }
+
+    it.each(['it', 'fr'] as const)('%s UI: the current price’s day, in the brackets closing its detail, is written in the house notation (T-ISO)', async (lang) => {
+        const locale = await speakAs(lang);
+        expect(houseDay('2024-01-02', locale), 'control: the oracle is the lot charts’ tooltip day').toBe(formatAxisDate(locale, '2024-01-02', true));
+
+        await probeWith({price: '123.456', count: 12, resultMs: 1234, totalMs: 2468, asOfDate: '2024-01-02'});
+
+        expect(priceDay(), `the current price’s day is not in the ${lang} interface’s notation: the section writes the ISO day`).toBe(houseDay('2024-01-02', locale));
+    });
+
+    it.each(['it', 'fr'] as const)('%s UI: the history’s range as the backend writes it, «2024-01-01 → 2024-01-08», is written day by day in the house notation (T-ISO)', async (lang) => {
+        const locale = await speakAs(lang);
+
+        await probeWith({price: '123.456', count: 6, resultMs: 1234, totalMs: 2468, dateRange: '2024-01-01 → 2024-01-08'});
+
+        expect(historyRange(), `the history’s range is not in the ${lang} interface’s notation: the section writes the backend’s ISO days`).toBe(`${houseDay('2024-01-01', locale)} → ${houseDay('2024-01-08', locale)}`);
+    });
+
+    it.each(['2020-01-01..2024-01-01', '2020..2024'])('Italian UI: a range that is not exactly «YYYY-MM-DD → YYYY-MM-DD» — %s — is shown as it came (guard, T-ISO)', async (range) => {
+        await speakAs('it');
+
+        await probeWith({price: '123.456', count: 6, resultMs: 1234, totalMs: 2468, dateRange: range});
+
+        expect(historyRange(), 'a range the backend does not write was rewritten').toBe(range);
     });
 });
 

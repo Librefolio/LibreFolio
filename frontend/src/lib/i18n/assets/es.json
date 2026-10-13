@@ -67,7 +67,10 @@
       "previous": "Activo anterior",
       "next": "Activo siguiente",
       "position": "Activo {current} de {total}"
-    }
+    },
+    "notFound": "Activo n.º {id} no encontrado",
+    "loadFailed": "No se pudo cargar la información del activo",
+    "pricesLoadFailed": "No se pudieron cargar los precios"
   },
   "assets": {
     "create": "Nuevo activo",
