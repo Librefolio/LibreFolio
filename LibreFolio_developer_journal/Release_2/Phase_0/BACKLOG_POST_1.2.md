@@ -826,13 +826,56 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     - IWR-006b ripiega su un controllo più debole;
   - `tx-clone`: righe scelte per posizione, classi CSS, `text=new`; il test «view-only» esce presto;
   - `files.spec.ts`:
-    - gli altri test di File Preview: i PDF puliscono in `finally` con 30 s, mentre markdown, immagine, dettaglio, zoom
-      e commenti non cancellano mai il loro upload (la lista `ownedStaticFiles` ora c'è);
+    - ✅ gli altri test di File Preview: i PDF puliscono in `finally` con 30 s, mentre markdown, immagine, dettaglio, zoom
+      e commenti non cancellano mai il loro upload (la lista `ownedStaticFiles` ora c'è). **Chiuso il 12/10** da
+      `eb269ecde` («files spec cleans uploads and broker»), ora nel target (treno 76): ogni upload si iscrive in
+      `ownedStaticFiles`, e il broker BRIM si cancella in un `afterEach`;
     - il modo griglia/lista si legge dalla classe `active`: servirebbe `aria-pressed` su `view-mode-grid` e
       `view-mode-list` in `files/+page.svelte` (~`:704/707`);
   - la fixture `logout()` (`auth-helpers.ts`) usa ancora i 3 s di default.
 
   Dettagli: piano della 46, §12.8.
+
+  ✅ **Chiusa in gran parte il 13/10**, nel checkpoint V-25/V-21 di V, via test-author. Verde a 1 e a 4 worker, col
+  DB al seed. Dettagli: piano della 46, §12.10.
+  - `transactions-modals`:
+    - T10 lavora su un DEPOSIT proprio, cancellato dal flusso vero e verificato per id;
+    - T3, T9 e T11 usano righe proprie;
+    - le sonde sono tolte, e T6 e T7b ora provano davvero.
+  - `tx-wac-unit-toggle` e `tx-wac-formmodal`: `aria-pressed` al posto delle classi; FM10 trova la riga per una
+    descrizione unica; FM7 è un'asserzione.
+  - `tx-commit-all-types`:
+    - checkbox per id, e lo stato della riga da `tx-bulk-row-status`;
+    - FX_CONVERSION esige il commit;
+    - il commento su AUTOINCREMENT è corretto.
+  - `tx-split-promote`, `tx-paired-edit` e `tx-clone` usano account propri; gli helper della coppia stanno in
+    `fixtures/owned-pair.ts`.
+  - `tx-event-picker`: niente più ripiego sul primo asset.
+  - `tx-import-resolution`:
+    - niente `return` condizionali;
+    - IWR-007 asserisce il contratto vero, quello della doc utente: una collisione col DB arriva alla revisione non
+      spuntata, con `data-duplicate-status="likely"`, e senza il passo «Duplicates»;
+    - IWR-006b apre la `TransactionCompareModal`.
+  - `files.spec.ts` legge `aria-pressed`, e `logout()` aspetta `/` e `login-page`.
+  - Gli attributi nuovi:
+    - `tx-bulk-row-status` con `data-status`;
+    - `tx-bulk-delete-selected`;
+    - la prop `testId` di `Tooltip`, usata come `tx-form-cost-basis-help`;
+    - `data-duplicate-status`;
+    - `aria-pressed` su `view-mode-*`.
+
+  **Resta aperto:**
+  - **T1**, decisione del developer. Ne dipende anche `fillBuyTransaction`, che prende la prima opzione e serve pure a
+    T2 e T6.
+  - **T4**, domanda 12 per il developer. Il prodotto mette `cost_basis_override` (`TransactionBulkModal.svelte:1825`)
+    prima di `asset_event_id` (`:1888`), mentre il piano Bugfix-3 M5, passo 10, dice che è stato spostato dopo. T4 non
+    prova niente ed è rimasto com'è.
+  - **T5 e T8** asseriscono il testo tradotto dell'etichetta dell'asset. Servirebbe uno stato pubblicato, per esempio
+    `data-asset-field` su `tx-form-asset-wrap` (`TransactionFormModal.svelte`, ~`:1900`); per T8, però, il soggetto è
+    la traduzione.
+  - **T13** comincia ad aspettare la risposta di validazione solo dopo il click su Apply.
+  - **`tx-delete`**, fuori lista: `.checkbox-btn` in A6 e B3-guard (`:652`, `:774`, `:815`), `.disabled-select-icon`
+    (`:811`) e una sonda (`:793`).
 - **V-22 · «+ New event» può modificare un evento esistente dicendo di averlo creato** — da decidere; letto da
   test-author di V e verificato nel codice da me, 12/10. Nessun test lo dimostra ancora:
   - `EventCreateMiniModal.svelte:133-145` manda un upsert senza id (`upsert_events_bulk`);
@@ -871,6 +914,69 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   Il DB, quindi, a fine categoria non torna al seed. Le righe consumate sono monouso per costruzione, e ogni invocazione
   ripopola. Il broker permanente, però, è della classe A7. Cura possibile: righe e broker creati dal test, come in A5
   e A7. Dettagli: piano della 46, §12.9.
+
+  ✅ **Chiusa il 13/10**, nel checkpoint V-25/V-21 di V, via test-author.
+  - **La prova del danno**, sullo spec non modificato: dopo il giro il DB aveva 73 transazioni, 9 broker e 18 asset,
+    contro 76, 8 e 17 del seed.
+  - **La cura**:
+    - A1-confirm e A2-confirm lavorano su account usa-e-getta, con una FEE propria e una coppia ETH propria, finanziate
+      da righe proprie, e cancellate in `afterEach` con l'account;
+    - A1-error registra gli id appena esistono e cancella righe, broker (`force`) e asset per id;
+    - lo stato «delete» si legge da `tx-bulk-row-status`.
+  - **La verifica**: 15/15 a 1 e a 4 worker, col DB al seed. L'impronta delle righe 1–76 è identica nei due giri.
+  - **Resta**: la riga 28 del seed (FEE «Platform fee for delete test») e la coppia 45/46 (`delete-consume`) non le
+    legge più nessuno spec. Restano nel seed, perché toglierle sposterebbe i lettori posizionali, come FE-SP-C4 di
+    `tx-bulk-suggest-ux`, `tx-picker-pagination`, A6 e B3-guard di `tx-delete`. Un consolidato a 1 worker non dovrebbe
+    più ripopolare dopo `tx-delete`.
+  - **I commenti** che lo davano ancora per distruttivo sono corretti nello stesso checkpoint: fixture `playwright.ts`,
+    skill `testing-frontend`, `populate_mock_data.py` 9c e `tx-paired-edit`. La doc dev `runner_architecture.md`
+    (`:232`, `:561`, `:577`, `:588`) è di M ed è segnalata al coordinatore.
+
+- ✅ **V-26 · Due rossi da carico della classe di V-20, nella verifica di V-21c** — basso; V, 13/10. Visti con la
+  coverage della 6176 in corso; test-triage dà «assunzione», col prodotto corretto in tutti e due.
+  - **`layout/app-start-auth.spec.ts`**, «a 401 in the middle of a session» (era `:263`, ora `:266`): rosso 2 volte su
+    2 a 1 worker, con loadavg 17–25.
+    - Appena `data-busy` diventa falso, `/assets` lancia senza `await` `loadFxPairSlugs()`: la GET delle route e 24
+      `POST /fx/currencies/convert`.
+    - Le `convert` partono a cavallo di `clearCookies`, quindi il primo 401 può nascere su `/assets`. L'interceptor
+      porta giustamente a `/?redirect=%2Fassets`.
+  - **`ai-export/ai-export-memory.spec.ts:66`**: rosso a 4 worker nel setup.
+    - `setupAiExportPage` faceva `login()` e poi `setLanguage('en')`, con 5 s per tutta la catena del bootstrap
+      (V-27).
+  - **Chiusa il 13/10** nel checkpoint V-25/V-21, via test-author, decisione del coordinatore:
+    - in quel test, `GET /fx/providers/routes` è servita localmente con zero coppie, mentre il 401 resta vero e del
+      backend;
+    - `setupAiExportPage` aspetta l'arrivo: l'URL fuori da `/` e `app-shell` visibile.
+
+    Verdi `front-utility auth` 29/29 e `front-ai-export all` (18 E2E e 426 Vitest), a 1 e a 4 worker, col DB pulito.
+    Dettagli: piano della 46, §12.10.
+
+- **V-27 · `login()` ritorna appena sparisce il form, prima dell'arrivo** — basso; V (triage di V-26), 13/10.
+  - `auth-helpers.ts` `login()` ritorna quando il form sparisce, mentre `/` carica ancora il bootstrap: impostazioni
+    utente, onboarding, impostazioni globali. Solo dopo porta a `/dashboard`.
+  - Ogni chiamante che ha bisogno dell'arrivo deve compensare da sé: `signIn()` di `app-start-auth`,
+    `expectLandedOnDashboard` di `auth.spec` e, da V-26, `setupAiExportPage`.
+  - Non compensa ancora `switchUser` di `ai-export-memory`, che fa `login()` e subito `setLanguage` per `TEST_USER_2`
+    e `TEST_ADMIN`.
+  - Cura strutturale: `login()` finisce all'arrivo, cioè URL fuori da `/` e `app-shell` (o `welcome-shell`) visibile.
+    I chiamanti sono più di 100, quindi serve una validazione dell'intera suite. Dopo la 1.2, decisione del coordinatore
+    del 13/10. Dettagli: piano della 46, §12.10.
+- ✅ **V-29 · Togliere una coppia nuova dal bulk editor lasciava la metà nascosta: «Discard changes?» su un workspace
+  vuoto** — basso, UX; evidenza E0 di V-21a, 13/10.
+  - Il caso: si aggiunge una coppia nuova (TRANSFER o FX_CONVERSION dal form), poi la si toglie con «Mark for
+    deletion» o «Delete selected». La griglia resta vuota, ma alla chiusura il workspace chiede di scartare.
+  - Il controllo: una riga singola nuova, tolta allo stesso modo, si chiude senza chiedere.
+  - La causa: `removeRow` filtrava solo `tempId`, quindi la partner nascosta (`pairedWith`) restava in `ops`.
+    `resolveOps` la saltava, perciò non arrivava mai al server; `serializeOps` invece la contava. I dati non si
+    toccavano.
+  - Il difetto c'è dalla **1.1.0**.
+  - **Chiusa il 13/10** in un commit a parte, `fix(transactions): …`, deciso dal coordinatore: `removeRow` toglie
+    anche l'op con `pairedWith === tempId`.
+    - Il rosso prima della cura: T7b e la variante «Delete selected» di `transactions-modals`, `Received: "asks to
+      discard"`.
+    - Dopo la cura: `transactions-modals` 20/20 a 1 e a 4 worker, e i vicini `tx-paired-edit` e `tx-split-promote`
+      verdi a 1 e a 4 worker.
+  - Se merita una riga 🐛 nel CHANGELOG lo decide il coordinatore. Dettagli: piano della 46, §12.10.
 
 ## 09 · Feedback e backlog strutturale
 
