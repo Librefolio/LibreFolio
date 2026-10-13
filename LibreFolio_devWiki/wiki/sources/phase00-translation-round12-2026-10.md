@@ -110,6 +110,8 @@ closed two items that had waited for the shared runner file and for T's CP1 of M
   `galleryLocale.ts` says what the locale pin reaches (`1e4a3ecd5`); M-24 (low) — the pin does not reach
   `navigator.language`, which `uiLocale()` reads — [[problems/playwright-probes-ignore-timeout]].
 - The release shots of 1.1 read `v1.1.0-dirty` — [[problems/release-shots-show-dirty-version]] (open, M's lot 34).
+- *Batch 34 (train 80)*: the version frozen once per release run, the tree checked after each step, the icons
+  redrawn only for a new logo — the page above is resolved in the code; M-25 added.
 
 ## Not ingested
 
