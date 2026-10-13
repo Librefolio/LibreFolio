@@ -2784,3 +2784,208 @@ Base `917ef437f`: i due commit di T4 (`d763657ca`, `917ef437f`) sono sul ramo, e
   - in V-21, T1 è chiusa (✅ 13/10) e la riga dei residui minori è aggiornata;
   - **V-37**, da decidere: «valid» accanto a un errore del form;
   - **V-38**, basso: l'avviso di saldo sotto il titolo dei campi.
+
+### 12.15 V-37: analisi del «valid» accanto a un errore del form (13/10, senza codice)
+
+Base `917ef437f`. Sola lettura del codice: niente test né server.
+
+**La citazione del developer:** «diciamo che è un caso limite in effetti, la soluzione migliore sarebbe nel form di
+disattivare il validate finchè tutti i campi obbligatori non ci sono e non sono validi con le regole di scrittura. Però
+non una disabilitazione completa, più un pre-step, se lo clicco prima verifichiamo che gli obbligatori ci siano, poi
+che tutti siano nel formato corretto e se si si manda il pacchetto al server, se no, le celle con i problemi si
+evidenziano di rosso, mi hai capito? se è facile lo farei subito, altrimenti dopo la 1.2»
+
+#### 0. Lo stato verificato
+
+Tutto in `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte`, salvo dove indicato.
+
+- **I tre cancelli** guardano cose diverse:
+  - lo scheduler automatico, `enabled: !isReadonly && isFormComplete` (`:855`);
+  - il pulsante ⚡, `disabled={!isFormComplete}` (`:2074`);
+  - Apply/Save, `disabled={… || !!dualValidationError || hasSignViolation || …}` (`:2103`). Solo Apply guarda gli errori
+    locali.
+- **«valid»** è `tx-form-valid-inline` (`:2084-2088`), mostrato da `isFreshlyValid` (`:942`). Questo guarda solo
+  l'esito del server sulla bozza corrente.
+- **Gli errori locali** oggi:
+  - `hasSignViolation` (`:1304`): la quantità non valida (`ExactQuantityInput` → `quantityInputValid`, `:1224`), il
+    segno della cassa (`cashSignResult`), la gamba ricevente FX negativa;
+  - `dualValidationError` (`:831-847`): due volte lo stesso broker (trasferimenti) o la stessa valuta (FX).
+- **Il segno**: il pacchetto per il server passa da `applySign` (`utils/transactions/txPayloadHelpers.ts:142-150`,
+  `:243-249`), quindi `-1` diventa `1`. Per questo il server risponde «valid».
+- **Il clic manuale scavalca `enabled`**: «Auto-triggers respect `enabled`; manual ignores it»
+  (`utils/transactions/useValidateScheduler.svelte.ts:71`, `:125`, `:167`). Lo scheduler è condiviso col bulk editor
+  (`TransactionBulkModal.svelte:1251`).
+- **Gli attributi che i test possono leggere**:
+  - la quantità pubblica già `aria-invalid` (`ExactQuantityInput`, fissato dal Vitest `TransactionFormModal.test.ts:770-838`);
+  - la cassa (`CompactCashCell`) colora il segno con le classi `sign-bad`/`sign-ok`, ma non ha `aria-invalid`;
+  - l'errore della coppia è `tx-form-dual-error` (`:1417`).
+- **Trovato in più: la data.**
+  - `SingleDatePicker` (`components/ui/date/SingleDatePicker.svelte:102-165`, `:346`) tiene a schermo un testo che non
+    legge come data (anche una data futura, `allowFuture=false`), con `data-invalid="true"`.
+  - Però **non avvisa il form**: le sue props (`:75`) non hanno una callback di validità, e `value` resta la data di
+    prima.
+  - Quindi, per lettura del codice, validate **e anche Apply** usano in silenzio la data vecchia mentre il campo è rosso.
+    **Da verificare a schermo**: se si conferma è un difetto vero, più serio di V-37 (punto 1b).
+
+#### 1. Il minimo
+
+**Cosa fa:**
+- **«valid» mai con errori locali**: `isFreshlyValid` aggiunge `!hasLocalErrors`, dove
+  `hasLocalErrors = hasSignViolation || !!dualValidationError` (più la data, se 1b).
+- **Nessun pacchetto finché ci sono**:
+  - lo scheduler riceve `enabled: … && !hasLocalErrors`;
+  - il clic, che scavalca `enabled`, controlla da sé: con errori locali non chiama `scheduler.trigger('manual')` e
+    porta il fuoco sul primo campo in errore, nell'ordine dello schermo:
+    - la quantità (`tx-form-quantity`);
+    - la cassa (`tx-form-cash-amount`, `-from-amount`, `-to-amount`);
+    - per l'errore di coppia, il broker o la valuta della gamba «A».
+- **Il pulsante resta com'è**: disabilitato solo se il form è incompleto. Nessuna asserzione esistente cambia.
+- **1b, facoltativo, dopo la verifica a schermo**:
+  - `SingleDatePicker` riceve una callback additiva `onvaliditychange`, facoltativa, usata solo dal form;
+  - il form la mette in `hasLocalErrors` **e** nel cancello di Apply, come fa per `hasSignViolation`.
+
+**I file:**
+- `TransactionFormModal.svelte`;
+- per 1b anche `SingleDatePicker.svelte`, condiviso da 8 componenti; il cambio è additivo e facoltativo, quindi gli
+  altri non cambiano.
+
+Nessun cambio a `useValidateScheduler`, che è condiviso.
+
+**Il bulk editor: lì il problema non c'è.**
+- Non ha campi suoi: le righe arrivano già normalizzate dal form (che con errori locali non applica), dal DB o
+  dall'import.
+- Il suo «valid» (`tx-bulk-valid`, `TransactionBulkModal.svelte:3604`) riflette solo il server.
+- Il suo pulsante (`:3599`) è sempre attivo e manda l'intero workspace: va bene così.
+
+**I test** (test-author):
+- **Vitest, in `TransactionFormModal.test.ts`**, il contratto principale. I mock di `validateTransactions` contano le
+  chiamate, quindi l'assenza si prova senza orologio:
+  - con quantità `-1` né il clic né il cambiamento chiamano `validateTransactions`;
+  - il fuoco va su `tx-form-quantity`;
+  - `tx-form-valid-inline` non compare, anche se un giro precedente era andato bene;
+  - lo stesso per la gamba FX negativa e per lo stesso broker in un trasferimento.
+- **E2E, uno o due, in `transactions-modals`**:
+  - si registrano le richieste di `/transactions/validate`;
+  - con quantità `-1`, il clic porta il fuoco sul campo, il contatore `data-validate-runs` non si muove, e
+    `tx-form-valid-inline` non c'è;
+  - corretta la quantità, parte un giro solo, con 3 nel pacchetto. Così si prova che col `-1` non era partito niente.
+- **Quelli esistenti che cambiano: nessuna asserzione.**
+  - Restano veri il Vitest `:454` («FX keeps Validate Now enabled…») e `tx-fx-completeness:383` («Validate stays
+    enabled»). Va aggiornato solo il loro commento: il clic ora porta al campo, non al server.
+  - Nessuno spec clicca ⚡ con errori locali aspettando un giro (grep).
+  - T6, ora su un form valido, non cambia.
+
+**i18n**: nessuna chiave nuova. Ogni campo mostra già il suo messaggio: «must be > 0», l'indicazione del segno della
+cassa, `sameBrokerError` e `sameCurrencyError`.
+
+**Doc** (di M, via docs-writer): una riga in `mkdocs_src/docs/user/transactions/form.en.md:29`, «Checks as you go»: con
+un campo in rosso, ⚡ porta al campo invece di controllare. La pagina ha traduzioni: si mette lo stamp, oppure resta un
+piccolo debito.
+
+**Rischio: basso.**
+- Un solo componente, e solo cancelli.
+- Effetto voluto: con un errore locale l'anteprima automatica del costo medio (che vive delle risposte di validate)
+  non si aggiorna finché il campo non è corretto.
+- Galleria: nessun cambiamento visivo atteso.
+
+**Stima:** circa **mezza giornata**.
+
+| Lavoro | Tempo |
+|---|---|
+| Codice | ~1 h |
+| Test | ~2 h |
+| Giri (`component-unit`, `transactions-modals` a 1 e a 4 worker, `front-transaction all`) | ~1 h |
+| Con 1b | ~+1 h (callback, cancello di Apply, un test) |
+
+#### 2. Il pre-step completo (come lo descrive il developer)
+
+**Cosa fa:**
+- **Il pulsante ⚡ resta sempre cliccabile**, in tutte le disposizioni: singola, coppia (`transfer_asset`,
+  `transfer_cash`) e FX, in creazione e in modifica. Si toglie `disabled={!isFormComplete}` (`:2074`).
+- **Al clic:**
+  1. **Gli obbligatori**, secondo le regole del tipo (`getTypeRule` e `isDraftReadyForValidation`,
+     `stores/transactions/transactionTypeStore.ts:269-279`):
+     - la data o le date;
+     - il broker, e quello della gamba «A» nei trasferimenti;
+     - l'asset, se richiesto;
+     - la quantità non vuota e diversa da zero;
+     - la cassa, su entrambe le gambe in FX;
+     - il costo in Manual (la doc dice che non può restare vuoto).
+  2. **Il formato di tutti**: la quantità (sintassi, cifre, intervallo, segno), il segno e l'importo della cassa per
+     gamba, la data digitata (serve 1b), gli errori di coppia.
+  3. **Se va tutto bene**, `scheduler.trigger('manual')`. **Se no**, **tutte** le celle in errore diventano rosse, il
+     fuoco va sulla prima, e nessuna richiesta parte. Il rosso resta finché la cella non è corretta.
+- **L'auto-validazione** resta col cancello del minimo.
+- **Due modi per il rosso:**
+  - **(a) sui contenitori**, consigliato: `tx-form-*-wrap` e i pannelli `tx-form-dual-from` / `-to`. Ognuno riceve un
+    anello rosso, `data-invalid` e il messaggio sotto. Tutto resta nel form.
+  - **(b) sui controlli**, con un `aria-invalid` su ciascuno: serve una prop `invalid` in `SearchSelect`/
+    `BrokerSearchSelect`, `AssetSelect`, `CompactCashCell` e `SingleDatePicker`, che sono componenti condivisi da tutta
+    l'app.
+
+**I file:**
+- `TransactionFormModal.svelte`;
+- un helper puro nuovo, per esempio `utils/transactions/formPreflight.ts`, che restituisce l'elenco ordinato dei
+  problemi `{field, kind: 'required' | 'format'}`;
+- `SingleDatePicker.svelte` (1b);
+- con (b), anche i 4-5 componenti condivisi;
+- i cataloghi `frontend/src/lib/i18n/transactions/{en,it,fr,es}.json`.
+
+**Il bulk editor**: non serve, per le stesse ragioni del minimo. Il suo pulsante è già sempre attivo, e non ci sono celle
+da colorare.
+
+**I test** (test-author):
+- **Vitest per l'helper**: tabella per tipo, disposizione e campo, economica ed esaustiva.
+- **Vitest del componente** per il clic: niente chiamate, fuoco, celle con `data-invalid`.
+- **E2E**, uno per disposizione (singola, trasferimento, FX):
+  - clic col form vuoto: rosso sui campi giusti, fuoco sul primo, nessuna richiesta;
+  - poi i formati sbagliati;
+  - poi tutto giusto: parte un giro.
+- **Quelli esistenti che cambiano:**
+  - `tx-fx-completeness:262`, `:363` e `:389`: oggi il pulsante è disabilitato con una gamba mancante o l'importo zero.
+    Diventano «clic → celle rosse, nessuna richiesta»;
+  - i commenti di `tx-fx-completeness:381-383` e del Vitest `:454`;
+  - la galleria (di M): gli scatti del form incompleto cambiano aspetto, perché il pulsante non è più a opacità 40%.
+
+**i18n**: da 2 a 4 chiavi nuove nelle 4 lingue.
+- Le chiavi possibili: `transactions.fieldErrors.dateRequired`, `quantityRequired` (distinta da `quantityInvalid`),
+  forse `brokerToRequired`, e una riga di sintesi vicino al pulsante («Completa i campi evidenziati»).
+- Esistono già: `brokerRequired`, `assetRequired`, `quantityInvalid` e `cashRequired`.
+- Sono file di U: da coordinare.
+
+**Doc** (di M): il paragrafo di `form.en.md:29` va riscritto: ⚡ prima evidenzia i campi mancanti o malformati, poi
+controlla. È debito di traduzione vero, quindi niente stamp.
+
+**Rischio: medio.**
+- Molti casi da coprire: 12 tipi, 4 disposizioni, creazione e modifica, i gruppi di scambio, le regole che arrivano dal
+  server.
+- Il form è centrale, a ridosso del rilascio.
+- Tocca i18n (U), doc e galleria (M).
+- Con (b), anche componenti condivisi dell'app.
+
+**Stima:** **1,5-2 giorni**.
+
+| Lavoro | Tempo |
+|---|---|
+| Codice, con (a) | 0,5-1 g |
+| Test | 0,5 g |
+| i18n, doc e galleria, coordinati | ~0,25 g |
+| Con (b) | ~+0,5 g |
+
+#### 3. La mia proposta
+
+- **Il minimo, subito, nella 1.2**, più **1b** se la verifica a schermo conferma la data vecchia applicata in silenzio.
+  È contenuto in un file (due con 1b), non cambia asserzioni esistenti, e chiude il caso segnalato.
+- **Il pre-step completo, dopo la 1.2**, come V-37b, con la variante (a).
+
+Prima di 1b serve una sola verifica a schermo (un Vitest o una sonda in `/tmp`): un BUY di oggi; nella data si digita
+una data futura o illeggibile e si esce dal campo; poi Apply. Il pacchetto applicato porta la data di oggi?
+
+- ✅ **Consegnata al coordinatore** (13/10). Nessun comando col venv, per il FREEZE-VENV del 13/10: il developer
+  aggiunge `uvicorn[standard]` al venv condiviso. Nel backlog, V-37 riporta la risposta del developer e la sintesi.
+  > **⚠️ Fuori pista**: controllando i clic su ⚡ negli E2E ho trovato quattro sonde.
+  > - In `tx-wac-fx.spec.ts:287`, `:320`, `:359` e in `tx-wac-mode.spec.ts:247` il clic sta dietro
+  >   `isVisible().catch(() => false)`.
+  > - I loro form sono validi (trasferimenti tra broker diversi, quantità positiva), quindi il minimo non li cambia. Ma
+  >   se il pulsante sparisse, salterebbero il clic in silenzio.
+  > - Messe nel backlog sotto V-21: da sistemare prima di toccare ⚡ per V-37.
