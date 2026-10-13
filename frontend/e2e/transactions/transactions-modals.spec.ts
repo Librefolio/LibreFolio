@@ -11,8 +11,10 @@ import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {validateRuns, waitForSettled, waitForValidateRun} from '../fixtures/app-events';
 import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
-import {todayIso} from '../fixtures/dates';
+import {daysAgoIso, todayIso} from '../fixtures/dates';
 import {uniqueSuffix} from '../fixtures/unique';
+import {createOwnedBroker} from '../fixtures/onboarding-accounts';
+import {cleanupOwnedAccount, commitCreates, emptyOwnedAccount, openOwnedAccount, readTransactions, seededAssetId} from '../fixtures/owned-pair';
 
 // ---------------------------------------------------------------------------
 // Constants — known mock data (populate_mock_data.py)
@@ -96,24 +98,18 @@ async function expectComputedBorderColor(page: Page, input: Locator, color: stri
 /**
  * Fill a minimal BUY transaction in the FormModal (assumes it's already open).
  *
- * Broker and asset are the first entries of their lists. That choice is T1's, and
- * it is a developer decision (backlog V-21), so it is kept as it was. What changed
- * is that every step now waits for what it needs instead of probing for it: a
- * probe that expired skipped its pick in silence, and the failure surfaced later,
- * at Apply, blaming the wrong step.
+ * Broker and asset are picked by name: "the first option" is whatever sorts first,
+ * and for TEST_USER that is a broker without cash (backlog V-21). Every step waits
+ * for what it needs instead of probing for it. The cash amount is typed before the
+ * asset is picked, so it is booked in the cell's default currency (EUR), not the
+ * asset's.
  */
-async function fillBuyTransaction(page: Page, opts: {qty?: string; skipCash?: boolean} = {}) {
+async function fillBuyTransaction(page: Page, opts: {broker: string; asset: string; qty?: string; skipCash?: boolean}) {
     const qty = opts.qty ?? '5';
     // Type is BUY by default
     await expect(page.getByTestId('tx-form-type')).toBeVisible({timeout: 3_000});
 
-    // Broker — the first option of the list.
-    const brokerWrap = page.getByTestId('tx-form-broker-wrap');
-    await brokerWrap.locator('button, [role="combobox"]').first().click();
-    await optionListReady(page);
-    await page.locator('[data-testid^="search-select-option-"]').first().click();
-    // The chosen broker closes the list; that is the signal the pick landed.
-    await optionListClosed(page);
+    await pickBroker(page, opts.broker);
 
     // Quantity
     await page.getByTestId('tx-form-quantity').fill(qty);
@@ -125,14 +121,8 @@ async function fillBuyTransaction(page: Page, opts: {qty?: string; skipCash?: bo
         await fillCashAmount(page, '100');
     }
 
-    // Asset — the first option of the list. A BUY always renders the field: its
-    // asset is required.
-    const assetWrap = page.getByTestId('tx-form-asset-wrap');
-    await expect(assetWrap).toBeVisible({timeout: 5_000});
-    await assetWrap.locator('button, [role="combobox"]').first().click();
-    await optionListReady(page);
-    await page.locator('[data-testid^="search-select-option-"]').first().click();
-    await optionListClosed(page);
+    // Asset — a BUY always renders the field: its asset is required.
+    await pickAsset(page, opts.asset);
 }
 
 /** Choose a transaction type by its code — the option's testid, never its translated label. */
@@ -337,16 +327,209 @@ async function deleteApiOwnedRows(page: Page): Promise<void> {
 // Tests
 // ---------------------------------------------------------------------------
 
+// ===================================================================
+// T1a, T1b, T6 — a BUY on a broker of the test's own: saved, refused, warned
+// ===================================================================
+
+// Same title as the block below, so the tests keep their full names. A block of its own
+// because the TEST_USER login there must not run for them: each signs in as a disposable
+// account (fixtures/owned-pair.ts) and enters its BUY on a broker that account owns, so
+// nothing shared changes, not even for a moment. Deleting the account takes that broker
+// and every row on it.
 test.describe('Transactions', () => {
-    // Whoever commits, cleans up. T1 commits a real BUY into one of TEST_USER's
-    // seeded brokers, and `Transaction` is global: left there, it shifts the NAV,
-    // positions, counts and pages of every later test, and the txHygiene net that
-    // used to hide it exists only at one worker. The tracker records the rows this
-    // page's commits create and deletes exactly those, at any worker count. It
-    // starts after login (it reads through `page.request`, which needs the session
-    // cookie) and so before any commit; `afterEach` runs for a red test too. The
-    // rows T3, T9, T10 and T11 create through the API are invisible to the tracker
-    // and are deleted by id in the same `afterEach`.
+    let owned = emptyOwnedAccount();
+
+    test.beforeEach(() => {
+        owned = emptyOwnedAccount();
+    });
+
+    // afterEach, not `finally`: it runs after a timeout too, and an error of its own is
+    // reported beside the test's instead of replacing it.
+    test.afterEach(async ({page, request}) => {
+        await cleanupOwnedAccount(page, request, owned);
+    });
+
+    /** One create of the commit request, as the bulk editor sends it. */
+    type SentCreate = {type: string; broker_id: number; asset_id: number | null; date: string; quantity: string; cash: {code: string; amount: string}};
+    /** The commit answer, with what an issue carries. */
+    type CommitAnswer = {committed?: boolean; issues?: Array<{code?: string; params?: Record<string, unknown>}>; results?: CommitBody['results']};
+
+    /** The currency `fillBuyTransaction` books the BUY's cash in: the cash cell's default, read off the commit request. */
+    const BUY_CASH_CODE = 'EUR';
+
+    /**
+     * Enter a BUY of 3 Apple for 100 on `brokerName` through the form and apply it. Ends with
+     * the form closed and the bulk editor holding that one row, new, done validating it: the
+     * run is awaited by its counter, read before Apply, so no late verdict lands over the
+     * commit's.
+     */
+    async function stageBuy(page: Page, brokerName: string): Promise<Locator> {
+        await openCreateFlow(page);
+        await fillBuyTransaction(page, {broker: brokerName, asset: ASSET_NAME, qty: '3'});
+        const bulkRoot = page.getByTestId('tx-bulk-modal-root');
+        const runsBefore = await validateRuns(bulkRoot);
+        await clickApply(page);
+        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible();
+        // The workspace is this test's own: it holds the applied row and nothing else.
+        const rows = page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]');
+        await expect(rows, 'the workspace must hold exactly the applied row').toHaveCount(1, {timeout: 3_000});
+        await expect(rows.getByTestId('tx-bulk-row-status')).toHaveAttribute('data-status', 'new');
+        await waitForValidateRun(bulkRoot, runsBefore);
+        return rows;
+    }
+
+    /** Save the workspace; returns the one create it sent and the server's answer. Armed before the click: a response is an edge. */
+    async function commitWorkspace(page: Page): Promise<{create: SentCreate; answer: CommitAnswer}> {
+        const commitBtn = page.getByTestId('tx-bulk-commit');
+        await expect(commitBtn).toBeEnabled({timeout: 8_000});
+        const response = page.waitForResponse((res) => res.request().method() === 'POST' && new URL(res.url()).pathname === `${API}/transactions/commit`, {timeout: 15_000});
+        await commitBtn.click();
+        const res = await response;
+        const {creates} = res.request().postDataJSON() as {creates?: SentCreate[]};
+        expect(
+            (creates ?? []).map((create) => create.type),
+            'the commit sends the applied BUY and nothing else',
+        ).toEqual(['BUY']);
+        return {create: creates![0], answer: (await res.json()) as CommitAnswer};
+    }
+
+    test.describe('Create standalone', () => {
+        test('a BUY entered in the form is saved and found again', async ({page, request}, testInfo) => {
+            // The account goes through the real welcome flow before the BUY itself.
+            test.setTimeout(60_000);
+            await openOwnedAccount(page, request, owned, `t1a_${testInfo.project.name}`);
+            const broker = await createOwnedBroker(page, 't1a', owned.brokerIds);
+            const appleId = await seededAssetId(page, 'AAPL');
+            await commitCreates(page, [{broker_id: broker.id, type: 'DEPOSIT', date: daysAgoIso(10), cash: {code: BUY_CASH_CODE, amount: '1000'}}], 'fund the owned broker');
+            // After the broker exists, so the page's broker list has it.
+            await goToTransactions(page);
+            await stageBuy(page, broker.name);
+
+            const {create, answer} = await commitWorkspace(page);
+            // Sent as entered, the 100 paid out of the funded currency: a BUY sends its cash negative.
+            expect(create, 'the BUY as entered').toMatchObject({type: 'BUY', broker_id: broker.id, asset_id: appleId});
+            expect(Number(create.quantity), 'the quantity entered').toBe(3);
+            expect(create.cash.code, 'the deposit funds the currency the form books the cash in').toBe(BUY_CASH_CODE);
+            expect(Number(create.cash.amount), 'the 100 entered, paid').toBe(-100);
+            expect(answer.committed, `the funded BUY must be saved — issues: ${JSON.stringify(answer.issues ?? [])}`).toBe(true);
+            const ids = (answer.results ?? []).filter((result) => result.operation === 'create' && result.status === 'success').flatMap((result) => result.ids ?? []);
+            expect(ids, 'the commit creates exactly the BUY').toHaveLength(1);
+            await expect(page.getByTestId('tx-bulk-modal')).toBeHidden({timeout: 10_000});
+
+            // Found again: on the server, as it was sent...
+            const saved = await readTransactions(page, {ids: ids[0]});
+            expect(
+                saved.map((tx) => [tx.type, tx.broker_id, tx.asset_id, tx.date, Number(tx.quantity), tx.cash?.code, Number(tx.cash?.amount)]),
+                `transaction ${ids[0]} as saved`,
+            ).toEqual([['BUY', broker.id, appleId, create.date, 3, create.cash.code, Number(create.cash.amount)]]);
+            // ...and in the main table.
+            await goToTransactionById(page, ids[0]);
+        });
+
+        test('a BUY without cash is refused with a clear message and nothing is saved', async ({page, request}, testInfo) => {
+            // The account goes through the real welcome flow before the BUY itself.
+            test.setTimeout(60_000);
+            await openOwnedAccount(page, request, owned, `t1b_${testInfo.project.name}`);
+            // No deposit: the broker holds no cash, and a new broker allows no overdraft.
+            const broker = await createOwnedBroker(page, 't1b', owned.brokerIds);
+            await goToTransactions(page);
+            const rows = await stageBuy(page, broker.name);
+
+            const {create, answer} = await commitWorkspace(page);
+            // Refused for the cash it would take below zero: on this broker, in the currency and
+            // on the day the request sent, by exactly the BUY's cash — the broker holds nothing else.
+            expect(answer.committed, `the BUY on a broker without cash must be refused — results: ${JSON.stringify(answer.results ?? [])}`).toBe(false);
+            expect(
+                (answer.issues ?? []).map((issue) => issue.code),
+                'one issue: the negative cash',
+            ).toEqual(['balanceCashNegative']);
+            const params = answer.issues![0].params ?? {};
+            expect(params, 'the refusal names the broker, currency and day').toMatchObject({brokerId: broker.id, currency: create.cash.code, date: create.date});
+            expect(Number(params.balance), `the balance it would reach (${JSON.stringify(params.balance)})`).toBeLessThan(0);
+            expect(Number(params.balance), "the balance is the BUY's own cash").toBe(Number(create.cash.amount));
+
+            // The user is told why: the editor stays open on its error banner, whose one balance
+            // line names this broker, the day and the currency. Checked on the broker's unique
+            // name and ISO codes, never on translated words — and against the raw forms a missing
+            // translation or an unknown broker would leave on screen.
+            const bulkModal = page.getByTestId('tx-bulk-modal');
+            const error = bulkModal.getByTestId('tx-bulk-error');
+            await expect(error).toBeVisible({timeout: 5_000});
+            const line = error.getByTestId('tx-bulk-balance-issue');
+            await expect(line).toHaveCount(1);
+            await expect(line).toContainText(broker.name);
+            await expect(line).toContainText(create.date);
+            await expect(line).toContainText(create.cash.code);
+            for (const raw of ['balanceCashNegative', 'Broker #', '{']) await expect(line, `the message must not show "${raw}"`).not.toContainText(raw);
+            await expect(bulkModal).toBeVisible();
+            await expect(rows).toHaveCount(1);
+            await expect(rows.getByTestId('tx-bulk-row-status')).toHaveAttribute('data-status', 'new');
+
+            // Its rows link leads to the BUY that caused it.
+            const label = rows.getByTestId('tx-bulk-row-label');
+            await expect(label).toHaveAttribute('data-issue-highlighted', 'false');
+            await line.getByTestId('tx-bulk-balance-rows').click();
+            await expect(label).toHaveAttribute('data-issue-highlighted', 'true');
+
+            // Nothing saved: the broker is this test's own, and holds no row.
+            expect(await readTransactions(page, {broker_id: broker.id}), 'the refused BUY must not have been saved').toEqual([]);
+        });
+    });
+
+    // ===================================================================
+    // T6 — Banner dismissible (M1/M2)
+    // ===================================================================
+    test.describe('Banner dismissible (M1/M2)', () => {
+        test('validation warning banner has dismiss button', async ({page, request}, testInfo) => {
+            // The account goes through the real welcome flow before the form itself.
+            test.setTimeout(60_000);
+            // The trigger is explicit: a BUY on this test's own broker, which holds no cash. The
+            // old version typed qty -1, but the form makes a BUY's quantity positive before it
+            // validates, so -1 never reached the server: its banner came from the first broker
+            // of the list having no cash.
+            await openOwnedAccount(page, request, owned, `t6_${testInfo.project.name}`);
+            const broker = await createOwnedBroker(page, 't6', owned.brokerIds);
+            // After the broker exists, so the page's broker list has it.
+            await goToTransactions(page);
+            await openCreateFlow(page);
+            await fillBuyTransaction(page, {broker: broker.name, asset: ASSET_NAME, qty: '3'});
+
+            // Validate now, and wait for *that* run: the counter is read before the
+            // click, so a run that finished earlier cannot answer for this one.
+            const root = page.getByTestId('tx-form-modal-root');
+            const validateBtn = page.getByTestId('tx-form-validate-now');
+            await expect(validateBtn).toBeEnabled({timeout: 5_000});
+            const runsBefore = await validateRuns(root);
+            await validateBtn.click();
+            await waitForValidateRun(root, runsBefore);
+
+            // The verdict lands in the form's warning banner. Naming this test's broker makes it
+            // the balance warning — the premise; its X is the subject. The old selector
+            // (`.info-banner button`) named a CSS class nothing carries, so its probe never
+            // matched and the dismiss was never tried.
+            const banner = page.getByTestId('tx-form-body').getByTestId('info-banner-warning');
+            await expect(banner).toBeVisible({timeout: 5_000});
+            await expect(banner).toContainText(broker.name);
+            const dismissBtn = banner.locator('button[aria-label]');
+            await expect(dismissBtn).toBeVisible();
+            await dismissBtn.click();
+            await expect(banner).toBeHidden({timeout: 2_000});
+        });
+    });
+});
+
+test.describe('Transactions', () => {
+    // Whoever commits, cleans up. `Transaction` is global: a row left on one of
+    // TEST_USER's seeded brokers shifts the NAV, positions, counts and pages of
+    // every later test, and the txHygiene net that used to hide it exists only at
+    // one worker. The BUY that is saved and the one that is refused (T1a, T1b) run
+    // on accounts of their own, in the block above; for any commit made here, the
+    // tracker records the rows this page's commits create and deletes exactly
+    // those, at any worker count. It starts after login (it reads through
+    // `page.request`, which needs the session cookie) and so before any commit;
+    // `afterEach` runs for a red test too. The rows T3, T9, T10 and T11 create
+    // through the API are invisible to the tracker and are deleted by id in the
+    // same `afterEach`.
     let txWrites: TransactionWriteTracker | undefined;
 
     test.beforeEach(async ({page}) => {
@@ -366,37 +549,10 @@ test.describe('Transactions', () => {
     });
 
     // ===================================================================
-    // T1 — Create standalone BUY (Apply flow)
+    // T1 — Create standalone BUY (Apply flow). The BUY that is saved and the
+    // one that is refused (T1a, T1b) run on accounts of their own, above.
     // ===================================================================
     test.describe('Create standalone', () => {
-        test('can create a BUY via FormModal → BulkModal → commit', async ({page}) => {
-            await openCreateFlow(page);
-            await fillBuyTransaction(page, {qty: '3'});
-            await clickApply(page);
-
-            // FormModal closes, BulkModal visible with at least 1 row
-            await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 3_000});
-            await expect(page.getByTestId('tx-bulk-modal')).toBeVisible();
-
-            // Verify the row appears in the BulkModal table
-            const bulkRows = page.locator('[data-testid="tx-bulk-modal"] tbody tr');
-            await expect(bulkRows.first()).toBeVisible({timeout: 3_000});
-
-            // Commit — may roll back due to balance checks, which is acceptable
-            const commitBtn = page.getByTestId('tx-bulk-commit');
-            // Armed before the click, read after the outcome: when the batch commits,
-            // its answer carries the id of the row this test now owns, and the tracker
-            // can delete only what it has read before the test ends — its own read of
-            // this body was issued first, on the response event. A click that never
-            // commits costs nothing extra: both waits run out together.
-            const commitAnswer = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 10_000}).catch(() => null);
-            await commitBtn.click();
-            // Wait for either success (close) or rollback (error banner)
-            await Promise.race([page.getByTestId('tx-bulk-modal').waitFor({state: 'hidden', timeout: 10_000}), page.getByTestId('tx-bulk-error').waitFor({state: 'visible', timeout: 10_000})]).catch(() => {});
-            const answer = await commitAnswer;
-            await answer?.json().catch(() => null);
-        });
-
         test('Apply button disabled when form incomplete', async ({page}) => {
             await openCreateFlow(page);
             // Type is BUY, but broker + qty not filled → Apply disabled
@@ -444,7 +600,7 @@ test.describe('Transactions', () => {
     test.describe('Double-click re-edit (C1)', () => {
         test('double-click on new row re-opens FormModal pre-populated', async ({page}) => {
             await openCreateFlow(page);
-            await fillBuyTransaction(page, {qty: '7'});
+            await fillBuyTransaction(page, {broker: OWNED_BROKER, asset: ASSET_NAME, qty: '7'});
             await clickApply(page);
 
             // FormModal closed, BulkModal visible
@@ -568,34 +724,8 @@ test.describe('Transactions', () => {
     });
 
     // ===================================================================
-    // T6 — Banner dismissible (M1/M2)
+    // T6 — Banner dismissible (M1/M2): on an account of its own, above.
     // ===================================================================
-    test.describe('Banner dismissible (M1/M2)', () => {
-        test('validation warning banner has dismiss button', async ({page}) => {
-            await openCreateFlow(page);
-            // Fill invalid data to trigger validation issues: a BUY's quantity is positive.
-            await fillBuyTransaction(page, {qty: '-1'});
-
-            // Validate now, and wait for *that* run: the counter is read before the
-            // click, so a run that finished earlier cannot answer for this one.
-            const root = page.getByTestId('tx-form-modal-root');
-            const validateBtn = page.getByTestId('tx-form-validate-now');
-            await expect(validateBtn).toBeEnabled({timeout: 5_000});
-            const runsBefore = await validateRuns(root);
-            await validateBtn.click();
-            await waitForValidateRun(root, runsBefore);
-
-            // The verdict lands in the form's warning banner; its X is the subject.
-            // The old selector (`.info-banner button`) named a CSS class nothing carries,
-            // so its probe never matched and the dismiss was never tried.
-            const banner = page.getByTestId('tx-form-body').getByTestId('info-banner-warning');
-            await expect(banner).toBeVisible({timeout: 5_000});
-            const dismissBtn = banner.locator('button[aria-label]');
-            await expect(dismissBtn).toBeVisible();
-            await dismissBtn.click();
-            await expect(banner).toBeHidden({timeout: 2_000});
-        });
-    });
 
     // ===================================================================
     // T7 — Paired transaction (Cash Transfer)
