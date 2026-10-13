@@ -113,6 +113,15 @@ wait on questions to the developer. A finding: after midnight the seed holds mor
 the populate's ECB window follows the calendar — so the no-leak check now proves that no rate is written after the
 populate, instead of counting them. **Still open**: the rest of V-21, V-17's two runner points, V-18.
 
+*Train 87*: two more leaks of the V-25 class, cured. `fx-destructive` said it used pairs outside the seed, but EUR/PLN
+and EUR/SEK have been in the seed since `a3a9ead52`, as ECB legs of other chains: its «clean slate» deleted both
+pairs' 2 × 276 rates (`fx_rates` 4 140 → 3 588). It now uses currencies checked free of the seed, registers its
+pairs before creating them and deletes only those (`586fd8aca`); its `beforeAll` checks, read-only, that no pair
+already has routes or rates, and fails without touching anything otherwise — proved red on purpose. The asset specs take each id from the `POST` response and delete it in `afterEach` (`ba1c34d64`): after
+every round the database is back at the seed's 17 assets. New in the backlog: V-31 (the mock FX sync leaves its
+rates), V-32 (asset specs that pick rows by position), V-34 (a cleanup that checks only the HTTP status). **Still
+open**: the rest of V-21, V-17's two runner points, V-18.
+
 ## Prevention
 
 - A test that writes shared state owns it: its own account, its own reserved pair, or a read-and-restore in `finally`;

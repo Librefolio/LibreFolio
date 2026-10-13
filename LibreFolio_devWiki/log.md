@@ -3380,3 +3380,20 @@ R's full run ([[sources/r-full-run-coverage-2026-10-12]]) and M's full gallery o
 1 skipped). Left to fill at the tag: the tag date, R's final run, the gates and the gallery at the tagged commit, the
 first nightly after the push (M-25) and the final CHANGELOG counts. Inbound links from
 [[decisions/changelog-entry-rules]] and the R source page. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Trains 84–91 — M's lots 35–38, T's last fixes, V's budgets, I's lot 51
+Base `fa6299689`; three read-only digests of the journals, every claim re-checked on the code and on git.
+**M** (lots 35–38): [[sources/phase00-translation-round12-2026-10]] — the [1.2.0] chapter re-translated with 136
+fixes from the catalogues, the two sync buttons, M-26 to M-29, «tipo de cambio»; [[problems/schwab-favicon-blocked-by-orb]]
+corrected: the gallery's four reds were also our own favicon mark (`6bb79fecd`), and Schwab falls to the plugin's
+generic icon; still open (U-B3). **T**: [[sources/phase00-financial-math-home-2026-10]], [[features/F-111]] (the shock
+table), [[decisions/figures-in-the-interface-language]] (T-ISO and T-FB pulled into 1.2 and delivered); created
+[[problems/test-hooks-read-the-localized-text]]. **V** (train 87): resolved [[problems/jscoverage-teardown-spends-the-test-budget]]
+(V-28, title corrected) and [[problems/login-returns-before-the-app-has-started]] (V-27);
+[[problems/e2e-writes-leaked-into-shared-state]] (`fx-destructive`, the asset specs); [[sources/phase00-data-quality-e2e-2026-10]].
+**I** (lot 51): created [[problems/event-markers-lost-in-the-last-partial-period]] (R-5); [[concepts/echarts-chart-gotchas]]
+gained the time-axis label rule. [[concepts/responsive-4mode-layout]] was updated by workstream I in `437e74066` (the
+width sweep in four languages, the phone pill): recorded here, and checked against the code — `pillWidthClass`, the
+pill test in `toolbar-width-sweep.spec.ts`, `3e5313d3e` after `v1.1.0`, the measures of plan 51. Also
+[[sources/release-1.2.0]] (two problems resolved, R-5 among the released defects, the gallery's group A corrected).
+Not filed: V-35, which has no record in the tree yet. Graph: not updated (P-6).
