@@ -76,7 +76,8 @@
       "fxPairDesc": "Superposer le taux d'une paire FX sur ce graphique pour comparaison",
       "linearLabel": "Linéaire {rate}/an",
       "compoundLabel": "Composée {rate}/an",
-      "sineLabel": "Sinusoïde ±{amplitude} / {period}j"
+      "sineLabel": "Sinusoïde ±{amplitude} / {period}j",
+      "assetFallback": "Actif n° {id}"
     },
     "params": {
       "annualRate": "Taux Annuel",
