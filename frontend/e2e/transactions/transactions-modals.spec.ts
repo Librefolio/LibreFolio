@@ -9,8 +9,22 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
-import {waitForSettled} from '../fixtures/app-events';
+import {validateRuns, waitForSettled, waitForValidateRun} from '../fixtures/app-events';
 import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
+import {todayIso} from '../fixtures/dates';
+import {uniqueSuffix} from '../fixtures/unique';
+
+// ---------------------------------------------------------------------------
+// Constants — known mock data (populate_mock_data.py)
+// ---------------------------------------------------------------------------
+
+const API = '/api/v1';
+/** TEST_USER is OWNER here. */
+const OWNED_BROKER = 'Interactive Brokers';
+/** TEST_USER is EDITOR here — the other leg of a transfer. */
+const EDITOR_BROKER = 'Directa SIM';
+/** Held at OWNED_BROKER, with price history and BUY lots. */
+const ASSET_NAME = 'Apple';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -81,24 +95,27 @@ async function expectComputedBorderColor(page: Page, input: Locator, color: stri
     await expect.poll(() => input.evaluate((element) => getComputedStyle(element).borderTopColor), {timeout: 10_000, message}).toBe(expected);
 }
 
-/** Fill a minimal BUY transaction in the FormModal (assumes it's already open). */
+/**
+ * Fill a minimal BUY transaction in the FormModal (assumes it's already open).
+ *
+ * Broker and asset are the first entries of their lists. That choice is T1's, and
+ * it is a developer decision (backlog V-21), so it is kept as it was. What changed
+ * is that every step now waits for what it needs instead of probing for it: a
+ * probe that expired skipped its pick in silence, and the failure surfaced later,
+ * at Apply, blaming the wrong step.
+ */
 async function fillBuyTransaction(page: Page, opts: {qty?: string; skipCash?: boolean} = {}) {
     const qty = opts.qty ?? '5';
     // Type is BUY by default
     await expect(page.getByTestId('tx-form-type')).toBeVisible({timeout: 3_000});
 
-    // Pick first available broker
+    // Broker — the first option of the list.
     const brokerWrap = page.getByTestId('tx-form-broker-wrap');
     await brokerWrap.locator('button, [role="combobox"]').first().click();
-    // Pick first option — the locator below already waits for the list to open.
-    const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
-    if (await brokerOption.isVisible({timeout: 2_000}).catch(() => false)) {
-        await brokerOption.click();
-        // The chosen broker closes the list; that is the signal the pick landed.
-        await expect(brokerOption)
-            .not.toBeVisible({timeout: 3_000})
-            .catch(() => {});
-    }
+    await optionListReady(page);
+    await page.locator('[data-testid^="search-select-option-"]').first().click();
+    // The chosen broker closes the list; that is the signal the pick landed.
+    await optionListClosed(page);
 
     // Quantity
     await page.getByTestId('tx-form-quantity').fill(qty);
@@ -110,21 +127,59 @@ async function fillBuyTransaction(page: Page, opts: {qty?: string; skipCash?: bo
         await fillCashAmount(page, '100');
     }
 
-    // Asset — pick first available
+    // Asset — the first option of the list. A BUY always renders the field: its
+    // asset is required.
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
-    if (await assetWrap.isVisible({timeout: 1_000}).catch(() => false)) {
-        const assetTrigger = assetWrap.locator('button, [role="combobox"]').first();
-        if (await assetTrigger.isVisible()) {
-            await assetTrigger.click();
-            const assetOption = page.locator('[data-testid^="search-select-option-"]').first();
-            if (await assetOption.isVisible({timeout: 2_000}).catch(() => false)) {
-                await assetOption.click();
-                await expect(assetOption)
-                    .not.toBeVisible({timeout: 3_000})
-                    .catch(() => {});
-            }
-        }
-    }
+    await expect(assetWrap).toBeVisible({timeout: 5_000});
+    await assetWrap.locator('button, [role="combobox"]').first().click();
+    await optionListReady(page);
+    await page.locator('[data-testid^="search-select-option-"]').first().click();
+    await optionListClosed(page);
+}
+
+/** Choose a transaction type by its code — the option's testid, never its translated label. */
+async function selectType(page: Page, code: string) {
+    await page.getByTestId('tx-form-type').locator('button, [role="combobox"]').first().click();
+    await optionListReady(page);
+    await page.getByTestId(`search-select-option-${code}`).click();
+    await optionListClosed(page);
+}
+
+/** Pick a broker of the standard form by name. */
+async function pickBroker(page: Page, name: string) {
+    await page.getByTestId('tx-form-broker-wrap').locator('button, [role="combobox"]').first().click();
+    await optionListReady(page);
+    const option = page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first();
+    await expect(option).toBeVisible({timeout: 3_000});
+    await option.click();
+    await optionListClosed(page);
+}
+
+/** Pick a broker inside one panel of the dual form (From/To) by name. */
+async function pickBrokerInPanel(page: Page, panelTestid: string, name: string) {
+    const trigger = page.getByTestId(panelTestid).locator('[role="combobox"]').first();
+    await expect(trigger).toBeVisible({timeout: 3_000});
+    await trigger.click();
+    await optionListReady(page);
+    const option = page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first();
+    await expect(option).toBeVisible({timeout: 3_000});
+    await option.click();
+    await optionListClosed(page);
+}
+
+/** Pick an asset by name. The asset select searches inline: its search box is the open trigger. */
+async function pickAsset(page: Page, name: string) {
+    const assetWrap = page.getByTestId('tx-form-asset-wrap');
+    await expect(assetWrap).toBeVisible({timeout: 3_000});
+    await assetWrap.locator('button, [role="combobox"]').first().click();
+    const search = page.getByTestId('tx-form-asset-search');
+    await expect(search).toBeVisible({timeout: 3_000});
+    await search.fill(name);
+    // The list is debounced; the named entry arriving *is* the settle.
+    const option = page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first();
+    await expect(option).toBeVisible({timeout: 5_000});
+    await option.click();
+    await optionListClosed(page);
 }
 
 /** Click the Apply/Save button in the FormModal. */
@@ -137,40 +192,147 @@ async function clickApply(page: Page) {
     await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 5_000});
 }
 
-/** Close all open modals (FormModal → BulkModal), handling discard dialogs. */
-async function closeAllModals(page: Page) {
-    // Close FormModal if open
-    const formCancel = page.getByTestId('tx-form-cancel');
-    if (await formCancel.isVisible({timeout: 500}).catch(() => false)) {
-        await formCancel.click();
-    }
-    // Handle FormModal's "Discard changes?" dialog
-    await handleDiscardDialog(page);
-    // Close BulkModal if open
-    const bulkCancel = page.getByTestId('tx-bulk-cancel');
-    if (await bulkCancel.isVisible({timeout: 500}).catch(() => false)) {
-        await bulkCancel.click();
-    }
-    // Handle BulkModal's "Discard changes?" dialog
-    await handleDiscardDialog(page);
-    // Wait for everything to close
-    await expect(page.getByTestId('tx-bulk-modal'))
-        .not.toBeVisible({timeout: 3_000})
-        .catch(() => {});
-    await expect(page.getByTestId('tx-form-modal'))
-        .not.toBeVisible({timeout: 1_000})
-        .catch(() => {});
+/** Click a row's action via its kebab menu (row-actions-{id} → context-menu-action-{actionId}). */
+async function clickKebabRowAction(row: Locator, actionId: string) {
+    const page = row.page();
+    await row.hover();
+    const kebabBtn = row.getByTestId(/^row-actions-/);
+    await expect(kebabBtn).toBeVisible({timeout: 2_000});
+    await kebabBtn.click();
+    const btn = page.getByTestId(`context-menu-action-${actionId}`);
+    await expect(btn).toBeVisible({timeout: 2_000});
+    await btn.click();
 }
 
-/** Handle a potential "Discard changes?" confirm dialog. */
-async function handleDiscardDialog(page: Page) {
-    const discardBtn = page.getByTestId('confirm-modal-confirm');
-    if (await discardBtn.isVisible({timeout: 1_000}).catch(() => false)) {
-        await discardBtn.click();
-        await expect(discardBtn)
-            .not.toBeVisible({timeout: 3_000})
-            .catch(() => {});
-    }
+/** Bring a row checkbox to `checked` whatever its starting state: a blind click is a toggle. */
+async function ensureChecked(checkbox: Locator) {
+    await expect(checkbox).toBeVisible({timeout: 5_000});
+    if ((await checkbox.getAttribute('data-state')) !== 'checked') await checkbox.click();
+    await expect(checkbox).toHaveAttribute('data-state', 'checked');
+}
+
+/**
+ * What a click on the bulk workspace's close did, read as one state: it closed, or
+ * it stopped on the discard dialog (`confirm-modal-confirm`), or it is still on its
+ * way out. Both ends are observable, so a poll on this tells them apart — and a
+ * failure names the reason instead of "still visible".
+ */
+async function closeOutcome(page: Page): Promise<'closed' | 'asks to discard' | 'closing'> {
+    if (await page.getByTestId('confirm-modal-confirm').isVisible()) return 'asks to discard';
+    if (await page.getByTestId('tx-bulk-modal').isHidden()) return 'closed';
+    return 'closing';
+}
+
+/**
+ * Stage a NEW cash-transfer pair in a fresh workspace and return its grid. The pair
+ * is one workspace row: its receiving half rides hidden behind it. Brokers are picked
+ * by name, not as "the first" and "the last" option, which are whatever sorts there.
+ */
+async function stageNewCashTransfer(page: Page): Promise<{bulkBody: Locator; rows: Locator}> {
+    await openCreateFlow(page);
+    await selectType(page, 'CASH_TRANSFER');
+    await expect(page.getByTestId('tx-form-dual-from')).toBeVisible({timeout: 3_000});
+    await pickBrokerInPanel(page, 'tx-form-dual-from', OWNED_BROKER);
+    await pickBrokerInPanel(page, 'tx-form-dual-to', EDITOR_BROKER);
+    await fillCashAmount(page, '100');
+    await clickApply(page);
+
+    const bulkBody = page.getByTestId('tx-bulk-body');
+    const rows = bulkBody.locator('tbody tr[data-row-id]');
+    await expect(rows, 'the new pair must be staged as one row').toHaveCount(1, {timeout: 3_000});
+    await expect(rows.getByTestId('tx-bulk-row-status')).toHaveAttribute('data-status', 'new');
+    return {bulkBody, rows};
+}
+
+/** After a new pair was removed from the workspace: neither of its halves may be left. */
+async function expectBothHalvesGone(page: Page, bulkBody: Locator, rows: Locator) {
+    // Not on screen: no row remains, and the grid says it is empty (its empty-state
+    // cell, not the translated "No data available").
+    await expect(rows).toHaveCount(0, {timeout: 3_000});
+    await expect(bulkBody.getByTestId('dt-empty')).toBeVisible();
+
+    // Nor behind it. The receiving half rides hidden, so the grid cannot show whether
+    // it went too; the editor's own dirty check can. With both halves gone there is
+    // nothing left to discard: closing must simply close.
+    await page.getByTestId('tx-bulk-close').click();
+    await expect.poll(() => closeOutcome(page), {timeout: 5_000, message: 'closing the emptied workspace must close it without asking to discard — a hidden half left behind is still a change'}).toBe('closed');
+}
+
+/**
+ * Open the table narrowed to one transaction through the `id_min`/`id_max` URL
+ * filter, ending with that row on screen. "It will be near the top" is not true
+ * with neighbouring workers creating rows.
+ */
+async function goToTransactionById(page: Page, txId: number): Promise<Locator> {
+    await navigateTo(page, `/transactions?id_min=${txId}&id_max=${txId}`);
+    // Visible is not loaded: the page renders, then fills, and says so through data-busy.
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="tx-${txId}"]`);
+    await expect(row, `transaction ${txId} must be on screen`).toBeVisible({timeout: 10_000});
+    return row;
+}
+
+// ---------------------------------------------------------------------------
+// Rows a test owns, created through the API
+// ---------------------------------------------------------------------------
+
+interface CommitBody {
+    committed?: boolean;
+    issues?: unknown[];
+    results?: Array<{operation: string; ids?: number[]; status?: string}>;
+}
+
+/**
+ * Rows created through `page.request`. That traffic never reaches the page's
+ * `response` event, so the commit tracker cannot see them: `afterEach` deletes
+ * them by id instead — and runs for a red test too.
+ */
+let apiOwnedTxIds: number[] = [];
+
+/** The OWNER broker of the mock contract, found by name and checked — never "the first editable one". */
+async function ownedMockBrokerId(page: Page): Promise<number> {
+    const resp = await page.request.get(`${API}/brokers`);
+    expect(resp.ok(), `GET ${API}/brokers answered ${resp.status()}`).toBe(true);
+    const {items} = (await resp.json()) as {items: Array<{id: number; name: string; user_role: string | null}>};
+    const broker = items.find((b) => b.name === OWNED_BROKER);
+    expect(broker?.user_role, `TEST_USER must be OWNER of "${OWNED_BROKER}" — check populate_mock_data.py`).toBe('OWNER');
+    return broker!.id;
+}
+
+/**
+ * A 1 EUR DEPOSIT this test owns, dated today and stamped with `marker`; returns
+ * its id. A cash DEPOSIT only raises the broker's cash, and deleting it puts the
+ * cash back: no position, lot or asset of anybody else moves.
+ */
+async function createOwnedDeposit(page: Page, marker: string): Promise<number> {
+    const brokerId = await ownedMockBrokerId(page);
+    const resp = await page.request.post(`${API}/transactions/commit`, {
+        data: {creates: [{broker_id: brokerId, type: 'DEPOSIT', date: todayIso(), quantity: '0', cash: {code: 'EUR', amount: '1'}, tags: [], description: marker}], updates: [], deletes: []},
+    });
+    expect(resp.ok(), `create the owned DEPOSIT: HTTP ${resp.status()}`).toBe(true);
+    const body = (await resp.json()) as CommitBody;
+    // Recorded before anything is asserted: cleanup must never depend on an assertion.
+    // A rolled-back batch reports its would-be ids as "simulated" — only "success" rows exist.
+    const ids = (body.results ?? []).filter((r) => r.operation === 'create' && r.status === 'success').flatMap((r) => r.ids ?? []);
+    apiOwnedTxIds.push(...ids);
+    expect(body.committed, `the owned DEPOSIT was rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
+    expect(ids, 'the commit must create exactly the owned DEPOSIT').toHaveLength(1);
+    return ids[0];
+}
+
+/** Delete the API-created rows that still exist. Fails loud: a silent leftover is somebody else's red. */
+async function deleteApiOwnedRows(page: Page): Promise<void> {
+    const ids = apiOwnedTxIds;
+    apiOwnedTxIds = [];
+    if (ids.length === 0) return;
+    const res = await page.request.get(`${API}/transactions?${ids.map((id) => `ids=${id}`).join('&')}`);
+    expect(res.ok(), `cleanup: GET ${API}/transactions?ids=… answered ${res.status()}`).toBe(true);
+    const stillThere = ((await res.json()) as Array<{id: number}>).map((t) => t.id);
+    if (stillThere.length === 0) return;
+    const del = await page.request.post(`${API}/transactions/commit`, {data: {creates: [], updates: [], deletes: stillThere}});
+    expect(del.ok(), `cleanup of rows ${stillThere.join(', ')}: HTTP ${del.status()}`).toBe(true);
+    const body = (await del.json()) as CommitBody;
+    expect(body.committed, `cleanup of rows ${stillThere.join(', ')} was rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +346,9 @@ test.describe('Transactions', () => {
     // used to hide it exists only at one worker. The tracker records the rows this
     // page's commits create and deletes exactly those, at any worker count. It
     // starts after login (it reads through `page.request`, which needs the session
-    // cookie) and so before any commit; `afterEach` runs for a red test too.
+    // cookie) and so before any commit; `afterEach` runs for a red test too. The
+    // rows T3, T9, T10 and T11 create through the API are invisible to the tracker
+    // and are deleted by id in the same `afterEach`.
     let txWrites: TransactionWriteTracker | undefined;
 
     test.beforeEach(async ({page}) => {
@@ -193,10 +357,14 @@ test.describe('Transactions', () => {
         await goToTransactions(page);
     });
 
-    test.afterEach(async () => {
+    test.afterEach(async ({page}) => {
         const tracker = txWrites;
         txWrites = undefined;
-        await tracker?.cleanup();
+        try {
+            await tracker?.cleanup();
+        } finally {
+            await deleteApiOwnedRows(page);
+        }
     });
 
     // ===================================================================
@@ -285,30 +453,35 @@ test.describe('Transactions', () => {
             await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 3_000});
             await expect(page.getByTestId('tx-bulk-modal')).toBeVisible();
 
-            // Double-click on the first visible data row
-            const firstRow = page.locator('[data-testid="tx-bulk-modal"] tbody tr').first();
-            await firstRow.dblclick();
+            // Double-click the row this test applied. The workspace was opened empty by
+            // this test, so it holds exactly that row: assert it, then act on it —
+            // never on "the first <tr>" of whatever the table happens to render.
+            const bulkRows = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]');
+            await expect(bulkRows, 'the workspace must hold exactly the applied row').toHaveCount(1, {timeout: 3_000});
+            await bulkRows.dblclick();
 
             // FormModal should reopen with pre-populated data
             await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 3_000});
 
-            // Quantity should be pre-filled (not empty)
+            // Quantity should be pre-filled with what was applied (7). Polled: the
+            // form fills in after it opens, and inputValue() reads one instant.
             const qtyInput = page.getByTestId('tx-form-quantity');
             await expect(qtyInput).toBeVisible();
-            const qtyValue = await qtyInput.inputValue();
-            expect(Number(qtyValue)).toBeGreaterThan(0);
+            await expect.poll(async () => Number(await qtyInput.inputValue()), {timeout: 3_000}).toBe(7);
         });
     });
 
     // ===================================================================
-    // T3 — Type swap groups (H6) — uses existing DB transactions
+    // T3 — Type swap groups (H6) — on a DB row this test creates
     // ===================================================================
     test.describe('Type swap groups (H6)', () => {
         test('editing DB row restricts type to swap group', async ({page}) => {
-            // Use existing DB transactions (mock data has them)
-            const firstCheckbox = page.locator('[data-testid="tx-table"] tbody .checkbox-btn, [data-testid="tx-table"] tbody tr .checkbox-btn').first();
-            await expect(firstCheckbox).toBeVisible({timeout: 3_000});
-            await firstCheckbox.click();
+            // A DB row this test owns: a DEPOSIT, whose swap group is {DEPOSIT, WITHDRAWAL}.
+            // "The first checkbox of the table" was a seed row or a neighbour's, of a type
+            // nobody chose, so the restriction could only be checked loosely (≤ 3).
+            const id = await createOwnedDeposit(page, `V21 T3 ${uniqueSuffix()}`);
+            await goToTransactionById(page, id);
+            await ensureChecked(page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${id}`));
 
             // Click edit toolbar button
             const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
@@ -327,11 +500,10 @@ test.describe('Transactions', () => {
             await typeSelect.locator('button, [role="combobox"]').first().click();
             await optionListReady(page);
 
-            // Should see limited options (swap group), NOT all types
-            const options = page.locator('[data-testid^="search-select-option-"]');
-            const count = await options.count();
-            // BUY↔SELL = 2 options max (or similar swap group)
-            expect(count).toBeLessThanOrEqual(3);
+            // Only the swap group of the row's own type — NOT all types.
+            await expect(page.getByTestId('search-select-option-DEPOSIT')).toBeVisible();
+            await expect(page.getByTestId('search-select-option-WITHDRAWAL')).toBeVisible();
+            await expect(page.locator('[data-testid^="search-select-option-"]'), 'a DEPOSIT may only swap with WITHDRAWAL').toHaveCount(2);
         });
     });
 
@@ -376,41 +548,26 @@ test.describe('Transactions', () => {
         test('INTEREST type shows (optional) on asset field', async ({page}) => {
             await openCreateFlow(page);
 
-            // Change type to INTEREST
-            const typeSelect = page.getByTestId('tx-form-type');
-            await typeSelect.locator('button, [role="combobox"]').first().click();
-            await optionListReady(page);
+            // Change type to INTEREST — by its option's testid. The old version found the
+            // option by its (translated) label and only acted if a probe saw it in time.
+            await selectType(page, 'INTEREST');
 
-            const searchInput = page.locator('[data-testid="tx-form-type"] input[type="text"]');
-            if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
-                await searchInput.fill('INTEREST');
-            }
-            const interestOption = page
-                .locator('[data-testid^="search-select-option-"]')
-                .filter({hasText: /interest/i})
-                .first();
-            if (await interestOption.isVisible({timeout: 2_000}).catch(() => false)) {
-                await interestOption.click();
-                await optionListClosed(page);
-
-                const assetWrap = page.getByTestId('tx-form-asset-wrap');
-                await expect(assetWrap).toBeVisible({timeout: 2_000});
-                const assetLabel = assetWrap.locator('span').first();
-                await expect(assetLabel).toContainText(/optional|opzionale|optionnel|opcional/i);
-            }
+            const assetWrap = page.getByTestId('tx-form-asset-wrap');
+            await expect(assetWrap).toBeVisible({timeout: 2_000});
+            const assetLabel = assetWrap.locator('span').first();
+            await expect(assetLabel).toContainText(/optional|opzionale|optionnel|opcional/i);
         });
 
         test('BUY type does not show (optional) on asset field', async ({page}) => {
             await openCreateFlow(page);
-            // BUY is default — asset label should show * not (optional).
-            // Wait for server-driven type rules to load (ensureTypesLoaded is async).
+            // BUY is default — asset label should show * not (optional). Its asset is
+            // required, so the field is always rendered: assert it rather than probe.
             const assetWrap = page.getByTestId('tx-form-asset-wrap');
-            if (await assetWrap.isVisible({timeout: 2_000}).catch(() => false)) {
-                const label = assetWrap.locator('span').first();
-                await expect(label).toContainText('*', {timeout: 15_000});
-                const labelText = await label.textContent();
-                expect(labelText).not.toMatch(/optional|opzionale|optionnel|opcional/i);
-            }
+            await expect(assetWrap).toBeVisible({timeout: 5_000});
+            const label = assetWrap.locator('span').first();
+            // Wait for server-driven type rules to load (ensureTypesLoaded is async).
+            await expect(label).toContainText('*', {timeout: 15_000});
+            await expect(label).not.toContainText(/optional|opzionale|optionnel|opcional/i);
         });
     });
 
@@ -420,23 +577,27 @@ test.describe('Transactions', () => {
     test.describe('Banner dismissible (M1/M2)', () => {
         test('validation warning banner has dismiss button', async ({page}) => {
             await openCreateFlow(page);
-            // Fill partial data to trigger validation issues
+            // Fill invalid data to trigger validation issues: a BUY's quantity is positive.
             await fillBuyTransaction(page, {qty: '-1'});
 
+            // Validate now, and wait for *that* run: the counter is read before the
+            // click, so a run that finished earlier cannot answer for this one.
+            const root = page.getByTestId('tx-form-modal-root');
             const validateBtn = page.getByTestId('tx-form-validate-now');
-            if (await validateBtn.isVisible({timeout: 2_000}).catch(() => false)) {
-                await validateBtn.click();
-                await waitForSettled(page.getByTestId('tx-form-modal-root'), 20_000);
+            await expect(validateBtn).toBeEnabled({timeout: 5_000});
+            const runsBefore = await validateRuns(root);
+            await validateBtn.click();
+            await waitForValidateRun(root, runsBefore);
 
-                const warningBanner = page.locator('[data-testid="tx-form-issues"]');
-                if (await warningBanner.isVisible({timeout: 3_000}).catch(() => false)) {
-                    const dismissBtn = page.locator('.info-banner button[aria-label]').first();
-                    if (await dismissBtn.isVisible({timeout: 1_000}).catch(() => false)) {
-                        await dismissBtn.click();
-                        await expect(warningBanner).not.toBeVisible({timeout: 2_000});
-                    }
-                }
-            }
+            // The verdict lands in the form's warning banner; its X is the subject.
+            // The old selector (`.info-banner button`) named a CSS class nothing carries,
+            // so its probe never matched and the dismiss was never tried.
+            const banner = page.getByTestId('tx-form-body').getByTestId('info-banner-warning');
+            await expect(banner).toBeVisible({timeout: 5_000});
+            const dismissBtn = banner.locator('button[aria-label]');
+            await expect(dismissBtn).toBeVisible();
+            await dismissBtn.click();
+            await expect(banner).toBeHidden({timeout: 2_000});
         });
     });
 
@@ -447,85 +608,36 @@ test.describe('Transactions', () => {
         test('can create Cash Transfer via dual form', async ({page}) => {
             await openCreateFlow(page);
 
-            const typeSelect = page.getByTestId('tx-form-type');
-            await typeSelect.locator('button, [role="combobox"]').first().click();
-            await optionListReady(page);
+            // By the option's testid: the old version matched the translated label
+            // ("cash transfer|bonifico") and only acted if a probe saw it in time.
+            await selectType(page, 'CASH_TRANSFER');
 
-            const searchInput = page.locator('[data-testid="tx-form-type"] input[type="text"]');
-            if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
-                await searchInput.fill('CASH');
-            }
-            const cashOption = page
-                .locator('[data-testid^="search-select-option-"]')
-                .filter({hasText: /cash.*transfer|bonifico/i})
-                .first();
-            if (await cashOption.isVisible({timeout: 2_000}).catch(() => false)) {
-                await cashOption.click();
-                await optionListClosed(page);
-
-                const dualFrom = page.getByTestId('tx-form-dual-from');
-                const dualTo = page.getByTestId('tx-form-dual-to');
-                await expect(dualFrom).toBeVisible({timeout: 3_000});
-                await expect(dualTo).toBeVisible({timeout: 3_000});
-            }
+            const dualFrom = page.getByTestId('tx-form-dual-from');
+            const dualTo = page.getByTestId('tx-form-dual-to');
+            await expect(dualFrom).toBeVisible({timeout: 3_000});
+            await expect(dualTo).toBeVisible({timeout: 3_000});
         });
 
         test('delete new paired row removes both halves (C3)', async ({page}) => {
-            await openCreateFlow(page);
+            const {bulkBody, rows} = await stageNewCashTransfer(page);
 
-            const typeSelect = page.getByTestId('tx-form-type');
-            await typeSelect.locator('button, [role="combobox"]').first().click();
-            await optionListReady(page);
-            const searchInput = page.locator('[data-testid="tx-form-type"] input[type="text"]');
-            if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
-                await searchInput.fill('CASH');
-            }
-            const cashOption = page
-                .locator('[data-testid^="search-select-option-"]')
-                .filter({hasText: /cash.*transfer|bonifico/i})
-                .first();
-            await expect(cashOption).toBeVisible({timeout: 3_000});
-            await cashOption.click();
-            await optionListClosed(page);
+            // Remove it through its kebab menu. The old version looked for a delete
+            // button inside the row, which does not exist: its probe never matched,
+            // nothing was ever deleted, and the test reported green regardless.
+            await clickKebabRowAction(rows, 'mark-delete');
 
-            // From broker
-            const fromSection = page.getByTestId('tx-form-dual-from');
-            await expect(fromSection).toBeVisible({timeout: 3_000});
-            const fromBrokerCombobox = fromSection.locator('[role="combobox"]').first();
-            await fromBrokerCombobox.click();
-            await optionListReady(page);
-            const fromBrokerOpt = page.locator('[data-testid^="search-select-option-"]').first();
-            await expect(fromBrokerOpt).toBeVisible({timeout: 3_000});
-            await fromBrokerOpt.click();
-            await optionListClosed(page);
+            await expectBothHalvesGone(page, bulkBody, rows);
+        });
 
-            // To broker
-            const toSection = page.getByTestId('tx-form-dual-to');
-            const toBrokerCombobox = toSection.locator('[role="combobox"]').first();
-            await toBrokerCombobox.click();
-            await optionListReady(page);
-            const toOptions = page.locator('[data-testid^="search-select-option-"]');
-            const toCount = await toOptions.count();
-            expect(toCount, 'Need at least 2 brokers — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
-            await toOptions.nth(toCount - 1).click();
-            await optionListClosed(page);
+        test('delete new paired row through «Delete selected» removes both halves (C3)', async ({page}) => {
+            const {bulkBody, rows} = await stageNewCashTransfer(page);
 
-            // Cash amount
-            await fillCashAmount(page, '100');
+            // Select it through its own checkbox, then remove the selection with the
+            // workspace's selection toolbar.
+            await ensureChecked(rows.getByTestId(/^dt-row-checkbox-/));
+            await page.getByTestId('tx-bulk-delete-selected').click();
 
-            await clickApply(page);
-            await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 3_000});
-
-            const rowsBefore = await page.locator('[data-testid="tx-bulk-modal"] tbody tr').count();
-
-            const deleteBtn = page.locator('[data-testid="tx-bulk-modal"] tbody tr').first().locator('[data-testid*="delete"], button[title*="delete"], button[title*="rimuovi"]').first();
-            if (await deleteBtn.isVisible({timeout: 1_000}).catch(() => false)) {
-                await deleteBtn.click();
-                await expect(page.locator('[data-testid="tx-bulk-modal"] tbody')).toContainText('No data available', {timeout: 3_000});
-                const remainingHtml = await page.locator('[data-testid="tx-bulk-modal"] tbody').innerHTML();
-                expect(remainingHtml).not.toMatch(/cash transfer|bonifico/i);
-                expect(rowsBefore).toBeGreaterThan(0);
-            }
+            await expectBothHalvesGone(page, bulkBody, rows);
         });
     });
 
@@ -536,30 +648,16 @@ test.describe('Transactions', () => {
         test('optional label changes with language', async ({page}) => {
             await openCreateFlow(page);
 
-            // Switch to INTEREST type
-            const typeSelect = page.getByTestId('tx-form-type');
-            await typeSelect.locator('button, [role="combobox"]').first().click();
-            await optionListReady(page);
-            const searchInput = page.locator('[data-testid="tx-form-type"] input[type="text"]');
-            if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
-                await searchInput.fill('INTEREST');
-            }
-            const opt = page
-                .locator('[data-testid^="search-select-option-"]')
-                .filter({hasText: /interest|interesse/i})
-                .first();
-            if (await opt.isVisible({timeout: 2_000}).catch(() => false)) {
-                await opt.click();
-                await optionListClosed(page);
+            // Switch to INTEREST type — by the option's testid, the same in every language.
+            await selectType(page, 'INTEREST');
+            const assetWrap = page.getByTestId('tx-form-asset-wrap');
+            await expect(assetWrap).toBeVisible({timeout: 3_000});
+            await expect(assetWrap).toContainText(/optional/i);
 
-                const assetWrap = page.getByTestId('tx-form-asset-wrap');
-                if (await assetWrap.isVisible({timeout: 2_000}).catch(() => false)) {
-                    await expect(assetWrap).toContainText(/optional/i);
-                }
-            }
-
-            // Close ALL modals before changing language
-            await closeAllModals(page);
+            // Leave the editor by reloading the page: the language selector sits in the
+            // header, under the modals. (It used to close them through probes, any of which
+            // could skip its click in silence and leave a backdrop over the header.)
+            await goToTransactions(page);
 
             // Set Italian
             await setLanguage(page, 'it');
@@ -567,30 +665,12 @@ test.describe('Transactions', () => {
             await openCreateFlow(page);
 
             // Switch to INTEREST again
-            const typeSelect2 = page.getByTestId('tx-form-type');
-            await typeSelect2.locator('button, [role="combobox"]').first().click();
-            await optionListReady(page);
-            const searchInput2 = page.locator('[data-testid="tx-form-type"] input[type="text"]');
-            if (await searchInput2.isVisible({timeout: 1_000}).catch(() => false)) {
-                await searchInput2.fill('INTEREST');
-            }
-            const opt2 = page
-                .locator('[data-testid^="search-select-option-"]')
-                .filter({hasText: /interest|interesse/i})
-                .first();
-            if (await opt2.isVisible({timeout: 2_000}).catch(() => false)) {
-                await opt2.click();
-                await optionListClosed(page);
-
-                const assetWrap2 = page.getByTestId('tx-form-asset-wrap');
-                if (await assetWrap2.isVisible({timeout: 2_000}).catch(() => false)) {
-                    await expect(assetWrap2).toContainText(/opzionale/i);
-                }
-            }
-
-            // Cleanup
-            await closeAllModals(page);
-            await setLanguage(page, 'en');
+            await selectType(page, 'INTEREST');
+            const assetWrap2 = page.getByTestId('tx-form-asset-wrap');
+            await expect(assetWrap2).toBeVisible({timeout: 3_000});
+            await expect(assetWrap2).toContainText(/opzionale/i);
+            // Nothing to restore: the language lives in this test's own browser context
+            // (localStorage), which ends with the test.
         });
     });
 
@@ -599,53 +679,85 @@ test.describe('Transactions', () => {
     // ===================================================================
     test.describe('Edit from main table (C2)', () => {
         test('edit button opens BulkModal with FormModal auto-opened', async ({page}) => {
-            // Use body row checkbox (NOT header "select all")
-            const bodyCheckbox = page.locator('[data-testid="tx-table"] tbody .checkbox-btn, [data-testid="tx-table"] tbody tr .checkbox-btn').first();
-            await expect(bodyCheckbox).toBeVisible({timeout: 3_000});
-            await bodyCheckbox.click();
+            // A row this test owns, selected by its id — not "the first body checkbox",
+            // a seed row or a neighbour's that could change under the test.
+            const id = await createOwnedDeposit(page, `V21 T9 ${uniqueSuffix()}`);
+            await goToTransactionById(page, id);
+            await ensureChecked(page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${id}`));
 
+            // One row selected: the toolbar's edit is always offered. Asserted, not probed.
             const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
-            if (await editBtn.isVisible({timeout: 2_000}).catch(() => false)) {
-                await editBtn.click();
+            await expect(editBtn).toBeVisible({timeout: 3_000});
+            await editBtn.click();
 
-                // BulkModal + FormModal should open (auto-open for single row)
-                await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
-                await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+            // BulkModal + FormModal should open (auto-open for single row)
+            await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+            await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
 
-                const qtyInput = page.getByTestId('tx-form-quantity');
-                if (await qtyInput.isVisible({timeout: 1_000}).catch(() => false)) {
-                    const qtyVal = await qtyInput.inputValue();
-                    expect(qtyVal).not.toBe('');
-                }
-            }
+            // Pre-populated with the row being edited. A DEPOSIT has no quantity; its
+            // amount is the field the form must have filled in.
+            const amountInput = page.getByTestId('tx-form-cash-amount');
+            await expect(amountInput).toBeVisible({timeout: 3_000});
+            await expect(amountInput).not.toHaveValue('');
         });
     });
 
     // ===================================================================
-    // T10 — Delete from main table (uses existing DB transactions)
+    // T10 — Delete from main table
     // ===================================================================
     test.describe('Delete', () => {
         test('can delete a standalone transaction', async ({page}) => {
-            // Use existing DB transactions
-            const countBadge = page.locator('[data-testid="tx-count-badge"]');
-            const countBefore = await countBadge.textContent();
-            expect(Number(countBefore), 'Transactions must exist — check populate_mock_data.py').toBeGreaterThan(0);
+            // A row this test owns. The old version took "the first body row" — a seed
+            // row or a neighbour's — read a global count badge, and never deleted
+            // anything: the toolbar delete opens the bulk workspace now, so its probe
+            // for a confirm dialog always answered false and the test went green
+            // having done nothing (backlog V-21).
+            const id = await createOwnedDeposit(page, `V21 T10 ${uniqueSuffix()}`);
+            await goToTransactionById(page, id);
+            await ensureChecked(page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${id}`));
 
-            // Select first body row (NOT header "select all")
-            const firstCheckbox = page.locator('[data-testid="tx-table"] tbody .checkbox-btn, [data-testid="tx-table"] tbody tr .checkbox-btn').first();
-            await expect(firstCheckbox).toBeVisible({timeout: 3_000});
-            await firstCheckbox.click();
+            const deleteBtn = page.getByTestId('toolbar-action-delete');
+            await expect(deleteBtn).toBeVisible({timeout: 3_000});
+            await deleteBtn.click();
 
-            const deleteBtn = page.locator('[data-testid="toolbar-action-delete"]');
-            if (await deleteBtn.isVisible({timeout: 2_000}).catch(() => false)) {
-                await deleteBtn.click();
+            // T4: no confirm dialog — the bulk workspace opens with the row staged as a
+            // delete, which the row's published status says (`data-status`).
+            const bulkModal = page.getByTestId('tx-bulk-modal');
+            await expect(bulkModal).toBeVisible({timeout: 5_000});
+            const stagedRows = bulkModal.locator('tbody tr[data-row-id]');
+            await expect(stagedRows, 'the workspace must stage exactly the row we selected').toHaveCount(1, {timeout: 5_000});
+            await expect(stagedRows.getByTestId('tx-bulk-row-status')).toHaveAttribute('data-status', 'delete');
 
-                const confirmBtn = page.getByTestId('confirm-modal-confirm');
-                if (await confirmBtn.isVisible({timeout: 3_000}).catch(() => false)) {
-                    await confirmBtn.click();
-                    await expect.poll(async () => Number(await countBadge.textContent().catch(() => '0')), {timeout: 15_000}).toBeLessThan(Number(countBefore));
-                }
-            }
+            // Commit through the workspace; the request must delete our row and nothing else.
+            const commitBtn = page.getByTestId('tx-bulk-commit');
+            await expect(commitBtn).toBeEnabled({timeout: 8_000});
+            const commitRequest = page.waitForRequest((req) => req.url().includes('/transactions/commit') && req.method() === 'POST', {timeout: 15_000});
+            const commitAnswer = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 15_000});
+            await commitBtn.click();
+            const payload = (await commitRequest).postDataJSON() as {deletes?: number[]};
+            expect(payload.deletes, 'the commit must delete exactly our row').toEqual([id]);
+            const body = (await (await commitAnswer).json()) as CommitBody;
+            expect(body.committed, `the delete was rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
+            await expect(bulkModal).toBeHidden({timeout: 10_000});
+
+            // Gone, by id: ids are never reused (AUTOINCREMENT since plan 34), so an
+            // empty answer for this id can only mean this row.
+            await expect
+                .poll(
+                    async () => {
+                        const res = await page.request.get(`${API}/transactions?ids=${id}`);
+                        return res.ok() ? ((await res.json()) as unknown[]).length : -1;
+                    },
+                    {timeout: 10_000, message: `transaction ${id} must no longer exist`},
+                )
+                .toBe(0);
+            // And from the table narrowed to that id. Nothing else can hold it, so the
+            // grid must render its empty state: that is the presence barrier which keeps
+            // "no such row" from also meaning "not rendered yet".
+            await navigateTo(page, `/transactions?id_min=${id}&id_max=${id}`);
+            await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+            await expect(page.getByTestId('tx-table').getByTestId('dt-empty')).toBeVisible({timeout: 10_000});
+            await expect(page.locator(`[data-testid="tx-table"] tr[data-row-id="tx-${id}"]`)).toHaveCount(0);
         });
     });
 
@@ -654,18 +766,23 @@ test.describe('Transactions', () => {
     // ===================================================================
     test.describe('View mode', () => {
         test('double-click on main table row opens view mode', async ({page}) => {
-            const firstRow = page.locator('[data-testid="tx-table"] tbody tr, [data-testid="tx-table"] tbody tr').first();
-            if (await firstRow.isVisible({timeout: 2_000}).catch(() => false)) {
-                await firstRow.dblclick();
+            // A row this test owns, on screen by its id. Double-clicked on its description
+            // cell: plain text, where the row's own handler gets the event (other cells
+            // carry links and buttons of their own).
+            const id = await createOwnedDeposit(page, `V21 T11 ${uniqueSuffix()}`);
+            const row = await goToTransactionById(page, id);
+            await row.getByTestId(`tx-desc-${id}`).dblclick();
 
-                await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
-                const title = page.getByTestId('tx-form-title');
-                await expect(title).toBeVisible();
+            await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+            const title = page.getByTestId('tx-form-title');
+            await expect(title).toBeVisible();
 
-                // Save button should NOT be visible in view mode
-                const saveBtn = page.getByTestId('tx-form-save');
-                await expect(saveBtn).not.toBeVisible({timeout: 1_000});
-            }
+            // View mode, proven positively first: only a read-only form offers the switch
+            // to edit, and its footer names the row it opened...
+            await expect(page.getByTestId('tx-form-switch-edit')).toBeVisible();
+            await expect(page.getByTestId('tx-form-readonly-footer')).toContainText(new RegExp(`#${id}\\b`));
+            // ...so the Save button being hidden means "read-only", not "not rendered yet".
+            await expect(page.getByTestId('tx-form-save')).toBeHidden();
         });
     });
 
@@ -694,8 +811,6 @@ test.describe('Transactions', () => {
             await qtyInput.fill('');
             await qtyInput.type('5');
             await expectComputedBorderColor(page, qtyInput, 'oklch(0.765 0.177 163.223 / 0.7)', 'Positive qty on BUY should have the effective green border color');
-
-            await closeAllModals(page);
         });
 
         test('SELL qty positive → green border (auto-negated on save)', async ({page}) => {
@@ -723,8 +838,6 @@ test.describe('Transactions', () => {
             await qtyInput.fill('');
             await qtyInput.type('-10');
             await expectComputedBorderColor(page, qtyInput, 'oklch(0.637 0.237 25.331 / 0.7)', 'Negative qty on SELL should have the effective red border color');
-
-            await closeAllModals(page);
         });
     });
 
@@ -748,29 +861,16 @@ test.describe('Transactions', () => {
             await page.getByTestId('search-select-option-ADJUSTMENT').click();
             await optionListClosed(page);
 
-            // Pick first broker
-            const brokerWrap = page.getByTestId('tx-form-broker-wrap');
-            await brokerWrap.locator('button, [role="combobox"]').first().click();
-            await optionListReady(page);
-            const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
-            await expect(brokerOption).toBeVisible({timeout: 3_000});
-            await brokerOption.click();
-            await optionListClosed(page);
+            // Broker and asset by name, not "the first option": that is whatever sorts
+            // first today — under concurrency a neighbour's broker or asset.
+            await pickBroker(page, OWNED_BROKER);
 
             // Set qty to 5 (positive)
             await page.getByTestId('tx-form-quantity').fill('5');
             await expect(page.getByTestId('tx-form-quantity')).toHaveValue('5');
 
             // Pick an asset (required for the form to be complete)
-            const assetWrap = page.getByTestId('tx-form-asset-wrap');
-            await expect(assetWrap).toBeVisible({timeout: 3_000});
-            const assetTrigger = assetWrap.locator('button, [role="combobox"]').first();
-            await assetTrigger.click();
-            await optionListReady(page);
-            const assetOption = page.locator('[data-testid^="search-select-option-"]').first();
-            await expect(assetOption).toBeVisible({timeout: 3_000});
-            await assetOption.click();
-            await optionListClosed(page);
+            await pickAsset(page, ASSET_NAME);
 
             // Apply the TX (push to BulkModal workspace)
             const applyBtn = page.getByTestId('tx-form-save');
@@ -789,8 +889,6 @@ test.describe('Transactions', () => {
             expect(respBody.committed).toBe(false);
             // WAC auto-mode: should have success + wac_results (no issues)
             expect(respBody.success_count).toBeGreaterThanOrEqual(1);
-
-            await closeAllModals(page);
         });
     });
 });

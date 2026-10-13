@@ -27,6 +27,10 @@ interface CommitPayload {
     [key: string]: unknown;
 }
 
+/** The broker the mock contract makes TEST_USER's OWNER, and an asset it holds (populate_mock_data.py). */
+const BROKER_NAME = 'Interactive Brokers';
+const ASSET_NAME = 'Apple';
+
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
@@ -46,14 +50,26 @@ async function openAdjustmentWithCostBasis(page: Page, quantity: string) {
     // list. That — not latency — is what the sleeps here were covering.
     await optionsClosed(page);
 
+    // Broker and asset by name. "The first option" is whatever sorts first today: under
+    // concurrency that can be a neighbour's broker or asset, gone while this test commits
+    // on it — and the commit test below does commit.
     const brokerWrap = page.getByTestId('tx-form-broker-wrap');
     await brokerWrap.locator('button, [role="combobox"]').first().click();
-    await page.locator('[data-testid^="search-select-option-"]').first().click();
+    const brokerOption = page.locator('[data-testid^="search-select-option-"]', {hasText: BROKER_NAME}).first();
+    await expect(brokerOption).toBeVisible({timeout: 5_000});
+    await brokerOption.click();
     await optionsClosed(page);
 
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
     await assetWrap.locator('button, [role="combobox"]').first().click();
-    await page.locator('[data-testid^="search-select-option-"]').first().click();
+    // The asset select searches inline: its search box is the open trigger itself.
+    const assetSearch = page.getByTestId('tx-form-asset-search');
+    await expect(assetSearch).toBeVisible({timeout: 3_000});
+    await assetSearch.fill(ASSET_NAME);
+    // The list is debounced; the named entry arriving *is* the settle.
+    const assetOption = page.locator('[data-testid^="search-select-option-"]', {hasText: ASSET_NAME}).first();
+    await expect(assetOption).toBeVisible({timeout: 5_000});
+    await assetOption.click();
     await optionsClosed(page);
 
     const qtyInput = page.getByTestId('tx-form-quantity');
@@ -117,8 +133,10 @@ test.describe('Cost Basis Override — Total/Per unit toggle', () => {
         const totalBtn = page.getByTestId('tx-form-cost-basis-unit-toggle-total');
         await expect(unitBtn).toBeVisible();
         await expect(totalBtn).toBeVisible();
-        // Default state: "Per unit" visually active (bg-gray-200 class applied by the component)
-        await expect(unitBtn).toHaveClass(/bg-gray-200/);
+        // Default state: "Per unit" is the pressed half. aria-pressed is the component
+        // saying which mode it is in; the old `bg-gray-200` was a guess about how it looks.
+        await expect(unitBtn).toHaveAttribute('aria-pressed', 'true');
+        await expect(totalBtn).toHaveAttribute('aria-pressed', 'false');
     });
 
     test('manual entry round-trips correctly between Total and Per unit for a qty=5 lot', async ({page}) => {
@@ -173,27 +191,25 @@ test.describe('Cost Basis Override — Total/Per unit toggle', () => {
     test('toggle choice persists across closing and reopening the form (localStorage)', async ({page}) => {
         await openAdjustmentWithCostBasis(page, '3');
         await page.getByTestId('tx-form-cost-basis-unit-toggle-total').click();
-        await expect(page.getByTestId('tx-form-cost-basis-unit-toggle-total')).toHaveClass(/bg-libre-green/);
+        await expect(page.getByTestId('tx-form-cost-basis-unit-toggle-total')).toHaveAttribute('aria-pressed', 'true');
 
-        // Cancel the form (discards this draft) — a "Discard changes?" confirm appears
-        // since fields were filled; confirm it, then close the underlying BulkModal too,
-        // so the next tx-add-button click opens a completely fresh FormModal.
+        // Cancel the form (discards this draft). Type, broker, asset and quantity were
+        // filled, so the draft differs from the one the form opened with and the form
+        // always asks first: confirm it. (Probing for it turned "slow" into "absent".)
         await page.getByTestId('tx-form-cancel').click();
         const discardConfirm = page.getByTestId('confirm-modal-confirm');
-        if (await discardConfirm.isVisible({timeout: 1_500}).catch(() => false)) {
-            await discardConfirm.click();
-        }
+        await expect(discardConfirm).toBeVisible({timeout: 5_000});
+        await discardConfirm.click();
         await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 5_000});
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+        // Nothing was ever applied to the workspace, so it closes without asking: an
+        // untouched editor that asks to discard would be a regression, and the
+        // assertion below would catch it instead of clicking it away.
         await page.getByTestId('tx-bulk-close').click();
-        // The BulkModal itself may also ask to discard its (empty) pending row.
-        const confirmDiscard = page.getByTestId('confirm-modal-confirm');
-        if (await confirmDiscard.isVisible({timeout: 1_500}).catch(() => false)) {
-            await confirmDiscard.click();
-        }
         await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 5_000});
 
+        // A completely fresh FormModal: the choice comes back from localStorage.
         await openAdjustmentWithCostBasis(page, '3');
-        await expect(page.getByTestId('tx-form-cost-basis-unit-toggle-total')).toHaveClass(/bg-libre-green/);
+        await expect(page.getByTestId('tx-form-cost-basis-unit-toggle-total')).toHaveAttribute('aria-pressed', 'true');
     });
 });
