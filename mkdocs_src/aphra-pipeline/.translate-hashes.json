@@ -10413,7 +10413,7 @@
     }
   },
   "CHANGELOG.md#1.2.0/fixed/charts": {
-    "md5": "bef5088ade74a3b8263725d92f214866",
+    "md5": "abadf74e117728366668040399c8e2bc",
     "langs_done": [
       "es",
       "fr",
@@ -10434,7 +10434,7 @@
         "structural_issues": 0,
         "elapsed_s": 81.0,
         "index": 7,
-        "stamped_at": "2026-10-13T08:34:47.013877+00:00",
+        "stamped_at": "2026-10-13T19:49:51.815210+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -10448,7 +10448,7 @@
         "structural_issues": 0,
         "elapsed_s": 59.6,
         "index": 7,
-        "stamped_at": "2026-10-13T08:34:47.013877+00:00",
+        "stamped_at": "2026-10-13T19:49:51.815210+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -10462,7 +10462,7 @@
         "structural_issues": 0,
         "elapsed_s": 59.9,
         "index": 7,
-        "stamped_at": "2026-10-13T08:34:47.013877+00:00",
+        "stamped_at": "2026-10-13T19:49:51.815210+00:00",
         "stamped_by": "translate-stamp"
       }
     }
