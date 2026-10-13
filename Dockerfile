@@ -65,9 +65,10 @@ WORKDIR /build
 COPY requirements.txt ./
 # --mount=type=cache persists downloaded wheels across builds on the host.
 # Only packages with new versions are re-downloaded; unchanged ones are instant.
+# uvicorn's extras (uvloop, httptools, watchfiles) are pinned in the lock too, so the
+# image runs the same server stack as development and tests.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --prefix=/install -r requirements.txt && \
-    pip install --prefix=/install uvicorn[standard]
+    pip install --prefix=/install -r requirements.txt
 
 FROM python:3.13-slim
 

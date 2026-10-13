@@ -101,7 +101,11 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   rilanciato con carico 30, è passato in 2,9 s. Nei 30 s stanno login, `ensureBrokerExists`, due navigazioni e il
   pannello. Da valutare con `test-triage`: un budget esplicito o una navigazione in meno. Dettagli:
   [piano della 50](50_brokerDetailBudget/plan-phase00BrokerDetailBudget.prompt.md).
-- **C-59 · L'immagine Docker installa `uvicorn[standard]` fuori dal lock** — medio-basso; coordinatore, 12/10, dalla
+- ✅ **C-59 · L'immagine Docker installa `uvicorn[standard]` fuori dal lock** — chiusa il 13/10, prima del tag (decisione
+  del developer, D5): il developer ha eseguito `pipenv upgrade "uvicorn[standard]==0.52.4"` e `pipenv sync --dev`, a
+  corsie ferme. Il lock ora contiene uvloop 0.23.0, httptools 0.9.0 e watchfiles 1.3.0. Il resolver ha alzato due extra
+  già presenti, websockets 17.1 → 17.2 e python-dotenv 1.2.3 → 1.2.4; i pacchetti di sviluppo non sono cambiati. Il
+  `Dockerfile` installa solo `requirements.txt`, generato dal lock. Era: medio-basso; coordinatore, 12/10, dalla
   ricerca su Python. `Dockerfile:70` esegue `pip install uvicorn[standard]` senza versione dopo `requirements.txt`:
   `uvloop`, `httptools` e gli altri extra arrivano in produzione all'ultima versione del giorno della build, mentre il
   lock non li contiene, e sviluppo e test girano senza `uvloop`. È uno scarto fra sviluppo e produzione, e una build
