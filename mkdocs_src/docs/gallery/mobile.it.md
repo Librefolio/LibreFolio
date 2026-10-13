@@ -128,13 +128,13 @@ Ripartizione per tipo, settore e geografia — istantanea attuale o evoluzione s
 
 ### 📋 Posizioni
 
-Passa tra Posizioni e Performance, poi confronta i dati nelle viste tabella o mappa — aggregati sull'intero portafoglio.
+Passa tra Portafoglio e Periodo, poi confronta i dati nelle viste tabella o mappa — aggregati sull'intero portafoglio.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-mobile-11" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Posizioni / Tabella" alt="Posizioni — Tabella Posizioni">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Posizioni / Mappa" alt="Posizioni — Mappa Posizioni">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Performance / Tabella" alt="Posizioni — Tabella Performance">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Performance / Mappa" alt="Posizioni — Mappa Performance">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Portafoglio / Tabella" alt="Posizioni — Tabella Portafoglio">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portafoglio / Mappa" alt="Posizioni — Mappa Portafoglio">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Periodo / Tabella" alt="Posizioni — Tabella Periodo">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Periodo / Mappa" alt="Posizioni — Mappa Periodo">
 </div>
 
 ### 💸 Scheda Transazioni
@@ -531,13 +531,13 @@ Gestisci comproprietà e ruoli di accesso con la modale di condivisione, ottimiz
 
 ### 📊 Posizioni broker
 
-Gli interruttori Posizioni e Performance ottimizzati per il tocco alternano le viste tabella e mappa su mobile.
+Il selettore Portafoglio / Periodo cambia la vista; le icone Tabella / Mappa la mostrano come tabella o come grafico.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-mobile-8" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Posizioni / Tabella" alt="Posizioni broker — Tabella Posizioni">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Posizioni / Mappa" alt="Posizioni broker — Mappa Posizioni">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Performance / Tabella" alt="Posizioni broker — Tabella Performance">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Performance / Mappa" alt="Posizioni broker — Mappa Performance">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Portafoglio / Tabella" alt="Posizioni broker — Tabella Portafoglio">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portafoglio / Mappa" alt="Posizioni broker — Mappa Portafoglio">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Periodo / Tabella" alt="Posizioni broker — Tabella Periodo">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Periodo / Mappa" alt="Posizioni broker — Mappa Periodo">
 </div>
 
 ### ℹ️ Informazioni broker

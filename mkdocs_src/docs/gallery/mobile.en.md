@@ -129,13 +129,13 @@ Breakdown by type, sector, and geography — current snapshot or historical evol
 
 ### 📋 Positions
 
-Switch between Holdings and Performance, then compare data in table or map views — aggregated across your whole portfolio.
+Switch between Portfolio and Period, then compare data in table or map views — aggregated across your whole portfolio.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-mobile-11" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Holdings / Table" alt="Positions — Holdings Table">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Holdings / Map" alt="Positions — Holdings Map">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Performance / Table" alt="Positions — Performance Table">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Performance / Map" alt="Positions — Performance Map">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Portfolio / Table" alt="Positions — Portfolio Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portfolio / Map" alt="Positions — Portfolio Map">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Period / Table" alt="Positions — Period Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Period / Map" alt="Positions — Period Map">
 </div>
 
 ### 💸 Transactions Tab
@@ -536,13 +536,13 @@ Manage co-ownership and access roles with the sharing modal, optimized for mobil
 
 ### 📊 Broker Positions
 
-Touch-friendly Holdings and Performance toggles switch between table and map views on mobile.
+The Portfolio / Period switch changes the view; the Table / Map icons draw it as a table or a chart.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-mobile-8" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Holdings / Table" alt="Broker Positions — Holdings Table">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Holdings / Map" alt="Broker Positions — Holdings Map">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Performance / Table" alt="Broker Positions — Performance Table">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Performance / Map" alt="Broker Positions — Performance Map">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Portfolio / Table" alt="Broker Positions — Portfolio Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portfolio / Map" alt="Broker Positions — Portfolio Map">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Period / Table" alt="Broker Positions — Period Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Period / Map" alt="Broker Positions — Period Map">
 </div>
 
 ### ℹ️ Broker Info
