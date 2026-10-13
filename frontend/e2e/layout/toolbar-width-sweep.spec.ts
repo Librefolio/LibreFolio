@@ -1086,7 +1086,7 @@ test.describe('Assets lifecycle pill at phone widths (lot 51, R-1)', () => {
             if (!baseURL) throw new Error('The pill check needs the runner-provided baseURL');
             await keepOffline(page, new URL(baseURL).origin);
             await login(page, TEST_USER);
-            // As in the sweep: login() returns before the post-login routing that brings the language selector.
+            // As in the sweep: login() returns once the app has arrived (V-27); the two waits below re-check that landing, then the selector.
             await page.waitForURL((url) => url.pathname !== '/', {timeout: 30_000});
             await expect(page.getByTestId('language-selector-button'), 'the app shell is up after the post-login redirect').toBeVisible({timeout: 30_000});
             await setLanguage(page, lang);

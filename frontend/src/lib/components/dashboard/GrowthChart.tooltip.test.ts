@@ -82,7 +82,15 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         return chart;
     }
 
-    return {chartInstances, echartsModule: {init: (dom: unknown) => createFakeChart(dom)}};
+    return {
+        chartInstances,
+        echartsModule: {
+            init: (dom: unknown) => createFakeChart(dom),
+            // WHY (plan 52, C1): the time axis now measures its labels with `echarts.format.getTextRect` to size its right
+            // inset, and `vi.mock` throws on an export the factory leaves out. 7 px a character, as GrowthChart.test.ts.
+            format: {getTextRect: (text: string) => ({x: 0, y: 0, width: text.length * 7, height: 14})},
+        },
+    };
 });
 
 vi.mock('echarts', () => echartsModule);

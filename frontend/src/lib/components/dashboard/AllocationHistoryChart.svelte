@@ -31,8 +31,10 @@
     import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
     import {currentLanguage} from '$lib/stores/app/language';
     import {debug} from '$lib/debug';
-    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
+    import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface AllocationComponent {
@@ -99,6 +101,8 @@
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
     let responsiveXAxisCompact = false;
+    /** The grid's right edge on screen: the time-axis inset that keeps the last label whole (plan 52), or the '4%' base. */
+    let appliedGridRight: number | string = '4%';
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let darkModeObserver: MutationObserver | null = null;
@@ -227,6 +231,18 @@
                                 chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
                             } else if (wasCompact) {
                                 renderChart();
+                            }
+                            // The '4%' base stands for other pixels at another width, so the inset may change with it.
+                            const gridRight = timeAxisGridRight({
+                                width: chartContainer.clientWidth,
+                                values: dataset.dates,
+                                locale: uiLocale(),
+                                base: '4%',
+                                measure: axisLabelMeasure(chartInstance, 14),
+                            });
+                            if (gridRight !== appliedGridRight) {
+                                appliedGridRight = gridRight;
+                                chartInstance.setOption({grid: {right: gridRight}}, {lazyUpdate: true});
                             }
                         }
                         scheduleResolutionCheck();
@@ -554,16 +570,21 @@
         }).format(toUtcDate(date));
     }
 
+    /**
+     * Every day of the header is written in the interface language, never as raw ISO (plan 52, C2). The week
+     * still running ends on its last day with data, never on the Sunday still to come: the price charts' rule.
+     */
     function buildAllocationTooltipHeader(row: TemporalBucketRow, mutedColor: string): string {
         if (currentResolution === 'weekly') {
-            return buildTooltipHeader($t('chart.tooltip.weekRange', {values: {start: row.bucketStart, end: row.bucketEnd}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: row.date}}), mutedColor);
+            const span = bucketSpanUpTo(row.date, row);
+            return buildTooltipHeader($t('chart.tooltip.weekRange', {values: {start: formatDay(span.bucketStart), end: formatDay(span.bucketEnd)}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
         }
 
         if (currentResolution === 'monthly') {
-            return buildTooltipHeader($t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(row.bucketStart)}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: row.date}}), mutedColor);
+            return buildTooltipHeader($t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(row.bucketStart)}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
         }
 
-        return buildTooltipHeader(row.date, mutedColor);
+        return buildTooltipHeader(formatDay(row.date), mutedColor);
     }
 
     function getDisplayName(rawName: string): string {
@@ -639,6 +660,15 @@
             axisType: 'time',
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
+        // The time axis widens the right inset to keep its last label whole (plan 52).
+        const gridRight = timeAxisGridRight({
+            width: chartContainer?.clientWidth ?? 0,
+            values: dataset.dates,
+            locale: uiLocale(),
+            base: '4%',
+            measure: axisLabelMeasure(chartInstance, 14),
+        });
+        appliedGridRight = gridRight;
 
         // Order and colour are decided together, once, and consumed by both the
         // series and the tooltip — they must not drift apart.
@@ -703,7 +733,7 @@
         return {
             ...(skipAnimation ? {animation: false, animationDuration: 0, animationDurationUpdate: 0} : CHART_ANIMATION_CONFIG),
             backgroundColor: 'transparent',
-            grid: {left: '3%', right: '4%', bottom: '40px', top: '10px', containLabel: true},
+            grid: {left: '3%', right: gridRight, bottom: '40px', top: '10px', containLabel: true},
             tooltip: {
                 trigger: 'axis',
                 // Bugfix: `appendToBody` moves the tooltip DOM to `document.body`, which
