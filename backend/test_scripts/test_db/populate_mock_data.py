@@ -1570,7 +1570,8 @@ def populate_transactions(session: Session):
     )
     session.add(tx_del_deposit)
 
-    # 9a.2: FEE on Directa (EDITOR) — safe to delete, small negative cash
+    # 9a.2: FEE on Directa (EDITOR) — safe to delete, small negative cash.
+    # Nothing consumes it since V-25 (13/10); kept for the table's composition — see 9c.
     tx_del_fee = Transaction(
         broker_id=directa.id,
         asset_id=None,
@@ -1862,8 +1863,8 @@ def populate_transactions(session: Session):
     session.commit()
     print(f"  🗑️🔗 delete-safe TRANSFER ETH IB↔Coinbase (#{tx_del_pair_out.id} ↔ #{tx_del_pair_in.id})")
 
-    # 9c. delete-consume TRANSFER pair: a SECOND paired row, same shape, meant to be
-    # destroyed.
+    # 9c. delete-consume TRANSFER pair: a SECOND paired row, same shape, created to be
+    # destroyed (single-use until V-25, see the end of this note).
     #
     # The pair above is read by specs that need it to still be there: tx-delete's A2
     # asserts it survives a cancelled delete, tx-bulk-suggest-ux raises when it cannot
@@ -1875,9 +1876,11 @@ def populate_transactions(session: Session):
     # Its description deliberately does NOT contain "delete-safe", so the finders that
     # look for that substring keep landing on the pair above and ignore this one.
     #
-    # Single use per population, by design: A2-confirm consumes it and does not restore
-    # it. Running that spec twice against the same database fails on the second pass —
-    # which is already true of A1-confirm and its FEE, and is what `db populate` is for.
+    # No longer consumed. A2-confirm deleted this pair, and A1-confirm the FEE of 9a.2, until
+    # V-25 (13/10): both now delete rows they create on a disposable account, and no spec reads
+    # either row by name. They stay anyway: specs that take "the first paired row" or the first
+    # rows of a page land on whatever sorts first, and removing these would move them onto other
+    # rows — tx-picker-pagination already broke once on a table with fewer rows.
     tx_del_consume_out = Transaction(
         broker_id=coinbase.id,
         asset_id=eth.id,

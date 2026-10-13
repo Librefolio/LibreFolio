@@ -480,9 +480,10 @@ Snapshot the ids and delete the difference — don't delete the ids you *think* 
 difference also catches rows created indirectly (the other half of a linked pair, a promoted
 transfer), and those are the ones that get forgotten.
 
-Real case: `tx-clone` commits a clone of "the first paired giver row on editable brokers" — which is
-the `delete-safe` ETH transfer — and `tx-delete` then asserts no such row survives its own delete.
-Neither spec was wrong; the implicit contract between them was.
+Real case, since fixed on both sides: `tx-clone` committed a clone of "the first paired giver row on editable
+brokers" — which was the `delete-safe` ETH transfer — and `tx-delete` then asserted that no such row survived its
+own delete. Neither spec was wrong; the implicit contract between them was. Today `tx-clone` deletes the rows it
+commits, and `tx-delete` deletes only rows it creates (V-25, 13/10).
 
 #### The automatic net, and why it works per file
 
@@ -490,32 +491,37 @@ Under a consolidated run (`LF_TX_HYGIENE=1`, set by `./dev.py test front-transac
 `txHygiene` fixture in `e2e/fixtures/playwright.ts` does this for every spec without any per-spec
 code — but **between spec files, not between tests**.
 
-That distinction is not a detail. Specs are written sequentially: `tx-commit-all-types` commits a BUY
-and then sells part of it; `tx-delete` creates a pair in one test and deletes it in the next.
-Cleaning between tests breaks those chains — measured on the whole `transactions/` directory, it
-turned three reds into five. What consolidation removed was the reset *between files*, so that is
-what gets restored and nothing more.
+That distinction is not a detail. When it was measured, specs were written sequentially:
+`tx-commit-all-types` committed a BUY and then sold part of it; `tx-delete` created a pair in one test
+and deleted it in the next. Cleaning between tests broke those chains — measured on the whole
+`transactions/` directory, it turned three reds into five. Neither chains any more (`tx-commit-all-types`
+funds each SELL inside its own batch; `tx-delete` stopped at V-25, 13/10 — its confirm tests now delete
+rows they create), but state may still accumulate inside a file. What consolidation removed was the reset
+*between files*, so that is what gets restored and nothing more.
 
 So the explicit `db-cleanup.ts` recipe above is still the right tool when a spec needs finer control
 than "restore at the end of the file". The automatic fixture is the floor, not a replacement.
 
 #### If a spec *destroys* mock rows, the fixture repopulates
 
-Dropping what a spec added is only half the invariant. `tx-delete` destroys mock rows by design, and
-no API call resurrects a row with its original id and its original half of a linked pair. So
+Dropping what a spec added is only half the invariant. A spec that destroys mock rows cannot be undone
+through the API: no call resurrects a row with its original id and its original half of a linked pair.
+`tx-delete` did, by design, until V-25 (13/10): its confirm tests now delete rows they create. So
 `restore()` compares against the opening snapshot: if a baseline id has vanished it runs the full
 `populate_mock_data --force --with-reports`, replays `initGlobalSettings()` (the global settings are
 the one part of `globalSetup` that `populate_mock_data` does not recreate) and logs the worker API
 context back in, because the users get new ids.
 
-Why it matters: on the database the suite leaves behind, `tx-picker-pagination` fails 4 tests; on a
-fresh one it passes 5. With fewer rows its first two clicks land on a linked pair, the bulk modal
-auto-opens a form modal, and the tests time out clicking behind a backdrop. The error blames
-`tx-form-modal` and never mentions `tx-delete`. Row *deflation*, the mirror of row inflation.
+Why it matters, measured while `tx-delete` still destroyed rows: on the database the suite left behind,
+`tx-picker-pagination` failed 4 tests; on a fresh one it passed 5. With fewer rows its first two clicks
+landed on a linked pair, the bulk modal auto-opened a form modal, and the tests timed out clicking behind
+a backdrop. The error blamed `tx-form-modal` and never mentioned `tx-delete`. Row *deflation*, the mirror
+of row inflation.
 
 The repopulate costs ~20 s, charged to whichever test triggers it, so the fixture grants
 `testInfo.setTimeout(+25 s)` **only when it actually ran** — a blanket increase would mask real
-slowness.
+slowness. Since V-25 no spec in `transactions/` triggers it (the 12/10 category gate found `tx-delete`'s
+rows the only seed rows missing); it remains the guard for the next spec that does.
 
 ## Test Runner Architecture (`scripts/test_runner/`)
 

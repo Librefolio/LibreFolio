@@ -79,11 +79,14 @@ function warnUninstrumentedOnce(): void {
  *
  * ### The granularity is per spec file, not per test — and that is the whole point
  *
- * Cleaning after every *test* looks tidier and is wrong. Specs are written
- * sequentially: `tx-commit-all-types` commits a BUY and then sells part of it,
- * `tx-delete` creates a pair in one test and deletes it in the next. Wiping
- * between tests breaks those chains, and measurably did: it turned three reds
- * into five.
+ * Cleaning after every *test* looks tidier and is wrong. When this was measured,
+ * specs were written sequentially: `tx-commit-all-types` committed a BUY and
+ * then sold part of it, `tx-delete` created a pair in one test and deleted it in
+ * the next. Wiping between tests broke those chains, and measurably did: it
+ * turned three reds into five. Neither chains any more: `tx-commit-all-types`
+ * funds each SELL inside its own batch, and `tx-delete` stopped at V-25 (13/10)
+ * — its confirm tests now delete rows they create. State may still accumulate
+ * inside a file, though, and this net must not be the thing that breaks it.
  *
  * What consolidation actually removed was the *inter-file* reset — before it,
  * every spec file ran in its own process against a freshly populated database.
@@ -94,11 +97,14 @@ function warnUninstrumentedOnce(): void {
  * ### The rollback has to work in both directions
  *
  * Deleting the rows a file added is the cheap half. A file that *destroys* mock
- * rows — `tx-delete` does, by design — cannot be repaired that way, because no
- * API call brings back a row with its original id and its original half of a
- * linked pair. When the baseline ids are no longer all there, the database is
- * repopulated instead. It costs about ten seconds and, measured over the whole
- * `transactions/` directory, happens once.
+ * rows — `tx-delete` did, until V-25 (13/10): its confirm tests now delete rows
+ * they create — cannot be repaired that way, because no API call brings back a
+ * row with its original id and its original half of a linked pair. When the
+ * baseline ids are no longer all there, the database is repopulated instead. It
+ * costs about ten seconds and, measured over the whole `transactions/`
+ * directory, fired once — for `tx-delete`, whose rows were the only seed rows
+ * the 12/10 category gate found missing. Since V-25 no spec there triggers it;
+ * it remains the guard for the next file that does.
  *
  * Runs only under `LF_TX_HYGIENE=1`, set by the consolidated pass, so a
  * single-spec run behaves exactly as before.
@@ -175,13 +181,15 @@ async function dropSince(api: APIRequestContext, before: Set<number>): Promise<v
 /**
  * Restore the mock data wholesale.
  *
- * Deleting what a file added is only half the invariant. `tx-delete` *destroys*
- * mock rows and never puts them back, and no API call can resurrect a row with
- * its original id and its original half of a linked pair. Measured: after that
- * file, `tx-picker-pagination` picks two rows that turn out to be one pair, the
- * BulkModal auto-opens a FormModal for the single entity, and four tests then
- * time out clicking a button behind the modal's backdrop — 5/5 green on a fresh
- * database, 4 red on the one the suite leaves behind.
+ * Deleting what a file added is only half the invariant. A file that *destroys*
+ * mock rows and never puts them back cannot be undone through the API: no call
+ * resurrects a row with its original id and its original half of a linked pair.
+ * `tx-delete` did, until V-25 (13/10): its confirm tests now delete rows they
+ * create. Measured while it still did: after that file, `tx-picker-pagination`
+ * picked two rows that turned out to be one pair, the BulkModal auto-opened a
+ * FormModal for the single entity, and four tests then timed out clicking a
+ * button behind the modal's backdrop — 5/5 green on a fresh database, 4 red on
+ * the one the suite left behind.
  *
  * So a file that removed shared rows gets the only faithful repair there is.
  * `populate_mock_data` recreates the E2E users itself; the global settings it
