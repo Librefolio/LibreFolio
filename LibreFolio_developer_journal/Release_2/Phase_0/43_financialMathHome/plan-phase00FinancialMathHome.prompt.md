@@ -2942,3 +2942,160 @@ Correzioni al conteggio automatico:
 - **Commit proposti**:
   1. `/tmp/libreFolio_commit_t_ten_1.txt`, `fix(i18n): chart and probe texts in UI language`: codice, test, cataloghi, runner;
   2. `/tmp/libreFolio_commit_t_ten_2.txt`, `docs(journal): record T-EN1 and T-EN2`: il piano e il backlog.
+
+### T-SHK + T-CL — via (coordinatore, 2026-10-13 03:15)
+- **Base**: `273b188ea` (treno 82), pulita. Corsia 6164.
+- **Carico**: finché il coordinatore non dà il «via», solo spec singole a 1 worker, perché gira la galleria di M.
+- **Mandato**:
+  1. **D5, la tabella dello shock** (README della 02, «Difetti noti»): etichette leggibili al posto degli id dei bucket; la prima colonna col nome della dimensione; i gruppi a peso zero non diventano righe, nel frontend, senza cambiare l'API.
+  2. **D8**: il drawdown massimo allineato nei cataloghi fr e it.
+  3. **D14**: il suggerimento della favicon, la descrizione del provider BoE, il commento di `fmtCurrency`.
+- **Regole**: prima un'analisi breve, poi si parte senza aspettare. Ci si ferma solo per un cambio di API o di backend, o per una scelta di prodotto che non è nel mandato. Test via test-author, rossi prima.
+
+#### T-SHK — analisi (2026-10-13)
+**Le superfici** (verificate su `273b188ea`):
+- `levels/l4/L4Shock.svelte`:
+  - `rowLabel` (`:100-106`) restituisce `row.bucketId` grezzo;
+  - anche l'editor del dettaglio scrive l'id grezzo (`:136-148`: testo, `title`, `aria-label`). È lo stesso difetto e lo curo insieme;
+  - `data-bucket-id` resta.
+- `levels/l4/TornadoChart.svelte:101`: la prima colonna ha sempre `risk.levels.l4.table.asset`. Il componente è condiviso col replay, che deve tenere «Asset».
+- `levels/l4/scenarioHelpers.ts:164-176` (`tornadoRows`): un bucket con peso 0 diventa una riga a 0,0 %. Il peso è `bucketShares`, cioè la stessa colonna *Weight* che il lettore vede.
+- **La resa del pannello legacy**: `RiskAnalysisPanel.svelte:357-365` (`stressBucketLabel`):
+  - `Other` → `common.other`;
+  - `european_union` → `risk.stress.europeanUnion`;
+  - una classe → `assets.types.<TIPO>`;
+  - un settore → emoji + `sectors.<chiave>`;
+  - un paese → bandiera + nome. I dati di riferimento si caricano per lingua (`ensureCountriesLoaded`, `ensureSectorsLoaded`).
+- **Il nome della dimensione esiste già**: `risk.stress.dimensions.{asset_class,sector,geography}` nelle 4 lingue («Asset class», «Sector», «Geography»). Nessuna chiave nuova.
+
+**La cura scelta**:
+1. **Una resa sola.** `stressBucketLabel(bucket, dimension, words)` diventa una funzione pura in `components/risk/riskAnalysisHelpers.ts`, col vocabolario iniettato (traduttore, emoji del settore, paese).
+   - Il pannello legacy la chiama, e la sua funzione locale diventa una riga; L4Shock la usa per le righe e per l'editor del dettaglio.
+   - Un codice senza traduzione (tipo o settore sconosciuto) o un paese sconosciuto si scrive com'è, mai come chiave del catalogo: è la stessa regola di `exposureCategoryLabel` del PAC.
+2. **L4Shock**:
+   - `rowLabel` diventa una funzione `$derived`: si riscrive al cambio di lingua e quando arrivano i dati di riferimento (un contatore, come nel pannello legacy);
+   - la dimensione è quella della risposta (`stressImpactDimension(output.dimension, …)`).
+3. **`TornadoChart`**:
+   - una prop facoltativa `nameHeader`; senza, resta «Asset» (il replay non cambia), e L4Shock passa `risk.stress.dimensions.<dimensione>`;
+   - `columns` legge `label` e `nameHeader` dentro il `$derived`, così un'etichetta nuova ridisegna la tabella.
+4. **`tornadoRows`**: nel ramo dei bucket, con i pesi noti (`shares !== null`), un bucket a peso 0 non diventa riga. Senza pesi il ramo è già vuoto (`contribution_return` è `null`). L'API non cambia.
+
+**Le scelte notate**:
+- l'ordine dell'editor del dettaglio resta quello degli id;
+- un portafoglio senza nessun bucket posseduto non mostra la tabella (`rows.length === 0`, il comportamento di oggi), ma il totale resta;
+- la seconda resa delle categorie, `exposureCategoryLabel` del PAC, va in una voce di backlog: unirle è un riordino dopo la 1.2.
+
+**I test (test-author)**:
+- **Rossi**:
+  - `scenarioHelpers.test.ts`: niente riga a peso 0, con le guardie per i bucket posseduti, il ramo per asset e lo scope senza pesi;
+  - `L4Shock.test.ts`, nuovo (jsdom, controller vero con `setResult('stress', …)`, come `L4Replay.test.ts`): le etichette di classi, settori, paesi, `Other` e `european_union` dal catalogo e dai dati di riferimento, in it o fr; l'intestazione; l'editor del dettaglio; il cambio di lingua sul posto;
+  - `TornadoChart.test.ts`: la guardia del default «Asset» per il replay.
+- **E2E**: `front-portfolio risk` (shock con lo stub) a 1 worker, dopo la cura.
+
+#### T-CL — analisi (2026-10-13)
+**D8, il drawdown massimo**:
+- Le chiavi sono `risk.metrics.maxDrawdown` (pannello legacy, `:192`) e `risk.levels.l1.technical.worst` (L1, `:400`).
+- Oggi: it «Drawdown massimo» contro «Massimo drawdown»; fr «Repli maximal» contro «Perte maximale». In en ed es sono già uguali.
+- **Il termine del glossario**: `cd0b404d2` fissa «repli» per *drawdown*, ma la tabella del glossario (`mkdocs_src/aphra-pipeline/glossaries/glossary.json`) dà per *maximum drawdown* it «drawdown massimo» e fr «perte maximale». La doc usa questi due 40 e 45 volte, gli altri due zero.
+- **Cura**: it `risk.levels.l1.technical.worst` → «Drawdown massimo»; fr `risk.metrics.maxDrawdown` → «Perte maximale», con `dev.py i18n update`.
+- **Rosso**: un test di catalogo, «le due etichette del drawdown massimo coincidono in ogni lingua».
+
+**D14** (testi e commenti, senza test rossi; il comportamento è coperto altrove):
+- **`brokers.iconUrlHint`** (`brokers/*.json:15`) diventa l'ordine reale di `brokerIconChain.svelte.ts:88-106`: icona personale, poi quella del plugin di import predefinito (se non è generico), poi la favicon del portale, poi l'icona di un plugin generico. Con `dev.py i18n update`.
+- **BoE** (`fx_providers/boe/plugin.py:91-94`, `description_i18n` in linea; i plugin FX non hanno frammenti i18n): «il provider di LibreFolio copre 15 valute». Solo il testo: l'API non cambia.
+- **`GrowthChart.svelte`** (commento di `fmtCurrency`, ~`:2156`): il segno viene da `uiLocale()`, non dalla locale del browser. Ho verificato su Node: `-` (U+002D) in en-GB, en-US, it, fr, es e nelle loro regioni.
+
+#### T-SHK + T-CL — tre aggiunte (coordinatore, 2026-10-13 03:39, dalla galleria completa di M)
+1. **Priorità alta, blocca il tag.** `ProviderComparisonModal`: `data-dist-pct` è la stringa mostrata e, da `5b2aad5c4` (M-18 CP1), segue la lingua (`100,00%`). La galleria (`e2e/fixtures/galleryProviderCompare.ts:309`) si aspetta `'100.00%'` e diventa rossa su desktop e mobile.
+   - **Cura**: il nome dell'attributo non cambia. `formatDistribution` dà a ogni voce `pct` (mostrato, localizzato) e `hook` (`(v×100).toFixed(2)%`, uguale in ogni lingua), e l'attributo legge `hook`.
+   - È l'aggancio stabile che `ProviderComparisonModal.test.ts:38` documenta: né la galleria né i test vanno cambiati.
+   - Rosso prima, in it o fr.
+2. **`AssetModal.svelte:1949`**: il placeholder «Brief description of the asset…» è scritto fisso. Chiave nuova `assets.modal.descriptionPlaceholder` (`where` → `i18n/assets/`), con `dev.py i18n add`. Rosso prima.
+3. **I campi DU/AU del `DateRangePicker` in ISO**: è una scelta, non un residuo.
+   - Tutte le toolbar di pagina usano `compact`, e `displayDate` restituisce l'ISO apposta (`DateRangePicker.svelte:1108`, «fits narrow cells»), già nella v1.1.0.
+   - Non si tocca: risposta data al coordinatore.
+- **Ordine**:
+  1. i rossi del primo giro (D5, D8) visti rossi;
+  2. lo script del catalogo (`/tmp/libreFolio_shk_i18n.sh`: D8, la favicon, la chiave del placeholder);
+  3. i rossi delle aggiunte 1 e 2;
+  4. la cura del codice (`/tmp/libreFolio_shk_apply.py`, 21 operazioni su 8 file più un file nuovo, provata a secco).
+- **Carico**: la galleria è finita; io resto a spec singole sulla 6164.
+
+#### T-SHK + T-CL passo 1 — i rossi del primo giro e il catalogo ✅ (2026-10-13)
+> **Note implementazione**: test-author I ha scritto 19 rossi; li ho visti rossi anch'io, un file alla volta a 1 worker (log `/tmp/libreFolio_shk_red_*.log`).
+>
+> | file | rossi | verdi |
+> |---|---|---|
+> | `scenarioHelpers.test.ts` | 2 | 59 |
+> | `L4Shock.test.ts` (nuovo, jsdom) | 16 | 5 |
+> | `TornadoChart.test.ts` (3 guardie nuove: «Asset» senza la prop) | 0 | 27 |
+> | `riskGlossary.test.ts` (nuovo) | 1 | 3 |
+>
+> - **Cosa leggono i rossi di `L4Shock`**: le etichette di classi, settori e paesi; il codice sconosciuto scritto com'è; l'intestazione della dimensione; i bucket non posseduti; l'editor del dettaglio; il cambio di lingua.
+> - **Nel runner**, una riga per file nuovo:
+>   - `L4Shock.test.ts` in `front_portfolio_risk_levels_component` (`_frontend_portfolio.py`);
+>   - `riskGlossary.test.ts` in `front_utility_unit` (`_frontend_utility.py`).
+> - **Le note di test-author, accettate**:
+>   - il blocco dello shock carica da sé i nomi dei paesi per lingua;
+>   - con pesi ma senza `bucket_audit` la tabella sparirebbe, ma oggi il backend lo manda sempre;
+>   - un gruppo geografico definito dall'host, diverso da `european_union`, resta un id grezzo.
+>
+>   Questi ultimi due sono limiti noti, da scrivere nel checkpoint.
+> - **Il catalogo** (`/tmp/libreFolio_shk_i18n.sh`, `dev.py i18n update/add`, log `/tmp/libreFolio_shk_i18n.log`):
+>   - it `risk.levels.l1.technical.worst` → «Drawdown massimo»; fr `risk.metrics.maxDrawdown` → «Perte maximale»;
+>   - `brokers.iconUrlHint` nelle 4 lingue;
+>   - la chiave nuova `assets.modal.descriptionPlaceholder`;
+>   - `i18n check`: 4 360 chiavi in modalità stretta; diff di 10 file sorgente.
+> - **In corso**: i rossi delle aggiunte 1 e 2, dallo stesso test-author.
+
+#### T-SHK + T-CL passo 2 — i rossi delle aggiunte e la cura ✅ (2026-10-13)
+> **Note implementazione**:
+> - **Rossi del secondo giro** (stesso test-author), visti rossi da me:
+>   - `ProviderComparisonModal.test.ts`: 2 rossi, it `60,00%` e fr `60,00 %` contro `60.00%`; più le guardie del testo localizzato. 22 verdi;
+>   - `AssetModal.test.ts`: 2 rossi, il placeholder inglese in it e fr; più la guardia inglese. 30 verdi.
+> - **Cura**: `/tmp/libreFolio_shk_apply.py --apply`, 21 operazioni su 8 file, più il file nuovo `components/risk/stressBucketLabel.ts`.
+> - **Verde, file per file a 1 worker**:
+>
+>   | file | test |
+>   |---|---|
+>   | `scenarioHelpers` | 61/61 |
+>   | `L4Shock` | 21/21 |
+>   | `TornadoChart` | 27/27 |
+>   | `riskGlossary` | 4/4 |
+>   | `ProviderComparisonModal` | 24/24 |
+>   | `AssetModal` | 32/32 |
+>
+> - **I vicini**: `riskAnalysisHelpers` 96, `stressBuckets` 5, `riskPanelController` 102, `RiskResultFrame` 20, `RiskCardGrid` 7, `L4Replay` 40.
+> - **I gate che leggono i sorgenti**: `htmlInterpolation` 26, `htmlSink` 7, `moneyRenderSites` 6, `catalogIcuLocale` 17. Tutti verdi.
+
+#### T-SHK + T-CL passo 3 — i gate ✅ (2026-10-13)
+> **Note implementazione** (corsia 6164, un'azione alla volta, E2E a 1 worker; log `/tmp/libreFolio_t1_shkv_*`):
+>
+> | controllo | risultato |
+> |---|---|
+> | `utils gate-plugin-i18n-ownership` | 45 |
+> | `utils gate-i18n-usage` | 195 |
+> | `utils gate-i18n-catalog` | 176 |
+> | `check-orphans` | pulito |
+> | E2E `front-portfolio risk` (lo shock con lo stub) | 38/38 |
+> | E2E `front-portfolio risk-asset-detail` (il pannello legacy) | 5/5 |
+> | E2E `front-transaction tx-import-asset-inspector` (il dialogo dell'asset) | 5/5 |
+>
+> - `dev.py front check`: 0 errori, 0 avvisi; Prettier pulito.
+> - `ruff` e `black --check` puliti su `boe/plugin.py`.
+> - `dev.py i18n audit`: 0 chiavi morte e 0 traduzioni mancanti; le «non verificate» restano le 4 di prima.
+> - Porta 6164 libera.
+> - **Backlog**: T-CAT (due rese delle categorie: PAC e rischio) e T-GRP (i gruppi geografici dell'host, e il limite dei pesi senza `bucket_audit`).
+> - **README della 02**: la voce «L4, la tabella dello shock» di «Difetti noti» è marcata risolta.
+> - **CHANGELOG**: la tabella dello shock è nata nella 1.2, quindi niente 🐛 a parte. Le correzioni entrano nella riga che la descrive (L316 a `273b188ea`).
+>   - Il placeholder della descrizione c'era già nella v1.1.0: vale una riga 🐛 minima, oppure si unisce alle righe «follow your language».
+>   - D8 rende vera L263 («drawdown is named the same way»).
+
+### Checkpoint T-SHK + T-CL 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
+- **Base**: `273b188ea`.
+- **Commit proposti**:
+  1. `/tmp/libreFolio_commit_t_shk_1.txt`, `fix(assets): stable dist hook, translated hint`;
+  2. `/tmp/libreFolio_commit_t_shk_2.txt`, `fix(risk): name shock buckets, hide unheld ones`;
+  3. `/tmp/libreFolio_commit_t_shk_3.txt`, `fix(i18n): one drawdown term, real icon order`;
+  4. `/tmp/libreFolio_commit_t_shk_4.txt`, `docs(journal): record T-SHK and T-CL`.
+- I file per commit sono nel manifest `/tmp/libreFolio_shk_manifest.txt`.

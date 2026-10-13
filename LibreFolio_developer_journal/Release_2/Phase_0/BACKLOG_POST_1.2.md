@@ -502,6 +502,16 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   `:1004`, `:1274`). Una coppia vuota dice `FX Pair` (`charts/signals/FxPairSignal.ts:94`). Si vede solo con una
   configurazione salvata che punta a un asset cancellato. Da fare: chiavi nel catalogo, lette con `ChartSignal.text`
   (T-EN2). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «T-EN — analisi».
+- **T-CAT · Due rese delle categorie: tipi, settori e paesi** — minimo; T, 13/10 (trovato con T-SHK). Lo shock del
+  rischio scrive i bucket con `components/risk/stressBucketLabel.ts`, il PAC le categorie di esposizione con
+  `exposureCategoryLabel` (`features/tools/pac-allocator/planner/categoryLabels.svelte.ts`). Le regole sono le stesse:
+  tipo tradotto, settore con emoji, paese con bandiera, codice sconosciuto scritto com'è. Da fare: una funzione sola, in
+  un modulo condiviso fuori dalle due feature. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «T-SHK — analisi».
+- **T-GRP · I gruppi geografici dell'host restano id grezzi nella tabella dello shock** — minimo; T, 13/10 (trovato con
+  T-SHK). `stressBucketLabel` dà un nome solo a `european_union`. Un gruppo definito dall'host nel catalogo degli scenari
+  porta già i suoi nomi per lingua (`geography_groups`), ma la tabella non li legge. Inoltre, se un impatto avesse i pesi
+  senza `bucket_audit`, ogni bucket avrebbe peso 0 e la tabella sparirebbe; oggi il backend lo manda sempre. Dettagli:
+  [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «T-SHK + T-CL».
 
 La voce di `TODO_FUTURI.md` sul riordino del codice si cancella a mano a mano.
 
