@@ -500,6 +500,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/release-1.2.0]] | `CHANGELOG.md` `## [1.2.0]` — **draft, tag date pending**: the features of 1.2.0 linked to their pages, the 60 decisions of the cycle by theme, the open problems and the backlog it leaves, the checks (R's run, the gallery, the gates); the final numbers are filled at the tag | 2026-10-13 | release, release-1.2, changelog |
 | [[sources/r-full-run-coverage-2026-10-12]] | `Release_2/Phase_0/38_postReleaseBacklog/report-R-full-run-coverage-20261012.md` — R's full run with coverage on train 68: 29 reds (27 load, 2 V-19), backend 91.51 %, JS 71.24 % | 2026-10-13 | testing, coverage, triage |
 | [[sources/phase00-ui-polish-2026-10]] | `Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` — workstream I's UI polish before the tag: the broker icon, the import mismatch modal, the security details, the copy buttons, the Spanish toolbar | 2026-10-12 | phase0, workstream-i, ui |
 | [[sources/release2-ai-ideas-2026-07]] | `Release_2/Ai_ideas/` — the July brainstorm: signals and risk in the backend first, an AI assistant through MCP later (deferred: `TODO_FUTURI.md`, QuarkAI) | 2026-10-12 | release2, ai, mcp, roadmap |
@@ -639,6 +640,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-13 | **The release page of 1.2.0, in draft.** What the release brings, the decisions of its cycle, what it leaves open and how it was checked; tag date and final numbers pending | [[sources/release-1.2.0]] *(1 page — 1 source)* |
 | 2026-10-13 | **C-64 closed — the plans of `phases/06_betaTestingReportAndFixing` against the wiki.** Ten plans and the F1–F17 classification read in full; three pages that contradicted the code corrected; eight gaps covered, smaller findings listed on the source page | [[decisions/asset-identity-quoted-code-leads]] *(5 pages — 2 decisions, 3 problems; see log)* |
 | 2026-10-13 | **The feature pages against the verified 1.2.0 CHANGELOG.** 46 items mapped; 23 pages say what 1.2.0 brought, with the CHANGELOG line and the commit or train; no status lagged; Benchmark assets got their page | [[features/F-114]] *(1 page — 1 feature)* |
 | 2026-10-13 | **Train 83 — the 1.2 CHANGELOG reviewed; M's full gallery.** The rules of a changelog line; a security fix that shipped without one; Schwab's favicon blocked; the jsCoverage page corrected | [[decisions/changelog-entry-rules]] *(3 pages — 1 decision, 2 problems; see log)* |
