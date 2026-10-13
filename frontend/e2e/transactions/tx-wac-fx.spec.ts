@@ -101,12 +101,15 @@ async function setupMissingFxScenario(page: Page) {
     // The verdict is what this scenario is about, so wait for the run that
     // carries it rather than for the debounce to have probably elapsed.
     await waitForValidateRun(root, before);
+    // Validate now. A create form always renders it, enabled once the form is complete —
+    // which the automatic run above proves — so it is asserted, never probed. That run
+    // ended with the form idle, so the counter read here moves only for the click's run.
     const validateBtn = page.getByTestId('tx-form-validate-now');
-    if (await validateBtn.isVisible({timeout: 1_000}).catch(() => false)) {
-        const forced = await validateRuns(root);
-        await validateBtn.click();
-        await waitForValidateRun(root, forced);
-    }
+    await expect(validateBtn).toBeVisible({timeout: 1_000});
+    await expect(validateBtn).toBeEnabled({timeout: 1_000});
+    const forced = await validateRuns(root);
+    await validateBtn.click();
+    await waitForValidateRun(root, forced);
 }
 
 /** Set up a TRANSFER form with Apple (USD) on Directa (EUR) — FX pair exists */
@@ -283,14 +286,15 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
         const costBasis = page.getByTestId('tx-form-cost-basis');
         await expect(costBasis).toBeVisible({timeout: 5_000});
 
-        // Click validate now if available
+        // Validate now. A create form always renders it, enabled once the form is complete —
+        // which the automatic run of the setup proves — so it is asserted, never probed.
+        const root = page.getByTestId('tx-form-modal-root');
         const validateBtn = page.getByTestId('tx-form-validate-now');
-        if (await validateBtn.isVisible({timeout: 2_000}).catch(() => false)) {
-            const root = page.getByTestId('tx-form-modal-root');
-            const before = await validateRuns(root);
-            await validateBtn.click();
-            await waitForValidateRun(root, before);
-        }
+        await expect(validateBtn).toBeVisible({timeout: 2_000});
+        await expect(validateBtn).toBeEnabled({timeout: 2_000});
+        const before = await validateRuns(root);
+        await validateBtn.click();
+        await waitForValidateRun(root, before);
 
         // Expand qualifying table
         const showBtn = page.getByTestId('tx-form-cost-basis-show-qualifying');
@@ -316,14 +320,14 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
         const costBasis = page.getByTestId('tx-form-cost-basis');
         await expect(costBasis).toBeVisible({timeout: 5_000});
 
-        // Trigger validate
+        // Trigger validate: always rendered in a create form, enabled on a complete one.
+        const root = page.getByTestId('tx-form-modal-root');
         const validateBtn = page.getByTestId('tx-form-validate-now');
-        if (await validateBtn.isVisible({timeout: 2_000}).catch(() => false)) {
-            const root = page.getByTestId('tx-form-modal-root');
-            const before = await validateRuns(root);
-            await validateBtn.click();
-            await waitForValidateRun(root, before);
-        }
+        await expect(validateBtn).toBeVisible({timeout: 2_000});
+        await expect(validateBtn).toBeEnabled({timeout: 2_000});
+        const before = await validateRuns(root);
+        await validateBtn.click();
+        await waitForValidateRun(root, before);
 
         // Expand qualifying table
         const showBtn = page.getByTestId('tx-form-cost-basis-show-qualifying');
@@ -355,14 +359,14 @@ test.describe('WAC FX — Sync Modal & Cross-Currency', () => {
         const costBasis = page.getByTestId('tx-form-cost-basis');
         await expect(costBasis).toBeVisible({timeout: 5_000});
 
-        // Trigger validate
+        // Trigger validate: always rendered in a create form, enabled on a complete one.
+        const root = page.getByTestId('tx-form-modal-root');
         const validateBtn = page.getByTestId('tx-form-validate-now');
-        if (await validateBtn.isVisible({timeout: 2_000}).catch(() => false)) {
-            const root = page.getByTestId('tx-form-modal-root');
-            const before = await validateRuns(root);
-            await validateBtn.click();
-            await waitForValidateRun(root, before);
-        }
+        await expect(validateBtn).toBeVisible({timeout: 2_000});
+        await expect(validateBtn).toBeEnabled({timeout: 2_000});
+        const before = await validateRuns(root);
+        await validateBtn.click();
+        await waitForValidateRun(root, before);
 
         // If stale FX is detected, the banner should appear
         const staleBanner = page.getByTestId('tx-form-cost-basis-fx-stale-banner');

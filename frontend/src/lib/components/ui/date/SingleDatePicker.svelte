@@ -5,12 +5,14 @@
   and close). The date itself is a text field, because reaching a date far from
   today through month arrows is slow and a user who already knows the date should
   simply be able to write it. Typed input accepts both orders and all three
-  separators (see `parseTypedDate`); anything unreadable is refused and the field
-  falls back to the current value rather than guessing.
+  separators (see `parseTypedDate`); anything unreadable is refused: the text stays
+  on screen, marked invalid, while `value` keeps the previous date — a parent that
+  must not act on that date listens to `onvaliditychange`.
 
   Used by: DataEditor (new row date editing), transaction form, broker form.
 -->
 <script lang="ts">
+    import {onDestroy} from 'svelte';
     import {todayIso} from '$lib/utils/dateOnly';
     import {Calendar, X} from 'lucide-svelte';
     import {_} from '$lib/i18n';
@@ -70,9 +72,17 @@
         clearable?: boolean;
         /** Test id for E2E targeting. */
         testid?: string;
+        /**
+         * Called with `{valid: false}` while the field holds text the picker refuses and the user has left it — the
+         * moment the field turns red — and with `{valid: true}` otherwise. It reports once on mount and then on every
+         * change; a picker that unmounts while refusing reports `{valid: true}` once more, so a parent never keeps
+         * the complaint of a field that is gone. The refused text never reaches `value`: a parent that ignores this
+         * keeps the previous date while the screen shows another (V-37).
+         */
+        onvaliditychange?: (state: {valid: boolean}) => void;
     }
 
-    let {value = $bindable(''), label = 'Date', compact = false, inputStyle = false, onchange, disabledDates, allowFuture = false, disabled = false, clearable = false, testid}: Props = $props();
+    let {value = $bindable(''), label = 'Date', compact = false, inputStyle = false, onchange, disabledDates, allowFuture = false, disabled = false, clearable = false, testid, onvaliditychange}: Props = $props();
 
     /**
      * Prefix for the structural test ids. `testid` names the *input*, which is what a
@@ -116,6 +126,18 @@
 
     $effect(() => {
         inputEl?.setCustomValidity(typedUnparseable ? $_('datePicker.invalidDate') : '');
+    });
+
+    /** The validity last reported to `onvaliditychange`; `null` until the first report. Not reactive on purpose. */
+    let reportedValid: boolean | null = null;
+    $effect(() => {
+        const valid = !typedInvalid;
+        if (valid === reportedValid) return;
+        reportedValid = valid;
+        onvaliditychange?.({valid});
+    });
+    onDestroy(() => {
+        if (reportedValid === false) onvaliditychange?.({valid: true});
     });
 
     // =========================================================================
