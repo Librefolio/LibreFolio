@@ -67,7 +67,10 @@
       "previous": "Actif précédent",
       "next": "Actif suivant",
       "position": "Actif {current} sur {total}"
-    }
+    },
+    "notFound": "Actif n° {id} introuvable",
+    "loadFailed": "Impossible de charger les informations de l'actif",
+    "pricesLoadFailed": "Impossible de charger les prix"
   },
   "assets": {
     "create": "Nouvel actif",

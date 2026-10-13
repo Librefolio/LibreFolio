@@ -31,6 +31,7 @@
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
 
     // =========================================================================
     // Types
@@ -707,7 +708,7 @@
                           const items = Array.isArray(params) ? params : [params];
                           if (!items.length) return '';
                           const date = items[0].axisValue || items[0].name;
-                          let html = `<strong>${date}</strong>`;
+                          let html = `<strong>${formatDay(String(date))}</strong>`;
 
                           // Build a set of band helper series names to skip in tooltip
                           const bandHelperNames = new Set<string>();
@@ -760,7 +761,7 @@
                               html += `<br/>${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`;
                               const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                               if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
-                                  html += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: representativePoint.representativeDate}})})</span>`;
+                                  html += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
                               }
 
                               // For band signals, also show upper/lower in the tooltip
