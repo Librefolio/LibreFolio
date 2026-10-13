@@ -58,7 +58,9 @@ with the commit or the train.
   `POST /portfolio/wac` answering anyone since its first version ([[problems/portfolio-wac-endpoint-answered-anyone]]);
   the hidden half of a removed pair (V-29, [[problems/hidden-pair-half-survived-row-removal]]); `dev.py` unusable in
   the 1.1.0 image ([[problems/devpy-unusable-in-docker-image]]); the 1.1 images with a debug frontend
-  ([[problems/release-images-shipped-debug-frontend]]).
+  ([[problems/release-images-shipped-debug-frontend]]); event markers lost in the last, open period at weekly or monthly
+  resolution, since v1.0.0 (R-5, [[problems/event-markers-lost-in-the-last-partial-period]] — its 🐛 line is proposed,
+  not yet in the chapter).
 - **🔄 Changed**: besides the three lines in the table, the figures of CVaR and Sharpe change on purpose, so they stay
   in 🔄; ids are never reused after the database conversion; the server compresses its responses
   ([[decisions/http-gzip-in-the-app]]).
@@ -89,8 +91,6 @@ Sixty decision pages are dated between 2026-09-07 and 2026-10-13:
 
 | Page | Open part | Backlog |
 |---|---|---|
-| [[problems/jscoverage-teardown-spends-the-test-budget]] | the coverage teardown spends the after-hooks slot | V-28 |
-| [[problems/login-returns-before-the-app-has-started]] | `login()` returns before the app is up, under load | V-27 |
 | [[problems/e2e-writes-leaked-into-shared-state]] | the rest of V-21, V-17's two runner points, V-18 | V-21, V-17, V-18 |
 | [[problems/schwab-favicon-blocked-by-orb]] | Schwab's favicon blocked by a bot check | U-B3 |
 | [[problems/dirty-days-ignore-fx-only-moves]] | the securities half of the FX-only days | T-U1, T-U5 |
@@ -104,7 +104,8 @@ Sixty decision pages are dated between 2026-09-07 and 2026-10-13:
 | [[problems/testid-grep-false-negative]] | recurs | — |
 
 [[problems/release-shots-show-dirty-version]] is resolved in the code and waits for the first nightly after the push
-(M-25 stays in the backlog).
+(M-25 stays in the backlog). *Resolved since the first draft* (train 87): [[problems/jscoverage-teardown-spends-the-test-budget]]
+(V-28) and [[problems/login-returns-before-the-app-has-started]] (V-27).
 
 ### The backlog after 1.2
 
@@ -121,9 +122,11 @@ stay `planned` ([[features/F-077]], [[features/F-079]], [[features/F-081]], [[fe
   `features/tools`, where the PAC planner lives).
 - **The gallery** ([[decisions/gallery-is-a-release-gate-with-real-data]]): M's full run of 2026-10-13 on train 80
   (`cea8a478d`), with the frontend built as `v1.2.0`: 242 passed, 9 failed, 1 skipped by design, in 1.4 hours. Four
-  causes: Schwab's favicon (4, environment — [[problems/schwab-favicon-blocked-by-orb]]), a test hook that read
-  `data-dist-pct` in the interface language (2, [[decisions/figures-in-the-interface-language]]), and two fixed waits
-  (1 and 2, the clock). M's report is kept outside the repository.
+  causes: Schwab's favicon (4, first read as the environment, then found to be our own favicon mark in the gallery,
+  cured in `6bb79fecd` — [[problems/schwab-favicon-blocked-by-orb]]), a test hook that read `data-dist-pct` in the
+  interface language (2, cured in `dfc4f9ccc` — [[problems/test-hooks-read-the-localized-text]]), and two fixed waits
+  (1 and 2, the clock, cured in `6bb79fecd`). The targeted rerun of the touched tests passed 42 of 42. M's report is
+  kept outside the repository.
 - **The gates**: `./dev.py test utils` runs five — `gate-i18n-catalog`, `gate-i18n-usage`,
   `gate-plugin-i18n-ownership`, `gate-plugin-layout`, `gate-docs-links` — and vitest runs the `*.gate.test.ts` files
   (clipboard sink, flag font, HTML interpolation and HTML sink, the layout guards). Their state at the tagged commit
