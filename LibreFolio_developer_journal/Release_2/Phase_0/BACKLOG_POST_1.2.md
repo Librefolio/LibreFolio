@@ -1134,6 +1134,19 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     - l'opzione `skipCash` di `fillBuyTransaction` non ha più chiamanti.
 
     I `bulkRows.first()` e la `Promise.race(...).catch` del vecchio T1 sono spariti con T1a e T1b (13/10).
+  - ✅ **`tx-wac-fx` e `tx-wac-mode`: le sonde intorno a «⚡ Validate now», chiuse il 13/10** nel checkpoint V-37 di V,
+    via test-author.
+    - Le cinque sonde `isVisible().catch(() => false)`: `tx-wac-fx.spec.ts` `setupMissingFxScenario` (`:105`), W6, W7
+      e W8 (`:287`, `:320`, `:359`), più `tx-wac-mode.spec.ts:247`. Ora asseriscono il pulsante visibile e attivo, e
+      poi cliccano.
+    - Il test ⚡ di `tx-wac-mode` aspetta il giro del clic (`data-validate-runs`) dopo un form fermo, quindi prova che
+      il clic arriva al server.
+  - **`tx-wac-fx` e `tx-wac-mode`, residui**, fuori lista, visti da test-author di V il 13/10:
+    - in W1-W5 di `tx-wac-fx` restano altre sonde `isVisible().catch` e dei `return` anticipati quando non compare
+      niente;
+    - `selectAsset` clicca un `.first()` senza filtro (`tx-wac-fx.spec.ts:71`);
+    - W7 usa `.tooltip` e un `.first()` senza filtro;
+    - W9-W11 di `tx-wac-mode` asseriscono classi CSS.
   - **`tx-delete`**, fuori lista: `.checkbox-btn` in A6 e B3-guard (`:652`, `:774`, `:815`), `.disabled-select-icon`
     (`:811`) e una sonda (`:793`).
 - **V-22 · «+ New event» può modificare un evento esistente dicendo di averlo creato** — dopo la 1.2, deciso dal developer il 13/10; letto da
@@ -1376,17 +1389,64 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     - `toolbar-width-sweep` 15/15 e `front-ai-export all` sono verdi a 4 worker.
 
     Dettagli: piano della 46, §12.12.
-- **V-37 · Nel form, «valid» accanto a un errore che blocca Apply** — da decidere, UX; visto da test-author di V nello
-  snapshot di T6, 13/10, e verificato nel codice da me.
+- **V-37 · Nel form, «valid» accanto a un errore che blocca Apply** — UX. Il minimo e 1b sono chiusi il 13/10 (✅,
+  sotto); il pre-step completo, V-37b, resta per dopo la 1.2. Visto da test-author di V nello snapshot di T6, 13/10, e
+  verificato nel codice da me.
   - Un BUY con quantità `-1`: il campo Qty è rosso con «must be > 0» e Apply è disabilitato.
   - «⚡ Validate now», però, risponde «valid»: il form manda al server la quantità col segno già corretto,
     `applySign('-1', 'positive')` → `'1'` (`frontend/src/lib/utils/transactions/txPayloadHelpers.ts:142-150`,
     `:243-249`).
   - L'utente legge insieme «valid» e un errore che gli impedisce di salvare.
-  - Domanda per il developer, mandata al coordinatore il 13/10: è voluto? Se no, il verdetto dovrebbe tenere conto degli
-    errori del form; è una cura di prodotto.
-  - Prove: `/tmp/libreFolio_v_t1/4-t2-t6.t6-results/error-context.md`, righe 1510-1535. Dettagli: piano della 46,
-    §12.14.
+  - Prove: `/tmp/libreFolio_v_t1/4-t2-t6.t6-results/error-context.md`, righe 1510-1535.
+  - **La risposta del developer** (13/10, testuale): «diciamo che è un caso limite in effetti, la soluzione migliore
+    sarebbe nel form di disattivare il validate finchè tutti i campi obbligatori non ci sono e non sono validi con le
+    regole di scrittura. Però non una disabilitazione completa, più un pre-step, se lo clicco prima verifichiamo che gli
+    obbligatori ci siano, poi che tutti siano nel formato corretto e se si si manda il pacchetto al server, se no, le
+    celle con i problemi si evidenziano di rosso, mi hai capito? se è facile lo farei subito, altrimenti dopo la 1.2».
+  - **L'analisi di V** (13/10, solo lettura del codice). Dettagli: piano della 46, §12.15.
+    - **Il minimo**, circa mezza giornata, rischio basso:
+      - «valid» non compare mai con errori del form: `isFreshlyValid` (`TransactionFormModal.svelte:942`) tiene conto
+        di `hasSignViolation` (`:1304`) e di `dualValidationError` (`:831`);
+      - niente pacchetto finché quegli errori ci sono: né dall'auto-validazione (`scheduler.enabled`, `:855`), né dal
+        clic, che oggi scavalca `enabled` (`useValidateScheduler.svelte.ts:71`);
+      - il clic porta al primo campo in errore.
+
+      Tocca solo `TransactionFormModal.svelte`. Nessuna chiave i18n e nessuna asserzione esistente cambia; servono test
+      nuovi (Vitest, più uno o due E2E).
+    - **1b, la data**, da verificare a schermo, circa un'ora in più:
+      - `SingleDatePicker` (`components/ui/date/SingleDatePicker.svelte:75`, `:150-165`) tiene a schermo un testo che
+        non legge come data, anche una data futura, ma non lo dice al form;
+      - per lettura del codice, validate **e Apply** usano quindi in silenzio la data di prima;
+      - se si conferma: una callback additiva, e la data entra negli errori del form e nel cancello di Apply.
+    - **Il pre-step completo**, 1,5-2 giorni, rischio medio:
+      - il pulsante resta sempre cliccabile (oggi `disabled={!isFormComplete}`, `:2074`);
+      - al clic controlla prima gli obbligatori, poi il formato; il rosso va su tutte le celle in errore e il fuoco sulla
+        prima;
+      - vale per singola, coppia e FX.
+
+      Tocca il form, un helper puro nuovo e da 2 a 4 chiavi i18n nelle 4 lingue (file di U), più doc e galleria (di
+      M). Cambiano `tx-fx-completeness:262`, `:363` e `:389`.
+    - **Il bulk editor non serve**, in nessuna delle due parti: non ha campi suoi, le righe arrivano già normalizzate,
+      e il suo «valid» (`TransactionBulkModal.svelte:3604`) riflette solo il server.
+    - **La proposta**: il minimo, più 1b se confermato, nella 1.2; il pre-step completo dopo, come V-37b.
+  - **La decisione del developer** (13/10, testuale): «Il minimo ora, più la data se la sonda la conferma; il pre-step
+    completo dopo la 1.2 (Consigliato)». La sonda ha confermato la data: un BUY si salvava in silenzio con la data di
+    prima, dalla v1.1.0 (`52b48fd83`).
+  - ✅ **Il minimo e 1b, chiusi il 13/10** nel checkpoint V-37 di V. La cura è mia, i test sono di test-author, visti
+    rossi prima della cura.
+    - `SingleDatePicker` ha una prop facoltativa `onvaliditychange`.
+    - In `TransactionFormModal` gli errori del form (quantità o segno della cassa rifiutati, due lati uguali, data
+      rifiutata) bloccano «valid», l'auto-validazione, «⚡ Validate now» e Apply. Il clic porta al primo campo
+      sbagliato.
+    - **I test**:
+      - due E2E di 1b (data futura e testo che non è una data) e uno del minimo (`-1`, nessuna richiesta, il fuoco,
+        poi un solo giro), in `transactions-modals`;
+      - due Vitest, del form e del picker.
+    - `front-transaction all` a 4 worker: 369 E2E e 887 Vitest verdi, col DB al seed.
+    - La doc è in `user/transactions/form.en.md`, solo EN: M la porta nelle altre lingue.
+    - Dettagli: piano della 46, §12.16.
+  - **Resta aperto, dopo la 1.2: V-37b, il pre-step completo** (§2 dell'analisi): ⚡ sempre cliccabile, prima gli
+    obbligatori e poi il formato, il rosso su tutte le celle in errore, in singola, coppia e FX. Circa 1,5-2 giorni.
 - **V-38 · Il form elenca un problema di saldo tra i problemi dei campi** — basso, UX; letto nel codice da test-author
   di V, 13/10, e verificato da me; **non visto a schermo**.
   - Il form divide i problemi per indice: `index >= 0` sono dei campi, `< 0` di saldo
