@@ -170,7 +170,7 @@ export class AssetComparisonSignal extends ChartSignal {
         const displayName = this.params._assetDisplayName as string | undefined;
         if (displayName) return displayName;
         const assetId = this.params.assetId;
-        if (assetId) return `Asset #${assetId}`;
-        return 'Asset';
+        if (assetId) return ChartSignal.text('chartSettings.signals.assetFallback', {id: String(assetId)});
+        return ChartSignal.text('common.asset', {});
     }
 }

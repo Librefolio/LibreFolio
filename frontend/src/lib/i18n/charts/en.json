@@ -76,7 +76,8 @@
       "fxPairDesc": "Overlay an FX pair's rate on this chart for comparison",
       "linearLabel": "Linear {rate}/yr",
       "compoundLabel": "Compound {rate}/yr",
-      "sineLabel": "Sine ±{amplitude} / {period}d"
+      "sineLabel": "Sine ±{amplitude} / {period}d",
+      "assetFallback": "Asset #{id}"
     },
     "params": {
       "annualRate": "Annual Rate",

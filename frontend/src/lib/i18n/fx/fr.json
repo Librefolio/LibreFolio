@@ -94,7 +94,6 @@
     "aiExport": "Export IA",
     "syncFailed": "Échec de la synchronisation : {error}",
     "loadFailed": "Impossible de charger les taux",
-    "assetFallback": "Actif n° {id}",
     "invalidRates": "{n, plural, one {# ligne a un taux invalide} other {# lignes ont un taux invalide}} : un taux doit être strictement supérieur à zéro (0 n’est pas autorisé).",
     "savedSummary": "Taux FX : {details}",
     "savedCount": "{n, plural, one {# enregistré} other {# enregistrés}}",
