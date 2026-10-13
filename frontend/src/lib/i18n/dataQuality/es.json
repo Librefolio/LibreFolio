@@ -9,7 +9,7 @@
     "currentPriceAssumedAtCostRange": "Ningún precio de mercado disponible entre {date_from} y {date_to} — valor abierto estimado al coste, P&L de mercado excluido",
     "affectedLots": "Lotes afectados:",
     "stalePrice": "{count} activo(s) con precios desactualizados",
-    "missingFx": "Faltan tasas FX para {count} par(es) — los totales pueden estar incompletos",
+    "missingFx": "Faltan tipos de cambio para {count} par(es) — los totales pueden estar incompletos",
     "navIncomplete": "NAV incompleto para {count} día(s) entre {date_from} y {date_to}",
     "mwrrNotAvailable": "MWRR no se puede calcular para este período",
     "mwrrSeriesUnreliable": "Gráfico MWRR no disponible: serie diverge en {divergence_pp}pp del valor esperado {summary_cum}% (primera divergencia: {first_bad_date})",
@@ -17,7 +17,7 @@
     "rangeBeforeData": "Datos disponibles desde {date}",
     "fxPairMissing": "Par FX no configurado — conversión no disponible",
     "fxPairNoData": "Sin datos disponibles",
-    "fxPairPartialGap": "Brecha parcial en las tasas — datos desde {date}",
+    "fxPairPartialGap": "Brecha parcial en los tipos de cambio — datos desde {date}",
     "cta": {
       "navigate_asset": "Ver activo",
       "navigate_fx": "Ver FX",
@@ -31,11 +31,11 @@
     "shortAdjustmentNotSupported": "Un ajuste todavía no puede abrir ni cerrar una posición short (bróker {broker_id})",
     "fifoSourceQuantityMissing": "La transacción supera la cantidad disponible en {missing_quantity} (bróker {broker_id})",
     "transferPairMissing": "A una transferencia le falta su transacción emparejada, o el par no es válido",
-    "missingFxRates": "Faltan tasas FX para {count} par(es) entre {date_from} y {date_to} ({dates_count} fecha(s)) — sincroniza para completar los totales",
-    "missingFxRatesManual": "Faltan tasas FX para {count} par(es) manual(es) — añade las tasas manualmente",
+    "missingFxRates": "Faltan tipos de cambio para {count} par(es) entre {date_from} y {date_to} ({dates_count} fecha(s)) — sincroniza para completar los totales",
+    "missingFxRatesManual": "Faltan tipos de cambio para {count} par(es) manual(es) — añade los tipos de cambio manualmente",
     "assetIncomeNoEligibleLots": "Ningún lote abierto elegible para {economic_type} de {target_amount} {target_currency} el {as_of_date} — ingreso sin asignar",
     "assetCostNoEligibleLots": "Ningún lote elegible para {economic_type} de {target_amount} {target_currency} el {as_of_date} — coste sin asignar",
-    "missingFxRatesAfterSync": "Siguen faltando tasas FX para {pairs} entre {date_from} y {date_to} ({dates_count} fecha(s)): el proveedor no devolvió ninguna para esas fechas. Introdúcelas a mano en la página del par.",
+    "missingFxRatesAfterSync": "Siguen faltando tipos de cambio para {pairs} entre {date_from} y {date_to} ({dates_count} fecha(s)): el proveedor no devolvió ninguno para esas fechas. Introdúcelos a mano en la página del par.",
     "missingCostBasis": "{count} activo(s) con una adquisición sin coste de compra — cuenta como cero hasta que lo indiques"
   }
 }

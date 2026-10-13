@@ -31,7 +31,7 @@
       "alreadyExists": "Este par ya existe — sincronízalo o edítalo desde la página FX."
     },
     "sync": {
-      "description": "Sincronizar tasas de cambio de los proveedores configurados para el rango de fechas seleccionado.",
+      "description": "Sincronizar tipos de cambio de los proveedores configurados para el rango de fechas seleccionado.",
       "synced": "Sincronizados",
       "start": "Iniciar sincronización",
       "pairsCount": "pares",
@@ -42,7 +42,7 @@
       "legBreakdown": "Detalle por tramo",
       "legNoData": "0 fechas — sin datos",
       "legDates": "fechas",
-      "inProgress": "Sincronizando tasas FX…",
+      "inProgress": "Sincronizando tipos de cambio…",
       "timeoutAfter": "Tiempo agotado tras {seconds} s",
       "requestTimedOut": "La solicitud agotó el tiempo tras {seconds} s. Aumenta el tiempo de espera y vuelve a intentarlo.",
       "failed": "Error de sincronización",
@@ -56,7 +56,7 @@
       "unusableSection": "No utilizables",
       "unusableHint": "Estos proveedores no tienen una ruta de conversión automática para este par de divisas.",
       "steps": "pasos",
-      "noRoutesAvailable": "No se encontraron rutas de conversión automáticas para este par. Puede guardar sin proveedor e insertar las tasas manualmente.",
+      "noRoutesAvailable": "No se encontraron rutas de conversión automáticas para este par. Puede guardar sin proveedor e insertar los tipos de cambio manualmente.",
       "chainWarning": "Las cadenas requieren que TODOS los pasos intermedios tengan éxito durante la sincronización. Si un proveedor falla, toda la cadena falla para esa fecha.",
       "searchPlaceholder": "Buscar proveedores, divisas, países…",
       "noSearchResults": "Ninguna ruta coincide con la búsqueda",
@@ -68,37 +68,37 @@
     "deletePairQuestion": "¿Eliminar {pair}?",
     "deletePairWarning": "Esto eliminará la configuración de proveedores y todos los tipos de cambio históricos. ⚠️",
     "delete": {
-      "toastOk": "{pair} eliminado ({count} tasas eliminadas)",
+      "toastOk": "{pair} eliminado ({count} tipos de cambio eliminados)",
       "toastFailed": "Error al eliminar {pair}",
-      "resultDeleted": "eliminado ({n} tasas)"
+      "resultDeleted": "eliminado ({n} tipos de cambio)"
     },
     "rateNotAvailable": "Tipo de cambio no disponible",
     "rate": "Tipo de cambio",
     "card": {
       "manualOnly": "Par solo manual",
-      "syncFromProvider": "Sincronizar las tasas desde el proveedor"
+      "syncFromProvider": "Sincronizar los tipos de cambio desde el proveedor"
     },
     "loadFailed": "No se pudieron cargar los pares FX"
   },
   "fxDetail": {
     "editRates": "Editar tipos de cambio",
-    "loadingRates": "Cargando tasas...",
-    "noData": "No hay datos de tasas disponibles para este rango.",
-    "syncRates": "Sincronizar tasas",
+    "loadingRates": "Cargando tipos de cambio...",
+    "noData": "No hay datos de tipos de cambio disponibles para este rango.",
+    "syncRates": "Sincronizar tipos de cambio",
     "backToList": "Volver a la lista FX",
     "swapConfirmTitle": "Cambios sin guardar",
-    "swapConfirmMessage": "Tienes cambios sin guardar en el editor de tasas. Invertir la dirección los descartará. ¿Continuar?",
-    "noDataManual": "No hay datos disponibles — inserte las tasas manualmente",
+    "swapConfirmMessage": "Tienes cambios sin guardar en el editor de tipos de cambio. Invertir la dirección los descartará. ¿Continuar?",
+    "noDataManual": "No hay datos disponibles — inserte los tipos de cambio manualmente",
     "insertManually": "Insertar manualmente",
-    "syncDisabledManual": "Sync deshabilitado — ningún proveedor configurado. Agregue un proveedor o inserte las tasas manualmente.",
+    "syncDisabledManual": "Sync deshabilitado — ningún proveedor configurado. Agregue un proveedor o inserte los tipos de cambio manualmente.",
     "aiExport": "Exportación IA",
     "syncFailed": "Error de sincronización: {error}",
-    "loadFailed": "No se pudieron cargar las tasas",
-    "invalidRates": "{n, plural, one {# fila tiene una tasa no válida} other {# filas tienen una tasa no válida}}: la tasa debe ser estrictamente mayor que cero (0 no está permitido).",
-    "savedSummary": "Tasas FX: {details}",
+    "loadFailed": "No se pudieron cargar los tipos de cambio",
+    "invalidRates": "{n, plural, one {# fila tiene un tipo de cambio no válido} other {# filas tienen un tipo de cambio no válido}}: el tipo de cambio debe ser estrictamente mayor que cero (0 no está permitido).",
+    "savedSummary": "Tipos de cambio: {details}",
     "savedCount": "{n, plural, one {# guardado} other {# guardados}}",
     "deletedCount": "{n, plural, one {# eliminado} other {# eliminados}}",
     "skippedCount": "{n, plural, one {# omitido (no válido)} other {# omitidos (no válidos)}}",
-    "saveFailed": "Error al guardar las tasas FX: {error}"
+    "saveFailed": "Error al guardar los tipos de cambio: {error}"
   }
 }
