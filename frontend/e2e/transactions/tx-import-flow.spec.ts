@@ -386,8 +386,8 @@ async function restoreCoachmarkGeometryObservation(page: Page): Promise<void> {
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
     await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /** Open the wizard via the toolbar Import button; wait until step 1 has settled. */

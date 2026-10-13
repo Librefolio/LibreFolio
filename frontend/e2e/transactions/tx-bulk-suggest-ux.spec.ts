@@ -31,10 +31,10 @@ test.setTimeout(30_000);
 
 async function goToTransactions(page: Page, query = '') {
     await navigateTo(page, `/transactions${query}`);
-    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
     // The table being VISIBLE is not the table being LOADED: it renders empty
     // and fills in. The page publishes data-busy, so wait on that instead.
-    await waitForSettled(page.getByTestId('transactions-page'));
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000});
 }
 
 /**

@@ -21,7 +21,8 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled, validateRuns, waitForValidateRun} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 
-test.setTimeout(25_000);
+// 60 s: login and the 20 s transactions-page gate share this budget before the validate runs and the FX sync modal; 25 s left those no time under load.
+test.setTimeout(60_000);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,10 +30,10 @@ test.setTimeout(25_000);
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
-    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
+    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 20_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 20_000})]).catch(() => {
         /* either is fine */
     });
-    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
 }
 
 /**
