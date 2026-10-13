@@ -3097,14 +3097,12 @@ test.describe('Gallery Screenshots', () => {
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
                     await freezeAnimations(page);
+                    await waitForNetworkSettled(page);
 
-                    // Wait for cards to load
-                    await page.waitForTimeout(1000);
-
-                    const card = page.locator('[data-testid^="broker-card-"]').first();
-                    await expect(card).toBeVisible({timeout: 3000});
-                    await card.click();
-                    await page.waitForLoadState('networkidle', {timeout: 20_000});
+                    // By name, not the first card: the list is alphabetical, and its first broker, Charles Schwab, has no
+                    // transactions, so the overview was empty (M-31). Interactive Brokers holds cash and stocks across the
+                    // default 3-month window (populate_mock_data.py).
+                    await openBrokerCardByName(page, 'Interactive Brokers');
                     // Wait for broker icon to load
                     await page.waitForTimeout(1000);
                     // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
