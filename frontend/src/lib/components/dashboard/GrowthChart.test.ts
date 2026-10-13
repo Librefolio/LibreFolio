@@ -790,6 +790,19 @@ function htmlText(html: string): string {
 }
 
 /**
+ * A calendar day as a tooltip header writes it in `localeTag` (plan 52, C2): short month, numeric day and year,
+ * read at LOCAL midnight the way the app reads a calendar day. WHY test-side: an expected date never comes from
+ * the formatter under test, so a wrong option or a wrong locale in the product cannot also be in the oracle.
+ */
+function dayIn(iso: string, localeTag: string): string {
+    const [year, month, date] = iso.split('-').map(Number);
+    return new Date(year, month - 1, date).toLocaleDateString(localeTag, {year: 'numeric', month: 'short', day: 'numeric'});
+}
+
+/** A calendar day in the interface locale the chart is drawn in. WHY: the header follows the interface language, never the browser's. */
+const uiDay = (iso: string) => dayIn(iso, uiLocale());
+
+/**
  * The label/value rows of a tooltip, as elements.
  *
  * Every amount row GrowthChart emits has the shape `<div><span>label</span><b>value</b></div>`,
@@ -2223,34 +2236,38 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
 
     it.each(SUBMODES)('B3 $title, 40 days, 1W: the tooltip header names the rung and the calendar week, days the series lacks included', async ({submode}) => {
         // WHY: decision (d), the header is the period the bucket stands for: bucket 0 is the week of Mon Dec 29 although
-        // the series starts on Jan 1, and bucket 6 the week of Feb 9 to 15 although today is its first day.
+        // the series starts on Jan 1, and bucket 6 the week of Feb 9 to 15 although today is its first day. Plan 52, C2:
+        // the edges are written in the interface language, never as raw ISO.
         await openRung(FIXTURE_40, submode, '1w', WEEK_BUCKETS_40);
         const week = resolved('datePicker.granularity.weeksShort');
-        expect([0, 5, 6].map((index) => tooltipHeaderText(ladderTooltip(index)))).toEqual([`1${week} - 2025-12-29 → 2026-01-04`, `1${week} - 2026-02-02 → 2026-02-08`, `1${week} - 2026-02-09 → 2026-02-15`]);
+        expect([0, 5, 6].map((index) => tooltipHeaderText(ladderTooltip(index)))).toEqual([`1${week} - ${uiDay('2025-12-29')} → ${uiDay('2026-01-04')}`, `1${week} - ${uiDay('2026-02-02')} → ${uiDay('2026-02-08')}`, `1${week} - ${uiDay('2026-02-09')} → ${uiDay('2026-02-15')}`]);
     });
 
     it.each(SUBMODES)('B3 $title, 40 days, 1M: the header is the calendar month — February to its 28th, although the series stops on the 9th', async ({submode}) => {
         // WHY: decision (d) on the rung users read most: a month is named by its own edges, not by the days with data.
+        // Plan 52, C2: the edges are written in the interface language.
         await openRung(FIXTURE_40, submode, '1m', MONTH_BUCKETS_40);
         const month = resolved('datePicker.granularity.monthsShort');
-        expect([0, 1].map((index) => tooltipHeaderText(ladderTooltip(index)))).toEqual([`1${month} - 2026-01-01 → 2026-01-31`, `1${month} - 2026-02-01 → 2026-02-28`]);
+        expect([0, 1].map((index) => tooltipHeaderText(ladderTooltip(index)))).toEqual([`1${month} - ${uiDay('2026-01-01')} → ${uiDay('2026-01-31')}`, `1${month} - ${uiDay('2026-02-01')} → ${uiDay('2026-02-28')}`]);
     });
 
     it('B3 Candles, 40 days, 1W: "value at" names the last day with data — Feb 9 for the week in progress, never a day still to come', async () => {
         // WHY: decision (d), a closing level exists only on a day with data. The week of bucket 6 runs to Feb 15, which
-        // has not happened; the cut week of bucket 0 ends on a day the series holds.
+        // has not happened; the cut week of bucket 0 ends on a day the series holds. Plan 52, C2: that day is written
+        // in the interface language, so the slot below matches any text and the "value at" line is still found once.
         await openRung(FIXTURE_40, 'candles', '1w', WEEK_BUCKETS_40);
         const valueAt = (date: string) => htmlText(get(_)('chart.tooltip.valueAt', {values: {date}}));
         const slot = valueAt('DATESLOT');
         if (!slot.includes('DATESLOT')) throw new Error(`chart.tooltip.valueAt did not take its date: ${slot}`);
-        const anyValueAt = new RegExp(`^${slot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('DATESLOT', '\\d{4}-\\d{2}-\\d{2}')}$`);
-        expect([0, 6].map((index) => topLevelDivTexts(ladderTooltip(index)).filter((text) => anyValueAt.test(text)))).toEqual([[valueAt('2026-01-04')], [valueAt('2026-02-09')]]);
+        const anyValueAt = new RegExp(`^${slot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('DATESLOT', '.+')}$`);
+        expect([0, 6].map((index) => topLevelDivTexts(ladderTooltip(index)).filter((text) => anyValueAt.test(text)))).toEqual([[valueAt(uiDay('2026-01-04'))], [valueAt(uiDay('2026-02-09'))]]);
     });
 
     it('B3 Candles, 40 days, 1D: a one-day bucket keeps its plain date as the header', async () => {
-        // WHY: decision (d), a day has no span to print; the period form is for wider rungs.
+        // WHY: decision (d), a day has no span to print; the period form is for wider rungs. Plan 52, C2: the day is
+        // written in the interface language.
         await openRung(FIXTURE_40, 'candles', '1d', DAY_COUNT);
-        expect([0, DAY_COUNT - 1].map((index) => tooltipHeaderText(ladderTooltip(index)))).toEqual(['2026-01-01', '2026-02-09']);
+        expect([0, DAY_COUNT - 1].map((index) => tooltipHeaderText(ladderTooltip(index)))).toEqual([uiDay('2026-01-01'), uiDay('2026-02-09')]);
     });
 
     // --- B4-B5: a partial period is marked and explained; the period in progress is not marked ---
@@ -4012,5 +4029,190 @@ describe('GrowthChart figures in the interface language (M-18)', {timeout: 30_00
             pctRows: PCT_ROWS.map(({seriesName}) => rows.find((row) => row.label === seriesName)?.value ?? `(no row labelled ${seriesName})`),
         };
         expect(read, spelled(expected)).toEqual(expected);
+    });
+});
+
+// =============================================================================
+// Plan 52, C2 — the tooltip header writes its dates in the interface language
+// =============================================================================
+
+/**
+ * Plan 52, C2: the cascade's tooltip header writes its dates in the interface language.
+ *
+ * `buildTooltipBucketHeader` prints the ISO day it is handed (defect 3a, there since v1.0.0): `2026-01-20` over a
+ * daily bucket, `Week 2022-03-07 – 2022-03-13` then `Value at 2022-03-13` over a weekly one, `Value at 2005-06-30`
+ * under a month. After C2 every date in the header is written by `formatDay`: short month, numeric day and year, in
+ * `uiLocale()`. Same keys, same periods, same lines in the same order; the month label is already localized and stays
+ * as it is. The cascade is the views the ladder does not own: Abs and % here.
+ *
+ * Closed periods only. Each case reads a bucket in the MIDDLE of its series, every day of it carrying data and the
+ * series running on past it: never the first bucket (the series may start inside it) nor the last (the period still
+ * running belongs to C3b and will change).
+ *
+ * Resolution. The fake chart is 1200 px wide (`getWidth`), and the cascade climbs a tier when that tier's buckets are
+ * more than 1.3 per px, and comes back under 0.8 (`DENSITY_THRESHOLDS.line`): read here, never changed.
+ *   - daily: FIXTURE_40, 40 days, 0.03 per px.
+ *   - weekly: 1700 consecutive days (Wed 2020-01-01..Mon 2024-08-26), 1.42 per px, over 1.3; their 244 weeks are 0.20
+ *     per px, so the cascade stays weekly.
+ *   - monthly: one Wednesday a week for 1700 weeks (1990-01-03..2022-07-27), plus every day of June 2005: 1725 days
+ *     (1.44 per px) and 1700 weeks (1.42 per px) are both over 1.3, so it climbs to the 391 months (0.33 per px) and
+ *     stays. June 2005 is covered day by day, so the last day of the month is a day with data.
+ * Each fixture is ONE instance, built once: a new `history` identity resets the chart's caches and its window.
+ *
+ * Expected texts. Every key is resolved through `get(_)` and read through `htmlText`, every day comes from `dayIn`,
+ * which never imports the product, and the month from `Intl` in the test. Each case ends on the negative oracle: no
+ * `YYYY-MM-DD` anywhere in the header.
+ */
+describe('GrowthChart — the tooltip header writes its dates in the interface language (plan 52, C2)', {timeout: 30_000}, () => {
+    /** A calendar period, its first and its last day. */
+    type Span = {start: string; end: string};
+
+    /** 1700 consecutive days. WHY so many: 1.42 days per px of the 1200 px fake, over the 1.3 that sends the cascade to weeks. */
+    const WEEKLY_FIXTURE = buildLadderFixture(isoDays(2020, 0, 1, 1700));
+    /** A Monday–Sunday week in the middle of WEEKLY_FIXTURE, two years in. */
+    const CLOSED_WEEK: Span = {start: '2022-03-07', end: '2022-03-13'};
+
+    /** One Wednesday a week for 1700 weeks. WHY: enough weeks to send the cascade past weekly, one day each. */
+    const WEDNESDAYS = isoDays(1990, 0, 3, 7 * 1700).filter((_day, index) => index % 7 === 0);
+    /** The Wednesdays, and every day of June 2005. WHY June day by day: a month whose last calendar day carries data. */
+    const MONTHLY_FIXTURE = buildLadderFixture([...new Set([...WEDNESDAYS, ...isoDays(2005, 5, 1, 30)])].sort());
+    /** A calendar month in the middle of MONTHLY_FIXTURE. */
+    const CLOSED_MONTH: Span = {start: '2005-06-01', end: '2005-06-30'};
+
+    /** A day in the middle of FIXTURE_40 (Thu 2026-01-01..Mon 02-09), which the cascade draws day by day. */
+    const DAILY_DAY: Span = {start: '2026-01-20', end: '2026-01-20'};
+
+    /** The non-English interface locale read. WHY a region tag: the dates must follow whatever the interface locale is. */
+    const ITALIAN = 'it-IT';
+
+    /** An ISO day. WHY: what no header line may hold once C2 is in, the negative oracle. */
+    const ISO_DAY = /\d{4}-\d{2}-\d{2}/;
+
+    /** A month as the month label writes it in `localeTag`: long month and year, read in UTC as `formatTooltipMonth` reads it. WHY test-side: the oracle never comes from the product. */
+    function monthIn(iso: string, localeTag: string): string {
+        const [year, month, date] = iso.split('-').map(Number);
+        return new Intl.DateTimeFormat(localeTag, {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(Date.UTC(year, month - 1, date)));
+    }
+
+    /** Every calendar day of `span`. WHY: "every day of it carries data" is then checked on the fixture, not assumed. */
+    function daysOf({start, end}: Span): string[] {
+        const [year, month, date] = start.split('-').map(Number);
+        return isoDays(year, month - 1, date, (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000 + 1);
+    }
+
+    /** Barrier: every day of `span` carries data in `fixture`. WHY: a header names the period's own edges only when the series covers it whole. */
+    function expectCovered(fixture: LadderFixture, span: Span): void {
+        expect(
+            fixture.history.map(({date}) => date).filter((date) => date >= span.start && date <= span.end),
+            `fixture: every day of ${span.start}..${span.end} carries data`,
+        ).toEqual(daysOf(span));
+    }
+
+    /** A key's text in today's language, as a header line reads. WHY: never a translated literal, and a key that does not resolve fails here instead of matching itself. */
+    function keyText(key: string, values: Record<string, string>): string {
+        const text = htmlText(get(_)(key, {values}));
+        expect(text, `${key} does not resolve`).not.toBe(key);
+        return text;
+    }
+
+    /** The first `count` top-level lines of a tooltip, as read. WHY: the header and its "value at" line are each one top-level `<div>`, ahead of every row. */
+    function headerLines(html: string, count: number): string[] {
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        return Array.from(host.children)
+            .filter((child) => child.tagName === 'DIV')
+            .slice(0, count)
+            .map((child) => child.textContent ?? '');
+    }
+
+    /**
+     * The index of the bucket that stands for `span` at `resolution`, found by its edges and proved interior. WHY: never a
+     * position, and never the first or the last bucket, whose period the series may cut or that may still be running.
+     */
+    async function bucketIndex(span: Span, resolution: 'daily' | 'weekly' | 'monthly'): Promise<number> {
+        return waitFor(
+            () => {
+                const data = renderedSeries()[0]?.data ?? [];
+                const index = data.findIndex((datum) => (datum as {bucketStart?: unknown} | null)?.bucketStart === span.start);
+                expect(data[index], `the cascade draws the ${resolution} bucket ${span.start}..${span.end}`).toMatchObject({bucketStart: span.start, bucketEnd: span.end, resolution});
+                expect(index, 'not the first bucket').toBeGreaterThan(0);
+                expect(index, 'not the last bucket').toBeLessThan(data.length - 1);
+                return index;
+            },
+            {timeout: 5_000},
+        );
+    }
+
+    /** The tooltip of bucket `index`, as ECharts asks for it on a hover. WHY the latest full option: its formatter reads the live state. */
+    const tooltipAt = (index: number) => latestFullOption().tooltip.formatter([{dataIndex: index}]);
+
+    /** Mounts `fixture` and opens the view `toggle` names, proved pressed. WHY one route: every case reaches its view the same way. */
+    async function openView(fixture: LadderFixture, toggle: 'growth-toggle-eur' | 'growth-toggle-pct'): Promise<void> {
+        render(GrowthChart, {props: ladderProps(fixture)});
+        await waitForFrame(FRAME.abs);
+        if (toggle === 'growth-toggle-pct') {
+            // Precondition: the fixture carries return series, so the % view can be reached.
+            expect(screen.getByTestId(toggle)).toBeEnabled();
+            const before = setOptionCount();
+            await fireEvent.click(screen.getByTestId(toggle));
+            await fullOptionAfter(before);
+        }
+        expect(pressedAmong(MODE_TOGGLES)).toEqual([toggle]);
+    }
+
+    beforeAll(() => {
+        // The one literal of this describe: if the oracle does not write en-US as en-US, the environment is wrong, not the product.
+        expect(dayIn('2025-12-29', 'en-US'), 'environment: the date oracle writes en-US').toBe('Dec 29, 2025');
+        // Control: this runtime has Italian data, so the Italian case tells the interface locale from English.
+        expect(dayIn(CLOSED_WEEK.start, ITALIAN), 'an Italian day differs from English').not.toBe(dayIn(CLOSED_WEEK.start, 'en-US'));
+    });
+
+    it('Abs, daily: a one-day bucket in the middle of the series heads its tooltip with the day in the interface language', async () => {
+        // WHY: the plainest header, the day itself, was raw ISO since v1.0.0.
+        expectCovered(FIXTURE_40, DAILY_DAY);
+        await openView(FIXTURE_40, 'growth-toggle-eur');
+        const index = await bucketIndex(DAILY_DAY, 'daily');
+        const lines = headerLines(tooltipAt(index), 1);
+
+        expect(lines).toEqual([uiDay(DAILY_DAY.start)]);
+        expect(lines.join('\n')).not.toMatch(ISO_DAY);
+    });
+
+    it.each([
+        {view: 'Abs', toggle: 'growth-toggle-eur'},
+        {view: '%', toggle: 'growth-toggle-pct'},
+    ] as const)('$view, weekly: a closed Monday–Sunday week reads its edges and its "value at" day in the interface language', async ({toggle}) => {
+        // WHY: the week range and the "value at" line both carried ISO, and both cascade views share the header.
+        expectCovered(WEEKLY_FIXTURE, CLOSED_WEEK);
+        await openView(WEEKLY_FIXTURE, toggle);
+        const index = await bucketIndex(CLOSED_WEEK, 'weekly');
+        const lines = headerLines(tooltipAt(index), 2);
+
+        expect(lines).toEqual([keyText('chart.tooltip.weekRange', {start: uiDay(CLOSED_WEEK.start), end: uiDay(CLOSED_WEEK.end)}), keyText('chart.tooltip.valueAt', {date: uiDay(CLOSED_WEEK.end)})]);
+        expect(lines.join('\n')).not.toMatch(ISO_DAY);
+    });
+
+    it('Abs, monthly: a closed month keeps its month label, and its "value at" day, its last, is in the interface language', async () => {
+        // WHY: the month label was already localized and stays as it is; the "value at" line under it carried ISO.
+        expectCovered(MONTHLY_FIXTURE, CLOSED_MONTH);
+        await openView(MONTHLY_FIXTURE, 'growth-toggle-eur');
+        const index = await bucketIndex(CLOSED_MONTH, 'monthly');
+        const lines = headerLines(tooltipAt(index), 2);
+
+        expect(lines).toEqual([keyText('chart.tooltip.monthLabel', {month: monthIn(CLOSED_MONTH.start, uiLocale())}), keyText('chart.tooltip.valueAt', {date: uiDay(CLOSED_MONTH.end)})]);
+        expect(lines.join('\n')).not.toMatch(ISO_DAY);
+    });
+
+    it('Abs, weekly, it-IT interface locale: the dates follow the interface locale, not a hard-coded one', async () => {
+        // WHY: an English expectation alone would also pass with en-US hard-coded in the product.
+        forceInterfaceLocale(ITALIAN);
+        expect(uiLocale(), 'control: the interface locale').toBe(ITALIAN);
+        expectCovered(WEEKLY_FIXTURE, CLOSED_WEEK);
+        await openView(WEEKLY_FIXTURE, 'growth-toggle-eur');
+        const index = await bucketIndex(CLOSED_WEEK, 'weekly');
+        const lines = headerLines(tooltipAt(index), 2);
+
+        expect(lines).toEqual([keyText('chart.tooltip.weekRange', {start: dayIn(CLOSED_WEEK.start, ITALIAN), end: dayIn(CLOSED_WEEK.end, ITALIAN)}), keyText('chart.tooltip.valueAt', {date: dayIn(CLOSED_WEEK.end, ITALIAN)})]);
+        expect(lines.join('\n')).not.toMatch(ISO_DAY);
     });
 });

@@ -46,6 +46,7 @@
     import {buildOhlcQuad} from '$lib/components/charts/candlestickChartHelpers';
     import {ChartLine, ChartCandlestick, Coins} from 'lucide-svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
@@ -1393,31 +1394,32 @@
         return `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml(text)}</div>`;
     }
 
+    /** Every day of the header is written in the interface language, never as raw ISO (plan 52, C2). */
     function buildTooltipBucketHeader(bucket: BucketInfo, theme: ReturnType<typeof buildTooltipTheme>): string {
         const partialHtml = buildPartialBucketLine(bucket, theme);
         // A one-day bucket has nothing to span, so it keeps the plain date. A ladder bucket is
         // judged by its period: a week the series covers for one day still prints its week.
         const span = bucket.period ?? {start: bucket.bucketStart, end: bucket.bucketEnd};
         if (span.start === span.end) {
-            return `${buildTooltipHeader(bucket.bucketEnd, theme.textColor)}${partialHtml}`;
+            return `${buildTooltipHeader(formatDay(bucket.bucketEnd), theme.textColor)}${partialHtml}`;
         }
 
         if (ladderActive) {
-            // "1M  2026-10-01 → 2026-10-31": the calendar period the bucket stands for. The
+            // "1M - Oct 1, 2026 → Oct 31, 2026": the calendar period the bucket stands for. The
             // old form said "Week" for every bucket wider than a day, which was simply false
             // on a three-day or fourteen-day rung.
-            const headerHtml = `${buildTooltipHeader(`${candleWidthLabel(candleWidth)} - ${span.start} → ${span.end}`, theme.textColor)}${partialHtml}`;
+            const headerHtml = `${buildTooltipHeader(`${candleWidthLabel(candleWidth)} - ${formatDay(span.start)} → ${formatDay(span.end)}`, theme.textColor)}${partialHtml}`;
             // "Value at <date>" is true of a closing level and false of a sum, so the
             // Income submode — whose bars are sums over the bucket — does not claim it. The
             // date is the last day with data, never a day of the period still to come.
             if (pnlSubmode === 'income') return headerHtml;
-            return `${headerHtml}<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: bucket.bucketEnd}})}</div>`;
+            return `${headerHtml}<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: formatDay(bucket.bucketEnd)}})}</div>`;
         }
 
-        const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: bucket.bucketEnd}})}</div>`;
+        const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: formatDay(bucket.bucketEnd)}})}</div>`;
 
         if (bucket.resolution === 'weekly') {
-            return `${buildTooltipHeader($_('chart.tooltip.weekRange', {values: {start: bucket.bucketStart, end: bucket.bucketEnd}}), theme.textColor)}${contextLine}`;
+            return `${buildTooltipHeader($_('chart.tooltip.weekRange', {values: {start: formatDay(bucket.bucketStart), end: formatDay(bucket.bucketEnd)}}), theme.textColor)}${contextLine}`;
         }
 
         return `${buildTooltipHeader($_('chart.tooltip.monthLabel', {values: {month: formatTooltipMonth(bucket.bucketEnd)}}), theme.textColor)}${contextLine}`;
