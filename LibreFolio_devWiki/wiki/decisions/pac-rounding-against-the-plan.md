@@ -119,6 +119,11 @@ and the rate triangle (`test_cross_rate_within_the_ten_decimal_band_of_the_trian
 **When an invariant matters, cite the section that states it and give it a test named after it** — a principle
 quoted from the wrong section is one nobody can check.
 
+*Clarified on 2026-10-13 (plan 53, T-PAC)*: the developer asked whether the planner's odd rounding of ties (D1, C-73)
+was this prudent rounding. It is not: the margin lives in the plan's computation (`constraints.py`,
+`ledger._PLAN_ROUNDING`) and in the execution margin, never in the display; D1 is only how the planner writes a
+percentage already computed — [[features/F-107]].
+
 ## Source files
 
 | Role | Path |
