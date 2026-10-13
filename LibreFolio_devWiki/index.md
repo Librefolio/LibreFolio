@@ -14,7 +14,7 @@
 | [[domains/layout-settings]] | LAYOUT & SETTINGS | F-004–F-008, F-101, F-104, F-105, F-109 | stable |
 | [[domains/brokers]] | BROKERS | F-009–F-014, F-103 | stable |
 | [[domains/fx]] | FX (Foreign Exchange) | F-015–F-023 | stable |
-| [[domains/assets]] | ASSETS | F-024–F-036 | stable |
+| [[domains/assets]] | ASSETS | F-024–F-036, F-114 | stable |
 | [[domains/signals]] | TECHNICAL ANALYSIS (Signals) | F-037–F-045 | stable |
 | [[domains/transactions]] | TRANSACTIONS | F-046–F-051 | implemented (F-048 recognised as shipped, C-64, 2026-10-12) |
 | [[domains/scheduler]] | SCHEDULER | F-052–F-053 | implemented (registry corrected 2026-10-09) |
@@ -28,7 +28,7 @@
 
 | Page | Description |
 |------|-------------|
-| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (113 features across 12 domains, 2026-10-12) |
+| [[features/registry]] | **Authoritative code→title→status→mkdocs table — READ THIS FIRST** (114 features across 12 domains, 2026-10-13) |
 
 ## Individual Feature Pages
 
@@ -47,6 +47,7 @@
 | [[features/F-111]] | Risk tab of the Dashboard and broker pages — four progressive levels; only the simulation rung stays beta | Dashboard | documented |
 | [[features/F-112]] | Risk Lab of Asset Global — correlation, losses, risk–return against a benchmark, replay | Dashboard | documented |
 | [[features/F-113]] | Risk tab of Asset Detail — the legacy panel, still beta, to be rebuilt after 1.2 | Dashboard | implemented |
+| [[features/F-114]] | Benchmark assets — a switch that offers an asset as a comparison benchmark (`00d8c735b`) | Assets | implemented |
 | [[features/F-109]] | In-app changelog — the bundled CHANGELOG in a modal; each release in the UI language when translated, English with a label otherwise | Layout & Settings | documented |
 | [[features/F-107]] | PAC allocator — a purchase planner in broker increments: SCIP searches, an exact Decimal replay certifies, a fixed-reference L2 first | Calculations | documented |
 | [[features/F-108]] | Portfolio Rebalancer — the PAC engine with existing positions, sales and a tax reserve; designed, contract without a service | Planned | planned |
@@ -633,6 +634,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-13 | **The feature pages against the verified 1.2.0 CHANGELOG.** 46 items mapped; 23 pages say what 1.2.0 brought, with the CHANGELOG line and the commit or train; no status lagged; Benchmark assets got their page | [[features/F-114]] *(1 page — 1 feature)* |
 | 2026-10-13 | **Train 83 — the 1.2 CHANGELOG reviewed; M's full gallery.** The rules of a changelog line; a security fix that shipped without one; Schwab's favicon blocked; the jsCoverage page corrected | [[decisions/changelog-entry-rules]] *(3 pages — 1 decision, 2 problems; see log)* |
 | 2026-10-13 | **Train 82 — V's §12.10.** V-29 (a product defect since 1.1.0) fixed; V-25 cured with an owned-pair fixture; V-21 in part; V-26; V-27 open | [[problems/hidden-pair-half-survived-row-removal]] *(1 page — 1 problem)* |
 | 2026-10-13 | **Train 81 and R's full run.** I's lot 50 (C-58); R's report: coverage, the triage of 29 reds, two open budgets, C-67 to C-69 | [[sources/r-full-run-coverage-2026-10-12]] *(4 pages — 1 source, 3 problems; see log)* |
