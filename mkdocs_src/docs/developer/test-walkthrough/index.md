@@ -67,10 +67,13 @@ Playwright spec files (Vitest files are not listed).
     misleading: it never cleaned JavaScript coverage. It cleans the **Python**
     coverage collected while Playwright drives the backend.
 
-    JS coverage has no accumulate-or-clean choice to make. It is raw V8 data whose
-    byte offsets only mean anything for the bundle that produced them, so it cannot
-    survive a frontend rebuild — a `--coverage js|all` run therefore always wipes it
-    first. `--cov-clean-js` exists only to clean it outside a run.
+    JS coverage has no accumulate-or-clean choice to make. Its istanbul counters
+    belong to the build that produced them — the statement maps follow that build's
+    instrumented sources — so they cannot survive a frontend rebuild: kept across one,
+    old counts would land on statements that have since moved. A run that collects JS
+    coverage (`--coverage js|all` on a `front-*`, `all-frontend` or `all` suite)
+    therefore always wipes `frontend/coverage-js/` first. `--cov-clean-js` exists only
+    to clean it outside a run.
 
 !!! tip "Two axes, not one"
 

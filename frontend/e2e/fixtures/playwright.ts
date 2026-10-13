@@ -28,11 +28,13 @@ const COVERAGE_ON = process.env.COVERAGE_JS === '1';
  * Is the build under test instrumented by `vite-plugin-istanbul`?
  *
  * The sentinel is written by `_ensure_frontend_build()`; timestamps cannot tell
- * the two *kinds* of build apart. When it is there, `window.__coverage__` will
- * carry richer data than V8 for every file, so V8 is not started at all — it is
- * not merely redundant, it is expensive: its payloads carry sources and
- * sourcemaps, and accumulating them across a consolidated category is what
- * reached 8 GB and killed the worker.
+ * the two *kinds* of build apart. Collecting does not depend on it: the
+ * teardown reads `window.__coverage__` from whatever page carries one. It only
+ * decides how an empty collection is read. On an instrumented build, a test
+ * whose pages carry no counters (it opened no app page, or they had closed)
+ * simply has nothing to add; on a plain build every collection is empty, and
+ * `warnUninstrumentedOnce()` says so instead of letting a report of zero pass
+ * for a measurement.
  */
 const INSTRUMENTED_BUILD = (() => {
     if (!COVERAGE_ON) return false;
@@ -45,6 +47,23 @@ const INSTRUMENTED_BUILD = (() => {
 
 /** Where each test drops its slice of `window.__coverage__`. */
 const E2E_COVERAGE_DIR = fileURLToPath(new URL('../../coverage-js/e2e-raw', import.meta.url));
+
+/**
+ * The JS coverage collection's own time budget. Collecting is not the test's work: once the test is over, the
+ * `jsCoverage` teardown reads `window.__coverage__` from every page (about 17 MB of JSON per test on the
+ * instrumented build), serialises it and writes it. A fixture without a `timeout` has its teardown charged to the
+ * slot Playwright gives the test's after-hooks — the test timeout again, 30 s, shared with every `afterEach` and
+ * every other teardown — and under load the collection overran it: 15 reds «Tearing down "jsCoverage" exceeded the
+ * test timeout of 30000ms» in R's coverage run (12/10, load 45–112), after 40–49 s, on tests that pass in 11–19 s
+ * alone, collection included. With a `timeout`, Playwright gives the fixture a slot of its own, shared only by its
+ * setup (a bare `use()`) and its teardown: the test's budget stays the test's, and a slow collection fails as
+ * «Fixture "jsCoverage" timeout of 120000ms exceeded during teardown», naming the collection rather than a slow
+ * test. 120 s is four times the 30 s it overran — the only measurement under load, and a censored one — and still
+ * short enough for a hung `page.evaluate` to fail rather than hold the worker. Unconditional on purpose: without
+ * COVERAGE_JS the teardown returns at once, the slot can never fire, and every run exercises the registration the
+ * coverage run relies on.
+ */
+const JS_COVERAGE_TIMEOUT_MS = 120_000;
 
 let coverageSeq = 0;
 let warnedUninstrumented = false;
@@ -299,11 +318,15 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: H
             await use();
 
             // The build carries its own istanbul counters, so collecting is a
-            // read of `window.__coverage__` — already in source coordinates,
-            // with a branch map for every `{#if}` of every template. Nothing
-            // has to be mapped back through the bundle, which is why there is
-            // no monocart here any more: resolving V8 ranges to sources was its
-            // entire job, and instrumenting the build removed the job.
+            // read of `window.__coverage__`, keyed by source file, with a
+            // branch map for every `{#if}` of every template. Nothing is
+            // mapped back through the bundle here: `vite-plugin-istanbul`
+            // instruments after the transform, so each entry counts positions
+            // in the transformed code and carries its own map back to the
+            // source, which `js-coverage-report.js` follows when it merges.
+            // That is also why there is no monocart here any more: resolving
+            // V8 ranges to sources was its entire job, and instrumenting the
+            // build removed the job.
             const entries = (
                 await Promise.all(
                     context.pages().map(async (page) => {
@@ -325,7 +348,7 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: H
             // One file per test rather than an in-process accumulator. The
             // accumulator is what used to die: it retained every payload —
             // sources and sourcemaps included — and over the 25 spec files a
-            // consolidated category now runs in a single worker it reached 8 GB
+            // consolidated category then ran in a single worker it reached 8 GB
             // and took the worker with it, reported against whichever test
             // happened to be running. Writing and forgetting is O(1) in memory,
             // and the merge is somebody else's problem: `js-coverage-report.js`.
@@ -337,7 +360,7 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: H
                 console.warn('[coverage-js] raccolta non riuscita:', e);
             }
         },
-        {scope: 'test', auto: true},
+        {scope: 'test', auto: true, timeout: JS_COVERAGE_TIMEOUT_MS},
     ],
 });
 
