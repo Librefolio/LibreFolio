@@ -875,7 +875,8 @@
     // =========================================================================
 
     function removeRow(tempId: string) {
-        ops = ops.filter((d) => d.tempId !== tempId);
+        // A pair is one row on screen and two ops: its hidden half leaves the batch with it.
+        ops = ops.filter((d) => d.tempId !== tempId && d.pairedWith !== tempId);
     }
 
     /** Mark an existing row for deletion (toggle). */
