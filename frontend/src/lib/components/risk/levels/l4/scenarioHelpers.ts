@@ -172,7 +172,12 @@ export function tornadoRows(output: unknown): TornadoRow[] {
             // first would make a 1%-weight bucket look as damaging as a 60% one.
             const value = toNumber(bucket.contribution_return);
             if (value === null) continue;
-            rows.push({key: `bucket:${bucketId}`, bucketId, value, ownReturn: toNumber(bucket.shock), contribution: value, amount: null, weight: shares === null ? null : (shares.get(bucketId) ?? 0)});
+            const weight = shares === null ? null : (shares.get(bucketId) ?? 0);
+            // A bucket nobody holds moved nothing: a row at 0.0% for it only lengthens the table (15 of
+            // the 18 of «Global risk-off» on the test data). The weight is the one the Weight column
+            // shows, so a bucket has its row exactly when the reader holds some of it.
+            if (weight === 0) continue;
+            rows.push({key: `bucket:${bucketId}`, bucketId, value, ownReturn: toNumber(bucket.shock), contribution: value, amount: null, weight});
         }
     } else {
         for (const raw of Array.isArray(stress.impacts) ? stress.impacts : []) {

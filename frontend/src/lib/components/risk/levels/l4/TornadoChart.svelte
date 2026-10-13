@@ -38,12 +38,14 @@
         rows: TornadoRow[];
         /** Row label, resolved by the caller: only it knows asset names. */
         label: (row: TornadoRow) => string;
+        /** Title of the first column, what a row is: «Asset» unless the caller names it (the shock names its dimension). */
+        nameHeader?: string;
         /** Money for a row, or '' when the payload carried no amount. */
         amount?: (row: TornadoRow) => string;
         testId: string;
     }
 
-    let {rows, label, amount, testId}: Props = $props();
+    let {rows, label, nameHeader, amount, testId}: Props = $props();
 
     let wrapper: HTMLDivElement | undefined = $state(undefined);
 
@@ -95,18 +97,22 @@
     let columns = $derived.by((): ColumnDef<TornadoRow>[] => {
         void $assetStoreVersion;
         const locale = uiLocale();
+        // Read here, not only inside the cells: a caller that renames its rows or its first column — a
+        // language switch, the reference data landing — hands new values, and the table is rebuilt for them.
+        const rowLabel = label;
+        const firstHeader = nameHeader ?? $t('risk.levels.l4.table.asset');
         const list: ColumnDef<TornadoRow>[] = [
             {
                 id: 'asset',
-                header: () => $t('risk.levels.l4.table.asset'),
+                header: () => firstHeader,
                 type: 'text',
                 width: 200,
                 minWidth: 140,
                 filterable: false,
-                getValue: (row) => label(row),
+                getValue: (row) => rowLabel(row),
                 cell: (row) => ({
                     type: 'html',
-                    html: `<div class="flex min-w-0 items-center gap-1.5" data-testid="${escapeHtml(`${testId}-row`)}" data-row-key="${escapeHtml(row.key)}">${iconHtml(row)}<span class="min-w-0 flex-1 ${overflowScrollTextClass}">${escapeHtml(label(row))}</span></div>`,
+                    html: `<div class="flex min-w-0 items-center gap-1.5" data-testid="${escapeHtml(`${testId}-row`)}" data-row-key="${escapeHtml(row.key)}">${iconHtml(row)}<span class="min-w-0 flex-1 ${overflowScrollTextClass}">${escapeHtml(rowLabel(row))}</span></div>`,
                 }),
             },
         ];
