@@ -10407,11 +10407,11 @@
     }
   },
   "CHANGELOG.md#1.2.0/fixed/charts": {
-    "md5": "08d123d877c63e9402aaff4db820e146",
+    "md5": "bef5088ade74a3b8263725d92f214866",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-10-13T02:00:07.056010+00:00",
     "analysis": "[{\"name\": \"Charts\", \"keywords\": [\"LibreFolio charts\", \"portfolio tracker chart section\", \"UI chart heading\", \"financial charts\"]}, {\"name\": \"amount axes\", \"keywords\": [\"chart amount axis\", \"financial chart y-axis\", \"portfolio chart axes\", \"axis labels amounts\"]}, {\"name\": \"Growth and Performance charts\", \"keywords\": [\"LibreFolio Growth chart\", \"Performance chart\", \"portfolio performance chart\", \"growth chart UI\"]}, {\"name\": \"label\", \"keywords\": [\"chart axis label\", \"tick label\", \"duplicate label\", \"UI label translation\"]}, {\"name\": \"print (the same label twice)\", \"keywords\": [\"UI render label\", \"display duplicate label\", \"chart print label\", \"software print vs display\"]}, {\"name\": \"5.5k, 6k, 1.25M, 1.3M\", \"keywords\": [\"number abbreviation k M\", \"thousands millions suffix\", \"locale number formatting\", \"chart axis labels\"]}, {\"name\": \"real 6k\", \"keywords\": [\"actual data value 6k\", \"real axis label\", \"duplicate label chart\", \"genuine value\"]}, {\"name\": \"axis edge\", \"keywords\": [\"chart axis edge\", \"axis boundary\", \"auto-scaled axis\", \"plot area edge\"]}, {\"name\": \"placed automatically beyond the data\", \"keywords\": [\"auto axis range\", \"axis limit beyond data\", \"chart auto-scaling\", \"axis edge placement\"]}, {\"name\": \"regular step\", \"keywords\": [\"axis step interval\", \"tick step\", \"regular gridline interval\", \"chart axis scale\"]}, {\"name\": \"tooltip\", \"keywords\": [\"UI tooltip\", \"chart hover tooltip\", \"LibreFolio tooltip\", \"software tooltip translation\"]}, {\"name\": \"total P&amp;L\", \"keywords\": [\"total profit and loss\", \"P&amp;L\", \"portfolio total P&amp;L\", \"financial P&amp;L translation\"]}, {\"name\": \"P&amp;L\", \"keywords\": [\"profit and loss acronym\", \"P&amp;L financial term\", \"income statement\", \"portfolio tracker\"]}, {\"name\": \"EUR\", \"keywords\": [\"ISO 4217 EUR\", \"euro currency code\", \"currency formatting\", \"EUR symbol\"]}, {\"name\": \"EUR -12.00 / −EUR 12.00\", \"keywords\": [\"currency formatting negative amount\", \"minus sign placement\", \"EUR amount format\", \"locale currency sign\"]}, {\"name\": \"reads\", \"keywords\": [\"UI reads displays\", \"chart tooltip reads\", \"software display verb\", \"localization reads\"]}, {\"name\": \"lot comparison chart\", \"keywords\": [\"tax lot comparison chart\", \"investment lot chart\", \"portfolio lot comparison\", \"financial lot\"]}, {\"name\": \"lot\", \"keywords\": [\"tax lot\", \"purchase lot\", \"share lot\", \"portfolio lot definition\"]}, {\"name\": \"empty strip\", \"keywords\": [\"empty chart strip\", \"blank layout strip\", \"chart margin\", \"UI empty space\"]}, {\"name\": \"amounts\", \"keywords\": [\"chart amounts\", \"monetary values\", \"axis amounts\", \"portfolio amounts\"]}, {\"name\": \"phones\", \"keywords\": [\"mobile phones\", \"phone screen\", \"responsive mobile UI\", \"chart on phones\"]}]",
@@ -10427,7 +10427,9 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 81.0,
-        "index": 7
+        "index": 7,
+        "stamped_at": "2026-10-13T08:34:47.013877+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-13T02:00:07.056010+00:00",
@@ -10439,7 +10441,9 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 59.6,
-        "index": 7
+        "index": 7,
+        "stamped_at": "2026-10-13T08:34:47.013877+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-13T02:00:07.056010+00:00",
@@ -10451,7 +10455,9 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 59.9,
-        "index": 7
+        "index": 7,
+        "stamped_at": "2026-10-13T08:34:47.013877+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
