@@ -3240,3 +3240,67 @@ Correzioni al conteggio automatico:
   4. `/tmp/libreFolio_commit_t_iso_4.txt`, `docs(journal): record T-ISO and T-FB`.
 - **I file per commit** sono nel manifest `/tmp/libreFolio_tiso_manifest.txt`.
 - **Il runner va nel commit 2**, perché registra anche il file nuovo di quel commit. Fra il commit 1 e il 2, `LineChart.test.ts` resta un orfano.
+
+### T-ISO, la riparazione di `component-unit` — via (coordinatore, 2026-10-13 06:08)
+- **T-ISO + T-FB è integrato**: treno 88, `dev_release2` = `50886d1ca` = la mia HEAD, pulita.
+- **I gate del treno**: 8 rossi in `front-utility component-unit`, tutti in `AssetModal.providerLifecycle.test.ts`. `expectResults` (`:424-440`) riconosce la riga dello storico dal `date_range` grezzo nel testo, e dopo T-ISO quel testo è formattato.
+- **Mandato**:
+  - un aggancio sulle righe `provider-test-result` che non dipende dalla lingua, usato dal test al posto del testo;
+  - poi `component-unit` intera e gli altri file che leggono il testo della sonda;
+  - checkpoint FROZEN. È il primo della coda: blocca la galleria finale.
+
+#### La riparazione — analisi (2026-10-13)
+- **Riprodotti**: 8 rossi su 41, tutti alla stessa riga, `:434` (`historyRows` vuoto). Log: `/tmp/libreFolio_tdr_red0_lifecycle.log`.
+- **Perché i gate di T-ISO non l'hanno visto**: al passo 3 ho fatto girare i file del lotto e i vicini dei grafici e del rischio, non `component-unit` intera. Il ciclo di vita dell'AssetModal legge il testo della sonda da fuori dal componente.
+- **La cura**: ogni riga pubblica `data-operation`, e il testo resta nella lingua della UI.
+  - I valori sono `current_price` e `history`, i nomi delle operazioni del backend (`ProbeOperation`, `schemas/provider.py:319-324`): gli stessi che la richiesta manda in `operations`.
+  - La riga che dice che la chiamata stessa è fallita (`probe.error`) pubblica `probe`.
+  - **Perché non il `date_range` grezzo**: nei fixture l'intervallo è sempre lo stesso; le risposte si distinguono dal prezzo. Al test serve sapere quale riga è quale, e `data-operation` lo dice per tutte e due. Così si controlla anche lo stato della riga del prezzo corrente, non più solo quando il caso passa un prezzo.
+- **Chi altro legge la sonda** (grep di `provider-test-result`, `→`, `as_of_date`, `points_count` e dell'endpoint):
+  - `ProviderAssignmentSection.test.ts`: legge cifre e giorni per struttura, con gli attesi scritti da `Intl`, ed è verde. Due commenti dicono che dentro la riga non si pubblica niente di più fine (`:20`, `:459`): con l'aggancio non è più vero, si correggono.
+  - `providerProbe.test.ts` (il tooltip, funzioni pure) e `providerProbeState.test.ts` (lo stato, non disegna): non leggono le righe.
+  - **E2E**:
+    - `asset-modal.spec.ts` guarda solo `data-status`;
+    - `tx-import-asset-inspector.spec.ts` e la fixture della galleria `galleryProviderCompare.ts` mandano risposte finte ma non leggono il testo.
+- **I test, da test-author J, rossi prima della cura**:
+  - `expectResults` riconosce le righe da `data-operation`;
+  - in `ProviderAssignmentSection.test.ts` si fissa il contratto dell'aggancio: successo pieno, fallimenti morbidi, la chiamata che fallisce.
+- **I gate**:
+  - i due file;
+  - `front-utility component-unit` intera e `providerProbe.test.ts`;
+  - `front check` e Prettier;
+  - l'E2E `front-asset asset-modal`, che passa dalla sonda.
+
+#### La riparazione, passo 1 — i rossi ✅ (2026-10-13)
+> **Note implementazione**: test-author J ha scritto 11 rossi, che ho visto rossi anche io, un file alla volta (`/tmp/libreFolio_tdr_red_*.log`). Falliscono tutti solo perché l'attributo manca: gli stati che leggono sono giusti.
+> - **`AssetModal.providerLifecycle.test.ts`**: 8 rossi e 33 verdi.
+>   - `expectResults` tiene firma e chiamate, e riconosce le righe da `data-operation`: esattamente `current_price` e `history`.
+>   - Lo storico è `success`, il prezzo corrente ha lo stato che resta, e il prezzo si controlla sulla sua riga.
+>   - In più una premessa: `statuses` contiene `success`, perché lo storico dei fixture riesce sempre.
+> - **`ProviderAssignmentSection.test.ts`**: 3 rossi e 37 verdi. Il contratto dell'aggancio: successo pieno, fallimenti morbidi, `probe` per la chiamata che fallisce. Corretti i due commenti, `:20` e il paragrafo «Handles».
+
+#### La riparazione, passo 2 — la cura ✅ (2026-10-13)
+> **Note implementazione**: `/tmp/libreFolio_tdr_apply.py --apply`, 5 operazioni su `ProviderAssignmentSection.svelte`, provata prima a secco.
+> - `TestResult` ha `operation`;
+> - le tre righe la valorizzano: `probe`, `current_price`, `history`;
+> - il `div` della riga pubblica `data-operation`.
+>
+> **Verdi** (`/tmp/libreFolio_tdr_green_*.log`): `AssetModal.providerLifecycle` 41, `ProviderAssignmentSection` 40, `providerProbe` 27, `providerProbeState` 237.
+
+#### La riparazione, passo 3 — i gate ✅ (2026-10-13)
+> **Note implementazione** (corsia 6164, un comando alla volta):
+> - **`front-utility component-unit` intera**: 117 file, 3 130 test, tutti verdi (`/tmp/libreFolio_t1_tdr_front-utility_component-unit.log`).
+> - **`providerProbe.test.ts`** (sta in `utility-unit`): 27.
+> - **Statici**:
+>   - `front check`: 0 errori, 0 avvisi;
+>   - Prettier pulito sui 3 file;
+>   - `git diff --check` pulito.
+> - **E2E**: `front-asset asset-modal` 17, l'unico che passa dalla sonda (legge solo `data-status`). `check-orphans` pulito: nessun file nuovo.
+> - **Porta 6164 libera.**
+
+### Checkpoint della riparazione 🧊 (2026-10-13) — FROZEN, in attesa del coordinatore
+- **Base**: `50886d1ca`.
+- **Commit proposti**:
+  1. `/tmp/libreFolio_commit_t_iso_r1.txt`, `fix(assets): probe rows name their operation`: il componente e i due spec;
+  2. `/tmp/libreFolio_commit_t_iso_r2.txt`, `docs(journal): record the T-ISO probe repair`: piano 43 e backlog.
+- **I file per commit** sono nel manifest `/tmp/libreFolio_tdr_manifest.txt`.
