@@ -512,3 +512,17 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > **Fuori pista**: il coordinatore colori ha corretto il calendario delle cartelle frontend
 > (il suo lotto A parte subito e tocca anche cambi, asset e transazioni); il §3 e il §7
 > riportano il calendario corretto.
+
+### Sessioni iniziali avviate ✅ (2026-10-14)
+
+> **Note implementazione**: base della fase `459131eb8` (piano generale, README, sezioni H…Y del
+> backlog). Avviate in modo piano, agente `coordinated-workstream`, prima consegna = solo analisi:
+> H (`e-alfy-sturdy-memory`, 6181), A (`e-alfy-legendary-winner`, 6182), X (`e-alfy-cuddly-engine`,
+> 6183), W (`e-alfy-fluffy-meme`, 6184), J (`e-alfy-crispy-goggles`, 6185), Z
+> (`e-alfy-potential-sniffle`, 6186). Ogni worktree è nato da `origin/dev_release2` (`6d0b1266c`) ed
+> è stato portato alla base con `merge --ff-only`; verificati HEAD, pulizia e presenza del file
+> dell'agente e del piano.
+>
+> **Fuori pista**: gli endpoint degli eventi degli asset stanno in `api/v1/assets.py` (di X), ma le
+> voci sugli eventi (I-09…I-12, V-22, C-65) sono di W. Deciso: X mette gli eventi in un modulo proprio
+> quando divide il router e lo integra presto; da lì il modulo è di W (messaggio a X, perimetro di W).

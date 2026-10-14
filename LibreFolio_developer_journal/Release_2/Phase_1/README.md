@@ -25,12 +25,12 @@ Ramo di integrazione: `dev_release2` (condiviso con il programma colori). Corsie
 | Lettera | Sessione | Corsia | Data-dir | Ramo | HEAD | Stato |
 |---|---|---|---|---|---|---|
 | — | Coordinatore 1.3 (in place) | 6180 | `/tmp/librefolio-r13-main` | `dev_release2` | — | attivo |
-| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | — | — | da avviare |
-| A | A - Account e accessi | 6182 | `/tmp/librefolio-r13-a` | — | — | da avviare |
-| X | X - Plugin asset e ricerca | 6183 | `/tmp/librefolio-r13-x` | — | — | da avviare |
-| W | W - Import e transazioni | 6184 | `/tmp/librefolio-r13-w` | — | — | da avviare |
-| J | J - Numeri e analisi | 6185 | `/tmp/librefolio-r13-j` | — | — | da avviare |
-| Z | Z - Sospensione e risveglio | 6186 | `/tmp/librefolio-r13-z` | — | — | da avviare |
+| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-sturdy-memory` | `459131eb8` | analisi (sessione `8490facf`) |
+| A | A - Account e accessi | 6182 | `/tmp/librefolio-r13-a` | `e-alfy-legendary-winner` | `459131eb8` | analisi (sessione `119ed166`) |
+| X | X - Plugin asset e ricerca | 6183 | `/tmp/librefolio-r13-x` | `e-alfy-cuddly-engine` | `459131eb8` | analisi (sessione `ad5f37c8`) |
+| W | W - Import e transazioni | 6184 | `/tmp/librefolio-r13-w` | `e-alfy-fluffy-meme` | `459131eb8` | analisi (sessione `e71e0e34`) |
+| J | J - Numeri e analisi | 6185 | `/tmp/librefolio-r13-j` | `e-alfy-crispy-goggles` | `459131eb8` | analisi (sessione `4c677a01`) |
+| Z | Z - Sospensione e risveglio | 6186 | `/tmp/librefolio-r13-z` | `e-alfy-potential-sniffle` | `459131eb8` | analisi (sessione `d401e062`) |
 | B | B - Backup e Docker | 6187 | `/tmp/librefolio-r13-b` | — | — | dopo il primo checkpoint di H |
 | E | E - Email | 6188 | `/tmp/librefolio-r13-e` | — | — | dopo token e inviti di A |
 | Y | Y - Cruscotto e grafici | 6189 | `/tmp/librefolio-r13-y` | — | — | dopo il lotto B dei colori |
