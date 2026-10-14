@@ -7,15 +7,16 @@
 
 import {parseColor, colorKey} from '../color.js';
 import {changesForTheme, hasEffect} from '../store';
-import type {LabChange, LabState} from '../types';
-import {applyCharts, reapplyAll, type ChartRule} from './charts';
+import type {LabChange, LabState, LabStats} from '../types';
+import {applyElementRules} from './anchors';
+import {applyCharts, reapplyAll, type AnchoredChartRule, type ChartRule} from './charts';
 import {applyCvd} from './cvd';
 import {applyStylesheets, normalizeSelector, type LiteralRule, type SheetPlan} from './stylesheets';
-import {resolveTarget} from './targets';
+import {isSafeSelector, resolveTarget} from './targets';
 import {applyVars} from './vars';
 
 let state: LabState | null = null;
-let counts = {cssRules: 0, chartInstances: 0, varOverrides: 0};
+let counts: LabStats = {cssRules: 0, chartInstances: 0, varOverrides: 0, elementRules: 0};
 let hits = new Map<string, number>();
 let themeObserver: MutationObserver | null = null;
 let lastDark = false;
@@ -62,6 +63,17 @@ function chartPlan(changes: LabChange[], dark: boolean): Map<string, ChartRule> 
     return plan;
 }
 
+/** Chart specialisations: one colour, only in the charts the selector reaches. */
+function chartAnchors(changes: LabChange[], dark: boolean): AnchoredChartRule[] {
+    const rules: AnchoredChartRule[] = [];
+    for (const c of changesForTheme(changes, dark)) {
+        if (c.layer !== 'element' || c.property !== 'chart' || !c.colorKey || !isSafeSelector(c.target)) continue;
+        const target = resolveTarget(c.to);
+        if (target) rules.push({changeId: c.id, target, alphaVariants: true, key: c.colorKey, selector: c.target});
+    }
+    return rules;
+}
+
 function applySheetsForTheme(): void {
     const changes = state ? changesForTheme(state.changes, isDark()) : [];
     const result = applyStylesheets(changes.length ? sheetPlan(changes) : null);
@@ -94,9 +106,11 @@ export async function applyState(next: LabState | null): Promise<void> {
     const changes = state?.changes ?? [];
     hits = new Map();
     counts.varOverrides = applyVars(changes.filter((c) => c.layer === 'css-var'));
+    counts.elementRules = applyElementRules(changes.filter((c) => c.layer === 'element'));
     applySheetsForTheme();
-    const charts = await applyCharts({light: chartPlan(changes, false), dark: chartPlan(changes, true)});
-    counts.chartInstances = charts.instances;
+    const charts = await applyCharts({light: chartPlan(changes, false), dark: chartPlan(changes, true), anchoredLight: chartAnchors(changes, false), anchoredDark: chartAnchors(changes, true)});
+    // Without a state the pass only put the original colours back: nothing is changed any more.
+    counts.chartInstances = state ? charts.instances : 0;
     for (const [id, n] of charts.hits) hits.set(id, n);
     applyCvd(state?.cvd ?? 'none');
     watchTheme(!!state);
@@ -106,7 +120,7 @@ export function isActive(): boolean {
     return state !== null;
 }
 
-export function stats(): {cssRules: number; chartInstances: number; varOverrides: number} {
+export function stats(): LabStats {
     return {...counts};
 }
 

@@ -131,6 +131,12 @@ function restore(): void {
     saved = [];
 }
 
+/** The value a declaration had before the Lab rewrote it, or null when the Lab has not touched it (element picker). */
+export function originalValue(style: CSSStyleDeclaration, prop: string): string | null {
+    for (const s of saved) if (s.style === style && s.prop === prop) return s.value;
+    return null;
+}
+
 function watchHead(): void {
     if (headObserver) return;
     headObserver = new MutationObserver((records) => {

@@ -51,6 +51,98 @@ const HEX_RE = /(?<![\w&])#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
 const FUNC_RE = /\b(rgba?|hsla?|oklch|color-mix)\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
 const VAR_USE_RE = /var\(\s*(--[\w-]+)/g;
 const VAR_DEF_RE = /^\s*(--[\w-]+)\s*:\s*([^;]+);/gm;
+/**
+ * A test id written in the markup: `data-testid=…`, or a prop a component renders as a `data-testid` — `testid`,
+ * `testId`, `optionTestId`… (never `testIdPrefix`: the name must end the attribute). The value is read by
+ * `testidValues`. Not part of the parity with the inventory.
+ */
+const TESTID_ATTR_RE = /(?<![\w-])(data-testid|testid|testId|[a-z][A-Za-z]*?(?:TestId|Testid|TestID))=/g;
+/**
+ * A test id given in a script: a property or a variable whose name ends with `testid`/`testId` (`testId: 'tab-a'`,
+ * `const rowTestId = \`row-${id}\``, a parameter default). Never a comparison (`===`), an arrow (`=>`), an optional
+ * property's type (`testId?: string`) or a type annotation's name alone (`testId: string`, no literal).
+ */
+const TESTID_SCRIPT_RE = /(?<![\w$-])((?:[A-Za-z_$][\w$]*?)?[tT]est[iI][dD])\s*(?::(?!:)|=(?![=>]))\s*/g;
+/**
+ * Literals in value position of an expression — at its start, after `?`, `:`, `??`, `||`, `&&`, an arrow `=>` or a
+ * grouping `(` — never comparison operands or call arguments (`fn('x')`).
+ */
+const VALUE_LITERAL_RE = /(?:^|[?:&|]|=>|(?<![\w$.\])])\()\s*(?:`([^`]*)`|'([^']*)'|"([^"]*)")/g;
+
+/**
+ * The index of the character that ends the expression starting at `rest[0]`: the closing brace of a `{…}` when
+ * `braced`, else the first `,`, `;`, `)`, `]` or `}` outside brackets and literals (a script statement or property).
+ * Template placeholders are skipped whole.
+ * @param {string} rest
+ * @param {boolean} braced
+ */
+function expressionEnd(rest, braced) {
+    let depth = 0;
+    let quote = '';
+    for (let i = 0; i < rest.length; i++) {
+        const c = rest[i];
+        if (quote) {
+            if (c === '\\') i++;
+            else if (c === quote) quote = '';
+            else if (quote === '`' && c === '$' && rest[i + 1] === '{') {
+                // Skip the template placeholder: no quotes inside the ids this repo writes.
+                const close = rest.indexOf('}', i);
+                if (close === -1) return rest.length;
+                i = close;
+            }
+        } else if (c === '"' || c === "'" || c === '`') quote = c;
+        else if (c === '{' || c === '(' || c === '[') depth++;
+        else if (c === '}' || c === ')' || c === ']') {
+            depth--;
+            if (braced ? depth === 0 : depth < 0) return i;
+        } else if (!braced && depth === 0 && (c === ',' || c === ';')) return i;
+    }
+    return rest.length;
+}
+
+/**
+ * The ids an expression can produce: its string and template literals in value position. A `${…}` or `{…}` cuts an
+ * id into a prefix; an id with nothing static before the cut (a pass-through) is not indexable.
+ * @param {string} expr
+ * @returns {{id: string, prefix: boolean}[]}
+ */
+function literalIds(expr) {
+    const out = [];
+    for (const m of expr.matchAll(VALUE_LITERAL_RE)) {
+        const value = m[1] ?? m[2] ?? m[3] ?? '';
+        const cut = value.search(/\$?\{/);
+        const id = cut === -1 ? value : value.slice(0, cut);
+        if (id.length >= (cut === -1 ? 1 : 3) && /^[\w:.-]+$/.test(id)) out.push({id, prefix: cut !== -1});
+    }
+    return out;
+}
+
+/**
+ * The ids a test-id attribute can take, from the text right after its `=`: a quoted value, or the literals of a `{…}`
+ * expression read up to its closing brace on the same line (`literalIds`).
+ *
+ * @param {string} rest
+ * @returns {{id: string, prefix: boolean}[]}
+ */
+export function testidValues(rest) {
+    const q = rest[0];
+    if (q === '"' || q === "'") {
+        const end = rest.indexOf(q, 1);
+        return end === -1 ? [] : literalIds(q + rest.slice(1, end) + q);
+    }
+    if (q !== '{') return [];
+    return literalIds(rest.slice(1, expressionEnd(rest, true)).trim());
+}
+
+/**
+ * The ids a script gives a test id, from the text right after `name:` or `name =`: the literals of the expression,
+ * read up to the end of the property or statement on the same line.
+ * @param {string} rest
+ * @returns {{id: string, prefix: boolean}[]}
+ */
+export function scriptTestidValues(rest) {
+    return literalIds(rest.slice(0, expressionEnd(rest, false)).trim());
+}
 
 /** @param {string} path a `frontend/`-relative POSIX path */
 export const isTestPath = (path) => path.includes('__tests__') || path.includes('__mocks__') || path.includes('.test.') || path.includes('.spec.');
@@ -237,8 +329,8 @@ function themeOfChain(chain) {
     return theme;
 }
 
-/** A condition naming the dark theme at the end of a line (`isDark`, `!dark`, `this.isDark()`, `(isDark)`). */
-const DARK_CONDITION_AT_END = /(!?)\s*\b[\w.$]*(?:dark|Dark|DARK)[\w.$]*(?:\(\))?\)*\s*$/;
+/** A condition naming the dark theme at the end of a line (`isDark`, `!dark`, `!$isDark`, `this.isDark()`, `(isDark)`). */
+const DARK_CONDITION_AT_END = /(!?)\s*(?<![\w$.])[\w.$]*(?:dark|Dark|DARK)[\w.$]*(?:\(\))?\)*\s*$/;
 
 /**
  * A theme hint for a colour written in a script: an object key (`dark: '#…'`), or the side of a ternary whose
@@ -254,7 +346,8 @@ function scriptThemeHint(lines, lineIndex, col) {
     const before = line.slice(0, col);
     const key = /\b(dark|light)\w*['"]?\s*[:=]\s*['"`]?$/i.exec(before);
     if (key) return key[1].toLowerCase() === 'dark' ? 'dark' : 'light';
-    for (const m of line.matchAll(/(!?)\s*\b[\w.]*(?:dark|Dark|DARK)[\w.]*(?:\(\))?\s*\?/g)) {
+    // `(?<![\w$.])` and not `\b`: a store (`!$isDark`) puts a `$` between the `!` and the name.
+    for (const m of line.matchAll(/(!?)\s*(?<![\w$.])[\w.$]*(?:dark|Dark|DARK)[\w.$]*(?:\(\))?\s*\?/g)) {
         const q = /** @type {number} */ (m.index) + m[0].length - 1;
         if (q >= col) break;
         const colon = ternaryColon(line, q + 1);
@@ -368,10 +461,11 @@ const paletteVar = (family, shade) => (shade ? `--color-${family}-${shade}` : fa
 /**
  * @typedef {object} FileScan
  * @property {{tw: number, custom: number, arbitrary: number, hex: number, fn: number}} counts  matches in this file
- * @property {{name: string, line: number}[]} varUses
+ * @property {{name: string, line: number, selector?: string | null}[]} varUses
  * @property {{name: string, value: string, line: number, offset: number}[]} varDefs
  * @property {{raw: string, var: string | null, line: number, dark: boolean}[]} classes
  * @property {object[]} literals
+ * @property {{id: string, prefix: boolean, line: number, via: 'attr' | 'prop' | 'script'}[]} testids  test ids the file writes
  */
 
 /**
@@ -400,7 +494,7 @@ export function scanSource(rel, text, opts = {}) {
         return r ? (r.kind === 'style' ? 'svelte-style' : 'svelte-script') : 'svelte-markup';
     };
 
-    const result = /** @type {FileScan} */ ({counts: {tw: 0, custom: 0, arbitrary: 0, hex: 0, fn: 0}, varUses: [], varDefs: [], classes: [], literals: []});
+    const result = /** @type {FileScan} */ ({counts: {tw: 0, custom: 0, arbitrary: 0, hex: 0, fn: 0}, varUses: [], varDefs: [], classes: [], literals: [], testids: []});
 
     /**
      * @param {RegExpMatchArray} m
@@ -462,7 +556,27 @@ export function scanSource(rel, text, opts = {}) {
             result.counts.fn++;
             addLiteral(m, i, m[1] === 'color-mix' ? 'mix' : 'fn');
         }
-        for (const m of line.matchAll(VAR_USE_RE)) result.varUses.push({name: m[1], line: i + 1});
+        for (const m of line.matchAll(VAR_USE_RE)) {
+            const offset = starts[i] + /** @type {number} */ (m.index);
+            const region = cssRegions.find((r) => r.start <= offset && offset < r.end);
+            result.varUses.push({name: m[1], line: i + 1, selector: region ? cssContext(text, region.blocks, offset).selector : null});
+        }
+        if (isSvelte) {
+            for (const m of line.matchAll(TESTID_ATTR_RE)) {
+                const at = /** @type {number} */ (m.index);
+                if (zoneAt(starts[i] + at) !== 'svelte-markup') continue;
+                const via = m[1] === 'data-testid' ? 'attr' : 'prop';
+                for (const v of testidValues(line.slice(at + m[0].length))) result.testids.push({...v, line: i + 1, via});
+            }
+        }
+        if (!isCss && line.includes('est')) {
+            for (const m of line.matchAll(TESTID_SCRIPT_RE)) {
+                const at = /** @type {number} */ (m.index);
+                const zone = zoneAt(starts[i] + at);
+                if (zone !== 'svelte-script' && zone !== 'ts') continue;
+                for (const v of scriptTestidValues(line.slice(at + m[0].length))) result.testids.push({...v, line: i + 1, via: 'script'});
+            }
+        }
     });
 
     for (const m of text.matchAll(VAR_DEF_RE)) {
@@ -520,16 +634,23 @@ export function scanColors(opts = {}) {
     const distinctUses = new Set();
     /** @type {Map<string, {var: string, uses: number, dark: number, classes: Record<string, number>, files: Record<string, number>, occ: number[][]}>} */
     const palette = new Map();
-    /** @type {Map<string, {name: string, defs: object[], uses: number, files: Record<string, number>}>} */
+    /** Per palette variable: class → its index in `classes` (insertion order, the order `Object.keys` returns). */
+    /** @type {Map<string, Map<string, number>>} */
+    const classIndex = new Map();
+    /** @type {Map<string, {name: string, defs: object[], uses: number, files: Record<string, number>, use_sites: (number | string | null)[][]}>} */
     const cssVars = new Map();
     /** @type {object[]} */
     const literals = [];
+    /** @type {Record<string, [number, number, 'attr' | 'prop' | 'script'][]>} */
+    const testids = {};
+    /** @type {[string, number, number, 'attr' | 'prop' | 'script'][]} */
+    const testidPrefixes = [];
 
     /** @param {string} name */
     const varEntry = (name) => {
         let v = cssVars.get(name);
         if (!v) {
-            v = {name, defs: [], uses: 0, files: {}};
+            v = {name, defs: [], uses: 0, files: {}, use_sites: []};
             cssVars.set(name, v);
         }
         return v;
@@ -558,20 +679,29 @@ export function scanColors(opts = {}) {
         for (const c of scan.classes) {
             if (!c.var) continue;
             let p = palette.get(c.var);
-            if (!p) {
+            let names = classIndex.get(c.var);
+            if (!p || !names) {
                 p = {var: c.var, uses: 0, dark: 0, classes: {}, files: {}, occ: []};
+                names = new Map();
                 palette.set(c.var, p);
+                classIndex.set(c.var, names);
             }
             p.uses++;
             if (c.dark) p.dark++;
             p.classes[c.raw] = (p.classes[c.raw] ?? 0) + 1;
+            if (!names.has(c.raw)) names.set(c.raw, names.size);
             p.files[f] = (p.files[f] ?? 0) + 1;
-            p.occ.push([f, c.line]);
+            p.occ.push([f, c.line, /** @type {number} */ (names.get(c.raw))]);
         }
         for (const u of scan.varUses) {
             const v = varEntry(u.name);
             v.uses++;
             v.files[f] = (v.files[f] ?? 0) + 1;
+            v.use_sites.push([f, u.line, u.selector ?? null]);
+        }
+        for (const t of scan.testids) {
+            if (t.prefix) testidPrefixes.push([t.id, f, t.line, t.via]);
+            else (testids[t.id] ??= []).push([f, t.line, t.via]);
         }
         for (const d of scan.varDefs) {
             const {offset: _offset, ...def} = /** @type {any} */ (d);
@@ -602,6 +732,8 @@ export function scanColors(opts = {}) {
         palette: [...palette.values()].sort((a, b) => a.var.localeCompare(b.var)),
         literals,
         by_value: byValue,
+        testids,
+        testid_prefixes: testidPrefixes.sort((a, b) => b[0].length - a[0].length),
     };
     const hash = 'sha256:' + createHash('sha256').update(JSON.stringify(body)).digest('hex');
     const layers = /** @type {Record<string, number>} */ ({});

@@ -21,6 +21,11 @@ export function isSafeCssValue(value: string): boolean {
     return value.length > 0 && value.length <= 200 && !UNSAFE.test(value);
 }
 
+/** A selector the Lab may write into a rule: one line, no block, comment or tag delimiter (escapes like `\:` are fine). */
+export function isSafeSelector(selector: string): boolean {
+    return typeof selector === 'string' && selector.length > 0 && selector.length <= 600 && !/[{};<]|\/\*|[\r\n]/.test(selector);
+}
+
 export function resolveTarget(to: string): Target | null {
     const css = to.trim();
     if (!isSafeCssValue(css)) return null;
@@ -51,7 +56,8 @@ export function cssWithAlpha(target: Target, alpha: number): string {
 
 /**
  * The target as a canvas colour: sRGB `rgba()` with a four-decimal alpha. The fixed form is deliberate: no colour the
- * app writes looks like it, so the chart engine can tell its own output from the app's when it reads an option back.
+ * app writes looks like it, so the chart engine can tell its own output from the app's when it reads an option back
+ * (the chart engine may add decimals, to give two different originals two spellings of one colour).
  */
 export function canvasString(target: Target, alpha: number): string | null {
     if (!target.rgba) return null;

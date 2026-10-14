@@ -118,8 +118,8 @@ Vincoli aggiunti dal coordinatore (14/10):
 | 3 | Motore L1/L2/L3, persistenza, sincronizzazione | effetto in un'altra scheda, ripristino esatto, nessun effetto a storage vuoto | ✅ 14/10 (verifica funzionale); E2E al passo 6 |
 | 4 | Interfaccia | accettazione dal vivo (passo esterno) | ✅ 14/10 codice; accettazione ⏳ |
 | 5 | Export, import, `verify-export`, skill | round trip identico, `verify-export` corretto, prova a secco della skill | ✅ 14/10 |
-| 5b | Selettore di elementi (ispettore): si punta un elemento nell'app, il Lab si filtra sulle sorgenti dei suoi colori; «specializza qui» con un'ancora nell'export (richiesta del developer del 14/10 sera) | da fissare con l'analisi | ⏳ analisi inviata al coordinatore il 14/10; **nessun codice prima del via** |
-| 6 | Test registrati, documentazione, gallery A/B, evidenza di release, backlog | tutto verde; gallery `identical` a parte le instabili | ⏳ in corso; checkpoint dei passi 0–5 il 14/10 sera (vedi «▶️ Ripresa del 14/10 sera») |
+| 5b | Selettore di elementi (ispettore): si punta un elemento nell'app, il Lab si filtra sulle sorgenti dei suoi colori; «specializza qui» con un'ancora nell'export (richiesta del developer del 14/10 sera) | vedi «Passo 5b» sotto | ✅ 14/10 sera (codice e verifica funzionale a due schede); test con `test-author` al passo 6 |
+| 6 | Test registrati, documentazione, gallery A/B, evidenza di release, backlog | tutto verde; gallery `identical` a parte le instabili | ✅ 14/10 alle 22:55 (test, documentazione, evidenza di release, backlog); ⏳ gallery A/B in attesa del via del coordinatore (N4) |
 
 ## Avanzamento
 
@@ -444,3 +444,360 @@ cd /Users/ea_enel/Documents/00_My/LibreFolio-worktrees/e-alfy-fuzzy-robot && git
 
 HEAD atteso: quello del commit del coordinatore dopo il checkpoint, con la base aggiornata a `dev_release2`.
 Righe di `git status` attese: solo i due file di test esclusi, se il coordinatore ha committato tutto il resto.
+## ▶️ Checkpoint committato e via al passo 5b (14/10/2026, 19:56)
+
+- **Commit del coordinatore:** checkpoint `6e967202e` (`feat(frontend): add debug-only Designer Lab`, 33 file, padre `b631308d5`), poi merge di `dev_release2` (`2dca0105c`).
+  **HEAD `150f2716a91c64c558bef2e61de45bacb9b4d5a9`**, verificato.
+- **Il merge porta:**
+  - il progetto aggiornato (§5.2 decisione, §5.5 flusso a due schede, nuovo §5.6 selettore);
+  - le nuove regole Git: solo il coordinatore committa e fa i merge, i figli mai;
+  - il toolkit che trova da solo la cartella di lavoro in `LibreFolio_subRepo`, quindi `LF_VISUAL_REVIEW_DIR` non serve più;
+  - documenti della 1.3.
+
+  Nessun file del frontend.
+- **Nel worktree:** solo i 2 test esclusi, non tracciati, come previsto.
+- **Corsia ricreata:** `dev.py test --test-port 6152 --data-dir /tmp/librefolio-r2-l db populate --force --clean --with-reports` verde.
+- **Via al 5b.** Il coordinatore conferma i tre punti dell'analisi:
+  - (a) «specializza» vale per ogni istanza del componente;
+  - (b) Alt+Shift+D solo dove il Lab è già stato aperto;
+  - (c) schema `lf-designer-lab/1`, solo aggiunte.
+
+  Regola confermata: **nessun testo dell'elemento nell'export**. Due suggerimenti accolti: il numero di elementi presi dal selettore generato, accanto al selettore; la scorciatoia letta da `event.code === 'KeyD'`, perché su macOS Alt+Shift+D dà «Î» in `event.key`.
+
+### Passo 5b — Selettore di elementi ✅ codice e verifica funzionale (14/10/2026 sera); test con `test-author` al passo 6
+
+**Richiesta** (testuale, developer, 14/10 sera): vedi «Selettore di elementi (passo 5b): richiesta e analisi».
+Analisi completa negli artefatti di sessione: `files/L-element-picker-analysis.md`.
+
+**Fatti verificati in più dopo l'analisi:**
+- **Test id passati come prop:** `testid=` e `testId=` ai componenti compaiono **2.594 volte**, contro 2.276 `data-testid=` scritti direttamente; i componenti li rendono con `data-testid={testid}`. L'indice dello scanner li deve includere entrambi (`via: attr | prop`).
+- **Niente top layer:** l'app non usa `<dialog>.showModal()` né popover, quindi il velo con lo z-index massimo resta sopra tutto.
+- **Utility Tailwind importanti:** l'app ne usa alcune (`!bg-white`, `dark:!bg-slate-800` in `qty-input`). Un `!important` fuori dai layer perderebbe contro di loro.
+  - Le regole di anteprima di «specializza» stanno quindi nel layer `lf-designer-lab`, **dichiarato per primo** in `<head>`.
+  - Tra le dichiarazioni `!important` vince il primo layer, sia sugli altri layer sia sugli override P1 di `app.css`, che sono fuori dai layer.
+  - Solo uno stile inline `!important` resterebbe sopra.
+
+**Progetto** (dall'analisi, con le decisioni a/b/c):
+
+| Parte | File | Cosa |
+|---|---|---|
+| Protocollo | `pick.ts` | chiavi `lf-designer-lab/pick` (`start`, `cancel`, `result`) e `lf-designer-lab/seen`, lettura e scrittura |
+| Client | `client.ts` | lo stesso listener `storage` reagisce anche alla chiave del puntamento. La scorciatoia Alt+Shift+D (`event.code`) si registra solo con `seen`; la pagina del Lab non entra mai in modalità puntamento |
+| Velo | `picker/overlay.ts` (chunk pigro) | velo trasparente con stili inline e z-index massimo, riquadro ed etichetta; `elementsFromPoint` (l'elemento non va in `:hover`); eventi intercettati in capture; `Esc` annulla; la rotella scorre il contenitore sotto il puntatore |
+| Descrizione | `picker/describe.ts` | proprietà visibili: `color`; `background-color` visibile, anche da un antenato; bordi, outline e decorazione se visibili; `fill`/`stroke` SVG; `box-shadow` e gradienti solo elencati. Per ognuna: valore calcolato, dichiarazioni candidate (regole con `el.matches`, anche nei layer, `@media`, `@supports` e abbreviate; stile inline; attributi SVG), antenato se ereditata, vincitrice provata per perturbazione (vedi sotto) |
+| Ancora | `picker/anchor.ts` | catena dei testid, percorso CSS dal testid più vicino, selettore di componente (testid più vicino + tag + classi senza `.svelte-…`; id con suffisso numerico generalizzati a `^=`), numero di elementi presi. **Nessun testo** |
+| Lab | `pickView.ts`, `PickedElement.svelte`, `DesignerLab.svelte`, `ColorEditor.svelte` | pulsante «Punta un elemento», scheda «Elemento» con le sorgenti per proprietà (var → definizioni, classe → usi nei file del componente, regola → `file:riga` esatti, inline o attributo → proposta, currentColor → `color`, grafico → colori), «Modifica la sorgente» (editor esistente, con l'ancora come contesto), «Specializza qui» (livello `element`); filtro «solo l'elemento puntato» sulle liste |
+| Motore | `engine/anchors.ts` | `element` → regole `@layer lf-designer-lab { html… :is(<selettore>) { <prop>: <valore> !important } }`; grafici: `element` con `property: chart` → colore mappato solo nelle istanze dentro il selettore |
+| Scanner | `scan-colors.mjs` | `testids` (statici `id → [file, riga, via]`, prefissi dei template); `palette[].occ` con l'indice della classe; `css_vars[].use_sites` (`file`, riga, selettore) per la riga esatta di una regola P1. Fuori dalla parità |
+| Export | `export.ts`, `types.ts` | layer `element` (`target` = selettore, `property`, `from` = valore calcolato, `to`, `anchor`, `occurrences` = candidati con `why` e `raw` = ago); `anchor` facoltativa sugli altri livelli; import validato (selettore sicuro, proprietà ammesse, ancora tipizzata e limitata); Markdown e riassunto |
+| Verifica | `verify-export.mjs` | candidati con `locate()` sul loro ago; presenza dei testid della catena nei sorgenti (indice statico e prefissi); `anchor_status` e totali; exit 1 se a una modifica `element` non resta alcun candidato |
+| Skill | `designer-lab-apply/SKILL.md` | sezione `element`: non si tocca la sorgente condivisa; variabile di componente nel candidato, legata per tema; le variabili dei temi si segnalano a R/T |
+
+**Vincitrice provata per perturbazione:**
+1. Le candidate si ordinano: `!important`, poi inline, poi ordine nel foglio.
+2. Per ognuna, in quest'ordine, si sostituisce il colore con un valore di prova, si legge il valore calcolato e si ripristina il `cssText` intero.
+3. Vince la prima che cambia il valore calcolato.
+
+La prova avviene con `transition: none` iniettata, per non leggere un valore a metà transizione, ed è sincrona: nessun fotogramma viene disegnato. Le altre candidate compaiono come «scavalcate» (il caso P1).
+
+**Definition of done:**
+- Si punta un elemento in un'altra scheda; il Lab mostra le sorgenti attese su tre casi: classe Tailwind e variabile; regola di componente con `file:riga` esatti (`DataTable.svelte`); override P1 in scuro.
+- «Specializza» cambia solo il componente: un altro elemento con lo stesso colore non cambia.
+- L'ancora è nell'export e `verify-export` la controlla.
+- Neutralità: senza `seen` né puntamento, nessun nuovo listener e nessun chunk.
+- `svelte-check` 0/0, gate verdi, Prettier pulito.
+- I test li scrive `test-author` nel passo 6, che copre anche il 5b.
+
+> **Note implementazione** (14/10 sera):
+> - **File nuovi:** `pick.ts`, `cssProps.ts`, `pickView.ts`, `PickedElement.svelte`, `engine/anchors.ts`, `picker/{anchor,describe,overlay}.ts`.
+>   **Modificati:** `types.ts`, `store.ts`, `client.ts`, `export.ts`, `i18n.ts`, `ColorEditor.svelte`, `DesignerLab.svelte`, `engine/{index,charts,stylesheets,targets}.ts`, `virtual-catalog.d.ts`, `scripts/designer-lab/{scan-colors,verify-export,vite-plugin}.mjs`, skill `designer-lab-apply`.
+> - **Client** (sempre caricato nelle build di debug, chunk di 6,2 KB): lo stesso listener `storage` segue `lf-designer-lab/pick`; carica il chunk del selettore (73,6 KB, indice dei testid compreso) solo davanti a una richiesta fresca o alla scorciatoia. La scorciatoia (`event.code === 'KeyD'` con Alt+Shift, senza Ctrl/Meta né ripetizione) si registra solo con `lf-designer-lab/seen`, scritto dal Lab al mount; mai sulla pagina del Lab.
+> - **Selettore di specializzazione per proprietà**, calcolato nella scheda dell'app:
+>   - si specializza **l'elemento che dichiara il colore**, se sta dentro il componente dell'elemento puntato (il `th` per un testo ereditato, la card per uno sfondo visto attraverso); sopra il componente (`body`, layout), l'elemento puntato;
+>   - selettore = testid più vicino (il suo prefisso per un id templato) + **percorso strutturale senza posizioni** fino all'elemento, con figli diretti (al massimo 6 segmenti);
+>   - dell'elemento si scrivono **solo le classi nominate dalla regola vincitrice** (`p.text-gray-500` sì, `flex`/`sorted` no);
+>   - per ogni proprietà, accanto a «Specializza qui», il selettore e il numero di elementi presi nella pagina aperta (suggerimento del coordinatore).
+> - **Indice dei testid:** secondo modulo virtuale `virtual:lf-testid-index` (statici + prefissi), importato solo da `picker/describe.ts`.
+>   - Un id della pagina che non è statico ma inizia con un prefisso noto è un'istanza di un id templato: nel selettore diventa `^="prefisso"`, nella catena e nell'export `prefisso*`.
+>   - Così nessun valore di record (codici, id) finisce nell'export e il selettore prende tutte le istanze.
+>   - Senza indice (test jsdom) resta l'euristica del suffisso numerico.
+> - **Scanner** (fuori dalla parità, che resta identica: 1047 file, 10682 classi, 1610 hex…):
+>   - `testids`: 1.828 id statici in 1.947 punti, 1.708 attributi e 239 prop;
+>   - `testid_prefixes`: 235;
+>   - `testidValues()` legge anche i letterali in posizione di valore di un'espressione (`cond ? 'a' : 'b'`, `x ?? \`tab-${id}\``), mai gli operandi di un confronto;
+>   - `palette[].occ` = `[file, riga, indiceClasse]`; `css_vars[].use_sites` = `[file, riga, selettore]`.
+> - **Lab:**
+>   - scheda «Elemento» con, per ogni proprietà: tipo di sorgente, catena delle variabili cliccabile, regola vincitrice, `file:riga` del catalogo, badge P1 «override del tema scuro», «sopra la classe …», «già specializzato», candidati e dichiarazioni (richiudibili);
+>   - «Modifica la sorgente» apre l'editor esistente con l'ancora come contesto; «Specializza qui» apre l'editor in modalità `element`;
+>   - filtro «Solo i colori dell'elemento puntato» su palette, variabili, fogli, grafici e senza anteprima;
+>   - a un nuovo puntamento si chiude un editor rimasto su una specializzazione precedente, e «Modifica» segue il tema del puntamento (salvo «entrambi»).
+> - **Export** (`lf-designer-lab/1`, solo aggiunte): layer `element` con `property`, `color_key`, `anchor`, `occurrences` = candidati (`raw` = testo atteso, `why`); `anchor` facoltativa sugli altri livelli; Markdown con «Dove legare la nuova variabile»; import con `sanitizeAnchor()` (tipi, lunghezze, enum, selettore sicuro).
+> - **`verify-export`:**
+>   - i candidati si contano a parte (`candidates_*`);
+>   - `anchor.status` vale `ok`, `testid-missing`, `no-candidates` o `lost`; exit 1 solo per `lost`;
+>   - si controlla che i testid dell'ancora siano ancora scritti nel codice;
+>   - un percorso fuori da `frontend/` non viene letto: un export è input.
+>
+> **Comandi ed evidenza** (corsia 6152, `/tmp/librefolio-r2-l`):
+> - `npm run check` → `svelte-check found 0 errors and 0 warnings`; Prettier pulito su `src/lib/dev/designer-lab` e `scripts/designer-lab`; `git diff --check` pulito.
+> - `node_modules/.bin/vitest run` dei 5 gate + `color.test.ts` + `scanColors.test.ts` → **89/89**.
+> - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py server --test --port 6152 --data-dir /tmp/librefolio-r2-l --no-scheduler --no-reload`, poi lo script a due schede `/tmp/libreFolio_L_5b_pick_check.mjs` (copia negli artefatti di sessione):
+>   - **neutralità** prima che il Lab sia aperto: `seen` assente, nessun velo, Alt+Shift+D senza effetto;
+>   - puntamento dal pulsante su un'intestazione della tabella transazioni: `color` = `rule-literal`, `th { color: #64748b }` → `DataTable.svelte:1607`; testid `tx-table` → `TransactionsTable.svelte:993`;
+>   - «Specializza» di `color` → `[data-testid="tx-table"] > div > div > table > thead > tr > th`, **12 elementi**: 12/12 `th` cambiano, 0 elementi fuori dai `th`, gli altri 58 `#64748b` invariati;
+>   - export: ancora con route, testid, `css_path`, selettore, 12 elementi e 2 candidati; **nessuno dei 371 testi** delle celle compare nell'export;
+>   - classe Tailwind con Alt+Shift+D: `text-gray-500` → `--color-gray-500`, selettore `… > p.text-gray-500`;
+>   - lo stesso elemento in scuro: `var` `--theme-text-muted` con badge P1, «sopra la classe dark:text-gray-400»; lo sfondo dal layout è senza «Specializza»;
+>   - filtro: palette 172 → 4, variabili 3;
+>   - Esc annulla: velo tolto, «Selezione annullata» nel Lab;
+>   - grafico `growth-chart`: 32 colori, il puntato per primo; «Specializza» del primo → verde presente nell'istanza;
+>   - «Ripristina tutto» → statistiche a 0 e nessuno stile del Lab residuo;
+>   - nessun errore di pagina. L'unico errore in console è il 401 di `GET /api/v1/auth/me` prima del login, comportamento dell'app.
+> - `node frontend/scripts/designer-lab/verify-export.mjs <export>` → exit 0, «2 candidates in place». Export manomessi (`/tmp/libreFolio_L_5b_tamper.sh`):
+>   - un candidato sparito e un testid rinominato → exit 0 con `testid-missing`;
+>   - tutti i candidati spariti → exit 1 `lost`;
+>   - percorso `../../…/etc/hosts` → non letto, exit 1.
+> - Chunk della build di debug: il client (6,2 KB) importa **solo dinamicamente** il selettore (73,6 KB) e i motori.
+> - `npm run build` (release): **0 file** con il marker `lf-designer-lab`, nessuna traccia del selettore o dell'indice; il nodo stub resta di 488 B (`17.CmL9VVVP.js`).
+> - Server fermato; `lsof -nP -iTCP:6152 -sTCP:LISTEN` → nessun processo in ascolto. `frontend/build` è ora una build di **release**: `dev.py server --test` la ricostruisce in debug.
+>
+> **⚠️ Fuori pista:**
+> - **Indice dei testid nella scheda dell'app**, non previsto dall'analisi. Gli id templati con un codice in coda (`filter-currency-row-${item.code}`) avrebbero dato un selettore su una sola riga e portato il codice nell'export.
+> - **Selettore riprogettato dopo la prima verifica dal vivo.** La prima versione (testid + tag + tutte le classi) prendeva **52 elementi** per il `div` di layout dentro un `th`, celle del corpo comprese: il conteggio accanto al selettore ha mostrato il problema subito. Si è passati alla versione per proprietà descritta sopra.
+> - **Filtro allargato** alle dichiarazioni scavalcate: in scuro la palette filtrata era vuota, perché vinceva l'override P1.
+> - **Contatore dei grafici:** dopo «Ripristina tutto» `chartInstances` valeva 1 (contava il passaggio di ripristino); ora vale 0 senza stato.
+> - **`parseImport`:** la granularità `occurrence` vale solo per `css-literal`, come già facevano l'editor e il motore.
+> - **Primo giro dello script:** il grafico era sotto la piega e il clic non colpiva nulla. Era un difetto dello script, non del prodotto: ora fa `scrollIntoViewIfNeeded`.
+> - **Scanner:** 2–3 s di norma, una corsa a 7,8 s con la macchina carica.
+> - **Slittamento di regola:** una modifica di testo (tipi JSDoc in `scan-colors.mjs`) fatta con `python3` di sistema invece che con lo strumento di modifica. Risultato corretto e verificato; le modifiche successive sono passate dallo strumento.
+
+### Passo 6 — ripresa dopo il 5b ⏳ (14/10/2026 sera)
+
+> **Note implementazione** (avvio):
+> - **Tre sotto-agenti in parallelo**, su file disgiunti:
+>   - `test-author` **unit**: completa `scanColors.test.ts` e scrive 13 file Vitest nuovi, più `src/routes/designer-lab/page.test.ts`. Usa solo Vitest, senza corsia;
+>   - `test-author` **E2E + runner**: `frontend/e2e/designer-lab/designer-lab-{live,picker,neutral}.spec.ts`, il nuovo `scripts/test_runner/_frontend_designer_lab.py` e solo aggiunte a `_registry.py` e `_suites.py` (file condiviso ①). Usa la corsia 6152 in esclusiva mentre lavora;
+>   - `docs-writer`: la pagina developer per il 5b. Valida con `mkdocs build` strict e `check-links`, senza corsia.
+> - **Elenco esatto dei file unit**, uguale nei due brief, perché la registrazione e i file coincidano:
+>   - `color`, `scanColors`, `vitePlugin`, `store`, `pick`, `exportFormat`, `catalogView`, `contrast`, `chartMapping`, `verifyExport`, `pickView`, `anchor` (jsdom), `elementRules` (jsdom), `designerLabImports.gate`;
+>   - più `routes/designer-lab/page`.
+> - **Verificato prima di scrivere i brief:** il runner costruisce il frontend in produzione (`_ensure_frontend_build`, `debug=False`), ma poi avvia `dev.py server --test`, che ricostruisce in debug quando la modalità non coincide. Quindi gli E2E girano davvero con il Lab, come diceva il kickoff.
+> - **Backlog, sezione L:** aggiunte L-8 (file del componente dalla classe di scope) e L-9 (limiti noti del selettore).
+
+> **⏸️ Finestra di quiete 21:25–22:45** (coordinatore, 21:14). G fa la misura finale del rumore della gallery: 2 gallery complete a 10 worker. In quella finestra, niente:
+> - build, anche `front build --debug`;
+> - Vitest, Playwright, server della corsia, `npm ci`;
+> - sotto-agenti che li lanciano.
+>
+> Alle 21:15, ai tre sotto-agenti:
+> - chiudere entro le 21:25 i comandi pesanti in corso; l'agente E2E ferma il proprio server e prova la porta libera;
+> - nella finestra solo lettura e scrittura dei propri file, più Prettier, ruff e black sui propri file;
+> - chiudere il turno con lo stato e riprendere solo al mio via dopo le 22:45.
+>
+> Stato alle 21:15: porta 6152 libera; in corso solo uno `svelte-check` dell'agente unit, partito da 11 s.
+> `npm run lint:dead` (knip), lanciato prima della finestra, segnala due cose del Lab: `MULTI_COLOR_PROPERTIES` in `cssProps.ts` e due helper non usati dell'agente E2E (`pointOnItself`, `pickedProperty`). Gli altri avvisi sono preesistenti e fuori dal Lab.
+
+> **Revisione statica durante la finestra** (solo lettura e scrittura; build e test rimandati a dopo le 22:45):
+> - **knip:** `MULTI_COLOR_PROPERTIES` ora ha un uso vero. `picker/describe.ts` tipizza su di essa i valori di prova delle proprietà con più colori (`probeFor()`), così una proprietà nuova in quella lista deve avere il suo valore di prova.
+> - **Scanner, `VALUE_LITERAL_RE`:** una `(` vale come inizio di un valore solo se è una parentesi di raggruppamento. Gli argomenti di una chiamata (`testid={fn('x')}`) non diventano più id statici.
+>   - Controllo puntuale: 9 casi su 9, prima delle 21:25.
+>   - Sull'albero reale parità, `testids` e `testid_prefixes` restano identici: oggi nessuna chiamata del genere.
+> - **Chiavi dei blocchi `{#each}` ripetute.** In `vite dev` Svelte si ferma con `each_key_duplicate`; nella build di debug (compilata in produzione) il comportamento non è definito.
+>   - «Aggancia a una variabile» di `ColorEditor` aveva **3 chiavi ripetute** (`--color-libre-beige`, `--color-libre-dark`, `--color-libre-green`: sono sia palette sia variabili definite). Difetto latente del passo 4, ora la lista passa da un `Set`;
+>   - i candidati dell'ancora nell'editor (un'ancora importata può ripeterli) e le condizioni `@media` di una dichiarazione (possono ripetersi se annidate) ora hanno come chiave l'indice;
+>   - `parseImport` tiene **una modifica per id**: una ripetuta sostituisce la precedente, con un avviso. Prima un export con due modifiche uguali dava due righe con la stessa chiave.
+> - **Chiavi i18n:** tutte le chiavi statiche dei componenti del Lab esistono (130) e coprono tutti i valori dei modelli dinamici (`source.*`, `element.breadth.*`, `layer.*`, `scope.*`, `tab.*`, `cvd.*`). È un controllo utile perché le chiavi con il punto sfuggono al controllo dei tipi.
+> - **Varianti importate:** passano dall'import senza validazione (passo 5). Ogni motore però valida da sé:
+>   - le variabili, con il nome e `isSafeCssValue`;
+>   - i fogli di stile e i grafici, con `resolveTarget`;
+>   - le specializzazioni, con selettore sicuro, valore sicuro e proprietà ammessa.
+>
+>   Nessuna iniezione possibile. Non tocco altro.
+>
+> **Correzioni nate dal rapporto di `docs-writer`** (21:30–21:40, solo scrittura; verifiche puntuali in millisecondi con `node`, il resto dopo le 22:45):
+> - **Dati che potevano ancora uscire.** Il rapporto ha trovato due strade per cui un valore di record finiva nell'export.
+>   - **Test id che l'indice non conosceva:**
+>     - **id costruiti negli script:** `kpi-unrealized-breakdown-${row.kind}-${currency}`, scritto in `KpiSection.svelte`;
+>     - **prop `*TestId=`:** `optionTestId=`, `filterRowTestId=` e simili;
+>     - **chiavi di oggetto:** `testId: 'x'` nelle configurazioni, circa 130 assegnazioni.
+>
+>     Correzioni:
+>     - lo scanner ora indicizza anche le prop `*TestId=` del markup (`via: prop`) e le proprietà o variabili degli script il cui nome finisce in `testid`/`testId` con un letterale (`via: script`). Restano escluse le funzioni freccia, i confronti, i nomi `…Prefix` e le annotazioni di tipo;
+>     - per un id ancora sconosciuto, `recordPrefix()` taglia prima del primo token che sembra un record: un numero intero, o un token con una maiuscola (`row-42`, `asset-row-42-menu`, `kpi-gain-EUR`). Le cifre dentro le parole non contano: 71 id statici ne hanno, come `risk-l2-weight`, e nessuno ha maiuscole;
+>     - `testidSites` e il `testidKnown` di `verify-export` riconoscono un `prefisso*` che estende un prefisso del catalogo. Un id generalizzato non dà quindi un falso «test id mancante».
+>   - **Rotte con parametri:** `routeOf()` usa l'id di rotta di SvelteKit (`page.route.id` da `$app/state`) senza i gruppi: un dettaglio dà `/assets/[id]`, mai l'id del record. Le rotte statiche non cambiano: `/transactions` resta `/transactions`.
+>   - **Prove:**
+>     - 17 casi su 17 per `testidValues` e `scriptTestidValues`;
+>     - un componente sintetico dà esattamente le 8 voci attese, comprese le esclusioni (confronto, `…Prefix`, tipo, `hasTestId = true`);
+>     - 10 casi su 11 per `recordPrefix`: l'undicesimo era una mia attesa sbagliata, perché `ab-` ha esattamente 3 caratteri, la soglia documentata;
+>     - 8 casi su 8 per `testidKnown`;
+>     - `routeOf` corretto su dettaglio, dashboard con `?tab=`, rotta senza id e radice.
+>   - **Primo errore della regex:** `TESTID_SCRIPT_RE` all'inizio non riconosceva i nomi `testId`/`testid` senza nulla davanti, perché la classe iniziale consumava la `t`. Corretto con una parte iniziale facoltativa, dopo il caso sintetico.
+> - **Chiusura della scheda del Lab:** su `pagehide` il Lab scrive `cancel` se sta aspettando un puntamento. Prima, chiudendo la scheda, le schede dell'app restavano col velo e la richiesta restava valida 5 minuti.
+> - **Commento di `pick.ts` reso esatto:**
+>   - un `result` chiude il puntamento in tutte le schede;
+>   - un `cancel` chiude solo la richiesta che nomina, mentre la scorciatoia dà a ogni scheda un id proprio;
+>   - cancellare la chiave chiude tutto.
+> - **Etichetta P1:** «override !important del tema scuro», senza più nominare `app.css`. Il codice non controlla il file; il file giusto compare tra i candidati.
+>
+> **Assegnazione del coordinatore (21:4x)**, estensione di ①. Citare la categoria `front-designer-lab` nei 5 posti dove la documentazione elenca le categorie del runner:
+> - `test-walkthrough/front-overview.md`;
+> - `test-walkthrough/index.md`;
+> - `test-walkthrough/api.md`;
+> - `test-walkthrough/runner_architecture.md`;
+> - `.github/instructions/frontend-testing.instructions.md`.
+>
+> Regole:
+> - solo aggiunte, una riga per posto, senza toccare le righe vicine né riordinare le tabelle;
+> - le scrive `docs-writer`;
+> - `mkdocs build` strict e `check-links` dopo le 22:45;
+> - se le pagine sono tradotte, basta `translate-stamp`;
+> - un conflitto con altri che aggiungono righe si risolve sommando, e lo fa chi arriva secondo;
+> - va nel prossimo checkpoint, con i 5 file elencati nell'handoff.
+>
+> Unica riga non aggiungibile: `index.md:195`, «All Frontend (front-utility → front-ai-export)». Ne cambia solo l'estremo, perché `all-frontend` ora esegue anche `front-designer-lab`. Lo segnalo nell'handoff.
+>
+> **Difetti latenti trovati da `test-author` unit** (nessuno compare nel codice di oggi), corretti alle 21:47–21:51 e verificati su casi sintetici:
+> 1. **`!$isDark`** (store Svelte negato) perdeva il `!`, perché `\b` non coglie il confine tra `!` e `$`; l'indizio di tema risultava invertito. Ora le due regex usano `(?<![\w$.])`. Prova: 10 letterali sintetici su 10, anche nella forma su più righe di Prettier.
+> 2. **`sourceVarValue()`** (passo 4):
+>    - in scuro poteva usare una definizione radice solo chiara;
+>    - in chiaro prendeva la prima non scura, anche se dopo veniva un `html.light`.
+>
+>    Ora prende la definizione del tema chiesto, altrimenti una condivisa, **mai quella dell'altro tema**; a parità vince l'ultima, come nella cascata.
+> 3. **`commit()` del Lab:** se lo storage rifiuta la scrittura (pieno o disattivato), l'eccezione ora è gestita. Il Lab mostra `storageFailed` e tiene l'ultimo stato salvato; le altre schede non avrebbero mai visto quello nuovo.
+> 4. **`TESTID_SCRIPT_RE`:** ora `(?<![\w$-])`. Un `data-testid="x"` dentro una stringa di script non entra più nell'indice, come dice la regola documentata.
+> 5. **`testidKnown('*')`:** ora `false`, perché il prefisso è vuoto.
+>
+> **Corsia per dopo le 22:45:**
+> 1. Prima l'agente unit: Vitest dei suoi file, `npm run check`, gate.
+> 2. Poi l'agente E2E, con nessuno che modifica `frontend/src` nel frattempo: `_ensure_frontend_build()` ricostruisce in release se un sorgente è più nuovo della build, mentre il server della corsia serve la build di debug.
+> 3. In parallelo `docs-writer`, solo `mkdocs build` e `check-links`.
+> 4. Per ultimo l'evidenza di release, a server fermo.
+>
+> **Nota per il merge** (decisione del coordinatore, opzione (a)). Nei posti aggiornati da `docs-writer`:
+> - `runner_architecture.md`: riga di `front-designer-lab`, totale e frase sotto;
+> - `index.md:169`: conteggio delle categorie;
+> - `index.md:195`: estremo della riga «All Frontend».
+>
+> Se nel frattempo un altro ha aggiunto una categoria, chi arriva per secondo **ricalcola** totale, frase e conteggi; non sceglie una delle due versioni.
+>
+> **Gallery A/B (N4), preparata; parte solo col via del coordinatore:**
+> - Il server della gallery (`webServer` di Playwright → `dev.py server --test`) ricostruisce solo se cambiano i sorgenti o la modalità debug/release, non se cambia `LF_DESIGNER_LAB`. Per questo:
+>   - **A, Lab spento:** `LF_DESIGNER_LAB=0 … dev.py front build --debug`. Prima e dopo la gallery, `grep -rl lf-designer-lab frontend/build` deve dare **0**: è la prova che la build servita era senza Lab;
+>   - **B, Lab acceso:** `dev.py front build --debug`, marcatore presente.
+>   - Gallery: `scripts/visual_review/gallery_snapshot.sh L-lab-off-<data>` / `L-lab-on-<data>` con `--checkout <worktree> --port 6152 --data-dir /tmp/librefolio-r2-l`, dopo `export PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc`; cartella di lavoro predefinita del toolkit.
+>   - Confronto: `gallery_tool diff $W/snapshots/L-lab-off-… $W/snapshots/L-lab-on-… --ignore-masks <maschere del rumore> --stability <stability.json>`. Le maschere sono quelle che il coordinatore indicherà dopo la misura finale di G.
+>   - Atteso: `identical`, a parte il rumore sulle schermate `unstable`.
+>
+> **Workstream T approvato** (avviso del coordinatore, 21:56). La palette della designer diventa ruoli `--lf-<gruppo>-<nome>` in `lib/theme/tokens.css`, scritto solo da T, nella forma `:root, html.light` / `html.dark, .dark`. I componenti li usano con utility `*-lf-<nome>` da `@theme inline`.
+>
+> Decisioni di L:
+> - **Selettore di elementi:** nessuna modifica, perché con `inline` la regola vincitrice legge già `var(--lf-…)`.
+> - **Scanner, L1 e catalogo:** voce **L-10**, dopo che T-1 entra nella base. Comprende:
+>   - le classi `lf-`, con la parità Python da decidere;
+>   - l'alias `@theme inline` che va rediretto alla variabile vera;
+>   - gli override L1 anche sui selettori del token.
+>
+>   Oggi `app.css` ha solo `@theme {`, non `inline`.
+> - **«Mostra i rimasti indietro»**, proposta di T: voce **L-11**, dopo questo checkpoint. Il passo 6 resta verifica di ciò che esiste; la lista legacy la fissa T.
+> - **Skill `designer-lab-apply`:** le modifiche ai ruoli `--lf-*` vanno in `tokens.css`, di T.
+> - **Limite L1 da documentare subito:** gli override stanno su `html`, quindi un sotto-albero che ridefinisce una variabile tiene il suo valore.
+>
+> **Assegnazione del coordinatore (21:59), L-10 (1).** La riga `tw_custom_re` di `scripts/visual_review/color_inventory.py` è assegnata a L, come estensione di ④.
+> - Appena T-1 entra nella base, `lf-` si aggiunge alla regex JS e a quella Python nello stesso cambio, una riga per parte.
+> - Subito dopo si verifica la parità JS/Python sullo stesso albero.
+> - I numeri di parità, prima e dopo, vanno nell'handoff.
+>
+> Approvati anche L-10 (2) e (3), L-11 nel backlog e la skill aggiornata.
+>
+> **▶️ Finestra chiusa in anticipo alle 22:20** (coordinatore: G ha finito; seguiranno solo rerun filtrati di G a 1 worker). Il DB della corsia è quello ricreato alle 19:5x, ancora presente, con la porta 6152 libera.
+>
+> Ripresa nell'ordine:
+> 1. agente unit: Vitest, `npm run check`, gate;
+> 2. in parallelo `docs-writer`: limite L1 «sotto-albero», `mkdocs build` strict e `check-links`;
+> 3. agente E2E, solo correzioni ai propri file finché l'agente unit non ha finito di modificare `frontend/src`.
+>
+> Il test di export non deve più pretendere che `#64748b` sia anche un colore di grafico del catalogo.
+>
+> **Riscansione dopo tutte le correzioni** (`scan-colors.mjs`, 1,6 s):
+> - parità, livelli ed etichette di tema **identici** al catalogo del passo 5;
+> - indice dei testid:
+>   - prima, solo markup: 1.828 id in 1.947 punti, 235 prefissi;
+>   - ora: **1.887 id in 2.006 punti** (attr 1.708, prop 251, script 47) e **256 prefissi** (attr 224, prop 20, script 12);
+>   - `kpi-unrealized-breakdown-` ora è indicizzato da `KpiSection.svelte:213` (`script`);
+>   - 0 id anomali, nessun id statico con maiuscole.
+>
+> **Unit ✅ (22:25), `test-author`.** 15 file Vitest, **389 test** verdi in due giri completi; gate del repo 60/60; Prettier pulito.
+> - Conteggi per file: `color` 23, `scanColors` 49, `vitePlugin` 20, `store` 23, `pick` 20, `exportFormat` 66, `catalogView` 18, `contrast` 11, `chartMapping` 13, `verifyExport` 20, `pickView` 45, `anchor` 30 (jsdom), `elementRules` 22 (jsdom), `designerLabImports.gate` 27, `routes/designer-lab/page` 2.
+> - Le correzioni 1, 2, 4 e 5 sono fissate da test che sul codice vecchio fallirebbero (verifica a mano dell'agente). `commit()` è un componente, senza test unit.
+> - Fuori dagli unit, coperti dagli E2E: `picker/describe.ts` e `picker/overlay.ts`, il comportamento di `client.ts`, i motori dal vivo, i componenti.
+> - Piccoli helper puri fuori dal brief, da aggiungere quando serve: `applyVars`, `cssWithAlpha`, `declares()`, `downloadText`, la CLI dello scanner.
+>
+> **`npm run check` era rosso:** 6 errori di tipo JSDoc, latenti, in `verify-export.mjs`. `verifyExport.test.ts` è il primo file che lo importa, e così lo porta nel controllo dei tipi `checkJs`.
+> - I fallback `{status: 'missing'}` si allargavano a `{status: string}`: ora sono tipizzati come `ReturnType<typeof locate>`.
+> - `doc.changes.map` restituiva `any`: ora è tipizzato come array.
+> - Dopo la correzione: `npm run check` → **0 errori, 0 avvisi**; `verifyExport.test.ts` 20/20.
+>
+> **Docs ✅ (22:23), `docs-writer`:**
+> - `dev.py mkdocs build` strict → exit 0, nessuna riga WARNING o ERROR;
+> - `dev.py mkdocs check-links` → exit 0, 95 link validi, 0 rotti;
+> - nuovo limite noto «Variables redefined in a subtree» (L1 su `html`);
+> - nessuna pagina ha traduzioni, quindi nessun `translate-stamp`;
+> - righe cambiate nei 4 posti, prima e dopo:
+>   - `front-overview.md`: 60, e la riga nuova 107;
+>   - `index.md`: 169 «15 → 16 categorie, 8 → 9 frontend»; la riga nuova 188; 196 (era la 195), estremo «All Frontend» `front-ai-export` → `front-designer-lab`; la riga nuova 258;
+>   - `runner_architecture.md`: la riga nuova 443 (`3 | 15 | 18 | 2`); il totale alla riga 449 (era la 448), 59/61/120/16 → 62/76/138/18; la frase alla riga 453 (era la 452), «21 rather than 16» → «23 rather than 18»;
+>   - `frontend-testing.instructions.md`: la riga nuova 452.
+>
+>   `api.md` è tornato all'originale.
+>
+> **E2E:** via all'agente alle 22:26, con la corsia 6152 in esclusiva.
+>
+> **E2E ✅ (22:42), `test-author`, corsia 6152.** Comandi `dev.py test --test-port 6152 --data-dir /tmp/librefolio-r2-l … front-designer-lab …`:
+>
+> | Azione | Esito | Tempo dei test / dell'invocazione |
+> |---|---|---|
+> | `live` (dopo la correzione) | 7/7 | 15,9 s / 55 s |
+> | `picker` | 3/3 | 8,8 s / 38 s |
+> | `--fresh-run --workers 1 … e2e` | 11/11 | 24,5 s / 1m13s |
+> | `--fresh-run --workers 4 … e2e` | 11/11 | 19,4 s / 47 s |
+> | `unit` | 15 file, 389/389 | 5,3 s / 7 s |
+> | `--fresh-run … all` | 11/11 Playwright + 389/389 Vitest | 57 s |
+>
+> Poi `check-orphans`: **exit 0**, con 120 spec e 376 file unit tutti registrati.
+> - Ogni giro ha stampato «Frontend build is up to date». Prove della build di debug: `.build-debug` vale `1`, il marcatore compare in 10 file di `build/_app/immutable`, e ogni test che apre il Lab verifica `data-catalog-hash`.
+> - Nessun errore `tsc` nuovo sugli e2e; i 2 che restano sono preesistenti e fuori dal Lab. knip non segnala più nulla del Lab né di `e2e/designer-lab`. Prettier, ruff e black puliti sui file dell'agente.
+> - Porta 6152 libera alle 22:42:19, provata con `lsof`.
+>
+> **⚠️ Fuori pista: difetto reale di L3 trovato dal primo `live` (deterministico, non instabile).**
+> - **Sintomo:** `engine/charts.ts` ricordava ogni originale sotto la stringa prodotta (`produced`). Due originali mappati sulla stessa uscita condividevano una voce, e vinceva l'ultimo: dopo «Ripristina tutto», i `#fff` del grafico tornavano `#ffffff`.
+> - **Caso grave:** due colori **diversi** portati allo stesso valore nuovo tornavano entrambi come uno dei due, finché l'app non ridisegnava il grafico. Anche il selettore riportava l'originale sbagliato.
+> - **Correzione (22:47), `produce()`:** una stringa prodotta sta per **un solo colore**. Se l'uscita sta già per un colore diverso (chiave o alfa), il nuovo prende un'altra grafia dello stesso colore: un decimale di alfa in più, identica sul canvas. Le grafie dello stesso colore condividono l'uscita e tornano come la prima vista: è una differenza solo di grafia.
+> - **Per i test:** nuovo export `forgetProducedColors()`.
+> - **Test:** quello E2E ora confronta i colori per valore. `chartMapping.test.ts` aveva un caso che fissava la vecchia grafia unica (riga 125: due alfa diverse sulla stessa uscita) e va adattato; c'è anche un test di regressione da aggiungere. Entrambi sono stati chiesti a `test-author` unit.
+>
+> **Chiusura del passo 6** (22:48–22:55):
+> - **`chartMapping.test.ts`, `test-author`:**
+>   - `beforeEach` con `forgetProducedColors()`;
+>   - il test delle alfa diviso in due;
+>   - fissata la regola della prima grafia;
+>   - 4 test di regressione: tre colori portati allo stesso valore tornano ognuno al suo originale, sia con `mapChartOption` sia con `chartPatch`; due alfa sulla stessa uscita; il caso misto `#fff`/`#ffffff`;
+>   - il file passa da 13 a 18 test. Suite del Lab **394/394** (15 file), `npm run check` 0/0, gate 60/60, Prettier pulito.
+> - **Commento di `produce()`:** oltre 32 colori diversi portati allo stesso valore, l'ultima grafia torna condivisa e vince l'ultimo, come prima della correzione. Caso non pratico, segnalato dall'agente.
+> - **Suite completa della categoria sul motore corretto:**
+>   - comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6152 --data-dir /tmp/librefolio-r2-l --fresh-run --workers 4 --log-dir /tmp/libreFolio_L6_logs front-designer-lab all` → **exit 0**;
+>   - Playwright **11/11** (13,3 s), Vitest **394/394**, le 5 azioni ✓;
+>   - «Frontend build is up to date», `.build-debug` = `1`, marcatore presente in 10 file.
+> - **Gate:**
+>   - `dev.py test check-orphans` → **exit 0** (376 file unit e 263 file backend raggiungibili da `all`);
+>   - `npm run lint:dead` (knip): nessun avviso del Lab né di `e2e/designer-lab`; gli altri sono preesistenti;
+>   - `git diff --check` pulito.
+> - **Release** (`npm run build`, exit 0), a server fermo:
+>   - **0** file con `lf-designer-lab`;
+>   - 0 con `lf-color-catalog/1`, `lf-testid-index`, l'indice dei testid, le stringhe del selettore, `DesignerLab` o `__lfDesignerLab`;
+>   - nodo stub di 488 B **identico** a prima (`17.CmL9VVVP.js`);
+>   - nessun `.build-debug`, 0 sourcemap, 24 MB.
+>
+>   `frontend/build` resta in release; `dev.py server --test` lo ricostruisce in debug da solo.
+> - **Porta 6152 libera**, provata con `lsof`; nessun sotto-agente al lavoro.
+> - **Delta per il checkpoint:** 26 file tracciati modificati, 28 file nuovi (7.446 righe), `+1.964/−197` sui tracciati.
