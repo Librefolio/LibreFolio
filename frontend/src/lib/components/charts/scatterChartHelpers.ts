@@ -71,7 +71,7 @@ export interface ScatterOptionInput {
      * reads as "better paid for the risk taken" than the dot it runs through.
      */
     riskFreeRate?: number;
-    /** `document.documentElement.classList.contains('dark')`, resolved by the caller. */
+    /** `isDarkTheme()`, resolved by the caller. */
     dark?: boolean;
     /** Axis titles and the CML name. Supplied already translated. */
     labels: {

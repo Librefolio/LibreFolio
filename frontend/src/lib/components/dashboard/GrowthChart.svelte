@@ -53,6 +53,7 @@
     import {themed} from '$lib/theme/themePair';
     import {CHART_GAIN_LOSS, CHART_NEUTRALS, CHART_TOOLTIP_COLORS, GROWTH_CHART_COLORS, GROWTH_SERIES} from '$lib/theme/chartTheme';
     import {GROWTH_BROKER_PALETTE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Props
@@ -1937,7 +1938,7 @@
 
         currentResolution = targetResolution;
         const entry = getResolutionData(targetResolution);
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
         const zoomWindow = buildZoomWindow(entry, logicalRange.startDate, logicalRange.endDate);
 
         activeChartData = entry;
@@ -1978,8 +1979,7 @@
     let tooltipCleanup: (() => void) | null = null;
 
     onMount(() => {
-        darkModeObserver = new MutationObserver(() => renderChart());
-        darkModeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        darkModeObserver = onThemeClassChange(() => renderChart());
 
         return () => {
             if (resolutionDebounceTimer) clearTimeout(resolutionDebounceTimer);
@@ -2109,7 +2109,7 @@
             dataZoomCleanup = () => zoomInstance.off('dataZoom', onDataZoom);
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
         const liveRange = getLogicalRangeFromChart();
         if (liveRange) {
             visibleStartDate = liveRange.startDate;

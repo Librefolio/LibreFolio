@@ -75,6 +75,7 @@
     import {themed} from '$lib/theme/themePair';
     import {CORRELATION_COLORS} from '$lib/theme/chartTheme';
     import {CORRELATION_SCALE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     type Ordering = 'similarity' | 'name' | 'type' | 'sector' | 'region';
     type Distribution = Readonly<Record<string, number>>;
@@ -297,11 +298,10 @@
 
     onMount(() => {
         const readTheme = () => {
-            dark = document.documentElement.classList.contains('dark');
+            dark = isDarkTheme();
         };
         readTheme();
-        const darkObserver = new MutationObserver(readTheme);
-        darkObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const darkObserver = onThemeClassChange(readTheme);
         return () => {
             darkObserver.disconnect();
             resizeWatcher.disconnect();

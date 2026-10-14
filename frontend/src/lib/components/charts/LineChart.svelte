@@ -35,6 +35,7 @@
     import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {themed} from '$lib/theme/themePair';
     import {CHART_NEUTRALS, CHART_TOOLTIP_COLORS, PRICE_SERIES} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Types
@@ -170,12 +171,8 @@
     // =========================================================================
 
     onMount(() => {
-        const observer = new MutationObserver(() => {
+        const observer = onThemeClassChange(() => {
             if (chartContainer && data.length > 0) renderChart();
-        });
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ['class'],
         });
         return () => {
             observer.disconnect();
@@ -366,7 +363,7 @@
             });
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
         const isPercentage = viewMode === 'percentage';
 
         const baseColor = isDark ? darkLineColor || DEFAULT_LINE_DARK : lineColor || DEFAULT_LINE_LIGHT;

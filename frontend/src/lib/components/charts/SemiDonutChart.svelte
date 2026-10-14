@@ -30,6 +30,7 @@
     import {themed} from '$lib/theme/themePair';
     import {CHART_TOOLTIP_COLORS, SEMI_DONUT_COLORS} from '$lib/theme/chartTheme';
     import {SEMI_DONUT_PALETTE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Types
@@ -188,7 +189,7 @@
         }
         const currentInstance = chartInstance;
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
         const avatarSize = 44;
         const borderColor = themed(SEMI_DONUT_COLORS.avatarBorder, isDark);
         const borderWidth = 2;

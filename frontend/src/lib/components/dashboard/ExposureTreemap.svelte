@@ -30,6 +30,7 @@
     import {themed} from '$lib/theme/themePair';
     import {CHART_GAIN_LOSS, TREEMAP_COLORS} from '$lib/theme/chartTheme';
     import {treemapPnlColor} from '$lib/theme/chartColorScales';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface Holding {
         asset_id: number;
@@ -92,8 +93,7 @@
     }
 
     onMount(() => {
-        const observer = new MutationObserver(() => renderChart());
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const observer = onThemeClassChange(() => renderChart());
         windowResizeHandler = () => updateChartSize();
         window.addEventListener('resize', windowResizeHandler);
         resizeObserver = new ResizeObserver(() => updateChartSize());
@@ -489,7 +489,7 @@
     }
 
     function pnlColor(pct: number | null): string {
-        return treemapPnlColor(pct, document.documentElement.classList.contains('dark'));
+        return treemapPnlColor(pct, isDarkTheme());
     }
 
     function handleTreemapContextMenu(params: any) {
@@ -542,7 +542,7 @@
 
     function renderChart() {
         if (!chartContainer || chartWidth <= 0 || chartHeight <= 0) return;
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
         applyTouchScrollHint();
 
         if (!chartInstance) {

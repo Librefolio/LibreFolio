@@ -34,6 +34,7 @@
     import {themed} from '$lib/theme/themePair';
     import {ALLOCATION_CHART_COLORS, CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
     import {ALLOCATION_PIE_PALETTE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Types & Props
@@ -118,8 +119,7 @@
     // =========================================================================
 
     onMount(() => {
-        const observer = new MutationObserver(() => renderChart());
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const observer = onThemeClassChange(() => renderChart());
         return () => {
             observer.disconnect();
             cleanup();
@@ -172,7 +172,7 @@
             needsInitialLayoutStabilityPass = true;
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
         const tr = $t;
         const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
 

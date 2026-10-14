@@ -51,6 +51,7 @@
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
     import {LOT_CHART_COLORS, LOT_GANTT_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -245,7 +246,7 @@
 
     function syncTheme() {
         if (typeof document === 'undefined') return;
-        isDark = document.documentElement.classList.contains('dark');
+        isDark = isDarkTheme();
     }
 
     /** Local name for this chart's numeric unwrap, which treats "missing" as
@@ -1340,11 +1341,10 @@
     $effect(() => {
         if (typeof document === 'undefined') return;
         syncTheme();
-        darkModeObserver = new MutationObserver(() => {
+        darkModeObserver = onThemeClassChange(() => {
             syncTheme();
             renderChart();
         });
-        darkModeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
 
         return () => {
             tooltipCleanup?.();

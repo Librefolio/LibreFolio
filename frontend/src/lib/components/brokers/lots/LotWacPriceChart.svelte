@@ -53,6 +53,7 @@
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
     import {LOT_CHART_COLORS, LOT_WAC_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
@@ -338,7 +339,7 @@
     }
 
     function syncTheme() {
-        isDark = document.documentElement.classList.contains('dark');
+        isDark = isDarkTheme();
     }
 
     function resetResolutionIfInputsChanged() {
@@ -1713,11 +1714,10 @@
 
     onMount(() => {
         syncTheme();
-        darkModeObserver = new MutationObserver(() => {
+        darkModeObserver = onThemeClassChange(() => {
             syncTheme();
             renderChart();
         });
-        darkModeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
 
         return () => {
             if (resolutionDebounceTimer) clearTimeout(resolutionDebounceTimer);

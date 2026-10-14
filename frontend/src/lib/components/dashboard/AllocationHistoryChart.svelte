@@ -40,6 +40,7 @@
     import {themed} from '$lib/theme/themePair';
     import {ALLOCATION_CHART_COLORS, CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
     import {ALLOCATION_HISTORY_PALETTE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface AllocationComponent {
         name: string;
@@ -189,8 +190,7 @@
     }
 
     onMount(() => {
-        darkModeObserver = new MutationObserver(() => renderChart());
-        darkModeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        darkModeObserver = onThemeClassChange(() => renderChart());
 
         const loadRefs = async () => {
             await Promise.allSettled([ensureCountriesLoaded($currentLanguage), ensureSectorsLoaded()]);
@@ -885,7 +885,7 @@
         }
 
         const activeDataset = getResolutionDataset(currentResolution);
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
         const skipAnimation = options.skipAnimation ?? (lastRenderedResolution !== null && lastRenderedResolution !== currentResolution);
         const option = buildChartOption(activeDataset, isDark, skipAnimation);
 

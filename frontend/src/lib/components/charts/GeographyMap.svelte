@@ -35,6 +35,7 @@
     import {themed} from '$lib/theme/themePair';
     import {CHART_NEUTRALS, GEO_MAP_COLORS} from '$lib/theme/chartTheme';
     import {GEO_CHOROPLETH_SCALE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Props
@@ -103,8 +104,7 @@
     onMount(() => {
         registerWorldMap();
         // Re-render on dark mode toggle
-        const observer = new MutationObserver(() => renderChart());
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const observer = onThemeClassChange(() => renderChart());
         return () => {
             observer.disconnect();
             cleanup();
@@ -262,7 +262,7 @@
             chartContainer.addEventListener('touchcancel', handleTouchPanEnd, {passive: true});
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
 
         // Convert ISO A3 → GeoJSON country name + percentage (skip unclassified)
         const chartData = buildChoroplethData(data, iso3ToGeoName);

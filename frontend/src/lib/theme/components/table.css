@@ -1,5 +1,5 @@
 /*
- * Data tables and the domain tables that reuse their look.
+ * Data tables, the domain tables that reuse their look, and their cells.
  *
  * Component colour tokens (plan 55, workstream R, R-3): the colours that the components' <style> blocks used
  * to write by hand, one name per role. `-dark` twins feed the components' `.dark` rules, which stay where
@@ -264,4 +264,20 @@
     --lf-cmp-risk-return-row-benchmark-bg-dark: #fbbf2424; /* rgb(251 191 36 / 0.14) */
     --lf-cmp-risk-return-row-selected-bg: #22c55e1f; /* rgb(34 197 94 / 0.12) */
     --lf-cmp-risk-return-row-selected-bg-dark: #4ade8024; /* rgb(74 222 128 / 0.14) */
+
+    /* CompactCashCell.svelte */
+    --lf-cmp-compact-cash-cell-input-bg: #fff; /* white */
+    --lf-cmp-compact-cash-cell-input-bg-dark: #1e293b; /* rgb(30 41 59) */
+    --lf-cmp-compact-cash-cell-input-border: rgb(229 231 235);
+    --lf-cmp-compact-cash-cell-input-border-dark: #475569; /* rgb(71 85 105) */
+    --lf-cmp-compact-cash-cell-input-text-dark: #f1f5f9; /* rgb(241 245 249) */
+    --lf-cmp-compact-cash-cell-input-hover-border: #9ca3af; /* rgb(156 163 175) */
+    --lf-cmp-compact-cash-cell-input-hover-border-dark: #64748b; /* rgb(100 116 139) */
+    --lf-cmp-compact-cash-cell-input-focus-border: #10b981; /* rgb(16 185 129) */
+    --lf-cmp-compact-cash-cell-input-focus-shadow: #10b98140; /* rgb(16 185 129 / 0.25) */
+    --lf-cmp-compact-cash-cell-sign-ok-border: #10b981b3; /* rgb(16 185 129 / 0.7) */
+    --lf-cmp-compact-cash-cell-sign-bad-border: #ef4444b3; /* rgb(239 68 68 / 0.7) */
+    --lf-cmp-compact-cash-cell-input-disabled-text: #9ca3af; /* rgb(156 163 175) */
+    --lf-cmp-compact-cash-cell-input-disabled-bg: #f3f4f6; /* rgb(243 244 246) */
+    --lf-cmp-compact-cash-cell-input-disabled-bg-dark: #0f172a; /* rgb(15 23 42) */
 }
