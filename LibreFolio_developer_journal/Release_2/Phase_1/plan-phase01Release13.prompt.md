@@ -374,6 +374,36 @@ dall'audit del 14/10: ogni sessione le riverifica nell'analisi.
 - **Integrazione senza conflitti nel checkout condiviso**: prima si aggiorna la base del
   figlio (i conflitti si risolvono nel suo worktree), poi il merge in `dev_release2`.
 
+### Forma comune del riordino (C1–C7, decise dal coordinatore dopo le analisi, 14/10)
+
+- **C1 — Nomi.** Un file che entra in un pacchetto di dominio tiene il suo nome; cambia solo il pacchetto
+  (`services/accounts/auth_service.py`, `services/platform/container_registry.py`). Meno righe toccate, e nessun
+  modulo nascosto da una variabile locale con lo stesso nome (`users` in `scripts/user_cli.py:130`). I moduli nuovi
+  nati da un taglio prendono nomi brevi per tema, senza ripetere il dominio (`services/fx/sync.py`,
+  `services/brim/parsing.py`). Un file esistente si rinomina solo se serve davvero, in un commit a parte con il motivo.
+- **C2 — Router divisi.** Un router diviso diventa il pacchetto `api/v1/<dominio>/`, con un modulo per risorsa.
+  - L'`__init__.py` contiene solo la composizione dei sotto-router e gli oggetti router che `router.py` già usa:
+    `router.py` resta intatto, e una patch su un nome che non c'è fallisce in modo esplicito.
+  - L'ordine di registrazione delle rotte resta quello di oggi.
+  - Prove: `api sync` (o i JSON di `dev.py api schema`, escluso `info.version`) senza differenze, più una verifica
+    che percorsi d'esempio arrivino allo stesso endpoint di prima: un `openapi.json` canonico non prova l'ordine di
+    corrispondenza.
+- **C3 — Schemi divisi.** Un modulo di schemi sopra le ~1 000 righe diventa il pacchetto `schemas/<dominio>/`, con
+  moduli per tema e un `__init__.py` con la sola docstring (niente barile). L'hub `schemas/__init__.py` resta e
+  continua a esportare i nomi pubblici; chi importa una classe la prende dal modulo che la definisce. Nomi di classe
+  invariati, quindi OpenAPI e impronte dei Tool invariati.
+- **C4 — Classi di servizio grandi.** Si tagliano in mixin per tema, composti nella classe in `service.py`; metodi
+  pubblici e patch sui metodi restano invariati. Le funzioni di modulo vanno nei moduli per tema e le patch puntano al
+  modulo che le definisce. Guardia contro le patch mute: uno script AST usa e getta in `/tmp`, oppure un test di
+  `test-author` dove serve.
+- **C5 — `npm ci`.** Permesso a ogni sessione, solo dal lock e solo nel proprio worktree, quando serve a un controllo.
+  Mai `npm install`, `npm update`, `npm audit fix` o `npx`. Per i lotti di solo riordino del backend bastano i JSON
+  di `dev.py api schema`.
+- **C6 — devWiki.** Le tabelle «Source files» le aggiorna la sessione che sposta i file, nello stesso lotto;
+  `check_source_paths.py` non deve peggiorare.
+- **C7 — Migrazioni.** 005 di A (account e inviti), 006 di X (impostazioni dei plugin), poi le correzioni dei dati di
+  W. Chi integra dopo riallinea `down_revision` all'aggiornamento di base.
+
 ### Superfici condivise: un solo scrittore
 
 | Superficie | Scrittore |
