@@ -1821,6 +1821,29 @@ plugin.
   Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Correzioni al progetto» 2.
 - **L-7 · Accettazione dal vivo con la designer** — medio; L, 14/10: è la DoD esterna del passo 4, su
   `scripts/visual_review/designer_live.sh`. Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 4».
+- **L-8 · File del componente dalla classe di scope** — basso; L, 14/10 (passo 5b).
+  - Il selettore conosce la classe di scope Svelte dell'elemento puntato (`svelte-xxxx`), ma non il file `.svelte` a cui appartiene.
+  - Oggi i candidati vengono da test id, regole e usi delle classi. Una mappa classe → file costruita al build, solo in debug, aggiungerebbe il file del componente come candidato.
+
+  Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 5b».
+- **L-9 · Limiti noti del selettore di elementi** — basso; L, 14/10 (passo 5b).
+  - Non si possono puntare gli elementi con `pointer-events: none`.
+  - I colori dei grafici calcolati da funzioni (tooltip) restano al piano globale anche dentro una specializzazione.
+  - Uno sfondo visto attraverso, che viene da fuori del componente, non si specializza.
+  - Il percorso strutturale del selettore di anteprima si rompe se il DOM cambia.
+
+  Dettagli: pagina developer `designer-lab.md`, «Known Limits».
+- **L-10 · Ruoli di T nel catalogo** — basso-medio; L, 14/10 (avviso del coordinatore sul workstream T). **Dipende da T-1 nella base di L.**
+  - Classi `*-lf-<nome>`: il conteggio va esteso nello scanner **e** in `color_inventory.py` con una riga ciascuno, per tenere la parità. La riga Python di `tw_custom_re` è **assegnata a L** come estensione di ④ (coordinatore, 14/10 alle 21:59). Si fanno entrambe nello stesso cambio; la parità si verifica dopo, sullo stesso albero; i numeri prima e dopo vanno nell'handoff.
+  - Catena `@theme inline`: `--color-lf-card: var(--lf-surface-card)` è un alias che a runtime non esiste. La palette e le «Variabili dell'app» devono mandare la modifica a `--lf-surface-card`, non all'alias.
+  - L1: oggi gli override stanno su `html`, quindi un sotto-albero `.dark`/`.light` che ridefinisce i ruoli tiene i suoi valori. Da scriverli anche sui selettori del token (`html.dark, .dark`). Oggi nessun sotto-albero lo fa.
+  - Il selettore di elementi non ha bisogno di nulla: con `inline` la regola vincitrice legge già `var(--lf-…)`.
+
+  Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 6».
+- **L-11 · Interruttore «mostra i rimasti indietro»** — basso; proposta di T, 14/10.
+  - Un contorno di debug, nel layer `lf-designer-lab` e sincronizzato tra le schede, sugli elementi con classi legacy (`-gray-`, `-slate-`, `bg-white`, `libre-`).
+  - La lista va presa dal piano di migrazione di T.
+  - Va fatto dopo il checkpoint dei passi 5b–6, quando T-1 avrà fissato i ruoli.
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 

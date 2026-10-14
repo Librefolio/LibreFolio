@@ -73,12 +73,17 @@ export function matchesSearch(query: string, texts: string[]): boolean {
 
 /**
  * The value a CSS variable has in a theme before any change: its definition for that theme in the app's sources
- * (`html.dark` for dark; `:root`, `@theme` for light), else `fallback` (Tailwind's own palette, read from the page).
+ * (`html.dark` for dark; `html.light`, `html:not(.dark)` for light), else a definition both themes share (`:root`,
+ * `@theme`) — never the other theme's — and at equal footing the later one, as in the cascade; else `fallback`
+ * (Tailwind's own palette, read from the page).
  */
 export function sourceVarValue(catalog: ColorCatalog, name: string, dark: boolean, fallback = ''): string {
     const v = catalog.css_vars.find((x) => x.name === name);
     const roots = v?.defs.filter((d) => d.scope === 'root') ?? [];
-    const pick = dark ? (roots.find((d) => d.theme === 'dark') ?? roots.find((d) => d.theme !== 'dark')) : roots.find((d) => d.theme !== 'dark');
+    const theme = dark ? 'dark' : 'light';
+    const own = roots.filter((d) => d.theme === theme);
+    const shared = roots.filter((d) => d.theme !== 'dark' && d.theme !== 'light');
+    const pick = own.length ? own[own.length - 1] : shared[shared.length - 1];
     return pick?.value ?? fallback;
 }
 

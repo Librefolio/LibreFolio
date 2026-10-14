@@ -27,8 +27,15 @@ export interface ChartRule {
     alphaVariants: boolean;
 }
 
+/** A chart specialisation: the rule applies only to the instances inside an element matching `selector`. */
+export interface AnchoredChartRule extends ChartRule {
+    key: string;
+    selector: string;
+}
+
 /** Colour key → rule, per theme; the theme in force is read when mapping, so a theme switch needs no re-plan. */
 let plans: {light: Map<string, ChartRule>; dark: Map<string, ChartRule>} = {light: new Map(), dark: new Map()};
+let anchored: {light: AnchoredChartRule[]; dark: AnchoredChartRule[]} = {light: [], dark: []};
 let echarts: EChartsModule | null = null;
 let originalSetOption: AnyFn | null = null;
 /** Every string the engine wrote → the original it replaced. */
@@ -37,12 +44,81 @@ const wrappers = new WeakMap<AnyFn, AnyFn>();
 const isWrapper = new WeakSet<AnyFn>();
 let hits = new Map<string, number>();
 
+const darkTheme = () => document.documentElement.classList.contains('dark');
+
 function activePlan(): Map<string, ChartRule> {
-    return document.documentElement.classList.contains('dark') ? plans.dark : plans.light;
+    return darkTheme() ? plans.dark : plans.light;
+}
+
+/**
+ * The plan of one instance: the global rules, plus the specialisations whose selector contains the chart. Function
+ * results (formatters) are mapped with the global rules only: they run later, without their instance.
+ */
+function planFor(instance: unknown): Map<string, ChartRule> {
+    const base = activePlan();
+    const list = darkTheme() ? anchored.dark : anchored.light;
+    if (!list.length) return base;
+    let dom: Element | null = null;
+    try {
+        dom = (instance as {getDom?: () => Element}).getDom?.() ?? null;
+    } catch {
+        dom = null;
+    }
+    if (!dom) return base;
+    let merged: Map<string, ChartRule> | null = null;
+    for (const rule of list) {
+        let inside = false;
+        try {
+            inside = dom.closest(rule.selector) !== null;
+        } catch {
+            inside = false;
+        }
+        if (!inside) continue;
+        merged ??= new Map(base);
+        merged.set(rule.key, rule);
+    }
+    return merged ?? base;
 }
 
 function planIsEmpty(): boolean {
-    return plans.light.size === 0 && plans.dark.size === 0;
+    return plans.light.size === 0 && plans.dark.size === 0 && anchored.light.length === 0 && anchored.dark.length === 0;
+}
+
+/** The colour the app wrote, for a string the engine produced (the element picker reports the app's colours). */
+export function originalColor(value: string): string {
+    return produced.get(value) ?? value;
+}
+
+/**
+ * The string to write for `original` mapped to the canvas colour `out`, remembered for the way back. Each produced
+ * string stands for one colour: when `out` already stands for a different colour (two colours given the same new
+ * value, or two alphas landing on the same result), this one gets another spelling of it — one more alpha decimal,
+ * identical on the canvas — so a later plan, or a reset, gives each colour its own original back. Spellings of one
+ * colour (`#fff`, `#ffffff`, `rgb(255, 255, 255)`) share a string, and come back as the first one seen. Past 32
+ * different colours given one value, the last spelling is shared again: the last one wins, as without this.
+ */
+function produce(out: string, original: string): string {
+    let spelled = out;
+    for (let extra = 0; extra < 32; extra++) {
+        const owner = produced.get(spelled);
+        if (owner === undefined) break;
+        if (sameColor(owner, original)) return spelled;
+        spelled = spelled.replace(/\)$/, '0)');
+    }
+    produced.set(spelled, original);
+    return spelled;
+}
+
+function sameColor(a: string, b: string): boolean {
+    if (a === b) return true;
+    const x = parseColor(a);
+    const y = parseColor(b);
+    return !!x && !!y && colorKey(x) === colorKey(y) && Math.abs(x.alpha - y.alpha) < 0.0005;
+}
+
+/** Forget every colour the engine wrote, so each test starts from the app's own colours. For tests. */
+export function forgetProducedColors(): void {
+    produced.clear();
 }
 
 /** Map the colour tokens of a string; a token the engine wrote earlier is first turned back into its original. */
@@ -56,9 +132,8 @@ function mapString(s: string, plan: Map<string, ChartRule>): string {
         if (!rule || (rgba.alpha < 0.9995 && !rule.alphaVariants)) return original;
         const out = canvasString(rule.target, rgba.alpha);
         if (!out) return original;
-        produced.set(out, original);
         hits.set(rule.changeId, (hits.get(rule.changeId) ?? 0) + 1);
-        return out;
+        return produce(out, original);
     });
 }
 
@@ -182,7 +257,7 @@ function install(ec: EChartsModule): void {
     const original = proto.setOption;
     originalSetOption = original;
     proto.setOption = function (this: unknown, option: unknown, ...rest: unknown[]) {
-        const mapped = planIsEmpty() ? option : mapValue(option, activePlan(), new WeakMap());
+        const mapped = planIsEmpty() ? option : mapValue(option, planFor(this), new WeakMap());
         return original.call(this, mapped, ...rest);
     };
     probe?.dispose();
@@ -193,7 +268,7 @@ export function reapplyAll(): number {
     if (!originalSetOption) return 0;
     let patched = 0;
     for (const inst of instances()) {
-        const patch = rootPatch(inst.getOption() as Record<string, unknown>, activePlan());
+        const patch = rootPatch(inst.getOption() as Record<string, unknown>, planFor(inst));
         if (!patch) continue;
         originalSetOption.call(inst, patch, {lazyUpdate: false});
         patched++;
@@ -212,15 +287,52 @@ export function chartPatch(option: Record<string, unknown>, plan: Map<string, Ch
 }
 
 /**
- * Set the plan (per theme) and bring every chart on screen to it. The prototype is wrapped on the first non-empty
- * plan; after that an empty plan makes the wrapper a pass-through and puts the original colours back.
+ * Set the plan (per theme, global and anchored) and bring every chart on screen to it. The prototype is wrapped on the
+ * first non-empty plan; after that an empty plan makes the wrapper a pass-through and puts the original colours back.
  */
-export async function applyCharts(next: {light: Map<string, ChartRule>; dark: Map<string, ChartRule>}): Promise<{instances: number; hits: Map<string, number>}> {
-    plans = next;
+export async function applyCharts(next: {light: Map<string, ChartRule>; dark: Map<string, ChartRule>; anchoredLight?: AnchoredChartRule[]; anchoredDark?: AnchoredChartRule[]}): Promise<{instances: number; hits: Map<string, number>}> {
+    plans = {light: next.light, dark: next.dark};
+    anchored = {light: next.anchoredLight ?? [], dark: next.anchoredDark ?? []};
     hits = new Map();
     if (planIsEmpty() && !originalSetOption) return {instances: 0, hits};
     install(await loadEcharts());
     return {instances: reapplyAll(), hits};
+}
+
+/** The distinct colours the app wrote in the chart whose DOM is `dom` (Lab changes undone), at most `limit`. */
+export async function chartColorsAt(dom: HTMLElement, limit = 40): Promise<string[]> {
+    const ec = await loadEcharts();
+    const inst = ec.getInstanceByDom(dom);
+    if (!inst) return [];
+    const colors = new Set<string>();
+    const collect = (v: unknown, depth: number): void => {
+        if (depth > 40 || colors.size >= limit) return;
+        if (typeof v === 'string') {
+            const original = originalColor(v);
+            if (parseColor(original)) colors.add(original);
+        } else if (Array.isArray(v)) v.forEach((x) => collect(x, depth + 1));
+        else if (v && typeof v === 'object' && !isOpaqueObject(v)) Object.values(v).forEach((x) => collect(x, depth + 1));
+    };
+    collect(inst.getOption(), 0);
+    return [...colors];
+}
+
+/** The colour of the shape under a point of the chart (`x`, `y` relative to its DOM), when ECharts can tell. */
+export async function chartColorAtPoint(dom: HTMLElement, x: number, y: number): Promise<string | null> {
+    const ec = await loadEcharts();
+    const inst = ec.getInstanceByDom(dom);
+    if (!inst) return null;
+    try {
+        // zrender's hit test: not a documented ECharts API, so any failure just means "unknown".
+        const zr = inst.getZr() as unknown as {handler?: {findHover?: (px: number, py: number) => {target?: {style?: {fill?: unknown; stroke?: unknown}}} | undefined}};
+        const style = zr.handler?.findHover?.(x, y)?.target?.style;
+        for (const value of [style?.fill, style?.stroke]) {
+            if (typeof value === 'string' && parseColor(originalColor(value))) return originalColor(value);
+        }
+    } catch {
+        return null;
+    }
+    return null;
 }
 
 /** The distinct colours of the chart inside the first element matching `selector` (E2E and console aid). */
