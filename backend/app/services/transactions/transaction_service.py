@@ -17,6 +17,7 @@ Atomic multi-broker semantics (Part 3):
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -48,12 +49,12 @@ from backend.app.schemas.transactions import (
 )
 from backend.app.schemas.wac import WACPreviewResultItem
 from backend.app.services.portfolio_service import compute_wac_iterative
-from backend.app.services.transaction_batch_context import (
+from backend.app.services.transactions.transaction_batch_context import (
     BalanceValidationError as BalanceValidationError,
 )
-from backend.app.services.transaction_batch_context import TransactionBatchContext
-from backend.app.services.transaction_batch_stages import _parse_lenient as _parse_lenient
-from backend.app.services.transaction_batch_stages import (
+from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
+from backend.app.services.transactions.transaction_batch_stages import _parse_lenient as _parse_lenient
+from backend.app.services.transactions.transaction_batch_stages import (
     apply_creates,
     apply_deletes,
     apply_promotes,
@@ -68,13 +69,6 @@ from backend.app.services.transaction_batch_stages import (
     validate_cost_basis,
     validate_updated_pairs,
 )
-
-
-class LinkedTransactionError(Exception):
-    """Raised when linked transaction operations fail."""
-
-
-from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

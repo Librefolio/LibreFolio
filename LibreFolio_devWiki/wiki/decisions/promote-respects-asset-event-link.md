@@ -67,8 +67,8 @@ check asked for one ([[problems/promote-skipped-cost-basis-check]]).
 
 | Role | Path |
 |------|------|
-| `apply_promotes`, `_promoted_state_issues` | `backend/app/services/transaction_batch_stages.py` |
-| `promote_suggest_bulk` | `backend/app/services/transaction_service.py` |
+| `apply_promotes`, `_promoted_state_issues` | `backend/app/services/transactions/transaction_batch_stages.py` |
+| `promote_suggest_bulk` | `backend/app/services/transactions/transaction_service.py` |
 | `TXPromoteSuggestInput.asset_event_id` | `backend/app/schemas/transactions.py` |
 | `PromoteContext`, `findPromoteMatch` | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
 | R42c, B3.8–B3.10 | `backend/test_scripts/test_api/test_transactions_batch_split_promote.py` |
