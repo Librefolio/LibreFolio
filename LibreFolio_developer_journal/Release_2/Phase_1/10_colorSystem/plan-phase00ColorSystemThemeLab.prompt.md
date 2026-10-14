@@ -79,7 +79,15 @@
     solo classi); shell; `routes/+error.svelte` a T.
   - **Istruzioni per gli agenti:** T aggiorna la sezione «Design System» di `frontend.instructions.md`, la riga «Dark
     mode» di `copilot-instructions.md` e una skill in `.github/skills/design-tools/theme-roles/`.
-  - **Rilasci:** nessun rilascio della 1.3 con la conversione dei neutri e degli stati a metà (W1–W4).
+  - **Rilasci:** nessun rilascio della 1.3 con la conversione dei neutri e degli stati a metà. Letta per intero
+    (precisazione del coordinatore delle 22:05, comunicata alla 1.3), per un tag servono:
+    - le ondate W1–W6 per neutri e stati;
+    - B2;
+    - B4, per i soli neutri e guadagno/perdita dei grafici;
+    - B5, quindi anche i lotti C e D di R.
+
+    Non bloccano solo le palette categoriali e dei dati. W4 dipende da FE8a e non da FE8b: le due modali di FE8b
+    passano dal B5.
   - **Ordine:** T-1 fondamenta (nessun pixel); T-2 accesso (ingresso subito, A aspetta); T-3 shell; T-4 PWA dopo il
     lotto A di R; T-5 sfondo del login dopo G; ondate W1–W6; B6.
 
