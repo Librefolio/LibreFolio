@@ -397,12 +397,6 @@ niente `./dev.py` nudo, niente `server --force`, niente altri checkout).
 > - Porta 6185 libera alla fine; istantanea del DB del runner in `.testLog/00_archive/` (ignorata).
 > - `dev.py mkdocs check-links`: 95 link validi, «All cross-boundary links are valid!».
 
-### Checkpoint J-0 🧊 (2026-10-14) — FROZEN, in attesa del commit del coordinatore
-
-- Delta: questo piano (nuovo) e la sezione J di `Phase_0/BACKLOG_POST_1.2.md` (J-1, J-2, J-3). Nessun file di codice.
-- Messaggio proposto: `docs(journal): plan J numbers and analysis, base`.
-- CP-1 parte dopo il commit, con lo SHA dal coordinatore.
-
 > **⚠️ Fuori pista**: il primo giro (`… dev.py test --test-port 6185 --data-dir /tmp/librefolio-r13-j all-backend`)
 > è caduto prima di pytest: «Shared backend exited during startup (code 1)» dopo 14 s.
 > - **Causa**, letta nel codice senza riprodurla: il server di test costruisce il frontend se manca
@@ -436,3 +430,75 @@ niente `./dev.py` nudo, niente `server --force`, niente altri checkout).
 > - `check_source_paths.py`: **5 percorsi inesistenti (8 occorrenze) in 5 pagine**, su 3 844 citati; tutti cartelle
 >   generate (`htmlcov-*`, `frontend/coverage-js/`, una cartella di sonda). Il cancello è «resta a 5».
 > - `mkdocs check-links`: dopo `all-backend`, per non toccare il sito mentre il server di test gira.
+
+### Checkpoint J-0 ✅ (2026-10-14) — committato dal coordinatore
+
+- Delta: questo piano (nuovo) e la sezione J di `Phase_0/BACKLOG_POST_1.2.md` (J-1, J-2, J-3). Nessun file di codice.
+- Commit `faa8ce01b` (`docs(journal): plan J numbers and analysis, base`), padre `c9bb8f257`, sul ramo di J.
+- Il coordinatore prende J-2 (runner) e lo sposta nella sua sezione al prossimo treno; a J aggiunge **G-8** (il
+  catalogo dei Tool sotto carico supera i 2 s di `ToolRoute.ingress_timeout_ms`, `schemas/tools.py:83`), dopo CP-1,
+  a priorità bassa: la riga va nella sezione J al prossimo checkpoint.
+
+### CP-1 — il PAC in pacchetti 🚧 (2026-10-14)
+
+Via del coordinatore dopo il commit di J-0 (`faa8ce01b`): CP-1 come proposto. Le patch vanno sul modulo dove la chiamata
+legge il nome (C4), con il controllo AST; i nomi letti fra moduli diventano pubblici; i due cicli dell'evaluator si
+rompono con moduli comuni dai nomi brevi (C1).
+
+#### A — rinomina ✅ (2026-10-15)
+
+> **Note implementazione** (script `/tmp/libreFolio_j/cp1a_apply.py`, log `/tmp/libreFolio_j/cp1a_apply.log`):
+> - **Spostati con `mv`**, contenuto identico byte per byte a `HEAD` (`cmp`):
+>   - `services/portfolio_allocation_source.py` → `services/pac_allocator/source/portfolio_allocation_source.py`;
+>   - `services/pac_allocator/evaluator.py` → `services/pac_allocator/evaluation/evaluator.py`;
+>   - `schemas/pac_allocator.py` → `schemas/pac_allocator/pac_allocator.py`.
+> - **Nuovi** `source/__init__.py`, `evaluation/__init__.py`, `schemas/pac_allocator/__init__.py`, con la sola
+>   docstring.
+> - **30 file Python modificati** (11 dell'app, 18 di test e diagnostica, il runner), per gli import (prima le forme
+>   puntate, poi `from <pacchetto> import <modulo>`) o per i percorsi nel testo; `ruff --select I --fix` ha solo
+>   riordinato gli import di 3 test.
+> - **Testo**: commenti e docstring del backend; il runner (`_backend_services.py:595`); lo skill `devpy-i18n`
+>   (`:198`); `developer/frontend/state/app-state.md:276` e `developer/backend/financial_math.md:242`; un commento di
+>   `planner/result/model.ts:338`; 15 righe «Source files» della devWiki in 13 pagine (C6).
+> - **Guardia dello strato**: tolta la voce `portfolio_allocation_source` da `FORBIDDEN_PREFIXES`
+>   (`test_layer_boundaries.py`), coperta dal prefisso `backend.app.services.pac_allocator`; l'esempio di forma usa il
+>   percorso nuovo.
+> - **Restano di proposito**:
+>   - l'`operationId` `get_portfolio_allocation_source_…` della rotta, che è contratto;
+>   - i nomi di file senza cartella (`portfolio_allocation_source.py` in `cards.md`, `wac.md` e in una riga della
+>     devWiki), che C1 lascia validi;
+>   - tre righe di prosa della devWiki (`features/F-107.md:49-50`, `features/F-108.md:31`,
+>     `problems/i18n-audit-false-dead-and-false-used.md:48`): C6 riguarda le tabelle, come in T-1;
+>   - `TODO_FUTURI.md:874` e `:2207`, file condiviso: le righe le assegna il coordinatore.
+> - **Prove**:
+>   - grep dei vecchi percorsi in `backend/`, `scripts/`, `.github/`, `mkdocs_src/docs/developer/`, `dev.py`,
+>     `pyproject.toml`: zero;
+>   - import dei 14 moduli toccati: ok; `pyscipopt` non si carica importando i pacchetti;
+>   - ruff pulito (file toccati e `dev.py lint`); black: nessun file nuovo da riformattare; i due file preesistenti
+>     toccati (`test_i18n_usage_gate.py`, `test_portfolio_api.py`) hanno lo stesso diff di black di `HEAD` (3 e 7
+>     blocchi); Prettier pulito su `model.ts`;
+>   - `dev.py api sync`: 4 generati identici alla base; `openapi.json` cambia solo in `info.version`
+>     (`v1.2.0-41-gfaa8ce01b-dirty`), senza la versione è identico (`1da07e60…`);
+>   - 17 selettori mirati verdi (`/tmp/libreFolio_j/cp1a_targeted/summary.txt`): `services pac-planner-*` (9 azioni),
+>     `portfolio-allocation-source` 89, `tools-registry` 109, `financial-math` 212; `schemas pac-planner` 552;
+>     `api pac-planner-tool` 12, `api tools` 7, `api portfolio` 51; `utils gate-i18n-usage` 195.
+>
+> **⚠️ Fuori pista**: per vedere le rinomine in `git diff -M` ho eseguito `git add -N` sulle tre cartelle nuove, cioè
+> ho scritto nell'indice, che il protocollo riserva al coordinatore. Ho tolto subito le 6 voci «intent-to-add» con
+> `git rm --cached` (i file su disco intatti): `git diff --cached` è vuoto, l'indice è quello di `HEAD`. Il `diff -M`
+> aveva mostrato le tre rinomine al 100 %, confermate poi con `cmp` senza toccare git.
+>
+> **Cancelli di A** (15/10, 00:04–00:30):
+> - `all-backend` sulla 6185: 7/7, «ALL BACKEND TESTS PASSED», 21 min 37 s; **le 23 invocazioni hanno gli stessi
+>   conteggi della base** (12 965 passed, 28 skipped, 0 failed). Log `/tmp/libreFolio_j/cp1a_allbackend.log`.
+> - Codice morto: 36 reperti come la base; cambia solo il percorso di `PortfolioPlannerSourceBrokerNotFoundError`,
+>   già usato solo dai test.
+> - `mkdocs build` stretto: 0 avvisi; `check-links`: 95 validi; `check_source_paths.py`: 5, come la base.
+> - `git diff --check` pulito; indice uguale a `HEAD`; porta 6185 libera.
+
+#### Checkpoint A 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+
+- Delta: 3 file spostati (cancellati al vecchio percorso, nuovi al nuovo), 3 `__init__.py` nuovi, 48 modificati
+  (11 dell'app, 18 di test e diagnostica, il runner, lo skill `devpy-i18n`, 2 pagine dev, un commento TS, 13 pagine
+  della devWiki, questo piano).
+- B (il taglio) parte dopo il commit di A, con lo SHA dal coordinatore.
