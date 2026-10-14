@@ -1861,6 +1861,26 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
+- **H-1 · Nella prosa della devWiki restano 9 menzioni dei percorsi spostati da CP1** — minimo; H, 14/10.
+  - Stanno in 8 pagine, fuori dalle tabelle «Source files»: `domains/scheduler.md:13`, `features/F-011.md:20`,
+    `F-014.md:20`, `F-052.md:22`, `F-073.md:25`, `entities/market-data-scheduler.md:22-23`.
+  - Due sono storiche: `features/F-078.md:34` e `sources/phase00-brim-danske-bank-2026-10.md:37`.
+  - Nella tabella di `domains/scheduler.md:82` la riga dice ancora «(planned) … (not yet created)».
+  - È lo stesso caso di T-W1.
+
+  Dettagli: [piano H](../Phase_1/01_platform/plan-phase01Platform.prompt.md), §14 «CP1 passo 1».
+- **H-2 · I test del backend costruiscono frontend e MkDocs dentro i 300 s d'avvio del server condiviso** — basso; H,
+  14/10.
+  - `dev.py server --test` ricostruisce il frontend se un file di `frontend/src` è più recente della build: basta un
+    `.test.ts`.
+  - In un worktree senza `node_modules`, `api sync` chiama `npx openapi-zod-client` e la build chiama
+    `npx svelte-check` (`dev.py:638`).
+  - Oggi la regola è nelle istruzioni. La cura starebbe nel runner: costruire prima di far partire il conto alla
+    rovescia, oppure fermarsi subito con un messaggio se mancano `node_modules`.
+  - È vicina a I-06 del backlog 38.
+
+  Dettagli: piano H, §14 «CP1 passo 0» e «Fuori pista 3».
+
 ## A · Account e accessi (fase 01)
 
 Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
