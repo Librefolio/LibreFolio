@@ -15,8 +15,8 @@ from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.services.scheduler import settings as scheduler_settings
-from backend.app.services.scheduler.settings import _parse_days, _parse_times
+from backend.app.services.platform.scheduler import settings as scheduler_settings
+from backend.app.services.platform.scheduler.settings import _parse_days, _parse_times
 from backend.test_scripts.test_utils import print_section, print_success
 
 

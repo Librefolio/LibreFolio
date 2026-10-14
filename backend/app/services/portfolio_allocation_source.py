@@ -38,7 +38,7 @@ from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceWacFxEvidence,
     PortfolioPlannerWacContext,
 )
-from backend.app.services.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
+from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.asset.sector import FinancialSector
 from backend.app.utils.datetime_utils import utcnow
 
