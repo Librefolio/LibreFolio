@@ -40,7 +40,7 @@ Manages user-specific settings (Language, Currency, Theme) and hosts the **Onboa
 described below. Its categories are `display` (Language), `currency` (Default Currency),
 `appearance` (Theme) and `onboarding`, plus *All Settings* when none is selected.
 
-**Logic** (`lib/components/settings/tabs/PreferencesTab.svelte`):
+**Logic** (`lib/features/settings/tabs/PreferencesTab.svelte`):
 
 1. **Load**: Fetches Global Defaults (`/settings/global`) and User Settings (`/settings/user`) in parallel.
 2. **State Tracking**:
@@ -204,8 +204,8 @@ Both components take callback props (`onsaveAll`, `onundoAll`, `onresetAll` on t
 
 ```svelte
 <script lang="ts">
-  import SettingsLayout from '$lib/components/settings/SettingsLayout.svelte';
-  import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
+  import SettingsLayout from '$lib/features/settings/SettingsLayout.svelte';
+  import SettingSelect from '$lib/features/settings/SettingSelect.svelte';
 
   let original = $state('option1');
   let value = $state('option1');

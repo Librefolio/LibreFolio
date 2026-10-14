@@ -17,9 +17,9 @@
     import {Coffee} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {donationPopup} from '$lib/stores/app/donationPopupStore.svelte';
-    import SupportActions from '$lib/components/support/SupportActions.svelte';
-    import SocialShareModal from '$lib/components/support/SocialShareModal.svelte';
-    import type {SocialPlatform} from '$lib/components/support/supportLinks';
+    import SupportActions from '$lib/features/support/SupportActions.svelte';
+    import SocialShareModal from '$lib/features/support/SocialShareModal.svelte';
+    import type {SocialPlatform} from '$lib/features/support/supportLinks';
 
     let sharePlatform = $state<SocialPlatform | null>(null);
 

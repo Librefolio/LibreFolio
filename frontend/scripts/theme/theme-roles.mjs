@@ -72,7 +72,7 @@ export const LITERAL_EXCEPTIONS = [
     {file: 'lib/components/charts/ChartSettingsModal.svelte', value: '#000000', reason: 'the colour of a demo signal, never drawn (R)'},
     {file: 'lib/components/assets/AssetDataEditorSection.svelte', value: '#a855f7', reason: 'the colour of the preview line (R-6)'},
     {file: 'lib/components/fx/FxDataEditorSection.svelte', value: '#a855f7', reason: 'the colour of the preview line (R-6)'},
-    {file: 'lib/components/support/supportLinks.ts', value: /^#/, reason: 'the brand colours of Reddit, Facebook, Instagram and TikTok on their share buttons: not ours to theme'},
+    {file: 'lib/features/support/supportLinks.ts', value: /^#/, reason: 'the brand colours of Reddit, Facebook, Instagram and TikTok on their share buttons: not ours to theme'},
 ];
 
 /**
@@ -80,7 +80,7 @@ export const LITERAL_EXCEPTIONS = [
  * @type {Readonly<Record<string, string>>}
  */
 export const ARBITRARY_ALLOWED = {
-    'lib/components/support/supportLinks.ts': 'the brand colours of Reddit, Facebook, Instagram and TikTok on their share buttons: not ours to theme',
+    'lib/features/support/supportLinks.ts': 'the brand colours of Reddit, Facebook, Instagram and TikTok on their share buttons: not ours to theme',
     'lib/features/onboarding/components/OnboardingCoachmark.svelte': 'the glow of the coachmark, a legacy colour: it migrates with onboarding (wave W2)',
 };
 
