@@ -182,7 +182,8 @@ Per ogni ondata: lotti di ≤ 15 file; gate eseguiti in serie da T; gallery e re
 |---|---|---|
 | 1 | T-0, T-1 con il diff del CSS compilato | ✅ checkpoint `2018fd853`, integrato con `4e024dfe8` |
 | 2 | T-2, poi integrazione subito: A aspetta | ✅ checkpoint `a73eb7eda`, integrato con `d80b986bf` |
-| 3 | T-3 con la gallery completa | ✅ codice e test pronti il 15/10; aspetta la base con G e la gallery del coordinatore |
+| 3 | T-3 con la gallery completa | ✅ checkpoint `bd51acbc2`, base aggiornata con G nel merge `dad0f6292`; la gallery la lancia il coordinatore il 15/10 |
+| 4 | T-5 sfondo del login, prima della gallery candidata del 15/10 | ✅ pronto il 15/10, FROZEN in attesa del commit |
 
 ## Avanzamento
 
@@ -190,7 +191,7 @@ Per ogni ondata: lotti di ≤ 15 file; gate eseguiti in serie da T; gallery e re
 
 > **Note implementazione:** piano creato dall'analisi d'implementazione, con le decisioni D-T1…D-T14 approvate dal
 > developer. Il branch è stato rinominato dall'app `e-alfy-t-tokens-theme` all'avvio della sessione. Sezione «T (colori)»
-> del backlog: T-B1 (requisiti della password per i lettori di schermo, ad A), T-B2 (ruoli in attesa del giro 2), T-B3
+> del backlog: TC-1 (requisiti della password per i lettori di schermo, ad A), TC-2 (ruoli in attesa del giro 2), TC-3
 > (uno scanner solo con L).
 
 ### T-1 — ✅ 14/10/2026 (checkpoint 1)
@@ -365,7 +366,7 @@ Per ogni ondata: lotti di ≤ 15 file; gate eseguiti in serie da T; gallery e re
 >
 >   I ruoli di stato del chiaro sono scuri e sul verde sparirebbero. Un sotto-albero `.dark` sulla barra risolverebbe,
 >   ma toglierebbe la barra alla modifica dal vivo del Lab, che sovrascrive i ruoli su `<html>`: decide la designer
->   (T-B2).
+>   (TC-2).
 >
 > **Evidenze:**
 > - **Cricchetto:** `--update` stringe la baseline, m1 11.325 → 11.185 e m2 1.782 → 1.781, solo gli 8 file della
@@ -405,5 +406,76 @@ Per ogni ondata: lotti di ≤ 15 file; gate eseguiti in serie da T; gallery e re
 > - **`html.dark body` dipinge ancora il blu notte di P1 dove la shell non copre**, per esempio con il rimbalzo dello
 >   scorrimento su iOS. Va con la pulizia B6, insieme al `body` chiaro, che è bianco. Non tolto ora: cambierebbe il
 >   fondo di pagine fuori dalla shell (per esempio il Lab di L).
-> - **Osservazioni di `test-author` fuori perimetro**, nel backlog come T-B5: il tema dell'header perso a un nuovo
+> - **Osservazioni di `test-author` fuori perimetro**, nel backlog come TC-5: il tema dell'header perso a un nuovo
 >   accesso; l'accessibilità della shell, preesistente.
+
+### T-5 — ✅ 15/10/2026 (checkpoint 4)
+
+> **Avvio:** il coordinatore ha committato T-3 (`bd51acbc2`) e aggiornato la base con G (merge `dad0f6292`, worktree
+> pulito, verificato). Con G entrato, `ui/AnimatedBackground.svelte` passa a T. Vincolo di G: il congelamento a
+> t* = 3.600 ms resta com'è, si toccano solo i colori. Checkpoint entro le 09:00, così la gallery candidata copre T-3
+> e T-5 insieme.
+>
+> **Note implementazione:**
+> - `lib/theme/tokens.css`: quattro ruoli nuovi, solo variabili e senza utility, nei blocchi chiaro e scuro:
+>
+>   | Ruolo | Chiaro | Scuro |
+>   |---|---|---|
+>   | `--lf-art-hill-1` | `#9CAF9C` al 25% | `#14241E` |
+>   | `--lf-art-hill-2` | `#9CAF9C` al 18% | `#192E26` |
+>   | `--lf-art-hill-3` | `#9CAF9C` al 12% | `#1F382F` |
+>   | `--lf-art-line` | `--lf-brand` al 15% | `#284238` |
+>
+>   - **L'intensità di ogni strato è l'alfa del suo colore**, con `color-mix(in oklab, X p%, transparent)`, così la
+>     designer nel Lab tara colore e intensità in un valore solo.
+>   - **In chiaro il disegno resta quello di oggi:** la salvia che la designer ha chiesto di tenere, alle opacità di
+>     oggi, e il marchio al 15% (`#1a4031` → `#1B4334`, il verde di D-T2).
+>   - **In scuro, i valori della designer a piena intensità,** come nel suo render: è la mia proposta iniziale, la
+>     tara con lei sulla gallery (TC-2).
+> - `ui/AnimatedBackground.svelte`:
+>   - fondo `var(--lf-surface-page)`: `#f5f4ef` → `#F7F4ED` in chiaro, `#11151c` → `#0F1412` in scuro;
+>   - ogni collina col suo gradiente su `--lf-art-hill-N` e senza `opacity`; linee con `stroke: var(--lf-art-line)` al
+>     posto dell'attributo `stroke="#1a4031"`;
+>   - nel fotogramma chiave `drawAndFade` l'altopiano passa da `0.15` a `1`: fa solo la dissolvenza, l'intensità è
+>     nel colore. Durate, ritardi e passi dei fotogrammi chiave restano uguali, quindi a t* = 3,6 s il fotogramma è lo
+>     stesso di G;
+>   - via le tre regole `:global(html.dark)` (`#11151c`, `#00ff9a`, `#4ade80`);
+>   - `data-testid="animated-background"` sulla radice, per le sonde E2E.
+> - **Cricchetto:** il file esce dalla baseline (m2 8 → 0, totale 1.781 → 1.773).
+> - **Skill:** una frase sui ruoli senza utility, letti con `var()` nel `<style>`.
+> - **Rinomina nel backlog** (coordinatore, 15/10): le voci di T diventano TC-1…TC-5, perché T-B4…T-B9 collidevano
+>   con la sezione «T · Matematica finanziaria» del piano 43. Richiami aggiornati qui e nella sezione; la sezione A
+>   aggiorna da sé il suo richiamo in A-6.
+>
+> **Test di `test-author`:**
+> - `themeTokens.gate.test.ts`: C2 risolve ora **ogni** ruolo dichiarato, con o senza utility, nei due temi; fa
+>   eccezione solo la ricetta delle tinte (`--lf-tint-*`, percentuali). Prima un refuso in un `--lf-art-*` sarebbe
+>   passato in silenzio, perché C2 guardava solo le utility. Controllo positivo su una tabella difettosa; prova per
+>   mutazione su una copia in memoria di `tokens.css`, poi tolta.
+> - `e2e/layout/theme-roles.spec.ts`, sonda (d), in chiaro e scuro, da disconnessi su `/`:
+>   - il fondo è `--lf-surface-page`;
+>   - le tre colline, attese dopo il montaggio, hanno ciascuna una tappa del gradiente in `--lf-art-hill-N` e opacità 1;
+>   - le tre linee hanno `stroke` = `--lf-art-line`;
+>   - in scuro, nessuno dei tre letterali ritirati.
+>
+>   Da 7 a 9 test per progetto. Il dubbio di `test-author`, cioè se Chrome scriva una tappa del gradiente come il
+>   `color` di una sonda, è sciolto: (d) chiaro passa.
+> - Descrizione dell'azione `theme-roles` e docstring di `front_theme_roles` aggiornate a T-5.
+>
+> **Evidenze, corsia 6155, in serie, tutte verdi:**
+> - E2E `theme-roles` 18/18, `auth` 29, `app-start-auth` 3;
+> - `core-unit` 4.246, cioè i 4.245 di T-3 più il test nuovo del gate;
+> - `front check` 0/0; Prettier verde; `--check` pulito.
+> - **16 scatti** in `files/T5-shots/` della sessione T: accesso, registrazione, password dimenticata, 404; chiaro e
+>   scuro, desktop 1280×800 e mobile. Le animazioni che si ripetono sono ferme a 3,6 s della loro corsa, come nella
+>   gallery di G.
+>   - In chiaro il disegno è quello di prima; cambia solo la pagina, più calda.
+>   - In scuro: fondo `#0F1412`, colline fino a circa `#1E372E` in basso (nel render della designer `#213127`–
+>     `#273B30`), linee `#284238` ben visibili.
+> - Il CSS compilato di `AnimatedBackground` legge solo `var(--lf-…)`; nessun letterale.
+>
+> **Fuori pista:**
+> - **TC-6 nel backlog:** sugli scatti, la bandiera del selettore della lingua è 🇬🇧 su una pagina in italiano, alla
+>   prima visita con browser `it-IT`. È un difetto di prima, non di colore: va instradato.
+> - **I pallini sulle linee** del render della designer restano fuori, come detto nell'analisi: non sono nelle sue
+>   note.
