@@ -25,6 +25,11 @@
   riordino del piano 43 (parte 2), backend e frontend, compresi i file più grandi, così
   che le molte sessioni parallele lavorino su cartelle chiare e separate.
 - **Si rilascia quando le ondate 1 e 2 sono complete e verdi** (decisione del developer).
+- **E quando la conversione dei colori non è a metà** (decisione del developer del 14/10, riportata dal coordinatore
+  colori): prima del tag devono essere entrate le ondate W1–W4 del workstream T (primitivi, aree libere, stati e mappe,
+  poi cambi, asset e transazioni). W4 viene dopo gli spostamenti di cartelle di X (cambi FE4, asset FE5) e di W
+  (transazioni FE8), che quindi sono necessari per il rilascio. Grafici, stili propri e colori per categoria (W5, W6,
+  B4 di T) non bloccano, salvo diversa richiesta della designer.
   Nessuna data: le stime del business plan sono prudenti e non vincolano.
 - **Perimetro del backlog** (decisione del developer): errori che toccano numeri,
   sicurezza o dati, e chiarezza per utenti non esperti. I riordini interni sono dentro
@@ -304,9 +309,10 @@ presentazione (U8) con i campi del backend di J; indicatore di attesa del server
 bandiere nei grafici (K-13); tooltip sanificati (K-15, C-34, C-15); voci dei grafici
 (I-01, I-03, 47-1, 54-1, B10, 48-1, O-16). Dopo il lotto C dei colori: file (FE3),
 `DataTable` tagliata, intestazione Azioni su mobile (C-38 e difetti 2 e 5 del PAC),
-ridimensionamento delle colonne (C-62). Per ultimi FE9, FE10, FE11. **Il riordino delle
-cartelle toccate dai colori non blocca il rilascio**: se i lotti B e C arrivano tardi,
-quella parte passa dopo la 1.3.
+ridimensionamento delle colonne (C-62). Per ultimi FE9, FE10, FE11. **Il riordino di queste
+cartelle (grafici, dashboard, rischio, broker, file) non blocca il rilascio**: se i lotti B e C dei colori arrivano
+tardi, quella parte passa dopo la 1.3. Diverso è il caso di cambi, asset e transazioni (FE4, FE5, FE8 di X e W): da
+lì passa la conversione dei colori che il rilascio richiede (§1).
 
 ## 5. Schede delle funzioni per il cloud
 
@@ -437,7 +443,8 @@ fermati all'handoff, porta verificata libera.
 | M3 | Primo treno del riordino: registri per famiglia (X), punti d'aggancio e configurazione (H), servizi account (A) | B, la sospensione nel backend (Z), le funzioni di A |
 | M4 | Riordino del backend completato (famiglie, servizi per dominio, file grandi) e cartelle frontend fuori dai colori | impostazioni dei plugin, ricerca, decisione sui test speculari |
 | M5 | Ondata 1 integrata | proposta al developer: passaggio su `dev`, così l'immagine `nightly` serve al pannello di controllo |
-| M6 | Ondata 2 integrata | cancelli di rilascio |
+| M5b | Spostamenti delle cartelle di cambi e asset (X, FE4 e FE5) e delle transazioni (W, FE8) integrati, dopo il cancello A dei colori | l'ondata W4 della conversione dei colori (T) |
+| M6 | Ondata 2 integrata e ondate W1–W4 della conversione dei colori entrate | cancelli di rilascio |
 | M7 | Cancelli verdi → 1.3.0 (tag e push del developer) | — |
 
 Indipendenti dai traguardi: il lavoro di J, W e Y, che entra a ogni treno quando è
@@ -450,6 +457,7 @@ pronto, e i lotti frontend legati ai lotti B e C dei colori.
 - **Prima dell'integrazione in `dev_release2`**: aggiornamento di base, validazione della
   revisione combinata, nessun file condiviso scritto da due sessioni.
 - **Rilascio**:
+  - conversione dei colori: ondate W1–W4 di T entrate in `dev_release2` (decisione del developer, §1);
   - run completa con coverage anche sotto carico (4 worker con un'altra corsia attiva,
     C-82);
   - galleria completa (con G, mai insieme a un'altra);
