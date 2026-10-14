@@ -392,8 +392,9 @@ dall'audit del 14/10: ogni sessione le riverifica nell'analisi.
   moduli per tema e un `__init__.py` con la sola docstring (niente barile). L'hub `schemas/__init__.py` resta e
   continua a esportare i nomi pubblici; chi importa una classe la prende dal modulo che la definisce. Nomi di classe
   invariati, quindi OpenAPI e impronte dei Tool invariati.
-- **C4 — Classi di servizio grandi.** Si tagliano in mixin per tema, composti nella classe in `service.py`; metodi
-  pubblici e patch sui metodi restano invariati. Le funzioni di modulo vanno nei moduli per tema e le patch puntano al
+- **C4 — Classi di servizio grandi.** Si tagliano in mixin per tema, composti nella classe del servizio, che resta nel
+  suo file con il suo nome (C1: per esempio `services/transactions/transaction_service.py`); metodi pubblici e patch
+  sui metodi restano invariati. Le funzioni di modulo vanno nei moduli per tema e le patch puntano al
   modulo che le definisce. Guardia contro le patch mute: uno script AST usa e getta in `/tmp`, oppure un test di
   `test-author` dove serve.
 - **C5 — `npm ci`.** Permesso a ogni sessione, solo dal lock e solo nel proprio worktree, quando serve a un controllo.
@@ -430,6 +431,17 @@ Rinomina e taglio in due commit; niente shim; grep dei vecchi percorsi a zero in
 poi backend intera con gli stessi conteggi della base; `ruff`, `black`, codice morto senza
 reperti nuovi; `api sync` senza differenze; `mkdocs build` stretto e `check-links`; le
 rinomine con somiglianza ≥ 95 % in `git diff -M`; i `patch` dei test sui nuovi percorsi.
+
+**Rinomina e taglio nello stesso commit** (chiarimento del coordinatore, 14/10, caso del PL2 di X). Sono ammessi
+insieme solo se:
+- nessun file è insieme rinominato e tagliato;
+- ogni rinomina resta ≥ 95 % in `git diff --cached -M`, che il coordinatore controlla allo staging;
+- il messaggio di commit elenca a parte le rinomine e i tagli.
+
+Altrimenti servono due checkpoint in fila.
+
+**`npm ci` prima della prima run di test**: anche i test del solo backend avviano il server condiviso, che costruisce il
+frontend se manca. Senza `node_modules`, la build chiama `npx` (vietato). Regola C5.
 
 **Taglio dichiarato** (dal programma colori, 14/10). Dopo l'ingresso di T-1, il cricchetto dei colori vuole i file
 nuovi senza classi di palette e tollera solo le rinomine. Un taglio crea file nuovi con le classi del file di
