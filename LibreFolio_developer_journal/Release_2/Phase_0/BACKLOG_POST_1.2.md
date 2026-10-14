@@ -1918,14 +1918,14 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > Workstream T del programma colori, aperto il 14/10 (D-T1). Da non confondere con la sezione «T · Matematica
 > finanziaria e riordino (43)». Piano: [T-tokensTheme](../Phase_1/10_colorSystem/T-tokensTheme/plan-phase01TokensTheme.prompt.md).
 
-- **T-B1 · I requisiti della password detti anche a chi usa un lettore di schermo** — basso; T, 14/10.
+- **TC-1 · I requisiti della password detti anche a chi usa un lettore di schermo** — basso; T, 14/10.
   - Oggi ✓ e ✗ distinguono un requisito soddisfatto senza affidarsi al colore, ma non hanno testo per i lettori di
     schermo.
   - Servono due chiavi i18n («soddisfatto», «non soddisfatto») in testo nascosto: lo fa A, che possiede la card di
     registrazione dopo il giro di T.
 
   Dettagli: piano di T, passo T-2.
-- **T-B2 · Ruoli in attesa del giro 2 della designer** — medio; T, 14/10.
+- **TC-2 · Ruoli in attesa del giro 2 della designer** — medio; T, 14/10.
   - Sono derivati provvisori, calcolati solo dai suoi valori: hover e premuto in chiaro, fondale delle modali, inverso
     dei tooltip, tinte di avviso, errore e informazione.
   - **Stati sulla barra verde** (T-3, 15/10): i colori di stato del chiaro sono scuri e sul verde sparirebbero. Le icone
@@ -1939,20 +1939,20 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Le otto correzioni minime di contrasto (D-T6) vanno confermate.
 
   Dettagli: piano di T, «Autorizzazione e decisioni»; `frontend/src/lib/theme/tokens.css`.
-- **T-B3 · Uno scanner dei colori solo, con L** — basso; T, 14/10.
+- **TC-3 · Uno scanner dei colori solo, con L** — basso; T, 14/10.
   - Il cricchetto (`frontend/scripts/theme/theme-roles.mjs`) copia la regex delle classi di palette dallo scanner del
     Designer Lab (`scan-colors.mjs`).
   - Quando L entra in `dev_release2`, un modulo comune evita che i due conteggi divergano.
 
   Dettagli: piano di T, passo T-1.
-- **T-B4 · Le cinque regole della password scritte due volte** — basso; T (trovato da `test-author`), 14/10.
+- **TC-4 · Le cinque regole della password scritte due volte** — basso; T (trovato da `test-author`), 14/10.
   - Le stesse regole stanno in `ui/input/PasswordStrength.svelte` (la lista mostrata) e in
     `auth/RegisterCard.svelte` (la validazione del modulo). Oggi coincidono; se divergessero, la lista direbbe
     «soddisfatta» mentre il modulo rifiuta la password.
   - Una fonte sola per le regole: è di A, che possiede la registrazione (F13).
 
   Dettagli: piano di T, passo T-2.
-- **T-B5 · Il tema scelto dall'header non sopravvive a un nuovo accesso** — basso; T (trovato da `test-author`), 15/10.
+- **TC-5 · Il tema scelto dall'header non sopravvive a un nuovo accesso** — basso; T (trovato da `test-author`), 15/10.
   - `ThemeToggle` scrive solo `localStorage`; all'accesso `auth.ts` riapplica il tema salvato nell'account
     (`applyTheme`), quindi una scelta fatta dall'header si perde se diverge da quella salvata. Comportamento di prima di
     T, non di colore.
@@ -1961,6 +1961,15 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     schermate d'attesa della shell scrivono «Loading...» e «Checking authentication...» in inglese.
 
   Dettagli: piano di T, passo T-3.
+- **TC-6 · Alla prima visita il selettore della lingua mostra l'inglese mentre l'interfaccia è nella lingua del
+  browser** — basso; T, 15/10. Da instradare: non è di colore.
+  - Visto sugli scatti di T-5: browser `it-IT`, nessuna preferenza salvata, pagina di accesso in italiano con la
+    bandiera 🇬🇧, e nel menu è selezionato l'inglese.
+  - Causa probabile, letta e non provata: `currentLanguage` (`lib/stores/app/language.ts`) nasce col valore salvato o
+    con `en`; il suo `init()`, chiamato al montaggio del layout radice, legge una volta sola il `locale` di svelte-i18n,
+    che passa a `it` solo dopo aver caricato il dizionario. Il negozio resta `en`.
+
+  Dettagli: piano di T, passo T-5.
 
 ---
 

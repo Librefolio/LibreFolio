@@ -7,7 +7,8 @@
  *      so that a subtree forced into the other theme recomputes them with its own base values.
  *   2. `@theme inline`, at the bottom, turns each role into Tailwind utilities: --color-lf-card gives bg-lf-card,
  *      border-lf-card, ring-lf-card… `inline` makes the utility read var(--lf-…) directly, so a theme switch or a live
- *      override (Designer Lab) reaches every element, subtrees included.
+ *      override (Designer Lab) reaches every element, subtrees included. The login illustration (--lf-art-*) has no
+ *      utility: its one component reads it with var() in its <style>.
  *   3. Components use the *-lf-* utilities only. The dark theme comes from the variables: never write `dark:` on a role
  *      utility. Every `border` names its role, since Tailwind v4 draws an unnamed border in currentColor.
  *
@@ -64,6 +65,13 @@ html.light,
     --lf-tint-soft: 8%;
     --lf-tint-line: 25%;
     --lf-tint-on-soft: 60%;
+
+    /* Login illustration (ui/AnimatedBackground.svelte): variables only, no utility. Each layer's strength is the alpha
+       of its colour, so the Designer Lab tunes colour and strength in one value */
+    --lf-art-hill-1: color-mix(in oklab, #9caf9c 25%, transparent); /* designer: keep today's sage hills, as they are */
+    --lf-art-hill-2: color-mix(in oklab, #9caf9c 18%, transparent);
+    --lf-art-hill-3: color-mix(in oklab, #9caf9c 12%, transparent);
+    --lf-art-line: color-mix(in oklab, var(--lf-brand) 15%, transparent); /* the chart lines: the brand at today's 15% */
 }
 
 /* ===== Derived roles: the same recipe in both themes ===== */
@@ -138,6 +146,13 @@ html.dark,
     --lf-tint-soft: 6%;
     --lf-tint-line: 22%;
     --lf-tint-on-soft: 37%;
+
+    /* Login illustration: the designer's deep fir greens and her line colour, at full strength as in her render. The
+       strengths are a first proposal, to tune with her on the gallery (TC-2) */
+    --lf-art-hill-1: #14241e;
+    --lf-art-hill-2: #192e26;
+    --lf-art-hill-3: #1f382f;
+    --lf-art-line: #284238;
 
     /* The designer's own password-requirements box (round 1): her values win over the recipe */
     --lf-success-soft: #1a2822;

@@ -7,7 +7,8 @@
  * tokens.css is the one home of the interface colours. A role `--lf-<group>-<name>` takes its light value on
  * `:root, html.light, .light` and its dark value on `html.dark, .dark`; a derived role is one formula on
  * `:root, .light, .dark` that each theme computes from its own base values; the `@theme inline` table turns every
- * role into Tailwind utilities (`bg-lf-card`, `text-lf-muted`). A migrated component trusts that table blindly: it
+ * role a class can use into Tailwind utilities (`bg-lf-card`, `text-lf-muted`) — the login illustration (`--lf-art-*`)
+ * has none, its one component reads it with `var()`. A migrated component trusts that table blindly: it
  * writes `text-lf-muted` once, with no `dark:` to correct it, and gets whatever the two themes say. So the table must
  * be whole in both themes, readable, and legible. Meanwhile the legacy dark remap of app.css (P1) keeps the
  * components not yet migrated as they are: it must leave the migrated ones alone, and shrink as they go.
@@ -20,7 +21,10 @@
  *       (today the designer's password box: `--lf-success-soft`, `--lf-success-line`, `--lf-success-on-soft`), but
  *       never declares a role of its own; and no role is both base and derived;
  *   C2  every utility of the table is `--color-lf-<name>: var(--lf-…)` of a role declared in the light or the
- *       derived block; every name is distinct; every utility resolves to a colour in both themes;
+ *       derived block; every name is distinct; every utility resolves to a colour in both themes — and so does every
+ *       role of the light, derived and dark blocks, utility or not, the tint recipe excepted (`--lf-tint-*`, the
+ *       shares of a mix: `8%`). The login illustration (`--lf-art-*`) has no utility: its one component reads it
+ *       with var(), where nothing but this check would see a role that does not resolve;
  *   C3  the pairs of `CONTRAST_PAIRS` reach their minimum in both themes: 4.5:1 for text (WCAG 1.4.3), 3:1 for the
  *       border of a field, the focus ring and a status mark on its own tint (WCAG 1.4.11). A pair under its minimum
  *       is red unless `KNOWN_EXCEPTIONS` holds it, and an entry there is the designer's decision, not ours;
@@ -78,13 +82,15 @@ const ratioText = (ratio: number): string => (Math.floor(ratio * 100) / 100).toF
 // C1 and C2: the table
 // ---------------------------------------------------------------------------
 
-/** Four blocks with one fault of every kind C1 and C2 look for. */
+/** Four blocks with one fault of every kind C1 and C2 look for — and a tint share, which is no colour and no fault. */
 const FAULTY_TOKENS = `
 :root,
 html.light,
 .light {
     --lf-a: #ffffff;
     --lf-b: #000000;
+    --lf-tint-a: 8%;
+    --lf-art-a: color-mix(in oklab, var(--lf-brnad) 15%, transparent);
 }
 
 :root,
@@ -99,6 +105,8 @@ html.dark,
     --lf-a: #111111;
     --lf-c: #222222;
     --lf-z: #333333;
+    --lf-tint-a: 6%;
+    --lf-art-a: #444444;
 }
 
 @theme inline {
@@ -134,6 +142,25 @@ function utilityFindings(tokens: Tokens): string[] {
     return out;
 }
 
+/** The tint recipe: `--lf-tint-*` are the shares the status tints are mixed with (`8%`), the one family of roles that is no colour. */
+const TINT_RECIPE = '--lf-tint-';
+
+/** Every role tokens.css declares, in the light, the derived or the dark block: once each, in the order of the file. */
+const declaredRoles = (tokens: Tokens): string[] => [...new Set([...tokens.light.keys(), ...tokens.derived.keys(), ...tokens.dark.keys()])];
+
+/** C2: what keeps a role — named by a utility or read by var() alone, the tint recipe excepted — from being a colour in a theme. */
+function roleFindings(tokens: Tokens): string[] {
+    const out: string[] = [];
+    for (const theme of THEMES) {
+        for (const name of declaredRoles(tokens)) {
+            if (name.startsWith(TINT_RECIPE)) continue;
+            const colour = colourOf(tokens, `var(${name})`, theme);
+            if (typeof colour === 'string') out.push(`${theme}  ${name}: ${colour}`);
+        }
+    }
+    return out;
+}
+
 describe('tokens.css: the table of the roles (C1, C2)', () => {
     it('reads exactly the four blocks of TOKEN_BLOCKS, none of them empty, and refuses any other block', () => {
         const tokens = readTokens();
@@ -148,6 +175,11 @@ describe('tokens.css: the table of the roles (C1, C2)', () => {
         const faulty = parseTokens(FAULTY_TOKENS);
         expect(themeFindings(faulty)).toEqual(['--lf-b  missing from the dark block', '--lf-z  in the dark block only, and no derived role it could override', '--lf-b  in both the light and the derived block']);
         expect(utilityFindings(faulty)).toEqual(['--color-lf-ghost  --lf-ghost is declared neither in the light block nor in the derived block', '--color-lf-raw  #ffffff is not var(--lf-…): a utility names a role, nothing else', '--color-brand  not a --color-lf-<name> utility']);
+        expect(roleFindings(faulty), 'a role no utility names is read all the same (the typo of --lf-art-a), and the tint share is left out').toEqual([
+            'light  --lf-art-a: tokens.css: --lf-brnad is not declared for the light theme',
+            'light  --lf-z: tokens.css: --lf-z is not declared for the light theme',
+        ]);
+        expect(typeof colourOf(faulty, 'var(--lf-tint-a)', 'light'), 'a tint share is not a colour: TINT_RECIPE alone keeps it out of the findings').toBe('string');
         expect(typeof colourOf(faulty, 'var(--lf-ghost)', 'dark'), 'an undeclared role cannot be read').toBe('string');
         expect(typeof colourOf(readTokens(), 'rgb(0 0 0)', 'light'), 'nor can a form the resolver does not know').toBe('string');
     });
@@ -174,6 +206,16 @@ describe('tokens.css: the table of the roles (C1, C2)', () => {
             }
         }
         expect(unreadable, ['', 'A utility the resolver cannot read is a utility C3 cannot check: use the forms tokens.css already uses, or teach resolveColour the new one.', '', ...unreadable, ''].join('\n  ')).toEqual([]);
+    });
+
+    it('C2: every role resolves to a colour in both themes, utility or not — the tint recipe excepted', () => {
+        const tokens = readTokens();
+        const named = new Set(tokens.utilities.values());
+        const readByVarAlone = declaredRoles(tokens).filter((name) => !named.has(`var(${name})`) && !name.startsWith(TINT_RECIPE));
+        expect(readByVarAlone, 'positive control: the check reaches the roles no utility names — the login illustration among them').toEqual(expect.arrayContaining(['--lf-art-hill-1', '--lf-art-hill-2', '--lf-art-hill-3', '--lf-art-line']));
+        const findings = roleFindings(tokens);
+        const rule = 'Every role is a colour in both themes, whether a utility names it or var() reads it alone: one the resolver cannot read draws nothing, in silence. Fix the role, or teach resolveColour its form.';
+        expect(findings, ['', rule, '', ...findings, ''].join('\n  ')).toEqual([]);
     });
 });
 

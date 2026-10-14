@@ -51,6 +51,10 @@ The full table, with the light and dark values, is in `tokens.css`.
 
 Opacity works on every role: `bg-lf-card/90`, `border-lf-on-brand/20`.
 
+**Roles without a utility.** The login illustration (`ui/AnimatedBackground.svelte`) reads `--lf-art-hill-1…3` and
+`--lf-art-line` with `var()` in its `<style>`: the alpha of each colour is the strength of its layer. A `<style>` block
+reads any role that way, `var(--lf-…)`, never a literal.
+
 ## Converting a component
 
 Convert by **meaning and step**, not by colour family: `gray` and `slate` go to the same roles.

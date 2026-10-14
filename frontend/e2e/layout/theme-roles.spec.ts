@@ -1,7 +1,7 @@
 /**
  * Colour roles in the browser: every migrated element draws the colour of its role, as the browser itself resolves it,
  * in the light and in the dark theme — and the page content not migrated yet keeps today's look (colour programme,
- * workstream T: step T-2, the login/registration pilot; step T-3, the app shell).
+ * workstream T: step T-2, the login/registration pilot; step T-3, the app shell; step T-5, the login background).
  *
  * ## What this protects
  *
@@ -13,6 +13,12 @@
  * unlayered, so it beats every Tailwind utility, and its structural rules exempt an element only through
  * `:where(:not([class*='-lf-']))`. Without that exemption a migrated field would keep the legacy border, text and
  * placeholder, and the card the legacy border, and nothing but a computed style would say so.
+ *
+ * The login background (ui/AnimatedBackground.svelte, fixed behind `/` and the error page) left its literals for roles
+ * as well, and its dark rules (`:global(html.dark)`) with them: its surface is --lf-surface-page, its illustration the
+ * roles --lf-art-*, whose alpha is the strength of each layer. Those have no utility: the component reads them with
+ * var() in its <style>, where no class grammar looks. themeTokens.gate.test.ts proves them declared and resolvable in
+ * both themes (C2); only a browser can prove that each layer draws its own.
  *
  * (a) Signed out, on `/`, in each theme:
  *   - `login-modal`: background --lf-surface-card, border --lf-border-subtle — in dark, the proof that
@@ -36,13 +42,23 @@
  * over that page, migrated, draws its own role: `language-selector-panel` on --lf-surface-card. A migration that leaked
  * into the page, or a remap that stopped repainting it, shows here.
  *
+ * (d) Signed out, on `/`, in each theme, the login background, `animated-background`:
+ *   - its root: background --lf-surface-page;
+ *   - its three waves, the `<div>` children of the root, which render once the component is mounted — waited for, never
+ *     assumed: wave N, in DOM order, is a gradient with a stop in --lf-art-hill-N, at opacity 1 — the strength of a hill
+ *     is the alpha of its role, and an opacity on top would dim it twice;
+ *   - its three chart lines, the `<path>`s of its `<svg>`: stroke --lf-art-line;
+ *   - in dark, none of those colours is one of the retired dark background, alpha aside: #11151c (its page), #00ff9a
+ *     (its hills), #4ade80 (its chart lines).
+ *
  * ## How it reads
  *
- * The test writes no colour. The theme is `localStorage['librefolio-theme']`, written by an init script on every
- * navigation, before app.html's theme script reads it ahead of the first paint. Signing in applies the account's own
- * preference instead (auth.ts calls `applyTheme` with the user's settings), so the signed-in cases load `/dashboard`
- * again once signed in: the init script writes the theme back first, and nothing after the sign-in reads the server's
- * preference again. The preference on the server is never touched.
+ * The test writes no colour it expects to see — the three of (d) are there to be proven gone. The theme is
+ * `localStorage['librefolio-theme']`, written by an init script on every navigation, before app.html's theme script
+ * reads it ahead of the first paint. Signing in applies the account's own preference instead (auth.ts calls
+ * `applyTheme` with the user's settings), so the signed-in cases load `/dashboard` again once signed in: the init script
+ * writes the theme back first, and nothing after the sign-in reads the server's preference again. The preference on the
+ * server is never touched.
  *
  * The value a role must have is the one the browser computes for it: a probe element appended to <body> with
  * `<property>: var(--lf-…, transparent)`, read with getComputedStyle and removed in the same task, so the page never
@@ -51,16 +67,23 @@
  * polls until it settles: the fields carry `transition-all`, so a border read straight after a focus would catch the
  * transition halfway.
  *
+ * A wave of (d) holds its colour as a stop of a gradient, which no colour property holds alone: each colour stop of its
+ * computed `background-image` is read back through a probe's `color` — the property its role is read through — so the
+ * two sides still serialize alike, whether the role is a hex (the dark hills) or a color-mix with an alpha (the light
+ * ones), and even if the gradient kept a stop unresolved. A chart line is compared through `stroke` itself.
+ *
  * The positive control runs first in every test: the probe resolves a role to a colour (it falls back to transparent
  * when no stylesheet declares the role, and that is refused); the two themes resolve --lf-surface-card to two different
  * values, read by probes inside a `.light` and a `.dark` subtree, which tokens.css declares every role on as well; and
  * the page's own value is the one of the theme the test set. So a dark test cannot pass on a page drawn in light — the
  * account's own preference included — and a probe that read one value everywhere fails there instead of passing below.
+ * In (d) the three hill roles must also resolve to three different colours, or no wave could be told from another.
  *
  * ## What it cannot see
  *
- *   - pixels: a computed colour is what the cascade decided, not what reached the screen — an opacity, a layer on top,
- *     an image behind; hover and pressed states; the colours of the icons. The gallery and the designer's review do;
+ *   - pixels: a computed colour is what the cascade decided, not what reached the screen — an opacity (a wave's aside,
+ *     held at 1 by (d)), a layer on top, an image behind, a clip; hover and pressed states; the colours of the icons.
+ *     The gallery and the designer's review do;
  *   - legibility: the contrast of the pairs is themeTokens.gate.test.ts's (C3), on the declared values;
  *   - the placeholder through anything but getComputedStyle(el, '::placeholder'). A browser that ignored the
  *     pseudo-element would hand back the field's own colour, --lf-text-primary: a red, not a silent pass, and its
@@ -71,8 +94,12 @@
  *     the brand rather than a role), the collapsed sidebar's tooltips (shown on hover only), and the shell's waiting
  *     screens (`app-auth-checking`, `app-bootstrap-loading`, `onboarding-redirecting`) and `welcome-shell`, which a
  *     signed-in landing passes through, or never reaches, before anything could be read;
- *   - any page but `/` and `/dashboard`: the rest of the content is legacy by decision (D-T3), and the migration waves
- *     bring their own cases.
+ *   - the login background as it moves: the waves' transform and the lines' dash and fade are animated, their colours
+ *     are not, so a computed colour holds at any frame — but the opacity of a line, animated from 0 to 1 and back, is
+ *     not read, so its strength is checked only as the alpha of --lf-art-line; and a retired colour that came back in
+ *     another form (a mix of it) would not be recognised as one;
+ *   - any page but `/` and `/dashboard` — the error page included, which draws the same login background: the rest of
+ *     the content is legacy by decision (D-T3), and the migration waves bring their own cases.
  *
  * The test writes nothing server-side. The signed-out cases never sign in or register; the registration link needs
  * `enable_registration`, true by default and closed by no E2E spec (auth.spec.ts stubs it on its own pages only). The
@@ -90,7 +117,7 @@ const THEMES = ['light', 'dark'] as const;
 type Theme = (typeof THEMES)[number];
 
 /** The colour properties this spec compares: a probe reads its role through the same one as the element. */
-type ColourProperty = 'background-color' | 'border-top-color' | 'border-right-color' | 'border-bottom-color' | 'color';
+type ColourProperty = 'background-color' | 'border-top-color' | 'border-right-color' | 'border-bottom-color' | 'color' | 'stroke';
 
 /** The first paint of `/`: it asks GET /auth/me before it shows the login (the budget auth.spec.ts gives the same step). */
 const FIRST_PAINT_MS = 20_000;
@@ -103,6 +130,13 @@ const SETTLE_MS = 3_000;
 const EVERY_RULE = 'Glacier!Quill7-Marmot-Sundial';
 /** The rules the checklist lists (PasswordStrength.svelte), each `password-rule-<key>`. */
 const RULE_KEYS = ['minLength', 'hasUppercase', 'hasLowercase', 'hasNumber', 'hasSpecial'] as const;
+
+/** The login background (AnimatedBackground.svelte): its waves, the `<div>` children of its root, wave N on --lf-art-hill-N. */
+const WAVES = 3;
+/** …and its chart lines, the `<path>`s of its `<svg>`, all three on --lf-art-line. */
+const LINES = 3;
+/** The colours of the dark login background before T-5, literals all three: its page, its hills, its chart lines. */
+const RETIRED_DARK = ['#11151c', '#00ff9a', '#4ade80'] as const;
 
 // The first paint may take FIRST_PAINT_MS on a loaded lane; the comparisons after it take a few seconds. The signed-in
 // cases sign in first and set a budget of their own.
@@ -132,7 +166,8 @@ function probe(page: Page, expression: string, property: ColourProperty, theme: 
 
 /**
  * A role's colour as the page resolves it. The probe falls back to transparent when nothing declares the role, and that
- * is refused: every role this spec reads is opaque, so transparent can only mean a broken probe or a missing role.
+ * is refused: every role this spec reads is a colour that shows — opaque, or translucent as the light hills of the login
+ * background are, never fully transparent — so transparent can only mean a broken probe or a missing role.
  */
 async function role(page: Page, name: string, property: ColourProperty, theme: Theme | null = null): Promise<string> {
     const value = await probe(page, `var(${name}, transparent)`, property, theme);
@@ -145,6 +180,50 @@ async function role(page: Page, name: string, property: ColourProperty, theme: T
 function computed(target: Locator, property: ColourProperty, pseudo = ''): Promise<string> {
     return target.evaluate((element, {property, pseudo}) => getComputedStyle(element, pseudo || null).getPropertyValue(property), {property, pseudo});
 }
+
+/**
+ * The colour of each stop of `wave`'s computed background-image, read back through a probe's `color` — the property
+ * role() reads a hill role through, so the two sides serialize alike — with the image itself, for the message. One
+ * task: the probe is appended to <body> and removed before the page could paint it.
+ */
+function stopColours(wave: Locator): Promise<{image: string; stops: string[]}> {
+    return wave.evaluate((element) => {
+        const image = getComputedStyle(element).getPropertyValue('background-image');
+        // The arguments of the gradient, split at their top-level commas: a direction, then the stops — a colour and, when
+        // it has them, its positions. What parses as a colour once its positions are stripped is a stop.
+        const args = /^[\w-]+\((.*)\)$/.exec(image)?.[1] ?? '';
+        const parts: string[] = [];
+        let depth = 0;
+        let part = '';
+        for (const char of args) {
+            if (char === ',' && depth === 0) {
+                parts.push(part);
+                part = '';
+                continue;
+            }
+            if (char === '(') depth++;
+            else if (char === ')') depth--;
+            part += char;
+        }
+        if (args) parts.push(part);
+        const probe = document.body.appendChild(document.createElement('div'));
+        try {
+            const stops = parts
+                .map((candidate) => candidate.trim().replace(/(?:\s+[-+]?[\d.]+(?:%|[a-z]+)?)+$/i, ''))
+                .filter((colour) => CSS.supports('color', colour))
+                .map((colour) => {
+                    probe.style.setProperty('color', colour);
+                    return getComputedStyle(probe).getPropertyValue('color');
+                });
+            return {image, stops};
+        } finally {
+            probe.remove();
+        }
+    });
+}
+
+/** An `rgba()` as the `rgb()` of its channels: a retired colour stays retired at any strength. */
+const withoutAlpha = (colour: string): string => colour.replace(/^rgba\((\d+), (\d+), (\d+), [\d.]+\)$/, 'rgb($1, $2, $3)');
 
 /** `target` draws `property` in the colour of the role `name`, once any transition has settled. */
 async function expectRole(page: Page, target: Locator, property: ColourProperty, name: string, what: string, pseudo = ''): Promise<void> {
@@ -166,6 +245,14 @@ async function expectDrawnIn(page: Page, theme: Theme): Promise<void> {
     };
     expect(card.light, 'positive control: the two themes resolve --lf-surface-card to two different values, or no comparison below could tell them apart').not.toBe(card.dark);
     expect(card.page, `positive control: the page resolves --lf-surface-card to its ${theme} value`).toBe(card[theme]);
+}
+
+/** Signed out, on a fresh load of `/` drawn in `theme`: the init script stores `theme` before app.html's theme script reads it. */
+async function openSignIn(page: Page, theme: Theme): Promise<void> {
+    await page.addInitScript((look) => localStorage.setItem('librefolio-theme', look), theme);
+    await page.goto('/');
+    await expect(page.getByTestId('login-modal')).toBeVisible({timeout: FIRST_PAINT_MS});
+    await expectDrawnIn(page, theme);
 }
 
 /** Precondition, read back rather than inferred: no onboarding flow is due, so no Welcome, tour or guide stands between the sign-in and the dashboard. */
@@ -191,10 +278,7 @@ test.describe('Colour roles on the sign-in page — every element draws its role
     for (const theme of THEMES) {
         test.describe(`${theme} theme`, () => {
             test.beforeEach(async ({page}) => {
-                await page.addInitScript((look) => localStorage.setItem('librefolio-theme', look), theme);
-                await page.goto('/');
-                await expect(page.getByTestId('login-modal')).toBeVisible({timeout: FIRST_PAINT_MS});
-                await expectDrawnIn(page, theme);
+                await openSignIn(page, theme);
             });
 
             test('the login card: card, field at rest and in focus, its placeholder, the primary action', async ({page}) => {
@@ -283,4 +367,48 @@ test.describe('Colour roles in the app shell — signed in as TEST_USER, on /das
         await expect(panel).toBeVisible();
         await expectRole(page, panel, 'background-color', '--lf-surface-card', 'language-selector-panel');
     });
+});
+
+test.describe('Colour roles behind the sign-in page — the login background, signed out on /', () => {
+    for (const theme of THEMES) {
+        test(`(d) ${theme} theme: the login background draws the page surface, its three hills and its chart lines from the roles`, async ({page}) => {
+            await openSignIn(page, theme);
+            const background = page.getByTestId('animated-background');
+            await expectRole(page, background, 'background-color', '--lf-surface-page', 'animated-background');
+
+            const hills: string[] = [];
+            for (let n = 1; n <= WAVES; n++) hills.push(await role(page, `--lf-art-hill-${n}`, 'color'));
+            expect(new Set(hills).size, `positive control: the hill roles resolve to ${WAVES} different colours, or no wave could be told from another (${hills.join(' | ')})`).toBe(WAVES);
+
+            // The waves render once the component is mounted: waited for, never assumed. Their DOM order is the subject —
+            // wave N reads --lf-art-hill-N — so an index names a wave of the component here, it does not guess at a row.
+            const waves = background.locator(':scope > div');
+            await expect(waves, 'the waves of the login background, rendered once it is mounted').toHaveCount(WAVES);
+            const drawn = [await computed(background, 'background-color')];
+            for (const [index, hill] of hills.entries()) {
+                const wave = waves.nth(index);
+                const name = `--lf-art-hill-${index + 1}`;
+                await expect.poll(() => stopColours(wave), {message: `wave ${index + 1}: its gradient must have a stop in ${name}, ${hill}`, timeout: SETTLE_MS}).toMatchObject({stops: expect.arrayContaining([hill])});
+                await expect(wave, `wave ${index + 1}: no opacity on top — the strength of its hill is the alpha of ${name}`).toHaveCSS('opacity', '1');
+                drawn.push(...(await stopColours(wave)).stops);
+            }
+
+            const lines = background.locator('svg path');
+            await expect(lines, 'the chart lines of the login background').toHaveCount(LINES);
+            for (let index = 0; index < LINES; index++) {
+                const line = lines.nth(index);
+                await expectRole(page, line, 'stroke', '--lf-art-line', `chart line ${index + 1}`);
+                drawn.push(await computed(line, 'stroke'));
+            }
+
+            // Only the dark background had literals of its own (its `:global(html.dark)` rules). The negative half, its
+            // barrier passed above: every colour in `drawn` was just proven to be its role's. The retired literals go
+            // through the same probe, so they serialize as the drawn colours do; an alpha does not hide one.
+            if (theme === 'dark') {
+                const retired = await Promise.all(RETIRED_DARK.map((hex) => probe(page, hex, 'color')));
+                const back = drawn.filter((colour) => retired.includes(withoutAlpha(colour)));
+                expect(back, `none of the retired dark colours (${RETIRED_DARK.join(', ')}, read as ${retired.join(', ')}) is drawn again; drawn: ${drawn.join(' | ')}`).toEqual([]);
+            }
+        });
+    }
 });
