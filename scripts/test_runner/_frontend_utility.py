@@ -449,7 +449,7 @@ def front_document_title(verbose: bool = False, ui: bool = False, headed: bool =
 
 
 def front_theme_roles(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run the colour roles of the sign-in page, in light and in dark, on desktop and mobile (workstream T, step T-2)."""
+    """Run the colour roles of the sign-in page and of the signed-in app shell, in light and in dark, on desktop and mobile (workstream T, steps T-2 and T-3)."""
     print_section("Frontend Theme Roles Tests")
     if not _ensure_frontend_build():
         return False
@@ -701,8 +701,8 @@ def populate_registry(registry: dict) -> None:
         "theme-roles",
         front_theme_roles,
         name="Theme Roles Tests",
-        desc="The sign-in page draws the colour roles of tokens.css, in light and in dark, as the browser resolves them (a probe element per role, never a hex): the login card's surface and border (in dark, proof that the legacy rounded-container rule of app.css exempts it), the username field's border at rest and in focus, its text and its placeholder (proof that the legacy input rule exempts it), the primary action, and the register card's password requirements on success-soft once every rule passes; a positive control first (the probe resolves, the two themes differ, the page is drawn in the theme set) — workstream T, step T-2",
-        prereq="Test users created",
+        desc="Colour roles as the browser resolves them, in light and in dark (a probe element per role, never a hex), a positive control first (the probe resolves, the two themes differ, the page is drawn in the theme set): (a) signed out on /, the login card's surface and border (in dark, proof that the legacy rounded-container rule of app.css exempts it), the username field's border at rest and in focus, its text and its placeholder (proof that the legacy input rule exempts it), the primary action, and the register card's password requirements on success-soft once every rule passes; (b) signed in as TEST_USER on /dashboard, the app shell on --lf-surface-app, the sidebar on --lf-brand with --lf-on-brand text and its active item marked in --lf-on-brand, the header on --lf-surface-app with a --lf-border-subtle bottom border; (c) in dark, the negative control: a legacy card of the page content (dashboard-cash-balances) still painted by the legacy remap (var(--theme-bg-card), not the card role, decision D-T3) while the language menu opened over it draws --lf-surface-card — workstream T, steps T-2 and T-3",
+        prereq="Test users created (TEST_USER grandfathered on onboarding)",
         tests="layout/theme-roles.spec.ts",
     )
     add_test(

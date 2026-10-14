@@ -95,19 +95,19 @@
 
 <!-- Mobile Overlay -->
 {#if isOpen}
-    <div class="fixed inset-0 bg-black/50 z-40 lg:hidden" on:click={closeSidebar} on:keydown={(e) => e.key === 'Escape' && closeSidebar()} role="button" tabindex="-1" aria-label="Close sidebar"></div>
+    <div class="fixed inset-0 bg-lf-overlay z-40 lg:hidden" on:click={closeSidebar} on:keydown={(e) => e.key === 'Escape' && closeSidebar()} role="button" tabindex="-1" aria-label="Close sidebar"></div>
 {/if}
 
 <!-- Sidebar -->
 <nav
-    class="fixed left-0 top-0 h-screen bg-libre-green text-white flex flex-col z-50 transform transition-all duration-300 ease-in-out overflow-hidden safe-top
+    class="fixed left-0 top-0 h-screen bg-lf-brand text-lf-on-brand flex flex-col z-50 transform transition-all duration-300 ease-in-out overflow-hidden safe-top
 		{collapsed ? 'w-16' : 'w-64'}
 		{isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0"
 >
     <!-- Logo Header -->
-    <div class="p-4 flex items-center border-b border-white/10 {collapsed ? 'justify-center' : 'justify-between'}">
+    <div class="p-4 flex items-center border-b border-lf-on-brand/10 {collapsed ? 'justify-center' : 'justify-between'}">
         <button class="flex items-center space-x-3 cursor-pointer" on:click={toggleCollapsed} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} data-testid="sidebar-collapse-toggle" use:guideAnchor={'nav.toggle.desktop'}>
-            <div class="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center p-1" style="background:#fff">
+            <div class="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center p-1 bg-lf-logo">
                 <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png" />
             </div>
             {#if !collapsed}
@@ -116,7 +116,7 @@
         </button>
         <!-- Mobile close button -->
         {#if !collapsed}
-            <button class="lg:hidden p-2 hover:bg-white/10 rounded-lg" on:click={closeSidebar}>
+            <button class="lg:hidden p-2 hover:bg-lf-on-brand/10 rounded-lg" on:click={closeSidebar}>
                 <X size={20} />
             </button>
         {/if}
@@ -138,7 +138,7 @@
                         }}
                         class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
-						{activeHref === item.href ? 'bg-white/20 border-r-4 border-white' : 'hover:bg-white/10'}"
+						{activeHref === item.href ? 'bg-lf-on-brand/20 border-r-4 border-lf-on-brand' : 'hover:bg-lf-on-brand/10'}"
                         title={collapsed ? $_(item.labelKey) : ''}
                     >
                         <svelte:component this={item.icon} size={20} class="flex-shrink-0" />
@@ -146,7 +146,7 @@
                             <span class="whitespace-nowrap">{$_(item.labelKey)}</span>
                         {/if}
                         {#if collapsed}
-                            <span class="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                            <span class="absolute left-full ml-2 px-2 py-1 bg-lf-inverse text-lf-on-inverse text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                                 {$_(item.labelKey)}
                             </span>
                         {/if}
@@ -156,7 +156,7 @@
         </ul>
 
         <!-- Divider -->
-        <div class="my-3 mx-4 border-t border-white/20"></div>
+        <div class="my-3 mx-4 border-t border-lf-on-brand/20"></div>
 
         <!-- Market Data Group -->
         <ul>
@@ -172,7 +172,7 @@
                         }}
                         class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
-						{activeHref === item.href ? 'bg-white/20 border-r-4 border-white' : 'hover:bg-white/10'}"
+						{activeHref === item.href ? 'bg-lf-on-brand/20 border-r-4 border-lf-on-brand' : 'hover:bg-lf-on-brand/10'}"
                         title={collapsed ? $_(item.labelKey) : ''}
                     >
                         <svelte:component this={item.icon} size={20} class="flex-shrink-0" />
@@ -180,7 +180,7 @@
                             <span class="whitespace-nowrap">{$_(item.labelKey)}</span>
                         {/if}
                         {#if collapsed}
-                            <span class="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                            <span class="absolute left-full ml-2 px-2 py-1 bg-lf-inverse text-lf-on-inverse text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                                 {$_(item.labelKey)}
                             </span>
                         {/if}
@@ -190,7 +190,7 @@
         </ul>
 
         <!-- Divider -->
-        <div class="my-3 mx-4 border-t border-white/20"></div>
+        <div class="my-3 mx-4 border-t border-lf-on-brand/20"></div>
 
         <!-- Files & Settings Group -->
         <ul>
@@ -206,7 +206,7 @@
                         }}
                         class="flex items-center px-4 py-3 transition-all relative group
 						{collapsed ? 'justify-center' : 'space-x-3'}
-						{activeHref === item.href ? 'bg-white/20 border-r-4 border-white' : 'hover:bg-white/10'}"
+						{activeHref === item.href ? 'bg-lf-on-brand/20 border-r-4 border-lf-on-brand' : 'hover:bg-lf-on-brand/10'}"
                         title={collapsed ? $_(item.labelKey) : ''}
                     >
                         <svelte:component this={item.icon} size={20} class="flex-shrink-0" />
@@ -214,7 +214,7 @@
                             <span class="whitespace-nowrap">{$_(item.labelKey)}</span>
                         {/if}
                         {#if collapsed}
-                            <span class="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                            <span class="absolute left-full ml-2 px-2 py-1 bg-lf-inverse text-lf-on-inverse text-sm rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                                 {$_(item.labelKey)}
                             </span>
                         {/if}
@@ -225,10 +225,10 @@
     </div>
 
     <!-- Bottom Section -->
-    <div class="border-t border-white/10 {collapsed ? 'p-2' : 'p-4'} space-y-2">
+    <div class="border-t border-lf-on-brand/10 {collapsed ? 'p-2' : 'p-4'} space-y-2">
         <!-- User Avatar & Info -->
         <a
-            class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/10 transition-colors
+            class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-lf-on-brand/10 transition-colors
                 {collapsed ? 'justify-center' : ''}"
             data-testid="sidebar-user-avatar"
             href="/settings"
@@ -236,18 +236,18 @@
             title={collapsed ? $auth.user?.username || $_('settings.userPreferences') : ''}
         >
             {#if avatarUrl}
-                <img src={avatarUrl} alt="Avatar" class="w-8 h-8 rounded-full object-cover border border-white/30 flex-shrink-0" />
+                <img src={avatarUrl} alt="Avatar" class="w-8 h-8 rounded-full object-cover border border-lf-on-brand/30 flex-shrink-0" />
             {:else}
-                <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                    <User size={16} class="text-white/70" />
+                <div class="w-8 h-8 rounded-full bg-lf-on-brand/20 flex items-center justify-center flex-shrink-0">
+                    <User size={16} class="text-lf-on-brand/70" />
                 </div>
             {/if}
             {#if !collapsed}
                 <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-white truncate">
+                    <div class="text-sm font-medium text-lf-on-brand truncate">
                         {$auth.user?.username || $_('common.user')}
                     </div>
-                    <div class="text-xs text-white/50 truncate">
+                    <div class="text-xs text-lf-on-brand/70 truncate">
                         {$auth.user?.email || ''}
                     </div>
                 </div>
@@ -257,7 +257,7 @@
         <!-- Logout Button -->
         <button
             class="w-full flex items-center justify-center px-4 py-2
-				bg-white/10 hover:bg-white/20 rounded-lg transition-all text-sm
+				bg-lf-on-brand/10 hover:bg-lf-on-brand/20 rounded-lg transition-all text-sm
 				{collapsed ? '' : 'space-x-2'}"
             data-testid="logout-button"
             on:click={handleLogout}
@@ -274,7 +274,7 @@
 
         <!-- Version — click opens the bundled changelog (F12) -->
         {#if !collapsed}
-            <button type="button" class="w-full text-center text-white/40 hover:text-white/70 text-xs pt-2 transition-colors cursor-pointer" title="LibreFolio {APP_VERSION} — {$_('changelog.title')}" on:click={() => (changelogOpen = true)} data-testid="sidebar-version">
+            <button type="button" class="w-full text-center text-lf-on-brand/70 hover:text-lf-on-brand text-xs pt-2 transition-colors cursor-pointer" title="LibreFolio {APP_VERSION} — {$_('changelog.title')}" on:click={() => (changelogOpen = true)} data-testid="sidebar-version">
                 {APP_VERSION}
             </button>
         {/if}
