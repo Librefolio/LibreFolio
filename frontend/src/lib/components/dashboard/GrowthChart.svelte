@@ -50,6 +50,9 @@
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {themed} from '$lib/theme/themePair';
+    import {CHART_GAIN_LOSS, CHART_NEUTRALS, CHART_TOOLTIP_COLORS, GROWTH_CHART_COLORS, GROWTH_SERIES} from '$lib/theme/chartTheme';
+    import {GROWTH_BROKER_PALETTE} from '$lib/theme/chartPalettes';
 
     // =========================================================================
     // Props
@@ -346,33 +349,11 @@
     let needsInitialLayoutStabilityPass = false;
 
     // Color palettes
-    const COLORS = {
-        nav: {light: '#1a4031', dark: '#4ade80'}, // NAV — prominent line
-        bookAssetLike: {light: '#3b82f6', dark: '#60a5fa'}, // Assets at cost — blue area
-        cashContributed: {light: '#9caf9c', dark: '#6b8e6b'}, // Capital cash — subdued green area
-        cashGenerated: {light: '#10b981', dark: '#34d399'}, // Returns cash — bright emerald area
-        capitalBaseline: {light: '#6b7280', dark: '#9ca3af'}, // Capital baseline — grey dashed
-        invested: {light: '#2563eb', dark: '#60a5fa'}, // TWRR (% mode)
-        pctCash: {light: '#9caf9c', dark: '#94a3b8'}, // ROI (% mode)
-        totalPnl: {light: '#1a4031', dark: '#4ade80'}, // P&L mode — Total line (same prominence as NAV)
-        // P&L income submode — Dividend stacked bar. Gold, away from the deposit teal and the reinvested emerald;
-        // the pair of `incomeEventColor` in lotComparisonChartHelpers.ts, so change both together.
-        dividend: {light: '#b08d00', dark: '#facc15'},
-        interest: {light: '#7c3aed', dark: '#a78bfa'}, // P&L income submode — Interest stacked bar
-        costs: {light: '#ea580c', dark: '#fb923c'}, // P&L income submode — Costs (FEE+TAX) bar (batch 2)
-        deposit: {light: '#0d9488', dark: '#2dd4bf'}, // P&L income submode — Deposit-size bar (batch 2)
-    };
+    const COLORS = GROWTH_SERIES;
 
     // Rotating palette for the P&L broker overlay (G1a) — distinct hues, cycled by index
     // so any broker count renders with a stable, distinguishable color per line.
-    const BROKER_PALETTE: Array<{light: string; dark: string}> = [
-        {light: '#2563eb', dark: '#60a5fa'}, // blue
-        {light: '#d97706', dark: '#fbbf24'}, // amber
-        {light: '#7c3aed', dark: '#a78bfa'}, // violet
-        {light: '#db2777', dark: '#f472b6'}, // pink
-        {light: '#0891b2', dark: '#22d3ee'}, // cyan
-        {light: '#65a30d', dark: '#a3e635'}, // lime
-    ];
+    const BROKER_PALETTE: Array<{light: string; dark: string}> = GROWTH_BROKER_PALETTE;
 
     function brokerColor(index: number, isDark: boolean): string {
         const entry = BROKER_PALETTE[index % BROKER_PALETTE.length];
@@ -1725,8 +1706,8 @@
         }
 
         if (viewMode === 'pnl' && pnlSubmode === 'line') {
-            const greenColor = isDark ? '#4ade80' : '#16a34a';
-            const redColor = isDark ? '#f87171' : '#dc2626';
+            const greenColor = themed(CHART_GAIN_LOSS.portfolio.gain, isDark);
+            const redColor = themed(CHART_GAIN_LOSS.portfolio.loss, isDark);
             // Positive/negative split (see clipToSign) instead of a single fixed-color
             // line — ECharts visualMap doesn't reliably recolor a line's
             // lineStyle/areaStyle per value (apache/echarts#8034), so this uses the
@@ -1768,7 +1749,7 @@
                 data: seriesData[2].data,
                 symbol: 'none',
                 showSymbol: false,
-                lineStyle: {color: isDark ? '#64748b' : '#9ca3af', type: 'dashed', width: 1},
+                lineStyle: {color: themed(GROWTH_CHART_COLORS.pnlReference, isDark), type: 'dashed', width: 1},
                 itemStyle: {color: 'transparent'},
                 emphasis: {disabled: true},
                 tooltip: {show: false},
@@ -1791,8 +1772,8 @@
 
         if (viewMode === 'pnl' && pnlSubmode === 'candles') {
             // Same up/down colors as the P&L tooltip's sign coloring, for consistency.
-            const greenColor = isDark ? '#4ade80' : '#16a34a';
-            const redColor = isDark ? '#f87171' : '#dc2626';
+            const greenColor = themed(CHART_GAIN_LOSS.portfolio.gain, isDark);
+            const redColor = themed(CHART_GAIN_LOSS.portfolio.loss, isDark);
             // seriesData[0].data is really (number[]|null)[] here (see the matching cast
             // in buildChartUpdateSeries) — a flat [open,close,low,high] quad per category
             // position, matching CandlestickChart.svelte's own category-axis convention
@@ -2175,7 +2156,7 @@
     function applyFullOption(isDark: boolean, series: echarts.SeriesOption[], zoomWindow: {start: number; end: number}) {
         if (!chartInstance) return;
         const {bg: tooltipBg, border: tooltipBorder, textColor, mutedColor} = buildTooltipTheme(isDark);
-        const gridColor = isDark ? '#1e293b' : '#f1f5f9';
+        const gridColor = themed(CHART_NEUTRALS.dashboard.gridLine, isDark);
         /**
          * Bucket separators need their own colour. `gridColor` is tuned for horizontal
          * value lines, which run the full width and read even when very faint; a vertical
@@ -2183,7 +2164,7 @@
          * tint it disappeared — in dark mode entirely (#1e293b is barely off the slate-800
          * background it is drawn on).
          */
-        const bucketLineColor = isDark ? '#64748b' : '#cbd5e1';
+        const bucketLineColor = themed(GROWTH_CHART_COLORS.bucketSeparator, isDark);
         // The ladder (Candles and Income) draws on a category axis: one slot per bucket,
         // so every bar and body gets the same width from the first render, whatever the
         // zoom. Its labels and separators come from the ladder plan, not from the shared
@@ -2254,7 +2235,7 @@
          * there without being 0 (0.1 + 0.2 − 0.3 is 5.55e-17), and tested on the raw value it
          * would print `EUR 0.00` in green.
          */
-        const signedValueColor = (v: number, dark: boolean, neutral: string) => (Math.abs(v) < 0.005 ? neutral : v > 0 ? (dark ? '#4ade80' : '#16a34a') : dark ? '#f87171' : '#dc2626');
+        const signedValueColor = (v: number, dark: boolean, neutral: string) => (Math.abs(v) < 0.005 ? neutral : v > 0 ? themed(CHART_GAIN_LOSS.portfolio.gain, dark) : themed(CHART_GAIN_LOSS.portfolio.loss, dark));
 
         /**
          * Format a number as currency: `EUR 1,234.56`, and with `signed` `EUR +5.00` or
@@ -2312,7 +2293,7 @@
                 backgroundColor: tooltipBg,
                 borderColor: tooltipBorder,
                 borderWidth: 1,
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark), fontSize: 12},
                 formatter: (params: any) => {
                     const items = Array.isArray(params) ? params : [params];
                     const idx = items[0]?.dataIndex ?? 0;

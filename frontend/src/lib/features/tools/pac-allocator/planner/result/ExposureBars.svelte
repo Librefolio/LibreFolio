@@ -15,6 +15,7 @@
     import {exposureTooltipHtml, exposureTooltipText} from './exposureTooltip';
     import {chartPercent, type WeightRow} from './model';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {PAC_EXPOSURE_BAR_COLORS} from '$lib/theme/chartTheme';
 
     interface Props {
         rows: readonly WeightRow[];
@@ -25,10 +26,7 @@
     let {rows, dimension}: Props = $props();
 
     /** Target in grey and after in green, as the bars of the allocation table. */
-    const COLOURS = {
-        light: {target: '#9ca3af', final: '#1a4031'},
-        dark: {target: '#6b7280', final: '#00d681'},
-    };
+    const COLOURS = PAC_EXPOSURE_BAR_COLORS;
 
     let dark = $state(false);
     let container = $state<HTMLDivElement>();

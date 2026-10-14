@@ -36,6 +36,7 @@
     import {stressBucketLabel as bucketLabel} from './stressBucketLabel';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {POLARITY_TONES} from '$lib/theme/toneClasses';
+    import {RISK_OVERLAY_COLORS} from '$lib/theme/chartTheme';
     interface Props {
         scope: RiskScope;
         dateStart: string;
@@ -233,7 +234,7 @@
                 id: 'risk-comparison',
                 label: $t('risk.comparison.comparisonAsset'),
                 data: (comparisonOutput.series ?? []).map((point) => ({date: point.date, value: point.comparison_cumulative_return * 100})),
-                color: '#f59e0b',
+                color: RISK_OVERLAY_COLORS.comparisonAsset,
                 lineWidth: 2,
                 lineType: 'solid',
                 markerStart: null,
@@ -257,7 +258,7 @@
                 id: 'risk-simulation-band',
                 label: $t('risk.simulation.simulated'),
                 data: simulationData,
-                color: '#2563eb',
+                color: RISK_OVERLAY_COLORS.simulation,
                 lineWidth: 2,
                 lineType: 'solid',
                 markerStart: null,

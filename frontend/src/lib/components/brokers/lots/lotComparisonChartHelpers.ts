@@ -24,6 +24,8 @@ import {mapDateToBucket, type ChartResolution} from '$lib/components/charts/time
 import {normalizeZero, formatAxisNumber, addOrNull} from './lotChartShared';
 import {maskCurrencyParts, maskFormattedNumber} from '$lib/utils/privacy/maskable';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {themed} from '$lib/theme/themePair';
+import {INCOME_EVENT_COLORS} from '$lib/theme/chartTheme';
 
 /** The two value provenances a lot's series can carry. */
 export type LotValueSource = 'MARKET_PRICE' | 'ESTIMATED_AT_COST';
@@ -186,12 +188,12 @@ export function lotColor(lotId: number, isDark: boolean): string {
 }
 
 /**
- * Gold for dividends, violet for interest, per theme. The dividend gold is the pair of
- * GrowthChart's `COLORS.dividend`: there is no shared palette module, so change both together.
+ * Gold for dividends, violet for interest, per theme. The dividend gold is the Growth chart's too:
+ * one entry, `INCOME_EVENT_COLORS.dividend` in `$lib/theme/chartTheme`.
  */
 export function incomeEventColor(type: 'DIVIDEND' | 'INTEREST', isDark: boolean): string {
-    if (type === 'DIVIDEND') return isDark ? '#facc15' : '#b08d00';
-    return isDark ? '#a78bfa' : '#6d28d9';
+    if (type === 'DIVIDEND') return themed(INCOME_EVENT_COLORS.dividend, isDark);
+    return themed(INCOME_EVENT_COLORS.lotInterest, isDark);
 }
 
 /**

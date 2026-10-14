@@ -27,6 +27,8 @@
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {themed} from '$lib/theme/themePair';
+    import {CHART_GAIN_LOSS, PERFORMANCE_COLORS} from '$lib/theme/chartTheme';
 
     interface AssetPeriodContribution {
         asset_id: number;
@@ -254,14 +256,14 @@
 
     function palette(themeDark: boolean) {
         return {
-            unrealized: themeDark ? '#60a5fa' : '#2563eb',
-            realized: themeDark ? '#4ade80' : '#16a34a',
-            income: themeDark ? '#fbbf24' : '#d97706',
-            costs: themeDark ? '#f87171' : '#dc2626',
-            other: themeDark ? '#a78bfa' : '#7c3aed',
-            positive: themeDark ? '#4ade80' : '#16a34a',
-            negative: themeDark ? '#f87171' : '#dc2626',
-            neutral: themeDark ? '#cbd5e1' : '#64748b',
+            unrealized: themed(PERFORMANCE_COLORS.unrealized, themeDark),
+            realized: themed(PERFORMANCE_COLORS.realized, themeDark),
+            income: themed(PERFORMANCE_COLORS.income, themeDark),
+            costs: themed(PERFORMANCE_COLORS.costs, themeDark),
+            other: themed(PERFORMANCE_COLORS.other, themeDark),
+            positive: themed(CHART_GAIN_LOSS.portfolio.gain, themeDark),
+            negative: themed(CHART_GAIN_LOSS.portfolio.loss, themeDark),
+            neutral: themed(PERFORMANCE_COLORS.neutral, themeDark),
         };
     }
 
@@ -296,7 +298,7 @@
         const colors = palette(themeDark);
         if (amount > 0) return colors.positive;
         if (amount < 0) return colors.negative;
-        return themeDark ? '#e2e8f0' : '#0f172a';
+        return themed(PERFORMANCE_COLORS.zeroValue, themeDark);
     }
 
     let labels = $derived.by(() => ({
@@ -431,31 +433,31 @@
     function buildAxisRich(themeDark: boolean, desktop = false) {
         return {
             name: {
-                color: themeDark ? '#e2e8f0' : '#1f2937',
+                color: themed(PERFORMANCE_COLORS.axisName, themeDark),
                 fontSize: desktop ? 14 : 11,
                 fontWeight: 500,
             },
             secondary: {
-                color: themeDark ? '#94a3b8' : '#64748b',
+                color: themed(PERFORMANCE_COLORS.axisSecondary, themeDark),
                 fontSize: 10,
             },
             section: {
-                color: themeDark ? '#cbd5e1' : '#475569',
+                color: themed(PERFORMANCE_COLORS.axisSection, themeDark),
                 fontSize: 10,
                 fontWeight: 700,
                 padding: [4, 0, 0, 0],
             },
             openBadge: {
-                color: '#ffffff',
-                backgroundColor: themeDark ? '#166534' : '#16a34a',
+                color: PERFORMANCE_COLORS.badgeText,
+                backgroundColor: themed(PERFORMANCE_COLORS.openBadge, themeDark),
                 borderRadius: 999,
                 padding: [2, 6],
                 fontSize: 9,
                 fontWeight: 700,
             },
             closedBadge: {
-                color: '#ffffff',
-                backgroundColor: themeDark ? '#475569' : '#64748b',
+                color: PERFORMANCE_COLORS.badgeText,
+                backgroundColor: themed(PERFORMANCE_COLORS.closedBadge, themeDark),
                 borderRadius: 999,
                 padding: [2, 6],
                 fontSize: 9,
@@ -523,8 +525,8 @@
         if (row.kind === 'section') return '';
 
         const statusText = row.isFullySold ? labels.closedLong : labels.openLong;
-        const statusBg = row.isFullySold ? (themeDark ? '#475569' : '#64748b') : themeDark ? '#166534' : '#16a34a';
-        const statusHtml = `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:${statusBg};color:#fff;font-weight:700">${escapeHtml(statusText)}</span>`;
+        const statusBg = row.isFullySold ? themed(PERFORMANCE_COLORS.closedBadge, themeDark) : themed(PERFORMANCE_COLORS.openBadge, themeDark);
+        const statusHtml = `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:${statusBg};color:${PERFORMANCE_COLORS.badgeText};font-weight:700">${escapeHtml(statusText)}</span>`;
         const titleName = truncateName(row.label);
         const title = row.assetTicker ? `${titleName} (${row.assetTicker})` : titleName;
         const colors = palette(themeDark);
@@ -649,7 +651,7 @@
                         height: yBottom - yTop + bandSize,
                     },
                     style: {
-                        fill: themeDark ? 'rgba(148, 163, 184, 0.14)' : 'rgba(148, 163, 184, 0.16)',
+                        fill: themed(PERFORMANCE_COLORS.rowHighlight, themeDark),
                     },
                 };
             },
@@ -712,7 +714,7 @@
                     symbol: 'none',
                     label: {show: false},
                     lineStyle: {
-                        color: themeDark ? '#94a3b8' : '#64748b',
+                        color: themed(PERFORMANCE_COLORS.zeroLine, themeDark),
                         width: 1,
                         opacity: 0.75,
                     },
@@ -803,7 +805,7 @@
                         y2: y,
                     },
                     style: {
-                        stroke: themeDark ? '#475569' : '#cbd5e1',
+                        stroke: themed(PERFORMANCE_COLORS.sectionSeparator, themeDark),
                         lineWidth: 1,
                     },
                 };
@@ -954,7 +956,7 @@
                     // so the native shadow already covers the whole row correctly.
                     type: isMobile ? 'none' : 'shadow',
                     shadowStyle: {
-                        color: themeDark ? 'rgba(148, 163, 184, 0.12)' : 'rgba(148, 163, 184, 0.14)',
+                        color: themed(PERFORMANCE_COLORS.axisPointerShadow, themeDark),
                     },
                 },
                 position: performanceTooltipPosition,

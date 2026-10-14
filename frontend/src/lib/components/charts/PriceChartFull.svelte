@@ -55,6 +55,8 @@
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {themed} from '$lib/theme/themePair';
+    import {CHART_NEUTRALS, CHART_TOOLTIP_COLORS, PRICE_SERIES} from '$lib/theme/chartTheme';
 
     // =========================================================================
     // Event Marker types and constants
@@ -767,7 +769,7 @@
                 symbol: 'none',
                 showSymbol: false,
                 sampling: 'lttb',
-                lineStyle: {color: isDark ? '#64748b' : '#9ca3af', type: 'dashed', width: 1},
+                lineStyle: {color: themed(PRICE_SERIES.baseline, isDark), type: 'dashed', width: 1},
                 itemStyle: {color: 'transparent'},
                 emphasis: {disabled: true},
                 tooltip: {show: false},
@@ -865,9 +867,9 @@
                             }
                             return html;
                         },
-                        backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                        borderColor: isDark ? '#334155' : '#e2e8f0',
-                        textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                        backgroundColor: themed(CHART_TOOLTIP_COLORS.box.background, isDark),
+                        borderColor: themed(CHART_TOOLTIP_COLORS.box.border, isDark),
+                        textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark), fontSize: 12},
                     },
                     z: 20,
                 });
@@ -899,9 +901,9 @@
                     type: 'category',
                     data: dates,
                     gridIndex: 0,
-                    axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
+                    axisLine: {lineStyle: {color: themed(CHART_NEUTRALS.priceAxis.line, isDark)}},
                     axisLabel: {
-                        color: isDark ? '#94a3b8' : '#6b7280',
+                        color: themed(CHART_NEUTRALS.priceAxis.label, isDark),
                         fontSize: 14,
                         formatter: xAxisPolicy.formatter,
                         ...(xAxisPolicy.axisLabel ?? {}),
@@ -913,9 +915,9 @@
             dataZoom: [{...buildDataZoom([0])[0], start: zoomWindow.start, end: zoomWindow.end}],
             tooltip: {
                 trigger: 'axis',
-                backgroundColor: isDark ? '#1e293b' : '#ffffff',
-                borderColor: isDark ? '#334155' : '#e2e8f0',
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                backgroundColor: themed(CHART_TOOLTIP_COLORS.box.background, isDark),
+                borderColor: themed(CHART_TOOLTIP_COLORS.box.border, isDark),
+                textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark), fontSize: 12},
                 confine: true,
                 position: tooltipPositionSide,
                 formatter: (params: any) => {
@@ -955,7 +957,7 @@
                         const axisIdx = isGhost ? 0 : (signalAxisMap.get(p.seriesName) ?? 0);
                         const valueSuffix = axisIdx === 0 ? suffix : '';
                         const axisLabel = signalAxisLabelMap.get(axisIdx);
-                        const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${escapeHtml(axisLabel)}]</span>` : '';
+                        const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:${CHART_TOOLTIP_COLORS.aside}">[${escapeHtml(axisLabel)}]</span>` : '';
 
                         // Use signalLabelToHtml for proper icon rendering. The label (crown, icon, name)
                         // gives way on a narrow chart, ending in an ellipsis; the currency travels with
@@ -1018,18 +1020,18 @@
                             const context = mainPointContext?.get(date);
                             if (context) {
                                 const referenceObservation = context.referencePriceDate && context.referencePriceDate !== context.referenceTargetDate ? ` · ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.referencePriceDate)}})}` : '';
-                                rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">↩ ${formatDay(context.referenceTargetDate)}${referenceObservation}</span>`;
+                                rowHtml += `<br/><span style="font-size:10px;color:${CHART_TOOLTIP_COLORS.aside}">↩ ${formatDay(context.referenceTargetDate)}${referenceObservation}</span>`;
                                 if (context.currentPriceDate !== date) {
-                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">📅 ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.currentPriceDate)}})}</span>`;
+                                    rowHtml += `<br/><span style="font-size:10px;color:${CHART_TOOLTIP_COLORS.aside}">📅 ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.currentPriceDate)}})}</span>`;
                                 }
                                 if (context.currentFxDate || context.referenceFxDate) {
-                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">💱 ${context.currentFxDate ? formatDay(context.currentFxDate) : '—'} / ${context.referenceFxDate ? formatDay(context.referenceFxDate) : '—'}</span>`;
+                                    rowHtml += `<br/><span style="font-size:10px;color:${CHART_TOOLTIP_COLORS.aside}">💱 ${context.currentFxDate ? formatDay(context.currentFxDate) : '—'} / ${context.referenceFxDate ? formatDay(context.referenceFxDate) : '—'}</span>`;
                                 }
                             }
                         }
                         const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                         if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
-                            rowHtml += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
+                            rowHtml += ` <span style="font-size:10px;color:${CHART_TOOLTIP_COLORS.aside}">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
                         }
                         if (isGhostRow) {
                             rowHtml = `<span style="opacity:0.7">${rowHtml}</span>`;

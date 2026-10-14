@@ -114,6 +114,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/themeColorMeta.gate.test.ts",
             "src/lib/api/dashboardReportFixture.test.ts",
             "src/lib/theme/colorAlpha.test.ts",
+            "src/lib/theme/chartTheme.test.ts",
             "src/lib/components/brokers/lots/lotChartShared.test.ts",
             "src/lib/components/brokers/lots/lotWacPriceChartHelpers.test.ts",
             "src/lib/components/brokers/lots/lotComparisonChartHelpers.test.ts",

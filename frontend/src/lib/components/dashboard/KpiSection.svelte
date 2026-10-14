@@ -19,6 +19,7 @@
     import {safeString} from '$lib/types';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {SIGN_BAR, SIGN_TEXT} from '$lib/theme/toneClasses';
+    import {timingEffectColor} from '$lib/theme/chartColorScales';
 
     interface Props {
         summary: PortfolioSummary | null;
@@ -249,7 +250,7 @@
     function timingColor(base: number, span: number): string | undefined {
         if (timingEffectVal == null) return undefined;
         const alpha = base + timingIntensity * span;
-        return timingEffectVal >= 0 ? `color: rgba(22, 163, 74, ${alpha})` : `color: rgba(220, 38, 38, ${alpha})`;
+        return `color: ${timingEffectColor(timingEffectVal >= 0, alpha)}`;
     }
     const roiPct = $derived(summary ? formatPercent(roiVal, {signed: false}) : '—');
     const twrrCumPct = $derived(twrrCumVal != null ? formatPercent(twrrCumVal, {signed: false}) : '—');

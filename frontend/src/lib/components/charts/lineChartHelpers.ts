@@ -10,6 +10,8 @@
 import * as echarts from 'echarts';
 import type {RenderedSignal} from '$lib/charts/signals';
 import {toRgba} from '$lib/theme/colorAlpha';
+import {themed} from '$lib/theme/themePair';
+import {CHART_GAIN_LOSS, CHART_NEUTRALS, PRICE_SERIES} from '$lib/theme/chartTheme';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Staleness
@@ -34,13 +36,14 @@ export function getStaleOpacity(staleDays?: number, maxDays = 14): number {
 // Theme constants
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/** The price charts' line and gain/loss colours, by name, for the charts that pick them that way. Values: `$lib/theme/chartTheme`. */
 export const COLORS = {
-    lineLight: '#1a4031',
-    lineDark: '#4ade80',
-    greenLight: '#16a34a',
-    greenDark: '#4ade80',
-    redLight: '#ef4444',
-    redDark: '#f87171',
+    lineLight: PRICE_SERIES.line.light,
+    lineDark: PRICE_SERIES.line.dark,
+    greenLight: CHART_GAIN_LOSS.price.gain.light,
+    greenDark: CHART_GAIN_LOSS.price.gain.dark,
+    redLight: CHART_GAIN_LOSS.price.loss.light,
+    redDark: CHART_GAIN_LOSS.price.loss.dark,
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -535,7 +538,7 @@ export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: b
             },
             label: {
                 show: true,
-                color: isDark ? '#cbd5e1' : '#64748b',
+                color: themed(CHART_NEUTRALS.referenceLevelLabel, isDark),
                 fontSize: 9,
                 formatter: (params: {name?: string}) => params.name ?? '',
             },

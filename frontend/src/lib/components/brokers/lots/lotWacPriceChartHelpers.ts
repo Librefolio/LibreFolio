@@ -21,6 +21,8 @@
 
 import {safeDecimal} from '$lib/types';
 import {mapDateToBucket} from '$lib/components/charts/timeSeriesAggregation';
+import {themed} from '$lib/theme/themePair';
+import {CHART_GAIN_LOSS, LOT_WAC_COLORS} from '$lib/theme/chartTheme';
 
 /** The seven presentation-level lot chronology event kinds. */
 export type LotEventKind = 'BUY' | 'SELL' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT' | 'TRANSFER_DEPART' | 'TRANSFER_ARRIVE';
@@ -297,9 +299,9 @@ export function lotBubbleRadius(value: number, minValue: number, maxValue: numbe
  * flat lot as a gain or a loss. `isDark` selects the theme's brighter variants.
  */
 export function lotBubbleSignColor(signed: number, isDark: boolean): string {
-    if (signed > LOT_BUBBLE_ZERO_EPS) return isDark ? '#4ade80' : '#16a34a';
-    if (signed < -LOT_BUBBLE_ZERO_EPS) return isDark ? '#f87171' : '#dc2626';
-    return isDark ? '#94a3b8' : '#64748b';
+    if (signed > LOT_BUBBLE_ZERO_EPS) return themed(CHART_GAIN_LOSS.portfolio.gain, isDark);
+    if (signed < -LOT_BUBBLE_ZERO_EPS) return themed(CHART_GAIN_LOSS.portfolio.loss, isDark);
+    return themed(LOT_WAC_COLORS.bubbleZero, isDark);
 }
 
 // ---------------------------------------------------------------------------
