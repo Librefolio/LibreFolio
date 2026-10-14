@@ -989,3 +989,19 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   2. `docs(journal): A2 frontend move, A backlog`.
 > - **Ingresso in `dev_release2`**: prima delle 08:45 o dopo la finestra della galleria. Fra le 08:00 e le 08:45
 >   aspetta il via del coordinatore.
+>
+> **Esito**: il coordinatore ha committato `73b8cbebd` (`refactor(frontend): move auth/settings/support UI`: 44
+> rinomine, 39 al 100 % e le altre fra il 94 % e il 99 %) e `40146a5d9` (journal). Poi ha aggiornato la base con il merge
+> `54f872995` di `dev_release2` a `8250d92b3`, che contiene H CP1: unione automatica, worktree pulito.
+
+#### A2.9 — Validazione leggera della revisione combinata `54f872995` ✅ (2026-10-15)
+> **Note implementazione** (`bash /tmp/libreFolio_a2v_validate.sh`, corsia 6182):
+> - **Cosa porta il merge**: H CP1 cambia 68 file del backend e degli script. Nel frontend cambia solo un commento di
+>   `update-check/updateCheck.test.ts`, quindi la build del frontend di A2 resta valida. Lock delle dipendenze
+>   invariati.
+> - `dev.py front check`: exit 0, «0 errors and 0 warnings».
+> - `front-utility core-unit`: 130 file, **4 245 test**, come prima.
+> - `node frontend/scripts/theme/theme-roles.mjs --check`: «Colour gates: clean». `--report`: «Ratchet: 0 violations,
+>   0 files dropped, 22 moves recognized. Grammar: 0 violations».
+> - E2E sul backend riordinato da H: `front-utility auth` 29 passati, `front-utility settings` 45 passati.
+> - Porta 6182 libera, worktree pulito dopo le prove.
