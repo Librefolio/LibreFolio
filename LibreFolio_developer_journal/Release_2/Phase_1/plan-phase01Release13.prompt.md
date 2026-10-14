@@ -686,3 +686,28 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > - `GrowthChart` è anche nel lotto D, quindi il taglio FE6 viene dopo quel lotto, non dopo il B;
 > - `AssetModal` e le tre modali delle transazioni sono già fuori dai lotti di R, quindi X e W possono tagliarle
 >   prima del lotto A.
+
+### Via parziale al codice ✅ (2026-10-14, 22:55)
+
+> **Note implementazione**: il developer, a metà lettura delle decisioni (finite le 11 di Account e accessi, con note
+> sue), ha delegato al coordinatore: «vedi tu se aspettare che leggo tutto, o intanto grazie a queste riesci ad avviare
+> qualche lavoro». Partono solo i primi checkpoint, tutti di riordino puro e senza decisioni di prodotto aperte:
+> H CP1 (`platform/`, `files/`), X0 e CP1 (registri per famiglia), A1 (`accounts/`), W0 e W1 (transazioni e broker),
+> J-0 e CP-1 (PAC). Base portata a `c9bb8f257` (regole C1–C7 nel §6) con un fast-forward dei cinque worktree, puliti.
+> Approvazione in modalità interattiva, con le parole del developer alla lettera e le risposte di coordinamento.
+> Z resta fermo: la sua prima parte dipende dalle decisioni 31 e 32.
+>
+> **Fuori pista**: le note del developer cambiano il perimetro di A (registrate nel piano di A alla fine di A1):
+> - D-A16 respinta: l'invito non vincola l'email;
+> - niente `LIBREFOLIO_SUPPORT_URL`;
+> - limite dei tentativi disattivabile solo da variabile, più una zona «controlli di sicurezza» per l'admin;
+> - scheda Utenti confermata.
+>
+> Restano aperti, con una proposta del coordinatore:
+> - scadenza del token di setup;
+> - dove l'admin vede l'abbonamento;
+> - meccanismo delle sessioni;
+> - cancellazione di un utente da parte dell'admin;
+> - `LIBREFOLIO_PUBLIC_URL`.
+>
+> Le note restano nel file delle decisioni, non committate, finché il developer legge.
