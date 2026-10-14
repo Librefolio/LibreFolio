@@ -2008,6 +2008,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   le valute di ECB (`fx_providers/ecb/plugin.py:94-150`) e su un errore di rete risponde con la lista vuota
   (`api/v1/fx.py:147-151`). Rosso d'ambiente nella run del CP1, verde rilanciato da solo: va contro la regola 6 delle
   istruzioni dei test backend. Dettagli: piano 04, §12, W1 passo 8.
+- **W-B10 · `access_control.md`: l'elenco degli endpoint d'accesso non è quello dell'API** — minimo, doc; W, 15/10 (W2).
+  `mkdocs_src/docs/developer/architecture/access_control.md`, «API Endpoints», elenca `POST /brokers/{id}/access` e
+  `PATCH`/`DELETE /brokers/{id}/access/{user_id}`; l'API ha `GET` e `PUT /brokers/{broker_id}/access` (tutta la
+  configurazione in un colpo), `PATCH` e `DELETE /brokers/{broker_id}/access/me` (`backend/app/api/v1/brokers.py:408`,
+  `:440`, `:493`, `:519`). L'elenco dei metodi sopra è stato corretto in W2. Dettagli: piano 04, §12, W2 passo 5.
 
 ## J · Numeri e analisi (fase 01)
 
