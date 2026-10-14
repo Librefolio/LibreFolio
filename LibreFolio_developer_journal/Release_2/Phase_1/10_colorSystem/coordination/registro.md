@@ -28,6 +28,7 @@
 | G | `G - gallery deterministica` (`0c554bef-ff1a-4821-8fab-1fb1bc063b66`) | `LibreFolio-worktrees/e-alfy-laughing-spoon` | `e-alfy-g-gallery-deterministica` | 6153 + `/tmp/librefolio-r2-g` | G-4 corretto, G-3 pronto, t* = 3600 ms (D1); compito B in corso; run filtrate di verifica dalle 20:08 |
 | R | `R - fattorizzazione colori` (`282018bc-660a-4d3a-8df9-20fab8549ecc`) | `LibreFolio-worktrees/e-alfy-literate-tribble` | `e-alfy-r-fattorizzazione-colori` | 6154 + `/tmp/librefolio-r2-r` | lotto A `d80b9e0cd`, lotto B `75c45d923` (20:10); base allineata a `e6d293e41` → HEAD `f53d979ef`; prosegue con il lotto C (W6–W7); cancelli A e B dopo G |
 | — | server per la designer | checkout principale | — | 6160 + `/tmp/librefolio-color-review` | fermo, su richiesta |
+| T | `T - token e tema` (`566352ca-ec49-456a-97db-b6e3519095a7`) | `LibreFolio-worktrees/e-alfy-expert-barnacle` | `e-alfy-expert-barnacle` (nome automatico) | 6155 + `/tmp/librefolio-r2-t` | aperto alle 21:23; portato alla baseline `d9aec0193` con fast-forward; analisi d'implementazione in sola lettura |
 
 ## Note
 - **14/10, base dei figli.** I tre worktree sono nati da `origin/dev_release2` (`6d0b1266c`), non dal `dev_release2`
@@ -205,3 +206,23 @@
   - La barra laterale prende lo stesso verde della testata della card di login, in tutti e due i temi.
   - `#F1EDE3` (chiaro) e `#131A17` (scuro) sono lo sfondo dell'app.
   - «Sfondo pagina» `#F7F4ED`/`#0F1412` resta lo sfondo della pagina di login.
+
+## 21:25 — Workstream T aperto (decisioni D-T1, D-T2, D-T3 del developer)
+
+- **D-T1:** si apre T subito.
+- **D-T2:** barra laterale = verde della testata della card di login; `#F1EDE3`/`#131A17` = sfondo dell'app; `#F7F4ED`/`#0F1412`
+  = pagina di login.
+- **D-T3:** soluzione finale subito.
+  - Ruoli `--lf-*` e utility, con la migrazione dei componenti a ondate di sotto-agenti.
+  - Nessuna ritintura delle scale né del bianco, così i rimasti indietro si vedono: nel build con un gate a cricchetto,
+    nel rendering con la gallery.
+  - Commit `d9aec0193`.
+- **T:** sessione `566352ca`, worktree `e-alfy-expert-barnacle`, corsia 6155 + `/tmp/librefolio-r2-t`.
+  - Kickoff in plan mode, agente `coordinated-workstream`.
+  - Il worktree nato da `origin` (`f27e83448`) è stato portato a `d9aec0193` con un fast-forward.
+  - Primo deliverable: analisi d'implementazione (architettura dei ruoli, strategia di migrazione, gate, piloti shell e
+    accesso).
+- **Schermate di accesso:** il coordinatore 1.3 ha scelto la strada (a), commit `5430b4056` dei suoi riferimenti.
+  - T fa per primo le modifiche visive e toglie la chiave `auth.registerTitle` (sorgente ceduta per quel solo cambio).
+  - Restano di A: `PasswordInput`, `routes/+page.svelte`, `ForgotPasswordCard`, `DonationPopupModal`; chiedere prima.
+  - Avvisare la 1.3 quando il cambio di T entra in `dev_release2`.
