@@ -6,8 +6,8 @@
 > - **Piano generale**: [`plan-phase01Release13.prompt.md`](../plan-phase01Release13.prompt.md), §4 «A · Account e
 >   accessi», §6, §7. **Decisioni**: [`decisioni-analisi-20261014.md`](../decisioni-analisi-20261014.md), §2
 >   «Account e accessi».
-> - **Stato**: A1 (CP1) consegnato, FROZEN in attesa del commit del coordinatore; i lotti dopo aspettano il suo via
->   (§15–§17).
+> - **Stato**: A1 (CP1) committato (`b53dfd705`, `fc66f19c8`) e validato sulla revisione combinata `419dab09c`.
+>   FROZEN, in attesa dell'integrazione in `dev_release2` e del via per A2 (§15–§17).
 >
 > Le sezioni 0–13 sono l'analisi consegnata il 14/10, con le correzioni del §14: restano come cronaca. Dove le
 > decisioni del developer (§15) e le dipendenze confermate (§16) la cambiano, valgono queste.
@@ -772,6 +772,39 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   1. `refactor(accounts): move services to accounts/`;
 >   2. `docs(journal): open plan 02_accounts, A backlog`.
 > - **Prossimo passo**: dopo il commit e l'aggiornamento di base (con T-1), A2 al via del coordinatore.
+>
+> **Esito**: il coordinatore ha committato `b53dfd705` (`refactor(accounts): move services to accounts/`: 6 rinomine
+> R097–R100, 1 file aggiunto, 67 modificati) e `fc66f19c8` (`docs(journal): open plan 02_accounts, A backlog`). Poi
+> ha aggiornato la base con il merge `419dab09c` di `dev_release2` a `265ae5c6e`, che porta T-1, T-2 e G.
+
+#### A1.9 — Validazione della revisione combinata `419dab09c` ✅ (2026-10-15)
+> **Note implementazione** (richiesta del coordinatore, prima di ogni altra modifica):
+> - **Base**: HEAD `419dab09c`, con genitori `fc66f19c8` (A) e `265ae5c6e` (`dev_release2`); worktree pulito.
+>   - I lock delle dipendenze sono invariati: `node_modules` resta valido.
+>   - Il merge porta 30 file frontend (T-1, T-2, G) e, nel backend, solo `scripts/visual_review/`.
+> - **`dev.py front build --debug`**: uscita 0 in 1 min 46 s, svelte-check «0 errors and 0 warnings».
+> - **`all-backend`** (corsia 6182): uscita 0, 7/7 categorie, 21 min 52 s. 23 righe di riepilogo di pytest: **12 965
+>   passati, 28 saltati, 0 falliti**, gli stessi conteggi della run di A1. Log `/tmp/libreFolio_a1v_all_backend.log`.
+> - **`dev.py api schema`**:
+>   - `openapi.json` è uguale a quello di `265ae5c6e`, escluso `info.version` (`v1.2.0-62-g419dab09c`);
+>   - il confronto è contro la mia base `c9bb8f257`, perché `backend/` è identico fra `c9bb8f257` e `265ae5c6e`
+>     (`git diff --stat` vuoto);
+>   - i contratti dei Tool sono identici (sha256 `202402e592a4…`).
+> - Porta 6182 libera, worktree pulito dopo le prove.
+>
+> **Da sapere per A2 e i lotti dopo** (T-1 e T-2, skill `.github/skills/design-tools/theme-roles/`):
+> - **Spostamenti**: uno spostamento o una rinomina pura non ha bisogno di nulla, perché il cricchetto accoppia il file
+>   uscito con quello nuovo dello stesso nome. Un taglio invece si dichiara, nello stesso commit, con
+>   `node frontend/scripts/theme/theme-roles.mjs --split <vecchio>:<nuovo1>,<nuovo2>`.
+> - **File nuovi**: nascono senza classi di palette, solo utility `*-lf-*`. Un elemento migra intero, senza `dark:` sui
+>   ruoli.
+> - **Schermate d'accesso**: T-2 ha già convertito `LoginCard`, `RegisterCard`, `ForgotPasswordCard` (solo classi),
+>   `PasswordInput` (prop `icon`), `PasswordStrength`, il link del caffè di `routes/+page.svelte` e
+>   `routes/+error.svelte`, e ha tolto `auth.registerTitle`. Ora A può farci le modifiche funzionali; K-17 si somma
+>   alla riga del bottone di `PasswordInput`.
+> - **Regole della password**: T-B4 di «T (colori)» è di A. Le copie sono quattro: `PasswordStrength`,
+>   `PasswordChangeModal`, `RegisterCard` e `validate_password` di `scripts/user_cli.py`; l'API chiede solo 8
+>   caratteri. Va nel backlog come A-6.
 
 #### A1.8 — Verifica facoltativa: cosa vede oggi un utente nuovo ✅ (2026-10-14)
 > **Note implementazione**, in sola lettura. Il developer pensava «solo nomi broker e nomi utenti». In realtà un utente

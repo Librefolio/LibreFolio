@@ -1990,6 +1990,13 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - ruff segnala W293 a `user_cli.py:208` e PLC0415 a `:271`.
   - `user_cli.py` si sistema con A5, che ne tocca i comandi.
   - Dettagli: idem, «A1.6».
+- **A-6 · Una fonte sola per le regole della password** (richiama T-B4 della sezione «T (colori)») — basso; A
+  (15/10).
+  - Quattro copie delle stesse cinque regole: `ui/input/PasswordStrength.svelte`, `settings/PasswordChangeModal.svelte`,
+    `auth/RegisterCard.svelte` e `validate_password` di `scripts/user_cli.py`.
+  - L'API chiede solo 8 caratteri (`schemas/auth.py:31`, `:38`). Da decidere se applicare le stesse regole anche lì.
+  - Si fa nel lotto A5, che aggiunge i moduli d'invito e di reset con le stesse regole.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A1.9».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
