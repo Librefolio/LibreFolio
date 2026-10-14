@@ -1,6 +1,7 @@
-# 56 · Gallery deterministica (workstream G)
+# G · Gallery deterministica (workstream G)
 
-> Aperta il 14/10/2026 dal coordinatore, insieme al [programma colori 55](../55_colorSystem/README.md).
+> Aperta il 14/10/2026 dal coordinatore, insieme al [programma colori](../README.md); fino al 14/10 sera era
+> `Phase_0/56_galleryDeterminism`.
 > **Scopo:** la gallery della documentazione è la rete di sicurezza dei lavori sui colori: il workstream R deve
 > dimostrare «stesso aspetto» con un diff dello stesso giorno. Oggi la gallery cambia anche da sola: questo lavoro la
 > rende ripetibile.
