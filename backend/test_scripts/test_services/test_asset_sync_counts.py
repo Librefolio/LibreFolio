@@ -22,7 +22,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.provider import FAProviderAssignmentItem
 from backend.app.schemas.refresh import FARefreshItem
-from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.registry import AssetProviderRegistry
 
 

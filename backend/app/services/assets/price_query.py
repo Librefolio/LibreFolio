@@ -38,13 +38,13 @@ from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetEventPointO
 from backend.app.schemas.provider import (
     FAVolumeKind,
 )
-from backend.app.services.asset_sources import core
-from backend.app.services.asset_sources.core import (
+from backend.app.services.assets import core
+from backend.app.services.assets.core import (
     AssetSourceProvider,
 )
+from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.fx.fx import convert_bulk
-from backend.app.services.market_calendar import ensure_market_holidays
 from backend.app.services.series_preparation import mark_market_closed_carries, prepare_asset_series_set
 from backend.app.services.signal_service import (
     SignalPreparedSeriesBundle,

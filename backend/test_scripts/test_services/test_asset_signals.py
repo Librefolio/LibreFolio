@@ -38,10 +38,10 @@ from backend.app.schemas.signals import (  # noqa: E402
     SignalThresholdCrossingRequest,
     SignalWarningCode,
 )
-from backend.app.services import market_calendar  # noqa: E402
-from backend.app.services.asset_source import AssetSourceManager  # noqa: E402
-from backend.app.services.asset_sources import price_query as price_query_module  # noqa: E402
-from backend.app.services.asset_sources.price_query import PriceQueryOperations  # noqa: E402
+from backend.app.services.assets import market_calendar  # noqa: E402
+from backend.app.services.assets import price_query as price_query_module  # noqa: E402
+from backend.app.services.assets.manager import AssetSourceManager  # noqa: E402
+from backend.app.services.assets.price_query import PriceQueryOperations  # noqa: E402
 from backend.app.services.signals.registry import SignalPluginRegistry  # noqa: E402
 
 

@@ -118,7 +118,7 @@ from backend.app.services.ai_export.temporal.policy import (
     indicator_history_row_limit,
 )
 from backend.app.services.ai_export.temporal.warmup import slice_to_requested_period
-from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.fx.fx import convert_bulk
 from backend.app.services.signal_service import SignalExecutionPlan, SignalService
 from backend.app.services.signals.registry import SignalPluginRegistry

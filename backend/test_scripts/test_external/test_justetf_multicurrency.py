@@ -17,7 +17,7 @@ from backend.app.db import IdentifierType
 
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.services.asset_source import AssetSourceError
+from backend.app.services.assets.core import AssetSourceError
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import print_section, print_success
 

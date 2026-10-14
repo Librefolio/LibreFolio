@@ -7,7 +7,7 @@ Tests provider auto-discovery for Asset and FX providers.
 import pytest
 
 from backend.app.schemas.provider import FAVolumeKind
-from backend.app.services.asset_source import AssetSourceProvider
+from backend.app.services.assets.core import AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.fx.fx import FXRateProvider
 from backend.app.services.fx.registry import FXProviderRegistry
