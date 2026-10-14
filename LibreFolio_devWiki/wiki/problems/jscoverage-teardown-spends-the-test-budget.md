@@ -37,6 +37,9 @@ The proof, at one worker with a delay injected into the collection and then remo
 Under load, `--fresh-run --coverage js --workers 4 front-fx all` was green: 103 E2E, no teardown timeout, the longest
 test 9.6 s.
 
+*Note (2026-10-14, R's final run on `10e646f79`)*: 0 reds, but at an average load of 8.9 against 37.9 on 12/10 —
+the cure is proven at normal load only; a run under high load is backlog C-82.
+
 ## Prevention
 
 A fixture that does slow work in its teardown needs its own `timeout`: without one it borrows a slot that belongs to
