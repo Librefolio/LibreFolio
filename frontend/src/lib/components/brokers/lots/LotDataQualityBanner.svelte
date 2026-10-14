@@ -13,11 +13,11 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
     import {AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp, Crosshair} from 'lucide-svelte';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import {buildIssueGroups, groupedSeverity, type IssueGroup, type IssueSeverity} from './lotDataQualityHelpers';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Props {
         /** Raw FIFO data-quality issues (one per lot for lot-scoped codes). */
@@ -34,7 +34,7 @@
     let expanded = $state(false);
 
     function formatDate(value: string): string {
-        return formatAxisDate($currentLanguage, value, true);
+        return formatAxisDate(uiLocale(), value, true);
     }
 
     /** Group issues by code (dedup the repeated per-lot banners), resolving each issue's lot_id into a

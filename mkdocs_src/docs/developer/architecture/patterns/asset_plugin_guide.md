@@ -2,9 +2,17 @@
 
 How to create a new **Asset Source Provider** to fetch prices from a new data source.
 
-**Base class**: `AssetSourceProvider` (in `backend/app/services/asset_source.py`)
-**Plugin folder**: `backend/app/services/asset_source_providers/`
+**Base class**: `AssetSourceProvider` (canonical path:
+`backend/app/services/asset_sources/core.py`)
+**Plugin folder**: `backend/app/services/asset_source_providers/<name>/` — the code in `plugin.py`, beside an `__init__.py` holding only its docstring (see [Plugin Folder and Translations](#plugin-folder))
 **Registry**: `AssetProviderRegistry`
+
+!!! info "Release 2 import compatibility"
+
+    `backend.app.services.asset_source` remains a supported compatibility facade and re-exports
+    the identical public objects. New provider code should import `AssetSourceProvider` and
+    `AssetSourceError` from `backend.app.services.asset_sources.core`; the canonical thread
+    runner and shared caches live there too.
 
 ---
 
@@ -21,12 +29,14 @@ Paste this entire page into an LLM with the data source's API documentation and 
     [brief description, or paste their API docs]
 
     Write a complete Python AssetSourceProvider implementation. Follow all conventions:
-    @register_provider, FACurrentValue, FAHistoricalData, FAPricePoint, asyncio.to_thread
-    for sync HTTP calls, test_cases, test_search_query if applicable.
+    @register_provider, FACurrentValue, FAHistoricalData, FAPricePoint, direct calls to
+    synchronous provider clients (never an internal asyncio.to_thread), test_cases, and
+    test_search_query if applicable. LibreFolio's service layer supplies thread isolation.
     ```
 
     After scaffolding, implement `get_current_value()` and `get_history_value()`, add test
-    cases, then place the file in `asset_source_providers/` and restart.
+    cases, then save it as `asset_source_providers/<name>/plugin.py`, beside an `__init__.py`
+    holding only a docstring, and restart.
 
 ---
 
@@ -75,6 +85,32 @@ graph TD
 **Plugin responsibility**: Fetch raw price data from external source. Return only actual data points (trading days).
 **Core responsibility**: Gap filling (weekends/holidays → `backward_filled=True`), caching, database storage, currency conversion.
 
+## 🧵 Provider Execution Boundary
+
+Provider contracts are asynchronous, but the service layer treats provider implementations as an
+isolation boundary. Every provider I/O operation is invoked through the canonical
+`asset_sources.core._run_provider_in_thread()` helper. The helper starts a dedicated worker
+thread, creates a new event loop in that thread, runs the provider coroutine to completion, and
+enforces the caller's timeout.
+
+Consequently, a provider that wraps a synchronous SDK or HTTP client should call that client
+**directly** inside its `async def` method:
+
+```python
+async def get_current_value(self, identifier, identifier_type, provider_params):
+    raw = self._sync_client.fetch(identifier)  # Direct blocking call in provider thread
+    return FACurrentValue(...)
+```
+
+Do **not** add `asyncio.to_thread()` or `run_in_executor()` inside the provider. Nesting another
+thread boundary obscures timeout/error behavior and is unnecessary: the manager operations,
+metadata refresh, current/history refresh, search, and URL resolution already route provider I/O
+through `_run_provider_in_thread()`. Async-native provider clients also work because their
+coroutines run on the dedicated thread's event loop.
+
+This rule applies to provider I/O only. Ordinary endpoints and service functions still must not
+perform blocking I/O directly on the application's main event loop.
+
 ---
 
 ## 📋 ABC Methods
@@ -107,7 +143,7 @@ graph TD
 |--------|---------|-------------|
 | `get_icon` | `None` | Provider icon URL for the UI |
 | `supports_history` | `True` | Set `False` for providers that only support current prices (e.g., web scrapers) |
-| `params_schema` | `[]` | List of field definitions for `provider_params`. Used by frontend to generate dynamic forms. |
+| `params_schema` | `[]` | List of field definitions for `provider_params`. Used by frontend to generate dynamic forms. Each field has a `key`, a `type` (`string`, `number`, `currency`, `select` with `options` / `option_labels`, or `ui_component` for a custom editor), `required` (shown with a red `*`), and optionally `default`, `placeholder`, a short `label` (the caption) and a `description` (the tooltip). The caption is the translation `assets.providerParams.<code>.label.<key>`, else `label`, else the raw `key` — declare a `label` so users do not see internal names; the tooltip is `assets.providerParams.<code>.description.<key>`, else `description`. Both translations live in the provider's own fragment: see [Plugin Folder and Translations](#plugin-folder). |
 | `get_asset_url(identifier, type, params)` | `None` | Generate URL to the provider's page for this asset (e.g., Yahoo Finance quote page) |
 | `resolvable_url_domains` | `[]` | Domains this provider can turn a page URL back into a search-item for (opt-in). See [Asset Search & Link-Finder](../../backend/assets/search_link_finder.md). |
 | `resolve_url(url)` | `None` | Inverse of `get_asset_url`: open a provider page URL → return one search-item dict, a list of dicts, or `None`. Enables the last-resort external search stack. |
@@ -135,7 +171,7 @@ The `search(query)` method allows users to **discover assets** by name, ticker, 
 
 | Provider | `search()` | `test_search_query` | `get_asset_url` | Notes |
 |----------|-----------|---------------------|:---:|-------|
-| **Yahoo Finance** | ✅ | `"Apple"` | ✅ | Full ticker search with caching (10 min TTL) |
+| **Yahoo Finance** | ✅ | `"Apple"` | ✅ | Full ticker search with the core query cache (15 min TTL) |
 | **JustETF** | ✅ | `"iShares Core S&P 500"` | ✅ | ISIN-based search across cached ETF list |
 | **CSS Scraper** | ❌ | `None` | ✅ | No search — URL must be provided manually |
 | **Scheduled Investment** | ❌ | `None` | — | Synthetic provider, no external search |
@@ -246,13 +282,13 @@ This runs selectable operations (`current_price`, `history`, `metadata`) without
 ## 💻 Implementation Example
 
 ```python
-# backend/app/services/asset_source_providers/my_provider.py
+# backend/app/services/asset_source_providers/my_provider/plugin.py
 
 from datetime import date
 from decimal import Decimal
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
-from backend.app.services.asset_source import AssetSourceProvider, AssetSourceError
+from backend.app.services.asset_sources.core import AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
 from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint
 
@@ -291,8 +327,9 @@ class MyProvider(AssetSourceProvider):
     async def get_current_value(
         self, identifier: str, identifier_type: IdentifierType, provider_params: dict
     ) -> FACurrentValue:
-        # Fetch latest price from your API
-        price = await self._fetch_price(identifier)
+        # A synchronous client call stays direct; the service runs this coroutine
+        # in the dedicated provider thread.
+        price = self._sync_client.fetch_price(identifier)
         return FACurrentValue(
             value=Decimal(str(price)),
             currency="USD",
@@ -304,8 +341,8 @@ class MyProvider(AssetSourceProvider):
         self, identifier: str, identifier_type: IdentifierType,
         provider_params: dict | None, start_date: date, end_date: date
     ) -> FAHistoricalData:
-        # Fetch historical data — return ONLY actual trading days
-        raw_data = await self._fetch_history(identifier, start_date, end_date)
+        # Return ONLY actual trading days; do not add an internal to_thread call.
+        raw_data = self._sync_client.fetch_history(identifier, start_date, end_date)
         prices = [
             FAPricePoint(date=d, close=Decimal(str(p)), open=None, high=None, low=None, volume=None, currency="USD")
             for d, p in raw_data
@@ -316,6 +353,42 @@ class MyProvider(AssetSourceProvider):
         # No params required — accept anything
         pass
 ```
+
+### 🗂️ Plugin Folder and Translations {: #plugin-folder }
+
+A provider is a folder of `asset_source_providers/`:
+
+```text
+backend/app/services/asset_source_providers/
+├── static/            ← the family's icons, served under /api/v1/uploads/plugin/asset/… (generate_static_url)
+└── my_provider/
+    ├── __init__.py    ← its docstring and nothing else
+    ├── plugin.py      ← the code above
+    └── i18n/          ← optional: en.json, it.json, fr.json, es.json
+```
+
+Restart the app: `AssetProviderRegistry` loads `plugin.py` as
+`backend.app.services.asset_source_providers.my_provider.plugin`. Import and patch the provider's
+names from that module: the package re-exports nothing. A helper only this provider uses sits
+beside `plugin.py` as `_*.py`. Discovery, the layout and the gate that keeps it
+(`./dev.py test utils gate-plugin-layout`) are in [Plugin Folder Layout](registry_pattern.md#plugin-layout).
+
+**Translations.** A provider's space is `assets.providerParams.<provider_code>`: the code
+`provider_code` returns, which need not be the folder's name — the `yahoo_finance/` folder
+registers `yfinance`. Its fragment holds the captions and tooltips of its `params_schema` fields,
+`label.<key>` and `description.<key>`; Borsa Italiana's (`borsa_italiana/i18n/`) is the only one
+today. Add the keys in the four languages, naming the folder with `--into`:
+
+```bash
+./dev.py i18n add "assets.providerParams.my_provider.label.api_key" --en "API key" --it "Chiave API" --fr "Clé API" --es "Clave API" --into asset_source_providers/my_provider
+./dev.py i18n add "assets.providerParams.my_provider.description.api_key" --en "API key for authentication" --it "…" --fr "…" --es "…" --into asset_source_providers/my_provider
+./dev.py i18n where "assets.providerParams.my_provider.label.api_key"   # the file that holds the key
+```
+
+Without `--into`, `add` refuses a new provider's first key, because the keys under
+`assets.providerParams` belong to plugins only. `./dev.py test utils gate-plugin-i18n-ownership`
+then keeps every key under the provider's space in its fragment
+([A Plugin's Translations](registry_pattern.md#plugin-translations)).
 
 ---
 

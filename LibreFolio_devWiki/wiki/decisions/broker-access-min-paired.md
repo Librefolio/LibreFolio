@@ -61,6 +61,6 @@ New field in `TXReadItem` — batch lookup of partner broker IDs for tooltip and
 | BrokerBadge (showRole) | `frontend/src/lib/components/ui/display/BrokerBadge.svelte` |
 | Transaction service | `backend/app/services/transaction_service.py` |
 | Transaction schemas | `backend/app/schemas/transactions.py` |
-| Delete modal | `frontend/src/lib/components/transactions/modals/TransactionDeleteModal.svelte` |
+| Delete flow (TransactionDeleteModal removed 2026-09-03: single-row delete routes through the bulk workspace) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | Broker service | `backend/app/services/broker_service.py` |
 

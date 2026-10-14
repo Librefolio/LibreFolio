@@ -20,6 +20,7 @@ warnings.filterwarnings("ignore", message=".*already taken in index.*")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,14 +31,17 @@ from backend.app.config import (
     PROJECT_NAME,
     PROJECT_ROOT,
     ensure_data_dirs,
+    get_data_dir,
     get_settings,
     get_version,
     is_test_mode,
     set_test_mode,
 )
+from backend.app.db.post_migration import configured_sqlite_path, run_post_migration_fixes
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import configure_logging, get_logger
 from backend.app.services.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
+from backend.app.services.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
 from backend.app.services.provider_registry import (
     AssetProviderRegistry,
     BRIMProviderRegistry,
@@ -54,8 +58,10 @@ from backend.app.services.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.settings_service import initialize_global_settings
 from backend.app.services.signal_runtime import validate_signal_runtime
 from backend.app.services.static_uploads import seed_default_avatars
-from backend.app.utils.cache_utils import close_all_caches
-from backend.app.utils.version import get_git_version
+from backend.app.services.tools.executor import shutdown_tool_executor
+from backend.app.services.tools.registry import ToolPluginRegistry
+from backend.app.utils.runtime.cache import close_all_caches
+from backend.app.utils.runtime.version import get_git_version
 
 # Check for test mode via environment variable ONLY
 # NOTE: Do NOT check sys.argv here - it causes issues when this module is imported
@@ -213,6 +219,27 @@ def ensure_database_exists():  # noqa: C901 — sequential DB bootstrap state ch
                 sys.exit(1)
 
 
+def run_post_migration_fixes_at_startup():
+    """Run the post-migration fixes on the configured SQLite database and data dir.
+
+    The repairs that cannot be Alembic migrations (``backend.app.db.post_migration``), right
+    after them. Returns their report, or ``None`` when the run itself failed. Never raises:
+    a repair that cannot run leaves the database as it was, and the server starts anyway.
+    Plan ``34_accountAndIdReuse`` §2.3.
+    """
+    try:
+        db_path = configured_sqlite_path()
+        if db_path is None:
+            return None
+        report = run_post_migration_fixes(db_path, get_data_dir())
+    except Exception as exc:  # noqa: BLE001 — startup never blocks on a repair
+        logger.warning("Post-migration fixes could not run; starting normally", error=str(exc))
+        return None
+    if report.failed:
+        logger.warning("Post-migration fixes failed; starting normally", outcomes=report.outcomes, backup=str(report.backup_path) if report.backup_path else None, errors=report.errors)
+    return report
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
     """
@@ -237,6 +264,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         plugin_count=len(SignalPluginRegistry.list_plugin_codes()),
     )
 
+    tool_catalog = await asyncio.to_thread(ToolPluginRegistry.get_snapshot)
+    logger.info("Tool catalog initialized", plugin_count=len(tool_catalog.definitions), quarantined_count=len(tool_catalog.failures))
+
     # Ensure all data directories exist (prod or test based on mode)
     ensure_data_dirs()
 
@@ -256,6 +286,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Ensure database exists and is migrated
     ensure_database_exists()
 
+    # Then the repairs that cannot be migrations, before anything else opens the database
+    await asyncio.to_thread(run_post_migration_fixes_at_startup)
+
     # Initialize global settings with defaults (if not already present)
     await _initialize_global_settings()
 
@@ -264,11 +297,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     _background_tasks.add(provider_prewarm_task)
     provider_prewarm_task.add_done_callback(_background_tasks.discard)
 
+    # Build the market holiday table in its own process, in background: the first computation that needs it awaits it
+    market_holiday_task = start_market_holiday_prewarm()
+    _background_tasks.add(market_holiday_task)
+    market_holiday_task.add_done_callback(_background_tasks.discard)
+
     # Start scheduler daemon
     shutdown_event = get_shutdown_event()
     scheduler_task = asyncio.create_task(scheduler_loop(shutdown_event))
 
-    yield
+    try:
+        yield
+    finally:
+        await shutdown_tool_executor()
     # Shutdown — stop scheduler first, then cleanup providers
     logger.info("Shutting down LibreFolio")
     shutdown_event.set()
@@ -285,6 +326,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # a parse only exists inside one.
     shutdown_brim_parse_pool(wait=True)
     await shutdown_quant_worker_pools()
+    # Never waits for a holiday build in progress: its process is ended at once
+    await shutdown_market_holidays()
 
     # Close all TTL caches (stop timer wheel threads for clean exit)
     close_all_caches()
@@ -328,6 +371,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Compress responses (API JSON, SvelteKit JS/CSS, docs HTML) for clients that accept
+# gzip: a first visit drops from ~7.5 MB to ~2.8 MB. Starlette leaves images, fonts,
+# archives, Server-Sent Events, 206 range replies and pre-encoded responses alone,
+# adds `Vary: Accept-Encoding`, and compresses bodies >= 128 KiB off the event loop.
+# Level 6 compresses as well as 9 on these bodies for a third of the CPU.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
+
 # Mount API v1 router
 app.include_router(api_v1_router, prefix=API_V1_PREFIX)
 
@@ -336,6 +386,18 @@ SITE_DIR = PROJECT_ROOT / "mkdocs_src" / "site"
 
 # Frontend build directory (generated by `./dev.sh fe:build`)
 FRONTEND_BUILD_DIR = PROJECT_ROOT / "frontend" / "build"
+
+# Every HTML document served from a build carries this. An HTML entry point names the hashed chunks of
+# the CURRENT build: without it a browser reuses its cached copy (heuristic freshness from Last-Modified)
+# and keeps running the build it had before an upgrade, with every immutable chunk that copy names, until
+# a manual reload (beta report; issue #26, «Plugin does not work on chromium»). The chunks stay
+# immutable: their names change with their content.
+REVALIDATE_HTML = {"Cache-Control": "no-cache, must-revalidate"}
+
+
+def _revalidated_file(path: Path) -> FileResponse:
+    """A file of a build, told to revalidate when it is an HTML document."""
+    return FileResponse(path, headers=REVALIDATE_HTML if path.suffix == ".html" else None)
 
 
 def frontend_available() -> bool:
@@ -362,7 +424,7 @@ def render_docs_not_built() -> HTMLResponse:  # pragma: no cover
 @app.get("/mkdocs", response_class=HTMLResponse)
 def mkdocs_root():  # pragma: no cover
     if docs_available():
-        return FileResponse(SITE_DIR / "index.html")
+        return _revalidated_file(SITE_DIR / "index.html")
     return render_docs_not_built()
 
 
@@ -377,7 +439,7 @@ def mkdocs_static(path: str):  # pragma: no cover
         target = target / "index.html"
 
     if target.exists() and target.is_file():
-        return FileResponse(target)
+        return _revalidated_file(target)
 
     return HTMLResponse("<h1>Documentation file not found</h1>", status_code=404)
 
@@ -389,7 +451,7 @@ async def root():  # pragma: no cover
     Serves frontend if build exists, otherwise provides API information.
     """
     if frontend_available():
-        return FileResponse(FRONTEND_BUILD_DIR / "index.html")
+        return _revalidated_file(FRONTEND_BUILD_DIR / "index.html")
 
     return {
         "name": PROJECT_NAME,
@@ -442,10 +504,11 @@ def frontend_catchall(path: str):  # pragma: no cover
         return HTMLResponse("<h1>Frontend not built</h1><p>Run: ./dev.py front build</p>", status_code=503)
 
     # Try to serve the exact file from the build directory
-    # This handles: favicon.png, robots.txt, manifest, etc.
+    # This handles: favicon.png, robots.txt, manifest, etc. — and index.html, 200.html, offline.html,
+    # which revalidate like every HTML document of the build.
     target = FRONTEND_BUILD_DIR / path
     if target.exists() and target.is_file():
-        return FileResponse(target)
+        return _revalidated_file(target)
 
     # For SPA routes, serve 200.html (fallback generated by adapter-static)
     # This contains the full SvelteKit app that can handle client-side routing.
@@ -454,7 +517,7 @@ def frontend_catchall(path: str):  # pragma: no cover
     # report: version stayed on an old build until an explicit F5).
     fallback = FRONTEND_BUILD_DIR / "200.html"
     if fallback.exists():
-        return FileResponse(fallback, headers={"Cache-Control": "no-cache, must-revalidate"})
+        return _revalidated_file(fallback)
 
     # Fallback to index.html if 200.html doesn't exist
-    return FileResponse(FRONTEND_BUILD_DIR / "index.html", headers={"Cache-Control": "no-cache, must-revalidate"})
+    return _revalidated_file(FRONTEND_BUILD_DIR / "index.html")

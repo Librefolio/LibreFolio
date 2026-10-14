@@ -6,6 +6,8 @@
  */
 
 import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 
 export interface FxConversionInfo {
     impliedRate: number;
@@ -113,9 +115,9 @@ export function buildFxTooltipData(info: FxConversionInfo, fxPoint: FxDataPoint 
  */
 export function buildFxTooltipHtml(data: FxTooltipData, t: (key: string, opts?: any) => string): string {
     let html = `<div class="space-y-1">`;
-    html += `<div><span class="text-gray-400">${t('transactions.fxInfo.impliedRate')}:</span> <strong>${data.impliedRate.toFixed(4)}</strong></div>`;
+    html += `<div><span class="text-gray-400">${t('transactions.fxInfo.impliedRate')}:</span> <strong>${formatFixed(data.impliedRate, 4)}</strong></div>`;
     if (data.marketRate != null) {
-        html += `<div><span class="text-gray-400">${t('transactions.fxInfo.marketRate')}:</span> ${data.marketRate.toFixed(4)}`;
+        html += `<div><span class="text-gray-400">${t('transactions.fxInfo.marketRate')}:</span> ${formatFixed(data.marketRate, 4)}`;
         if (data.staleDays != null && data.staleDays > 0) {
             html += ` <span class="text-amber-400">⚠️ ${t('transactions.fxInfo.stale', {values: {days: data.staleDays}})}</span>`;
         }
@@ -123,7 +125,7 @@ export function buildFxTooltipHtml(data: FxTooltipData, t: (key: string, opts?: 
         html += `</div>`;
         if (data.spread) {
             const sign = data.spread.absolute >= 0 ? '+' : '';
-            html += `<div><span class="text-gray-400">${t('transactions.fxInfo.spread')}:</span> ${sign}${data.spread.absolute.toFixed(4)} (${sign}${data.spread.percent.toFixed(2)}%)</div>`;
+            html += `<div><span class="text-gray-400">${t('transactions.fxInfo.spread')}:</span> ${formatFixed(data.spread.absolute, 4, {signed: true})} (${formatPercent(data.spread.percent)})</div>`;
         }
     } else {
         html += `<div class="text-gray-500 italic">${t('transactions.fxInfo.marketNotAvailable')}</div>`;

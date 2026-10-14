@@ -38,7 +38,7 @@ Aroon Up sube a 100 en el momento en que el precio establece un nuevo máximo de
 
 | Parámetro | Clave | Valor por Defecto | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 14 | Ventana obsoleta para localizar el máximo/mínimo extremo. |
+| Período ($N$) | `period` | 14 | Ventana retrospectiva para localizar el máximo/mínimo extremo, en sesiones. |
 
 ---
 
@@ -48,14 +48,14 @@ Aroon es inusual entre estos indicadores: no es un filtro sobre la *amplitud* en
 
 ```mermaid
 flowchart LR
- H["📈 Máximo"] --> MAXW["🏔️ Máximo móvil en N barras"]
- MAXW --> AGEH["⏱️ Barras desde el último nuevo máximo"]
- AGEH --> UP["⬆️ Aroon Up = 100·(N−edad)/N"]
- L["📉 Mínimo"] --> MINW["🕳️ Mínimo móvil en N barras"]
- MINW --> AGEL["⏱️ Barras desde el último nuevo mínimo"]
- AGEL --> DOWN["⬇️ Aroon Down = 100·(N−edad)/N"]
- UP --> OSC["🔄 Oscilador = Up − Down"]
- DOWN --> OSC
+    H["📈 Máximo"] --> MAXW["🏔️ Máximo móvil en N barras"]
+    MAXW --> AGEH["⏱️ Barras desde el último nuevo máximo"]
+    AGEH --> UP["⬆️ Aroon Up = 100·(N−edad)/N"]
+    L["📉 Mínimo"] --> MINW["🕳️ Mínimo móvil en N barras"]
+    MINW --> AGEL["⏱️ Barras desde el último nuevo mínimo"]
+    AGEL --> DOWN["⬇️ Aroon Down = 100·(N−edad)/N"]
+    UP --> OSC["🔄 Oscilador = Up − Down"]
+    DOWN --> OSC
 ```
 
 !!! info "Complementario del ADX"

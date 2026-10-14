@@ -36,8 +36,8 @@ Le RSI simple peut stagner dans la zone 40–60 pendant de longues périodes san
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période stochastique ($N$) | `period` | 14 | Période de référence partagée pour le RSI sous-jacent et sa plage stochastique %K. |
-| Période D ($d$) | `dPeriod` | 3 | Fenêtre SMA appliquée à %K pour produire %D. |
+| Période stochastique ($N$) | `period` | 14 | Période de référence partagée pour le RSI sous-jacent et sa plage stochastique %K, en séances. |
+| Période D ($d$) | `dPeriod` | 3 | Fenêtre SMA appliquée à %K pour produire %D, en séances. |
 | Surachat | `overbought` | 80 | Seuil pour la zone de surachat. |
 | Survente | `oversold` | 20 | Seuil pour la zone de survente. |
 
@@ -54,10 +54,10 @@ Le RSI Stochastique est une **cascade à deux étages** : le premier étage (RSI
 
 ```mermaid
 flowchart LR
- C["💹 Close"] --> RSI["💪 RSI(N)"]
- RSI --> MINMAX["📐 Rolling min/max over N bars"]
- MINMAX --> K["🎯 %K"]
- K --> D["🔁 %D = SMA(d, %K)"]
+    C["💹 Close"] --> RSI["💪 RSI(N)"]
+    RSI --> MINMAX["📐 Rolling min/max over N bars"]
+    MINMAX --> K["🎯 %K"]
+    K --> D["🔁 %D = SMA(d, %K)"]
 ```
 
 !!! tip "Plus rapide mais plus bruyant"
@@ -66,4 +66,4 @@ flowchart LR
     %K peut passer de 0 à 100 en seulement quelques barres — utile pour des signaux de retournement rapides,
     mais plus sujet aux faux signaux que le RSI simple.
 
-:material-link: [Stochastic RSI on StockCharts](https://school.stockcharts.com/doku.php?id=technical_indicators:stochrsi){ target="_blank" }
+:material-link: [RSI stochastique sur StockCharts](https://school.stockcharts.com/doku.php?id=technical_indicators:stochrsi){ target="_blank" }

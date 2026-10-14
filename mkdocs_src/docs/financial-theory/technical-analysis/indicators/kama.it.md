@@ -38,7 +38,7 @@ Una EMA a periodo fisso è un compromesso: abbastanza veloce da seguire i trend,
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 10 | Finestra di lookback per l'Efficiency Ratio. |
+| Periodo ($N$) | `period` | 10 | Finestra di lookback per l'Efficiency Ratio, in sedute. |
 
 !!! note "Le costanti fast/slow non sono esposte"
 
@@ -56,12 +56,12 @@ KAMA è la stessa **ricorrenza IIR del primo ordine** dell'EMA, ma con un guadag
 
 ```mermaid
 flowchart LR
- C["💹 Prezzo di chiusura"] --> ER["📐 Efficiency Ratio (finestra N)"]
- ER --> SC["⚙️ Costante di smussamento adattativa SC"]
- C --> REC["🔁 KAMA(t) = KAMA(t-1) + SC·(C(t) − KAMA(t-1))"]
- SC --> REC
- REC --> OUT["🛣️ KAMA(t)"]
- OUT -.->|"feedback"| REC
+    C["💹 Prezzo di chiusura"] --> ER["📐 Efficiency Ratio (finestra N)"]
+    ER --> SC["⚙️ Costante di smussamento adattativa SC"]
+    C --> REC["🔁 KAMA(t) = KAMA(t-1) + SC·(C(t) − KAMA(t-1))"]
+    SC --> REC
+    REC --> OUT["🛣️ KAMA(t)"]
+    OUT -.->|"feedback"| REC
 ```
 
 !!! tip "Polo in trend vs polo in range laterale"

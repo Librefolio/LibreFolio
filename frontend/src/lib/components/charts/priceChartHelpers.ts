@@ -16,8 +16,13 @@
 import type {LineDataPoint} from './LineChart.svelte';
 import type {ViewMode} from './ChartToolbar.svelte';
 import type {EventMarker} from './PriceChartFull.svelte';
+import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
+import {getBackendSignalProblem, type SignalProblem} from '$lib/charts/signals/signalProblem';
 import {truncateName} from '$lib/utils/text';
 import {aggregateLineSeries, bucketEventMarkers, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /** A resolved logical date span the chart is currently showing. */
 export interface LogicalVisibleRange {
@@ -31,13 +36,186 @@ export interface BucketInfo {
     bucketEnd: string;
 }
 
+export const CALENDAR_RETURN_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
+export const CALENDAR_RETURN_INSTANCE_ID = 'asset-calendar-return';
+
+export type CalendarReturnViewState = 'idle' | 'loading' | 'ready' | 'partial' | 'unavailable' | 'error';
+export type CalendarReturnPointStatus = 'available' | 'missing_reference' | 'invalid_current_price' | 'invalid_reference_price';
+
+export interface CalendarReturnPointContext {
+    status: CalendarReturnPointStatus;
+    referenceTargetDate: string;
+    currentPriceDate: string;
+    referencePriceDate: string | null;
+    currentFxDate: string | null;
+    referenceFxDate: string | null;
+}
+
+export interface CalendarReturnView {
+    state: CalendarReturnViewState;
+    points: LineDataPoint[];
+    contextByDate: Map<string, CalendarReturnPointContext>;
+    problem: SignalProblem | null;
+}
+
+const CALENDAR_RETURN_STATUSES = new Set<CalendarReturnPointStatus>(['available', 'missing_reference', 'invalid_current_price', 'invalid_reference_price']);
+const SIGNAL_RESULT_STATUSES = new Set(['ok', 'partial', 'unavailable', 'failed']);
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function emptyCalendarReturnView(state: CalendarReturnViewState, problem: SignalProblem | null = null): CalendarReturnView {
+    return {state, points: [], contextByDate: new Map(), problem};
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function flattenOneLevel(value: unknown): unknown[] | null {
+    if (!Array.isArray(value)) return null;
+    return value.flatMap((item) => (Array.isArray(item) ? item : [item]));
+}
+
+function requiredIsoDate(value: unknown): string | null {
+    return typeof value === 'string' && ISO_DATE_PATTERN.test(value) ? value : null;
+}
+
+function optionalIsoDate(value: unknown): string | null | undefined {
+    if (value === null || value === undefined) return null;
+    return requiredIsoDate(value) ?? undefined;
+}
+
+function requiredNonNegativeInt(value: unknown): number | null {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function optionalNonNegativeInt(value: unknown): number | null | undefined {
+    if (value === null || value === undefined) return null;
+    return requiredNonNegativeInt(value) ?? undefined;
+}
+
+function calendarResultMatches(value: unknown, instanceId: string): value is Record<string, unknown> {
+    return isRecord(value) && value.instance_id === instanceId && value.signal_code === CALENDAR_RETURN_SIGNAL_CODE;
+}
+
+export function isCalendarReturnSignalResult(value: unknown, instanceId: string = CALENDAR_RETURN_INSTANCE_ID): boolean {
+    return calendarResultMatches(value, instanceId);
+}
+
+/**
+ * Normalize the calendar-return result without depending on generated union
+ * shapes. Runtime payloads are flat; code generation may widen series/points
+ * to one-level nested arrays, so this transport seam accepts both.
+ */
+export function extractCalendarReturnView(rawResults: unknown, instanceId: string = CALENDAR_RETURN_INSTANCE_ID): CalendarReturnView {
+    const results = flattenOneLevel(rawResults);
+    if (!results) return emptyCalendarReturnView('error');
+
+    const result = results.find((item) => calendarResultMatches(item, instanceId));
+    if (!result || typeof result.status !== 'string' || !SIGNAL_RESULT_STATUSES.has(result.status)) {
+        return emptyCalendarReturnView('error');
+    }
+    const parsedResult = backendSignalSchemas.result.safeParse(result);
+    const problem = parsedResult.success ? getBackendSignalProblem(parsedResult.data) : null;
+    if (result.status === 'unavailable') {
+        return parsedResult.success ? emptyCalendarReturnView('unavailable', problem) : emptyCalendarReturnView('error');
+    }
+    if (result.status === 'failed') return emptyCalendarReturnView('error', problem);
+
+    const seriesCandidates = 'series' in result ? flattenOneLevel(result.series) : [result];
+    if (!seriesCandidates) return emptyCalendarReturnView('error', problem);
+    const series = seriesCandidates.find((item) => isRecord(item) && item.key === 'calendar_return');
+    if (!isRecord(series)) return emptyCalendarReturnView('error', problem);
+
+    const pointCandidates = flattenOneLevel(series.points);
+    if (!pointCandidates?.length) return emptyCalendarReturnView('error', problem);
+
+    const points: LineDataPoint[] = [];
+    const contextByDate = new Map<string, CalendarReturnPointContext>();
+    let hasMissing = false;
+
+    for (const item of pointCandidates) {
+        if (!isRecord(item) || !isRecord(item.provenance)) return emptyCalendarReturnView('error', problem);
+        const date = requiredIsoDate(item.date);
+        const status = typeof item.provenance.status === 'string' && CALENDAR_RETURN_STATUSES.has(item.provenance.status as CalendarReturnPointStatus) ? (item.provenance.status as CalendarReturnPointStatus) : null;
+        const referenceTargetDate = requiredIsoDate(item.provenance.reference_target_date);
+        const currentPriceDate = requiredIsoDate(item.provenance.current_price_date);
+        const currentPriceDaysBack = requiredNonNegativeInt(item.provenance.current_price_days_back);
+        const referencePriceDate = optionalIsoDate(item.provenance.reference_price_date);
+        const referencePriceDaysBack = optionalNonNegativeInt(item.provenance.reference_price_days_back);
+        const currentFxDate = optionalIsoDate(item.provenance.current_fx_date);
+        const currentFxDaysBack = optionalNonNegativeInt(item.provenance.current_fx_days_back);
+        const referenceFxDate = optionalIsoDate(item.provenance.reference_fx_date);
+        const referenceFxDaysBack = optionalNonNegativeInt(item.provenance.reference_fx_days_back);
+        const value = item.value === null ? null : typeof item.value === 'number' && Number.isFinite(item.value) ? item.value : undefined;
+
+        if (
+            !date ||
+            !status ||
+            !referenceTargetDate ||
+            !currentPriceDate ||
+            currentPriceDaysBack === null ||
+            referencePriceDate === undefined ||
+            referencePriceDaysBack === undefined ||
+            currentFxDate === undefined ||
+            currentFxDaysBack === undefined ||
+            referenceFxDate === undefined ||
+            referenceFxDaysBack === undefined ||
+            value === undefined ||
+            (status === 'available') !== (value !== null) ||
+            (referencePriceDate === null) !== (referencePriceDaysBack === null) ||
+            (currentFxDate === null) !== (currentFxDaysBack === null) ||
+            (referenceFxDate === null) !== (referenceFxDaysBack === null) ||
+            contextByDate.has(date)
+        ) {
+            return emptyCalendarReturnView('error', problem);
+        }
+
+        const fxStaleDays = Math.max(currentFxDaysBack ?? 0, referenceFxDaysBack ?? 0);
+        const staleDays = Math.max(currentPriceDaysBack, referencePriceDaysBack ?? 0, fxStaleDays);
+        hasMissing ||= value === null;
+        points.push({
+            date,
+            value: value ?? 0,
+            ...(value === null ? {missing: true} : {}),
+            ...(staleDays > 0 ? {staleDays} : {}),
+            ...(fxStaleDays > 0 ? {fxStaleDays} : {}),
+        });
+        contextByDate.set(date, {
+            status,
+            referenceTargetDate,
+            currentPriceDate,
+            referencePriceDate,
+            currentFxDate,
+            referenceFxDate,
+        });
+    }
+
+    points.sort((left, right) => left.date.localeCompare(right.date));
+    return {
+        state: result.status === 'partial' || hasMissing ? 'partial' : 'ready',
+        points,
+        contextByDate,
+        problem,
+    };
+}
+
+export function extractCalendarReturnViewsByAsset(rawItems: unknown, assetIds: readonly number[], instanceId: string = CALENDAR_RETURN_INSTANCE_ID): Map<number, CalendarReturnView> {
+    const items = Array.isArray(rawItems) ? rawItems : [];
+    return new Map(
+        [...new Set(assetIds)].map((assetId) => {
+            const item = items.find((candidate) => isRecord(candidate) && candidate.asset_id === assetId);
+            return [assetId, item ? extractCalendarReturnView(item.signals, instanceId) : emptyCalendarReturnView('error')];
+        }),
+    );
+}
+
 /**
  * Localized "Month YYYY" label for a `YYYY-MM-DD` date. Anchored to UTC so the
- * month never drifts across a timezone boundary. `locale` defaults to the host
- * default (what the component uses); tests pass an explicit locale to stay
+ * month never drifts across a timezone boundary. `locale` defaults to the
+ * interface locale (`uiLocale()`, M-18); tests pass an explicit locale to stay
  * deterministic regardless of the machine's locale.
  */
-export function formatMonthLabel(date: string, locale?: string | string[]): string {
+export function formatMonthLabel(date: string, locale: string | string[] = uiLocale()): string {
     return new Intl.DateTimeFormat(locale, {
         month: 'long',
         year: 'numeric',
@@ -60,6 +238,17 @@ export function getBucketInfo(point: LineDataPoint, currentResolution: ChartReso
         bucketStart: typeof (point as {bucketStart?: unknown}).bucketStart === 'string' ? (point as {bucketStart: string}).bucketStart : mapDateToBucket(point.date, currentResolution).bucketStart,
         bucketEnd: typeof (point as {bucketEnd?: unknown}).bucketEnd === 'string' ? (point as {bucketEnd: string}).bucketEnd : point.date,
     };
+}
+
+/**
+ * The span an aggregated point's tooltip names: its bucket from the first day up to the point's own day,
+ * the last day with data that the line or the candle renders the bucket at. A whole week or month ends on
+ * its bucket end, because the read path fills every calendar day; the one still running, or a series that
+ * stops inside it, ends on its last data point, not on a day without data or still to come. A date outside
+ * the bucket, or no day at all, leaves the bucket whole.
+ */
+export function bucketSpanUpTo(date: string, info: BucketInfo): BucketInfo {
+    return ISO_DATE_PATTERN.test(date) && date >= info.bucketStart && date < info.bucketEnd ? {bucketStart: info.bucketStart, bucketEnd: date} : info;
 }
 
 /**
@@ -319,10 +508,20 @@ export interface EventScatterContext {
  * signal. A marker's Y value follows its overlay line when it belongs to one,
  * otherwise the main price at that date; a date the axis does not contain is
  * skipped. Coarser resolutions bucket the markers first and carry the whole
- * bucket on one point. Groups that placed nothing are dropped.
+ * bucket on one point, placed where the line renders that bucket: its last data
+ * point, which for the open week or month falls before the bucket's end. Groups
+ * that placed nothing are dropped.
  */
 export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResolution: ChartResolution, ctx: EventScatterContext): EventScatterGroup[] {
     const {dateIndexMap, resolvedLineData, overlayDataByLabel, bucketInfoByDate, baseColor} = ctx;
+
+    // Markers are keyed by their bucket's end date, the line by the date each bucket renders at.
+    const renderDateByBucketEnd = new Map<string, string>();
+    if (activeResolution !== 'daily') {
+        for (const point of resolvedLineData) {
+            renderDateByBucketEnd.set(point.bucketEnd ?? mapDateToBucket(point.date, activeResolution).bucketEnd, point.date);
+        }
+    }
 
     const grouped = new Map<string, {markers: EventMarker[]; color: string; label: string}>();
     for (const marker of eventMarkers) {
@@ -364,11 +563,12 @@ export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResol
             }
         } else {
             const bucketedMarkers = bucketEventMarkers(markers, activeResolution);
-            for (const [bucketDate, bucketEntries] of bucketedMarkers) {
-                const index = dateIndexMap.get(bucketDate);
+            for (const [bucketEnd, bucketEntries] of bucketedMarkers) {
+                const renderDate = renderDateByBucketEnd.get(bucketEnd) ?? bucketEnd;
+                const index = dateIndexMap.get(renderDate);
                 if (index === undefined) continue;
-                const yValue = resolveY(bucketEntries[0]?.assetLabel, bucketDate, index);
-                points.push({value: [bucketDate, yValue], markers: bucketEntries, bucketInfo: bucketInfoByDate.get(bucketDate) ?? mapDateToBucket(bucketDate, activeResolution), bucketValue: yValue});
+                const yValue = resolveY(bucketEntries[0]?.assetLabel, renderDate, index);
+                points.push({value: [renderDate, yValue], markers: bucketEntries, bucketInfo: bucketInfoByDate.get(renderDate) ?? mapDateToBucket(renderDate, activeResolution), bucketValue: yValue});
             }
         }
 
@@ -392,15 +592,15 @@ export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResol
  */
 export function buildDeltaHtml(value: number, firstValue: number, isPercentage: boolean): string {
     const color = (n: number) => (n >= 0 ? '#10b981' : '#ef4444');
-    const sign = (n: number) => (n >= 0 ? '+' : '');
 
+    // In the interface locale (M-18); a zero carries no sign, as with `formatPercent` everywhere.
     if (isPercentage) {
-        return ` <span style="font-size:10px;color:${color(value)}">(Δ ${sign(value)}${value.toFixed(2)}%)</span>`;
+        return ` <span style="font-size:10px;color:${color(value)}">(Δ ${formatPercent(value)})</span>`;
     }
 
     const deltaAbs = value - firstValue;
     const deltaPct = firstValue !== 0 ? ((value - firstValue) / firstValue) * 100 : 0;
-    return ` <span style="font-size:10px;color:${color(deltaAbs)}">(Δ ${sign(deltaAbs)}${deltaAbs.toFixed(4)} / ${sign(deltaPct)}${deltaPct.toFixed(2)}%)</span>`;
+    return ` <span style="font-size:10px;color:${color(deltaAbs)}">(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${formatPercent(deltaPct)})</span>`;
 }
 
 /**
@@ -433,4 +633,17 @@ export function formatTruncatedGhostLabel(ghostLabel: string): string {
         return `💱 ${truncateName(nameMatch[1])} ${nameMatch[2]}`;
     }
     return truncateName(ghostLabel);
+}
+
+/**
+ * Split a ghost label `"💱 Name (🇺🇸 USD)"` into its name and its currency parenthetical (the last
+ * one), with nothing cut: the tooltip lets the name shrink while the currency stays whole. A label
+ * without that shape is all name.
+ */
+export function splitGhostLabel(ghostLabel: string): {name: string; currency: string | null} {
+    const nameMatch = ghostLabel.match(/^💱\s*(.+?)\s*(\([^)]+\))$/);
+    if (nameMatch) {
+        return {name: `💱 ${nameMatch[1]}`, currency: nameMatch[2]};
+    }
+    return {name: ghostLabel, currency: null};
 }

@@ -24,7 +24,7 @@ Il s'agit simplement d'un rendement en pourcentage sur $N$ périodes, réexprim�
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 12 | Nombre de jours en arrière utilisé comme prix de référence. |
+| Période ($N$) | `period` | 12 | Nombre de séances en arrière utilisé comme prix de référence. |
 
 ---
 
@@ -40,11 +40,11 @@ Contrairement au MACD (qui soustrait deux sorties *passe-bas* pour approcher une
 
 ```mermaid
 flowchart LR
- C0["💹 C(t−N)"] --> DIFF["➖ C(t) − C(t−N)"]
- C1["💹 C(t)"] --> DIFF
- DIFF --> NORM["➗ ÷ C(t−N)"]
- NORM --> SCALE["✖️ ×100"]
- SCALE --> ROC["🚀 ROC(t)"]
+    C0["💹 C(t−N)"] --> DIFF["➖ C(t) − C(t−N)"]
+    C1["💹 C(t)"] --> DIFF
+    DIFF --> NORM["➗ ÷ C(t−N)"]
+    NORM --> SCALE["✖️ ×100"]
+    SCALE --> ROC["🚀 ROC(t)"]
 ```
 
 !!! warning "Amplification du bruit"

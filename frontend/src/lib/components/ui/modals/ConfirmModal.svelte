@@ -44,7 +44,12 @@
         /** Z-index for stacking (default 60 = above first-level modals) */
         zIndex?: number;
         /** Operation results to display after action completes (replaces message+items when present) */
-        results?: {label: string; success: boolean; detail?: string}[];
+        results?: {
+            label: string;
+            success: boolean;
+            detail?: string;
+            action?: {href: string; label: string; testId?: string};
+        }[];
         /**
          * Identifies *which* confirmation is on screen. ConfirmModal is generic, so
          * without this every confirm looks alike to a test and the only way to tell
@@ -91,7 +96,10 @@
                         {/if}
                         <span class="result-label">{r.label}</span>
                         {#if r.detail}
-                            <span class="result-detail">— {r.detail}</span>
+                            <span class="result-detail" data-testid={r.action?.testId ? `${r.action.testId}-detail` : undefined}>— {r.detail}</span>
+                        {/if}
+                        {#if r.action}
+                            <a class="result-action" data-testid={r.action.testId} href={r.action.href}>{r.action.label}</a>
                         {/if}
                     </li>
                 {/each}
@@ -255,6 +263,18 @@
 
     :global(.dark) .result-detail {
         color: #94a3b8;
+    }
+
+    .result-action {
+        margin-left: auto;
+        color: #2563eb;
+        font-size: 0.75rem;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    :global(.dark) .result-action {
+        color: #60a5fa;
     }
 
     .items-section {

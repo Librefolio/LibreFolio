@@ -40,7 +40,7 @@ query time) — simply re-running the analysis with the v4 engine now surfaces a
 ## Source files
 | File |
 |------|
-| `backend/app/services/fifo_lot_engine.py` |
+| `backend/app/services/financial_math/fifo/engine.py` |
 | `backend/app/services/lots_analysis_service.py` |
 | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/implementation-plan-v5.md` Fase 1 "Fuori pista" |
 | `LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/hig-level-analysis-v5.md` §12, §23.1 |

@@ -5,7 +5,7 @@ to turn whatever the user types — a name, a ticker, an ISIN, or a whole line c
 broker report — into a concrete, priceable asset candidate, while keeping automated price
 fetches completely free of any web search.
 
-This page documents the **generic** machinery (the orchestration in `AssetSourceService`,
+This page documents the **generic** machinery (the orchestration in `AssetSearchService`,
 the `web_link_finder` module, the `resolve_url` capability, the `hints` mechanism, and the
 identifier post-filter). Provider-specific behaviour lives on each provider page — see
 [Borsa Italiana](provider_borsa_italiana.md), which is currently the only provider that opts
@@ -21,7 +21,7 @@ The system is **not** one function — it is a small **standalone module** (the 
 | Piece | File | Role |
 |-------|------|------|
 | **`web_link_finder` module** | `backend/app/services/web_link_finder.py` | Self-contained subsystem: the external-engine client (**ddgs** metasearch by default), config, TTL cache, domain filter. Knows nothing about providers or assets. |
-| **Search orchestration** | `backend/app/services/asset_source.py` → `AssetSearchService` | Ties it together: `_augment_with_link_finder`, `_build_link_finder_queries`, `_filter_items_by_known_identifiers`, `_provider_url_for_item`. Decides *when* to fall back and *how* to narrow. |
+| **Search orchestration** | `backend/app/services/asset_sources/search.py` → `AssetSearchService` | Ties it together: `_augment_with_link_finder`, `_build_link_finder_queries`, `_filter_items_by_known_identifiers`, `_provider_url_for_item`. Decides *when* to fall back and *how* to narrow. |
 | **Provider hook** | each provider's `resolve_url` / `resolvable_url_domains` | Turns a resolved URL back into search-item(s). Only Borsa Italiana implements it today. |
 | **Endpoints** | `backend/app/api/v1/assets.py` | `/assets/provider/search[/stream]` accept the optional `hints` query param. |
 
@@ -32,7 +32,7 @@ module for the engine, orchestrated by the service layer, with a thin per-provid
 graph LR
     EP["API /assets/provider/search[/stream]"] --> SVC
 
-    subgraph SVC["asset_source.py — AssetSearchService (orchestration)"]
+    subgraph SVC["asset_sources/search.py — AssetSearchService (orchestration)"]
         A["_augment_with_link_finder"]
         B["_build_link_finder_queries"]
         C["_filter_items_by_known_identifiers"]
@@ -100,14 +100,15 @@ graph TD
 
 ---
 
-## 🎼 Orchestration (`AssetSourceService`)
+## 🎼 Orchestration (`AssetSearchService`)
 
 Both `search()` (batch) and `search_stream()` (SSE) query every eligible provider in parallel.
-After a provider yields its L1 results, the shared augment helper decides whether to fall back
-to the external stack:
+Each `provider.search()` call goes through `asset_sources.core._run_provider_in_thread()`. After a
+provider yields its L1 results, the shared augment helper decides whether to fall back to the
+external stack:
 
 ```python
-# backend/app/services/asset_source.py
+# backend/app/services/asset_sources/search.py
 async def search(query: str, provider_codes=None, hints: Optional[list[str]] = None) -> FAProviderSearchResponse
 async def search_stream(query: str, provider_codes=None, hints: Optional[list[str]] = None) -> AsyncGenerator[str]
 ```
@@ -115,10 +116,11 @@ async def search_stream(query: str, provider_codes=None, hints: Optional[list[st
 - **`_augment_with_link_finder(code, provider, query, hints=None)`** — invoked when a provider
   returns 0 items **and** `provider.supports_url_resolution` **and** `web_link_finder.is_enabled()`.
   It builds the candidate queries (see [Hints](#hints-the-two-stage-stringone)), calls
-  `find_candidate_urls`, then `resolve_url`s each hit (in a worker thread — `resolve_url` may do
-  sync I/O). `resolve_url` may return one item or a canonical list; the helper flattens lists,
-  de-duplicates by `(identifier, language)`, and returns the non-`None` items. Any failure is
-  caught and yields `[]` — the search always completes and emits `done`.
+  `find_candidate_urls`, then resolves each hit through
+  `asset_sources.core._run_provider_in_thread()` (`resolve_url` may do sync I/O). The helper
+  flattens one-item/list results, de-duplicates by `(identifier, language)`, and returns the
+  non-`None` items. Any failure is caught and yields `[]` — the search always completes and
+  emits `done`.
 - **`_provider_url_for_item(code, item)`** — DRY helper used during serialization so the
   `provider_url` display link is (re)computed from the item's `provider_params` on every request.
 - Results are flagged as "found via web" for the UI.

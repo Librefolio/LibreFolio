@@ -4,7 +4,7 @@
  <img class="gallery-img" data-category="transactions" data-name="form-modal-fxconversion" alt="Formulario de Transacción — Conversión de divisa">
 </div>
 
-Las **conversiones de divisa** intercambian una moneda por otra dentro de la **misma cuenta de bróker**. El saldo de una moneda disminuye mientras que el de otra aumenta; no hay cambios en los activos ni en los brókers.
+Las **conversiones de divisa** intercambian una moneda por otra dentro de la **misma cuenta de bróker**. El saldo de una moneda disminuye mientras que el de otra aumenta; no hay cambios en los activos ni en los brókeres.
 
 ---
 
@@ -74,8 +74,8 @@ Internamente, una Conversión de divisa se compone de un Retiro (moneda de orige
 
 | Operación | Resultado |
 |-----------|--------|
-| **División** (desvincular) | Conversión de divisa → Retiro + Depósito independientes |
-| **Promover** (vincular) | Retiro + Depósito → Conversión de divisa |
+| **Separar par** (desvincular) | Conversión de divisa → Retiro + Depósito independientes |
+| **Promocionar** (vincular) | Retiro + Depósito → Conversión de divisa |
 
 **Restricciones de Promover**: monedas diferentes, mismo bróker.
 
@@ -84,9 +84,9 @@ Internamente, una Conversión de divisa se compone de un Retiro (moneda de orige
 ## 🔗 Relacionado
 
 - 💵 **[Depósito y Retiro](deposit-withdrawal.md)** — Movimientos de efectivo unilaterales
-- 🔄 **[Transferencia de Activos](transfer.md)** — Movimiento de valores entre brókers
-- 🏦 **[Transferencia de Efectivo](cash-transfer.md)** — Transferencias bancarias entre brókers
+- 🔄 **[Transferencia de Activos](transfer.md)** — Movimiento de valores entre brókeres
+- 🏦 **[Transferencia de fondos](cash-transfer.md)** — Transferencias bancarias entre brókeres
 
 ---
 
-*Ver también: [💱 Tasas de FX](../../../user/fx/index.md) — cómo configurar y sincronizar los tipos de cambio en LibreFolio.*
+*Ver también: [💱 Tipos de cambio](../../../user/fx/index.md) — cómo configurar y sincronizar los tipos de cambio en LibreFolio.*

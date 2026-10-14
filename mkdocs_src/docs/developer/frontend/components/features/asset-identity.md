@@ -90,7 +90,7 @@ and is pinned by tests rather than by inspecting the UI.
 
 ## ⭐ Electing the primary identifier
 
-`components/assets/IdentifierPrimaryChooser.svelte` — one component, four triggers.
+`components/assets/IdentifierPrimaryChooser.svelte` — one component, five triggers.
 
 The rule never changes: **one value leads, the others move to `identifier_other`, nothing is
 discarded.** What changes is who is arguing.
@@ -102,6 +102,11 @@ discarded.** What changes is who is arguing.
 | A provider search returns a different code | `AssetModal.applySearchResult()` |
 | Provider enrichment disagrees on several fields | `ProviderComparisonModal` mounts **one chooser per conflicting identifier type** |
 | Two archived assets are merged | `AssetMergeModal` |
+
+The third trigger has a twin: the same search selection also starts a metadata read, whose
+comparison would ask about the same code again. That comparison **waits** while the chooser is open
+and **loses the rows the chooser already asked** — see
+[A search selection asks each question once](#a-search-selection-asks-each-question-once).
 
 **Provenance is recorded, never guessed.** `prefilledIdentifiers` registers at the source which
 values arrived from a report. A badge that gets the origin wrong is worse than no badge, because
@@ -129,6 +134,70 @@ Design points worth preserving:
   rewards holding to maturity and, precisely because it is not meant to be traded, has no market
   price. The key is `issuanceNote`, not `btpNote` — a key name is documentation too.
 
+### ⏳ A search selection asks each question once {: #a-search-selection-asks-each-question-once }
+
+Picking a provider search result in `AssetModal` used to raise the same identity question twice.
+`applySearchResult()` opens the chooser synchronously when the form already holds a different code
+of the same type, and it also starts the metadata read —
+`fetchAndCompareMetadata('all', 'selection')` — whose `ProviderComparisonModal` asks about that code
+again as an `identifier_<type>` row. Opened as they arrived, the second modal landed on top of the
+first and repeated its question (R18).
+
+The decision is a pure function, `decideComparison()` in
+`components/assets/providerComparisonQueue.ts`; the modal only reports what is open and whether its
+provider context is still current:
+
+| When the comparison is ready… | Decision |
+|---|---|
+| …its read is stale: the provider context changed, the modal closed, or a save started | `drop` |
+| …every row asks something the chooser already asked | `drop` — no comparison and no *all match* toast: the differences existed, and the user already settled them |
+| …a prompt of the selection is still open: the chooser, its discard confirmation, or the reuse-existing prompt of the import wizard's create flow | `hold` — the comparison stays loaded and waits |
+| …otherwise | `open`, without the rows the chooser already asked |
+
+"Already asked" is exact. `identifierQuestion()` records the chooser's question as the comparison
+field `identifier_<type>` plus the codes the chooser offered (trimmed, upper-cased, deduplicated),
+and `asksSameQuestion()` removes a row only when its field is that field **and** its provider value
+is one of those codes. A provider value the chooser never offered is a new question and still reaches
+the user; a name, currency or distribution row is never removed.
+
+The sequence in the modal:
+
+1. `applySearchResult()` closes any previous chooser, fills the form and, on a conflicting code,
+   opens the chooser and builds the question.
+2. `resetDraftReads()` clears the previous selection's questions and any held comparison; the new
+   question is recorded right after it.
+3. The read returns, and `decideComparison()` runs with `promptOpen` set when the chooser, its discard
+   confirmation or the reuse prompt is on screen.
+4. When the last of those prompts closes — confirmed, discarded or dismissed — an effect calls
+   `releaseHeldComparison()`, which decides again with `promptOpen: false` and the context re-checked
+   (`open && !saving && isMetadataCurrent(...)`).
+
+Because the question stays recorded until the next selection, the pruning applies just the same
+when the user answers the chooser **before** the read returns. A held comparison is discarded when
+the provider configuration changes or a new read starts.
+
+A manual **Ask provider** is unchanged: `handleAskProvider()` reads with the default origin
+`'manual'` and opens the comparison with every row. The rule is unit-tested in
+`providerComparisonQueue.test.ts`, the modal flow in `AssetModal.providerLifecycle.test.ts`.
+
+Which fields become rows at all is decided upstream, in `fetchAndCompareMetadata()`, from the
+`patch_data` of the probe's `metadata` operation:
+
+- a field empty in the form, and not edited while the read ran, is filled silently;
+- an equal value agrees, and so does a provider type that only names the family of the stored
+  subtype — `isFamilyOnlyProposal()` in `lib/utils/assetTypes.ts` (`ETF` against `ETF_STOCK`).
+  A refinement (`ETF` → `ETF_STOCK`) is still a row;
+- a case-only difference, or a currency the user never picked (`currencyUserSet`), is auto-filled
+  instead of shown;
+- `identifier_other` is merged additively (`mergeOtherIdentifiers()`), never a row; a description
+  pre-filled by the import wizard is merged too — provider text first, the report's names after;
+- a missing sector or geographic block raises the `noDistributionData` toast, and no row with
+  nothing missing raises `allMatch`.
+
+On **Apply Selected**, a ticked field edited since the differences were computed (while the
+comparison was held or open) sends it back to a fresh `'all'` read instead of overwriting the
+edit.
+
 ---
 
 ## 🧲 Merging assets already in the database
@@ -147,9 +216,11 @@ There are exactly four foreign keys to `assets.id`, all handled:
 | `AssetEvent.asset_id` | no unique (deliberately) | Reassigned, deduplicated by `(date, type, amount)`, and `Transaction.asset_event_id` is remapped onto the survivors |
 | `AssetProviderAssignment.asset_id` | `uq_asset_provider_asset_id` | Moved only if the target has none; otherwise the source's is deleted |
 
-`identifier_other` on the target becomes the **union** of both `other` lists plus every
-structured identifier of the source the target does not already hold as a primary. Then the
-source asset is deleted.
+Identifiers are decided column by column: the value elected in the modal (`identifier_primaries`)
+or, by default, the target's own, with the source's filling a gap. Every losing value is demoted,
+so `identifier_other` on the target becomes the **union** of both `other` lists plus the demoted
+values, deduplicated and never repeating a value that is now primary. Then the source asset is
+deleted.
 
 !!! danger "Two ordering traps, both found by tests"
 
@@ -177,6 +248,12 @@ The election is only worth making if the stored value is actually used next time
 Priorities 1 and 2 run **together** and merge (deduplicated by `asset_id`). That is deliberate:
 an ISIN that is primary on a duplicate asset and alternative on the good one produces **both**
 candidates, side by side — which is exactly the moment offering a merge costs the user least.
+
+The wizard makes that offer through `duplicateCandidates()` in
+`lib/utils/transactions/importResolutionHelpers.ts`: the resolution card shows its duplicate notice
+and **Merge** button only when at least two candidates are `EXACT` or `HIGH`. Ticker (`MEDIUM`)
+and name (`LOW`) matches never raise it — two funds from the same issuer are supposed to look
+alike.
 
 !!! note "Why 2 is not last"
 

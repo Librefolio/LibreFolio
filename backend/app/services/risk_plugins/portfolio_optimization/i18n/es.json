@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "portfolioOptimization": {
+        "name": "Asignación de cartera",
+        "description": "Construye una composición hipotética de activos a partir de la muestra, la estrategia, los estimadores y las restricciones seleccionados."
+      }
+    }
+  }
+}

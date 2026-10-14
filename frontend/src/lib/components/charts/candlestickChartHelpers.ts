@@ -15,6 +15,8 @@
  */
 
 import type {LineDataPoint} from './LineChart.svelte';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 
 /**
  * Baseline for percentage mode: the first point's open (falling back to its
@@ -35,6 +37,18 @@ export function toPercent(v: number, isPercentage: boolean, baseValue: number): 
 }
 
 /**
+ * A single ECharts candlestick quad `[open, close, low, high]` (note the
+ * ordering — NOT open/high/low/close), with the percentage transform applied to
+ * each leg. Generalized out of `buildCandleSeriesData` so any already-complete
+ * OHLC source (no synthesis needed) can reuse the exact, tested quad-ordering
+ * convention instead of re-deriving it — see GrowthChart.svelte's P&L candles
+ * (G1b), which always has a full quad or nothing (never a lone close).
+ */
+export function buildOhlcQuad(open: number, close: number, low: number, high: number, isPercentage: boolean, baseValue: number): number[] {
+    return [toPercent(open, isPercentage, baseValue), toPercent(close, isPercentage, baseValue), toPercent(low, isPercentage, baseValue), toPercent(high, isPercentage, baseValue)];
+}
+
+/**
  * ECharts candlestick data: one `[open, close, low, high]` quad per point, with
  * the percentage transform applied. DB values win; missing fields are
  * synthesized (open borrows the previous close — the first point opens at its own
@@ -49,7 +63,7 @@ export function buildCandleSeriesData(data: LineDataPoint[], isPercentage: boole
         const o = d.open ?? prevClose;
         const h = d.high ?? Math.max(o, c);
         const l = d.low ?? Math.min(o, c);
-        return [toPercent(o, isPercentage, baseValue), toPercent(c, isPercentage, baseValue), toPercent(l, isPercentage, baseValue), toPercent(h, isPercentage, baseValue)];
+        return buildOhlcQuad(o, c, l, h, isPercentage, baseValue);
     });
 }
 
@@ -70,22 +84,22 @@ export function isBullishBar(d: LineDataPoint): boolean {
 }
 
 /**
- * Format a price for the tooltip. Percentage mode → signed two-decimal percent.
- * Absolute mode scales precision to magnitude: ≥100 → 2 dp, ≥1 → 4 dp, otherwise
- * 6 dp with trailing zeros trimmed (a bare integer such as 0 is kept as "0.0").
- * Built on `toFixed`, so the decimal separator is always '.', independent of the
- * process locale.
+ * Format a price for the tooltip. Percentage mode → signed two-decimal percent (a
+ * zero carries no sign). Absolute mode scales precision to magnitude: ≥100 → 2 dp,
+ * ≥1 → 4 dp, otherwise up to 6 dp with trailing zeros trimmed, keeping at least one
+ * (0 is "0.0"). Written in the interface locale (`formatPercent`, `formatFixed`, M-18).
  */
 export function formatCandlePrice(v: number, isPercentage: boolean): string {
-    if (isPercentage) return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
-    if (Math.abs(v) >= 100) return v.toFixed(2);
-    if (Math.abs(v) >= 1) return v.toFixed(4);
-    return v.toFixed(6).replace(/0+$/, '').replace(/\.$/, '.0');
+    if (isPercentage) return formatPercent(v);
+    if (Math.abs(v) >= 100) return formatFixed(v, 2);
+    if (Math.abs(v) >= 1) return formatFixed(v, 4);
+    const decimals = Math.abs(v).toFixed(6).replace(/0+$/, '').split('.')[1]?.length ?? 0;
+    return formatFixed(v, Math.max(1, decimals));
 }
 
-/** Compact volume label: millions → "…M", thousands → "…K", otherwise integer. */
+/** Compact volume label: millions → "…M", thousands → "…K", otherwise integer; in the interface locale. */
 export function formatVolume(vol: number): string {
-    return vol >= 1_000_000 ? `${(vol / 1_000_000).toFixed(2)}M` : vol >= 1_000 ? `${(vol / 1_000).toFixed(1)}K` : vol.toFixed(0);
+    return vol >= 1_000_000 ? `${formatFixed(vol / 1_000_000, 2)}M` : vol >= 1_000 ? `${formatFixed(vol / 1_000, 1)}K` : formatFixed(vol, 0);
 }
 
 /**

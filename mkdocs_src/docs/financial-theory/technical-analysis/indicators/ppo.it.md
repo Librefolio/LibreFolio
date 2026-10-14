@@ -36,9 +36,9 @@ Una lettura MACD di €2 significa qualcosa di molto diverso per un'azione da �
 
 | Parametro | Chiave | Predefinito | Descrizione |
 |---|---|---|---|
-| Periodo Veloce | `fastPeriod` | 12 | Finestra EMA a breve termine (giorni). |
-| Periodo Lento | `slowPeriod` | 26 | Finestra EMA a lungo termine (giorni), anche denominatore di normalizzazione del PPO. |
-| Periodo Segnale | `signalPeriod` | 9 | Livellamento EMA applicato alla linea PPO. |
+| Periodo Veloce | `fastPeriod` | 12 | Finestra EMA a breve termine (sedute). |
+| Periodo Lento | `slowPeriod` | 26 | Finestra EMA a lungo termine (sedute), anche denominatore di normalizzazione del PPO. |
+| Periodo Segnale | `signalPeriod` | 9 | Livellamento EMA applicato alla linea PPO (sedute). |
 
 ---
 
@@ -48,15 +48,15 @@ L'uscita passa-banda del MACD (vedi [MACD](macd.md)) ha un'ampiezza che scala co
 
 ```mermaid
 flowchart LR
- C["💹 Chiusura"] --> EF["📉 EMA veloce"]
- C --> ES["📉 EMA lenta"]
- EF --> DIFF["➖ EMA veloce − EMA lenta"]
- ES --> DIFF
- DIFF --> AGC["🎚️ ÷ EMA lenta ×100 (AGC)"]
- AGC --> PPO["📐 Linea PPO"]
- PPO --> SIG["🔁 EMA(signalPeriod)"]
- PPO --> HIST["📊 Istogramma = PPO − Segnale"]
- SIG --> HIST
+    C["💹 Chiusura"] --> EF["📉 EMA veloce"]
+    C --> ES["📉 EMA lenta"]
+    EF --> DIFF["➖ EMA veloce − EMA lenta"]
+    ES --> DIFF
+    DIFF --> AGC["🎚️ ÷ EMA lenta ×100 (AGC)"]
+    AGC --> PPO["📐 Linea PPO"]
+    PPO --> SIG["🔁 EMA(signalPeriod)"]
+    PPO --> HIST["📊 Istogramma = PPO − Segnale"]
+    SIG --> HIST
 ```
 
 !!! info "Stessi incroci, scala diversa"

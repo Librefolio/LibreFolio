@@ -4,6 +4,8 @@ User Service
 Business logic for user management, used by both API and CLI.
 """
 
+import asyncio
+from dataclasses import dataclass, field
 from typing import Optional
 
 import structlog
@@ -12,7 +14,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import BrokerUserAccess, User, UserSettings
 from backend.app.services.auth_service import hash_password
+from backend.app.services.broker_service import BrokerService
 from backend.app.utils.datetime_utils import utcnow
+
+
+@dataclass(frozen=True)
+class AccountDeletion:
+    """What deleting an account took with it (plan 34_accountAndIdReuse §2.1).
+
+    ``deleted_broker_ids``: the brokers the user was the last owner of, deleted with the
+    account (their transactions in the same commit, their BRIM files by the caller after it).
+    """
+
+    deleted_broker_ids: list[int] = field(default_factory=list)
+
+
+class AccountDeletionError(Exception):
+    """A broker of the account could not be released: nothing was deleted."""
+
 
 logger = structlog.get_logger(__name__)
 
@@ -147,7 +166,7 @@ async def create_user(
     user = User(
         username=username,
         email=email,
-        hashed_password=hash_password(password),
+        hashed_password=await asyncio.to_thread(hash_password, password),
         is_active=is_active,
         is_superuser=is_superuser,
     )
@@ -202,6 +221,9 @@ async def set_user_active(
     """
     Activate or deactivate a user.
 
+    The last active administrator cannot be deactivated: an inactive user cannot log in, so the
+    instance would be left with nobody to administer it.
+
     Args:
         session: Database session
         username: Username
@@ -214,13 +236,19 @@ async def set_user_active(
     if not user:
         return False, f"User '{username}' not found"
 
+    if not active and await _is_last_active_admin(session, user):
+        return False, f"User '{username}' is the last active administrator: promote or activate another administrator first"
+
+    # Store user_id before commit (to avoid lazy load after commit)
+    user_id = user.id
+
     user.is_active = active
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()
 
     status = "activated" if active else "deactivated"
-    logger.info(f"User {status}", user_id=user.id, username=username)
+    logger.info(f"User {status}", user_id=user_id, username=username)
     return True, None
 
 
@@ -231,6 +259,9 @@ async def set_user_admin(
 ) -> tuple[bool, Optional[str]]:
     """
     Promote or demote a user to/from admin.
+
+    The last active administrator cannot be demoted: the instance would be left with nobody to
+    administer it. Demoting an inactive administrator removes no active one, and is allowed.
 
     Args:
         session: Database session
@@ -247,6 +278,9 @@ async def set_user_admin(
     if user.is_superuser == is_admin:
         status = "already an admin" if is_admin else "not an admin"
         return False, f"User '{username}' is {status}"
+
+    if not is_admin and await _is_last_active_admin(session, user):
+        return False, f"User '{username}' is the last active administrator: promote another user first"
 
     # Store user_id before commit (to avoid lazy load after commit)
     user_id = user.id
@@ -330,33 +364,63 @@ async def count_superusers(session: AsyncSession) -> int:
     return result.scalar() or 0
 
 
-async def delete_user(session: AsyncSession, user_id: int) -> bool:
-    """
-    Delete a user and all associated data.
+async def count_active_superusers(session: AsyncSession, *, excluding_user_id: Optional[int] = None) -> int:
+    """The active superusers — those who can still administer the instance — with ``excluding_user_id`` left out."""
+    stmt = select(func.count(User.id)).where(User.is_superuser == True, User.is_active == True)  # noqa: E712 — SQLAlchemy filter
+    if excluding_user_id is not None:
+        stmt = stmt.where(User.id != excluding_user_id)
+    result = await session.execute(stmt)
+    return result.scalar() or 0
 
-    This is a destructive operation that cascades to:
-    - All brokers owned by the user
-    - All transactions
-    - All user settings
-    - All sessions
+
+async def _is_last_active_admin(session: AsyncSession, user: User) -> bool:
+    """True when ``user`` is an active administrator and no other active administrator remains."""
+    return bool(user.is_superuser and user.is_active) and await count_active_superusers(session, excluding_user_id=user.id) == 0
+
+
+async def delete_user(session: AsyncSession, user_id: int) -> Optional[AccountDeletion]:
+    """
+    Delete a user, applying the last-owner rule to every broker the user can access.
+
+    Broker by broker, the same rule as leaving a broker (``BrokerService.leave_broker``, F4):
+    a broker the user was the last OWNER of is deleted with its transactions; on any other
+    broker only the user's access goes. Then the user, with the rows that cascade from it
+    (settings, onboarding progress), and one commit.
+
+    All or nothing: if a broker cannot be released, or anything fails, the session is rolled
+    back and the error propagates — nothing is deleted. The deleted brokers' BRIM files live
+    on disk: the caller removes them after this commit.
 
     Args:
         session: Database session
         user_id: ID of user to delete
 
     Returns:
-        True if deleted, False if user not found
+        What went with the account, or ``None`` if the user does not exist
     """
     user = await get_user_by_id(session, user_id)
     if not user:
-        return False
+        return None
+    username = user.username
 
-    # Delete user (cascades to related data via DB constraints)
-    await session.delete(user)
-    await session.commit()
+    broker_ids = (await session.execute(select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id).order_by(BrokerUserAccess.broker_id))).scalars().all()
+    broker_service = BrokerService(session)
+    deleted_broker_ids: list[int] = []
+    try:
+        for broker_id in broker_ids:
+            success, message, broker_deleted = await broker_service.leave_broker(broker_id, user_id)
+            if not success:
+                raise AccountDeletionError(f"Broker {broker_id} could not be released: {message}")
+            if broker_deleted:
+                deleted_broker_ids.append(broker_id)
+        await session.delete(user)
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
 
-    logger.warning("User deleted", user_id=user_id, username=user.username)
-    return True
+    logger.warning("User deleted", user_id=user_id, username=username, brokers_deleted=deleted_broker_ids)
+    return AccountDeletion(deleted_broker_ids=deleted_broker_ids)
 
 
 async def search_users(

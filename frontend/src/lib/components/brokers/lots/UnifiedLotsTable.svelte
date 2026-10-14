@@ -12,9 +12,11 @@
     import {BarChart3, Copy, ExternalLink, Eye} from 'lucide-svelte';
     import type {z} from 'zod';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {writeTextToClipboard} from '$lib/utils/clipboard';
     import {safeDecimal, safeNumber} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
-    import {filterStates, findBroker, formatLotQuantity as formatQuantity, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumNumeric, weightedAverage} from './unifiedLotsTableHelpers';
+    import {filterStates, findBroker, formatLotQuantityCell, formatLotQuantityMasked, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumCompleteOrNull, sumNumeric, weightedAverageCompleteOrNull} from './unifiedLotsTableHelpers';
+    import {isUnknownOrNonZero} from './lotChartShared';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotCustodySummarySchema = z.infer<typeof schemas.LotCustodySummarySchema>;
@@ -161,7 +163,7 @@
 
     function quantityCell(row: DisplayRow): HtmlCell | string {
         if (row.primaryState === 'CLOSED') return '—';
-        const content = row.primaryState === 'PARTIALLY_CLOSED' ? `${formatQuantity(row.quantityOpen)} / ${formatQuantity(row.quantityOriginal)}` : formatQuantity(row.quantityOpen);
+        const content = formatLotQuantityCell(row.quantityOpen, row.quantityOriginal, row.primaryState === 'PARTIALLY_CLOSED');
         return {
             type: 'html',
             html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(content)}</span>`,
@@ -172,7 +174,7 @@
         if (value == null) return '—';
         return {
             type: 'html',
-            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatQuantity(value))}</span>`,
+            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatLotQuantityMasked(value))}</span>`,
         };
     }
 
@@ -181,6 +183,20 @@
         return {
             type: 'html',
             html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatCurrencyAmountPlain(value, currency))}</span>`,
+        };
+    }
+
+    /**
+     * A price per unit. Public: the product owner ruled that a price is not patrimony and that
+     * a purchase price is admissible (2026-09-22). It used to be masked with the other amounts
+     * while the open quantity beside it was visible, since quantity × price rebuilds the value;
+     * the quantity is masked now (D5′), so the price has nothing left to reveal.
+     */
+    function unitPriceCell(value: number | null): HtmlCell | string {
+        if (value == null) return '—';
+        return {
+            type: 'html',
+            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatCurrencyAmountPlain(value, currency, {sensitivity: 'public'}))}</span>`,
         };
     }
 
@@ -223,7 +239,7 @@
         const lines = row.custodySlices.map((slice) => {
             const brokerId = safeNumber(slice.broker_id);
             const name = slice.custody_type === 'IN_TRANSIT' && brokerId == null ? label('brokers.lots.inTransit', 'In transit') : getBrokerName(brokerId);
-            return `<div class="flex items-center justify-between gap-3"><span>${escapeHtml(name)}</span><span class="font-medium tabular-nums">${escapeHtml(formatQuantity(safeDecimal(slice.quantity)))}</span></div>`;
+            return `<div class="flex items-center justify-between gap-3"><span>${escapeHtml(name)}</span><span class="font-medium tabular-nums">${escapeHtml(formatLotQuantityMasked(safeDecimal(slice.quantity)))}</span></div>`;
         });
         return `<div class="space-y-1"><div class="font-semibold">${escapeHtml(label('brokers.lots.custody', 'Custody'))}</div>${lines.join('')}</div>`;
     }
@@ -255,10 +271,10 @@
         }
 
         const distributedLabel = brokerIds.length > 1 ? label('brokers.lots.brokersCount', '{count} brokers').replace('{count}', String(brokerIds.length)) : label('brokers.lots.inTransit', 'In transit');
-        const transitTag = hasInTransit ? `<span class="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/40 dark:text-sky-300">${escapeHtml(label('brokers.lots.inTransitShort', 'Transit'))}</span>` : '';
+        const transitBadge = hasInTransit ? `<span class="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700 dark:border-sky-800/70 dark:bg-sky-950/40 dark:text-sky-300">${escapeHtml(label('brokers.lots.inTransitShort', 'Transit'))}</span>` : '';
         return {
             type: 'html',
-            html: `<span class="inline-flex max-w-full items-center gap-1.5" data-testid="unified-lots-custody-${row.lotId}"><span class="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700 dark:border-violet-800/70 dark:bg-violet-950/40 dark:text-violet-300">${escapeHtml(distributedLabel)}</span>${transitTag}</span>`,
+            html: `<span class="inline-flex max-w-full items-center gap-1.5" data-testid="unified-lots-custody-${row.lotId}"><span class="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700 dark:border-violet-800/70 dark:bg-violet-950/40 dark:text-violet-300">${escapeHtml(distributedLabel)}</span>${transitBadge}</span>`,
             tooltip: {html: tooltip, position: 'top', maxWidth: '280px'},
             onClick: () => onCustodyCellClick?.(row.lot),
         };
@@ -373,7 +389,12 @@
             icon: Copy,
             label: () => label('brokers.lots.copyLotIdentifier', 'Copy lot identifier'),
             onClick: async (row) => {
-                await navigator.clipboard.writeText(String(row.lotId));
+                try {
+                    await writeTextToClipboard(String(row.lotId));
+                } catch {
+                    toasts.error($_('support.clipboardUnavailable'));
+                    return;
+                }
                 toasts.success(`${label('brokers.lots.lotIdentifierCopied', 'Lot identifier copied')}: ${row.lotId}. ${label('brokers.lots.lotIdentifierHelp', 'Stable technical identifier derived from the opening transaction, used for audit, support and API correlation.')}`);
             },
         },
@@ -381,36 +402,38 @@
 
     let hasDifferingStates = $derived.by(() => new Set(rows.map((row) => row.filterStates.join('|'))).size > 1);
     let hasMixedDirections = $derived.by(() => new Set(rows.map((row) => row.direction)).size > 1);
-    let hasPositiveAssetIncome = $derived.by(() => rows.some((row) => (row.assetIncome ?? 0) > 0));
-    let hasNetCosts = $derived.by(() => rows.some((row) => (row.allocatedFees ?? 0) !== 0 || (row.allocatedTaxes ?? 0) !== 0));
+    // A column stays visible when one of its values is unknown (null, shown as «—»): hiding it would read as zero.
+    let hasPositiveAssetIncome = $derived.by(() => rows.some((row) => row.assetIncome == null || row.assetIncome > 0));
+    let hasNetCosts = $derived.by(() => rows.some((row) => isUnknownOrNonZero(row.allocatedFees) || isUnknownOrNonZero(row.allocatedTaxes)));
 
     function buildFooterCells(footerRows: DisplayRow[]): Record<string, FooterCellContent> {
-        const totalPnl = sumNumeric(footerRows, (row) => row.totalPnl);
-        const openingValueSum = sumNumeric(footerRows, (row) => row.openingValue);
+        // Amounts that can be unknown total only when every row is known; a partial sum would read as complete.
+        const totalPnl = sumCompleteOrNull(footerRows, (row) => row.totalPnl);
+        const openingValueSum = sumCompleteOrNull(footerRows, (row) => row.openingValue);
         const totalReturn = ratioOrNull(totalPnl, openingValueSum);
-        const netTotalPnl = sumNumeric(footerRows, (row) => row.netTotalPnl);
+        const netTotalPnl = sumCompleteOrNull(footerRows, (row) => row.netTotalPnl);
         const netTotalReturn = ratioOrNull(netTotalPnl, openingValueSum);
 
         return {
             'opening-date': label('brokers.lots.footerTotals', label('assets.distribution.total', 'Totals')),
             'total-pnl': signedAmountCell(totalPnl),
             'total-return': signedPercentCell(totalReturn),
-            'asset-income': currencyCell(sumNumeric(footerRows, (row) => row.assetIncome)),
-            'allocated-fees': currencyCell(sumNumeric(footerRows, (row) => row.allocatedFees)),
-            'allocated-taxes': currencyCell(sumNumeric(footerRows, (row) => row.allocatedTaxes)),
+            'asset-income': currencyCell(sumCompleteOrNull(footerRows, (row) => row.assetIncome)),
+            'allocated-fees': currencyCell(sumCompleteOrNull(footerRows, (row) => row.allocatedFees)),
+            'allocated-taxes': currencyCell(sumCompleteOrNull(footerRows, (row) => row.allocatedTaxes)),
             'net-total-pnl': signedAmountCell(netTotalPnl),
             'net-total-return': signedPercentCell(netTotalReturn),
-            'current-value': currencyCell(sumNumeric(footerRows, (row) => row.currentValue)),
+            'current-value': currencyCell(sumCompleteOrNull(footerRows, (row) => row.currentValue)),
             'open-quantity': quantityValueCell(sumNumeric(footerRows, (row) => row.quantityOpen)),
-            'opening-price': currencyCell(
-                weightedAverage(
+            'opening-price': unitPriceCell(
+                weightedAverageCompleteOrNull(
                     footerRows,
                     (row) => row.openingUnitPrice,
                     (row) => row.currentValue,
                 ),
             ),
             'open-return': signedPercentCell(
-                weightedAverage(
+                weightedAverageCompleteOrNull(
                     footerRows,
                     (row) => row.relativeReturn,
                     (row) => row.currentValue,
@@ -584,7 +607,7 @@
         {
             id: 'opening-price',
             header: () => label('brokers.lots.openingPriceReference', 'Opening price'),
-            cell: (row) => currencyCell(row.openingUnitPrice),
+            cell: (row) => unitPriceCell(row.openingUnitPrice),
             type: 'number',
             align: 'right',
             width: 150,

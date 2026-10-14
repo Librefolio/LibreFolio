@@ -8,8 +8,10 @@
   Step 4: Review & Import — asset resolution + TX selection + handoff to BulkModal
 -->
 <script lang="ts">
-    import {untrack} from 'svelte';
+    import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {Upload, Trash2, Eye, Search, ChevronDown, ChevronRight, Check, AlertTriangle, Info, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, ListChecks, X, Wand2, Pencil, Loader2} from 'lucide-svelte';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
@@ -18,14 +20,18 @@
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import {ensureBrokersLoaded, getEditableBrokers, refreshAllBrokers, getBrokerInfo, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {getAssetInfo, refreshAllAssets, type AssetInfo} from '$lib/stores/reference/assetStore';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {safeString} from '$lib/types/common';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {isFakeAssetId} from '$lib/utils/brim/isFakeAssetId';
     import {getIndexColor, getStringColor} from '$lib/utils/colors';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import {loadAssetEditData, type AssetEditData} from '$lib/components/assets/assetEditData';
     import IdentifierPrimaryChooser from '$lib/components/assets/IdentifierPrimaryChooser.svelte';
     import {pendingIdentifier, needsPrimaryChoice, mergeOther, demotedValues} from '$lib/utils/assetIdentifiers';
-    import {electPrimary, groupExtractedAssets, groupSignature, orderedIdentifiers, representativeMap, representativeOf, type AssetGroup, type ExtractedAsset, type GroupOverride, type IdentifierKind, type PrimaryMap, type SimilarityLink} from '$lib/utils/assetGrouping';
+    import {clusterSignature, electPrimary, groupExtractedAssets, groupSignature, memberKey, orderedIdentifiers, representativeMap, representativeOf, type AssetGroup, type ExtractedAsset, type GroupOverride, type IdentifierKind, type PrimaryMap, type SimilarityLink} from '$lib/utils/assetGrouping';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import {getTransactionTypeIconUrl, getTypeRule, ensureTypesLoaded, TX_TYPES} from '$lib/stores/transactions/transactionTypeStore';
 
@@ -36,12 +42,16 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
-    import ImportPluginSelect, {getCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
+    import ImportPluginSelect, {getCachedPlugins, setCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
     import ParseDetailModal from '$lib/components/transactions/modals/ParseDetailModal.svelte';
+    import ImportBrokerMismatchModal, {type BrokerMismatchBroker, type BrokerMismatchPlugin, type BrokerMismatchTarget} from '$lib/components/transactions/modals/ImportBrokerMismatchModal.svelte';
+    import {findDefaultPluginMismatch, resolveParseRefusalMessage, type ParseRefusal} from '$lib/utils/brim/defaultPluginCheck';
+    import {brimPluginName} from '$lib/utils/brim/pluginText';
+    import {isFallbackPlugin} from '$lib/utils/brim/pluginKind';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {mapWithConcurrency} from '$lib/utils/core/requestConcurrency';
@@ -56,6 +66,8 @@
     import BrimNoticeList from '$lib/components/transactions/import/BrimNoticeList.svelte';
     import FixFlaggedStep, {type FixPatch} from '$lib/components/transactions/import/FixFlaggedStep.svelte';
     import AssetGroupStep from '$lib/components/transactions/import/AssetGroupStep.svelte';
+    import ReportSetCard from '$lib/components/transactions/import/ReportSetCard.svelte';
+    import GapFixStep from '$lib/components/transactions/import/GapFixStep.svelte';
     import AssetMergeModal from '$lib/components/assets/AssetMergeModal.svelte';
     import TransactionCompareModal from '$lib/components/transactions/modals/TransactionCompareModal.svelte';
     import type {CompareColumn, CompareField, CompareCell} from '$lib/components/transactions/modals/TransactionCompareModal.svelte';
@@ -65,14 +77,37 @@
     import {buildDuplicateRecheckPayload} from '$lib/utils/transactions/duplicateRecheckPayload';
     import {isFixStepTodo, rowStaysInFixStep, todosAfterSettle, todosAfterReopen} from '$lib/utils/transactions/fixRowLifecycle';
     import {CONF_ORDER, type DuplicateStatus, type DuplicateTier, type DedupKey, type DuplicateGroup, type MergedTx, type AssetResolution} from '$lib/utils/transactions/importTypes';
-    import {buildDedupKey, buildDuplicateGroups, dedupKeysMatch, duplicateStatusAllowsAutoSelect, duplicateStatusIsSelectedWarning, isResolvedAwayDuplicate, pendingDuplicateStatusFor} from '$lib/utils/transactions/importDedup';
-    import {buildMergedTransactions, mergeCandidates, uniqueExactCandidateId} from '$lib/utils/transactions/importMerge';
+    import {buildDedupKey, buildDuplicateGroups, compareTargetFor, dedupKeysMatch, duplicateStatusIsSelectedWarning, isResolvedAwayDuplicate, pendingDuplicateStatusFor, rowAfterRecheck} from '$lib/utils/transactions/importDedup';
+    import {buildMergedTransactions, mergeCandidates, uniqueCandidateId} from '$lib/utils/transactions/importMerge';
     import {cmpSourceFromTx, cmpSourceFromExisting, compareTypeCellHtml, type CmpSource} from '$lib/utils/transactions/importCompare';
     import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
-    import {brokerIdForTx, beforeOpeningInfo, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
-    import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet} from '$lib/utils/transactions/importDuplicateResolver';
+    import {brokerIdForTx, beforeOpeningInfo, isBeforeHistory as isBeforeHistoryPure, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure, shouldAutoSelectOnRecheck} from '$lib/utils/transactions/importRowState';
+    import {
+        buildParseUnits,
+        combinedFileForSet,
+        groupBrokerFiles,
+        isReportSetPlugin,
+        readAlonePlugins,
+        rememberedChoices,
+        setBlocksAnalysis,
+        setPluginFor,
+        setRequest,
+        setSelectionState,
+        ungroupedSetFiles,
+        type ReportSetGroup,
+        type SetPluginInfo,
+        type SetPreviewState,
+    } from '$lib/utils/transactions/importReportSets';
+    import {completePairsOnly, freshLinkFor, linkedPairs, setPairSelected} from '$lib/utils/transactions/importPairs';
+    import {renderFromToHtml, renderImpliedRateHtml} from '$lib/utils/transactions/pairCellHtml';
+    import {buildGapFixRequests, buildGapFixView, defaultGapFixSelection, gapFixHasSomethingToShow, gapFixSelectedCount, resolveTruthAssetId, selectedGapFixCreates, truthSourcesOf, type GapFixOutcome, type GapFixView, type TruthSource} from '$lib/utils/transactions/gapFixModel';
+    import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet, carryResolverChoices, type ResolverChoices} from '$lib/utils/transactions/importDuplicateResolver';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide, type ImportGuideStepId} from '$lib/features/onboarding/onboardingGuide.svelte';
 
-    import type {TransactionCreateItem, BrimFile, BrimParseResponse, FilePreviewResponse} from '$lib/types';
+    import type {TransactionCreateItem, BrimFile, BrimParseResponse, BrimPlugin, BrimSetCombineResponse, BrimSetPreview, FilePreviewResponse} from '$lib/types';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Props
@@ -90,7 +125,7 @@
          *  to-be-deleted rows is no longer flagged as a duplicate. */
         pendingDeleteTxIds?: number[];
         onClose: () => void;
-        onImportBatch: (creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>) => void;
+        onImportBatch: (creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>, guideProgress?: {current: number; total: number}) => void;
     }
 
     let {open, zIndex = 70, defaultBrokerId = null, pendingCreateTransactions = [], pendingDeleteTxIds = [], onClose, onImportBatch}: Props = $props();
@@ -110,14 +145,15 @@
      *
      * Order matters and encodes the invariant that motivated the split: nothing is
      * compared against the database until the data is complete. Understand → unify →
-     * correct → compare → review.
+     * correct → compare → review. A report set adds, after the review, the alignment with the
+     * bank (`gapFix`): what the bank states at its truth points against what LibreFolio will know.
      *
      * `assets` sits before `fix` deliberately. The correction step asks the user to attach an
      * asset to a flagged row, and its list is derived from the resolutions: unify afterwards and
      * the same security would appear twice there, indistinguishable, so half the rows would land
      * on half the instrument. Unifying first makes that choice unambiguous and asks it once.
      */
-    type StepId = 'upload' | 'select' | 'analyze' | 'assets' | 'fix' | 'duplicates' | 'review';
+    type StepId = 'upload' | 'select' | 'analyze' | 'assets' | 'fix' | 'duplicates' | 'review' | 'gapFix';
 
     const STEP_DEFS: ReadonlyArray<{id: StepId; titleKey: string}> = [
         {id: 'upload', titleKey: 'step1Title'},
@@ -127,6 +163,7 @@
         {id: 'fix', titleKey: 'stepFixTitle'},
         {id: 'duplicates', titleKey: 'stepDuplicatesTitle'},
         {id: 'review', titleKey: 'step4Title'},
+        {id: 'gapFix', titleKey: 'reportSet.gapFix.stepTitle'},
     ];
 
     const STEP_ORDER: ReadonlyArray<StepId> = STEP_DEFS.map((s) => s.id);
@@ -136,6 +173,44 @@
     // =========================================================================
 
     let currentStepId = $state<StepId>('upload');
+    let guideObservedOpen = false;
+    let guideHandedOff = false;
+
+    function importGuideStep(id: StepId): ImportGuideStepId {
+        return `import.${id}` as ImportGuideStepId;
+    }
+
+    $effect(() => {
+        const isOpen = open;
+        const step = currentStepId;
+        const stepIndex = visibleSteps.findIndex((candidate) => candidate.id === step);
+        const progress = {
+            current: Math.max(stepIndex + 1, 1),
+            total: visibleSteps.length,
+        };
+        if (isOpen) {
+            if (!guideObservedOpen) {
+                guideObservedOpen = true;
+                guideHandedOff = false;
+                if (onboardingGuide.active?.flow === 'transaction_bulk_guide') {
+                    onboardingGuide.queueContextual('transaction_bulk_guide', onboardingGuide.active.stepId);
+                    onboardingGuide.dismissHost();
+                }
+            }
+            if (guideHandedOff) return;
+            if (onboardingGuide.active?.flow === 'import_guide' && onboardingGuide.active.stepId === importGuideStep(step)) {
+                onboardingGuide.setStep(importGuideStep(step), progress);
+            } else if (!onboardingGuide.active) {
+                onboardingGuide.startImportAt(importGuideStep(step), progress);
+            }
+            return;
+        }
+        if (guideObservedOpen && !guideHandedOff && onboardingGuide.active?.flow === 'import_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
+        guideObservedOpen = false;
+        guideHandedOff = false;
+    });
 
     // =========================================================================
     // Step 1 State — Upload & Assign Broker
@@ -148,6 +223,8 @@
         brokerId: number | null;
         status: 'pending' | 'uploading' | 'uploaded' | 'error';
         serverFileId?: string;
+        /** The server's file info, from the upload response: role detection needs its plugins and batch. */
+        serverInfo?: BrimFile;
         errorMessage?: string;
     }
 
@@ -159,9 +236,32 @@
     let dropZoneExpanded = $state(true); // T2: collapsible drop zone
     let dropZoneContainerRef: HTMLDivElement | undefined = $state(undefined);
 
-    // T1/R3: click outside drop zone → collapse if files exist
+    /**
+     * One upload batch per wizard session: the files uploaded together form a report set
+     * (design D-S22), and an export dropped after the "missing export" warning joins that set.
+     */
+    let uploadBatchId = $state(generateUUID());
+
+    /** A required export missing from a set this session uploaded (design §4.2). */
+    interface Step1SetWarning {
+        key: string;
+        pluginCode: string;
+        pluginName: string;
+        docsUrl: string | null;
+        roleCode: string;
+        roleLabel: string;
+        extensions: string;
+        start: string | null;
+        end: string | null;
+    }
+
+    let step1SetWarnings = $state<Step1SetWarning[]>([]);
+
+    // T1/R3: click outside drop zone → collapse if files exist. Not while a set warning asks
+    // for its missing export: collapsing on the mousedown of Next resized the modal under the
+    // pointer, and the click that should have moved on was lost.
     $effect(() => {
-        if (!dropZoneExpanded || pendingFiles.length === 0) return;
+        if (!dropZoneExpanded || pendingFiles.length === 0 || step1SetWarnings.length > 0) return;
         function handleClickOutside(e: MouseEvent) {
             if (isOutsideClick(e.target, (el) => !dropZoneContainerRef || dropZoneContainerRef.contains(el))) {
                 dropZoneExpanded = false;
@@ -203,8 +303,45 @@
     let expandedBrokers = $state<Set<number>>(new Set());
     let filePluginOverrides = $state<Map<string, string>>(new Map());
 
+    // Report sets (design §4.3): the plugin catalogue, the files grouped into sets, each set's
+    // preview, and which cards are open. A set is selected, analysed and imported as a whole.
+    /** A set's preview, with the members it was asked for: another membership needs another preview. */
+    type SetPreviewEntry = SetPreviewState & {preview?: BrimSetPreview | null; members?: string};
+    let importPlugins = $state<BrimPlugin[]>([]);
+    let setPreviews = $state<Map<string, SetPreviewEntry>>(new Map());
+    let expandedSets = $state<Set<string>>(new Set());
+    let setUploadingRole = $state<Map<string, string>>(new Map());
+    let setPreviewEpoch = 0;
+    let setPluginInfos = $derived(importPlugins as unknown as SetPluginInfo[]);
+    /**
+     * How each file is read, as last analysed (phase G): files only uploaded have no memory, an
+     * analysed set remembers its members and plugin, a file analysed alone its plugin.
+     */
+    let rememberedByBroker = $derived(new Map([...brokerFilesMap].map(([brokerId, files]) => [brokerId, rememberedChoices(files, setPluginInfos)] as const)));
+    /** The choices in force: this session's (`filePluginOverrides`) over the memory of the last analysis. */
+    function choicesFor(brokerId: number): Map<string, string> {
+        return new Map([...(rememberedByBroker.get(brokerId) ?? new Map<string, string>()), ...filePluginOverrides]);
+    }
+    let brokerSetGroups = $derived.by(() => {
+        const groups = new Map<number, {sets: ReportSetGroup[]; singles: BrimFile[]}>();
+        for (const [brokerId, files] of brokerFilesMap) groups.set(brokerId, groupBrokerFiles(brokerId, files, setPluginInfos, choicesFor(brokerId)));
+        return groups;
+    });
+    let allReportSets = $derived([...brokerSetGroups.values()].flatMap((group) => group.sets));
+    let selectedFileIdSet = $derived(new Set(selectedFiles.map((f) => f.fileId)));
+    let blockingSets = $derived(allReportSets.filter((set) => setBlocksAnalysis(set, selectedFileIdSet, setPreviews.get(set.key))));
+    /** R6: a set ticked only in part blocks until it is ticked whole or unticked; its hint comes first. */
+    let partlySelectedSets = $derived(allReportSets.filter((set) => setSelectionState(set, selectedFileIdSet) === 'some'));
+    let parseUnits = $derived(buildParseUnits(selectedFiles, allReportSets));
+    /** #26: selected files read alone with a report-set plugin — in no set (no batch, or failed), so the server would refuse them. */
+    let ungroupedFiles = $derived(ungroupedSetFiles(parseUnits, setPluginInfos));
+    /** Why Continue waits on the sets, in order of precedence: a set ticked in part (R6), a set file in no set (#26), an incomplete set. */
+    let setBlockReason = $derived<'partly-selected' | 'ungrouped' | 'incomplete' | null>(partlySelectedSets.length > 0 ? 'partly-selected' : ungroupedFiles.length > 0 ? 'ungrouped' : blockingSets.length > 0 ? 'incomplete' : null);
+    let selectedSetCount = $derived(parseUnits.filter((unit) => unit.kind === 'set').length);
+    let setPreviewsLoading = $derived([...setPreviews.values()].some((entry) => entry.status === 'loading'));
+
     // T9: Parse validation — all selected files must have a plugin
-    let step2CanParse = $derived(selectedFiles.length > 0 && selectedFiles.every((f) => f.pluginCode !== ''));
+    let step2CanParse = $derived(selectedFiles.length > 0 && selectedFiles.every((f) => f.pluginCode !== '') && blockingSets.length === 0 && ungroupedFiles.length === 0);
 
     // =========================================================================
     // Step 3 State — Parse Engine & Results
@@ -222,6 +359,22 @@
         status: 'pending' | 'parsing' | 'done' | 'error';
         response: BrimParseResponse | null;
         errorMessage?: string;
+        /** Set when the row is a report set, analysed as one through its combined file. */
+        set?: ParsedSetInfo;
+    }
+
+    /** A report set analysed as one row: its files, and the combined file it is parsed through. */
+    interface ParsedSetInfo {
+        key: string;
+        batchId: string;
+        /** The originals of the upload left out of the set: the combine must leave them out too. */
+        excludeFileIds: string[];
+        uploadedAt: string;
+        memberIds: string[];
+        memberNames: string[];
+        combinedFileId: string | null;
+        summary: Record<string, unknown> | null;
+        reused: boolean;
     }
 
     let parseResults = $state<ParsedFileResult[]>([]);
@@ -363,11 +516,6 @@
         for (const group of groups) {
             const partitions = groupPartitions(group, txArr);
             const primaryIndices = new Set(partitions.map((p) => p.primaryIndex));
-            // Back-reference each secondary to its own partition primary (its exact twin).
-            const primaryOf = new Map<number, number>();
-            for (const p of partitions) {
-                for (const idx of p.memberIndices) primaryOf.set(idx, p.primaryIndex);
-            }
             for (const idx of group.memberIndices) {
                 const mt = txArr.find((row) => row.index === idx);
                 if (!mt) continue;
@@ -376,39 +524,71 @@
                 mt.dupGroupKey = group.key;
                 mt.dupTier = group.tier;
                 mt.isDupKeeper = isPrimary;
-                if (isPrimary) {
-                    // Keep the primary's own vs-existing status; it is not an in-batch duplicate.
-                    mt.dupKeeperIndex = undefined;
-                    mt.dupKeeperFileName = undefined;
-                } else {
-                    // Every secondary shares its partition's description+key → exact in-batch duplicate.
-                    mt.duplicateStatus = 'pending_duplicate';
-                    const keeperIndex = primaryOf.get(idx) ?? idx;
-                    mt.dupKeeperIndex = keeperIndex;
-                    mt.dupKeeperFileName = getSourceFileName(txArr.find((row) => row.index === keeperIndex)?.sourceFileId ?? '');
-                }
+                // The primary keeps its own vs-existing status; every secondary shares its
+                // partition's description+key, so it is an exact in-batch duplicate.
+                if (!isPrimary) mt.duplicateStatus = 'pending_duplicate';
             }
         }
     }
 
-    function markPendingBulkDuplicates(txArr: MergedTx[], assetMap: Map<number, AssetResolution>) {
+    /**
+     * Record which rows match one of the bulk editor's unsaved rows. Runs before the cross-file
+     * resolver, which must know that verdict: a copy the editor already holds is never the one a
+     * group keeps by default. `markPendingBulkDuplicates` then shows the verdict on the row.
+     */
+    function detectPendingBulkDuplicates(txArr: MergedTx[], assetMap: Map<number, AssetResolution>) {
         const pending = pendingCreateTransactions.map((tx) => ({tx, key: buildDedupKey(tx, assetMap)})).filter((entry): entry is {tx: TransactionCreateItem; key: DedupKey} => entry.key !== null);
         for (const mt of txArr) {
             const key = buildDedupKey(mt.tx, assetMap);
             if (!key) continue;
             const match = pending.find((entry) => dedupKeysMatch(key, entry.key));
             if (!match) continue;
-            mt.duplicateStatus = pendingDuplicateStatusFor(mt.tx, match.tx);
+            mt.pendingMatchStatus = pendingDuplicateStatusFor(mt.tx, match.tx);
+            mt.dupPendingMatch = match.tx;
+        }
+    }
+
+    function markPendingBulkDuplicates(txArr: MergedTx[]) {
+        for (const mt of txArr) {
+            if (!mt.pendingMatchStatus || !mt.dupPendingMatch) continue;
+            mt.duplicateStatus = mt.pendingMatchStatus;
+            // Inside a cross-file group the resolver has already chosen knowing this verdict: a
+            // firm match was never kept, and the copy it shows stays listed, as with a database
+            // twin. Only the badge changes here, so a first pass and a re-apply agree.
+            if (mt.dupGroupKey != null) continue;
             mt.selected = mt.duplicateStatus === 'pending_possible_duplicate';
             mt.isDupKeeper = false;
-            mt.dupKeeperIndex = undefined;
-            mt.dupKeeperFileName = $t('importWizard.resolver.pendingEditor');
-            mt.dupPendingMatch = match.tx;
         }
     }
 
     let mergedTransactions = $state<MergedTx[]>([]);
     let assetResolutions = $state<AssetResolution[]>([]);
+    let candidatesRefreshing = $state(false);
+    let candidatesError = $state<string | null>(null);
+    let candidateRequestEpoch = 0;
+    let wizardDataEpoch = 0;
+    let navigationEpoch = 0;
+    let duplicateRequestEpoch = 0;
+    let importPreparing = $state(false);
+    const manualAssetSelections = new Map<string, number | null>();
+    /** "Align with the bank" (report sets): the view of the last gap-fix, and the corrections the user keeps. */
+    let gapFixView = $state<GapFixView | null>(null);
+    let gapFixSelected = $state<ReadonlySet<string>>(new Set());
+    let gapFixSelectedTotal = $derived(gapFixView ? gapFixSelectedCount(gapFixView, gapFixSelected) : 0);
+    /** The per-file remap of the last merge: the gap-fix maps the truth positions through it. */
+    let mergeFakeRemapByFile = new Map<string, Map<number, number>>();
+
+    function invalidateCandidateRequests() {
+        wizardDataEpoch += 1;
+        candidateRequestEpoch += 1;
+        navigationEpoch += 1;
+        duplicateRequestEpoch += 1;
+        candidatesRefreshing = false;
+        candidatesError = null;
+        duplicateRecheckRunning = false;
+    }
+
+    onDestroy(invalidateCandidateRequests);
 
     /*
      * Unification state.
@@ -489,6 +669,12 @@
     let step4TableRef = $state<DataTable<MergedTx> | undefined>(undefined);
     let brokers = $state<BrokerInfo[]>([]);
     let brokersLoading = $state(false);
+    /**
+     * Broker-list loads in flight; `brokersLoading` is the signal the template reads.
+     * A plain variable, never `$state`: the open effect starts a load, and a reactive counter
+     * read and written there would make the effect depend on it (see `importPluginsRequest`).
+     */
+    let brokerLoadsInFlight = 0;
     let confirmCloseOpen = $state(false);
     let showWarningConfirm = $state(false);
 
@@ -593,23 +779,53 @@
         mergedTransactions = mergedTransactions.map((t) => (beforeOpeningIndices.has(t.index) ? {...t, selected: false} : t));
     });
 
+    /** A report set's rows before H0: already represented in LibreFolio, hidden in the review and never imported. */
+    function isBeforeHistory(mt: MergedTx): boolean {
+        return isBeforeHistoryPure(mt, parseResults);
+    }
+
+    let beforeHistoryIndices = $derived.by(() => new Set(mergedTransactions.filter(isBeforeHistory).map((t) => t.index)));
+    let showBeforeHistory = $state(false);
+
+    $effect(() => {
+        if (!mergedTransactions.some((t) => t.selected && beforeHistoryIndices.has(t.index))) return;
+        mergedTransactions = mergedTransactions.map((t) => (beforeHistoryIndices.has(t.index) ? {...t, selected: false} : t));
+    });
+
     /** True unless the row's asset is an unresolved fake mapping (no bound real asset yet). */
     function isRowAssetResolved(t: MergedTx): boolean {
         return isRowAssetResolvedPure(t, assetResolutions);
     }
 
     // Step 4 deriveds
-    let step4Rows = $derived(mergedTransactions.filter((t) => !isResolvedAwayDuplicate(t)));
-    let step4SelectedCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index)).length);
-    let step4TotalCount = $derived(step4Rows.filter((t) => !beforeOpeningIndices.has(t.index)).length);
+    // A linked pair (a currency conversion's two legs) is one table row, its paying leg's; the counts stay in transactions.
+    let pairs = $derived(linkedPairs(mergedTransactions));
+    let mergedByIndex = $derived(new Map(mergedTransactions.map((t) => [t.index, t])));
+    let step4LegRows = $derived(mergedTransactions.filter((t) => !isResolvedAwayDuplicate(t) && (showBeforeHistory || !beforeHistoryIndices.has(t.index))));
+    let step4Rows = $derived(step4LegRows.filter((t) => !pairs.hidden.has(t.index)));
+    let step4SelectedCount = $derived(
+        completePairsOnly(
+            mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index)),
+            pairs,
+        ).length,
+    );
+    let step4TotalCount = $derived(step4LegRows.filter((t) => !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index)).length);
+
+    /** The other leg of a pair's row, shown as its "To"; undefined for a row that is no pair. */
+    function pairPartner(mt: MergedTx): MergedTx | undefined {
+        const partner = pairs.partnerOf.get(mt.index);
+        return partner === undefined ? undefined : mergedByIndex.get(partner);
+    }
     let step4UnresolvedCount = $derived(assetResolutions.filter((r) => r.resolvedAssetId === null).length);
+    let step4MissingAssetCount = $derived(assetResolutions.filter((r) => r.resolvedAssetId === null && r.candidates.length === 0).length);
     let step4HasUnresolvedSelected = $derived(mergedTransactions.some((t) => t.selected && !beforeOpeningIndices.has(t.index) && !isRowAssetResolved(t)));
-    let step4CanImport = $derived(step4SelectedCount > 0 && !step4HasUnresolvedSelected);
+    let step4CanImport = $derived(step4SelectedCount > 0 && !step4HasUnresolvedSelected && !candidatesRefreshing && !candidatesError && !duplicateRecheckRunning && !importPreparing);
     let step4SelectedDuplicateCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index) && duplicateStatusIsSelectedWarning(t.duplicateStatus)).length);
     let step4BeforeOpeningCount = $derived(beforeOpeningIndices.size);
+    let step4BeforeHistoryCount = $derived(beforeHistoryIndices.size);
     // Reasons a visible step-4 row is pre-deselected (for the explanatory banner)
-    let step4DeselectPendingDup = $derived(step4Rows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && t.duplicateStatus === 'pending_duplicate').length);
-    let step4DeselectDbDup = $derived(step4Rows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && t.duplicateStatus === 'likely').length);
+    let step4DeselectPendingDup = $derived(step4LegRows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index) && t.duplicateStatus === 'pending_duplicate').length);
+    let step4DeselectDbDup = $derived(step4LegRows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index) && t.duplicateStatus === 'likely').length);
     let step4HasDeselectReasons = $derived(step4BeforeOpeningCount > 0 || step4DeselectPendingDup > 0 || step4DeselectDbDup > 0);
 
     interface BrokerOpeningIssue {
@@ -645,18 +861,23 @@
         }));
     });
 
-    /**
-     * Return the asset_id of a lone EXACT-confidence candidate, else null.
-     * Used to auto-bind an extracted asset whose ISIN uniquely matches one existing
-     * asset even when the backend left selected_asset_id null.
-     */
     function mergeAllTransactions() {
-        const {txArr, assetMap, fileIdOfFake} = buildMergedTransactions(parseResults, brokers, pendingDeleteTxIds);
+        invalidateCandidateRequests();
+        const {txArr, assetMap, fileIdOfFake, fakeRemapByFile} = buildMergedTransactions(parseResults, brokers, pendingDeleteTxIds);
+        mergeFakeRemapByFile = fakeRemapByFile;
+        if (gapFixView !== null) clearGapFix();
 
         // Unification runs *before* anything else looks at assets: the duplicate report, the
         // correction step and the review all read the resulting list, so a partition applied
         // later would mean asking the user to pick an asset twice.
         applyAssetGrouping(txArr, assetMap, fileIdOfFake);
+        for (const resolution of assetMap.values()) {
+            const signature = groupSignature({members: resolution.groupMembers});
+            if (manualAssetSelections.has(signature)) {
+                resolution.resolvedAssetId = manualAssetSelections.get(signature) ?? null;
+                resolution.selectionOrigin = 'manual';
+            }
+        }
 
         syncDuplicateFilePriority();
         rebuildDuplicateGroups(txArr, assetMap);
@@ -722,10 +943,10 @@
                 // A member may have been the only one the backend could match: keep its
                 // candidates and its binding rather than losing them with the entry.
                 leadRes.candidates = mergeCandidates(leadRes.candidates, folded.candidates);
-                leadRes.resolvedAssetId = leadRes.resolvedAssetId ?? folded.resolvedAssetId;
                 leadRes.notices = [...leadRes.notices, ...folded.notices];
                 assetMap.delete(member.fakeAssetId);
             }
+            if (group.members.length > 1) leadRes.resolvedAssetId = uniqueCandidateId(leadRes.candidates);
         }
 
         // Rewriting the bindings through the map rather than per group is what keeps the two
@@ -739,10 +960,28 @@
     }
 
     /** Union of two candidate lists, keeping the strongest confidence seen for each asset. */
-    /** Turns a per-row duplicate verdict into resolver groups and folds the panel sensibly. */
-    function rebuildDuplicateGroups(txArr: MergedTx[], assetMap: Map<number, AssetResolution>) {
-        const groups = buildDuplicateGroups(txArr, assetMap);
+    /**
+     * Turns a per-row duplicate verdict into resolver groups and folds the panel sensibly.
+     *
+     * With the previous report, the user's resolver choices are carried over to the groups they
+     * already arbitrated in the same form; the groups they have not are returned as changed.
+     */
+    function rebuildDuplicateGroups(txArr: MergedTx[], assetMap: Map<number, AssetResolution>, previous?: {groups: DuplicateGroup[]; rows: MergedTx[]; choices: ResolverChoices}): DuplicateGroup[] {
+        // The editor verdict first: the resolver below reads it to choose the keepers.
+        detectPendingBulkDuplicates(txArr, assetMap);
+        const groups = buildDuplicateGroups(
+            txArr.filter((mt) => !isBeforeHistory(mt)),
+            assetMap,
+        );
         duplicateGroups = groups;
+        let changed: DuplicateGroup[] = [];
+        if (previous) {
+            // Before the resolver runs below: it reads these choices for every group member.
+            const carried = carryResolverChoices(previous.groups, previous.choices, groups, {previousRows: previous.rows, nextRows: txArr});
+            duplicateResolverTouchedKeys = carried.touchedKeys;
+            duplicateResolverSelections = carried.selections;
+            changed = carried.changed;
+        }
         // Nothing partial to arbitrate ⇒ every group is a total overlap, which the resolver
         // already keeps one copy of. The panel stays available but folded, with a badge that
         // says so — showing an open resolver full of decisions that need no decision buries
@@ -750,7 +989,8 @@
         duplicateResolverCollapsed = !groups.some((g) => g.tier === 'probable');
         expandedDuplicateTiers = new Set<DuplicateTier>();
         applyPendingDuplicateGroups(txArr, groups);
-        markPendingBulkDuplicates(txArr, assetMap);
+        markPendingBulkDuplicates(txArr);
+        return changed;
     }
 
     /**
@@ -760,12 +1000,21 @@
      * The report returned by `/parse` answers the question "does the plugin's raw reading of
      * this file already exist?". After the user fixes a row that the plugin misread, that is
      * no longer the question being asked, so the answer is re-requested rather than reused.
+     *
+     * The resolver choices survive the recheck on the groups the user already arbitrated in
+     * the same form. Returns the groups they have not — new, or changed — which is empty when
+     * the recheck did not complete.
      */
-    async function refreshDuplicateReport(): Promise<void> {
+    async function refreshDuplicateReport(preserveSelection = false): Promise<DuplicateGroup[]> {
+        const request = ++duplicateRequestEpoch;
+        const context = wizardDataEpoch;
+        const session = getClientSessionGeneration();
+        const mappingKey = JSON.stringify(assetResolutions.map((resolution) => [resolution.fakeAssetId, resolution.resolvedAssetId]));
+        const current = () => open && request === duplicateRequestEpoch && context === wizardDataEpoch && isClientSessionCurrent(session) && mappingKey === JSON.stringify(assetResolutions.map((resolution) => [resolution.fakeAssetId, resolution.resolvedAssetId]));
         duplicateRecheckError = null;
         if (mergedTransactions.length === 0) {
             duplicateGroups = [];
-            return;
+            return [];
         }
 
         // Duplicate detection is scoped to one broker, and an import can span several.
@@ -777,7 +1026,7 @@
             list.push(m);
             byBroker.set(brokerId, list);
         }
-        if (byBroker.size === 0) return;
+        if (byBroker.size === 0) return [];
 
         const resolvedByFakeId = new Map<number, number>();
         for (const res of assetResolutions) {
@@ -796,6 +1045,7 @@
                     broker_id: brokerId,
                     transactions: asked.map(({clone}) => clone) as never,
                 });
+                if (!current()) return [];
                 const pendingDeleteSet = new Set(pendingDeleteTxIds);
                 const record = (entries: unknown[], status: DuplicateStatus) => {
                     for (const raw of entries as Array<{tx_row_index: number; tx_existing_matches?: BrimDuplicateMatch[]}>) {
@@ -811,54 +1061,52 @@
                 record(report.tx_possible_duplicates ?? [], 'possible');
             }
         } catch (e) {
+            if (!current()) return [];
             // A failed re-check must not silently fall back to the stale verdict: say so and
             // keep what we have, so the user can still arbitrate manually.
             duplicateRecheckError = extractErrorMessage(e);
             duplicateRecheckRunning = false;
-            return;
+            return [];
+        } finally {
+            if (request === duplicateRequestEpoch) duplicateRecheckRunning = false;
         }
-        duplicateRecheckRunning = false;
+        if (!current()) return [];
 
         const assetMap = new Map<number, AssetResolution>(assetResolutions.map((r) => [r.fakeAssetId, r]));
         const txArr = mergedTransactions.map((m) => {
-            const v = verdict.get(m.index);
-            const status: DuplicateStatus = v?.status ?? 'unique';
-            // Recomputed, not carried over: a correction can clear a false duplicate, and the
-            // row must then become selectable again. Rows predating the broker's opening date
-            // stay out either way.
+            // Rows predating the broker's opening date stay out either way.
             const openedAt = brokers.find((b) => b.id === parseResults.find((r) => r.fileId === m.sourceFileId)?.brokerId)?.opened_at ?? null;
             const beforeOpening = openedAt != null && String(m.tx.date ?? '') !== '' && String(m.tx.date ?? '') < openedAt;
-            return {
-                ...m,
-                duplicateStatus: status,
-                dupMatches: v?.matches ?? [],
-                dupGroupKey: undefined,
-                dupTier: undefined,
-                dupKeeperIndex: undefined,
-                dupKeeperFileName: undefined,
-                isDupKeeper: undefined,
-                dupPendingMatch: undefined,
-                selected: !beforeOpening && duplicateStatusAllowsAutoSelect(status),
-            } as MergedTx;
+            return rowAfterRecheck(m, verdict.get(m.index), {beforeOpening, preserveSelection});
         });
 
-        duplicateResolverTouchedKeys = new Set();
-        duplicateResolverSelections = {};
+        const previous = {groups: duplicateGroups, rows: mergedTransactions, choices: {touchedKeys: duplicateResolverTouchedKeys, selections: duplicateResolverSelections}};
         expandedDuplicateGroupKeys = new Set();
-        rebuildDuplicateGroups(txArr, assetMap);
+        const changed = rebuildDuplicateGroups(txArr, assetMap, previous);
         mergedTransactions = txArr;
         duplicateRecheckDone = true;
+        return changed;
     }
 
     function resolveAsset(fakeAssetId: number, realAssetId: number) {
-        assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: realAssetId} : r));
+        assetResolutions = assetResolutions.map((r): AssetResolution => {
+            if (r.fakeAssetId !== fakeAssetId) return r;
+            manualAssetSelections.set(groupSignature({members: r.groupMembers}), realAssetId);
+            return {...r, resolvedAssetId: realAssetId, selectionOrigin: 'manual'};
+        });
+        duplicateRecheckDone = false;
         // W7: rows gated on before-opening while this asset was unresolved never
         // got re-selected — re-run the importable pass now that they resolve.
         reselectImportableRows();
     }
 
     function clearResolution(fakeAssetId: number) {
-        assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: null} : r));
+        assetResolutions = assetResolutions.map((r): AssetResolution => {
+            if (r.fakeAssetId !== fakeAssetId) return r;
+            manualAssetSelections.set(groupSignature({members: r.groupMembers}), null);
+            return {...r, resolvedAssetId: null, selectionOrigin: 'manual'};
+        });
+        duplicateRecheckDone = false;
         reselectImportableRows();
     }
 
@@ -947,48 +1195,61 @@
         await refreshCandidates(fakeId);
     }
 
-    /**
-     * Replace candidates for a specific fakeAssetId with fresh results from the backend.
-     * Called after an asset's identifier is updated so confidence reflects current DB state.
-     */
-    async function refreshCandidates(fakeAssetId: number) {
-        const res = assetResolutions.find((r) => r.fakeAssetId === fakeAssetId);
-        if (!res) return;
+    /** Refresh catalog-dependent matches, never the cached parser facts or manual choices. */
+    async function refreshCandidates(fakeAssetId?: number): Promise<boolean> {
+        const targets = assetResolutions.filter((resolution) => fakeAssetId === undefined || resolution.fakeAssetId === fakeAssetId);
+        if (targets.length === 0) return true;
+        const request = ++candidateRequestEpoch;
+        const context = wizardDataEpoch;
+        const session = getClientSessionGeneration();
+        const current = () => open && request === candidateRequestEpoch && context === wizardDataEpoch && isClientSessionCurrent(session);
+        candidatesRefreshing = true;
+        candidatesError = null;
         try {
-            // Search on every code the group carries, not just the representative's. A unified
-            // bond holds its issue code and its quoted one; querying one of them would quietly
-            // narrow the very union the unification step just built.
-            const isins = res.groupIsins.length > 0 ? res.groupIsins : [res.extractedIsin ?? ''];
-            const symbols = res.groupSymbols.length > 0 ? res.groupSymbols : [res.extractedSymbol ?? ''];
-            const queries = Math.max(isins.length, symbols.length);
-            let fresh: Awaited<ReturnType<typeof zodiosApi.get_asset_candidates_api_v1_brokers_import_asset_candidates_post>> = [];
-            for (let i = 0; i < queries; i++) {
-                const batch = await zodiosApi.get_asset_candidates_api_v1_brokers_import_asset_candidates_post({
-                    extracted_symbol: symbols[i] || undefined,
-                    extracted_isin: isins[i] || undefined,
-                    extracted_name: res.extractedName ?? undefined,
-                });
-                fresh = [...fresh, ...batch];
-            }
-            // Sort by confidence and replace candidates in state
-            const seenAssetIds = new Set<number>();
-            const sorted: AssetResolution['candidates'] = [...fresh]
-                .sort((a, b) => (CONF_ORDER[a.match_confidence] ?? 9) - (CONF_ORDER[b.match_confidence] ?? 9))
-                .filter((c) => {
-                    // Sorted first, so the entry kept is the strongest confidence for that asset.
-                    if (seenAssetIds.has(c.asset_id)) return false;
-                    seenAssetIds.add(c.asset_id);
-                    return true;
-                })
-                .map((c) => ({asset_id: c.asset_id, symbol: (Array.isArray(c.symbol) ? (c.symbol[0] ?? null) : c.symbol) as string | null, isin: (Array.isArray(c.isin) ? (c.isin[0] ?? null) : c.isin) as string | null, name: c.name, match_confidence: c.match_confidence as string}));
+            await refreshAllAssets();
+            if (!current()) return false;
+            const updates = new Map<number, AssetResolution['candidates']>();
+            await mapWithConcurrency(
+                targets,
+                async (resolution) => {
+                    const isins = resolution.groupIsins.length ? resolution.groupIsins : [resolution.extractedIsin ?? ''];
+                    const symbols = resolution.groupSymbols.length ? resolution.groupSymbols : [resolution.extractedSymbol ?? ''];
+                    const names = resolution.groupNames.length ? resolution.groupNames : [resolution.extractedName ?? ''];
+                    const stages = [isins.filter(Boolean).map((value) => ({extracted_isin: value})), symbols.filter(Boolean).map((value) => ({extracted_symbol: value})), names.filter(Boolean).map((value) => ({extracted_name: value}))];
+                    let candidates: AssetResolution['candidates'] = [];
+                    // Match the backend's precedence across the whole group: fuzzy names must
+                    // not compete with a primary/alternate ISIN found through another member.
+                    for (const queries of stages) {
+                        for (const query of queries) {
+                            if (!current()) return;
+                            const result = await zodiosApi.get_asset_candidates_api_v1_brokers_import_asset_candidates_post(query);
+                            candidates = mergeCandidates(
+                                candidates,
+                                result.map((candidate) => ({asset_id: candidate.asset_id, symbol: safeString(candidate.symbol), isin: safeString(candidate.isin), name: candidate.name, match_confidence: candidate.match_confidence})),
+                            );
+                        }
+                        if (candidates.length > 0) break;
+                    }
+                    updates.set(resolution.fakeAssetId, candidates);
+                },
+                {shouldStop: () => !current()},
+            );
+            if (!current()) return false;
             assetResolutions = assetResolutions.map((r) => {
-                if (r.fakeAssetId !== fakeAssetId) return r;
-                // If still unresolved and a fresh identifier edit produced a lone exact match, auto-bind it.
-                const autoBind = r.resolvedAssetId == null ? uniqueExactCandidateId(sorted) : null;
-                return {...r, candidates: sorted, resolvedAssetId: r.resolvedAssetId ?? autoBind};
+                const candidates = updates.get(r.fakeAssetId);
+                if (!candidates) return r;
+                const resolvedAssetId = r.selectionOrigin === 'manual' ? r.resolvedAssetId : uniqueCandidateId(candidates);
+                if (resolvedAssetId !== r.resolvedAssetId) duplicateRecheckDone = false;
+                return {...r, candidates, resolvedAssetId};
             });
-        } catch {
-            // Silently ignore — old candidates remain visible
+            return true;
+        } catch (error: unknown) {
+            if (!current()) return false;
+            candidatesError = extractErrorMessage(error, $t('common.errorOccurred'));
+            toasts.error(candidatesError);
+            return false;
+        } finally {
+            if (current()) candidatesRefreshing = false;
         }
     }
 
@@ -1029,7 +1290,7 @@
         if (!pending) {
             // Nothing to decide — but the search keys still have to land somewhere.
             await mergeSearchKeys(realAssetId, currentOther, extraOther);
-            await refreshCandidates(fakeAssetId);
+            await refreshCandidates();
             return;
         }
 
@@ -1131,22 +1392,152 @@
     }
 
     function buildFinalTxList(): Array<{tx: TransactionCreateItem; todos: ImportTodo[]}> {
-        return mergedTransactions
-            .filter((t) => t.selected && !beforeOpeningIndices.has(t.index))
-            .map((t) => {
-                const tx = {...t.tx} as any;
-                const assetId = typeof tx.asset_id === 'number' ? tx.asset_id : null;
-                if (assetId !== null && isFakeAssetId(assetId)) {
-                    const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
-                    if (res?.resolvedAssetId) tx.asset_id = res.resolvedAssetId;
-                }
-                return {tx: tx as TransactionCreateItem, todos: t.todos};
-            });
+        // Whole pairs only, each under a fresh link_uuid: a plugin's ids repeat in every upload of one statement.
+        const freshLinks = new Map<string, string>();
+        const chosen = mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index));
+        return completePairsOnly(chosen, pairs).map((t) => {
+            const tx = {...t.tx} as any;
+            const link = freshLinkFor(t, freshLinks, generateUUID);
+            if (link) tx.link_uuid = link;
+            const assetId = typeof tx.asset_id === 'number' ? tx.asset_id : null;
+            if (assetId !== null && isFakeAssetId(assetId)) {
+                const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
+                if (res?.resolvedAssetId) tx.asset_id = res.resolvedAssetId;
+            }
+            return {tx: tx as TransactionCreateItem, todos: t.todos};
+        });
     }
 
-    function handleImport() {
-        const creates = buildFinalTxList();
-        onImportBatch(creates);
+    function clearGapFix() {
+        gapFixView = null;
+        gapFixSelected = new Set();
+    }
+
+    function localizeGapFixTodo(reasonCode: string, message: string): string {
+        const key = `importWizard.reportSet.gapFix.todo.${reasonCode}`;
+        const translated = $t(key);
+        return translated === key ? message : translated;
+    }
+
+    function gapFixBrokerName(brokerId: number): string {
+        return brokers.find((b) => b.id === brokerId)?.name ?? getBrokerInfo(brokerId)?.name ?? `#${brokerId}`;
+    }
+
+    /**
+     * One `POST /gap-fix` per broker and plugin with truth points, one after the other. The truth
+     * positions go through the asset each plugin fake became in this wizard; the selection is the
+     * final list, and the editor's unsaved rows and deletions count as they will. A failed request
+     * becomes its group's error: the user can still go on without its corrections.
+     */
+    async function computeGapFixView(sources: TruthSource[], finalList: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>): Promise<GapFixView> {
+        const context = {fakeRemapByFile: mergeFakeRemapByFile, survivorOf: representativeMap(assetGroups), resolutions: assetResolutions};
+        const requests = buildGapFixRequests(
+            sources,
+            finalList.map((item) => item.tx),
+            pendingCreateTransactions,
+            pendingDeleteTxIds,
+            (fileId, assetId) => resolveTruthAssetId(fileId, assetId, context),
+        );
+        const outcomes: GapFixOutcome[] = [];
+        for (const request of requests) {
+            try {
+                const response = await zodiosApi.gap_fix_api_v1_brokers_import_gap_fix_post(request as unknown as Parameters<typeof zodiosApi.gap_fix_api_v1_brokers_import_gap_fix_post>[0]);
+                outcomes.push({brokerId: request.broker_id, pluginCode: request.plugin_code, response});
+            } catch (error) {
+                outcomes.push({brokerId: request.broker_id, pluginCode: request.plugin_code, error: extractErrorMessage(error, $t('importWizard.reportSet.gapFix.error'))});
+            }
+        }
+        return buildGapFixView(outcomes, localizeGapFixTodo);
+    }
+
+    function handOffToEditor(creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>) {
+        const bulkProgress = {
+            current: visibleSteps.length + 1,
+            total: visibleSteps.length + 1,
+        };
+        onImportBatch(creates, bulkProgress);
+        if (onboardingGuide.active?.flow === 'import_guide') {
+            guideHandedOff = true;
+        }
+    }
+
+    function toggleGapFixProposal(key: string) {
+        const next = new Set(gapFixSelected);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        gapFixSelected = next;
+    }
+
+    /** The gap-fix step's select all / select visible / deselect all, in one update. */
+    function setGapFixProposals(keys: string[], selected: boolean) {
+        const next = new Set(gapFixSelected);
+        for (const key of keys) {
+            if (selected) next.add(key);
+            else next.delete(key);
+        }
+        gapFixSelected = next;
+    }
+
+    /** The review's rows and the corrections the user kept, with their todos (design §4.7). */
+    function handleGapFixContinue() {
+        if (!gapFixView || importPreparing) return;
+        const corrections = selectedGapFixCreates(gapFixView, gapFixSelected).map(({tx, todos}) => ({tx: tx as unknown as TransactionCreateItem, todos}));
+        handOffToEditor([...buildFinalTxList(), ...corrections]);
+    }
+
+    async function handleImport() {
+        if (importPreparing) return;
+        const session = getClientSessionGeneration();
+        importPreparing = true;
+        try {
+            if (!(await refreshCandidates()) || !open || !isClientSessionCurrent(session)) return;
+            if (step4HasUnresolvedSelected || step4SelectedCount === 0) return;
+            if (!duplicateRecheckDone) {
+                const context = wizardDataEpoch;
+                const previousSelection = new Set(mergedTransactions.filter((row) => row.selected && !beforeOpeningIndices.has(row.index)).map((row) => row.index));
+                const changedGroups = await refreshDuplicateReport(true);
+                if (!open || context !== wizardDataEpoch || !isClientSessionCurrent(session) || duplicateRecheckError || !duplicateRecheckDone) return;
+                // The groups already arbitrated kept their choices through the recheck: only one the
+                // user has not seen in its current form is a reason to go back to that step.
+                if (changedGroups.length > 0) {
+                    notify({
+                        name: 'tx.import.duplicates.changed',
+                        detail: {groups: changedGroups.map((group) => ({key: group.key, memberIndices: [...group.memberIndices].sort((a, b) => a - b)}))},
+                        toast: {variant: 'warning', message: $t('importWizard.duplicatesChangedReview')},
+                    });
+                    currentStepId = 'duplicates';
+                    return;
+                }
+                const currentSelection = mergedTransactions.filter((row) => row.selected && !beforeOpeningIndices.has(row.index)).map((row) => row.index);
+                if (currentSelection.length !== previousSelection.size || currentSelection.some((index) => !previousSelection.has(index))) {
+                    notify({
+                        name: 'tx.import.selection.changed',
+                        detail: {previousIndices: [...previousSelection], currentIndices: currentSelection},
+                        toast: {variant: 'warning', message: $t('importWizard.selectionChangedReview')},
+                    });
+                    return;
+                }
+            }
+            if (step4HasUnresolvedSelected || step4SelectedCount === 0) return;
+            const finalList = buildFinalTxList();
+            // A report set brings the bank's truth points: compare them with what LibreFolio will
+            // know, and stop on "Align with the bank" only when there is something to show (§4.6).
+            const sources = truthSourcesOf(parseResults);
+            if (sources.length > 0) {
+                const context = wizardDataEpoch;
+                const view = await computeGapFixView(sources, finalList);
+                if (!open || context !== wizardDataEpoch || !isClientSessionCurrent(session)) return;
+                if (gapFixHasSomethingToShow(view)) {
+                    gapFixView = view;
+                    gapFixSelected = new Set(defaultGapFixSelection(view));
+                    currentStepId = 'gapFix';
+                    return;
+                }
+            }
+            handOffToEditor(finalList);
+        } finally {
+            importPreparing = false;
+        }
     }
 
     /**
@@ -1245,7 +1636,6 @@
      * A function (not a derived) so the keeper column can close over the specific group.
      */
     function resolverMemberColumns(group: DuplicateGroup): ColumnDef<MergedTx>[] {
-        const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const cmpMembers = resolverGroupMembers(group);
         const descOutliers = outlierIndexSet(cmpMembers, (mt) =>
             String(mt.tx.description ?? '')
@@ -1324,7 +1714,7 @@
                     const arrow = isPair ? '<span class="shrink-0 mr-0.5">↔</span>' : '';
                     return {
                         type: 'html',
-                        html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>${arrow}<span>${esc(label)}</span></span>`,
+                        html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>${arrow}<span>${escapeHtml(label)}</span></span>`,
                     };
                 },
             },
@@ -1361,7 +1751,7 @@
                 width: 170,
                 minWidth: 130,
                 getValue: (mt) => getSourceFileName(mt.sourceFileId),
-                cell: (mt) => ({type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-gray-600 dark:text-gray-300" title="${esc(getSourceFileName(mt.sourceFileId))}">${esc(getSourceFileName(mt.sourceFileId))}</span>`}),
+                cell: (mt) => ({type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-gray-600 dark:text-gray-300" title="${escapeHtml(getSourceFileName(mt.sourceFileId))}">${escapeHtml(getSourceFileName(mt.sourceFileId))}</span>`}),
             },
             {
                 id: 'description',
@@ -1374,7 +1764,7 @@
                 cell: (mt) => {
                     const raw = String(mt.tx.description ?? '').trim();
                     const hl = descOutliers.has(mt.index) ? diffCls : '';
-                    return {type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-gray-800 dark:text-gray-100${hl}" title="${esc(raw)}">${esc(raw || '—')}</span>`};
+                    return {type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-gray-800 dark:text-gray-100${hl}" title="${escapeHtml(raw)}">${escapeHtml(raw || '—')}</span>`};
                 },
             },
         ];
@@ -1517,20 +1907,21 @@
         nwCompareOpen = true;
     }
 
-    /** Dispatch a step-4 status-badge click to the right comparison view. */
+    /** Dispatch a step-4 status-badge click to the comparison the badge claims. */
     function openBadgeCompare(mt: MergedTx) {
-        if (mt.dupGroupKey != null) {
-            const group = duplicateGroups.find((g) => g.key === mt.dupGroupKey);
-            if (group) {
-                openLotCompare(group);
-                return;
-            }
+        const target = compareTargetFor(mt);
+        if (target === 'db') {
+            void openDbCompare(mt);
+            return;
         }
-        if (mt.dupPendingMatch) {
+        if (target === 'pending') {
             openPendingCompare(mt);
             return;
         }
-        void openDbCompare(mt);
+        if (target === 'lot') {
+            const group = duplicateGroups.find((g) => g.key === mt.dupGroupKey);
+            if (group) openLotCompare(group);
+        }
     }
 
     async function openBrokerOpeningEdit(mt: MergedTx) {
@@ -1644,14 +2035,16 @@
                 align: 'center' as const,
                 pinned: 'left' as const,
                 sortFn: (a: MergedTx, b: MergedTx) => {
-                    const order = {before_opening: 0, unresolved: 1, pending_duplicate: 2, pending_possible_duplicate: 3, likely: 4, possible: 5, unique: 6};
+                    const order = {before_history: 0, before_opening: 0, unresolved: 1, pending_duplicate: 2, pending_possible_duplicate: 3, likely: 4, possible: 5, unique: 6};
                     const aKey = (() => {
+                        if (beforeHistoryIndices.has(a.index)) return 'before_history';
                         if (beforeOpeningIndices.has(a.index)) return 'before_opening';
                         const id = typeof a.tx.asset_id === 'number' ? a.tx.asset_id : null;
                         if (id !== null && isFakeAssetId(id) && !assetResolutions.find((r) => r.fakeAssetId === id)?.resolvedAssetId) return 'unresolved';
                         return a.duplicateStatus;
                     })();
                     const bKey = (() => {
+                        if (beforeHistoryIndices.has(b.index)) return 'before_history';
                         if (beforeOpeningIndices.has(b.index)) return 'before_opening';
                         const id = typeof b.tx.asset_id === 'number' ? b.tx.asset_id : null;
                         if (id !== null && isFakeAssetId(id) && !assetResolutions.find((r) => r.fakeAssetId === id)?.resolvedAssetId) return 'unresolved';
@@ -1660,6 +2053,7 @@
                     return (order[aKey as keyof typeof order] ?? 3) - (order[bKey as keyof typeof order] ?? 3);
                 },
                 getValue: (mt) => {
+                    if (beforeHistoryIndices.has(mt.index)) return 'before_history';
                     if (beforeOpeningIndices.has(mt.index)) return 'before_opening';
                     const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
                     if (assetId !== null && isFakeAssetId(assetId) && !assetResolutions.find((r) => r.fakeAssetId === assetId)?.resolvedAssetId) return 'unresolved';
@@ -1673,8 +2067,16 @@
                     {value: 'pending_possible_duplicate', label: $t('importWizard.status.possiblePendingDuplicate')},
                     {value: 'unresolved', label: $t('importWizard.status.unresolved')},
                     {value: 'before_opening', label: $t('importWizard.status.beforeOpening')},
+                    {value: 'before_history', label: $t('importWizard.reportSet.beforeHistoryStatus')},
                 ],
                 cell: (mt) => {
+                    if (beforeHistoryIndices.has(mt.index)) {
+                        return {
+                            type: 'html',
+                            html: `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300" data-testid="import-wizard-before-history-badge"><span>⏮</span><span class="hidden sm:inline">${$t('importWizard.reportSet.beforeHistoryStatus')}</span></span>`,
+                            tooltip: {text: $t('importWizard.reportSet.beforeHistoryTooltip'), position: 'top', maxWidth: '300px'},
+                        };
+                    }
                     if (beforeOpeningIndices.has(mt.index)) {
                         return {
                             type: 'html',
@@ -1701,7 +2103,7 @@
                     if (mt.duplicateStatus === 'likely') {
                         return {
                             type: 'html',
-                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 cursor-pointer"><span class="sm:hidden">⚠</span><span class="hidden sm:inline">${$t('importWizard.status.likelyDup')}</span></span>`,
+                            html: `<span data-duplicate-status="likely" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 cursor-pointer"><span class="sm:hidden">⚠</span><span class="hidden sm:inline">${$t('importWizard.status.likelyDup')}</span></span>`,
                             tooltip: {text: $t('importWizard.compareModal.openHint'), position: 'top', maxWidth: '260px'},
                             onClick: () => openBadgeCompare(mt),
                             testId: `import-wizard-compare-${mt.index}`,
@@ -1710,7 +2112,7 @@
                     if (mt.duplicateStatus === 'pending_duplicate') {
                         return {
                             type: 'html',
-                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-orange-100 text-orange-800 ring-1 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-700 cursor-pointer"><span class="sm:hidden">⧉</span><span class="hidden sm:inline">${$t('importWizard.status.pendingDuplicate')}</span></span>`,
+                            html: `<span data-duplicate-status="pending_duplicate" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-orange-100 text-orange-800 ring-1 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-700 cursor-pointer"><span class="sm:hidden">⧉</span><span class="hidden sm:inline">${$t('importWizard.status.pendingDuplicate')}</span></span>`,
                             tooltip: {text: $t('importWizard.status.tooltip.pendingDuplicate'), position: 'top', maxWidth: '300px'},
                             onClick: () => openBadgeCompare(mt),
                             testId: `import-wizard-compare-${mt.index}`,
@@ -1719,7 +2121,7 @@
                     if (mt.duplicateStatus === 'pending_possible_duplicate') {
                         return {
                             type: 'html',
-                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:ring-yellow-700 cursor-pointer"><span class="sm:hidden">≈</span><span class="hidden sm:inline">${$t('importWizard.status.possiblePendingDuplicate')}</span></span>`,
+                            html: `<span data-duplicate-status="pending_possible_duplicate" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:ring-yellow-700 cursor-pointer"><span class="sm:hidden">≈</span><span class="hidden sm:inline">${$t('importWizard.status.possiblePendingDuplicate')}</span></span>`,
                             tooltip: {text: $t('importWizard.status.tooltip.possiblePendingDuplicate'), position: 'top', maxWidth: '300px'},
                             onClick: () => openBadgeCompare(mt),
                             testId: `import-wizard-compare-${mt.index}`,
@@ -1728,7 +2130,7 @@
                     if (mt.duplicateStatus === 'possible') {
                         return {
                             type: 'html',
-                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 cursor-pointer"><span class="sm:hidden">ℹ</span><span class="hidden sm:inline">${$t('importWizard.status.possibleDup')}</span></span>`,
+                            html: `<span data-duplicate-status="possible" class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 cursor-pointer"><span class="sm:hidden">ℹ</span><span class="hidden sm:inline">${$t('importWizard.status.possibleDup')}</span></span>`,
                             tooltip: {text: $t('importWizard.compareModal.openHint'), position: 'top', maxWidth: '260px'},
                             onClick: () => openBadgeCompare(mt),
                             testId: `import-wizard-compare-${mt.index}`,
@@ -1749,14 +2151,15 @@
                 width: 44,
                 minWidth: 44,
                 cell: (mt) => {
-                    const beforeOpening = beforeOpeningIndices.has(mt.index);
+                    const beforeOpening = beforeOpeningIndices.has(mt.index) || beforeHistoryIndices.has(mt.index);
+                    const partner = pairPartner(mt);
                     return {
                         type: 'editable-checkbox',
-                        value: beforeOpening ? false : mt.selected,
+                        value: beforeOpening ? false : mt.selected && (partner?.selected ?? true),
                         disabled: beforeOpening,
                         onchange: (v: boolean) => {
                             if (beforeOpening) return;
-                            mergedTransactions = mergedTransactions.map((t) => (t.index === mt.index ? {...t, selected: v} : t));
+                            mergedTransactions = setPairSelected(mergedTransactions, mt.index, v, pairs);
                         },
                     };
                 },
@@ -1864,19 +2267,19 @@ ${arrow}<span>${label}</span></span>`,
                         if (res?.resolvedAssetId) {
                             const rInfo = getAssetInfo(res.resolvedAssetId);
                             const rName = rInfo?.display_name ?? `#${res.resolvedAssetId}`;
-                            const rIcon = rInfo?.icon_url ?? (rInfo?.asset_type ? getAssetTypeIconUrl(rInfo.asset_type) : null);
-                            const rIconHtml = rIcon ? `<img src="${rIcon}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                            const rIconUrl = rInfo?.icon_url ?? (rInfo?.asset_type ? getAssetTypeIconUrl(rInfo.asset_type) : null);
+                            const rIconHtml = rIconUrl ? `<img src="${escapeHtml(rIconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
                             const origName = getAssetDisplayName(assetId);
-                            return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate text-emerald-600 dark:text-emerald-400" title="${origName} → ${rName}">${rIconHtml}<span class="truncate">${rName}</span></span>`};
+                            return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate text-emerald-600 dark:text-emerald-400" title="${escapeHtml(origName)} → ${escapeHtml(rName)}">${rIconHtml}<span class="truncate">${escapeHtml(rName)}</span></span>`};
                         }
                         const name = getAssetDisplayName(assetId);
-                        return {type: 'html', html: `<span class="text-red-600 dark:text-red-400 inline-flex items-center gap-1">✗ <span class="truncate">${name}</span></span>`};
+                        return {type: 'html', html: `<span class="text-red-600 dark:text-red-400 inline-flex items-center gap-1">✗ <span class="truncate">${escapeHtml(name)}</span></span>`};
                     }
                     const info = getAssetInfo(assetId);
                     const name = info?.display_name ?? `#${assetId}`;
                     const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-                    const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
-                    return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate">${iconHtml}<span class="truncate">${name}</span></span>`};
+                    const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                    return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate">${iconHtml}<span class="truncate">${escapeHtml(name)}</span></span>`};
                 },
             },
             {
@@ -1910,13 +2313,13 @@ ${arrow}<span>${label}</span></span>`,
                     const b = brokers.find((x) => x.id === brokerId) ?? getBrokerInfo(brokerId);
                     const name = b?.name ?? `#${brokerId}`;
                     const iconUrl = b?.icon_url ?? null;
-                    const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                    const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
                     // For rows blocked by the broker's opening date, surface a discoverable
                     // "edit opening date" affordance directly in the destination-broker column.
                     if (beforeOpeningIndices.has(mt.index)) {
                         return {
                             type: 'html',
-                            html: `<span class="inline-flex items-center gap-1 cursor-pointer text-gray-700 dark:text-gray-200 hover:text-libre-green" title="${$t('importWizard.status.editBrokerDate')}">${iconHtml}<span class="truncate">${name}</span><span class="shrink-0">✏️</span></span>`,
+                            html: `<span class="inline-flex items-center gap-1 cursor-pointer text-gray-700 dark:text-gray-200 hover:text-libre-green" title="${$t('importWizard.status.editBrokerDate')}">${iconHtml}<span class="truncate">${escapeHtml(name)}</span><span class="shrink-0">✏️</span></span>`,
                             onClick: () => openBrokerOpeningEdit(mt),
                             testId: `import-wizard-broker-edit-${mt.index}`,
                         };
@@ -1941,7 +2344,7 @@ ${arrow}<span>${label}</span></span>`,
                     const q = mt.tx.quantity;
                     if (!q || q === '0') return {type: 'html', html: '<span class="text-gray-400">—</span>'};
                     const n = parseFloat(q);
-                    const formatted = isNaN(n) ? q : parseFloat(n.toFixed(8)).toString();
+                    const formatted = isNaN(n) ? q : formatFixed(n, 8, {trim: true});
                     return {type: 'html', html: `<span class="font-mono text-sm">${formatted}</span>`};
                 },
             },
@@ -1978,6 +2381,13 @@ ${arrow}<span>${label}</span></span>`,
                     const cash = mt.tx.cash;
                     if (cash && typeof cash === 'object' && !Array.isArray(cash)) {
                         const c = cash as {code: string; amount: string};
+                        const partnerCash = pairPartner(mt)?.tx.cash;
+                        if (partnerCash && typeof partnerCash === 'object' && !Array.isArray(partnerCash)) {
+                            const to = partnerCash as {code: string; amount: string};
+                            const fromTo = renderFromToHtml(formatCurrencyAmountHtml(Number(c.amount), c.code, {showSign: true}), formatCurrencyAmountHtml(Number(to.amount), to.code, {showSign: true}), {from: $t('common.from'), to: $t('common.to')});
+                            const rate = renderImpliedRateHtml({code: c.code, amount: Number(c.amount)}, {code: to.code, amount: Number(to.amount)});
+                            return {type: 'html', html: `<div class="inline-flex flex-col items-end gap-0.5" data-testid="import-tx-pair-cash">${fromTo}${rate}</div>`};
+                        }
                         return {type: 'html', html: formatCurrencyAmountHtml(Number(c.amount), c.code, {showSign: true})};
                     }
                     return {type: 'html', html: '<span class="text-gray-400">—</span>'};
@@ -2017,7 +2427,6 @@ ${arrow}<span>${label}</span></span>`,
 
         // Show source file column only when multiple files were parsed (avoids noise for single-file imports)
         if (doneFilesCount > 1) {
-            const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
             columns.push({
                 id: 'sourceFileId',
                 header: () => $t('importWizard.sourceFile'),
@@ -2030,7 +2439,7 @@ ${arrow}<span>${label}</span></span>`,
                 getValue: (mt) => parseResults.find((r) => r.fileId === mt.sourceFileId)?.fileName ?? mt.sourceFileId,
                 cell: (mt) => {
                     const name = parseResults.find((r) => r.fileId === mt.sourceFileId)?.fileName ?? mt.sourceFileId;
-                    return {type: 'html', html: `<span class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[180px] block" title="${esc(name)}">${esc(name)}</span>`} as const;
+                    return {type: 'html', html: `<span class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[180px] block" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`} as const;
                 },
             });
         }
@@ -2041,7 +2450,7 @@ ${arrow}<span>${label}</span></span>`,
     function step4SelectAll() {
         // Do not re-select in-batch duplicates that were resolved away (non-keeper group members):
         // selecting them would surface hidden duplicates. Keepers and non-group rows are selected.
-        mergedTransactions = mergedTransactions.map((t) => ({...t, selected: !beforeOpeningIndices.has(t.index) && !(t.dupGroupKey != null && t.isDupKeeper === false)}));
+        mergedTransactions = mergedTransactions.map((t) => ({...t, selected: !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index) && !(t.dupGroupKey != null && t.isDupKeeper === false)}));
     }
     function step4DeselectAll() {
         mergedTransactions = mergedTransactions.map((t) => ({...t, selected: false}));
@@ -2054,9 +2463,14 @@ ${arrow}<span>${label}</span></span>`,
     function step4SelectVisible() {
         const ids = new Set(step4TableRef?.getPageRowIds() ?? []);
         if (ids.size === 0) return;
+        // A pair's row stands for both legs: its hidden leg is selected with it.
+        for (const id of [...ids]) {
+            const partner = pairs.partnerOf.get(Number(id));
+            if (partner !== undefined) ids.add(String(partner));
+        }
         mergedTransactions = mergedTransactions.map((t) => {
             if (!ids.has(String(t.index))) return t;
-            if (beforeOpeningIndices.has(t.index)) return t;
+            if (beforeOpeningIndices.has(t.index) || beforeHistoryIndices.has(t.index)) return t;
             if (t.dupGroupKey != null && t.isDupKeeper === false) return t;
             return {...t, selected: true};
         });
@@ -2123,17 +2537,35 @@ ${arrow}<span>${label}</span></span>`,
     });
 
     function resetState() {
+        invalidateCandidateRequests();
+        manualAssetSelections.clear();
+        importPreparing = false;
+        inspectRequestEpoch += 1;
+        inspectAssetData = null;
+        inspectAssetLoading = false;
         currentStepId = 'upload';
         pendingFiles = [];
         globalBrokerId = null;
         uploading = false;
         uploadError = null;
         dropZoneExpanded = true;
+        // A prompt left open by a closed wizard answers "keep": nothing is moved or removed behind the user's back.
+        answerMismatch({action: 'keep'});
+        mismatchPrompt = null;
+        mismatchBusy = false;
+        step1Continuing = false;
         selectedFiles = [];
         brokerFilesMap = new Map();
         brokerFilesLoading = false;
         expandedBrokers = new Set();
         filePluginOverrides = new Map();
+        uploadBatchId = generateUUID();
+        step1SetWarnings = [];
+        setPreviewEpoch += 1;
+        setPreviews = new Map();
+        expandedSets = new Set();
+        setUploadingRole = new Map();
+        showBeforeHistory = false;
         confirmCloseOpen = false;
         step1SelectedIds = [];
         // Step 3 reset
@@ -2148,6 +2580,8 @@ ${arrow}<span>${label}</span></span>`,
         mergedTransactions = [];
         assetResolutions = [];
         assetGroups = [];
+        clearGapFix();
+        mergeFakeRemapByFile = new Map();
         // Only a full reset drops the user's unification: member keys are content-based, so a
         // re-parse of the same files replays their decisions instead of asking again.
         assetGroupOverride = null;
@@ -2182,11 +2616,29 @@ ${arrow}<span>${label}</span></span>`,
     // Broker Loading
     // =========================================================================
 
-    async function loadBrokers() {
+    /**
+     * Runs one load of the broker list. Step 1 stays busy, and its Next disabled, until every load
+     * in flight has finished: the open load and the refresh after a broker created from Step 1 can
+     * overlap, and Step 2 opens the panels of the brokers known when Next is pressed.
+     */
+    async function trackBrokerLoad(load: () => Promise<void>): Promise<void> {
+        brokerLoadsInFlight += 1;
         brokersLoading = true;
-        await Promise.all([ensureBrokersLoaded(), ensureTypesLoaded()]);
-        brokers = getEditableBrokers();
-        brokersLoading = false;
+        try {
+            await load();
+        } finally {
+            brokerLoadsInFlight -= 1;
+            brokersLoading = brokerLoadsInFlight > 0;
+        }
+    }
+
+    function loadBrokers(): Promise<void> {
+        return trackBrokerLoad(async () => {
+            // allSettled: a failed list must neither release Next while the others are still in
+            // flight nor lock it once they have landed. Each loader logs its own failure.
+            await Promise.allSettled([ensureBrokersLoaded(), ensureTypesLoaded(), ensureImportPlugins()]);
+            brokers = getEditableBrokers();
+        });
     }
 
     // =========================================================================
@@ -2223,7 +2675,7 @@ ${arrow}<span>${label}</span></span>`,
      */
     let fixStepRows = $derived(
         mergedTransactions
-            .filter((m) => rowStaysInFixStep(m.todos, fixDecisions[m.index]))
+            .filter((m) => !isBeforeHistory(m) && rowStaysInFixStep(m.todos, fixDecisions[m.index]))
             // Only the todos this step can actually act on are handed over: showing a row a
             // cost-basis complaint it cannot fix here would be noise at best.
             .map((m) => ({
@@ -2295,6 +2747,13 @@ ${arrow}<span>${label}</span></span>`,
     /** Accept a proposal as it stands — no reshaping, so the automatic partition still applies. */
     function confirmGroupProposal(signature: string) {
         assetGroupConfirmed = new Set([...assetGroupConfirmed, signature]);
+        mergeAllTransactions();
+    }
+
+    function confirmAllGroupProposals() {
+        const signatures = assetGroups.filter((group) => group.state === 'proposed').map((group) => clusterSignature(group.members.map(memberKey)));
+        if (signatures.length === 0) return;
+        assetGroupConfirmed = new Set([...assetGroupConfirmed, ...signatures]);
         mergeAllTransactions();
     }
 
@@ -2473,32 +2932,48 @@ ${arrow}<span>${label}</span></span>`,
      * from a list of names is guesswork when two of them read alike — the currency, the
      * identifiers and the provider decide it, and they are only visible in the asset form.
      */
-    let inspectAssetData = $state<Record<string, unknown> | null>(null);
+    let inspectAssetData = $state<AssetEditData | null>(null);
     let inspectAssetLoading = $state(false);
+    let inspectRequestEpoch = 0;
+    onDestroy(() => (inspectRequestEpoch += 1));
 
     async function openAssetInspector(assetId: number) {
         if (inspectAssetLoading) return;
+        const request = ++inspectRequestEpoch;
+        const session = getClientSessionGeneration();
+        const current = () => open && request === inspectRequestEpoch && isClientSessionCurrent(session);
         inspectAssetLoading = true;
         try {
-            // `/assets/all` hides inactive instruments, and an expired security created from
-            // this very wizard is usually filed as inactive on purpose — asking for it there
-            // returns nothing and the inspector silently refuses to open.
-            const assets = (await zodiosApi.list_assets_api_v1_assets_query_get({queries: {}})) as Array<Record<string, unknown>>;
-            const asset = assets.find((a) => a.id === assetId);
-            if (!asset) return;
-            const assignments = (await zodiosApi.get_provider_assignments_api_v1_assets_provider_assignments_get({queries: {asset_ids: [assetId]}})) as Array<Record<string, unknown>>;
-            const assignment = assignments[0] ?? null;
-            inspectAssetData = {
-                ...asset,
-                provider_code: assignment?.provider_code ?? null,
-                provider_identifier: assignment?.identifier ?? '',
-                provider_identifier_type: assignment?.identifier_type ?? '',
-                provider_params: assignment?.provider_params ?? null,
-                provider_user_url: asset.user_url ?? '',
-                provider_url: assignment?.provider_url ?? null,
-            };
+            const data = await loadAssetEditData(assetId);
+            if (current()) inspectAssetData = data;
+        } catch (error: unknown) {
+            if (current()) toasts.error(extractErrorMessage(error, $t('common.errorOccurred')));
         } finally {
-            inspectAssetLoading = false;
+            if (request === inspectRequestEpoch) inspectAssetLoading = false;
+        }
+    }
+
+    async function refreshAssetCatalog(): Promise<void> {
+        const context = wizardDataEpoch;
+        const session = getClientSessionGeneration();
+        const current = () => open && context === wizardDataEpoch && isClientSessionCurrent(session);
+        try {
+            await refreshAllAssets();
+            if (!current() || !(await refreshCandidates())) return;
+            if (currentStepId === 'review' && !duplicateRecheckDone) await refreshDuplicateReport(true);
+        } catch (error: unknown) {
+            if (current()) toasts.error(extractErrorMessage(error, $t('common.errorOccurred')));
+        }
+    }
+
+    async function handleInspectedAssetUpdated() {
+        const request = ++inspectRequestEpoch;
+        inspectAssetData = null;
+        inspectAssetLoading = true;
+        try {
+            await refreshAssetCatalog();
+        } finally {
+            if (request === inspectRequestEpoch) inspectAssetLoading = false;
         }
     }
 
@@ -2584,6 +3059,8 @@ ${arrow}<span>${label}</span></span>`,
         // one decision only the user can make: which copy to keep when the same movement
         // appears in two of the files being imported.
         if (id === 'duplicates') return duplicateGroups.length > 0;
+        // Reached only from the review's Import, and only with something to show.
+        if (id === 'gapFix') return gapFixView !== null;
         return true;
     }
 
@@ -2607,6 +3084,7 @@ ${arrow}<span>${label}</span></span>`,
     }
 
     function resetDownstreamState() {
+        invalidateCandidateRequests();
         mergedTransactions = [];
         assetResolutions = [];
         assetGroups = [];
@@ -2623,10 +3101,14 @@ ${arrow}<span>${label}</span></span>`,
         fixCreatedAssets = {};
         duplicateRecheckDone = false;
         duplicateRecheckError = null;
+        clearGapFix();
     }
 
     function goToStep(target: StepId) {
         if (!isStepBeforeCurrent(target)) return;
+        invalidateCandidateRequests();
+        // Leaving the alignment drops it: the next Import recomputes it on the current selection.
+        if (gapFixView !== null) clearGapFix();
         if (target === 'upload') selectedFiles = [];
         if (target === 'upload' || target === 'select') resetDownstreamState();
         currentStepId = target;
@@ -2639,9 +3121,19 @@ ${arrow}<span>${label}</span></span>`,
      * on a stale "nothing to arbitrate" or shown with the plugin's original verdict.
      */
     async function enterNextActiveStep(from: StepId) {
+        const navigation = ++navigationEpoch;
+        const current = () => open && navigation === navigationEpoch && currentStepId === from;
+        if (!(await refreshCandidates())) return;
+        if (!current()) return;
+        if (from === 'duplicates' && !duplicateRecheckDone) {
+            await refreshDuplicateReport();
+            if (!current()) return;
+            if (stepIsActive('duplicates')) return;
+        }
         for (let i = STEP_ORDER.indexOf(from) + 1; i < STEP_ORDER.length; i++) {
             const id = STEP_ORDER[i];
             if (id === 'duplicates') await refreshDuplicateReport();
+            if (!current()) return;
             if (stepIsActive(id)) {
                 currentStepId = id;
                 return;
@@ -2651,11 +3143,35 @@ ${arrow}<span>${label}</span></span>`,
     }
 
     function goNext() {
+        if (candidatesRefreshing || duplicateRecheckRunning) return;
         if (currentStepId === 'upload') {
-            uploadAllPendingFiles().then(() => {
-                currentStepId = 'select';
-                loadBrokerFiles();
-            });
+            // Next is disabled while the broker list loads; a click that lands anyway waits for it too.
+            if (step1Continuing || brokersLoading) return;
+            const uploadIds = new Set(pendingFiles.filter((f) => f.status === 'pending' && f.brokerId !== null).map((f) => f.id));
+            const uploadsNow = uploadIds.size > 0;
+            step1Continuing = true;
+            void uploadAllPendingFiles()
+                .then(async () => {
+                    // A file outside its broker's format is moved, kept or removed before anything reads it as a set.
+                    if (uploadsNow) await reviewDefaultPluginMismatches(uploadIds);
+                    if (!open || currentStepId !== 'upload') return;
+                    // Every file just uploaded was removed: stay here, where new files can be dropped.
+                    if (uploadsNow && pendingFiles.length === 0) return;
+                    // A set this upload left incomplete is announced here, where its missing export can
+                    // still be dropped into the same set; a second Continue goes on regardless (§4.2).
+                    const warnings = uploadsNow ? await collectStep1SetWarnings() : [];
+                    if (!open || currentStepId !== 'upload') return;
+                    step1SetWarnings = warnings;
+                    if (warnings.length > 0) {
+                        dropZoneExpanded = true;
+                        return;
+                    }
+                    currentStepId = 'select';
+                    loadBrokerFiles();
+                })
+                .finally(() => {
+                    step1Continuing = false;
+                });
         } else if (currentStepId === 'select') {
             currentStepId = 'analyze';
             // Init parse results and auto-start parsing
@@ -2675,17 +3191,19 @@ ${arrow}<span>${label}</span></span>`,
         } else if (currentStepId === 'fix') {
             enterNextActiveStep('fix');
         } else if (currentStepId === 'duplicates') {
-            currentStepId = 'review';
+            void enterNextActiveStep('duplicates');
         }
     }
 
     function goBack() {
+        invalidateCandidateRequests();
         if (currentStepId === 'analyze' && parseParsing) {
             abortParsing = true;
         }
         if (currentStepIndex > 0) {
             currentStepId = visibleSteps[currentStepIndex - 1].id;
         }
+        if (gapFixView !== null && currentStepId !== 'gapFix') clearGapFix();
     }
 
     // =========================================================================
@@ -2746,6 +3264,8 @@ ${arrow}<span>${label}</span></span>`,
 
         uploading = true;
         uploadError = null;
+        // The files of one wizard session form one report set: they share the session's batch id.
+        const batchId = uploadBatchId;
 
         await mapWithConcurrency(toUpload, async (entry) => {
             pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'uploading'} : f));
@@ -2753,6 +3273,7 @@ ${arrow}<span>${label}</span></span>`,
             const formData = new FormData();
             formData.append('file', entry.file);
             formData.append('broker_id', String(entry.brokerId));
+            formData.append('batch_id', batchId);
             if (entry.fileName !== entry.file.name) {
                 formData.append('custom_filename', entry.fileName);
             }
@@ -2761,12 +3282,136 @@ ${arrow}<span>${label}</span></span>`,
             if (result.status === 'error') {
                 pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'error', errorMessage: result.message} : f));
             } else {
-                const serverFileId = result.data?.data?.file_id ?? generateUUID();
-                pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'uploaded', serverFileId} : f));
+                const serverInfo = result.data?.data as BrimFile | undefined;
+                const serverFileId = serverInfo?.file_id ?? generateUUID();
+                pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'uploaded', serverFileId, serverInfo} : f));
             }
         });
 
         uploading = false;
+    }
+
+    // =========================================================================
+    // Step 1: a file its broker's default import plugin cannot read
+    // =========================================================================
+
+    type MismatchChoice = {action: 'move'; brokerId: number} | {action: 'keep'} | {action: 'remove'};
+
+    interface MismatchPrompt {
+        entryId: string;
+        fileName: string;
+        broker: BrokerMismatchBroker;
+        defaultPlugin: BrokerMismatchPlugin;
+        reason: string | null;
+        targets: BrokerMismatchTarget[];
+        readerNames: string[];
+        current: number;
+        total: number;
+    }
+
+    let mismatchPrompt = $state<MismatchPrompt | null>(null);
+    let mismatchBusy = $state(false);
+    /** Continue on step 1 is running — uploads, the default-plugin check, the report-set check: a second click waits, or it would skip them. */
+    let step1Continuing = $state(false);
+    let mismatchAnswer: ((choice: MismatchChoice) => void) | null = null;
+
+    function askMismatch(prompt: MismatchPrompt): Promise<MismatchChoice> {
+        return new Promise((resolve) => {
+            mismatchAnswer = resolve;
+            mismatchPrompt = prompt;
+        });
+    }
+
+    function answerMismatch(choice: MismatchChoice) {
+        const answer = mismatchAnswer;
+        mismatchAnswer = null;
+        answer?.(choice);
+    }
+
+    /** The default plugin's reason in the UI language; a reason that cannot be fetched is left out, the prompt still says where the file belongs. */
+    async function fetchRefusalReason(fileId: string, pluginCode: string): Promise<string | null> {
+        try {
+            const check = await zodiosApi.check_file_plugin_api_v1_brokers_import_files__file_id__plugin_check_get({params: {file_id: fileId}, queries: {plugin_code: pluginCode}});
+            // The generated TS type adds an impossible array branch to an optional object (anyOf + null); the zod schema has validated the real shape.
+            const refusal = check.refusal as ParseRefusal | null | undefined;
+            return refusal ? resolveParseRefusalMessage(refusal, $t) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Right after an upload, a file that its broker's default import plugin cannot read was
+     * probably assigned to the wrong broker: without this, `pickBestPlugin` would quietly import it
+     * there with another plugin. One prompt per such file, in upload order: move it to a broker
+     * whose default plugin reads it, keep it, or remove it. A broker without a default plugin is
+     * never questioned.
+     */
+    async function reviewDefaultPluginMismatches(entryIds: Set<string>): Promise<void> {
+        const plugins = await ensureImportPlugins();
+        const pluginName = (code: string) => brimPluginName({code, name: plugins.find((p) => p.code === code)?.name}, $t);
+        const pluginView = (code: string): BrokerMismatchPlugin => ({code, name: pluginName(code), iconUrl: (plugins.find((p) => p.code === code)?.icon_url as string | null | undefined) ?? null});
+        const brokerView = (id: number): BrokerMismatchBroker => {
+            const broker = brokers.find((b) => b.id === id);
+            return {id, name: broker?.name ?? String(id), iconUrl: broker?.icon_url ?? null, portalUrl: broker?.portal_url ?? null, pluginCode: broker?.default_import_plugin ?? null};
+        };
+        const options = {
+            reportSetPlugins: new Set(plugins.filter((p) => (p.report_roles ?? []).length > 0).map((p) => p.code)),
+            fallbackPlugins: new Set(plugins.filter(isFallbackPlugin).map((p) => p.code)),
+        };
+        const found = pendingFiles.flatMap((entry) => {
+            if (!entryIds.has(entry.id) || entry.status !== 'uploaded' || !entry.serverFileId || entry.brokerId === null) return [];
+            const mismatch = findDefaultPluginMismatch(entry.serverInfo?.compatible_plugins as string[] | undefined, entry.brokerId, brokers, options);
+            return mismatch ? [{entryId: entry.id, fileId: entry.serverFileId, fileName: entry.fileName, mismatch}] : [];
+        });
+        for (const [position, {entryId, fileId, fileName, mismatch}] of found.entries()) {
+            if (!open) break;
+            const reason = await fetchRefusalReason(fileId, mismatch.defaultPlugin);
+            const choice = await askMismatch({
+                entryId,
+                fileName,
+                broker: brokerView(mismatch.brokerId),
+                defaultPlugin: pluginView(mismatch.defaultPlugin),
+                reason,
+                targets: mismatch.targets.map((target) => ({...brokerView(target.id), name: target.name, plugin: pluginView(target.pluginCode)})),
+                readerNames: mismatch.readers.map(pluginName),
+                current: position + 1,
+                total: found.length,
+            });
+            mismatchBusy = true;
+            if (choice.action === 'move') await moveUploadedFile(entryId, choice.brokerId);
+            else if (choice.action === 'remove') await removeUploadedFile(entryId);
+            mismatchBusy = false;
+            mismatchPrompt = null;
+        }
+    }
+
+    /** Upload the same file to `brokerId`, in this session's batch, then delete the copy in the wrong broker. */
+    async function moveUploadedFile(entryId: string, brokerId: number): Promise<void> {
+        const entry = pendingFiles.find((f) => f.id === entryId);
+        if (!entry?.serverFileId) return;
+        const formData = new FormData();
+        formData.append('file', entry.file);
+        formData.append('broker_id', String(brokerId));
+        formData.append('batch_id', uploadBatchId);
+        if (entry.fileName !== entry.file.name) {
+            formData.append('custom_filename', entry.fileName);
+        }
+        const uploaded = await trySave(() => axiosInstance.post(`/api/v1/brokers/import/upload`, formData), {fallback: $t('importWizard.brokerMismatch.moveFailed'), prefix: entry.fileName});
+        const serverInfo = uploaded.status === 'success' ? (uploaded.data?.data as BrimFile | undefined) : undefined;
+        if (!serverInfo?.file_id) return;
+        const oldFileId = entry.serverFileId;
+        // The entry follows the moved file even when the old copy cannot be deleted: the error says so, and Files can remove it.
+        pendingFiles = pendingFiles.map((f) => (f.id === entryId ? {...f, brokerId, serverFileId: serverInfo.file_id, serverInfo} : f));
+        await trySave(() => zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {params: {file_id: oldFileId}}), {fallback: $t('importWizard.brokerMismatch.removeFailed'), prefix: entry.fileName});
+    }
+
+    async function removeUploadedFile(entryId: string): Promise<void> {
+        const entry = pendingFiles.find((f) => f.id === entryId);
+        if (!entry?.serverFileId) return;
+        const fileId = entry.serverFileId;
+        const removed = await trySave(() => zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {params: {file_id: fileId}}), {fallback: $t('importWizard.brokerMismatch.removeFailed'), prefix: entry.fileName});
+        if (removed.status === 'success') removePendingFileById(entryId);
     }
 
     function clearAllPendingFiles() {
@@ -2906,12 +3551,17 @@ ${arrow}<span>${label}</span></span>`,
                 map.get(bid)!.push(f);
             }
             brokerFilesMap = map;
+            await ensureImportPlugins();
 
-            // Auto-expand brokers with files
-            expandedBrokers = new Set(allBrokerIds.filter((id) => (map.get(id)?.length ?? 0) > 0));
+            const step1FileIds = new Set(pendingFiles.filter((f) => f.status === 'uploaded' && f.serverFileId).map((f) => f.serverFileId!));
+            expandedBrokers = new Set(
+                allBrokerIds.filter((id) => {
+                    const files = map.get(id) ?? [];
+                    return step1FileIds.size > 0 ? files.some((file) => step1FileIds.has(file.file_id)) : files.length > 0;
+                }),
+            );
 
             // T7: Pre-select files uploaded in Step 1 + auto-pick plugin
-            const step1FileIds = new Set(pendingFiles.filter((f) => f.status === 'uploaded' && f.serverFileId).map((f) => f.serverFileId!));
             for (const [brokerId, brokerFiles] of brokerFilesMap) {
                 for (const bf of brokerFiles) {
                     if (step1FileIds.has(bf.file_id) && !selectedFiles.some((s) => s.fileId === bf.file_id)) {
@@ -2920,6 +3570,11 @@ ${arrow}<span>${label}</span></span>`,
                     }
                 }
             }
+
+            // The sets of this session open on their card; every set's preview runs in the background.
+            const sessionSets = allReportSets.filter((set) => set.files.some((file) => step1FileIds.has(file.file_id)));
+            expandedSets = new Set([...expandedSets, ...sessionSets.map((set) => set.key)]);
+            void refreshSetPreviews(allReportSets);
         } catch (e) {
             console.error('Failed to load broker files:', e);
         } finally {
@@ -2929,6 +3584,16 @@ ${arrow}<span>${label}</span></span>`,
 
     // T6: Smart plugin auto-selection
     function pickBestPlugin(file: BrimFile, brokerId: number): string {
+        // A choice in force (this session's, or the last analysis'): its set, its plugin, or '' (none).
+        const choice = choicesFor(brokerId).get(file.file_id);
+        if (choice !== undefined) {
+            const chosenSet = setPluginFor(file, setPluginInfos, choice);
+            if (chosenSet) return chosenSet;
+            if (!isReportSetPlugin(setPluginInfos.find((plugin) => plugin.code === choice))) return choice;
+        }
+        // A file a report-set plugin recognises is read through its set (A18).
+        const setPlugin = setPluginFor(file, setPluginInfos);
+        if (setPlugin) return setPlugin;
         const broker = brokers.find((b) => b.id === brokerId);
         const defaultPlugin = broker?.default_import_plugin ?? '';
         const compatible = (file.compatible_plugins as string[] | undefined) ?? [];
@@ -2953,8 +3618,10 @@ ${arrow}<span>${label}</span></span>`,
     }
 
     function handleSelectionChange(brokerId: number, selectedIds: string[]) {
-        // Remove deselected files from this broker
-        selectedFiles = selectedFiles.filter((f) => f.brokerId !== brokerId || selectedIds.includes(f.fileId));
+        // Remove the single files this table deselected. A set's files are not in the table: they
+        // keep their selection, which the set's card owns.
+        const singleIds = new Set((brokerSetGroups.get(brokerId)?.singles ?? []).map((file) => file.file_id));
+        selectedFiles = selectedFiles.filter((f) => f.brokerId !== brokerId || !singleIds.has(f.fileId) || selectedIds.includes(f.fileId));
 
         // Add newly selected files with auto-picked plugin
         const existing = new Set(selectedFiles.map((f) => f.fileId));
@@ -2963,7 +3630,7 @@ ${arrow}<span>${label}</span></span>`,
             if (!existing.has(id)) {
                 const bf = brokerFiles.find((f) => f.file_id === id);
                 if (bf) {
-                    const pluginCode = filePluginOverrides.get(id) ?? pickBestPlugin(bf, brokerId);
+                    const pluginCode = pickBestPlugin(bf, brokerId);
                     selectedFiles = [...selectedFiles, {fileId: id, fileName: bf.filename, brokerId, pluginCode}];
                 }
             }
@@ -2973,6 +3640,50 @@ ${arrow}<span>${label}</span></span>`,
     function updateFilePlugin(fileId: string, pluginCode: string) {
         filePluginOverrides = new Map(filePluginOverrides).set(fileId, pluginCode);
         selectedFiles = selectedFiles.map((f) => (f.fileId === fileId ? {...f, pluginCode} : f));
+        // Choosing a report-set plugin for a single file puts it back in its set.
+        void refreshChangedSetPreviews();
+    }
+
+    /**
+     * «Read as» on a set's card (phase G, A): another report-set plugin for every member, or each
+     * member alone with its best single-file plugin, or none. Only how the files are read changes:
+     * every member keeps its tick (step H, R2), and one no single-file plugin reads stays ticked with
+     * no plugin — Parse waits for a choice, and the set's plugin is still offered to bring it back.
+     */
+    function readSetAs(set: ReportSetGroup, code: string | null) {
+        const brokerDefault = brokers.find((b) => b.id === set.brokerId)?.default_import_plugin ?? null;
+        const next = new Map(filePluginOverrides);
+        const chosen = new Map<string, string>();
+        for (const file of set.files) {
+            const choice = code ?? readAlonePlugins(file, setPluginInfos, brokerDefault)[0]?.code ?? '';
+            next.set(file.file_id, choice);
+            chosen.set(file.file_id, choice);
+        }
+        filePluginOverrides = next;
+        selectedFiles = selectedFiles.map((f) => {
+            const choice = chosen.get(f.fileId);
+            return choice === undefined ? f : {...f, pluginCode: choice};
+        });
+        void refreshChangedSetPreviews();
+    }
+
+    /** «Read alone with» a single-file plugin (phase G, B): the file leaves its set, and keeps its selection. */
+    function readFileAlone(fileId: string, code: string) {
+        filePluginOverrides = new Map(filePluginOverrides).set(fileId, code);
+        selectedFiles = selectedFiles.map((f) => (f.fileId === fileId ? {...f, pluginCode: code} : f));
+        void refreshChangedSetPreviews();
+    }
+
+    /**
+     * «Remove from the set» (phase G, B; R5): the file leaves its set with no plugin, waiting for a new
+     * choice, and keeps its tick — taking a file out of a set says «not with this plugin», not «not at
+     * all». Like «Read as» and «Read alone with», it changes how the file is read, never its tick;
+     * choosing the set's plugin again puts it back.
+     */
+    function removeFileFromSet(fileId: string) {
+        filePluginOverrides = new Map(filePluginOverrides).set(fileId, '');
+        selectedFiles = selectedFiles.map((f) => (f.fileId === fileId ? {...f, pluginCode: ''} : f));
+        void refreshChangedSetPreviews();
     }
 
     function getFileStatus(file: BrimFile): string {
@@ -2992,6 +3703,7 @@ ${arrow}<span>${label}</span></span>`,
     async function confirmDeleteFile() {
         const target = pendingDeleteFile;
         if (!target) return;
+        const affectedSet = allReportSets.find((set) => set.files.some((file) => file.file_id === target.fileId)) ?? null;
         try {
             await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {
                 params: {file_id: target.fileId},
@@ -3003,6 +3715,7 @@ ${arrow}<span>${label}</span></span>`,
                 (map.get(target.brokerId) ?? []).filter((f) => f.file_id !== target.fileId),
             );
             brokerFilesMap = map;
+            if (affectedSet) void refreshChangedSetPreviews();
         } catch (e) {
             console.error('Delete report failed:', e);
             toasts.error($t('files.deleteFailed'));
@@ -3015,6 +3728,195 @@ ${arrow}<span>${label}</span></span>`,
     function cancelDeleteFile() {
         showDeleteFileConfirm = false;
         pendingDeleteFile = null;
+    }
+
+    // =========================================================================
+    // Report sets (design §4.1–§4.4)
+    // =========================================================================
+
+    /**
+     * The plugin catalogue, with each plugin's report roles; shared with ImportPluginSelect's cache.
+     *
+     * Memoised in a plain variable, never read from `$state`: `loadBrokers()` runs inside the
+     * open effect, and a reactive read here would make the effect depend on the list it writes
+     * after the request — an endless reload whenever the catalogue comes back empty.
+     */
+    let importPluginsRequest: Promise<BrimPlugin[]> | null = null;
+
+    function ensureImportPlugins(): Promise<BrimPlugin[]> {
+        importPluginsRequest ??= loadImportPlugins();
+        return importPluginsRequest;
+    }
+
+    async function loadImportPlugins(): Promise<BrimPlugin[]> {
+        const cached = getCachedPlugins();
+        if (cached && cached.length > 0) {
+            importPlugins = cached;
+            return cached;
+        }
+        try {
+            const plugins = ((await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get()) as BrimPlugin[] | undefined) ?? [];
+            if (plugins.length > 0) setCachedPlugins(plugins);
+            importPlugins = plugins;
+            return plugins;
+        } catch (e) {
+            console.error('Failed to load import plugins:', e);
+            importPluginsRequest = null;
+            return [];
+        }
+    }
+
+    /** An ISO day (or timestamp) in the user's date format, read as a calendar day. */
+    function formatSetDay(iso: string | null | undefined): string {
+        if (!iso) return '—';
+        const day = String(iso).slice(0, 10);
+        const [year, month, date] = day.split('-').map(Number);
+        if (!year || !month || !date) return day;
+        return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(uiLocale(), {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
+    }
+
+    function setRowLabel(set: ReportSetGroup, fileCount: number): string {
+        return $t('importWizard.reportSet.analyzeRowLabel', {values: {date: formatSetDay(set.uploadedAt), n: fileCount}});
+    }
+
+    /** A combined file of the set was already parsed: the set was analysed before (design §4.3, case C). */
+    function isSetAnalysed(set: ReportSetGroup): boolean {
+        return combinedFileForSet(set, brokerFilesMap.get(set.brokerId) ?? [])?.status === 'parsed';
+    }
+
+    function toggleSetExpanded(key: string) {
+        const next = new Set(expandedSets);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        expandedSets = next;
+    }
+
+    /** A set is selected or deselected as a whole: its files are read together, through the set's plugin. */
+    function toggleSetSelection(set: ReportSetGroup) {
+        const ids = new Set(set.files.map((file) => file.file_id));
+        const others = selectedFiles.filter((f) => !ids.has(f.fileId));
+        if (setSelectionState(set, selectedFileIdSet) !== 'none') {
+            selectedFiles = others;
+            return;
+        }
+        selectedFiles = [...others, ...set.files.map((file) => ({fileId: file.file_id, fileName: file.filename, brokerId: set.brokerId, pluginCode: set.pluginCode}))];
+        if (setPreviews.get(set.key)?.members !== memberSignature(set)) void previewSet(set);
+    }
+
+    /** The members a set preview is asked for: the cache key beside the set's own. */
+    function memberSignature(set: ReportSetGroup): string {
+        return set.files
+            .map((file) => file.file_id)
+            .sort()
+            .join(',');
+    }
+
+    async function previewSet(set: ReportSetGroup): Promise<SetPreviewEntry> {
+        const epoch = setPreviewEpoch;
+        const members = memberSignature(set);
+        setPreviews = new Map(setPreviews).set(set.key, {status: 'loading', preview: setPreviews.get(set.key)?.preview ?? null, members});
+        let entry: SetPreviewEntry;
+        try {
+            // The originals left out of the set (read alone, removed) are named, so the server reads the same set.
+            const preview = (await zodiosApi.preview_report_set_api_v1_brokers_import_sets_preview_post(setRequest(set, brokerFilesMap.get(set.brokerId) ?? []))) as BrimSetPreview;
+            entry = {status: 'ready', preview, members};
+        } catch (e) {
+            entry = {status: 'error', preview: null, error: extractErrorMessage(e), members};
+        }
+        if (epoch === setPreviewEpoch) setPreviews = new Map(setPreviews).set(set.key, entry);
+        return entry;
+    }
+
+    async function refreshSetPreviews(sets: ReportSetGroup[]) {
+        await mapWithConcurrency(sets, async (set) => {
+            await previewSet(set);
+        });
+    }
+
+    /** After a choice changed a set (its plugin, or its members), read again the previews that no longer match. */
+    async function refreshChangedSetPreviews() {
+        await refreshSetPreviews(allReportSets.filter((set) => setPreviews.get(set.key)?.members !== memberSignature(set)));
+    }
+
+    /** Re-read one broker's files; the list also returns files with no broker, which are left out. */
+    async function refreshBrokerFiles(brokerId: number) {
+        try {
+            const files = (await zodiosApi.list_files_api_v1_brokers_import_files_get({queries: {broker_ids: [brokerId]}})) as BrimFile[];
+            brokerFilesMap = new Map(brokerFilesMap).set(
+                brokerId,
+                files.filter((file) => file.target_broker_id === brokerId),
+            );
+        } catch (e) {
+            console.error('Failed to reload broker files:', e);
+        }
+    }
+
+    /**
+     * "Upload the missing file": the export joins the same set (same broker, same upload batch)
+     * and the card updates; if the set was selected, so is its new file (design §4.1, rule 4).
+     */
+    async function uploadMissingIntoSet(set: ReportSetGroup, roleCode: string, file: globalThis.File) {
+        if (setUploadingRole.has(set.key)) return;
+        setUploadingRole = new Map(setUploadingRole).set(set.key, roleCode);
+        const wasSelected = setSelectionState(set, selectedFileIdSet) !== 'none';
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('broker_id', String(set.brokerId));
+            formData.append('batch_id', set.batchId);
+            const result = await trySave(() => axiosInstance.post(`/api/v1/brokers/import/upload`, formData), {toast: false, fallback: 'Upload failed', prefix: file.name});
+            if (result.status === 'error') {
+                notify({name: 'tx.import.set.upload_failed', detail: {set: set.key, role: roleCode}, toast: {variant: 'error', message: result.message}});
+                return;
+            }
+            const uploaded = result.data?.data as BrimFile | undefined;
+            await refreshBrokerFiles(set.brokerId);
+            if (wasSelected && uploaded?.file_id && !selectedFileIdSet.has(uploaded.file_id) && setPluginFor(uploaded, setPluginInfos) === set.pluginCode) {
+                selectedFiles = [...selectedFiles, {fileId: uploaded.file_id, fileName: uploaded.filename, brokerId: set.brokerId, pluginCode: set.pluginCode}];
+            }
+            // The set as it is now, with its new file: the one before the upload would name that file as left out.
+            await previewSet(allReportSets.find((current) => current.key === set.key) ?? set);
+            notify({name: 'tx.import.set.file_added', detail: {set: set.key, role: roleCode, fileId: uploaded?.file_id ?? null}});
+        } finally {
+            const next = new Map(setUploadingRole);
+            next.delete(set.key);
+            setUploadingRole = next;
+        }
+    }
+
+    /** The missing exports of the sets this session uploaded, from their previews. */
+    async function collectStep1SetWarnings(): Promise<Step1SetWarning[]> {
+        const plugins = (await ensureImportPlugins()) as unknown as SetPluginInfo[];
+        const byBroker = new Map<number, BrimFile[]>();
+        for (const entry of pendingFiles) {
+            if (entry.status !== 'uploaded' || !entry.serverInfo || entry.brokerId === null) continue;
+            byBroker.set(entry.brokerId, [...(byBroker.get(entry.brokerId) ?? []), entry.serverInfo]);
+        }
+        const sets = [...byBroker].flatMap(([brokerId, files]) => groupBrokerFiles(brokerId, files, plugins).sets);
+        const warnings: Step1SetWarning[] = [];
+        await mapWithConcurrency(sets, async (set) => {
+            const entry = await previewSet(set);
+            if (entry.status !== 'ready' || !entry.preview || entry.preview.complete) return;
+            const plugin = plugins.find((p) => p.code === set.pluginCode);
+            for (const missing of entry.preview.missing ?? []) {
+                const role = plugin?.report_roles?.find((r) => r.code === missing.role);
+                const roleKey = `importWizard.reportSet.roleName.${missing.role}`;
+                const translated = $t(roleKey);
+                warnings.push({
+                    key: `${set.key}:${missing.role}`,
+                    pluginCode: set.pluginCode,
+                    pluginName: plugin ? brimPluginName(plugin, $t) : set.pluginCode,
+                    docsUrl: plugin?.docs_url ?? null,
+                    roleCode: missing.role,
+                    roleLabel: translated === roleKey ? (role?.description ?? missing.role) : translated,
+                    extensions: (role?.extensions ?? []).map((ext) => ext.replace(/^\./, '').toUpperCase()).join(', '),
+                    start: missing.start ? String(missing.start) : null,
+                    end: missing.end ? String(missing.end) : null,
+                });
+            }
+        });
+        warnings.sort((a, b) => a.key.localeCompare(b.key));
+        return warnings;
     }
 
     // =========================================================================
@@ -3121,12 +4023,8 @@ ${arrow}<span>${label}</span></span>`,
     }
 
     function getPluginName(pluginCode: string): string {
-        const cached = getCachedPlugins();
-        if (cached) {
-            const plugin = cached.find((p: {code: string; name: string}) => p.code === pluginCode);
-            if (plugin) return plugin.name;
-        }
-        return pluginCode;
+        const plugin = getCachedPlugins()?.find((p: {code: string; name: string}) => p.code === pluginCode);
+        return brimPluginName({code: pluginCode, name: plugin?.name}, $t);
     }
 
     function initParseResults() {
@@ -3148,27 +4046,67 @@ ${arrow}<span>${label}</span></span>`,
         duplicateResolverSelections = {};
         expandedDuplicateGroupKeys = new Set();
 
-        // Build fresh ParsedFileResult[] from selectedFiles
+        // Build fresh ParsedFileResult[]: one per single file, one per report set (its files are analysed together)
         const results: ParsedFileResult[] = [];
-        for (const file of selectedFiles) {
-            const pluginName = getPluginName(file.pluginCode);
-            const broker = brokers.find((b) => b.id === file.brokerId);
-            results.push({
-                fileId: file.fileId,
-                fileName: file.fileName,
-                brokerId: file.brokerId,
-                brokerName: getBrokerName(file.brokerId),
+        for (const unit of parseUnits) {
+            const brokerId = unit.kind === 'file' ? unit.file.brokerId : unit.set.brokerId;
+            const pluginCode = unit.kind === 'file' ? unit.file.pluginCode : unit.set.pluginCode;
+            const broker = brokers.find((b) => b.id === brokerId);
+            const base = {
+                brokerId,
+                brokerName: getBrokerName(brokerId),
                 brokerIconUrl: broker?.icon_url ?? null,
                 brokerPortalUrl: broker?.portal_url ?? null,
-                pluginUsed: file.pluginCode,
-                pluginName,
-                status: 'pending',
+                pluginUsed: pluginCode,
+                pluginName: getPluginName(pluginCode),
+                status: 'pending' as const,
                 response: null,
+            };
+            if (unit.kind === 'file') {
+                results.push({...base, fileId: unit.file.fileId, fileName: unit.file.fileName});
+                continue;
+            }
+            results.push({
+                ...base,
+                // Keyed by the set until the combine answers, then by its combined file.
+                fileId: unit.set.key,
+                fileName: setRowLabel(unit.set, unit.members.length),
+                set: {
+                    key: unit.set.key,
+                    batchId: unit.set.batchId,
+                    excludeFileIds: setRequest(unit.set, brokerFilesMap.get(unit.set.brokerId) ?? []).exclude_file_ids,
+                    uploadedAt: unit.set.uploadedAt,
+                    memberIds: unit.members.map((member) => member.fileId),
+                    memberNames: unit.members.map((member) => member.fileName),
+                    combinedFileId: null,
+                    summary: null,
+                    reused: false,
+                },
             });
         }
         parseResults = results;
         syncDuplicateFilePriority();
         lastParseHash = newHash;
+    }
+
+    /**
+     * Parse one row of the analysis in place. A report set is combined first (or its identical
+     * combined file reused), and the combined file is what gets parsed: the set stays one row (§4.4).
+     */
+    async function parseResultInPlace(result: ParsedFileResult) {
+        try {
+            if (result.set) {
+                const combined = (await zodiosApi.combine_report_set_api_v1_brokers_import_sets_combine_post({broker_id: result.brokerId, plugin_code: result.pluginUsed, batch_id: result.set.batchId, exclude_file_ids: result.set.excludeFileIds})) as BrimSetCombineResponse;
+                result.fileId = combined.combined.file_id;
+                result.set = {...result.set, combinedFileId: combined.combined.file_id, summary: (combined.summary ?? null) as Record<string, unknown> | null, reused: combined.reused ?? false};
+            }
+            const res = await zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post({plugin_code: result.pluginUsed, broker_id: result.brokerId}, {params: {file_id: result.fileId}});
+            result.response = res as BrimParseResponse;
+            result.status = 'done';
+        } catch (e) {
+            result.status = 'error';
+            result.errorMessage = extractErrorMessage(e);
+        }
     }
 
     // Parses run in parallel too. The server off-loads each parse to its own process, so the
@@ -3185,15 +4123,7 @@ ${arrow}<span>${label}</span></span>`,
                 file.status = 'parsing';
                 parseResults = [...parseResults];
 
-                try {
-                    const res = await zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post({plugin_code: file.pluginUsed, broker_id: file.brokerId}, {params: {file_id: file.fileId}});
-                    file.response = res as BrimParseResponse;
-                    file.status = 'done';
-                } catch (e) {
-                    file.status = 'error';
-                    file.errorMessage = extractErrorMessage(e);
-                }
-
+                await parseResultInPlace(file);
                 parseResults = [...parseResults];
             },
             {shouldStop: () => abortParsing},
@@ -3224,7 +4154,12 @@ ${arrow}<span>${label}</span></span>`,
         {
             id: 'fileName',
             header: () => $t('common.name'),
-            cell: (row) => ({type: 'icon-text', icon: FileText, text: row.fileName}) as const,
+            cell: (row) => {
+                if (!row.set) return {type: 'icon-text', icon: FileText, text: row.fileName} as const;
+                // A set is one row: its label, and the files it was combined from underneath.
+                const members = row.set.memberNames.map((member) => escapeHtml(member)).join(' + ');
+                return {type: 'html', html: `<div class="min-w-0" data-testid="parse-row-set"><div class="truncate font-medium">${escapeHtml(row.fileName)}</div><div class="truncate text-xs text-gray-500 dark:text-gray-400">${members}</div></div>`} as const;
+            },
             type: 'text',
             sortable: true,
             width: 250,
@@ -3255,14 +4190,13 @@ ${arrow}<span>${label}</span></span>`,
             id: 'pluginName',
             header: () => 'Plugin',
             cell: (row) => {
-                const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
                 const plugin = (getCachedPlugins() ?? []).find((p) => p.code === row.pluginUsed);
                 const iconUrl = (plugin as {icon_url?: string | null} | undefined)?.icon_url;
                 const name = row.pluginName || row.pluginUsed;
                 const icon = iconUrl
-                    ? `<img src="${esc(iconUrl)}" class="w-5 h-5 rounded-full object-cover shrink-0" alt="">`
-                    : `<span class="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">${esc(name.charAt(0).toUpperCase())}</span>`;
-                return {type: 'html', html: `<div class="flex items-center gap-1.5 min-w-0">${icon}<span class="truncate text-xs">${esc(name)}</span></div>`} as const;
+                    ? `<img src="${escapeHtml(iconUrl)}" class="w-5 h-5 rounded-full object-cover shrink-0" alt="">`
+                    : `<span class="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">${escapeHtml(name.charAt(0).toUpperCase())}</span>`;
+                return {type: 'html', html: `<div class="flex items-center gap-1.5 min-w-0">${icon}<span class="truncate text-xs">${escapeHtml(name)}</span></div>`} as const;
             },
             type: 'text',
             sortable: true,
@@ -3280,10 +4214,9 @@ ${arrow}<span>${label}</span></span>`,
                 // Failed rows carry the reason in a tooltip: a bare "Error" badge tells
                 // the user nothing about what went wrong.
                 if (row.status === 'error') {
-                    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                     return {
                         type: 'html',
-                        html: `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">${esc($t('common.error'))}</span>`,
+                        html: `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">${escapeHtml($t('common.error'))}</span>`,
                         tooltip: {text: row.errorMessage ?? $t('common.error'), position: 'top', maxWidth: '28rem'},
                     } as const;
                 }
@@ -3420,14 +4353,7 @@ ${arrow}<span>${label}</span></span>`,
         // Parse just this one file
         result.status = 'parsing';
         parseResults = [...parseResults];
-        try {
-            const res = await zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post({plugin_code: result.pluginUsed, broker_id: result.brokerId}, {params: {file_id: result.fileId}});
-            result.response = res as BrimParseResponse;
-            result.status = 'done';
-        } catch (e) {
-            result.status = 'error';
-            result.errorMessage = extractErrorMessage(e);
-        }
+        await parseResultInPlace(result);
         parseResults = [...parseResults];
         mergeAllTransactions();
     }
@@ -3557,7 +4483,13 @@ ${arrow}<span>${label}</span></span>`,
     <!-- ================================================================== -->
     <!-- Content -->
     <!-- ================================================================== -->
-    <div class="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
+    <div class="p-5 space-y-4 max-h-[65vh] overflow-y-auto" data-testid="import-wizard-content" data-guide-scroll-root aria-busy={candidatesRefreshing || duplicateRecheckRunning || importPreparing} data-busy={candidatesRefreshing || duplicateRecheckRunning || importPreparing}>
+        {#if candidatesError}
+            <div role="alert" class="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300" data-testid="import-wizard-candidates-error">
+                <p>{candidatesError}</p>
+                <button type="button" class="mt-2 underline disabled:opacity-50" disabled={candidatesRefreshing} onclick={() => void refreshCandidates()} data-testid="import-wizard-candidates-retry">{$t('common.retry')}</button>
+            </div>
+        {/if}
         <!-- ============================================================ -->
         <!-- Step 1: Upload & Assign Broker -->
         <!-- ============================================================ -->
@@ -3570,6 +4502,30 @@ ${arrow}<span>${label}</span></span>`,
                 {#if uploadError}
                     <InfoBanner variant="error" message={uploadError} dismissible ondismiss={() => (uploadError = null)} />
                 {/if}
+
+                <!-- A report set this upload left incomplete: the missing export dropped here joins the same set -->
+                {#each step1SetWarnings as warning (warning.key)}
+                    <div
+                        class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
+                        data-testid="import-wizard-step1-set-warning"
+                        data-plugin-code={warning.pluginCode}
+                        data-role={warning.roleCode}
+                    >
+                        <AlertTriangle size={16} class="mt-0.5 shrink-0" />
+                        <div class="space-y-1">
+                            <p>{$t('importWizard.reportSet.step1Missing', {values: {plugin: warning.pluginName, role: warning.roleLabel, ext: warning.extensions}})}</p>
+                            {#if warning.start && warning.end}
+                                <p>{$t('importWizard.reportSet.missingPeriod', {values: {start: formatSetDay(warning.start), end: formatSetDay(warning.end)}})}</p>
+                            {/if}
+                            <p class="text-xs">
+                                {$t('importWizard.reportSet.step1MissingHint')}
+                                {#if warning.docsUrl}
+                                    <a class="ml-1 text-libre-green hover:underline" href={warning.docsUrl} target="_blank" rel="noopener noreferrer">{$t('importWizard.reportSet.howToExport')}</a>
+                                {/if}
+                            </p>
+                        </div>
+                    </div>
+                {/each}
 
                 <!-- T2: Collapsible drop zone -->
                 {#if dropZoneExpanded}
@@ -3664,7 +4620,7 @@ ${arrow}<span>${label}</span></span>`,
             <!-- Step 2: Select Files from Broker Panels (DataTable) -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'select'}
-            <div class="space-y-4" data-testid="import-wizard-step2" data-busy={brokerFilesLoading || uploading}>
+            <div class="space-y-4" data-testid="import-wizard-step2" data-busy={brokerFilesLoading || uploading || setPreviewsLoading || setUploadingRole.size > 0}>
                 {#if brokerFilesLoading}
                     <div class="py-8 text-center">
                         <LoadingSpinner size="md" />
@@ -3673,10 +4629,14 @@ ${arrow}<span>${label}</span></span>`,
                     <!-- Header: selected count + column visibility -->
                     <div class="flex items-center justify-between flex-wrap gap-2">
                         <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                            {$t('importWizard.selectedCount', {values: {n: selectedFiles.length, b: selectedBrokerCount}})}
+                            {#if allReportSets.length > 0}
+                                {$t('importWizard.reportSet.selectedCount', {values: {sets: selectedSetCount, n: parseUnits.length - selectedSetCount, b: selectedBrokerCount}})}
+                            {:else}
+                                {$t('importWizard.selectedCount', {values: {n: selectedFiles.length, b: selectedBrokerCount}})}
+                            {/if}
                         </span>
                         <div class="flex items-center gap-2">
-                            <ColumnVisibilityToggle tableRef={tableRefs[0]} additionalTableRefs={tableRefs.slice(1)} />
+                            <ColumnVisibilityToggle tableRef={tableRefs.find((table) => table != null)} additionalTableRefs={tableRefs.filter((table) => table != null).slice(1)} />
                         </div>
                     </div>
 
@@ -3688,10 +4648,17 @@ ${arrow}<span>${label}</span></span>`,
                     <!-- Broker panels with DataTable -->
                     {#each brokers as broker, brokerIdx}
                         {@const brokerFiles = brokerFilesMap.get(broker.id) ?? []}
+                        {@const brokerGroups = brokerSetGroups.get(broker.id) ?? {sets: [], singles: brokerFiles}}
                         {#if brokerFiles.length > 0}
-                            <div class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <div class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden" data-testid={`import-wizard-broker-files-${broker.id}`}>
                                 <!-- Broker header (collapsible) -->
-                                <button type="button" class="w-full flex items-center gap-2 px-3 py-2.5 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-750 text-left" onclick={() => toggleBrokerExpand(broker.id)}>
+                                <button
+                                    type="button"
+                                    class="w-full flex items-center gap-2 px-3 py-2.5 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-750 text-left"
+                                    onclick={() => toggleBrokerExpand(broker.id)}
+                                    aria-expanded={expandedBrokers.has(broker.id)}
+                                    data-testid={`import-wizard-broker-toggle-${broker.id}`}
+                                >
                                     {#if expandedBrokers.has(broker.id)}
                                         <ChevronDown size={14} class="text-gray-400" />
                                     {:else}
@@ -3702,41 +4669,81 @@ ${arrow}<span>${label}</span></span>`,
                                     {#if selectedFiles.filter((f) => f.brokerId === broker.id).length > 0}
                                         <span class="text-xs font-medium text-libre-green ml-1">({selectedFiles.filter((f) => f.brokerId === broker.id).length})</span>
                                     {/if}
-                                    <span class="text-xs text-gray-400 ml-auto">{brokerFiles.length} file(s)</span>
+                                    <span class="text-xs text-gray-400 ml-auto">
+                                        {#if brokerGroups.sets.length > 0}{$t('importWizard.reportSet.setCount', {values: {n: brokerGroups.sets.length}})} ·{/if}
+                                        {brokerGroups.singles.length + brokerGroups.sets.reduce((total, set) => total + set.files.length, 0)} file(s)
+                                    </span>
                                 </button>
 
-                                <!-- DataTable per broker -->
-                                {#if expandedBrokers.has(broker.id)}
+                                <!-- Report sets, one card each; the single files stay in the table -->
+                                {#if expandedBrokers.has(broker.id) && brokerGroups.sets.length > 0}
+                                    <div class="space-y-2 border-t border-gray-200 p-2 dark:border-gray-700" data-testid={`import-wizard-broker-sets-${broker.id}`}>
+                                        {#each brokerGroups.sets as set (set.key)}
+                                            <ReportSetCard
+                                                {set}
+                                                plugin={setPluginInfos.find((p) => p.code === set.pluginCode) ?? null}
+                                                previewState={setPreviews.get(set.key)}
+                                                selection={setSelectionState(set, selectedFileIdSet)}
+                                                expanded={expandedSets.has(set.key)}
+                                                analysed={isSetAnalysed(set)}
+                                                uploadingRole={setUploadingRole.get(set.key) ?? null}
+                                                onToggleSelected={() => toggleSetSelection(set)}
+                                                onToggleExpanded={() => toggleSetExpanded(set.key)}
+                                                onUploadMissing={(roleCode, file) => void uploadMissingIntoSet(set, roleCode, file)}
+                                                onPreviewFile={(fileId) => openPreview(fileId)}
+                                                onDeleteFile={(file) => requestDeleteFile(file as BrimFile, broker.id)}
+                                                plugins={setPluginInfos}
+                                                brokerDefaultPlugin={broker.default_import_plugin ?? null}
+                                                onReadAs={(code) => readSetAs(set, code)}
+                                                onReadAlone={(fileId, code) => readFileAlone(fileId, code)}
+                                                onRemoveFromSet={(fileId) => removeFileFromSet(fileId)}
+                                            />
+                                        {/each}
+                                    </div>
+                                {/if}
+
+                                <!-- DataTable per broker: the single files -->
+                                {#if expandedBrokers.has(broker.id) && brokerGroups.singles.length > 0}
                                     <div class="border-t border-gray-200 dark:border-gray-700">
-                                        <DataTable
-                                            bind:this={tableRefs[brokerIdx]}
-                                            data={brokerFiles}
-                                            columns={fileTableColumns}
-                                            getRowId={(row) => row.file_id}
-                                            storageKey={`import-wizard-files-${broker.id}`}
-                                            enableSelection={true}
-                                            selectionMode="multi"
-                                            initialSelectedIds={selectedFiles.filter((f) => f.brokerId === broker.id).map((f) => f.fileId)}
-                                            onSelectionChange={(ids) => handleSelectionChange(broker.id, ids)}
-                                            onRowDoubleClick={(row) => openPreview(row.file_id)}
-                                            enableActions={true}
-                                            actionsColumnWidth="64px"
-                                            rowActions={[
-                                                {id: 'preview', icon: Eye, label: $t('common.preview'), onClick: (row) => openPreview(row.file_id)},
-                                                {id: 'delete', icon: Trash2, label: $t('common.delete'), variant: 'danger', onClick: (row) => requestDeleteFile(row, broker.id)},
-                                            ]}
-                                            enableSorting={true}
-                                            enableColumnFilters={true}
-                                            enableColumnResize={true}
-                                            enablePagination={false}
-                                            enableColumnVisibility={false}
-                                            defaultPageSize={100}
-                                            tableLayout="auto"
-                                            stickyActions={false}
-                                            enableContextMenu={true}
-                                            initialFilters={undefined}
-                                            onColumnResize={(colId, w) => handleColumnResize(brokerIdx, colId, w)}
-                                        />
+                                        {#if brokerGroups.sets.length > 0}
+                                            <p class="px-3 pt-2 text-xs font-medium text-gray-600 dark:text-gray-300" data-testid={`import-wizard-other-files-${broker.id}`}>{$t('importWizard.reportSet.otherFiles')}</p>
+                                        {/if}
+                                        <!-- The table reads the selection only when it mounts (initialSelectedIds), so it is
+                                             remounted whenever a file joins or leaves it: a file that arrives from a set keeps
+                                             its tick, and the next click on another row cannot drop it (step H). -->
+                                        {#key brokerGroups.singles.map((file) => file.file_id).join(',')}
+                                            <DataTable
+                                                bind:this={tableRefs[brokerIdx]}
+                                                data={brokerGroups.singles}
+                                                columns={fileTableColumns}
+                                                getRowId={(row) => row.file_id}
+                                                storageKey={`import-wizard-files-${broker.id}`}
+                                                enableSelection={true}
+                                                selectionMode="multi"
+                                                initialSelectedIds={selectedFiles.filter((f) => f.brokerId === broker.id && brokerGroups.singles.some((single) => single.file_id === f.fileId)).map((f) => f.fileId)}
+                                                onSelectionChange={(ids) => handleSelectionChange(broker.id, ids)}
+                                                onRowDoubleClick={(row) => openPreview(row.file_id)}
+                                                enableActions={true}
+                                                actionsColumnWidth="64px"
+                                                rowActions={[
+                                                    {id: 'preview', icon: Eye, label: $t('common.preview'), onClick: (row) => openPreview(row.file_id)},
+                                                    {id: 'delete', icon: Trash2, label: $t('common.delete'), variant: 'danger', onClick: (row) => requestDeleteFile(row, broker.id)},
+                                                ]}
+                                                enableSorting={true}
+                                                enableColumnFilters={true}
+                                                enableColumnResize={true}
+                                                enablePagination={brokerGroups.singles.length > 5}
+                                                alwaysShowPagination={brokerGroups.singles.length > 5}
+                                                enableColumnVisibility={false}
+                                                defaultPageSize={5}
+                                                pageSizeOptions={[5, 10, 25, 50, 100, 0]}
+                                                tableLayout="auto"
+                                                stickyActions={false}
+                                                enableContextMenu={true}
+                                                initialFilters={undefined}
+                                                onColumnResize={(colId, w) => handleColumnResize(brokerIdx, colId, w)}
+                                            />
+                                        {/key}
                                     </div>
                                 {/if}
                             </div>
@@ -3757,7 +4764,7 @@ ${arrow}<span>${label}</span></span>`,
             <!-- Step 3: Parse Engine -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'analyze'}
-            <div class="flex flex-col gap-4 p-4" data-testid="import-wizard-step3" data-parse-state={parseState}>
+            <div class="flex flex-col gap-4 p-4" data-testid="import-wizard-step3" data-parse-state={parseState} data-busy={candidatesRefreshing || duplicateRecheckRunning} aria-busy={candidatesRefreshing || duplicateRecheckRunning}>
                 <!-- Progress bar -->
                 <div class="space-y-1">
                     <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
@@ -3903,6 +4910,7 @@ ${arrow}<span>${label}</span></span>`,
                     touched={assetGroupingTouched}
                     onpartition={applyGroupPartition}
                     onconfirm={confirmGroupProposal}
+                    onconfirmall={confirmAllGroupProposals}
                     onprimary={electGroupPrimary}
                     onreset={resetGrouping}
                     oninspect={openAssetInspector}
@@ -4100,7 +5108,19 @@ ${arrow}<span>${label}</span></span>`,
             <!-- Step 4: Review & Import -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'review'}
-            <div class="flex flex-col gap-4 h-full overflow-y-auto" data-testid="import-wizard-step4" data-busy={autoFixingBrokerId !== null || recheckingOpenings} data-selected-count={step4SelectedCount} data-total-count={step4TotalCount}>
+            <div
+                class="flex flex-col gap-4 h-full overflow-y-auto"
+                data-testid="import-wizard-step4"
+                data-busy={autoFixingBrokerId !== null || recheckingOpenings || candidatesRefreshing || duplicateRecheckRunning || importPreparing || inspectAssetLoading}
+                aria-busy={autoFixingBrokerId !== null || recheckingOpenings || candidatesRefreshing || duplicateRecheckRunning || importPreparing || inspectAssetLoading}
+                data-selected-count={step4SelectedCount}
+                data-total-count={step4TotalCount}
+            >
+                {#if duplicateRecheckError}
+                    <div data-testid="import-wizard-duplicate-recheck-error">
+                        <InfoBanner variant="error" message={$t('importWizard.duplicateRecheckFailed', {values: {error: duplicateRecheckError}})} />
+                    </div>
+                {/if}
                 <!-- ── Resolve Assets section ─────────────────────────── -->
                 {#if assetResolutions.length > 0}
                     <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden" data-testid="import-wizard-resolve-section">
@@ -4115,8 +5135,7 @@ ${arrow}<span>${label}</span></span>`,
                                 {#if step4ShowResolveSection}<ChevronDown size={16} />{:else}<ChevronRight size={16} />{/if}
                                 <span class="font-semibold text-sm">{$t('importWizard.resolveAssets')}</span>
                                 {#if step4UnresolvedCount > 0}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                                        {step4UnresolvedCount}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" data-testid="import-wizard-unresolved-count">
                                         {$t('importWizard.unresolvedCount', {values: {n: step4UnresolvedCount}})}
                                     </span>
                                 {:else}
@@ -4126,6 +5145,15 @@ ${arrow}<span>${label}</span></span>`,
                                 {/if}
                             </div>
                         </button>
+
+                        {#if step4MissingAssetCount > 0}
+                            <div class="px-3 pt-3" data-testid="import-wizard-manual-asset-help">
+                                <InfoBanner variant="info">
+                                    <p class="font-semibold mb-1">{$t('importWizard.manualAssets.title')}</p>
+                                    <p>{$t('importWizard.manualAssets.body')}</p>
+                                </InfoBanner>
+                            </div>
+                        {/if}
 
                         {#if step4ShowResolveSection}
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
@@ -4262,6 +5290,12 @@ ${arrow}<span>${label}</span></span>`,
                             {#if step4BeforeOpeningCount > 0}
                                 <span class="text-xs text-gray-500 dark:text-gray-400">⛔ {step4BeforeOpeningCount} {$t('importWizard.beforeOpeningCount')}</span>
                             {/if}
+                            {#if step4BeforeHistoryCount > 0}
+                                <span class="text-xs text-gray-500 dark:text-gray-400" data-testid="import-wizard-before-history-count" data-count={step4BeforeHistoryCount}>⏮ {$t('importWizard.reportSet.beforeHistoryCount', {values: {n: step4BeforeHistoryCount}})}</span>
+                                <button type="button" class="text-xs text-libre-green hover:underline" onclick={() => (showBeforeHistory = !showBeforeHistory)} aria-pressed={showBeforeHistory} data-testid="import-wizard-before-history-toggle">
+                                    {showBeforeHistory ? $t('importWizard.reportSet.hideBeforeHistory') : $t('importWizard.reportSet.showBeforeHistory')}
+                                </button>
+                            {/if}
                         </div>
                         <div class="flex items-center gap-2">
                             {#if step4BeforeOpeningCount > 0}
@@ -4329,6 +5363,11 @@ ${arrow}<span>${label}</span></span>`,
                     />
                 </div>
             </div>
+        {:else if currentStepId === 'gapFix' && gapFixView}
+            <!-- ============================================================ -->
+            <!-- Align with the bank (report sets) -->
+            <!-- ============================================================ -->
+            <GapFixStep view={gapFixView} selected={gapFixSelected} onToggle={toggleGapFixProposal} onSetSelected={setGapFixProposals} assetName={getAssetDisplayName} brokerName={gapFixBrokerName} />
         {/if}
     </div>
 
@@ -4359,8 +5398,15 @@ ${arrow}<span>${label}</span></span>`,
                         {$t('common.clear') || 'Clear'}
                     </button>
                 {/if}
-                <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step1CanProceed || uploading} data-testid="import-wizard-next">
-                    {#if uploading}
+                <button
+                    type="button"
+                    class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onclick={goNext}
+                    disabled={!step1CanProceed || uploading || step1Continuing || brokersLoading}
+                    data-testid="import-wizard-next"
+                    use:guideAnchor={'import.action.upload'}
+                >
+                    {#if uploading || step1Continuing || brokersLoading}
                         <LoadingSpinner size="sm" />
                     {:else if step1ValidCount > 0}
                         {$t('importWizard.next')} ({step1ValidCount}) ▶
@@ -4374,7 +5420,18 @@ ${arrow}<span>${label}</span></span>`,
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
                     ◀ {$t('common.back')}
                 </button>
-                {#if selectedFiles.length > 0 && !step2CanParse}
+                {#if setBlockReason !== null}
+                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400" data-testid="import-wizard-set-blocks" data-reason={setBlockReason} data-file-ids={setBlockReason === 'ungrouped' ? ungroupedFiles.map((file) => file.fileId).join(',') : undefined}>
+                        <AlertTriangle size={14} />
+                        {#if setBlockReason === 'partly-selected'}
+                            {$t('importWizard.reportSet.partlySelectedBlocks')}
+                        {:else if setBlockReason === 'ungrouped'}
+                            {$t('importWizard.reportSet.ungroupedBlocks', {values: {files: ungroupedFiles.map((file) => file.fileName).join(', ')}})}
+                        {:else}
+                            {$t('importWizard.reportSet.incompleteBlocks')}
+                        {/if}
+                    </span>
+                {:else if selectedFiles.length > 0 && !step2CanParse}
                     <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                         <AlertTriangle size={14} />
                         {$t('importWizard.pluginRequired')}
@@ -4386,8 +5443,8 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step2CanParse} data-testid="import-wizard-parse">
-                {$t('importWizard.parse', {values: {n: selectedFiles.length}})} ▶
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step2CanParse} data-testid="import-wizard-parse" use:guideAnchor={'import.action.select'}>
+                {$t('importWizard.parse', {values: {n: parseUnits.length}})} ▶
             </button>
         {:else if currentStepId === 'analyze'}
             <div class="flex items-center gap-1">
@@ -4421,7 +5478,14 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step3CanContinue} data-testid="import-wizard-continue">
+            <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                onclick={goNext}
+                disabled={!step3CanContinue || candidatesRefreshing || duplicateRecheckRunning}
+                data-testid="import-wizard-continue"
+                use:guideAnchor={'import.action.analyze'}
+            >
                 {$t('common.continue')} ▶
             </button>
             <!--
@@ -4446,7 +5510,14 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={goNext} data-testid="import-wizard-assets-continue">
+            <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
+                onclick={goNext}
+                disabled={assetGroupOpenProposals > 0 || candidatesRefreshing || duplicateRecheckRunning}
+                data-testid="import-wizard-assets-continue"
+                use:guideAnchor={'import.action.assets'}
+            >
                 {$t('common.continue')} ▶
             </button>
         {:else if currentStepId === 'fix'}
@@ -4466,7 +5537,14 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={fixStepPendingCount > 0 || duplicateRecheckRunning} data-testid="import-wizard-fix-continue">
+            <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                onclick={goNext}
+                disabled={fixStepPendingCount > 0 || duplicateRecheckRunning || candidatesRefreshing}
+                data-testid="import-wizard-fix-continue"
+                use:guideAnchor={'import.action.fix'}
+            >
                 {#if duplicateRecheckRunning}
                     <LoadingSpinner size="sm" />
                 {:else}
@@ -4490,7 +5568,26 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={goNext} data-testid="import-wizard-duplicates-continue">
+            <button
+                type="button"
+                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
+                onclick={goNext}
+                disabled={candidatesRefreshing || duplicateRecheckRunning}
+                data-testid="import-wizard-duplicates-continue"
+                use:guideAnchor={'import.action.duplicates'}
+            >
+                {$t('common.continue')} ▶
+            </button>
+        {:else if currentStepId === 'gapFix'}
+            <div class="flex items-center gap-2">
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
+                    ◀ {$t('common.back')}
+                </button>
+                <span class="text-xs text-gray-600 dark:text-gray-300" data-testid="import-wizard-gapfix-count" data-count={gapFixSelectedTotal}>
+                    {$t('importWizard.reportSet.gapFix.selectedCount', {values: {n: gapFixSelectedTotal}})}
+                </span>
+            </div>
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" onclick={handleGapFixContinue} disabled={importPreparing} data-testid="import-wizard-gapfix-continue" use:guideAnchor={'import.action.gapFix'}>
                 {$t('common.continue')} ▶
             </button>
         {:else}
@@ -4514,7 +5611,7 @@ ${arrow}<span>${label}</span></span>`,
                     </span>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleImport} disabled={!step4CanImport} data-testid="import-wizard-import">
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleImport} disabled={!step4CanImport} data-testid="import-wizard-import" use:guideAnchor={'import.action.review'}>
                 {$t('importWizard.importToEditor', {values: {n: step4SelectedCount}})} ▶
             </button>
         {/if}
@@ -4523,6 +5620,26 @@ ${arrow}<span>${label}</span></span>`,
 
 <!-- Unsaved guard -->
 <ConfirmModal open={confirmCloseOpen} title={$t('common.discardImport')} message={$t('common.discardChangesMessage')} confirmText={$t('common.discard')} warning zIndex={80} onConfirm={confirmDiscard} onCancel={() => (confirmCloseOpen = false)} />
+
+{#if mismatchPrompt}
+    <ImportBrokerMismatchModal
+        open={true}
+        fileKey={mismatchPrompt.entryId}
+        fileName={mismatchPrompt.fileName}
+        broker={mismatchPrompt.broker}
+        defaultPlugin={mismatchPrompt.defaultPlugin}
+        reason={mismatchPrompt.reason}
+        targets={mismatchPrompt.targets}
+        readerNames={mismatchPrompt.readerNames}
+        current={mismatchPrompt.current}
+        total={mismatchPrompt.total}
+        busy={mismatchBusy}
+        zIndex={70}
+        onMove={(brokerId) => answerMismatch({action: 'move', brokerId})}
+        onKeep={() => answerMismatch({action: 'keep'})}
+        onRemove={() => answerMismatch({action: 'remove'})}
+    />
+{/if}
 
 <!-- Step 2: delete-report (broker import file) confirmation -->
 <ConfirmModal
@@ -4719,17 +5836,7 @@ ${arrow}<span>${label}</span></span>`,
 
 <!-- Asset inspection from the resolution step — the picked instrument, in full -->
 {#if inspectAssetData !== null}
-    <AssetModal
-        open={true}
-        editMode={true}
-        editData={inspectAssetData as never}
-        zIndex={90}
-        onupdated={() => {
-            inspectAssetData = null;
-            void refreshAllAssets();
-        }}
-        onclose={() => (inspectAssetData = null)}
-    />
+    <AssetModal open={true} editMode={true} editData={inspectAssetData} zIndex={90} onupdated={handleInspectedAssetUpdated} onclose={() => (inspectAssetData = null)} />
 {/if}
 
 <!-- Asset creation from the correction step — seeded with the row's own description -->
@@ -4758,7 +5865,7 @@ ${arrow}<span>${label}</span></span>`,
         oncreated={(assetId) => {
             fixCreatedAssets = {...fixCreatedAssets, [fixCreateAssetIndex!]: assetId};
             fixCreateAssetIndex = null;
-            void refreshAllAssets();
+            void refreshAssetCatalog();
         }}
         onclose={() => (fixCreateAssetIndex = null)}
     />
@@ -4804,13 +5911,15 @@ ${arrow}<span>${label}</span></span>`,
                 {$t('importWizard.addIdentifier.title')}
             </h2>
             <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed" data-testid="identifier-prompt-body">
-                {@html $t('importWizard.addIdentifier.body', {
-                    values: {
-                        asset: `<strong>${identifierPromptAssetName ?? ''}</strong>`,
-                        value: `<strong>${identifierPromptValues[0] ?? ''}</strong>`,
-                        type: identifierPromptField === 'identifier_ticker' ? 'Ticker' : 'ISIN',
-                    },
-                })}
+                {@html sanitizeHtml(
+                    $t('importWizard.addIdentifier.body', {
+                        values: {
+                            asset: `<strong>${escapeHtml(identifierPromptAssetName ?? '')}</strong>`,
+                            value: `<strong>${escapeHtml(identifierPromptValues[0] ?? '')}</strong>`,
+                            type: identifierPromptField === 'identifier_ticker' ? 'Ticker' : 'ISIN',
+                        },
+                    }),
+                )}
             </p>
         {/if}
 
@@ -4845,7 +5954,8 @@ ${arrow}<span>${label}</span></span>`,
             pendingFiles = pendingFiles.map((f) => (f.id === createBrokerContext ? {...f, brokerId: d.id} : f));
         }
         // Force full refetch so user_role is included (mergeBrokers alone lacks role data).
-        refreshAllBrokers().then(() => {
+        void trackBrokerLoad(async () => {
+            await refreshAllBrokers();
             brokers = getEditableBrokers();
         });
         createBrokerOpen = false;

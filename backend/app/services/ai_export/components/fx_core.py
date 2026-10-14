@@ -83,8 +83,8 @@ from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.technical_shared import load_fx_rate_series
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, BuildContextScopeError
+from backend.app.services.financial_math.valuation import compute_holding_value, normalize_quote_base_quantity
 from backend.app.services.fx import convert_bulk
-from backend.app.utils.financial.valuation_utils import compute_holding_value, normalize_quote_base_quantity
 
 # Relative tolerance used to decide whether an independently-resolved exposure
 # rate (via `_load_exposure_conversions`/`convert_bulk`) "reconciles" with the
@@ -353,7 +353,7 @@ async def _load_asset_facts(context: BuildContext, asset_ids: Sequence[int]) -> 
 def _native_amount_for_holding(holding: PortfolioHolding, quote_base_quantity: int) -> Decimal | None:
     """Honest native-currency amount for `holding`, in `holding.valuation_effective_currency`.
 
-    Mirrors exactly how `backend.app.services.portfolio_engine` derived
+    Mirrors exactly how `backend.app.services.financial_math.portfolio.daily_state` derived
     `holding.current_value` before converting it to `target_currency`:
     - MARKET_PRICE / LAST_TRADE_PRICE valuations sit on the market ×quote_base_quantity
       axis, so they scale by `quote_base_quantity` via the same `compute_holding_value`
@@ -486,7 +486,7 @@ def _rate_reconciles(implied_rate: Decimal, resolved_rate: Decimal) -> bool:
 
     Both `implied_rate` (`target_amount / native_amount`) and `resolved_rate`
     (from `_load_exposure_conversions`) ultimately read the same `FxRate` rows
-    for the same date (see `backend.app.services.portfolio_engine`'s own
+    for the same date (see `backend.app.services.financial_math.portfolio.engine`'s own
     `convert_bulk` usage), so they should match near-exactly; the tolerance
     only absorbs Decimal rounding-order differences.
     """

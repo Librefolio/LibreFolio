@@ -23,6 +23,7 @@
 import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {clamp} from './lotChartShared';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /** The marker kinds the Gantt can draw for a lot event. */
 export type EventMarkerKind = 'BUY' | 'SELL' | 'TRANSFER' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT';
@@ -99,9 +100,9 @@ export function firstPresentUnknown(...values: unknown[]): unknown {
 
 /**
  * Format a quantity with up to 6 fraction digits. `locale` is exposed for
- * deterministic tests; it defaults to the machine locale, matching the component.
+ * deterministic tests; it defaults to the interface locale (`uiLocale()`, M-18).
  */
-export function formatQuantity(value: number, locale?: string): string {
+export function formatQuantity(value: number, locale: string = uiLocale()): string {
     return value.toLocaleString(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6});
 }
 
@@ -243,18 +244,20 @@ export function eventMarkerSymbol(kind: EventMarkerKind): string {
 /** The subset of a rendered segment needed to classify a transition. */
 interface TransitionSegment {
     quantity: number;
-    unitPrice: number;
+    /** `null` when the price has no rate to the target currency. */
+    unitPrice: number | null;
     startMs: number;
 }
 
 /**
  * Whether two adjacent segments look like a stock split: quantity changed but
  * notional (quantity × unitPrice) is preserved within a tiny relative tolerance.
- * A zero/negative unit price on either side, or an unchanged quantity, rules it
- * out.
+ * An unknown, zero or negative unit price on either side, or an unchanged
+ * quantity, rules it out. This inference is only the fallback for a chart given
+ * no explicit lot events; the backend's own SPLIT events need no price.
  */
-export function isSplitTransition(prev: {quantity: number; unitPrice: number}, next: {quantity: number; unitPrice: number}): boolean {
-    if (prev.quantity === next.quantity || prev.unitPrice <= 0 || next.unitPrice <= 0) return false;
+export function isSplitTransition(prev: {quantity: number; unitPrice: number | null}, next: {quantity: number; unitPrice: number | null}): boolean {
+    if (prev.quantity === next.quantity || prev.unitPrice == null || next.unitPrice == null || prev.unitPrice <= 0 || next.unitPrice <= 0) return false;
     const prevNotional = prev.quantity * prev.unitPrice;
     const nextNotional = next.quantity * next.unitPrice;
     return Math.abs(prevNotional - nextNotional) <= Math.max(0.000001, Math.abs(prevNotional) * 0.0001);

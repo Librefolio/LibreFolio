@@ -13,11 +13,42 @@
 /** A distribution map: `{Technology: 0.4, Health: 0.6}` etc. */
 export type Distribution = Record<string, number>;
 
+export function normalizeDistribution(values: Record<string, string | number>): Distribution {
+    return Object.fromEntries(
+        Object.entries(values).map(([key, value]): [string, number] => {
+            const weight = Number(value);
+            if ((typeof value !== 'string' && typeof value !== 'number') || String(value).trim() === '' || !Number.isFinite(weight)) throw new Error('Invalid distribution weight.');
+            return [key, weight];
+        }),
+    );
+}
+
 /** The classification payload sub-object, each part present only when non-empty. */
 export interface ClassificationParams {
     short_description?: string;
     sector_area?: {distribution: Distribution};
     geographic_area?: {distribution: Distribution};
+}
+
+export interface ClassificationPatch {
+    short_description?: string | null;
+    sector_area?: {distribution: Distribution} | null;
+    geographic_area?: {distribution: Distribution} | null;
+}
+
+export function sameDistribution(left: Distribution = {}, right: Distribution = {}): boolean {
+    const keys = Object.keys(left);
+    return keys.length === Object.keys(right).length && keys.every((key) => Object.hasOwn(right, key) && left[key] === right[key]);
+}
+
+/** Omission preserves untouched metadata; null expresses a deliberate clear. */
+export function buildClassificationPatch(previous: ClassificationParams | undefined, current: ClassificationParams | undefined): ClassificationPatch | null | undefined {
+    const patch: ClassificationPatch = {};
+    if ((previous?.short_description ?? null) !== (current?.short_description ?? null)) patch.short_description = current?.short_description ?? null;
+    if (!sameDistribution(previous?.sector_area?.distribution, current?.sector_area?.distribution)) patch.sector_area = current?.sector_area ?? null;
+    if (!sameDistribution(previous?.geographic_area?.distribution, current?.geographic_area?.distribution)) patch.geographic_area = current?.geographic_area ?? null;
+    if (Object.keys(patch).length === 0) return undefined;
+    return current === undefined ? null : patch;
 }
 
 /**

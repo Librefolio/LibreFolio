@@ -5,16 +5,19 @@
   Keep markup/data-testid/i18n/colors identical for safe reuse.
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {_} from '$lib/i18n';
     import type {PortfolioSummary, PortfolioHistoryPoint} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import TweenedValue from '$lib/components/ui/TweenedValue.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import KpiMetricBar from '$lib/components/dashboard/KpiMetricBar.svelte';
-    import KpiDivergingFlowBar from '$lib/components/dashboard/KpiDivergingFlowBar.svelte';
+    import KpiMetricBar from '$lib/components/ui/display/KpiMetricBar.svelte';
+    import KpiDivergingFlowBar from '$lib/components/ui/display/KpiDivergingFlowBar.svelte';
     import {safeString} from '$lib/types';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
 
     interface Props {
         summary: PortfolioSummary | null;
@@ -41,11 +44,12 @@
         return formatCurrencyAmountPlain(rendered, code ?? displayCurrency, {showSign});
     }
 
-    function tooltipRows(description: string, rows: {emoji: string; label: string; value: string}[]): string {
-        let html = `<div style="font-size:12px;max-width:300px">${description}`;
+    function tooltipRows(description: string, rows: {emoji: string; label: string; value: string; testid?: string}[]): string {
+        let html = `<div style="font-size:12px;max-width:300px">${escapeHtml(description)}`;
         html += `<table style="width:100%;margin-top:6px;border-collapse:collapse">`;
         for (const r of rows) {
-            html += `<tr><td style="white-space:nowrap">${r.emoji} ${r.label}</td><td style="text-align:right;padding-left:12px;white-space:nowrap;font-weight:500">${r.value}</td></tr>`;
+            const testid = r.testid ? ` data-testid="${escapeHtml(r.testid)}"` : '';
+            html += `<tr${testid}><td style="white-space:nowrap">${r.emoji} ${r.label}</td><td style="text-align:right;padding-left:12px;white-space:nowrap;font-weight:500">${r.value}</td></tr>`;
         }
         html += `</table></div>`;
         return html;
@@ -77,11 +81,22 @@
         const prev = parseFloat(prevHistoryPoint.total_pnl.amount);
         return last - prev;
     });
+    /** Direction of the day's change, published as `data-direction`; the colour agrees (up and flat green, down red). */
+    const pnlDeltaDayDirection = $derived(pnlDeltaDay == null ? undefined : pnlDeltaDay > 0 ? 'up' : pnlDeltaDay < 0 ? 'down' : 'flat');
+
+    /**
+     * `change` as a percentage of `|base|`: the sign is the direction of the change even when the
+     * base is negative (a loss that shrinks is a rise). Null only on a zero or unreadable base.
+     */
+    function dayChangePct(change: number, base: number): number | null {
+        if (!Number.isFinite(change) || !Number.isFinite(base) || base === 0) return null;
+        return (change / Math.abs(base)) * 100;
+    }
+
+    /** Card 2: the day change as a share of yesterday's NAV. */
     const pnlDeltaDayPct = $derived.by(() => {
-        if (!lastHistoryPoint || !prevHistoryPoint) return null;
-        const prevNav = parseFloat(prevHistoryPoint.nav_value.amount);
-        if (prevNav === 0 || pnlDeltaDay == null) return null;
-        return ((pnlDeltaDay / prevNav) * 100).toFixed(2);
+        if (!prevHistoryPoint || pnlDeltaDay == null) return null;
+        return dayChangePct(pnlDeltaDay, parseFloat(prevHistoryPoint.nav_value.amount));
     });
 
     const cashContribAmt = $derived(lastHistoryPoint?.cash_from_contributed_capital != null ? parseFloat(lastHistoryPoint.cash_from_contributed_capital.amount) : null);
@@ -110,11 +125,10 @@
         const amount = parseFloat(totalPnlCur.amount);
         return Number.isFinite(amount) ? amount : null;
     });
+    /** Card 1: the day change as a share of yesterday's total P&L. */
     const pnlDeltaDayVsPrevTotalPct = $derived.by(() => {
         if (!prevHistoryPoint || pnlDeltaDay == null) return null;
-        const prevTotalPnl = parseFloat(prevHistoryPoint.total_pnl.amount);
-        if (!Number.isFinite(prevTotalPnl) || Math.abs(prevTotalPnl) < 0.01) return null;
-        return ((pnlDeltaDay / prevTotalPnl) * 100).toFixed(2);
+        return dayChangePct(pnlDeltaDay, parseFloat(prevHistoryPoint.total_pnl.amount));
     });
     // Absolute (since-inception) ROI next to the absolute total P&L in Card 3 —
     // period ROI (simple_roi_percent) belongs to Card 2's period-based returns only.
@@ -122,7 +136,7 @@
         if (!summary) return null;
         const roi = parseFloat(summary.total_gain_loss_percent);
         if (!Number.isFinite(roi)) return null;
-        return (roi * 100).toFixed(2);
+        return roi * 100;
     });
     const nwBarMax = $derived(Math.max(navHeroAmt, marketValueStartAmt, marketValueAmt, purchaseCostAmt, purchaseCostStartAmt, cashAmt, cashStartAmt, totalDepositedAmt, totalWithdrawnAmt) || 1);
     const marketBarPct = $derived((marketValueAmt / nwBarMax) * 100);
@@ -178,6 +192,28 @@
             ]);
         })(),
     );
+    // Rows and their order come from the backend and add up to the bar's figure: never add, drop or sort one.
+    const unrealizedDeltaTooltipHtml = $derived.by(() => {
+        const rows = summary?.period_unrealized_breakdown ?? [];
+        if (rows.length === 0) return undefined;
+        return tooltipRows(
+            $_('dashboard.unrealizedDeltaTooltip'),
+            rows.map((row) => {
+                const delta = safeCurrency(row.period_delta);
+                const currency = row.asset_currency;
+                let emoji = '📈';
+                let label = $_('dashboard.unrealizedAssetEffect', {values: {currency}});
+                if (row.kind === 'fx') {
+                    emoji = '💱';
+                    label = $_('dashboard.unrealizedFxEffect', {values: {from: currency, to: delta?.code ?? displayCurrency}});
+                } else if (row.kind === 'unsplit') {
+                    emoji = '❔';
+                    label = $_('dashboard.unrealizedUnsplit', {values: {currency}});
+                }
+                return {emoji, label: escapeHtml(label), value: formatMoney(delta?.code, delta?.amount, {signed: true}), testid: `kpi-unrealized-breakdown-${row.kind}-${currency}`};
+            }),
+        );
+    });
 
     const pnlBarMax = $derived(Math.max(Math.abs(uglDeltaAmt), Math.abs(realizedAmt), Math.abs(incomeAmt), Math.abs(feesAmt)) || 1);
     function pnlBarPct(val: number) {
@@ -191,31 +227,36 @@
     }
 
     const roiVal = $derived(summary ? parseFloat(summary.simple_roi_percent) * 100 : 0);
-    const twrrCumVal = $derived.by(() => {
-        const v = summary ? safeString(summary.twrr_percent) : null;
-        return v != null ? parseFloat(v) * 100 : 0;
-    });
-    const mwrrCumVal = $derived.by(() => {
-        const v = summary ? safeString(summary.mwrr_cumulative_percent) : null;
-        return v != null ? parseFloat(v) * 100 : 0;
-    });
-    const mwrrAnnVal = $derived.by(() => {
-        const v = summary ? safeString(summary.mwrr_annualized_percent) : null;
-        return v != null ? parseFloat(v) * 100 : 0;
-    });
-    const timingEffectVal = $derived(mwrrCumVal - twrrCumVal);
-    const timingIntensity = $derived(Math.min(Math.abs(timingEffectVal) / 3, 1));
+    /** A return in percent, or null when the backend could not compute it (the field is optional and nullable). */
+    function returnPct(raw: unknown): number | null {
+        const text = safeString(raw);
+        if (text == null) return null;
+        const pct = parseFloat(text) * 100;
+        return Number.isFinite(pct) ? pct : null;
+    }
+    const twrrCumVal = $derived(summary ? returnPct(summary.twrr_percent) : null);
+    const mwrrCumVal = $derived(summary ? returnPct(summary.mwrr_cumulative_percent) : null);
+    const mwrrAnnVal = $derived(summary ? returnPct(summary.mwrr_annualized_percent) : null);
+    // Timing effect needs both returns: a missing one counted as 0 would show a difference that does not exist.
+    const timingEffectVal = $derived(twrrCumVal != null && mwrrCumVal != null ? mwrrCumVal - twrrCumVal : null);
+    const timingIntensity = $derived(timingEffectVal != null ? Math.min(Math.abs(timingEffectVal) / 3, 1) : 0);
     const timingLabel = $derived.by(() => {
+        if (timingEffectVal == null) return '';
         if (Math.abs(timingEffectVal) < 0.05) return $_('dashboard.timingNeutral');
         return timingEffectVal > 0 ? $_('dashboard.timingFavorable') : $_('dashboard.timingUnfavorable');
     });
-    const roiPct = $derived(summary ? `${roiVal.toFixed(2)}%` : '—');
-    const twrrCumPct = $derived(summary ? `${twrrCumVal.toFixed(2)}%` : '—');
-    const mwrrCumPct = $derived(summary ? `${mwrrCumVal.toFixed(2)}%` : '—');
-    const mwrrAnnPct = $derived(summary ? `${mwrrAnnVal.toFixed(2)}%` : '—');
+    function timingColor(base: number, span: number): string | undefined {
+        if (timingEffectVal == null) return undefined;
+        const alpha = base + timingIntensity * span;
+        return timingEffectVal >= 0 ? `color: rgba(22, 163, 74, ${alpha})` : `color: rgba(220, 38, 38, ${alpha})`;
+    }
+    const roiPct = $derived(summary ? formatPercent(roiVal, {signed: false}) : '—');
+    const twrrCumPct = $derived(twrrCumVal != null ? formatPercent(twrrCumVal, {signed: false}) : '—');
+    const mwrrCumPct = $derived(mwrrCumVal != null ? formatPercent(mwrrCumVal, {signed: false}) : '—');
+    const mwrrAnnPct = $derived(mwrrAnnVal != null ? formatPercent(mwrrAnnVal, {signed: false}) : '—');
     const roiIsPositive = $derived(summary ? parseFloat(summary.simple_roi_percent) >= 0 : undefined);
 
-    const retBarMax = $derived(Math.max(Math.abs(roiVal), Math.abs(twrrCumVal), Math.abs(mwrrCumVal), Math.abs(mwrrAnnVal)) || 1);
+    const retBarMax = $derived(Math.max(Math.abs(roiVal), Math.abs(twrrCumVal ?? 0), Math.abs(mwrrCumVal ?? 0), Math.abs(mwrrAnnVal ?? 0)) || 1);
     function retBarPct(val: number) {
         return (Math.abs(val) / retBarMax) * 100;
     }
@@ -225,7 +266,7 @@
 
     const fmtMoney = (v: number) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true});
     const fmtMoneyUnsigned = (v: number) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: false});
-    const fmtPct = (v: number) => `${v.toFixed(2)}%`;
+    const fmtPct = (v: number) => formatPercent(v, {signed: false});
 </script>
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="kpi-row">
@@ -253,17 +294,19 @@
                     <TweenedValue value={periodPnlAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true})} />
                 </p>
                 {#if pnlDeltaDay != null}
-                    <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-pnl-delta-day">
+                    <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-pnl-delta-day" data-direction={pnlDeltaDayDirection}>
                         <TweenedValue value={pnlDeltaDay} format={fmtMoney} />
                         {#if pnlDeltaDayVsPrevTotalPct != null}
-                            <span> ({pnlDeltaDay >= 0 ? '+' : ''}{pnlDeltaDayVsPrevTotalPct}%)</span>
+                            <span> (<span data-testid="kpi-pnl-delta-day-pct">{formatPercent(pnlDeltaDayVsPrevTotalPct)}</span>)</span>
                         {/if}
                     </p>
                 {/if}
                 <div class="flex flex-col gap-2 mt-1">
                     <KpiMetricBar
+                        testid="kpi-unrealized-delta"
                         label={$_('dashboard.unrealizedDelta')}
-                        tooltip={$_('dashboard.unrealizedDeltaTooltip')}
+                        tooltipHtml={unrealizedDeltaTooltipHtml}
+                        tooltip={unrealizedDeltaTooltipHtml ? undefined : $_('dashboard.unrealizedDeltaTooltip')}
                         value={uglDeltaStr}
                         numericValue={uglDeltaAmt}
                         formatValue={fmtMoney}
@@ -298,21 +341,21 @@
                 <Tooltip text={$_('dashboard.timingEffectTooltip')} position="top">
                     <div class="flex flex-col cursor-help">
                         <span class="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide border-b border-dotted border-gray-300 dark:border-gray-600 inline-block">{$_('dashboard.timingEffect')}</span>
-                        <span class="text-[10px] italic" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.4 + timingIntensity * 0.6})` : `rgba(220, 38, 38, ${0.4 + timingIntensity * 0.6})`}">{timingLabel}</span>
+                        <span class="text-[10px] italic" data-testid="kpi-timing-effect-label" style={timingColor(0.4, 0.6)}>{timingLabel}</span>
                     </div>
                 </Tooltip>
-                <span class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold tabular-nums transition-colors" style="color: {timingEffectVal >= 0 ? `rgba(22, 163, 74, ${0.3 + timingIntensity * 0.7})` : `rgba(220, 38, 38, ${0.3 + timingIntensity * 0.7})`}">
-                    <TweenedValue value={timingEffectVal} format={(v) => `${v >= 0 ? '+' : '-'}${Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${$_('dashboard.pp')}`} />
+                <span class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold tabular-nums transition-colors {timingEffectVal == null ? 'text-gray-400 dark:text-gray-500' : ''}" data-testid="kpi-timing-effect-value" style={timingColor(0.3, 0.7)}>
+                    {#if timingEffectVal == null}—{:else}<TweenedValue value={timingEffectVal} format={(v) => `${formatFixed(v, 2, {signed: true})} ${$_('dashboard.pp')}`} />{/if}
                 </span>
             </div>
-            {#if pnlDeltaDayPct}
-                <p class="text-xs text-right {pnlDeltaDay != null && pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-returns-delta-pct">{pnlDeltaDay != null && pnlDeltaDay >= 0 ? '+' : ''}{pnlDeltaDayPct}%</p>
+            {#if pnlDeltaDayPct != null}
+                <p class="text-xs text-right {pnlDeltaDay != null && pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-returns-delta-pct" data-direction={pnlDeltaDayDirection}>{formatPercent(pnlDeltaDayPct)}</p>
             {/if}
             <div class="flex flex-col gap-2 mt-1">
-                <KpiMetricBar label={$_('dashboard.roi')} tooltip={$_('dashboard.roiTooltip')} value={roiPct} numericValue={roiVal} formatValue={fmtPct} barPct={retBarPct(roiVal)} barColor={retBarColor(roiVal)} valueColor="font-bold text-gray-800 dark:text-gray-100" />
-                <KpiMetricBar label={$_('dashboard.twrrCum')} tooltip={$_('dashboard.twrrTooltip')} value={twrrCumPct} numericValue={twrrCumVal} formatValue={fmtPct} barPct={retBarPct(twrrCumVal)} barColor={retBarColor(twrrCumVal)} />
-                <KpiMetricBar label={$_('dashboard.mwrrCum')} tooltip={$_('dashboard.mwrrCumTooltip')} value={mwrrCumPct} numericValue={mwrrCumVal} formatValue={fmtPct} barPct={retBarPct(mwrrCumVal)} barColor={retBarColor(mwrrCumVal)} />
-                <KpiMetricBar label={$_('dashboard.mwrrAnn')} tooltip={$_('dashboard.mwrrAnnTooltip')} value={mwrrAnnPct} numericValue={mwrrAnnVal} formatValue={fmtPct} barPct={retBarPct(mwrrAnnVal)} barColor={retBarColor(mwrrAnnVal)} />
+                <KpiMetricBar testid="kpi-return-roi" label={$_('dashboard.roi')} tooltip={$_('dashboard.roiTooltip')} value={roiPct} numericValue={roiVal} formatValue={fmtPct} barPct={retBarPct(roiVal)} barColor={retBarColor(roiVal)} valueColor="font-bold text-gray-800 dark:text-gray-100" />
+                <KpiMetricBar testid="kpi-return-twrr-cum" label={$_('dashboard.twrrCum')} tooltip={$_('dashboard.twrrTooltip')} value={twrrCumPct} numericValue={twrrCumVal ?? undefined} formatValue={fmtPct} barPct={retBarPct(twrrCumVal ?? 0)} barColor={retBarColor(twrrCumVal ?? 0)} />
+                <KpiMetricBar testid="kpi-return-mwrr-cum" label={$_('dashboard.mwrrCum')} tooltip={$_('dashboard.mwrrCumTooltip')} value={mwrrCumPct} numericValue={mwrrCumVal ?? undefined} formatValue={fmtPct} barPct={retBarPct(mwrrCumVal ?? 0)} barColor={retBarColor(mwrrCumVal ?? 0)} />
+                <KpiMetricBar testid="kpi-return-mwrr-ann" label={$_('dashboard.mwrrAnn')} tooltip={$_('dashboard.mwrrAnnTooltip')} value={mwrrAnnPct} numericValue={mwrrAnnVal ?? undefined} formatValue={fmtPct} barPct={retBarPct(mwrrAnnVal ?? 0)} barColor={retBarColor(mwrrAnnVal ?? 0)} />
             </div>
             <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.periodBasedReturns')}</p>
         {/if}
@@ -337,7 +380,7 @@
                 <p class="text-xs text-right tabular-nums transition-colors duration-300 {totalPnlAmt >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-total-pnl-delta">
                     <TweenedValue value={totalPnlAmt} format={fmtMoney} />
                     {#if absRoiPct != null}
-                        <span> ({parseFloat(absRoiPct) >= 0 ? '+' : ''}{absRoiPct}%)</span>
+                        <span> ({formatPercent(absRoiPct)})</span>
                     {/if}
                 </p>
             {/if}

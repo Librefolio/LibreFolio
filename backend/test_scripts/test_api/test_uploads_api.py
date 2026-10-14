@@ -8,10 +8,11 @@ Tests for static file upload endpoints:
 - GET /uploads/{id}/preview: Structured preview payload
 - GET /uploads/file/{id}: Download file
 - DELETE /uploads/{id}: Delete file
-- GET /uploads/plugin/{type}/{path}: Serve plugin static asset
+- GET /uploads/plugin/{type}/{path}: Serve plugin static asset, and the icons bundled with the BRIM plugins
 """
 
 import io
+import mimetypes
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -22,12 +23,17 @@ import pytest
 
 from backend.app.api.v1 import uploads as uploads_api
 from backend.app.config import get_settings
+from backend.app.services.provider_registry import BRIMProviderRegistry
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
+# The test server's origin: a plugin's icon_url is a path on it.
+SERVER_BASE = f"http://localhost:{settings.TEST_PORT}"
+# The URL of a file of the BRIM plugins' static folder (BRIMProvider.generate_static_url), served by GET /uploads/plugin/brim/{path}.
+BRIM_STATIC_PREFIX = "/api/v1/uploads/plugin/brim/"
 
 
 def unique_username() -> str:
@@ -100,6 +106,11 @@ def create_xlsx_bytes() -> bytes:
     return output.getvalue()
 
 
+def create_damaged_xlsx_bytes() -> bytes:
+    """Create synthetic bytes for a file named .xlsx that are no workbook, not even a zip archive (F2)."""
+    return b"LibreFolio F2 synthetic bytes: not an Excel workbook and not a zip archive.\n" * 16
+
+
 def create_minimal_pdf_bytes() -> bytes:
     """Create a tiny but valid PDF file."""
     return (
@@ -117,6 +128,27 @@ def read_sample_xls_bytes() -> bytes:
     """Read committed legacy XLS sample for preview coverage."""
     sample_path = Path(__file__).resolve().parents[3] / "backend" / "staticResources" / "FilePreviewSamples" / "file_example_XLS_10.xls"
     return sample_path.read_bytes()
+
+
+def media_type(response: httpx.Response) -> str:
+    """The media type of a response's content-type, without its parameters."""
+    return response.headers.get("content-type", "").split(";")[0].strip().lower()
+
+
+async def bundled_icon_problem(client: httpx.AsyncClient, code: str, icon_url: str) -> str | None:
+    """GET a BRIM plugin's bundled icon on the test server; what is wrong with the answer (status, image type of the file, its bytes), or None.
+
+    ``icon_url`` must start with ``BRIM_STATIC_PREFIX``: the request goes to the test server, never to a third party."""
+    asset_path = uploads_api.PLUGIN_STATIC_DIRS["brim"] / icon_url.removeprefix(BRIM_STATIC_PREFIX)
+    expected_type = mimetypes.guess_type(asset_path.name)[0] or ""
+    response = await client.get(f"{SERVER_BASE}{icon_url}", timeout=TIMEOUT)
+    if response.status_code != 200:
+        return f"{code}: GET {icon_url} answers {response.status_code}"
+    if not expected_type.startswith("image/") or media_type(response) != expected_type:
+        return f"{code}: GET {icon_url} has content-type {response.headers.get('content-type')!r}, the image type of {asset_path.name} is {expected_type!r}"
+    if response.content != asset_path.read_bytes():
+        return f"{code}: GET {icon_url} answers {len(response.content)} bytes that are not the file {asset_path}"
+    return None
 
 
 class _DirectUploadFile:
@@ -574,6 +606,38 @@ class TestStructuredPreview:
 
             print_success("✓ Preview used metadata MIME fallback")
 
+    @pytest.mark.asyncio
+    async def test_damaged_xlsx_preview_returns_400(self, test_server):
+        """UPLOAD-005H: Preview of a damaged .xlsx answers 400 with a detail, not 500 (F2)."""
+        print_section("UPLOAD-005H: Damaged XLSX preview answers 400")
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+
+            files = {
+                "file": (
+                    "damaged.xlsx",
+                    BytesIO(create_damaged_xlsx_bytes()),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            }
+            upload_resp = await client.post(f"{API_BASE}/uploads", files=files, timeout=TIMEOUT)
+            assert upload_resp.status_code == 200, upload_resp.text
+            file_id = upload_resp.json()["file"]["id"]
+
+            try:
+                response = await client.get(f"{API_BASE}/uploads/{file_id}/preview", timeout=TIMEOUT)
+
+                assert response.status_code == 400, f"the preview of a damaged .xlsx answers {response.status_code} {response.text}: a damaged workbook is the user's file, not a fault of the server (F2)"
+                detail = response.json().get("detail")
+                assert isinstance(detail, str) and detail.strip(), f"the 400 says why, in a detail: {response.text}"
+            finally:
+                # Whoever uploads cleans up: the owner deletes the file, as UPLOAD-007 does.
+                delete_resp = await client.delete(f"{API_BASE}/uploads/{file_id}", timeout=TIMEOUT)
+                assert delete_resp.status_code == 200, delete_resp.text
+
+            print_success("✓ Damaged XLSX preview answered 400")
+
 
 # ============================================================================
 # DOWNLOAD TESTS
@@ -697,6 +761,29 @@ class TestPluginStatic:
             assert response.headers.get("content-type")
 
             print_success("✓ Served existing plugin asset")
+
+    @pytest.mark.asyncio
+    async def test_plugin_static_serves_every_bundled_brim_icon(self, test_server):
+        """UPLOAD-010C: Every BRIM plugin whose icon_url is a file of the static folder gets it served: 200, the image type of the file, its bytes.
+
+        The plugins as GET /brokers/import/plugins lists them: Scalable's two since 37_brimScalable. Only icons under BRIM_STATIC_PREFIX are
+        requested, and only from the test server."""
+        print_section("UPLOAD-010C: Plugin static serves every bundled BRIM icon")
+
+        icons = {info.code: info.icon_url for info in BRIMProviderRegistry.list_plugin_info() if (info.icon_url or "").startswith(BRIM_STATIC_PREFIX)}
+        assert icons, "premise: one registered BRIM plugin at least bundles its icon (broker_scalable and broker_scalable_deposit do), or this check passes on nothing"
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client)
+            problems = []
+            for code, icon_url in sorted(icons.items()):
+                problem = await bundled_icon_problem(client, code, icon_url)
+                if problem:
+                    problems.append(problem)
+
+        assert not problems, f"{len(problems)} bundled BRIM icon(s) not served as their file:\n" + "\n".join(f"  {problem}" for problem in problems)
+
+        print_success(f"✓ {len(icons)} bundled BRIM icon(s) served as their file")
 
     @pytest.mark.asyncio
     async def test_plugin_static_not_found(self, test_server):

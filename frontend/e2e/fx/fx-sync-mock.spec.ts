@@ -29,14 +29,28 @@
  * translated verb, so every number here is read from the `data-*` attributes
  * `SyncModalBase` publishes for exactly that reason — never from the sentence.
  *
- * The pairs are **mock data**, not something this file creates. That is the
- * point: `populate_mock_data --force` truncates `fx_conversion_routes`
- * wholesale, and the frontend recovery net runs it whenever a spec destroys a
- * baseline row — so pairs created by the test itself vanished mid-run, twice,
- * once as a row that could not be found and once as a sync where every pair
- * suddenly failed. A fixture that belongs to the baseline is *restored* by that
- * net instead of being removed by it, which is why this file writes nothing and
- * therefore has nothing to clean up.
+ * The pairs are **mock data**: their routes are seed rows, not something this
+ * file creates. That was the point when it was written — `populate_mock_data
+ * --force` truncates `fx_conversion_routes` wholesale, and the frontend recovery
+ * net ran it whenever a spec destroyed a baseline row, so pairs created by the
+ * test itself vanished mid-run, twice, once as a row that could not be found and
+ * once as a sync where every pair suddenly failed. A fixture that belongs to the
+ * baseline is *restored* by that net instead of being removed by it.
+ *
+ * The file does write, though: rates. It never touches a route, but every sync
+ * that succeeds stores MOCKFX's fixed rate for each calendar day of the synced
+ * window — on EUR/PHP (FSM-002), EUR/TWD and EUR/MYR (FSM-004), and EUR/ILS
+ * (FSM-005). The MOCKFX_FAIL pairs store nothing, and FSM-001 never starts a
+ * sync. The seed holds no rate on any of these pairs, and nothing here deletes
+ * what the syncs wrote: after `front-fx all` at four workers (2026-10-13), 372
+ * MOCKFX rows were left behind, 93 per pair.
+ *
+ * That is tolerated today, not designed: the routes are seed rows this file
+ * never edits; the next `populate_mock_data --force` rebuilds the database
+ * without those rates; and no other spec reads those pairs' rates. Nor does this
+ * file need them gone — no assertion here wants an empty pair: FSM-002 counts
+ * what was fetched, not what changed, and FSM-005 makes its own first sync.
+ * Deleting what the syncs write is backlog V-31.
  */
 
 import {expect, test, type Page} from '../fixtures/playwright';
@@ -60,7 +74,7 @@ import {goToFxPage} from './fx-helpers';
  * snapshot of a failing run — the row was there, reading `DKK → EUR`.
  *
  * Deliberately disjoint from `fx-destructive.spec.ts` (NZD/SGD/MXN/ZAR/HKD/
- * SEK/NOK/PLN) and from the ECB-backed pairs, so no two specs arbitrate the
+ * PEN/QAR/UYU) and from the ECB-backed pairs, so no two specs arbitrate the
  * same row.
  */
 const PAIRS = {

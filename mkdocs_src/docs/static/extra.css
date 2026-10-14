@@ -806,6 +806,54 @@
     word-break: normal;
 }
 
+/* Account tables (user/transactions/import/scalable): wrapped in
+   `<div class="lf-accounts-table" markdown>`. The account, with its icon, and its
+   import plugin (1st and 2nd columns) stay on one line, on mobile too, where
+   Material scrolls the table sideways; the 3rd column wraps, kept apart from them. */
+.md-typeset .lf-accounts-table th:nth-child(-n+2),
+.md-typeset .lf-accounts-table td:nth-child(-n+2) {
+    white-space: nowrap;
+}
+
+/* The 36 px icon makes the rows tall: centre every cell on it. `table td` matches the
+   specificity of Material's `table:not([class]) td { vertical-align: top }`, and this
+   file loads after it. */
+.md-typeset .lf-accounts-table table td {
+    vertical-align: middle;
+}
+
+/* Material's `max-width: 100%` on images leaves the icon out of the column's
+   minimum width: on a narrow screen the account's name then spills into the
+   2nd column. The icons have a fixed width anyway. */
+.md-typeset .lf-accounts-table img {
+    max-width: none;
+}
+
+.md-typeset .lf-accounts-table th:nth-child(3),
+.md-typeset .lf-accounts-table td:nth-child(3) {
+    min-width: 14em;
+    padding-left: 1.5em;
+}
+
+/* Pros-and-cons tables (user/connection-security): wrapped in
+   `<div class="lf-pros-cons" markdown>`, full width with two equal columns on
+   every screen. Material's table wrapper is an inline block, as wide as its
+   content: `display: block` lets the table take the whole width, and the fixed
+   layout splits it in half whatever the cells hold. */
+.md-typeset .lf-pros-cons .md-typeset__table {
+    display: block;
+}
+
+.md-typeset .lf-pros-cons table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.md-typeset .lf-pros-cons th,
+.md-typeset .lf-pros-cons td {
+    width: 50%;
+}
+
 /* Icon styling */
 .card-icon {
     grid-area: icon;
@@ -972,16 +1020,18 @@
 }
 
 @media screen and (max-width: 76.1875em) {
+    /* Keep emoji, favicon and name on one row; wrap only when the title does not fit. */
     .md-content h1 {
-        flex-direction: column;
+        flex-direction: row;
+        flex-wrap: wrap;
         justify-content: center;
         text-align: center;
         align-items: center;
-        gap: 0.6rem;
+        gap: 0.4rem;
     }
     .md-content h1 img, .md-content h1 svg {
         margin-right: 0;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0;
     }
 }
 

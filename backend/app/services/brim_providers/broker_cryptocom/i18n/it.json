@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_cryptocom": {
+      "description": "Import CSV di Crypto.com al meglio delle possibilità. Importa acquisti, vendite e ricompense chiari; salta con un avviso trasferimenti interni, swap, vincoli (lockup) e righe ambigue.",
+      "name": "Crypto.com"
+    }
+  }
+}

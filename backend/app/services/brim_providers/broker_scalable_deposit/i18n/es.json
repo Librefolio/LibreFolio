@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_scalable_deposit": {
+      "name": "Scalable Capital cuenta remunerada",
+      "description": "Importa la cuenta remunerada de Scalable Capital desde el archivo del exportador de LibreFolio: intereses con la retención, depósitos, retiradas y transferencias a la cuenta de valores."
+    }
+  }
+}

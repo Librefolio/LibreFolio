@@ -11,16 +11,54 @@
  * response here instead of a seeded provider and a live network round-trip.
  *
  * What these tests assert is the `onchange` payload (the contract to the parent)
- * and the `data-testid` / `data-status` the component publishes. Never a
- * translated label, never a CSS class, never geometry (jsdom has no layout).
+ * and the `data-testid` / `data-status` / `data-operation` the component
+ * publishes. Never a translated label, never a CSS class, never geometry (jsdom
+ * has no layout).
+ *
+ * Each `provider-test-result` row publishes the operation it reports in
+ * `data-operation`: the backend's own operation names, `current_price` and
+ * `history` — the strings the request sends in `operations` — or `probe` on the
+ * one row that reports the probe call itself failing. That is the hook a caller
+ * identifies a row by (`AssetModal.providerLifecycle.test.ts`); the probe cases
+ * pin it.
+ *
+ * The probe's figures (M-18 CP3b) are read where the component writes them: the
+ * current price and the history count that open their results' details, each
+ * result's time and the total, all in the interface locale (`uiLocale()`, through
+ * `formatFixed`). A row publishes its operation and its status and nothing
+ * finer, so the figures and days inside it are found by structure — inside the
+ * row, and in the list that holds the rows — and in those cases the labels that
+ * tell the rows apart are compared through the catalogue (`$_`), never as
+ * literals. Every expected figure is written by `Intl` itself. Its days (T-ISO) —
+ * the current price's day and the history's range as the backend writes it — are
+ * written in the house notation of a tooltip day, every expected day written by
+ * `Intl` too.
  *
  * The pure probe classifiers/formatters (`isSoftProbeFailure`,
  * `summarizeProbeError`, `buildProbeTooltipHtml`, …) are covered exhaustively in
  * `providerProbe.test.ts`; here we only prove the component wires them up.
  */
-import {beforeEach, describe, expect, it, vi} from 'vitest';
-import {writable} from 'svelte/store';
-import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {flushSync, tick} from 'svelte';
+import {get, writable} from 'svelte/store';
+import type {z} from 'zod';
+import type {schemas} from '$lib/api/generated';
+import type {ProviderConfiguration} from './providerProbeState.svelte';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import ProviderProbeLifecycleHarness from '$test/ProviderProbeLifecycleHarness.svelte';
+
+type LifecycleProvider = z.infer<typeof schemas.FAProviderInfo>;
+type LifecycleProbeRequest = z.infer<typeof schemas.FAProviderProbeRequest>;
+type LifecycleProbeResponse = z.infer<typeof schemas.FAProviderProbeResponse>;
+
+// The added lifecycle cases opt into explicit routes; the older cases keep
+// their existing mock behaviour unchanged.
+const lifecycleApi = vi.hoisted(() => ({
+    enabled: false,
+    unexpected: [] as string[],
+    list: vi.fn<() => Promise<LifecycleProvider[]>>(),
+    probe: vi.fn<(request: LifecycleProbeRequest) => Promise<LifecycleProbeResponse>>(),
+}));
 
 // --- Mocks --------------------------------------------------------------
 // zodiosApi: a Proxy minting a cached spy per method, so `vi.mocked(zodiosApi.foo)`
@@ -31,6 +69,12 @@ vi.mock('$lib/api', () => {
         {},
         {
             get(_t, prop: string) {
+                if (lifecycleApi.enabled) {
+                    if (prop === 'list_providers_api_v1_assets_provider_get') return lifecycleApi.list;
+                    if (prop === 'probe_provider_config_api_v1_assets_provider_probe_post') return lifecycleApi.probe;
+                    lifecycleApi.unexpected.push(prop);
+                    throw new Error(`Unexpected provider lifecycle API method: ${prop}`);
+                }
                 if (!cache.has(prop))
                     cache.set(
                         prop,
@@ -60,6 +104,11 @@ vi.mock('$lib/stores/app/language', () => ({currentLanguage: writable('en')}));
 
 import ProviderAssignmentSection from './ProviderAssignmentSection.svelte';
 import {zodiosApi} from '$lib/api';
+import {_} from '$lib/i18n';
+import {toasts} from '$lib/stores/app/toastStore.svelte';
+import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
+import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
 
 // --- Provider fixtures --------------------------------------------------
 // mockprov must be filtered out of the options; yahoo has an icon + help url +
@@ -100,10 +149,60 @@ async function waitLoaded(name: string) {
 const testBtn = () => screen.getByTestId('provider-test-config') as HTMLButtonElement;
 const idInput = () => screen.getByTestId('provider-identifier') as HTMLInputElement;
 
+/**
+ * The result rows as `<operation>:<status>`, sorted: what each `provider-test-result` publishes in `data-operation`
+ * — the backend's own operation names (`current_price`, `history`), or `probe` for the probe call's own failure —
+ * and `data-status`. The hook a caller identifies a row by, whatever the order and the interface language.
+ */
+function operationStatuses(rows: HTMLElement[]): string[] {
+    return rows.map((row) => `${row.getAttribute('data-operation')}:${row.getAttribute('data-status')}`).sort();
+}
+
 beforeEach(async () => {
     await setupI18n();
     vi.clearAllMocks();
     listFn().mockResolvedValue(PROVIDERS as never);
+});
+
+/**
+ * The clipboard surface, stubbed per test and put back after it. jsdom has none of
+ * `navigator.clipboard`, `window.isSecureContext`, `document.execCommand`: each stub
+ * is an own property, and `restoreStubs()` (in `afterEach`) deletes it again — or
+ * restores what was there — newest first.
+ */
+const stubbed: {target: object; key: string; before: PropertyDescriptor | undefined}[] = [];
+
+function stubProperty(target: object, key: string, value: unknown) {
+    stubbed.push({target, key, before: Object.getOwnPropertyDescriptor(target, key)});
+    Object.defineProperty(target, key, {value, configurable: true, writable: true});
+}
+
+function restoreStubs() {
+    for (const {target, key, before} of stubbed.splice(0).reverse()) {
+        if (before) Object.defineProperty(target, key, before);
+        else Reflect.deleteProperty(target, key);
+    }
+}
+
+/**
+ * Plain HTTP as Chromium presents it: not a secure context, and no
+ * `navigator.clipboard` at all. The legacy `execCommand('copy')` succeeds and
+ * records what the hidden textarea held at that moment.
+ */
+function onPlainHttp() {
+    const captured: (string | undefined)[] = [];
+    const execCommand = vi.fn((_command: string) => {
+        captured.push(document.querySelector('textarea')?.value);
+        return true;
+    });
+    stubProperty(window, 'isSecureContext', false);
+    stubProperty(navigator, 'clipboard', undefined);
+    stubProperty(document, 'execCommand', execCommand);
+    return {execCommand, captured};
+}
+
+afterEach(() => {
+    restoreStubs();
 });
 
 // =========================================================================
@@ -284,6 +383,8 @@ describe('ProviderAssignmentSection — Test Configuration probe', () => {
         expect(urlField.value).toBe('https://prov/url');
         // …and the final emit carried the passed status.
         expect(onchange.mock.calls.at(-1)?.[0]).toMatchObject({testStatus: 'passed'});
+        // Each row names its operation: the hook a caller (AssetModal's lifecycle spec) identifies it by.
+        expect(operationStatuses(rows), 'the rows do not publish their operations: one current_price and one history, each a success').toEqual(['current_price:success', 'history:success']);
     });
 
     it('marks the probe failed on a real error and offers a copy button', async () => {
@@ -296,7 +397,33 @@ describe('ProviderAssignmentSection — Test Configuration probe', () => {
         await fireEvent.click(testBtn());
         await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'failed'));
         // A real error row exposes the copy-to-clipboard control.
-        expect(document.querySelector('button[title="Copy error detail"]')).not.toBeNull();
+        expect(screen.getByTestId('provider-test-result-copy')).toBeInTheDocument();
+    });
+
+    it('copies the error detail on plain HTTP through the legacy path, and confirms it once', async () => {
+        probeFn().mockResolvedValue({
+            current_price: {success: false, error: 'HTTP 500 upstream', error_code: 'HTTP_ERROR', execution_time_ms: 40},
+        } as never);
+        // HTTP_ERROR has no catalogue entry, so the row's detail is the backend's own error text.
+        expect(get(_)('providerErrors.HTTP_ERROR')).toBe('providerErrors.HTTP_ERROR');
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+        await fireEvent.click(testBtn());
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'failed'));
+        // No textarea on the page before the click: the one the stub reads can only be the copy's.
+        expect(document.querySelector('textarea')).toBeNull();
+        // And no toast yet: whatever is counted below, the copy click produced it.
+        expect(toasts.info).not.toHaveBeenCalled();
+        const http = onPlainHttp();
+
+        await fireEvent.click(screen.getByTestId('provider-test-result-copy'));
+
+        await waitFor(() => expect(http.execCommand).toHaveBeenCalledTimes(1));
+        expect(http.execCommand).toHaveBeenCalledWith('copy');
+        expect(http.captured).toEqual(['HTTP 500 upstream']);
+        await waitFor(() => expect(toasts.info).toHaveBeenCalledTimes(1));
+        expect(toasts.error).not.toHaveBeenCalled();
+        expect(document.querySelector('textarea')).toBeNull();
     });
 
     it('keeps the probe passed when every failure is a soft (warning) failure', async () => {
@@ -314,6 +441,8 @@ describe('ProviderAssignmentSection — Test Configuration probe', () => {
         const rows = screen.getAllByTestId('provider-test-result');
         expect(rows).toHaveLength(2);
         expect(rows.every((r) => r.getAttribute('data-status') === 'warning')).toBe(true);
+        // A soft failure keeps its operation's row: the same two operations, each a warning.
+        expect(operationStatuses(rows), 'the soft-failure rows do not publish their operations: one current_price and one history, each a warning').toEqual(['current_price:warning', 'history:warning']);
     });
 
     it('marks the probe failed when the probe call itself throws', async () => {
@@ -324,6 +453,334 @@ describe('ProviderAssignmentSection — Test Configuration probe', () => {
         await fireEvent.click(testBtn());
         await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'failed'));
         expect(onchange.mock.calls.at(-1)?.[0]).toMatchObject({testStatus: 'failed'});
+        // No operation answered: the one row reports the probe call itself, as `probe`, an error.
+        expect(operationStatuses(screen.getAllByTestId('provider-test-result')), 'the probe call’s own failure is not exactly one row publishing probe, an error').toEqual(['probe:error']);
+    });
+});
+
+// =========================================================================
+describe('ProviderAssignmentSection — the probe figures in the interface language (M-18)', () => {
+    /*
+     * Four figures, each written through `formatFixed` in the interface locale, `uiLocale()`: the current
+     * price that opens its result's detail (two decimals), the history's point count that opens its own
+     * (no decimals, grouped the interface's way), each result's time and the total (seconds, two decimals).
+     * On jsdom's en-US browser the interface locale is `en-US` for the English UI and bare `it` for the
+     * Italian one: an en-US browser lends Italian no region.
+     *
+     * The word after the count (T-EN1): the count and its word are one catalogue message,
+     * `assets.probe.points`, a plural on `count` with the figure as `n` — `12.345 punti`, `1 point` — before
+     * the currency in brackets and the date range, which do not move. The last cases read it; the M-18 cases
+     * read only the figure.
+     *
+     * The days (T-ISO). The current price's day, in brackets at the end of its detail, is written in the house
+     * notation of a tooltip day — the lot charts' `formatAxisDate(uiLocale(), day, true)`: `2 gen 2024`,
+     * `2 janv. 2024` — and so is the history's range when it is what the backend always writes,
+     * `f"{min(dates)} → {max(dates)}"` (`provider_management.py`): a string that is exactly
+     * `YYYY-MM-DD → YYYY-MM-DD` becomes `<start> → <end>`, each day in the house notation. Any other range is
+     * shown as it came (the fixtures' `2020-01-01..2024-01-01` and `2020..2024` among them). Expected days come
+     * from Intl (`houseDay`); red today in Italian and French, where both days are ISO.
+     *
+     * Handles. The rows are `provider-test-result`, each publishing its operation (`data-operation`) and its
+     * status and nothing finer, so the rest is structure: a row is its label, its detail and its time — three
+     * spans, in that order — and the total is the one line of the rows' list that holds no row. Here the labels
+     * prove which row is which, read through the catalogue.
+     */
+    type ProbeResponse = z.infer<typeof schemas.FAProviderProbeResponse>;
+
+    /** What the synthetic probe answers: the price as the backend sends it (a decimal string), the history's point count, each operation's time and the total; the current price's day and the history's range when a case names them. */
+    interface ProbeInput {
+        price: string;
+        count: number;
+        resultMs: number;
+        totalMs: number;
+        asOfDate?: string;
+        dateRange?: string;
+    }
+
+    /** The probe's figures, as read off the section or as the expectation writes them. */
+    interface Figures {
+        /** The current price, as its result's detail opens. */
+        price: string;
+        /** The history's point count, as its result's detail opens. */
+        count: string;
+        /** Each result's time as written beside it: the current price's, then the history's. */
+        times: string[];
+        /** The total line, its label included. */
+        total: string;
+    }
+
+    function figuresResponse({price, count, resultMs, totalMs, asOfDate = '2024-01-02', dateRange = '2020-01-01..2024-01-01'}: ProbeInput): ProbeResponse {
+        return {
+            provider_code: 'yahoo',
+            identifier: 'AAPL',
+            total_execution_time_ms: totalMs,
+            current_price: {success: true, value: price, currency: 'USD', as_of_date: asOfDate, execution_time_ms: resultMs},
+            history: {success: true, points_count: count, date_range: dateRange, execution_time_ms: resultMs},
+        };
+    }
+
+    /** `value` with exactly `digits` decimals, as `Intl` writes it in `locale`: the oracle, never a literal. */
+    function fixed(value: number, digits: number, locale: string): string {
+        return new Intl.NumberFormat(locale, {minimumFractionDigits: digits, maximumFractionDigits: digits}).format(value);
+    }
+
+    function normalize(text: string | null | undefined): string {
+        return (text ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** A catalogue word as the section words it: `$_`, in whatever language the catalogue speaks. */
+    function word(key: string): string {
+        return normalize(get(_)(key));
+    }
+
+    /** The figures as they must read in `locale`. */
+    function expected({price, count, resultMs, totalMs}: ProbeInput, locale: string): Figures {
+        const time = `(${fixed(resultMs / 1000, 2, locale)}s)`;
+        return {
+            price: fixed(Number(price), 2, locale),
+            count: fixed(count, 0, locale),
+            times: [time, time],
+            total: `${word('assets.probe.totalTime')}: ${fixed(totalMs / 1000, 2, locale)}s`,
+        };
+    }
+
+    /** A result row's parts, by structure: its label, its detail and its time — the row's three spans, in that order. */
+    function partsOf(row: HTMLElement): {label: string; detail: string; time: string} {
+        const spans = [...row.children].filter((child) => child.tagName === 'SPAN');
+        expect(spans, 'a result row is its label, its detail and its time: three spans').toHaveLength(3);
+        const [label, detail, time] = spans.map((span) => normalize(span.textContent));
+        return {label, detail, time};
+    }
+
+    /** The figure a detail opens with: everything before its first space. */
+    function opening(detail: string): string {
+        return detail.split(' ')[0];
+    }
+
+    /** The list of results: the rows' nearest common ancestor. */
+    function resultListOf(rows: HTMLElement[]): HTMLElement {
+        for (let node = rows[0].parentElement; node; node = node.parentElement) {
+            const candidate = node;
+            if (rows.every((row) => candidate.contains(row))) return candidate;
+        }
+        throw new Error('the result rows share no list');
+    }
+
+    /** The total line, by structure: the one child of the results list that holds no result (the in-flight line is gone once the probe has settled). */
+    function totalLineOf(rows: HTMLElement[]): string {
+        const lines = [...resultListOf(rows).children].filter((child) => !rows.some((row) => child.contains(row)));
+        expect(lines, 'besides its results, the list holds one line: the total').toHaveLength(1);
+        return normalize(lines[0].textContent);
+    }
+
+    /** The figures as the section wrote them. */
+    function figures(): Figures {
+        const rows = screen.getAllByTestId('provider-test-result');
+        expect(rows, 'barrier: one result per operation the synthetic response carries, two').toHaveLength(2);
+        const [price, history] = rows.map((row) => partsOf(row));
+        expect([price.label, history.label], 'the results are not the current price then the history (labels read through the catalogue)').toEqual([`${word('common.currentPrice')}:`, `${word('assets.probe.history')}:`]);
+        return {price: opening(price.detail), count: opening(history.detail), times: [price.time, history.time], total: totalLineOf(rows)};
+    }
+
+    /** Mounts the section, runs the manual probe `input` answers, and waits until it has settled. */
+    async function probeWith(input: ProbeInput): Promise<void> {
+        probeFn().mockResolvedValue(figuresResponse(input));
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+        await fireEvent.click(testBtn());
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'passed'));
+    }
+
+    /** The interface language switched in place, as the language selector does, then Svelte's update boundary. */
+    async function switchTo(language: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(language);
+        await tick();
+        flushSync();
+    }
+
+    afterEach(async () => {
+        currentLanguage.set('en');
+        await setupI18n('en');
+    });
+
+    it.each([{price: '1234.5'}, {price: '12345.5'}])('Italian UI: the current price $price, a history of 12345 points, each result’s 1234 ms and the 2468 ms total, all in Italian notation', async ({price}) => {
+        const input: ProbeInput = {price, count: 12345, resultMs: 1234, totalMs: 2468};
+        // An Italian UI is the catalogue and the language store together, as the language selector moves
+        // them; the store is a plain writable in this file, so the catalogue is switched beside it.
+        await setupI18n('it');
+        currentLanguage.set('it');
+        expect(uiLocale(), 'control: an Italian UI on jsdom’s en-US browser writes bare Italian').toBe('it');
+
+        await probeWith(input);
+
+        expect(figures(), 'the probe’s figures are not in Italian notation: the section still writes them with toFixed, a point in every language').toEqual(expected(input, 'it'));
+    });
+
+    it('follows an in-place switch while mounted: English (en-US, the count grouped from 1,000 on — the new contract) → Italian → English; the results recompute and every figure follows', async () => {
+        // A price below 1,000, so its English form is the one it always had; the count from 1,000 on is
+        // grouped in English too — the new contract, pinned by the English case below.
+        const input: ProbeInput = {price: '123.456', count: 12345, resultMs: 1234, totalMs: 2468};
+        await probeWith(input);
+        const english = figures();
+
+        // Only the language store moves; the catalogue stays English. A catalogue switch re-runs every
+        // `$t` read — `buildTestResults` among them — and would refresh the figures even through a locale
+        // read the section does not track: here the interface locale is the only road to them.
+        await switchTo('it');
+        expect(uiLocale(), 'control: the switch reached the interface locale').toBe('it');
+        const italian = figures();
+
+        await switchTo('en');
+        expect(uiLocale(), 'control: and back, en-US on this browser').toBe('en-US');
+        const englishAgain = figures();
+
+        expect({english, italian, englishAgain}, 'the figures do not follow the interface language in place: the derived results and the times must be rewritten at each switch').toEqual({
+            english: expected(input, 'en-US'),
+            italian: expected(input, 'it'),
+            englishAgain: expected(input, 'en-US'),
+        });
+    });
+
+    it('English UI on an en-US browser: below 1,000 the figures read as before (123.46, 1.23s, 2.47s); a history count from 1,000 on is now grouped (12,345 points) — the new contract', async () => {
+        const input: ProbeInput = {price: '123.456', count: 12345, resultMs: 1234, totalMs: 2468};
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser writes en-US').toBe('en-US');
+        const english = expected(input, 'en-US');
+        // Premises. Below 1,000, en-US writes exactly what toFixed wrote: those figures are guards the cure
+        // must not move. From 1,000 on en-US groups, so the count is where the English contract changes.
+        const toFixedTime = `(${(input.resultMs / 1000).toFixed(2)}s)`;
+        expect({price: english.price, times: english.times, total: english.total}, 'premise: below 1,000, en-US writes what toFixed wrote').toEqual({
+            price: Number(input.price).toFixed(2),
+            times: [toFixedTime, toFixedTime],
+            total: `${word('assets.probe.totalTime')}: ${(input.totalMs / 1000).toFixed(2)}s`,
+        });
+        expect(english.count, 'premise: en-US groups a count from 1,000 on, which the bare number does not').not.toBe(String(input.count));
+
+        await probeWith(input);
+        const written = figures();
+
+        expect({price: written.price, times: written.times, total: written.total}, 'guard: below 1,000 the English figures read as they always did').toEqual({price: english.price, times: english.times, total: english.total});
+        expect(written.count, 'new contract: the history count is grouped the interface’s way, 12,345 points in en-US').toBe(english.count);
+    });
+
+    /** The history result's detail as the section wrote it, its row found by its label (read through the catalogue). */
+    function historyDetail(): string {
+        const history = screen
+            .getAllByTestId('provider-test-result')
+            .map((row) => partsOf(row))
+            .find((parts) => parts.label === `${word('assets.probe.history')}:`);
+        if (!history) throw new Error('No result row is labelled as the history');
+        expect(history.detail, 'barrier: the history succeeded, and its detail still ends on its date range').toMatch(/ — 2020-01-01\.\.2024-01-01$/);
+        return history.detail;
+    }
+
+    /** What a history detail says before the currency in brackets: the count and the word that names it. */
+    function countPhrase(detail: string): string {
+        const currency = detail.indexOf(' (');
+        return currency < 0 ? detail : detail.slice(0, currency);
+    }
+
+    /** The count and its word as the catalogue words them in the interface language — `assets.probe.points`, the figure as Intl writes it in `locale`. */
+    function pointsPhrase(count: number, locale: string): string {
+        return normalize(get(_)('assets.probe.points', {values: {count, n: fixed(count, 0, locale)}}));
+    }
+
+    it('Italian UI: a history of 12345 points is counted in the catalogue’s words — assets.probe.points, its plural, the figure in Italian notation (T-EN1)', async () => {
+        await setupI18n('it');
+        currentLanguage.set('it');
+        expect(uiLocale(), 'control: an Italian UI on jsdom’s en-US browser writes bare Italian').toBe('it');
+
+        await probeWith({price: '123.456', count: 12345, resultMs: 1234, totalMs: 2468});
+
+        expect(countPhrase(historyDetail()), 'the history count is not worded by the catalogue: the section writes «points» in English after the figure').toBe(pointsPhrase(12345, 'it'));
+    });
+
+    it('English UI: a history of one point is counted in the singular — the catalogue’s «one» branch of assets.probe.points (T-EN1)', async () => {
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser writes en-US').toBe('en-US');
+
+        await probeWith({price: '123.456', count: 1, resultMs: 1234, totalMs: 2468});
+
+        expect(countPhrase(historyDetail()), 'one point is counted in the plural: the section writes «points» whatever the count').toBe(pointsPhrase(1, 'en-US'));
+    });
+
+    it('French UI: a history of one point is counted in the singular too (T-EN1)', async () => {
+        await setupI18n('fr');
+        currentLanguage.set('fr');
+        expect(uiLocale(), 'control: a French UI on jsdom’s en-US browser writes bare French').toBe('fr');
+
+        await probeWith({price: '123.456', count: 1, resultMs: 1234, totalMs: 2468});
+
+        expect(countPhrase(historyDetail()), 'one point is not counted in the French catalogue’s words: the section writes «points» in English whatever the count').toBe(pointsPhrase(1, 'fr'));
+    });
+
+    it('English UI: a history of 12345 points reads as it does today — the English catalogue’s plural around the en-US figure (guard, T-EN1)', async () => {
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser writes en-US').toBe('en-US');
+
+        await probeWith({price: '123.456', count: 12345, resultMs: 1234, totalMs: 2468});
+
+        expect(countPhrase(historyDetail()), 'the English plural moved').toBe(pointsPhrase(12345, 'en-US'));
+    });
+
+    /** The calendar day `iso` in the house notation of a tooltip day, as Intl writes it in `locale`: numeric year, short month, numeric day. */
+    function houseDay(iso: string, locale: string): string {
+        const [year, month, day] = iso.split('-').map(Number);
+        return new Intl.DateTimeFormat(locale, {year: 'numeric', month: 'short', day: 'numeric'}).format(new Date(year, month - 1, day));
+    }
+
+    /** The detail of the result labelled `labelKey` (read through the catalogue), as the section wrote it. */
+    function detailOf(labelKey: string): string {
+        const parts = screen
+            .getAllByTestId('provider-test-result')
+            .map((row) => partsOf(row))
+            .find((candidate) => candidate.label === `${word(labelKey)}:`);
+        if (!parts) throw new Error(`No result row is labelled ${labelKey}`);
+        return parts.detail;
+    }
+
+    /** The current price's day: what its detail says in the brackets closing it. */
+    function priceDay(): string | undefined {
+        return /\(([^()]*)\)$/.exec(detailOf('common.currentPrice'))?.[1];
+    }
+
+    /** The history's range: what its detail says after its last dash. */
+    function historyRange(): string {
+        const detail = detailOf('assets.probe.history');
+        const dash = detail.lastIndexOf(' — ');
+        expect(dash, 'barrier: the history succeeded, and its detail ends on its date range after a dash').toBeGreaterThan(0);
+        return detail.slice(dash + ' — '.length);
+    }
+
+    /** An Italian or a French UI: the catalogue and the language store together, as the language selector moves them. */
+    async function speakAs(lang: 'it' | 'fr'): Promise<string> {
+        await setupI18n(lang);
+        currentLanguage.set(lang);
+        const locale = uiLocale();
+        expect(locale, `control: a ${lang} UI on jsdom’s en-US browser writes bare ${lang}`).toBe(lang);
+        return locale;
+    }
+
+    it.each(['it', 'fr'] as const)('%s UI: the current price’s day, in the brackets closing its detail, is written in the house notation (T-ISO)', async (lang) => {
+        const locale = await speakAs(lang);
+        expect(houseDay('2024-01-02', locale), 'control: the oracle is the lot charts’ tooltip day').toBe(formatAxisDate(locale, '2024-01-02', true));
+
+        await probeWith({price: '123.456', count: 12, resultMs: 1234, totalMs: 2468, asOfDate: '2024-01-02'});
+
+        expect(priceDay(), `the current price’s day is not in the ${lang} interface’s notation: the section writes the ISO day`).toBe(houseDay('2024-01-02', locale));
+    });
+
+    it.each(['it', 'fr'] as const)('%s UI: the history’s range as the backend writes it, «2024-01-01 → 2024-01-08», is written day by day in the house notation (T-ISO)', async (lang) => {
+        const locale = await speakAs(lang);
+
+        await probeWith({price: '123.456', count: 6, resultMs: 1234, totalMs: 2468, dateRange: '2024-01-01 → 2024-01-08'});
+
+        expect(historyRange(), `the history’s range is not in the ${lang} interface’s notation: the section writes the backend’s ISO days`).toBe(`${houseDay('2024-01-01', locale)} → ${houseDay('2024-01-08', locale)}`);
+    });
+
+    it.each(['2020-01-01..2024-01-01', '2020..2024'])('Italian UI: a range that is not exactly «YYYY-MM-DD → YYYY-MM-DD» — %s — is shown as it came (guard, T-ISO)', async (range) => {
+        await speakAs('it');
+
+        await probeWith({price: '123.456', count: 6, resultMs: 1234, totalMs: 2468, dateRange: range});
+
+        expect(historyRange(), 'a range the backend does not write was rewritten').toBe(range);
     });
 });
 
@@ -340,5 +797,389 @@ describe('ProviderAssignmentSection — readonly & disabled', () => {
         mount({providerCode: 'yahoo', identifier: 'AAPL', disabled: true});
         await waitLoaded('Yahoo');
         expect(idInput()).toBeDisabled();
+    });
+});
+
+// =========================================================================
+describe('ProviderAssignmentSection — probe ownership lifecycle', () => {
+    const providers: LifecycleProvider[] = [
+        {
+            code: 'lifecycle-a',
+            name: 'Lifecycle A',
+            description: 'Synthetic provider with an editable parameter',
+            supports_search: false,
+            params_schema: [{key: 'note', type: 'text', required: true, description: ''}],
+            accepted_identifier_types: ['TICKER', 'ISIN'],
+            supports_meaningful_volume: false,
+        },
+        {
+            code: 'lifecycle-b',
+            name: 'Lifecycle B',
+            description: 'Synthetic alternative provider without parameters',
+            supports_search: false,
+            params_schema: [],
+            accepted_identifier_types: ['TICKER', 'ISIN'],
+            supports_meaningful_volume: false,
+        },
+    ];
+    const pending: Array<() => Promise<void>> = [];
+
+    function configuration(): ProviderConfiguration {
+        return {
+            providerCode: 'lifecycle-a',
+            identifier: 'OWNED.PROBE',
+            identifierType: 'TICKER',
+            providerParams: {note: 'owned note'},
+            noProvider: false,
+        };
+    }
+
+    function expectedRequest(): LifecycleProbeRequest {
+        // Independent of the bound props, and frozen so a later UI edit cannot
+        // change the oracle alongside the request reference retained by the spy.
+        const request: LifecycleProbeRequest = {
+            provider_code: 'lifecycle-a',
+            identifier: 'OWNED.PROBE',
+            identifier_type: 'TICKER',
+            provider_params: {note: 'owned note'},
+            operations: ['current_price', 'history'],
+        };
+        Object.freeze(request.provider_params);
+        Object.freeze(request.operations);
+        return Object.freeze(request);
+    }
+
+    function probeResponse(): LifecycleProbeResponse {
+        return {
+            provider_code: 'lifecycle-a',
+            identifier: 'OWNED.PROBE',
+            provider_url: 'https://provider.invalid/owned-probe',
+            total_execution_time_ms: 9,
+            current_price: {
+                success: true,
+                value: '123.45',
+                currency: 'USD',
+                as_of_date: '2024-01-02',
+                execution_time_ms: 4,
+            },
+            history: {
+                success: true,
+                points_count: 1,
+                date_range: '2024-01-01..2024-01-01',
+                sample_prices: [{date: '2024-01-01', close: '123.40'}],
+                execution_time_ms: 5,
+            },
+        };
+    }
+
+    function deferred<T>(fallback: T) {
+        let resolve!: (value: T) => void;
+        const promise = new Promise<T>((complete) => {
+            resolve = complete;
+        });
+        async function finish(value: T = fallback) {
+            resolve(value);
+            // This is the promise actually returned to the component/controller,
+            // followed by Svelte's update boundary, never clock-based polling.
+            await promise;
+            await tick();
+            flushSync();
+        }
+        pending.push(() => finish());
+        return {promise, finish};
+    }
+
+    function unexpected(operation: string): never {
+        lifecycleApi.unexpected.push(operation);
+        throw new Error(`Unplanned provider lifecycle request: ${operation}`);
+    }
+
+    function queueCatalogue() {
+        const reply = deferred(providers);
+        lifecycleApi.list.mockImplementationOnce(() => reply.promise);
+        return reply;
+    }
+
+    function queueProbe() {
+        const reply = deferred(probeResponse());
+        lifecycleApi.probe.mockImplementationOnce((request) => {
+            if (request.operations.join(',') !== 'current_price,history') {
+                return unexpected(`probe operations: ${request.operations.join(',')}`);
+            }
+            return reply.promise;
+        });
+        return reply;
+    }
+
+    function expectManualResults(container: HTMLElement) {
+        // getAllByTestId is the positive barrier: an empty result set throws.
+        // Every row here belongs to this mount and this synthetic response.
+        for (const row of within(container).getAllByTestId('provider-test-result')) {
+            expect(row).toBeVisible();
+            expect(row).toHaveAttribute('data-status', 'success');
+        }
+    }
+
+    beforeEach(() => {
+        lifecycleApi.enabled = true;
+        lifecycleApi.unexpected.length = 0;
+        pending.length = 0;
+        lifecycleApi.list.mockReset().mockImplementation(() => unexpected('provider catalogue'));
+        lifecycleApi.probe.mockReset().mockImplementation(() => unexpected('provider probe'));
+    });
+
+    afterEach(async () => {
+        try {
+            // Dispose every owner before releasing even an unused/failed-case
+            // deferred. These cases do not change globals or client identity.
+            await cleanup();
+            for (const finish of pending) await finish();
+            expect(lifecycleApi.unexpected).toEqual([]);
+        } finally {
+            lifecycleApi.enabled = false;
+            lifecycleApi.list.mockReset();
+            lifecycleApi.probe.mockReset();
+            pending.length = 0;
+        }
+    });
+
+    it('keeps shared manual work across collapse/remount and clears it on a provider switch', async () => {
+        const catalogue = queueCatalogue();
+        const firstRemount = queueCatalogue();
+        const secondRemount = queueCatalogue();
+        const manual = queueProbe();
+        const request = expectedRequest();
+        const onchange = vi.fn();
+        const {container} = render(ProviderProbeLifecycleHarness, {...configuration(), onchange});
+        await catalogue.finish();
+
+        expect(testBtn()).toBeVisible();
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(testBtn()).toBeEnabled();
+        expect(idInput()).toHaveValue('OWNED.PROBE');
+        expect(screen.getByTestId('param-note')).toHaveValue('owned note');
+
+        await fireEvent.click(testBtn());
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(testBtn()).toBeDisabled();
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+
+        // The child disappears while its manual request is still in flight.
+        // Only the parent-owned controller can accept the response now.
+        await fireEvent.click(screen.getByTestId('provider-probe-collapse'));
+        expect(screen.getByTestId('provider-probe-expand')).toBeEnabled();
+        expect(screen.queryByTestId('provider-test-config')).toBeNull();
+        await manual.finish();
+
+        await fireEvent.click(screen.getByTestId('provider-probe-expand'));
+        await firstRemount.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expect(testBtn()).toBeEnabled();
+        expectManualResults(container);
+        expect(idInput()).toHaveValue('OWNED.PROBE');
+        expect(screen.getByTestId('param-note')).toHaveValue('owned note');
+
+        // A second collapse starts with visible results, proving that completed
+        // manual details survive as well as the in-flight work above.
+        await fireEvent.click(screen.getByTestId('provider-probe-collapse'));
+        expect(screen.getByTestId('provider-probe-expand')).toBeEnabled();
+        expect(screen.queryByTestId('provider-test-result')).toBeNull();
+        await fireEvent.click(screen.getByTestId('provider-probe-expand'));
+        await secondRemount.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expectManualResults(container);
+
+        await fireEvent.click(screen.getByTestId('provider-code-select-button'));
+        expect(screen.getByTestId('provider-option-lifecycle-b')).toBeVisible();
+        await fireEvent.click(screen.getByTestId('provider-option-lifecycle-b'));
+
+        expect(idInput()).toBeVisible();
+        expect(idInput()).toHaveValue('');
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(testBtn()).toBeDisabled();
+        expect(screen.queryByTestId('provider-test-result')).toBeNull();
+        expect(screen.queryByTestId('param-note')).toBeNull();
+        expect(onchange).toHaveBeenLastCalledWith({
+            providerCode: 'lifecycle-b',
+            identifier: '',
+            identifierType: 'TICKER',
+            providerParams: null,
+            noProvider: false,
+            testStatus: 'not_tested',
+        });
+        // The actual argument reference is still the original configuration;
+        // neither remount nor the switch silently issued another probe.
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+        expect(lifecycleApi.list.mock.calls).toStrictEqual([[], [], []]);
+    });
+
+    it('discards a standalone response after unmount before a fresh instance uses the same configuration', async () => {
+        const oldCatalogue = queueCatalogue();
+        const lateResponse = queueProbe();
+        const request = expectedRequest();
+        const oldOnchange = vi.fn();
+        const oldMount = render(ProviderAssignmentSection, {...configuration(), onchange: oldOnchange});
+        await oldCatalogue.finish();
+
+        const oldButton = testBtn();
+        expect(oldButton).toBeVisible();
+        expect(oldButton).toBeEnabled();
+        await fireEvent.click(oldButton);
+        expect(oldButton).toHaveAttribute('data-status', 'testing');
+        expect(oldButton).toBeDisabled();
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+        expect(oldOnchange).not.toHaveBeenCalled();
+
+        await oldMount.unmount();
+        expect(oldButton).not.toBeInTheDocument();
+        await lateResponse.finish();
+        // A fresh mount alone would not catch the old destroyed child's late
+        // emitChange: this callback proves its owner rejected the response.
+        expect(oldOnchange).not.toHaveBeenCalled();
+
+        const newCatalogue = queueCatalogue();
+        const currentResponse = queueProbe();
+        const newOnchange = vi.fn();
+        const {container} = render(ProviderAssignmentSection, {...configuration(), onchange: newOnchange});
+        await newCatalogue.finish();
+
+        expect(testBtn()).toBeVisible();
+        expect(testBtn()).toBeEnabled();
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(idInput()).toHaveValue('OWNED.PROBE');
+        expect(screen.getByTestId('param-note')).toHaveValue('owned note');
+        expect(screen.queryByTestId('provider-test-result')).toBeNull();
+
+        await fireEvent.click(testBtn());
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(testBtn()).toBeDisabled();
+        await currentResponse.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expect(testBtn()).toBeEnabled();
+        expectManualResults(container);
+        expect(newOnchange).toHaveBeenLastCalledWith({...configuration(), testStatus: 'passed'});
+        expect(oldOnchange).not.toHaveBeenCalled();
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request], [request]]);
+        expect(lifecycleApi.list.mock.calls).toStrictEqual([[], []]);
+    });
+
+    it('clears mounted parameter controls and verification when the parent resets params to null', async () => {
+        const catalogue = queueCatalogue();
+        const firstProbe = queueProbe();
+        const originalRequest = expectedRequest();
+        const onchange = vi.fn();
+        const {container, rerender} = render(ProviderAssignmentSection, {...configuration(), onchange});
+        await catalogue.finish();
+        expect(idInput()).toHaveValue('OWNED.PROBE');
+        expect(screen.getByTestId('param-note')).toHaveValue('owned note');
+        expect(testBtn()).toBeEnabled();
+
+        await fireEvent.click(testBtn());
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        await firstProbe.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expectManualResults(container);
+
+        // The schema remains mounted: disappearing controls on a provider switch
+        // would not detect a stale local params object after this parent reset.
+        await rerender({providerParams: null});
+        await tick();
+        flushSync();
+        expect(screen.getByTestId('param-note')).toBeVisible();
+        expect(screen.getByTestId('param-note')).toHaveValue('');
+        expect(idInput()).toHaveValue('OWNED.PROBE');
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(testBtn()).toBeEnabled();
+        expect(screen.queryByTestId('provider-test-result')).toBeNull();
+
+        const resetProbe = queueProbe();
+        await fireEvent.click(testBtn());
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[originalRequest], [{...originalRequest, provider_params: null}]]);
+        await resetProbe.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expectManualResults(container);
+        expect(onchange).toHaveBeenLastCalledWith({...configuration(), providerParams: null, testStatus: 'passed'});
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[originalRequest], [{...originalRequest, provider_params: null}]]);
+        expect(lifecycleApi.list.mock.calls).toStrictEqual([[]]);
+    });
+
+    it('preserves a standalone URL binding seed and probes with full params before the catalog resolves', async () => {
+        const catalogue = queueCatalogue();
+        const manual = queueProbe();
+        const request = expectedRequest();
+        const seedUrl = 'https://provider.invalid/stored-seed';
+        const onchange = vi.fn();
+        const {container, rerender} = render(ProviderProbeLifecycleHarness, {...configuration(), providerUrl: seedUrl, shared: false, onchange});
+        await tick();
+        flushSync();
+
+        const boundUrl = screen.getByTestId('provider-probe-bound-url');
+        expect(boundUrl).toHaveTextContent(seedUrl);
+        expect(idInput()).toHaveValue('OWNED.PROBE');
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(testBtn()).toBeEnabled();
+        expect(lifecycleApi.list.mock.calls).toStrictEqual([[]]);
+
+        // The catalogue is still pending. Provider params belong to the draft,
+        // not to whichever schema the panel has managed to load so far.
+        await fireEvent.click(testBtn());
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+        expect(boundUrl).toHaveTextContent(seedUrl);
+        await manual.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expect(boundUrl).toHaveTextContent('https://provider.invalid/owned-probe');
+        expectManualResults(container);
+        expect(onchange).toHaveBeenLastCalledWith({...configuration(), testStatus: 'passed'});
+
+        await catalogue.finish();
+        expect(screen.getByTestId('param-note')).toHaveValue('owned note');
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expect(boundUrl).toHaveTextContent('https://provider.invalid/owned-probe');
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+
+        await rerender({providerParams: null});
+        await tick();
+        flushSync();
+        expect(screen.getByTestId('param-note')).toBeVisible();
+        expect(screen.getByTestId('param-note')).toHaveValue('');
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        expect(boundUrl.textContent).toBe('');
+        expect(screen.queryByTestId('provider-test-result')).toBeNull();
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+    });
+
+    it('shows an automatic result only as status until the section runs a manual probe', async () => {
+        const catalogue = queueCatalogue();
+        const automatic = queueProbe();
+        const manual = queueProbe();
+        const request = expectedRequest();
+        const {container} = render(ProviderProbeLifecycleHarness, configuration());
+        await catalogue.finish();
+
+        expect(testBtn()).toBeVisible();
+        expect(testBtn()).toHaveAttribute('data-status', 'not_tested');
+        await fireEvent.click(screen.getByTestId('provider-probe-auto'));
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(testBtn()).toBeDisabled();
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request]]);
+        await automatic.finish();
+
+        // The completed status is the positive barrier before checking that
+        // automatic work did not render manual-only detail rows.
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expect(testBtn()).toBeEnabled();
+        expect(screen.queryByTestId('provider-test-result')).toBeNull();
+
+        await fireEvent.click(testBtn());
+        expect(testBtn()).toHaveAttribute('data-status', 'testing');
+        expect(testBtn()).toBeDisabled();
+        await manual.finish();
+        expect(testBtn()).toHaveAttribute('data-status', 'passed');
+        expect(testBtn()).toBeEnabled();
+        expectManualResults(container);
+        expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request], [request]]);
+        expect(lifecycleApi.list.mock.calls).toStrictEqual([[]]);
     });
 });

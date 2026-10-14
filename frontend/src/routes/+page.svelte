@@ -10,9 +10,13 @@
     import HelpMenu from '$lib/components/layout/HelpMenu.svelte';
     import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';
     import {auth} from '$lib/stores/app/auth';
+    import {isAuthenticated} from '$lib/stores/app/auth';
+    import {appBootstrap} from '$lib/features/onboarding/appBootstrap.svelte';
+    import OnboardingBootstrapBlock from '$lib/features/onboarding/components/OnboardingBootstrapBlock.svelte';
     import {_} from '$lib/i18n';
     import {Coffee} from 'lucide-svelte';
     import {page} from '$app/stores';
+    import {safeInternalPath} from '$lib/utils/internalPath';
 
     // Auth view state (modals)
     type AuthView = 'login' | 'register' | 'forgot-password';
@@ -24,15 +28,29 @@
     // Loading state while checking auth
     let checkingAuth = true;
 
-    // Get redirect URL from query params (if coming from protected route)
-    $: redirectTo = $page.url.searchParams.get('redirect') || '/dashboard';
+    // Where to go after signing in: the page the user was on (`?redirect=`), when it is an in-app path.
+    $: redirectTo = safeInternalPath($page.url.searchParams.get('redirect'));
 
-    // Check if already authenticated and redirect
+    async function routeAuthenticated(requestedPath: string): Promise<void> {
+        checkingAuth = true;
+        const state = await appBootstrap.load();
+        if (state === 'blocked') {
+            checkingAuth = false;
+            return;
+        }
+        if (state === 'ready' || state === 'degraded') {
+            await goto(appBootstrap.resolveDestination(requestedPath), {
+                replaceState: true,
+            });
+        }
+    }
+
+    // Check if already authenticated and redirect. Any other answer shows the login, as before: here the
+    // page asked for is the login itself.
     onMount(async () => {
         if (browser) {
-            const isAuth = await auth.checkAuth();
-            if (isAuth) {
-                goto('/dashboard');
+            if ((await auth.checkAuth()) === 'authenticated') {
+                await routeAuthenticated(redirectTo);
                 return;
             }
         }
@@ -63,6 +81,23 @@
         successMessage = '';
         currentView = 'login';
     }
+
+    async function retryBootstrap(): Promise<void> {
+        checkingAuth = true;
+        const state = await appBootstrap.load(true);
+        if (state === 'ready' || state === 'degraded') {
+            await goto(appBootstrap.resolveDestination(redirectTo), {
+                replaceState: true,
+            });
+            return;
+        }
+        checkingAuth = false;
+    }
+
+    async function logout(): Promise<void> {
+        await auth.logout();
+        checkingAuth = false;
+    }
 </script>
 
 <AnimatedBackground />
@@ -72,6 +107,8 @@
     <div class="min-h-screen flex items-center justify-center" data-testid="auth-loading">
         <div class="text-libre-green text-xl">Loading...</div>
     </div>
+{:else if $isAuthenticated && appBootstrap.state === 'blocked'}
+    <OnboardingBootstrapBlock error={appBootstrap.error} onretry={retryBootstrap} onlogout={logout} />
 {:else}
     <div class="min-h-screen flex items-center justify-center p-4" data-testid="login-page">
         <!-- Language & Theme Selector (top right) -->
@@ -87,7 +124,7 @@
 
         <!-- Card Container - Cambio istantaneo senza transizione -->
         {#if currentView === 'login'}
-            <LoginCard {redirectTo} {successMessage} on:gotoRegister={handleGotoRegister} on:gotoForgot={handleGotoForgot} />
+            <LoginCard {redirectTo} {successMessage} onAuthenticated={routeAuthenticated} on:gotoRegister={handleGotoRegister} on:gotoForgot={handleGotoForgot} />
         {:else if currentView === 'register'}
             <RegisterCard on:gotoLogin={handleGotoLogin} />
         {:else if currentView === 'forgot-password'}

@@ -1,7 +1,8 @@
 /**
  * Application Version
  *
- * Version is injected at build time from git describe via Vite.
+ * Version is injected at build time via Vite: LF_APP_VERSION when set (the release workflow freezes it from VERSION),
+ * otherwise git describe.
  */
 
 // Declared by Vite at build time (see vite.config.ts)

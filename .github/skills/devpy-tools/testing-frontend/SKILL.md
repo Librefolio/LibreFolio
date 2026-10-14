@@ -62,12 +62,31 @@ frontend/
 ./dev.py test --coverage py front-transaction all    # backend Python only
 ./dev.py test --coverage js front-transaction all    # frontend JS/Svelte only
 
+# Dedicated lane for a concurrent worktree
+./dev.py test --test-port 6152 --data-dir /tmp/librefolio-r2-c front-asset all
+
 # Gallery screenshots
 ./dev.py mkdocs gallery
 ./dev.py mkdocs gallery --desktop-only
 ./dev.py mkdocs gallery -f "assets"
 ./dev.py mkdocs gallery -l              # list available tests
 ```
+
+### Gallery: a language's shots are taken by a browser of that language
+
+The app formats amounts and many dates with the browser's locale, so an Italian shot needs an Italian browser,
+not only the Italian UI. `fixtures/galleryLocale.ts` sets it at runtime through the page's CDP session
+(Playwright's `locale` is fixed per context, and a gallery test walks four languages in one page):
+
+- **First thing in every language loop**: `await setBrowserLocale(page, lang);` — before the page of the
+  shot is loaded. A language switch redraws no number already on screen, so a page set up once before the
+  loop must be loaded again per language (`perLanguage` in `gallery.spec.ts`).
+- **The gallery's describe yields no context locale** (`test.use({locale: async ({}, use) => use(undefined)})`):
+  `@playwright/test` defaults to `en-US`, and Chromium refuses a second locale override while one is in effect.
+  The outer `beforeEach` pins `en-US` itself.
+- **The guard**: every document is stamped with the locale it began under, and `screenshot()`/`shootFiles()`
+  fail a shot whose page was drawn under another locale (`expectDrawnUnder`). A forgotten switch point is a
+  red, not an en-US number in a French picture.
 
 ### Consolidation is on by default
 
@@ -85,23 +104,31 @@ the whole run rather than once per action.
 what the 8 categories are verified against (629 Playwright + 687 vitest passing).
 
 !!! warning "Under `--coverage js` the groups are split into batches of 8"
-    A consolidated worker accumulates V8 coverage for its whole lifetime. Measured: 8 specs finish
-    comfortably, 25 specs die at the heap limit — and the failure lands on an innocent test with a
-    duration of `0ms`. So with JS coverage on, a group runs in batches of `_JS_COVERAGE_CHUNK` (8)
-    specs. If a run starts dying again, lower that constant; do **not** raise
-    `--max-old-space-size`, which only postpones the crash.
+    The batches date from the V8 era, when a consolidated worker accumulated coverage for its whole lifetime.
+    Measured then: 8 specs finish comfortably, 25 specs die at the heap limit — and the failure lands on an innocent
+    test with a duration of `0ms`. Today the `jsCoverage` fixture writes one file per test and keeps nothing in memory,
+    but the batches of `_JS_COVERAGE_CHUNK` (8, `scripts/test_runner/_consolidate.py`) stay as a bound on how long a
+    worker lives. If a run starts dying again, lower that constant; do **not** raise `--max-old-space-size`, which only
+    postpones the crash.
 
-!!! warning "Never run two Playwright invocations at once"
-    Consolidation reduces the number of invocations; it does not make them concurrent. They share one
-    backend, one database and one set of E2E users, so a second simultaneous invocation corrupts
-    both. Frontend parallelism lives **inside** Playwright (`fullyParallel`), never above it.
+!!! warning "Never run two Playwright invocations in one lane"
+    Consolidation reduces the number of invocations; it does not make them concurrent. Within a lane
+    they share one backend, one database and one set of E2E users, so a second invocation corrupts
+    both. Separate worktrees may run concurrently only with unique `--test-port` **and**
+    `--data-dir` values. Frontend parallelism inside one lane lives in Playwright (`fullyParallel`).
+
+!!! info "App-managed worktrees reuse the main Pipenv"
+    Prefix the runner with
+    `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py`.
+    Otherwise Pipenv may create an empty environment keyed to the worktree path.
 
 ## Playwright Config
 
 - **2 projects**: `desktop` (1280×720, Chrome) + `mobile` (iPhone 14 Pro Max viewport, Chromium)
 - **Workers**: 1 (sequential — shared DB state)
-- **Timeout**: 15s per test (localhost — fast responses expected)
-- **Web Server auto-start**: `./dev.py server --test --force` (port 6041)
+- **Timeout**: 30 s per test (`playwright.config.ts`); `expect` defaults to 3 s (localhost assertions)
+- **Web Server**: owned by `./dev.py test`, started without `--force` on the
+  lane `TEST_PORT` (default 6041); an occupied lane fails closed
 - **Retry**: 0 local, 2 in CI
 
 ## Fixtures
@@ -211,8 +238,10 @@ it measured frontend code, which it never did).
 
 ## JS/Svelte Coverage during E2E
 
-Collected via Chromium V8 (`page.coverage`) and remapped to `.svelte`/`.ts` through
-the build's sourcemaps. Enabled by `--coverage js|all`, which sets `COVERAGE_JS=1`.
+`--coverage js|all` sets `COVERAGE_JS=1` and builds the frontend instrumented by `vite-plugin-istanbul`
+(`COVERAGE_INSTRUMENT=1`; the sentinel `build/.coverage-instrumented` tells that build apart). The counters live in
+the page as `window.__coverage__`, keyed by source file — `.svelte` templates included, branch map and all — and each
+entry carries the map back to its source, which `js-coverage-report.js` follows; V8 plays no part.
 
 **All specs must import from the barrel, not from `@playwright/test`:**
 
@@ -221,16 +250,22 @@ import {test, expect} from '../fixtures/playwright';
 import type {Page} from '../fixtures/playwright';
 ```
 
-`e2e/fixtures/playwright.ts` re-exports the same symbols and adds an `auto` fixture
-that collects coverage only when the flag is on — at flag off the cost is zero.
+`e2e/fixtures/playwright.ts` re-exports the same symbols and adds the `auto` fixture `jsCoverage`, which works only
+when the flag is on — at flag off it returns at once and costs nothing. In its teardown it reads `window.__coverage__`
+from every page of the test and writes one JSON file per test into `frontend/coverage-js/e2e-raw/` (about 17 MB on
+the instrumented build); nothing is accumulated in memory. The teardown has a budget of its own,
+`JS_COVERAGE_TIMEOUT_MS` (120 s): without it the collection was charged to the test's after-hooks slot (30 s) and,
+under load, turned green tests red (V-28). A collection that overruns fails as «Fixture "jsCoverage" timeout …
+exceeded during teardown», never as a slow test.
 
 Key files:
-- `frontend/mcr.shared.js`: filters + external sourcemap resolution (read from `build/`)
-- `frontend/mcr.e2e.config.js`: E2E config — `cleanCache: false`, the fixture only calls `add()`
-- `frontend/scripts/mcr-generate.js`: turns the accumulated cache into the report
+- `frontend/vite.config.ts`: the istanbul instrumentation, on with `COVERAGE_INSTRUMENT=1`
+- `frontend/e2e/fixtures/playwright.ts`: the `jsCoverage` fixture
+- `frontend/scripts/js-coverage-report.js`: merges the per-test files (and the vitest `coverage-final.json`) with
+  `istanbul-lib-coverage` into a report
 
-Reports: `frontend/coverage-js/e2e/`, merged with the vitest level into
-`frontend/coverage-js/combined/`. Open with `./dev.py test coverage show js`.
+Reports: `frontend/coverage-js/e2e/` (Playwright only), `frontend/coverage-js/unit-combined/` (vitest only), and
+`frontend/coverage-js/combined/` (both). Open with `./dev.py test coverage show js` (or `js-e2e`, `js-unit`).
 
 ### The cleaning flags, and why there are only three
 
@@ -244,8 +279,9 @@ Reports: `frontend/coverage-js/e2e/`, merged with the vitest level into
 last thing in the system calling a Python measurement "frontend".
 
 `--cov-clean-js` is a **manual convenience only**. During any run with `--coverage js|all` the JS
-directories are wiped unconditionally anyway, because V8 offsets belong to one specific bundle: kept
-across a rebuild they would be remapped onto moved sources and the report would lie without failing.
+directories are wiped unconditionally anyway, because the counters belong to one specific build: istanbul's
+statement maps follow the sources that build instrumented, and kept across a rebuild old counts would be merged
+onto moved statements — the report would lie without failing.
 There is no separate flag for vitest — its data lives in `coverage-js/unit/`, under the same roof.
 
 > **No blocking thresholds**: Svelte 5 compiles templates into closures, so the data
@@ -260,7 +296,7 @@ There is no separate flag for vitest — its data lives in `coverage-js/unit/`, 
 ```
 
 Same analyser as the backend (`scripts/coverage_analysis.py`); `scripts/coverage_js.py`
-converts monocart's istanbul JSON and supplies the frontend categories
+reads the istanbul JSON that `scripts/js-coverage-report.js` writes and supplies the frontend categories
 (`JS_FEATURE`, `JS_STORE`, `JS_API`, `JS_UTILITY`, `JS_CHART`, `SVELTE_UI`, `JS_ROUTE`, …).
 
 Two caveats when reading it:
@@ -283,6 +319,60 @@ Two caveats when reading it:
 - **Never assert on translated text**: assert the toast *variant* (`toast-success`) or the event, never the message
 - **Never let a probe decide whether to act**: a short-timeout `isVisible().catch(() => false)` turns *slow* into *absent* and skips the spec's own setup in silence
 - **Verify the precondition, do not infer it**: filtering to the right *kind* of row is not the same as finding one that can still do what you need
+- **An enumerating gate is deterministic about its forms, never about the world**: see below — when you add a rule, extend the forms with it
+
+### ⚠️ A gate that enumerates source sites: extend the forms with the rule
+
+Some tests do not exercise behaviour — they assert that a *premise* still holds. The privacy gate
+(`frontend/src/lib/utils/privacy/moneyRenderSites.test.ts`) is the reference: global value masking
+works only while every monetary amount is rendered through a known set of formatters, so the gate
+scans the source for the observable forms of money rendering and fails when one appears that is not
+in its registry.
+
+If you write another gate of this shape, three properties are what make it survive:
+
+- **It enumerates, it does not judge.** A gate that decides whether a new site is *safe* has to be
+  right about intent. One that is wrong in an annoying direction gets switched off, and then it
+  protects nothing at all. Registering a site is a human decision, recorded once, with its reason —
+  an entry without a reason is indistinguishable from an oversight.
+- **Key entries by content, not by `file:line`.** An unrelated edit above a site shifts its line and
+  turns the gate red for reasons that have nothing to do with the subject. That is the same failure
+  as noise: it trains people to update the registry without reading it.
+- **It needs a positive control.** *"No unregistered site"* is also true when the scanner reads the
+  wrong directory or the regexes match nothing — the assertion that guards the property is exactly
+  the one whose failure is silent. Assert that the scan still finds the sites you know about, and
+  prove the gate fails by adding a violating file once and watching it go red.
+
+🔴 **The forms are a floor, not a proof.** The privacy gate knows two: `Intl.NumberFormat` with
+`style: 'currency'`, and a template literal interpolating a currency identifier **or a rendered
+symbol** beside a numeric token. It cannot see an amount assembled across several statements, nor
+one rendered with no currency marker at all. So **when the rule the gate protects grows, the
+enumerated forms must grow with it** — a gate whose forms lag its rule reports green about a
+question it stopped asking. Write the new form into the scanner in the same change that introduces
+the new rule, not afterwards.
+
+🔴 **A token heuristic is defeated by a synonym, and the damage is silent.** That gate first
+required the token `currency`, and so never matched `` `${sign}${symbol}${compact}` `` — the branch
+of `shortMoney` that renders every currency with a known symbol. The site looked covered only
+because its other branch, the fallback naming `currency`, happened to sit on the same source line:
+**its coverage was a line wrap, not a match.** Reformat that ternary across two lines and the
+gate stays green while the money walks out. When you widen a token, measure the noise first —
+adding `symbol` cost one new hit, adding `sign` would have cost 29, nearly all of them percentages
+and CSS class names.
+
+🔴 **What that gate cannot see, measured in its second round.** (1) A *legacy* (non-runes)
+component that calls a formatter inside its template: the call compiles into `$.untrack`, the
+privacy flag is never tracked, and the output freezes at mount — the site is registered, masked
+and green, and still does not react to the toggle (R20, the Brokers page). Neither the gate nor a
+formatter unit test can catch this; only a component test that **toggles privacy in place, in both
+directions** does (`BrokerCard.test.ts`, `CurrencyAmount.test.ts` with its legacy host harness).
+(2) Axes and labels with no currency token. (3) A `public` marking: once a site is marked public,
+nothing re-examines it — only the tests of that site protect the decision.
+
+> The sites a gate like this finds on the day you write it are not the point; they are already in
+> front of you. Its value is failing on the day of the next one — which is also why its registry
+> must refuse entries for code that no longer exists: a list nobody trusts makes the next real
+> entry look like more of the same.
 
 ### ⚠️ Parallelism is the default; serialisation is opted out of
 
@@ -400,9 +490,10 @@ Snapshot the ids and delete the difference — don't delete the ids you *think* 
 difference also catches rows created indirectly (the other half of a linked pair, a promoted
 transfer), and those are the ones that get forgotten.
 
-Real case: `tx-clone` commits a clone of "the first paired giver row on editable brokers" — which is
-the `delete-safe` ETH transfer — and `tx-delete` then asserts no such row survives its own delete.
-Neither spec was wrong; the implicit contract between them was.
+Real case, since fixed on both sides: `tx-clone` committed a clone of "the first paired giver row on editable
+brokers" — which was the `delete-safe` ETH transfer — and `tx-delete` then asserted that no such row survived its
+own delete. Neither spec was wrong; the implicit contract between them was. Today `tx-clone` deletes the rows it
+commits, and `tx-delete` deletes only rows it creates (V-25, 13/10).
 
 #### The automatic net, and why it works per file
 
@@ -410,32 +501,37 @@ Under a consolidated run (`LF_TX_HYGIENE=1`, set by `./dev.py test front-transac
 `txHygiene` fixture in `e2e/fixtures/playwright.ts` does this for every spec without any per-spec
 code — but **between spec files, not between tests**.
 
-That distinction is not a detail. Specs are written sequentially: `tx-commit-all-types` commits a BUY
-and then sells part of it; `tx-delete` creates a pair in one test and deletes it in the next.
-Cleaning between tests breaks those chains — measured on the whole `transactions/` directory, it
-turned three reds into five. What consolidation removed was the reset *between files*, so that is
-what gets restored and nothing more.
+That distinction is not a detail. When it was measured, specs were written sequentially:
+`tx-commit-all-types` committed a BUY and then sold part of it; `tx-delete` created a pair in one test
+and deleted it in the next. Cleaning between tests broke those chains — measured on the whole
+`transactions/` directory, it turned three reds into five. Neither chains any more (`tx-commit-all-types`
+funds each SELL inside its own batch; `tx-delete` stopped at V-25, 13/10 — its confirm tests now delete
+rows they create), but state may still accumulate inside a file. What consolidation removed was the reset
+*between files*, so that is what gets restored and nothing more.
 
 So the explicit `db-cleanup.ts` recipe above is still the right tool when a spec needs finer control
 than "restore at the end of the file". The automatic fixture is the floor, not a replacement.
 
 #### If a spec *destroys* mock rows, the fixture repopulates
 
-Dropping what a spec added is only half the invariant. `tx-delete` destroys mock rows by design, and
-no API call resurrects a row with its original id and its original half of a linked pair. So
+Dropping what a spec added is only half the invariant. A spec that destroys mock rows cannot be undone
+through the API: no call resurrects a row with its original id and its original half of a linked pair.
+`tx-delete` did, by design, until V-25 (13/10): its confirm tests now delete rows they create. So
 `restore()` compares against the opening snapshot: if a baseline id has vanished it runs the full
 `populate_mock_data --force --with-reports`, replays `initGlobalSettings()` (the global settings are
 the one part of `globalSetup` that `populate_mock_data` does not recreate) and logs the worker API
 context back in, because the users get new ids.
 
-Why it matters: on the database the suite leaves behind, `tx-picker-pagination` fails 4 tests; on a
-fresh one it passes 5. With fewer rows its first two clicks land on a linked pair, the bulk modal
-auto-opens a form modal, and the tests time out clicking behind a backdrop. The error blames
-`tx-form-modal` and never mentions `tx-delete`. Row *deflation*, the mirror of row inflation.
+Why it matters, measured while `tx-delete` still destroyed rows: on the database the suite left behind,
+`tx-picker-pagination` failed 4 tests; on a fresh one it passed 5. With fewer rows its first two clicks
+landed on a linked pair, the bulk modal auto-opened a form modal, and the tests timed out clicking behind
+a backdrop. The error blamed `tx-form-modal` and never mentioned `tx-delete`. Row *deflation*, the mirror
+of row inflation.
 
 The repopulate costs ~20 s, charged to whichever test triggers it, so the fixture grants
 `testInfo.setTimeout(+25 s)` **only when it actually ran** — a blanket increase would mask real
-slowness.
+slowness. Since V-25 no spec in `transactions/` triggers it (the 12/10 category gate found `tx-delete`'s
+rows the only seed rows missing); it remains the guard for the next spec that does.
 
 ## Test Runner Architecture (`scripts/test_runner/`)
 
@@ -491,5 +587,3 @@ can exist. (It used to: six registered actions worth ~259 tests were never execu
 | `add_test(cat, action, func, ...)` | `_common.py` | Registers a test entry in a category dict |
 | `make_category(help, desc)` | `_common.py` | Creates the `_meta` entry for a new category |
 | `_run_test_suite(tests, ...)` | `_common.py` | Runs tests sequentially with summary report |
-
-

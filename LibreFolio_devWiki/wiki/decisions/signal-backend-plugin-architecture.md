@@ -32,6 +32,14 @@ The frontend keeps `SignalConfig` and all local style/view behavior. Backend cat
 - Status is explicit per instance (`ok`, `partial`, `unavailable`, `failed`); one failure never removes prices or sibling results.
 - One bulk request is mandatory for list views; no request-per-card/pair/signal.
 - The old TypeScript technical classes remain only as rollback until Gate E visual review, then are removed.
+- *Planned (2026-10-12)*: each signal plugin becomes a folder (`<plugin>/plugin.py`) with its own translations —
+  [[decisions/plugin-folders-and-split-i18n]].
+
+
+How each plugin sizes its warm-up against the reference library: [[decisions/signal-indicator-warmup-sizing]]. The same
+migration commit isolated client sessions: [[problems/spa-logout-cross-user-cache-leak]].
+
+The July brainstorm that put the signals first in Release 2: [[sources/release2-ai-ideas-2026-07]].
 
 ## Source files
 

@@ -8,12 +8,32 @@
  * a bad clamp would hide.
  *
  * The month label is asserted with an explicit locale so the expected string is
- * deterministic regardless of the machine's locale.
+ * deterministic regardless of the machine's locale; without one it follows the
+ * interface language (M-18), pinned in the last describe, which also writes the
+ * tooltip delta in French.
  */
-import {describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 
+// The interface locale is the UI language regionalised by `navigator.language` (M-18). Node's tag
+// follows the host's ICU locale, so it is pinned to en-US — jsdom's own — before any import.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
+import type {RenderedSignal} from '$lib/charts/signals';
+import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
+import {currentLanguage} from '$lib/stores/app/language';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import type {LineDataPoint} from './LineChart.svelte';
 import type {EventMarker} from './PriceChartFull.svelte';
+import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from './calendarReturnWindow';
+import * as calendarReturnWindowModule from './calendarReturnWindow';
 import {
     buildDeltaHtml,
     buildEventScatterGroups,
@@ -21,18 +41,24 @@ import {
     computeGhostSeries,
     computeZoomWindow,
     countBuckets,
+    extractCalendarReturnView,
+    extractCalendarReturnViewsByAsset,
     formatMonthLabel,
     formatTruncatedGhostLabel,
     getBucketInfo,
+    bucketSpanUpTo,
     getVisibleDailyPoints,
     resolveActivePointIndex,
     resolveZoomBounds,
     resolveZoomIndex,
+    splitGhostLabel,
     synthesizeDailyOHLC,
     toAbsoluteValue,
     toDisplaySeries,
+    type BucketInfo,
     type EventScatterContext,
 } from './priceChartHelpers';
+import {aggregateLineSeries, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
 
 /** Minimal daily point; overrides layer on top. */
 function pt(date: string, value: number, overrides: Partial<LineDataPoint> = {}): LineDataPoint {
@@ -43,6 +69,710 @@ function pt(date: string, value: number, overrides: Partial<LineDataPoint> = {})
 function dailyRun(dates: string[]): LineDataPoint[] {
     return dates.map((date, index) => pt(date, index + 1));
 }
+
+const CALENDAR_INSTANCE_ID = 'asset-calendar-return';
+const CALENDAR_SIGNAL_CODE = 'ASSET_CALENDAR_ROLLING_RETURN';
+
+function calendarProvenance(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        status: 'available',
+        reference_target_date: '2026-01-02',
+        current_price_date: '2026-02-01',
+        current_price_days_back: 0,
+        reference_price_date: '2026-01-02',
+        reference_price_days_back: 0,
+        current_fx_date: null,
+        current_fx_days_back: null,
+        reference_fx_date: null,
+        reference_fx_days_back: null,
+        ...overrides,
+    };
+}
+
+function calendarPoint(date: string, value: number | null, provenance: Record<string, unknown> = {}): Record<string, unknown> {
+    return {date, value, provenance: calendarProvenance(provenance)};
+}
+
+function nestedCalendarResult(points: unknown[], overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        instance_id: CALENDAR_INSTANCE_ID,
+        signal_code: CALENDAR_SIGNAL_CODE,
+        status: 'ok',
+        series: [{key: 'calendar_return', points}],
+        ...overrides,
+    };
+}
+
+function calendarInputCoverage(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        requested_points: 4,
+        available_points: 0,
+        contiguous_points: 0,
+        observed_points: 0,
+        backfilled_points: 0,
+        missing_points: 4,
+        max_consecutive_missing_points: 4,
+        internal_gap_count: 0,
+        coverage_ratio: 0,
+        field_coverage: {close: 0},
+        ...overrides,
+    };
+}
+
+function typedUnavailableCalendarResult(message: string): Record<string, unknown> {
+    return nestedCalendarResult([], {
+        status: 'unavailable',
+        series: [],
+        availability: {
+            domain_compatible: true,
+            can_compute: false,
+            input_coverage: calendarInputCoverage(),
+            required_points: 7,
+            warmup_complete: true,
+            partial_coverage_used: false,
+            reason_code: 'undefined_metric',
+        },
+        warmup: {
+            requirement: {
+                minimum_points: 1,
+                stabilization_points: 6,
+                total_points: 7,
+            },
+            loaded_points: 11,
+            used_points: 7,
+            complete: true,
+        },
+        warnings: [
+            {
+                code: 'undefined_metric_window',
+                message,
+                details: {
+                    unavailable_points: 4,
+                    reasons: {invalid_current_price: 4},
+                },
+            },
+        ],
+        error: null,
+    });
+}
+
+function typedFailedCalendarResult(message: string): Record<string, unknown> {
+    return nestedCalendarResult([], {
+        status: 'failed',
+        series: [],
+        availability: {
+            domain_compatible: true,
+            can_compute: false,
+            input_coverage: calendarInputCoverage({
+                requested_points: 3,
+                missing_points: 3,
+                max_consecutive_missing_points: 3,
+            }),
+            required_points: 7,
+            warmup_complete: false,
+            partial_coverage_used: false,
+            reason_code: null,
+        },
+        warmup: {
+            requirement: {
+                minimum_points: 1,
+                stabilization_points: 6,
+                total_points: 7,
+            },
+            loaded_points: 3,
+            used_points: 0,
+            complete: false,
+        },
+        warnings: [],
+        error: {
+            code: 'compute_error',
+            message,
+            details: {stage: 'calendar_return'},
+            retryable: false,
+        },
+    });
+}
+
+describe('calendarReturnWindow', () => {
+    it.each([
+        ['1w', 7],
+        ['1m', 30],
+        ['3m', 90],
+        ['1y', 365],
+    ] as const)('maps the %s preset to exactly %i calendar days', (preset, expectedDays) => {
+        const selection: CalendarReturnWindowSelection = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'preset',
+            preset,
+        };
+
+        expect(calendarReturnWindowDays(selection)).toBe(expectedDays);
+        expect(CALENDAR_RETURN_PRESETS.find((candidate) => candidate.key === preset)?.windowDays).toBe(expectedDays);
+    });
+
+    it('measures availability by elapsed end-start days rather than an inclusive date count', () => {
+        expect(calendarReturnRangeDays('2026-01-01', '2026-01-08')).toBe(7);
+        expect(calendarReturnRangeDays('2026-01-08', '2026-01-08')).toBe(0);
+    });
+
+    it('keeps every preset as an exact positive request window even when it exceeds the visible span', () => {
+        const span = calendarReturnRangeDays('2026-01-01', '2026-03-31');
+
+        expect(span).toBe(89);
+        expect(CALENDAR_RETURN_PRESETS.map(({key, windowDays}) => [key, windowDays])).toEqual([
+            ['1w', 7],
+            ['1m', 30],
+            ['3m', 90],
+            ['1y', 365],
+        ]);
+        expect(CALENDAR_RETURN_PRESETS.every(({windowDays}) => Number.isSafeInteger(windowDays) && windowDays > 0)).toBe(true);
+        expect(CALENDAR_RETURN_PRESETS.find(({key}) => key === '1y')?.windowDays).toBeGreaterThan(span);
+    });
+
+    it.each([
+        ['weeks', 7],
+        ['months', 30],
+        ['years', 365],
+    ] as const)('converts a custom %s amount to an exact positive request window', (customUnit, multiplier) => {
+        const selection: CalendarReturnWindowSelection = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'custom',
+            customAmount: 3,
+            customUnit,
+        };
+        const convertedDays = 3 * multiplier;
+
+        expect(calendarReturnWindowDays(selection)).toBe(convertedDays);
+    });
+
+    it('starts on 1M while remembering an independently valid 3Y custom request', () => {
+        expect(DEFAULT_CALENDAR_RETURN_WINDOW).toEqual({
+            kind: 'preset',
+            preset: '1m',
+            customAmount: 3,
+            customUnit: 'years',
+        });
+        expect(calendarReturnWindowDays(DEFAULT_CALENDAR_RETURN_WINDOW)).toBe(30);
+        const rememberedCustom: CalendarReturnWindowSelection = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'custom',
+        };
+        expect(calendarReturnWindowDays(rememberedCustom)).toBe(1095);
+    });
+
+    it('keeps a positive custom N when the visible span is shorter than N', () => {
+        const selection: CalendarReturnWindowSelection = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'custom',
+            customAmount: 2,
+            customUnit: 'months',
+        };
+        const span = calendarReturnRangeDays('2026-01-01', '2026-03-01');
+        const requestWindowDays = calendarReturnWindowDays(selection);
+
+        expect(calendarReturnWindowDays(selection)).toBe(60);
+        expect(span).toBe(59);
+        expect(requestWindowDays).toBe(60);
+        expect(requestWindowDays).toBeGreaterThan(span);
+    });
+
+    it('does not rewrite a valid stored selection after the visible range shrinks', () => {
+        const previousSelection: CalendarReturnWindowSelection = {
+            kind: 'custom',
+            preset: '1y',
+            customAmount: 3,
+            customUnit: 'months',
+        };
+        const shrunkenSpan = calendarReturnRangeDays('2026-01-01', '2026-02-15');
+
+        const persistedSelection = sanitizeCalendarReturnWindow(previousSelection);
+        expect(shrunkenSpan).toBe(45);
+        expect(calendarReturnWindowDays(persistedSelection)).toBe(90);
+        expect(calendarReturnWindowDays(persistedSelection)).toBeGreaterThan(shrunkenSpan);
+        expect(persistedSelection).toEqual({
+            kind: 'custom',
+            preset: '1y',
+            customAmount: 3,
+            customUnit: 'months',
+        });
+    });
+
+    it('keeps Calendar mode requestable when the elapsed span is under seven days', () => {
+        const span = calendarReturnRangeDays('2026-02-01', '2026-02-07');
+        const requestedWindow = calendarReturnWindowDays({
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'preset',
+            preset: '1w',
+        });
+
+        expect(span).toBe(6);
+        expect(requestedWindow).toBe(7);
+        expect(requestedWindow).toBeGreaterThan(span);
+    });
+
+    it('preserves a valid stored selection and its inactive custom memory', () => {
+        expect(
+            sanitizeCalendarReturnWindow({
+                kind: 'preset',
+                preset: '1y',
+                customAmount: 8,
+                customUnit: 'months',
+            }),
+        ).toEqual({
+            kind: 'preset',
+            preset: '1y',
+            customAmount: 8,
+            customUnit: 'months',
+        });
+    });
+
+    it('sanitizes malformed fields independently to their defaults', () => {
+        expect(
+            sanitizeCalendarReturnWindow({
+                kind: 'custom',
+                preset: '3m',
+                customAmount: 0,
+                customUnit: 'weeks',
+            }),
+        ).toEqual({
+            kind: 'custom',
+            preset: '3m',
+            customAmount: 3,
+            customUnit: 'weeks',
+        });
+        expect(
+            sanitizeCalendarReturnWindow({
+                kind: 'unexpected',
+                preset: '2y',
+                customAmount: 8,
+                customUnit: 'days',
+            }),
+        ).toEqual({
+            kind: 'preset',
+            preset: '1m',
+            customAmount: 8,
+            customUnit: 'years',
+        });
+        expect(sanitizeCalendarReturnWindow(null)).toEqual(DEFAULT_CALENDAR_RETURN_WINDOW);
+        expect(sanitizeCalendarReturnWindow([])).toEqual(DEFAULT_CALENDAR_RETURN_WINDOW);
+    });
+
+    it('falls back to the complete default when a stored custom product overflows', () => {
+        expect(
+            sanitizeCalendarReturnWindow({
+                kind: 'custom',
+                preset: '1y',
+                customAmount: Number.MAX_SAFE_INTEGER,
+                customUnit: 'years',
+            }),
+        ).toEqual(DEFAULT_CALENDAR_RETURN_WINDOW);
+    });
+
+    it.each([
+        ['zero', 0, 'weeks'],
+        ['negative', -1, 'months'],
+        ['fractional', 1.5, 'years'],
+        ['not finite', Number.POSITIVE_INFINITY, 'weeks'],
+        ['unsafe amount', Number.MAX_SAFE_INTEGER + 1, 'months'],
+        ['safe amount with unsafe product', Math.floor(Number.MAX_SAFE_INTEGER / 365) + 1, 'years'],
+    ] as const)('returns no request value for a %s custom amount', (_label, customAmount, customUnit) => {
+        const selection: CalendarReturnWindowSelection = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'custom',
+            customAmount,
+            customUnit: customUnit as CalendarReturnWindowUnit,
+        };
+
+        expect(calendarReturnWindowDays(selection)).toBeNull();
+    });
+
+    it('returns no request value for unknown preset and unit variants', () => {
+        const invalidPreset = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'preset',
+            preset: '2y',
+        } as unknown as CalendarReturnWindowSelection;
+        const invalidUnit = {
+            ...DEFAULT_CALENDAR_RETURN_WINDOW,
+            kind: 'custom',
+            customUnit: 'days',
+        } as unknown as CalendarReturnWindowSelection;
+
+        expect(calendarReturnWindowDays(invalidPreset)).toBeNull();
+        expect(calendarReturnWindowDays(invalidUnit)).toBeNull();
+    });
+});
+
+describe('calendarReturnWindow — the window presets are labelled from the catalogues (P, item 8)', () => {
+    // The rolling-return window presets carry English literal labels — '1W', '1M', '3M', '1Y' —
+    // which the asset page prints as they are, so Italian reads «1W» beside a date picker that
+    // reads the catalogue's week. The contract of the cure: a preset is a `count` of a `unit`
+    // (`CalendarReturnWindowUnit`) instead of a label, and the module maps each unit to the
+    // catalogue key of its count message, `CALENDAR_RETURN_UNIT_LABEL_KEYS` — the date picker's
+    // keys, read by the page with `{values: {n: preset.count}}`, so the two say the same thing.
+    // The keys and the windows do not change. The exports are read untyped, so this file compiles
+    // before the cure and after it. Red today: no preset has a count or a unit, and no map exists.
+
+    const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+    const UNITS: readonly CalendarReturnWindowUnit[] = ['weeks', 'months', 'years'];
+    /** The module's exports by name, read untyped: the map does not exist before the cure. */
+    const moduleExports: Record<string, unknown> = {...calendarReturnWindowModule};
+    /** Each preset's own fields, read untyped: the cure trades the literal label for a count and a unit. */
+    const presetFields = CALENDAR_RETURN_PRESETS.map((preset): Record<string, unknown> => ({...preset}));
+
+    /** The value behind a dotted key of a catalogue, if any. */
+    const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+
+    /** Each of `keys` that some catalogue has no string for, with those catalogues: `{}` when all four have all of them. */
+    function catalogueGaps(keys: readonly string[]): Record<string, string[]> {
+        const gaps = keys.map((key) => [key, Object.entries(CATALOGUES).flatMap(([lang, catalogue]) => (typeof leafOf(catalogue, key) === 'string' ? [] : [lang]))] as const);
+        return Object.fromEntries(gaps.filter(([, langs]) => langs.length > 0));
+    }
+
+    it('describes every preset by an integer count and a unit, not by a literal label', () => {
+        const uncounted = presetFields.filter(({count, unit}) => !(Number.isInteger(count) && UNITS.includes(unit as CalendarReturnWindowUnit))).map(({key}) => key);
+        const labelled = presetFields.filter((fields) => 'label' in fields).map(({key}) => key);
+        expect(uncounted, 'presets without an integer count and a unit').toEqual([]);
+        expect(labelled, 'presets that still carry a literal label').toEqual([]);
+    });
+
+    it('counts 1 week, 1 month, 3 months and 1 year, under the same keys and windows', () => {
+        const presets = Object.fromEntries(presetFields.map(({key, count, unit, windowDays}) => [String(key), {count, unit, windowDays}]));
+
+        expect(presets).toEqual({
+            '1w': {count: 1, unit: 'weeks', windowDays: 7},
+            '1m': {count: 1, unit: 'months', windowDays: 30},
+            '3m': {count: 3, unit: 'months', windowDays: 90},
+            '1y': {count: 1, unit: 'years', windowDays: 365},
+        });
+    });
+
+    it('maps each unit to the date picker’s count message, which the four catalogues have', () => {
+        const unitKeys = moduleExports.CALENDAR_RETURN_UNIT_LABEL_KEYS;
+
+        expect(unitKeys, 'CALENDAR_RETURN_UNIT_LABEL_KEYS: unit → catalogue key').toEqual({weeks: 'datePicker.presets.weeks', months: 'datePicker.presets.months', years: 'datePicker.presets.years'});
+        expect(catalogueGaps(Object.values(unitKeys as Record<string, string>)), 'key → the catalogues with no string for it').toEqual({});
+    });
+});
+
+describe('extractCalendarReturnView', () => {
+    it('maps a runtime-flat ready result without rebasing its percentage values', () => {
+        const view = extractCalendarReturnView(
+            [
+                {
+                    instance_id: CALENDAR_INSTANCE_ID,
+                    signal_code: CALENDAR_SIGNAL_CODE,
+                    status: 'ok',
+                    key: 'calendar_return',
+                    points: [calendarPoint('2026-02-01', 12.5)],
+                },
+            ],
+            CALENDAR_INSTANCE_ID,
+        );
+
+        expect(view.state).toBe('ready');
+        expect(view.points.find((point) => point.date === '2026-02-01')).toMatchObject({
+            date: '2026-02-01',
+            value: 12.5,
+        });
+        expect(view.contextByDate.has('2026-02-01')).toBe(true);
+    });
+
+    it('accepts generated one-level series/points nesting and selects the requested instance, code, and series key', () => {
+        const requested = nestedCalendarResult([calendarPoint('2026-02-02', -3.75)], {
+            series: [
+                {key: 'other_series', points: [calendarPoint('2026-02-02', 999)]},
+                {key: 'calendar_return', points: [calendarPoint('2026-02-02', -3.75)]},
+                {key: 'another_series', points: [calendarPoint('2026-02-02', -999)]},
+            ],
+        });
+        const view = extractCalendarReturnView([{...requested, instance_id: 'another-instance'}, requested, {...requested, signal_code: 'RISK_ROLLING_RETURN'}], CALENDAR_INSTANCE_ID);
+
+        expect(view.state).toBe('ready');
+        expect(view.points.find((point) => point.date === '2026-02-02')).toMatchObject({
+            date: '2026-02-02',
+            value: -3.75,
+        });
+        expect(view.points.some((point) => point.value === 999)).toBe(false);
+        expect(view.points.some((point) => point.value === -999)).toBe(false);
+    });
+
+    it('preserves every date and turns null values into explicit missing chart gaps', () => {
+        const view = extractCalendarReturnView(
+            [
+                nestedCalendarResult([
+                    calendarPoint('2026-02-01', null, {
+                        status: 'missing_reference',
+                        reference_target_date: '2026-01-02',
+                        reference_price_date: null,
+                        reference_price_days_back: null,
+                    }),
+                    calendarPoint('2026-02-02', 1.25, {
+                        reference_target_date: '2026-01-03',
+                        current_price_date: '2026-02-02',
+                        reference_price_date: '2026-01-03',
+                    }),
+                ]),
+            ],
+            CALENDAR_INSTANCE_ID,
+        );
+
+        expect(view.points.map((point) => point.date)).toEqual(['2026-02-01', '2026-02-02']);
+        expect(view.points.find((point) => point.date === '2026-02-01')).toMatchObject({
+            value: 0,
+            missing: true,
+        });
+        expect(view.points.find((point) => point.date === '2026-02-02')).toMatchObject({
+            value: 1.25,
+        });
+        expect(view.points.find((point) => point.date === '2026-02-02')?.missing).not.toBe(true);
+    });
+
+    it('uses maximum price/FX staleness overall and keeps the FX-only maximum separate', () => {
+        const view = extractCalendarReturnView(
+            [
+                nestedCalendarResult([
+                    calendarPoint('2026-02-10', 4.5, {
+                        reference_target_date: '2026-01-11',
+                        current_price_date: '2026-02-08',
+                        current_price_days_back: 2,
+                        reference_price_date: '2026-01-05',
+                        reference_price_days_back: 6,
+                        current_fx_date: '2026-02-06',
+                        current_fx_days_back: 4,
+                        reference_fx_date: '2026-01-02',
+                        reference_fx_days_back: 9,
+                    }),
+                ]),
+            ],
+            CALENDAR_INSTANCE_ID,
+        );
+
+        expect(view.points.find((point) => point.date === '2026-02-10')).toMatchObject({
+            staleDays: 9,
+            fxStaleDays: 9,
+        });
+        expect(view.contextByDate.get('2026-02-10')).toMatchObject({
+            referenceTargetDate: '2026-01-11',
+            currentPriceDate: '2026-02-08',
+            referencePriceDate: '2026-01-05',
+            currentFxDate: '2026-02-06',
+            referenceFxDate: '2026-01-02',
+        });
+    });
+
+    it('keeps usable points and reports a partial backend result as partial', () => {
+        const view = extractCalendarReturnView([nestedCalendarResult([calendarPoint('2026-02-01', 2.5)], {status: 'partial'})], CALENDAR_INSTANCE_ID);
+
+        expect(view.state).toBe('partial');
+        expect(view.points.find((point) => point.date === '2026-02-01')).toMatchObject({
+            value: 2.5,
+        });
+    });
+
+    it('preserves an unavailable reason and warning detail without fabricating primary values', () => {
+        const warning = 'Every selected Calendar output is undefined.';
+        const typedUnavailable = typedUnavailableCalendarResult(warning);
+        expect(backendSignalSchemas.result.safeParse(typedUnavailable).success).toBe(true);
+        const view = extractCalendarReturnView([typedUnavailable], CALENDAR_INSTANCE_ID);
+
+        expect(view).toMatchObject({
+            state: 'unavailable',
+            points: [],
+            contextByDate: new Map(),
+            problem: {
+                code: 'undefined_metric',
+                status: 'unavailable',
+                message: warning,
+                requestedPoints: 4,
+                availablePoints: 0,
+                minimumPoints: 1,
+                warmupUsedPoints: 7,
+                warmupRequiredPoints: 7,
+                missingPoints: 4,
+                maxConsecutiveMissingPoints: 4,
+                coverageRatio: 0,
+                coveragePercent: 0,
+            },
+        });
+    });
+
+    it('preserves a failed result and its typed backend error detail', () => {
+        const detail = 'Calendar calculation rejected for the selected fingerprint.';
+        const view = extractCalendarReturnView([typedFailedCalendarResult(detail)], CALENDAR_INSTANCE_ID);
+
+        expect(view).toMatchObject({
+            state: 'error',
+            points: [],
+            contextByDate: new Map(),
+            problem: {
+                code: 'calculation_failed',
+                status: 'failed',
+                message: detail,
+                requestedPoints: 3,
+                availablePoints: 0,
+                minimumPoints: 1,
+                warmupUsedPoints: 0,
+                warmupRequiredPoints: 7,
+                missingPoints: 3,
+                maxConsecutiveMissingPoints: 3,
+                coverageRatio: 0,
+                coveragePercent: null,
+            },
+        });
+    });
+
+    it.each([
+        {label: 'null results', rawResults: null},
+        {
+            label: 'missing calendar series',
+            rawResults: [nestedCalendarResult([], {series: [{key: 'another_series', points: [calendarPoint('2026-02-01', 1)]}]})],
+        },
+        {
+            label: 'non-array points',
+            rawResults: [nestedCalendarResult([], {series: [{key: 'calendar_return', points: {date: '2026-02-01', value: 1}}]})],
+        },
+    ])('returns error for malformed $label payloads', ({rawResults}) => {
+        expect(extractCalendarReturnView(rawResults, CALENDAR_INSTANCE_ID)).toEqual({
+            state: 'error',
+            points: [],
+            contextByDate: new Map(),
+            problem: null,
+        });
+    });
+});
+
+describe('extractCalendarReturnViewsByAsset', () => {
+    it('rejects malformed string unavailable by owned asset id', () => {
+        const malformedUnavailable = nestedCalendarResult([], {status: 'unavailable'});
+        expect(backendSignalSchemas.result.safeParse(malformedUnavailable).success).toBe(false);
+
+        const views = extractCalendarReturnViewsByAsset([{asset_id: 105, signals: [malformedUnavailable]}], [105], CALENDAR_INSTANCE_ID);
+        expect(views.get(105)).toEqual({
+            state: 'error',
+            points: [],
+            contextByDate: new Map(),
+            problem: null,
+        });
+    });
+
+    it('keeps independently sparse I60G Calendar subsets joined by asset id', () => {
+        const views = extractCalendarReturnViewsByAsset(
+            [
+                {
+                    asset_id: 104,
+                    signals: [typedUnavailableCalendarResult('Every selected I60G Calendar output is undefined.')],
+                },
+                {
+                    asset_id: 102,
+                    signals: [
+                        nestedCalendarResult(
+                            [
+                                calendarPoint('2026-04-13', 32, {
+                                    reference_target_date: '2026-04-06',
+                                    current_price_date: '2026-04-13',
+                                    reference_price_date: '2026-04-06',
+                                }),
+                                calendarPoint('2026-04-11', 31, {
+                                    reference_target_date: '2026-04-04',
+                                    current_price_date: '2026-04-11',
+                                    reference_price_date: '2026-04-04',
+                                }),
+                            ],
+                            {status: 'partial'},
+                        ),
+                    ],
+                },
+                {
+                    asset_id: 101,
+                    signals: [
+                        nestedCalendarResult(
+                            [
+                                calendarPoint('2026-04-05', 7.4, {
+                                    reference_target_date: '2026-03-29',
+                                    current_price_date: '2026-04-05',
+                                    reference_price_date: '2026-03-29',
+                                }),
+                                calendarPoint('2026-04-01', 7, {
+                                    reference_target_date: '2026-03-25',
+                                    current_price_date: '2026-04-01',
+                                    reference_price_date: '2026-03-25',
+                                }),
+                            ],
+                            {status: 'partial'},
+                        ),
+                    ],
+                },
+                {
+                    asset_id: 103,
+                    signals: [
+                        nestedCalendarResult(
+                            [
+                                calendarPoint('2026-04-01', 21, {
+                                    reference_target_date: '2026-03-25',
+                                    current_price_date: '2026-04-01',
+                                    reference_price_date: '2026-03-25',
+                                    current_fx_date: '2026-04-01',
+                                    current_fx_days_back: 0,
+                                    reference_fx_date: '2026-03-25',
+                                    reference_fx_days_back: 0,
+                                }),
+                                calendarPoint('2026-04-10', null, {
+                                    status: 'missing_reference',
+                                    reference_target_date: '2026-04-03',
+                                    current_price_date: '2026-04-10',
+                                    reference_price_date: '2026-04-03',
+                                    reference_price_days_back: 0,
+                                    current_fx_date: '2026-04-10',
+                                    current_fx_days_back: 0,
+                                    reference_fx_date: null,
+                                    reference_fx_days_back: null,
+                                }),
+                            ],
+                            {status: 'partial'},
+                        ),
+                    ],
+                },
+            ],
+            [101, 102, 103, 104],
+            CALENDAR_INSTANCE_ID,
+        );
+
+        expect(views.get(101)?.state).toBe('partial');
+        expect(views.get(101)?.points.map((point) => point.date)).toEqual(['2026-04-01', '2026-04-05']);
+        expect(views.get(101)?.contextByDate.get('2026-04-01')).toMatchObject({
+            referenceTargetDate: '2026-03-25',
+            referencePriceDate: '2026-03-25',
+        });
+
+        expect(views.get(102)?.state).toBe('partial');
+        expect(views.get(102)?.points.map((point) => point.date)).toEqual(['2026-04-11', '2026-04-13']);
+
+        expect(views.get(103)?.state).toBe('partial');
+        expect(views.get(103)?.points.map((point) => point.date)).toEqual(['2026-04-01', '2026-04-10']);
+        expect(views.get(103)?.points.find((point) => point.date === '2026-04-10')).toMatchObject({
+            value: 0,
+            missing: true,
+        });
+        expect(views.get(103)?.contextByDate.get('2026-04-10')).toMatchObject({
+            status: 'missing_reference',
+            referenceTargetDate: '2026-04-03',
+            referencePriceDate: '2026-04-03',
+            currentFxDate: '2026-04-10',
+            referenceFxDate: null,
+        });
+
+        expect(views.get(104)).toMatchObject({
+            state: 'unavailable',
+            points: [],
+            contextByDate: new Map(),
+            problem: {
+                code: 'undefined_metric',
+                status: 'unavailable',
+            },
+        });
+    });
+});
 
 describe('formatMonthLabel', () => {
     it('formats a mid-month date as "Month YYYY" in the given locale', () => {
@@ -100,6 +830,62 @@ describe('getBucketInfo', () => {
         const point = {date: '2024-01-03', value: 10, bucketStart: 20240101 as unknown as string};
         const info = getBucketInfo(point as LineDataPoint, 'weekly');
         expect(info).toEqual({bucketStart: '2024-01-01', bucketEnd: '2024-01-03'});
+    });
+});
+
+// ===========================================================================
+// bucketSpanUpTo — the span a coarse point's tooltip header names
+// ===========================================================================
+
+describe('bucketSpanUpTo', () => {
+    /*
+     * A weekly or monthly point is dated by its bucket's last data point (`aggregateLineSeries`,
+     * `aggregateOHLCV`), while `bucketEnd` keeps the bucket's theoretical end: the Sunday, the month's last
+     * day. In a whole bucket the two are one day; in the open one — the week or month still running, a series
+     * that stops inside a period — the point sits on its last data day, and a header spanning to `bucketEnd`
+     * names a day with no data, or one still to come.
+     *
+     * The contract: `bucketSpanUpTo(date, info)` is the span up to the point's own day. When
+     * `info.bucketStart <= date < info.bucketEnd` (ISO string order) it is `{bucketStart, bucketEnd: date}`;
+     * otherwise `info` as it is — a whole bucket (the point on its end), a date outside the bucket, or no day
+     * at all. Pure: the bucket it is given is left untouched.
+     */
+
+    /** The ISO week of Monday 11 March 2024, Sunday 17 included. */
+    const WEEK: BucketInfo = {bucketStart: '2024-03-11', bucketEnd: '2024-03-17'};
+    /** March 2024, the 31st included. */
+    const MONTH: BucketInfo = {bucketStart: '2024-03-01', bucketEnd: '2024-03-31'};
+
+    /** The helper, once a barrier has proved `priceChartHelpers` exports it, next to `getBucketInfo`. */
+    function spanUpTo(date: string, info: BucketInfo): BucketInfo {
+        expect(bucketSpanUpTo, 'barrier: priceChartHelpers exports bucketSpanUpTo').toBeTypeOf('function');
+        return bucketSpanUpTo(date, info);
+    }
+
+    it.each([
+        {name: 'open week, last data on Wed 13', date: '2024-03-13', info: WEEK, span: {bucketStart: '2024-03-11', bucketEnd: '2024-03-13'}},
+        {name: 'open month, last data on the 13th', date: '2024-03-13', info: MONTH, span: {bucketStart: '2024-03-01', bucketEnd: '2024-03-13'}},
+        {name: 'point on its first day: one day', date: '2024-03-11', info: WEEK, span: {bucketStart: '2024-03-11', bucketEnd: '2024-03-11'}},
+    ])('ends the span on the point’s own day — $name', ({date, info, span}) => {
+        expect(spanUpTo(date, info)).toEqual(span);
+    });
+
+    it.each([
+        {name: 'whole week, point on Sunday 17', date: '2024-03-17', info: WEEK},
+        {name: 'whole month, point on the 31st', date: '2024-03-31', info: MONTH},
+        {name: 'a date before the bucket', date: '2024-03-10', info: WEEK},
+        {name: 'a date after the bucket', date: '2024-03-18', info: WEEK},
+        {name: 'no day at all', date: '', info: WEEK},
+    ])('keeps the bucket as it is — $name', ({date, info}) => {
+        expect(spanUpTo(date, info)).toEqual(info);
+    });
+
+    it('leaves the bucket it is given untouched', () => {
+        const info: BucketInfo = {...WEEK};
+
+        spanUpTo('2024-03-13', info);
+
+        expect(info, 'bucketSpanUpTo mutated the bucket it was given').toEqual(WEEK);
     });
 });
 
@@ -458,6 +1244,38 @@ function scatterCtx(dates: string[], values: number[], overrides: Partial<EventS
     };
 }
 
+/** Every calendar day from `start` to `end`, both included: the calendar-filled series the asset and FX pages chart. */
+function calendarDays(start: string, end: string): string[] {
+    const days: string[] = [];
+    const last = Date.parse(`${end}T00:00:00Z`);
+    for (let time = Date.parse(`${start}T00:00:00Z`); time <= last; time += 86_400_000) {
+        days.push(new Date(time).toISOString().slice(0, 10));
+    }
+    return days;
+}
+
+/**
+ * The scatter context PriceChartFull builds at a coarse resolution, from the real aggregation: the
+ * main line through `aggregateLineSeries`, overlays through `downsampleRenderedSignal` (keyed by the
+ * main line's render dates). So a partial bucket renders at its last data point, as on screen.
+ */
+function aggregatedScatterCtx(daily: LineDataPoint[], resolution: ChartResolution, overlays: RenderedSignal[] = []): EventScatterContext {
+    const resolvedLineData = aggregateLineSeries(daily, resolution);
+    const dates = resolvedLineData.map((point) => point.date);
+    const overlayDataByLabel = new Map<string, Map<string, number>>();
+    for (const overlay of overlays) {
+        const downsampled = downsampleRenderedSignal(overlay, resolution, resolvedLineData);
+        if (downsampled.data.length > 0) overlayDataByLabel.set(downsampled.label, new Map(downsampled.data.map((point) => [point.date, point.value])));
+    }
+    return {
+        dateIndexMap: new Map(dates.map((date, index) => [date, index])),
+        resolvedLineData,
+        overlayDataByLabel,
+        bucketInfoByDate: new Map(dates.map((date, index) => [date, getBucketInfo(resolvedLineData[index], resolution)])),
+        baseColor: '#123456',
+    };
+}
+
 describe('buildEventScatterGroups', () => {
     it('groups own-asset markers by type and colours them with the base colour', () => {
         const ctx = scatterCtx(['2024-01-01', '2024-01-02'], [10, 20]);
@@ -535,6 +1353,67 @@ describe('buildEventScatterGroups', () => {
         const groups = buildEventScatterGroups([evm('2024-06-05', 'DIVIDEND')], 'weekly', ctx);
         expect(groups).toHaveLength(0);
     });
+
+    // R-5 (lot 51): an event bucket is keyed by its theoretical bucket end, while the aggregated line
+    // renders each bucket at its last data point. On a calendar-filled series a full bucket's two dates
+    // coincide; the last, partial one's never do (the default range ends today), and its markers vanished.
+
+    it('places an event of the last, partial week on the bar that week renders at (R-5, lot 51)', () => {
+        const ctx = aggregatedScatterCtx(dailyRun(calendarDays('2024-01-01', '2024-01-10')), 'weekly');
+        // Precondition: the open week (Mon 01-08..Wed 01-10) renders at 01-10; its bucket end, Sun 01-14, is no axis date.
+        expect([...ctx.dateIndexMap.keys()]).toEqual(['2024-01-07', '2024-01-10']);
+        const dividend = evm('2024-01-09', 'DIVIDEND');
+        const groups = buildEventScatterGroups([dividend], 'weekly', ctx);
+        expect(groups, 'the marker of the open week vanished').toHaveLength(1);
+        expect(groups[0].points).toEqual([{value: ['2024-01-10', 10], markers: [dividend], bucketInfo: {bucketStart: '2024-01-08', bucketEnd: '2024-01-14'}, bucketValue: 10}]);
+    });
+
+    it('places an event of the current, partial month on the bar that month renders at, beside a full month (R-5, lot 51)', () => {
+        const ctx = aggregatedScatterCtx(dailyRun(calendarDays('2024-01-01', '2024-02-13')), 'monthly');
+        // Precondition: January renders at its bucket end; the open February at its last data point, not at 02-29.
+        expect([...ctx.dateIndexMap.keys()]).toEqual(['2024-01-31', '2024-02-13']);
+        const january = evm('2024-01-15', 'DIVIDEND');
+        const february = evm('2024-02-10', 'DIVIDEND');
+        const groups = buildEventScatterGroups([january, february], 'monthly', ctx);
+        expect(groups).toHaveLength(1);
+        const pointAt = (date: string) => groups[0].points.find((point) => point.value[0] === date);
+        // Guard: a full month renders at its bucket end, so its marker has always been placed.
+        expect(pointAt('2024-01-31')).toEqual({value: ['2024-01-31', 31], markers: [january], bucketInfo: {bucketStart: '2024-01-01', bucketEnd: '2024-01-31'}, bucketValue: 31});
+        expect(pointAt('2024-02-13'), 'the marker of the open month vanished').toEqual({value: ['2024-02-13', 44], markers: [february], bucketInfo: {bucketStart: '2024-02-01', bucketEnd: '2024-02-29'}, bucketValue: 44});
+        expect(groups[0].points).toHaveLength(2);
+    });
+
+    it('places a comparison event of the open week on its overlay, at the bar that week renders at (R-5, lot 51)', () => {
+        // The FX page form: the pair has no events of its own, only those of the comparison asset.
+        const beta: RenderedSignal = {id: 'beta', label: 'Beta', data: calendarDays('2024-01-01', '2024-01-10').map((date, index) => pt(date, (index + 1) * 100)), color: '#ff0000', lineWidth: 1, lineType: 'solid', markerStart: null, markerEnd: null, aggregationProfile: 'last_with_range'};
+        const ctx = aggregatedScatterCtx(dailyRun(calendarDays('2024-01-01', '2024-01-10')), 'weekly', [beta]);
+        // Precondition: the downsampled overlay is keyed by the main line's render dates, with values of its own.
+        expect(ctx.overlayDataByLabel.get('Beta')).toEqual(
+            new Map([
+                ['2024-01-07', 700],
+                ['2024-01-10', 1000],
+            ]),
+        );
+        const event = evm('2024-01-08', 'DIVIDEND', {assetLabel: 'Beta', signalColor: '#ff0000'});
+        const groups = buildEventScatterGroups([event], 'weekly', ctx);
+        expect(groups, 'the comparison marker of the open week vanished').toHaveLength(1);
+        expect(groups[0]).toMatchObject({label: 'Beta DIVIDEND', color: '#ff0000', eventType: 'DIVIDEND'});
+        // On the overlay (1000), not on the main line (10).
+        expect(groups[0].points).toEqual([{value: ['2024-01-10', 1000], markers: [event], bucketInfo: {bucketStart: '2024-01-08', bucketEnd: '2024-01-14'}, bucketValue: 1000}]);
+    });
+
+    it('shows an event dated after the last data point on the bar of its open week, not one of a later week (R-5, lot 51)', () => {
+        // A bar stands for its whole period: the first partial bucket already carries events dated
+        // before its first data point, so the last one carries those dated after its last.
+        const ctx = aggregatedScatterCtx(dailyRun(calendarDays('2024-01-01', '2024-01-10')), 'weekly');
+        expect([...ctx.dateIndexMap.keys()]).toEqual(['2024-01-07', '2024-01-10']);
+        const friday = evm('2024-01-12', 'DIVIDEND');
+        const nextMonday = evm('2024-01-15', 'DIVIDEND');
+        const groups = buildEventScatterGroups([friday, nextMonday], 'weekly', ctx);
+        expect(groups, 'the marker of the open week vanished').toHaveLength(1);
+        // Guard: a week with no data point renders no bar, so its event stays off the chart (as off-axis days do).
+        expect(groups[0].points).toEqual([{value: ['2024-01-10', 10], markers: [friday], bucketInfo: {bucketStart: '2024-01-08', bucketEnd: '2024-01-14'}, bucketValue: 10}]);
+    });
 });
 
 // ===========================================================================
@@ -550,10 +1429,13 @@ describe('buildDeltaHtml', () => {
         expect(buildDeltaHtml(-2.5, 0, true)).toContain('(Δ -2.50%)');
     });
 
-    it('exactly 0 counts as non-negative (green, + sign)', () => {
+    it('exactly 0 counts as non-negative: green, and no sign (M-18)', () => {
         const html = buildDeltaHtml(0, 0, true);
         expect(html).toContain('#10b981');
-        expect(html).toContain('(Δ +0.00%)');
+        // Why (re-pin, M-18 CP2): the delta goes through `formatPercent`, whose rule (CP1) is that a zero
+        // is not a gain: `(Δ +0.00%)` becomes `(Δ 0.00%)`. The colour is unchanged.
+        expect(html).toContain('(Δ 0.00%)');
+        expect(html).not.toContain('+');
     });
 
     it('shows both the absolute and percentage delta in absolute view', () => {
@@ -571,7 +1453,9 @@ describe('buildDeltaHtml', () => {
 
     it('reports a 0% relative delta when the first value is 0 (no divide-by-zero)', () => {
         const html = buildDeltaHtml(10, 0, false);
-        expect(html).toContain('(Δ +10.0000 / +0.00%)');
+        // Why (re-pin, M-18 CP2): the relative delta goes through `formatPercent`, and a zero carries no
+        // `+` (CP1): `+0.00%` becomes `0.00%`. The absolute delta keeps its `+`: it is a gain.
+        expect(html).toContain('(Δ +10.0000 / 0.00%)');
     });
 });
 
@@ -631,5 +1515,155 @@ describe('formatTruncatedGhostLabel', () => {
     it('truncates the whole string when it does not match the ghost shape', () => {
         const plain = 'Z'.repeat(40);
         expect(formatTruncatedGhostLabel(plain)).toBe(`${'Z'.repeat(29)}…`);
+    });
+});
+
+// ===========================================================================
+// splitGhostLabel — the ghost label's name and currency, apart and uncut (K step 16, item 1)
+// ===========================================================================
+
+/**
+ * The tooltip's ghost row — the asset in its original currency, while a conversion is active — reads
+ * `💱 Name (🇺🇸 USD)`. Today `formatTruncatedGhostLabel` cuts the name at 30 characters in JS and keeps the currency
+ * whole. In the fitted tooltip (`buildFittedTooltipRow`) the label item's CSS ellipsis does the cut, and the currency
+ * travels with the value, in the item that never shrinks: the tooltip needs the two parts apart, and the name whole.
+ * Same regex as `formatTruncatedGhostLabel` (`^💱\s*(.+?)\s*(\([^)]+\))$`), so both agree on what a ghost label is.
+ */
+describe('splitGhostLabel — the name and the currency apart, nothing cut (K step 16, item 1)', () => {
+    it('splits `💱 Name (flag CUR)` into the 💱 name and the currency parenthetical', () => {
+        expect(splitGhostLabel('💱 Some Name (🇺🇸 USD)')).toEqual({name: '💱 Some Name', currency: '(🇺🇸 USD)'});
+    });
+
+    it.each([
+        {why: 'a plain name', label: 'Apple Inc.'},
+        {why: 'a 💱 name with no parenthetical', label: '💱 Apple'},
+        {why: 'a 40-character name, not cut either', label: 'Z'.repeat(40)},
+    ])('returns a label with no currency parenthetical unchanged, with no currency — $why', ({label}) => {
+        expect(splitGhostLabel(label)).toEqual({name: label, currency: null});
+    });
+
+    it('never truncates the name — the tooltip CSS does, where formatTruncatedGhostLabel cut it at 30 characters', () => {
+        const longName = 'A'.repeat(40);
+        expect(splitGhostLabel(`💱 ${longName} (🇺🇸 USD)`)).toEqual({name: `💱 ${longName}`, currency: '(🇺🇸 USD)'});
+    });
+
+    it("keeps the name's own parentheses in the name: only the last parenthetical is the currency", () => {
+        expect(splitGhostLabel('💱 iShares Core MSCI World (Acc) (🇺🇸 USD)')).toEqual({name: '💱 iShares Core MSCI World (Acc)', currency: '(🇺🇸 USD)'});
+    });
+
+    it.each(['💱 Apple (🇺🇸 USD)', '💱 iShares World (Acc) (🇪🇺 EUR)', '💱 Apple', 'Apple (🇺🇸 USD)', 'Apple'])('agrees with formatTruncatedGhostLabel on what a ghost label is: rejoined, a label too short to cut reads the same — %s', (label) => {
+        const {name, currency} = splitGhostLabel(label);
+        expect(currency === null ? name : `${name} ${currency}`).toBe(formatTruncatedGhostLabel(label));
+    });
+});
+
+/**
+ * M-18 CP2: the tooltip delta and the month label in the interface language.
+ *
+ * `buildDeltaHtml` writes the `(Δ …)` suffix of the main tooltip row with `toFixed`, so a French reader
+ * gets `(Δ +2.50%)` beside amounts written `1 234,50`; `formatMonthLabel`, called without a locale — as
+ * PriceChartFull's tooltip header calls it — writes the month in the machine's language instead of the
+ * interface's. Every figure follows the interface language (the developer's decision M-18, 2026-10-12):
+ *
+ *   - percentage view: `(Δ ${formatPercent(value)})`;
+ *   - absolute view: `(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${formatPercent(deltaPct)})`;
+ *   - the colours stay derived from the sign, a zero green;
+ *   - `formatMonthLabel(date)` defaults to the interface locale; an explicit locale still wins.
+ *
+ * Expectations come from `formatPercent`/`formatFixed` and `Intl.DateTimeFormat` given an explicit
+ * locale, never typed; each case checks that the language under test differs from English, so a runtime
+ * without its data cannot make the comparison vacuous.
+ */
+describe('buildDeltaHtml and formatMonthLabel in the interface language (M-18)', () => {
+    const FR = {locale: 'fr'} as const;
+    const GREEN = '#10b981';
+    const RED = '#ef4444';
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'it' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    /** What a delta suffix shows: the colour it is painted in and its `(Δ …)` text. */
+    function deltaOf(html: string): {color: string; text: string} {
+        const match = /color:\s*(#[0-9a-f]{3,8})[^>]*>([^<]*)</i.exec(html);
+        return {color: match?.[1] ?? `(no colour in ${html})`, text: match?.[2] ?? `(no text in ${html})`};
+    }
+
+    /** The month as `Intl` writes it in `locale`, with the options and the UTC anchor `formatMonthLabel` uses. */
+    function monthIn(locale: string, date: string): string {
+        return new Intl.DateTimeFormat(locale, {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${date}T00:00:00Z`));
+    }
+
+    it('French UI, percentage view: the delta is a French percentage — `+` on a gain, none on a zero — in the colour of its sign', async () => {
+        await uiLanguage('fr');
+        const cases = [
+            {value: 2.5, color: GREEN},
+            {value: -2.5, color: RED},
+            {value: 0, color: GREEN},
+            {value: 1234.5, color: GREEN},
+        ];
+        const expected = cases.map(({value, color}) => ({color, text: `(Δ ${formatPercent(value, FR)})`}));
+        // Control: this runtime carries French data, so the French text is not today's English one.
+        expect(expected[0].text, 'French differs from English').not.toBe('(Δ +2.50%)');
+
+        expect(
+            cases.map(({value}) => deltaOf(buildDeltaHtml(value, 0, true))),
+            spelled(expected),
+        ).toEqual(expected);
+    });
+
+    it('French UI, absolute view: the absolute delta with four decimals and its sign, the relative one as a French percentage', async () => {
+        await uiLanguage('fr');
+        const cases = [
+            {value: 110, first: 100, color: GREEN},
+            {value: 90, first: 100, color: RED},
+            {value: 10, first: 0, color: GREEN},
+            {value: 2234.5, first: 1000, color: GREEN},
+        ];
+        // The two deltas as the helper computes them: the difference, and its share of the first value
+        // (0 when there is none).
+        const expected = cases.map(({value, first, color}) => {
+            const deltaPct = first !== 0 ? ((value - first) / first) * 100 : 0;
+            return {color, text: `(Δ ${formatFixed(value - first, 4, {signed: true, ...FR})} / ${formatPercent(deltaPct, FR)})`};
+        });
+        expect(expected[0].text, 'French differs from English').not.toBe('(Δ +10.0000 / +10.00%)');
+
+        expect(
+            cases.map(({value, first}) => deltaOf(buildDeltaHtml(value, first, false))),
+            spelled(expected),
+        ).toEqual(expected);
+    });
+
+    it('without a locale, the month label is written in the interface language — French, then Italian — not the machine’s', async () => {
+        const written: Record<string, string> = {};
+        for (const lang of ['fr', 'it'] as const) {
+            await uiLanguage(lang);
+            written[lang] = formatMonthLabel('2024-01-15');
+        }
+        const expected = {fr: monthIn('fr', '2024-01-15'), it: monthIn('it', '2024-01-15')};
+        // Control: both languages name the month differently from English.
+        expect(Object.values(expected), 'French and Italian differ from English').not.toContain(monthIn('en-US', '2024-01-15'));
+
+        expect(written).toEqual(expected);
+    });
+
+    it('English UI on an en-US browser: the month label without a locale is today’s English; an explicit locale still wins in French', async () => {
+        await uiLanguage('en');
+        expect(formatMonthLabel('2024-01-15')).toBe('January 2024');
+
+        await uiLanguage('fr');
+        expect(formatMonthLabel('2024-01-15', 'de-DE')).toBe('Januar 2024');
     });
 });

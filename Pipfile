@@ -30,7 +30,6 @@ pycountry = "*"
 mkdocs = ">=1.6,<2"
 mkdocs-material = "*"
 websockets = "*"
-uvicorn = "*"
 starlette = "*"
 mergedeep = "*"
 websocket-client = "*"
@@ -50,9 +49,11 @@ riskfolio-lib = "==7.0.1"
 justetf-scraping = {git = "https://github.com/Librefolio/justetf-scraping.git", ref = "main"}
 xlrd = "*"
 openpyxl = "*"
-borsa-italiana-scraping = {git = "https://github.com/Librefolio/borsaItaliana-scraping.git", ref = "main"}
 ddgs = "*"
 pyyaml = "==6.0.3"
+pyscipopt = "==6.2.1"
+borsa-italiana-scraping = {ref = "main", git = "https://github.com/Librefolio/borsaItaliana-scraping.git"}
+uvicorn = {extras = ["standard"], version = "==0.52.4"}
 
 [dev-packages]
 pytest = "*"

@@ -24,7 +24,7 @@ Esto es simplemente un rendimiento porcentual de $N$ períodos, reexpresado como
 
 | Parámetro | Clave | Predeterminado | Descripción |
 |---|---|---|---|
-| Período ($N$) | `period` | 12 | Número de días hacia atrás utilizado como precio de referencia. |
+| Período ($N$) | `period` | 12 | Número de sesiones hacia atrás utilizado como precio de referencia. |
 
 ---
 
@@ -40,11 +40,11 @@ A diferencia de MACD (que resta dos salidas de *pase bajo* para aproximar una de
 
 ```mermaid
 flowchart LR
- C0["💹 C(t−N)"] --> DIFF["➖ C(t) − C(t−N)"]
- C1["💹 C(t)"] --> DIFF
- DIFF --> NORM["➗ ÷ C(t−N)"]
- NORM --> SCALE["✖️ ×100"]
- SCALE --> ROC["🚀 ROC(t)"]
+    C0["💹 C(t−N)"] --> DIFF["➖ C(t) − C(t−N)"]
+    C1["💹 C(t)"] --> DIFF
+    DIFF --> NORM["➗ ÷ C(t−N)"]
+    NORM --> SCALE["✖️ ×100"]
+    SCALE --> ROC["🚀 ROC(t)"]
 ```
 
 !!! warning "Amplificación de ruido"
@@ -53,4 +53,4 @@ flowchart LR
     muy irregular. A menudo se utiliza con un $N$ más largo, o se pasa a través de un promedio
     móvil adicional, cuando se necesita una lectura de impulso más limpia.
 
-:material-link: [Rate of change (technology) on Wikipedia](https://en.wikipedia.org/wiki/Momentum_(technical_analysis)){ target="_blank" }
+:material-link: [Tasa de variación (análisis técnico) en Wikipedia](https://en.wikipedia.org/wiki/Momentum_(technical_analysis)){ target="_blank" }

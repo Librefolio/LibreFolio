@@ -20,45 +20,60 @@ These tests do NOT require a database connection.
 
 from __future__ import annotations
 
+import ast
+import atexit
+import csv
+import io
 import re
+import shutil
+import tempfile
+import unicodedata
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from enum import Enum
 from pathlib import Path
-from typing import List, Set
+from typing import Any, List, Set
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import BaseModel
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import (
+    COMBINED_REQUIRED_HEADERS,
+    BRIMCombinedTable,
     BRIMExtractedAssetInfo,
     BRIMNotice,
     BRIMParseOutput,
     BRIMPluginInfo,
+    BRIMRefusal,
     is_fake_asset_id,
 )
 from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.brim_providers import broker_credit_agricole as ca
+from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, write_combined_csv
 from backend.app.services.brim_providers._brim_io import MATURITY_NOTICE_KIND, model_bond_maturity, read_rows
-from backend.app.services.brim_providers.broker_coinbase import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
-from backend.app.services.brim_providers.broker_credit_agricole import CreditAgricoleBrokerProvider
-from backend.app.services.brim_providers.broker_degiro import DegiroBrokerProvider, _extract_quantity_from_description, _parse_degiro_date
-from backend.app.services.brim_providers.broker_directa import DirectaBrokerProvider, _parse_directa_date, _parse_directa_number
-from backend.app.services.brim_providers.broker_etoro import EtoroBrokerProvider, _parse_etoro_date, _parse_etoro_number
-from backend.app.services.brim_providers.broker_fineco import FinecoBrokerProvider
-from backend.app.services.brim_providers.broker_finpension import FinpensionBrokerProvider, _parse_finpension_date, _parse_finpension_number
-from backend.app.services.brim_providers.broker_freetrade import FreetradeBrokerProvider, _parse_freetrade_datetime, _parse_freetrade_number
-from backend.app.services.brim_providers.broker_generic_csv import parse_decimal
-from backend.app.services.brim_providers.broker_ibkr import IBKRBrokerProvider, _parse_ibkr_date, _parse_ibkr_number
-from backend.app.services.brim_providers.broker_intesa import IntesaSanpaoloBrokerProvider
-from backend.app.services.brim_providers.broker_revolut import RevolutBrokerProvider, _parse_revolut_amount, _parse_revolut_datetime, _parse_revolut_quantity
-from backend.app.services.brim_providers.broker_schwab import SchwabBrokerProvider, _parse_schwab_amount, _parse_schwab_date
-from backend.app.services.brim_providers.broker_trading212 import Trading212BrokerProvider, _parse_trading212_datetime, _parse_trading212_number
-from backend.app.services.portfolio_engine import ClassifiedTransaction, DailyStateBuilder
-from backend.app.services.price_resolver import build_asset_price_series
+from backend.app.services.brim_providers.broker_coinbase.plugin import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
+from backend.app.services.brim_providers.broker_credit_agricole import plugin as ca
+from backend.app.services.brim_providers.broker_credit_agricole.plugin import CreditAgricoleBrokerProvider
+from backend.app.services.brim_providers.broker_degiro.plugin import DegiroBrokerProvider, _extract_quantity_from_description, _parse_degiro_date
+from backend.app.services.brim_providers.broker_directa.plugin import DirectaBrokerProvider, _parse_directa_date, _parse_directa_number
+from backend.app.services.brim_providers.broker_etoro.plugin import EtoroBrokerProvider, _parse_etoro_date, _parse_etoro_number
+from backend.app.services.brim_providers.broker_fineco.plugin import FinecoBrokerProvider
+from backend.app.services.brim_providers.broker_finpension.plugin import FinpensionBrokerProvider, _parse_finpension_date, _parse_finpension_number
+from backend.app.services.brim_providers.broker_freetrade.plugin import FreetradeBrokerProvider, _parse_freetrade_datetime, _parse_freetrade_number
+from backend.app.services.brim_providers.broker_generic_csv.plugin import GenericCSVBrokerProvider, parse_decimal
+from backend.app.services.brim_providers.broker_ibkr.plugin import IBKRBrokerProvider, _parse_ibkr_date, _parse_ibkr_number
+from backend.app.services.brim_providers.broker_intesa.plugin import IntesaSanpaoloBrokerProvider
+from backend.app.services.brim_providers.broker_revolut.plugin import RevolutBrokerProvider, _parse_revolut_amount, _parse_revolut_datetime, _parse_revolut_quantity
+from backend.app.services.brim_providers.broker_schwab.plugin import SchwabBrokerProvider, _parse_schwab_amount, _parse_schwab_date
+from backend.app.services.brim_providers.broker_trading212.plugin import Trading212BrokerProvider, _parse_trading212_datetime, _parse_trading212_number
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
+from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.app.services.provider_registry import BRIMProviderRegistry
+from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
 # CONSTANTS & HELPERS
@@ -68,8 +83,12 @@ SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / 
 DEGIRO_SAMPLE = SAMPLE_DIR / "degiro-export.csv"
 DIRECTA_SAMPLE = SAMPLE_DIR / "directa-export.csv"
 CA_SAMPLE = SAMPLE_DIR / "credit_agricole-export.csv"
+CA_SAMPLE_XLSX = SAMPLE_DIR / "credit_agricole-export.xlsx"
 CA_CONTI_SAMPLE = SAMPLE_DIR / "credit_agricole-conti.csv"
+CA_CONTI_SAMPLE_XLSX = SAMPLE_DIR / "credit_agricole-conti.xlsx"
 INTESA_PATRIMONIO_SAMPLE = SAMPLE_DIR / "intesa-patrimonio.csv"
+INTESA_LISTA_SAMPLE = SAMPLE_DIR / "intesa-lista.csv"
+ETORO_SAMPLE = SAMPLE_DIR / "etoro-export.csv"
 FINPENSION_SAMPLE = SAMPLE_DIR / "finpension-export.csv"
 IBKR_SAMPLE = SAMPLE_DIR / "ibkr-trades-export.csv"
 IBKR_DEFAULT_CURRENCY_SAMPLE = SAMPLE_DIR / "ibkr-default-currency-export.csv"
@@ -112,8 +131,54 @@ def get_all_sample_files() -> List[Path]:
     return files
 
 
+def _sample_sets(plugin: BRIMProvider) -> list:
+    """A report-set plugin's ``test_sample_sets``: one ``{role: [sample names]}`` per set (``[]`` if it declares none)."""
+    return list(getattr(plugin, "test_sample_sets", None) or [])
+
+
+def _set_members(sample_set: dict) -> dict:
+    """``{role: [paths]}`` of one declared sample set, as ``combine`` takes it."""
+    return {role: [SAMPLE_DIR / name for name in names] for role, names in sample_set.items()}
+
+
+_COMBINED_SAMPLE_DIR: List[Path] = []
+_COMBINED_SAMPLES: dict = {}
+
+
+def _combined_sample(plugin: BRIMProvider, position: int) -> Path:
+    """The combined file of ``plugin.test_sample_sets[position]``.
+
+    Combined by the plugin and written by the core (``write_combined_csv``), as the
+    set API does, into a temporary folder kept for the whole session: the tests that
+    parse samples read it like any other sample file.
+    """
+    key = (plugin.provider_code, position)
+    if key not in _COMBINED_SAMPLES:
+        if not _COMBINED_SAMPLE_DIR:
+            folder = Path(tempfile.mkdtemp(prefix="lf-brim-combined-samples-"))
+            atexit.register(shutil.rmtree, folder, True)
+            _COMBINED_SAMPLE_DIR.append(folder)
+        table = plugin.combine(_set_members(_sample_sets(plugin)[position]))
+        path = _COMBINED_SAMPLE_DIR[0] / f"{plugin.provider_code}-set{position + 1}-combined.csv"
+        write_combined_csv(path, table)
+        _COMBINED_SAMPLES[key] = path
+    return _COMBINED_SAMPLES[key]
+
+
+def _combined_samples_for(plugin: BRIMProvider) -> List[Path]:
+    """Every combined sample of a report-set plugin, one per declared set."""
+    return [_combined_sample(plugin, position) for position in range(len(_sample_sets(plugin)))]
+
+
 def get_sample_files_for_plugin(plugin: BRIMProvider) -> List[Path]:
-    """Get sample files that a plugin can parse."""
+    """Get sample files that a plugin can parse.
+
+    A report-set plugin (non-empty ``report_roles``) parses combined files only: its
+    samples are the combined files built from its ``test_sample_sets``, never the
+    members, which it refuses on their own by design.
+    """
+    if plugin.report_roles:
+        return _combined_samples_for(plugin)
     if not SAMPLE_DIR.exists():
         return []
     return [f for f in SAMPLE_DIR.glob("*.csv") if plugin.can_parse(f)]
@@ -160,12 +225,58 @@ def _all_samples_for_plugin(plugin: BRIMProvider) -> List[Path]:
 
 
 def _representative_samples(plugin: BRIMProvider) -> List[Path]:
-    """All samples to exercise for a plugin: every declared variant, else one fallback."""
+    """All samples to exercise for a plugin: every declared variant, else one fallback.
+
+    A report-set plugin: the combined file of each of its sample sets, never a member.
+    """
+    if plugin.report_roles:
+        return _combined_samples_for(plugin)
     samples = _all_samples_for_plugin(plugin)
     if samples:
         return samples
     single = _first_sample_for_plugin(plugin)
     return [single] if single else []
+
+
+def _json_safe(value: Any) -> Any:
+    """Recursively normalize a parsed BRIM value into JSON-comparable primitives.
+
+    ``Decimal`` -> ``str`` (exact, never a binary-rounded float), ``date`` -> ISO
+    string, ``Enum`` -> its ``.value``, a pydantic model -> its (recursively
+    normalized) field dict, dict/list/tuple -> recursed. Used to compare two
+    ``BRIMParseOutput`` trees (e.g. a CSV read against an XLSX read of the same
+    sample) for structural equality regardless of which concrete Python type a
+    given source format happened to produce for a cell (native XLSX number vs.
+    CSV string, etc.) — the comparison is on shape and value, not on type identity.
+    """
+    if isinstance(value, BaseModel):
+        return _json_safe(value.model_dump())
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
+def _normalize_ca_xlsx_evidence_row_numbers(value: Any, offset: int) -> Any:
+    """Normalize only CA's documented XLSX source-evidence row offset.
+
+    The XLSX securities export has nine presentation rows before the CSV header;
+    the account layouts have no offset.  Every other field remains part of the
+    comparison, including messages, contexts, reasons, ordering and fake IDs.
+    """
+    normalized = _json_safe(value)
+    if isinstance(normalized, dict):
+        return {key: ([row_number - offset for row_number in item] if key == "row_numbers" else _normalize_ca_xlsx_evidence_row_numbers(item, offset)) for key, item in normalized.items()}
+    if isinstance(normalized, list):
+        return [_normalize_ca_xlsx_evidence_row_numbers(item, offset) for item in normalized]
+    return normalized
 
 
 # =============================================================================
@@ -380,6 +491,104 @@ class TestBRIMPlugin:
 
 
 # =============================================================================
+# CATEGORY 2a: REPORT-SET PLUGINS — sample sets, members, combine, combined files
+# =============================================================================
+
+_REPORT_SET_PARAMS = [(code, plugin) for code, plugin in _PLUGIN_PARAMS if plugin.report_roles]
+_REPORT_SET_IDS = [code for code, _ in _REPORT_SET_PARAMS]
+
+
+class TestReportSetSamplesExist:
+    """Guard: the report-set suite below runs on at least one plugin, so it is never green by being empty."""
+
+    def test_a_report_set_plugin_declares_sample_sets(self):
+        declaring = sorted(code for code, plugin in _PLUGIN_PARAMS if plugin.report_roles and _sample_sets(plugin))
+
+        assert declaring, "No registered BRIM plugin declares report roles and test_sample_sets: TestReportSetPlugin runs on nothing (BRIM report sets, phase B: Danske Bank)"
+
+
+@pytest.mark.parametrize(("code", "plugin"), _REPORT_SET_PARAMS, ids=_REPORT_SET_IDS)
+class TestReportSetPlugin:
+    """Every report-set plugin (non-empty ``report_roles``), on every sample set it declares.
+
+    A member is never parsed alone: the set is combined by the plugin, written by the
+    core, and the combined file is parsed. ``TestBRIMPlugin`` then applies its usual
+    checks to those combined files (see ``_representative_samples``).
+    """
+
+    def test_declared_samples_exist(self, code: str, plugin: BRIMProvider):
+        sets = _sample_sets(plugin)
+        roles = {role.code: role for role in plugin.report_roles}
+
+        assert sets, f"{code} declares report roles but no test_sample_sets"
+        for position, sample_set in enumerate(sets):
+            assert set(sample_set) <= set(roles), f"{code} set {position}: unknown roles {sorted(set(sample_set) - set(roles))}"
+            assert {name for name, role in roles.items() if role.required} <= {name for name, files in sample_set.items() if files}, f"{code} set {position} lacks a required role"
+            missing = [name for names in sample_set.values() for name in names if not (SAMPLE_DIR / name).is_file()]
+            assert not missing, f"{code} set {position}: not in sample_reports/: {missing}"
+
+    def test_members_are_recognised_with_their_role(self, code: str, plugin: BRIMProvider):
+        for sample_set in _sample_sets(plugin):
+            for role, names in sample_set.items():
+                for name in names:
+                    path = SAMPLE_DIR / name
+                    assert plugin.detect_role(path) == role, f"{code}: {name}"
+                    assert plugin.can_parse(path) is True, f"{code}: {name}"
+                    assert BRIMProviderRegistry.auto_detect_plugin(path) == code, f"{code}: {name}"
+
+    def test_members_are_described(self, code: str, plugin: BRIMProvider):
+        for sample_set in _sample_sets(plugin):
+            for role, names in sample_set.items():
+                for name in names:
+                    summary = plugin.describe_member(SAMPLE_DIR / name)
+                    assert summary.role == role, f"{code}: {name}"
+                    assert summary.rows > 0 and summary.coverage, f"{code}: {name} has no rows or no coverage"
+
+    def test_every_set_has_a_segment(self, code: str, plugin: BRIMProvider):
+        for position, sample_set in enumerate(_sample_sets(plugin)):
+            assert plugin.describe_set(_set_members(sample_set)).segments, f"{code} set {position}"
+
+    def test_combine_is_pure_and_well_formed(self, code: str, plugin: BRIMProvider):
+        for position, sample_set in enumerate(_sample_sets(plugin)):
+            members = _set_members(sample_set)
+            before = {path: path.read_bytes() for paths in members.values() for path in paths}
+
+            first, second = plugin.combine(members), plugin.combine(_set_members(sample_set))
+
+            assert isinstance(first, BRIMCombinedTable), f"{code} set {position}"
+            assert set(COMBINED_REQUIRED_HEADERS) <= set(first.headers) and first.rows, f"{code} set {position}"
+            assert (first.headers, first.rows, first.summary) == (second.headers, second.rows, second.summary), f"{code} set {position}: combine is not pure"
+            assert {path: path.read_bytes() for path in before} == before, f"{code} set {position}: combine changed a member"
+
+    def test_combined_files_are_recognised_without_a_role(self, code: str, plugin: BRIMProvider):
+        for path in _combined_samples_for(plugin):
+            assert plugin.can_parse(path) is True, path.name
+            assert plugin.detect_role(path) is None, path.name
+            assert BRIMProviderRegistry.auto_detect_plugin(path) == code, path.name
+
+    def test_a_member_alone_is_refused(self, code: str, plugin: BRIMProvider):
+        for sample_set in _sample_sets(plugin):
+            for names in sample_set.values():
+                for name in names:
+                    with pytest.raises(BRIMSetRequiredError):
+                        plugin.parse(SAMPLE_DIR / name, broker_id=1)
+
+    def test_combined_parse_contract(self, code: str, plugin: BRIMProvider):
+        """Positions point at extracted assets; every transaction carries ``import`` and the history tag; one opening, the earliest."""
+        for path in _combined_samples_for(plugin):
+            out = plugin.parse(path, broker_id=1)
+
+            positions = {position.asset_id for checkpoint in out.checkpoints for position in checkpoint.positions}
+            assert positions <= set(out.extracted_assets), f"{path.name}: positions on assets that were not extracted: {positions - set(out.extracted_assets)}"
+            untagged = [tx.description for tx in out.transactions if not {"import", plugin.history_tag} <= set(tx.tags or [])]
+            assert not untagged, f"{path.name}: transactions without the import and {plugin.history_tag!r} tags: {untagged}"
+            kinds = [checkpoint.kind for checkpoint in out.checkpoints]
+            assert kinds.count("opening") == 1, f"{path.name}: checkpoint kinds {kinds}"
+            opening = next(checkpoint for checkpoint in out.checkpoints if checkpoint.kind == "opening")
+            assert opening.as_of == min(checkpoint.as_of for checkpoint in out.checkpoints), path.name
+
+
+# =============================================================================
 # CATEGORY 2b: MALFORMED INPUT — parser-level warnings (not parametrized)
 # =============================================================================
 
@@ -452,6 +661,29 @@ class TestAutoDetection:
 # CATEGORY 4: GENERIC CSV SPECIFIC TESTS (not parametrized)
 # =============================================================================
 
+GENERIC_CSV_CODE = "broker_generic_csv"
+
+
+def _header_names_date_and_type(path: Path) -> bool:
+    """Decision 1 of workstream L, step G, restated as an oracle: the first row of ``path`` names a ``date`` and a ``type`` column.
+
+    The row is read the way the plugin reads its files — ``BRIMProvider._open_text`` (UTF-8 with or
+    without BOM, then Windows-1252, then Latin-1) split on ``BRIMProvider.detect_csv_delimiter`` — and
+    mapped by the plugin's own ``_detect_columns`` (case-insensitive, trimmed, any alias of
+    ``HEADER_MAPPINGS``): exactly the two columns ``parse`` requires before it reads a single row.
+    """
+    try:
+        with BRIMProvider._open_text(path) as handle:
+            header = next(csv.reader(handle, delimiter=BRIMProvider.detect_csv_delimiter(path)), None) or []
+    except Exception:
+        return False
+    return {"date", "type"} <= set(GenericCSVBrokerProvider()._detect_columns(header))
+
+
+_CSV_SAMPLES = sorted(sample for sample in get_all_sample_files() if sample.suffix.lower() == ".csv")
+_CSV_SAMPLES_WITH_DATE_AND_TYPE = [sample for sample in _CSV_SAMPLES if _header_names_date_and_type(sample)]
+_CSV_SAMPLES_WITHOUT_DATE_AND_TYPE = [sample for sample in _CSV_SAMPLES if not _header_names_date_and_type(sample)]
+
 
 class TestGenericCSVPlugin:
     """Specific tests for the generic CSV fallback plugin."""
@@ -468,15 +700,21 @@ class TestGenericCSVPlugin:
             filepath = SAMPLE_DIR / filename
             assert filepath.exists(), f"Required generic sample file missing: {filename}"
 
-    def test_generic_can_parse_any_csv(self):
-        plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
+    def test_generic_can_parse_every_csv_sample_with_date_and_type(self):
+        """Every CSV sample whose first row names a ``date`` and a ``type`` column is the generic plugin's.
+
+        Was ``test_generic_can_parse_any_csv``, which held the generic plugin to every CSV sample. Decision 1
+        of workstream L, step G (issue #26) — the generic CSV declares only what it can read — reverses it
+        for the samples without those two columns: what survives of the old test is here, and the refusal
+        of the rest is ``TestGenericCSVDeclaresOnlyWhatItReads``. Binary spreadsheets stay out, as before.
+        """
+        plugin = BRIMProviderRegistry.get_provider_instance(GENERIC_CSV_CODE)
         assert plugin is not None
-        for sample_file in get_all_sample_files():
-            if sample_file.suffix.lower() != ".csv":
-                # The generic plugin is a CSV catch-all and intentionally rejects
-                # binary spreadsheet samples (see GenericCSVBrokerProvider.can_parse).
-                continue
-            assert plugin.can_parse(sample_file), f"Generic plugin should parse {sample_file.name}"
+        readable = {sample.name for sample in _CSV_SAMPLES_WITH_DATE_AND_TYPE}
+        # Positive control: the oracle still finds the generic samples, so the check below never passes on nothing.
+        assert set(self.REQUIRED_GENERIC_FILES) <= readable, f"The oracle finds no date and type column in {sorted(set(self.REQUIRED_GENERIC_FILES) - readable)}: it reads the headers wrong"
+        refused = [sample.name for sample in _CSV_SAMPLES_WITH_DATE_AND_TYPE if not plugin.can_parse(sample)]
+        assert not refused, f"Generic plugin should parse these CSV samples, whose header names a date and a type column: {refused}"
 
     def test_generic_handles_multiple_date_formats(self):
         plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
@@ -499,6 +737,464 @@ class TestGenericCSVPlugin:
     def test_generic_has_no_test_file_pattern(self):
         plugin = BRIMProviderRegistry.get_provider_instance("broker_generic_csv")
         assert plugin.test_file_pattern is None
+
+
+# =============================================================================
+# CATEGORY 4b: THE GENERIC CSV DECLARES ONLY WHAT IT CAN READ (workstream L, step G — decision 1)
+# =============================================================================
+
+
+def _generic_plugin() -> BRIMProvider:
+    plugin = BRIMProviderRegistry.get_provider_instance(GENERIC_CSV_CODE)
+    assert plugin is not None, f"{GENERIC_CSV_CODE} is not registered"
+    return plugin
+
+
+# Headers that name both required columns, through the aliases of several languages, on both delimiters.
+# Two data rows each, so that the delimiter sniffing reads a table and not a single line.
+_HEADERS_WITH_DATE_AND_TYPE = [
+    pytest.param("generic.csv", b"date,type,quantity,amount,currency\n2025-01-03,BUY,10,-1000.00,EUR\n2025-01-04,DEPOSIT,0,500.00,EUR\n", id="english-comma"),
+    pytest.param("movimenti.csv", b"data;tipo;importo;valuta\n2025-01-03;acquisto;-1000,00;EUR\n2025-01-04;deposito;500,00;EUR\n", id="italian-semicolon"),
+    pytest.param("movimientos.csv", b"Fecha;Tipo;Cantidad;Importe\n03/01/2025;compra;10;-1000,00\n04/01/2025;deposito;0;500,00\n", id="spanish-semicolon"),
+    pytest.param("umsaetze.csv", "Datum,Action,Betrag,Währung\n03.01.2025,buy,-1000.00,EUR\n04.01.2025,deposit,500.00,EUR\n".encode(), id="german-comma-utf8"),
+    pytest.param("export.csv", b" SETTLEMENT_DATE ; Transaction_Type ; AMOUNT \n2025-01-03;BUY;-1000.00\n2025-01-04;DEPOSIT;500.00\n", id="upper-case-padded"),
+    pytest.param("export.csv", b"Konto,Foo,date,Bar,type,Baz\nX,1,2025-01-03,2,BUY,3\nY,4,2025-01-04,5,DEPOSIT,6\n", id="extra-unknown-columns"),
+    pytest.param("export.csv", b'"Date","Type","Amount"\n"2025-01-03","BUY","-1000.00"\n"2025-01-04","DEPOSIT","500.00"\n', id="quoted-header"),
+    pytest.param("export.csv", "data;tipo;importo\n2025-01-03;acquisto;-1000,00\n2025-01-04;deposito;500,00\n".encode("utf-8-sig"), id="utf8-bom"),
+    pytest.param("EXPORT.CSV", b"date,type,amount\n2025-01-03,BUY,-1000.00\n2025-01-04,DEPOSIT,500.00\n", id="upper-case-extension"),
+]
+
+# Headers that miss one required column or both: the plugin's parse could only fail on them. Each one carries the
+# required columns it misses, written by hand (step G.5 checks the sentence that names them): never computed by
+# ``_detect_columns``, which is the code under test.
+_HEADERS_MISSING_DATE_OR_TYPE = [
+    pytest.param(b"date,amount,currency\n2025-01-03,-1000.00,EUR\n2025-01-04,500.00,EUR\n", ("type",), id="only-date"),
+    pytest.param(b"type;amount;currency\nBUY;-1000,00;EUR\nDEPOSIT;500,00;EUR\n", ("date",), id="only-type"),
+    pytest.param(b"foo,bar\n1,2\n3,4\n", ("date", "type"), id="neither"),
+    pytest.param(b"date,trade_date,amount\n2025-01-03,2025-01-03,-1000.00\n2025-01-04,2025-01-04,500.00\n", ("type",), id="two-date-columns-no-type"),
+    # The header row is the first row, for parse as for the README of the samples: a preamble hides it.
+    pytest.param(b"Account: 12345,,\ndate,type,amount\n2025-01-03,BUY,-1000.00\n2025-01-04,DEPOSIT,500.00\n", ("date", "type"), id="date-and-type-below-the-first-row"),
+]
+# The same headers, contents only, as step G's refusal test takes them.
+_HEADERS_WITHOUT_DATE_AND_TYPE = [pytest.param(case.values[0], id=case.id) for case in _HEADERS_MISSING_DATE_OR_TYPE]
+
+_DANSKE_CASH_SAMPLES = ["danske_bank-cash.csv", "danske_bank-gap-cash.csv"]
+
+# The generic samples this file already parses (REQUIRED_GENERIC_FILES, _first_sample_for_plugin, the
+# samples auto-detected as generic) and the malformed one TestGenericMalformedRow reads.
+_GENERIC_SAMPLES = [*sorted(SAMPLE_DIR.glob("generic_*.csv")), SAMPLE_DIR / "malformed" / "generic_malformed_row.csv"]
+
+
+class TestGenericCSVDeclaresOnlyWhatItReads:
+    """Decision 1 of workstream L, step G (issue #26): the generic CSV declares only what it can read.
+
+    The developer: the generic CSV looked at the extension only; it should look at the columns, and see
+    whether every required one is there, in at least one of the languages. So ``can_parse`` is true only
+    for a ``.csv`` whose header row — read with the plugin's own encoding fallback (``_open_text``) and
+    ``detect_csv_delimiter`` — maps both required columns, ``date`` and ``type``, through
+    ``_detect_columns`` (case-insensitive, trimmed, any alias of ``HEADER_MAPPINGS``). Missing either,
+    empty or unreadable: false. Another extension: false, as before. Everything else of the plugin is
+    unchanged — ``parse`` still raises on a missing ``date`` or ``type``.
+
+    Why it matters beyond the plugin: ``compatible_plugins`` is what the import wizard offers. The bank's
+    own cash statement (Danske) names neither column, so the generic CSV could only fail on it, and yet
+    it was offered for it — "read it alone with the generic CSV", or the broker's default plugin noted
+    on a set it cannot read.
+
+    Every input is written in ``tmp_path``. The accepting tests are guards, true before the change too;
+    the refusals are red until ``can_parse`` reads the header. Each case first checks its premise
+    against ``parse``: what is accepted parses, what is refused raises ``BRIMParseError``.
+    """
+
+    @pytest.mark.parametrize(("name", "content"), _HEADERS_WITH_DATE_AND_TYPE)
+    def test_accepts_a_header_with_date_and_type(self, name: str, content: bytes, tmp_path: Path):
+        path = tmp_path / name
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert isinstance(plugin.parse(path, broker_id=1), BRIMParseOutput), f"premise: the generic plugin parses {name}"
+
+        assert plugin.can_parse(path) is True, f"{name}: a header that names a date and a type column is the generic plugin's"
+
+    def test_accepts_a_windows_1252_header_with_accented_words(self, tmp_path: Path):
+        """``Data;Tipo;Quantità;Importo`` saved as Windows-1252, as Excel on Windows writes it: read through the encoding fallback."""
+        content = "Data;Tipo;Quantità;Importo\n03/01/2025;acquisto;10;-1000,00\n04/01/2025;deposito;0;500,00\n".encode("cp1252")
+        with pytest.raises(UnicodeDecodeError):
+            content.decode("utf-8")  # premise: a UTF-8 read stops on the accented byte, so only the fallback reads this header
+        path = tmp_path / "movimenti.csv"
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert isinstance(plugin.parse(path, broker_id=1), BRIMParseOutput), "premise: the generic plugin parses the Windows-1252 file"
+
+        assert plugin.can_parse(path) is True, "a Windows-1252 header that names a date and a type column is the generic plugin's"
+
+    @pytest.mark.parametrize("content", _HEADERS_WITHOUT_DATE_AND_TYPE)
+    def test_refuses_a_header_without_date_and_type(self, content: bytes, tmp_path: Path):
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        with pytest.raises(BRIMParseError):
+            plugin.parse(path, broker_id=1)  # premise: the generic plugin cannot read this file
+
+        assert plugin.can_parse(path) is False, f"The generic plugin claims a CSV whose first row names no date or no type column: {content.splitlines()[0]!r}"
+
+    def test_refuses_what_it_cannot_read(self, tmp_path: Path):
+        """An empty file, a missing one: no header row, nothing to declare (a guard, true before the change too)."""
+        empty = tmp_path / "empty.csv"
+        empty.write_bytes(b"")
+        plugin = _generic_plugin()
+
+        assert plugin.can_parse(empty) is False
+        assert plugin.can_parse(tmp_path / "missing.csv") is False
+
+    @pytest.mark.parametrize("name", ["export.txt", "export.tsv", "export.xlsx"])
+    def test_refuses_another_extension_even_with_date_and_type(self, name: str, tmp_path: Path):
+        """The extension still comes first, as before (a guard)."""
+        path = tmp_path / name
+        path.write_bytes(b"date,type,amount\n2025-01-03,BUY,-1000.00\n2025-01-04,DEPOSIT,500.00\n")
+
+        assert _generic_plugin().can_parse(path) is False
+
+    @pytest.mark.parametrize("name", _DANSKE_CASH_SAMPLES)
+    def test_refuses_the_danske_cash_statement(self, name: str):
+        """``Pvm;Saaja/Maksaja;Määrä;Saldo;Tila;Tarkastus``, Latin-1: no date and no type column the generic CSV knows."""
+        path = SAMPLE_DIR / name
+        plugin = _generic_plugin()
+        with pytest.raises(BRIMParseError):
+            plugin.parse(path, broker_id=1)  # premise: the generic plugin cannot read the bank's statement
+
+        assert plugin.can_parse(path) is False, f"The generic plugin claims {name}, which it cannot parse"
+
+    @pytest.mark.parametrize("name", _DANSKE_CASH_SAMPLES)
+    def test_only_danske_reads_its_cash_statement(self, name: str):
+        """What the upload records as ``compatible_plugins``, and the import wizard offers: Danske, and no generic CSV."""
+        assert BRIMProviderRegistry.get_compatible_plugins(SAMPLE_DIR / name) == ["broker_danske_bank"]
+
+    def test_the_generic_samples_are_all_listed(self):
+        """Guard: the parametrization below covers the generic samples the file relies on, so it is never green by being empty."""
+        listed = {sample.name for sample in _GENERIC_SAMPLES if sample.is_file()}
+
+        assert {*TestGenericCSVPlugin.REQUIRED_GENERIC_FILES, "generic_multilang.csv", "generic_malformed_row.csv"} <= listed
+
+    @pytest.mark.parametrize("sample", _GENERIC_SAMPLES, ids=lambda sample: sample.name)
+    def test_the_generic_samples_stay_generic(self, sample: Path):
+        """Every generic sample names its date and type columns: the generic plugin keeps them (a guard)."""
+        assert _generic_plugin().can_parse(sample) is True, f"The generic plugin refuses its own sample {sample.name}"
+        assert GENERIC_CSV_CODE in BRIMProviderRegistry.get_compatible_plugins(sample), f"{GENERIC_CSV_CODE} is not offered for {sample.name}"
+
+    def test_refuses_every_csv_sample_without_date_and_type(self):
+        """The other brokers' samples whose first row names no date or no type column are not the generic plugin's.
+
+        The real-format counterpart of the synthetic refusals: exports with a preamble (Directa, Fineco,
+        Intesa), a ``Type`` without a date (XTB), a date without a type (Delta), the bank's own words
+        (Danske, Avanza, Crédit Agricole…). Each keeps its own plugin (``test_all_sample_files_have_compatible_plugin``).
+        """
+        names = {sample.name for sample in _CSV_SAMPLES_WITHOUT_DATE_AND_TYPE}
+        # Positive control: the partition still holds the bank's statement, so the check below never passes on nothing.
+        assert "danske_bank-cash.csv" in names, f"The oracle finds a date and a type column in danske_bank-cash.csv: it reads the headers wrong ({sorted(names)})"
+        plugin = _generic_plugin()
+
+        claimed = sorted(sample.name for sample in _CSV_SAMPLES_WITHOUT_DATE_AND_TYPE if plugin.can_parse(sample))
+
+        assert not claimed, f"The generic plugin claims {len(claimed)} CSV sample(s) whose first row names no date or no type column: {claimed}"
+
+
+# =============================================================================
+# CATEGORY 4c: THE GENERIC CSV SAYS WHY IT REFUSES A FILE (workstream L, step G.5)
+# =============================================================================
+
+# The sentences of the contract, verbatim: one short English sentence each, lowercase start, no final period.
+_REASON_ONLY_CSV = "the Generic CSV reads only .csv files"
+_REASON_UNREADABLE = "the file could not be read"
+_REASON_NO_HEADER = "the file has no header row"
+# Keyed by the required columns a header misses, as _HEADERS_MISSING_DATE_OR_TYPE writes them.
+_REASON_MISSING = {
+    ("date",): "required column 'date' not found in the CSV header",
+    ("type",): "required column 'type' not found in the CSV header",
+    ("date", "type"): "required columns 'date' and 'type' not found in the CSV header",
+}
+
+# ``Data;Tipo;Quantità;Importo`` saved as Windows-1252, as Excel on Windows writes it: the file of
+# ``test_accepts_a_windows_1252_header_with_accented_words``, a header that only the encoding fallback reads.
+_WINDOWS_1252_HEADER = pytest.param(
+    "movimenti.csv",
+    "Data;Tipo;Quantità;Importo\n03/01/2025;acquisto;10;-1000,00\n04/01/2025;deposito;0;500,00\n".encode("cp1252"),
+    id="windows-1252-accented",
+)
+# A header that names both required columns, for the files refused for another reason than their columns.
+_DATE_AND_TYPE_ROWS = b"date,type,amount\n2025-01-03,BUY,-1000.00\n2025-01-04,DEPOSIT,500.00\n"
+_NOT_CSV_NAMES = ["export.txt", "export.tsv", "export.xlsx", "export"]
+# Nothing that could be a header row: no byte at all, a lone line break, a lone UTF-8 byte order mark.
+_WITHOUT_A_HEADER_ROW = [
+    pytest.param(b"", id="empty"),
+    pytest.param(b"\n", id="a-lone-line-break"),
+    pytest.param(b"\xef\xbb\xbf", id="a-lone-utf8-bom"),
+]
+# Nothing to read at the path: nothing there at all, or a folder named like a CSV.
+_UNREADABLE_PATHS = ["missing-path", "folder-named-like-a-csv"]
+
+
+def _unreadable_path(folder: Path, kind: str) -> Path:
+    """An ``export.csv`` path in ``folder`` with nothing to read behind it: missing, or a folder."""
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "export.csv"
+    if kind == "folder-named-like-a-csv":
+        path.mkdir()
+    return path
+
+
+def _write_every_case(folder: Path) -> List[Path]:
+    """Every synthetic case of category 4c under ``folder``: one subfolder each, since the names repeat; then the unreadable paths."""
+    cases = [
+        *((case.values[0], case.values[1]) for case in [*_HEADERS_WITH_DATE_AND_TYPE, _WINDOWS_1252_HEADER]),
+        *(("export.csv", case.values[0]) for case in _HEADERS_MISSING_DATE_OR_TYPE),
+        *((name, _DATE_AND_TYPE_ROWS) for name in _NOT_CSV_NAMES),
+        *(("export.csv", case.values[0]) for case in _WITHOUT_A_HEADER_ROW),
+    ]
+    paths = []
+    for index, (name, content) in enumerate(cases):
+        path = folder / f"case-{index:02d}" / name
+        path.parent.mkdir()
+        path.write_bytes(content)
+        paths.append(path)
+    return [*paths, *(_unreadable_path(folder / kind, kind) for kind in _UNREADABLE_PATHS)]
+
+
+def _is_one_sentence(reason: object) -> bool:
+    """One short English sentence, as the contract wants it: a non-empty single-line string, no blank around it, lowercase start, no final period."""
+    return isinstance(reason, str) and reason != "" and reason == reason.strip() and "\n" not in reason and reason[0] == reason[0].lower() and not reason.endswith(".")
+
+
+class TestGenericCSVSaysWhyItRefuses:
+    """Step G.5 of workstream L (issue #26): a plugin can say why it refuses a file, and the generic CSV says which required column is missing.
+
+    Since step G the generic CSV refuses a CSV whose header names no ``date`` or no ``type`` column, so a parse forced on
+    such a file stops at the guard of ``parse_file`` — "Plugin 'broker_generic_csv' cannot parse file '…'" — where the
+    plugin's ``parse`` used to say "Required column 'date' not found in CSV header". The developer's decision, verbatim:
+    «Correggi dentro G con il metodo opzionale (Consigliato)».
+
+    So ``BRIMProvider`` gains a concrete, optional method, ``cannot_parse_reason(file_path) -> Optional[str]``, ``None`` by
+    default: one short English sentence (lowercase start, no final period) saying why ``can_parse`` refuses the file, or
+    ``None`` when there is nothing to add. It never raises. The generic CSV overrides it with the ``_REASON_*`` sentences
+    above, and ``can_parse(p) is (cannot_parse_reason(p) is None)`` on every path. What the guard of ``parse_file`` does
+    with the sentence is in ``test_services/test_brim_parse_race.py``; what the user reads, in RS-G05 of
+    ``test_api/test_brim_api.py``.
+
+    Every input is a sample or is written in ``tmp_path``, and every expected sentence is written out by hand. Each test
+    first checks its premise against ``can_parse`` (true before G.5 too), then asks the reason: red until the method exists.
+    """
+
+    @pytest.mark.parametrize(("content", "missing"), _HEADERS_MISSING_DATE_OR_TYPE)
+    def test_names_the_required_columns_the_header_misses(self, content: bytes, missing: tuple, tmp_path: Path):
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is False, f"premise: the generic plugin refuses {content.splitlines()[0]!r}"
+
+        assert plugin.cannot_parse_reason(path) == _REASON_MISSING[missing]
+
+    @pytest.mark.parametrize("name", _DANSKE_CASH_SAMPLES)
+    def test_names_both_required_columns_for_the_danske_cash_statement(self, name: str):
+        """``Pvm;Saaja/Maksaja;Määrä;Saldo;Tila;Tarkastus``, Latin-1: neither a date nor a type column the generic CSV knows."""
+        path = SAMPLE_DIR / name
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is False, f"premise: the generic plugin refuses {name}"
+
+        assert plugin.cannot_parse_reason(path) == _REASON_MISSING[("date", "type")]
+
+    @pytest.mark.parametrize(("name", "content"), [*_HEADERS_WITH_DATE_AND_TYPE, _WINDOWS_1252_HEADER])
+    def test_has_nothing_to_add_about_a_header_with_date_and_type(self, name: str, content: bytes, tmp_path: Path):
+        path = tmp_path / name
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is True, f"premise: the generic plugin accepts {name}"
+
+        assert plugin.cannot_parse_reason(path) is None
+
+    @pytest.mark.parametrize("name", _NOT_CSV_NAMES)
+    def test_says_it_reads_only_csv_files(self, name: str, tmp_path: Path):
+        """The extension comes first: the header names both required columns, and it does not matter."""
+        path = tmp_path / name
+        path.write_bytes(_DATE_AND_TYPE_ROWS)
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is False, f"premise: the generic plugin refuses {name}"
+
+        assert plugin.cannot_parse_reason(path) == _REASON_ONLY_CSV
+
+    @pytest.mark.parametrize("content", _WITHOUT_A_HEADER_ROW)
+    def test_says_the_file_has_no_header_row(self, content: bytes, tmp_path: Path):
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is False, f"premise: the generic plugin refuses {content!r}"
+
+        assert plugin.cannot_parse_reason(path) == _REASON_NO_HEADER
+
+    @pytest.mark.parametrize("kind", _UNREADABLE_PATHS)
+    def test_says_the_file_could_not_be_read(self, kind: str, tmp_path: Path):
+        """Nothing to read at the path, and no exception either: the method never raises."""
+        path = _unreadable_path(tmp_path, kind)
+        plugin = _generic_plugin()
+        assert plugin.can_parse(path) is False, f"premise: the generic plugin refuses a {kind}"
+
+        assert plugin.cannot_parse_reason(path) == _REASON_UNREADABLE
+
+    def test_can_parse_is_true_exactly_when_there_is_no_reason(self, tmp_path: Path):
+        """``can_parse(p) is (cannot_parse_reason(p) is None)`` on every file of ``sample_reports/`` (recursive, every extension) and every synthetic case above."""
+        corpus = sorted(path for path in SAMPLE_DIR.rglob("*") if path.is_file())
+        paths = [*corpus, *_write_every_case(tmp_path)]
+        plugin = _generic_plugin()
+        accepted = {path: plugin.can_parse(path) for path in paths}
+        # Positive controls: the corpus holds more than one kind of file, and both answers occur, so neither side of the invariant is vacuous.
+        assert len({path.suffix.lower() for path in corpus}) > 1, f"premise: sample_reports/ holds more than one kind of file: {[path.name for path in corpus]}"
+        assert set(accepted.values()) == {True, False}, "premise: the generic plugin accepts some of these files and refuses the others"
+
+        disagreements = []
+        for path in paths:
+            reason = plugin.cannot_parse_reason(path)
+            if accepted[path] is not (reason is None):
+                shown = path.relative_to(SAMPLE_DIR) if path.is_relative_to(SAMPLE_DIR) else path.relative_to(tmp_path)
+                disagreements.append(f"{shown}: can_parse={accepted[path]}, cannot_parse_reason={reason!r}")
+
+        assert not disagreements, f"can_parse and cannot_parse_reason disagree on {len(disagreements)} of {len(paths)} file(s): {disagreements}"
+
+    def test_the_base_method_is_concrete(self):
+        """A concrete method of ``BRIMProvider``, not an abstract one: every plugin written before G.5 stays valid without it."""
+        assert callable(getattr(BRIMProvider, "cannot_parse_reason", None)), "BRIMProvider has no cannot_parse_reason method"
+        assert "cannot_parse_reason" not in BRIMProvider.__abstractmethods__
+
+    @pytest.mark.parametrize("code", ["broker_trading212", "broker_danske_bank"])
+    def test_a_plugin_that_does_not_override_it_has_nothing_to_add(self, code: str, tmp_path: Path):
+        """The base default, ``None``, about a file the plugin refuses: the guard of ``parse_file`` keeps its plain message."""
+        plugin = BRIMProviderRegistry.get_provider_instance(code)
+        assert plugin is not None, f"{code} is not registered"
+        path = tmp_path / "export.csv"
+        path.write_bytes(_DATE_AND_TYPE_ROWS)
+        assert plugin.can_parse(path) is False, f"premise: {code} refuses a generic CSV"
+        assert type(plugin).cannot_parse_reason is BRIMProvider.cannot_parse_reason, f"premise: {code} does not override cannot_parse_reason"
+
+        assert plugin.cannot_parse_reason(path) is None
+
+    def test_every_plugin_answers_nothing_or_one_sentence(self, tmp_path: Path):
+        """The contract for every registered plugin, on every sample and on paths with nothing to read: ``cannot_parse_reason`` never raises, and answers ``None`` or one sentence."""
+        paths = [*sorted(path for path in SAMPLE_DIR.rglob("*") if path.is_file()), *(_unreadable_path(tmp_path / kind, kind) for kind in _UNREADABLE_PATHS)]
+        broken = []
+        for code, plugin in _PLUGIN_PARAMS:
+            for path in paths:
+                try:
+                    reason = plugin.cannot_parse_reason(path)
+                except Exception as exc:  # the contract: it never raises
+                    broken.append(f"{code} on {path.name}: raised {type(exc).__name__}: {exc}")
+                    continue
+                if reason is not None and not _is_one_sentence(reason):
+                    broken.append(f"{code} on {path.name}: {reason!r}")
+
+        assert not broken, f"{len(broken)} answer(s) break the contract of cannot_parse_reason, the first ones: {broken[:3]}"
+
+
+# =============================================================================
+# CATEGORY 4d: A PLUGIN SAYS WHY WITH A CODE THE FRONTEND TRANSLATES (37_brimScalable, plan §7.1)
+# =============================================================================
+
+# A refusal's code: the stable snake_case key the frontend translates as ``importWizard.parseRefusal.<code>``.
+_REFUSAL_CODE = re.compile(r"[a-z][a-z0-9_]*")
+
+
+def _refusal_problems(detail: object, reason: object) -> List[str]:
+    """Where one answer of ``cannot_parse_detail`` breaks its contract, next to the answer of ``cannot_parse_reason`` on the same path."""
+    if detail is None:
+        return [] if reason is None else [f"no refusal, and yet the reason {reason!r}"]
+    if not isinstance(detail, BRIMRefusal):
+        return [f"{type(detail).__name__} {detail!r}, not a BRIMRefusal"]
+    problems = [] if detail.message == reason else [f"message {detail.message!r}, while cannot_parse_reason says {reason!r}"]
+    if not _is_one_sentence(detail.message):
+        problems.append(f"message {detail.message!r} is not one sentence (one line, lowercase start, no final period)")
+    if detail.code is not None and not _REFUSAL_CODE.fullmatch(detail.code):
+        problems.append(f"code {detail.code!r} is not a stable snake_case key")
+    try:
+        detail.model_dump_json()
+    except Exception as exc:  # it travels to the import wizard as JSON (GET /import/files/{file_id}/plugin-check)
+        problems.append(f"does not serialise to JSON: {type(exc).__name__}: {exc}")
+    return problems
+
+
+def _detail_answer(code: str, plugin: BRIMProvider, path: Path, label: str) -> tuple:
+    """One plugin's ``cannot_parse_detail`` on one path, and where it breaks the contract: an exception is a problem of the answer, never a crash of the test."""
+    try:
+        detail, reason = plugin.cannot_parse_detail(path), plugin.cannot_parse_reason(path)
+    except Exception as exc:  # the contract: neither method ever raises
+        return None, [f"{code} on {label}: raised {type(exc).__name__}: {exc}"]
+    return detail, [f"{code} on {label}: {problem}" for problem in _refusal_problems(detail, reason)]
+
+
+class TestPluginSaysWhyWithACode:
+    """37_brimScalable, plan §7.1: a plugin can say why it refuses a file with a stable code the frontend translates, and the context of the code.
+
+    The import wizard asks the broker's default plugin about every uploaded file (``GET /import/files/{file_id}/plugin-check``, category 17 of
+    ``test_api/test_brim_api.py``) and shows its reason. ``BRIMProvider`` gains a concrete, optional method, ``cannot_parse_detail(file_path) ->
+    Optional[BRIMRefusal]``: by default the ``cannot_parse_reason`` sentence, wrapped without a code and with an empty context; None when there is
+    no reason. A plugin that overrides it (the two Scalable plugins, refusing each other's files: ``test_brim_scalable.py``) gives a snake_case
+    ``code`` and a ``context``; its ``message`` stays what ``cannot_parse_reason`` says. Same rules as ``cannot_parse_reason``: never raises, one
+    English sentence.
+
+    Every input is a sample or is written in ``tmp_path``; the sentences are those of category 4c.
+    """
+
+    def test_the_base_method_is_concrete(self):
+        """A concrete method of ``BRIMProvider``, not an abstract one: every plugin written before it stays valid without it."""
+        assert callable(getattr(BRIMProvider, "cannot_parse_detail", None)), "BRIMProvider has no cannot_parse_detail method"
+        assert "cannot_parse_detail" not in BRIMProvider.__abstractmethods__
+
+    @pytest.mark.parametrize(("content", "missing"), _HEADERS_MISSING_DATE_OR_TYPE)
+    def test_the_default_wraps_the_reason_without_a_code(self, content: bytes, missing: tuple, tmp_path: Path):
+        """The generic CSV overrides ``cannot_parse_reason`` only: its refusal is that sentence, without a code, with an empty context."""
+        path = tmp_path / "export.csv"
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert type(plugin).cannot_parse_detail is BRIMProvider.cannot_parse_detail, "premise: the generic CSV does not override cannot_parse_detail"
+        assert plugin.cannot_parse_reason(path) == _REASON_MISSING[missing], f"premise: the generic CSV names the columns {content.splitlines()[0]!r} misses"
+
+        detail = plugin.cannot_parse_detail(path)
+
+        assert isinstance(detail, BRIMRefusal), f"the default answers {detail!r}, not a BRIMRefusal"
+        assert (detail.code, detail.message, detail.context) == (None, _REASON_MISSING[missing], {})
+
+    @pytest.mark.parametrize(("name", "content"), [*_HEADERS_WITH_DATE_AND_TYPE, _WINDOWS_1252_HEADER])
+    def test_the_default_has_nothing_to_add_without_a_reason(self, name: str, content: bytes, tmp_path: Path):
+        """A file the generic CSV reads: no reason, so no refusal."""
+        path = tmp_path / name
+        path.write_bytes(content)
+        plugin = _generic_plugin()
+        assert plugin.cannot_parse_reason(path) is None, f"premise: the generic CSV has nothing to say about {name}"
+
+        assert plugin.cannot_parse_detail(path) is None
+
+    @pytest.mark.parametrize("code", ["broker_trading212", "broker_danske_bank"])
+    def test_a_plugin_that_overrides_neither_method_has_nothing_to_add(self, code: str, tmp_path: Path):
+        """The base defaults all the way down, about a file the plugin refuses: no reason, so no refusal."""
+        plugin = BRIMProviderRegistry.get_provider_instance(code)
+        assert plugin is not None, f"{code} is not registered"
+        path = tmp_path / "export.csv"
+        path.write_bytes(_DATE_AND_TYPE_ROWS)
+        assert plugin.can_parse(path) is False, f"premise: {code} refuses a generic CSV"
+        assert (type(plugin).cannot_parse_reason, type(plugin).cannot_parse_detail) == (BRIMProvider.cannot_parse_reason, BRIMProvider.cannot_parse_detail), f"premise: {code} overrides neither method"
+
+        assert plugin.cannot_parse_detail(path) is None
+
+    def test_every_plugin_answers_nothing_or_a_refusal_that_agrees_with_its_reason(self, tmp_path: Path):
+        """The contract for every registered plugin, on every file of ``sample_reports/`` (recursive, every extension) and on paths with nothing to read:
+        ``cannot_parse_detail`` never raises; it is None exactly when ``cannot_parse_reason`` is None; otherwise a ``BRIMRefusal`` whose message is that
+        reason and one sentence, whose code is None or snake_case, and which serialises to JSON."""
+        paths = [*sorted(path for path in SAMPLE_DIR.rglob("*") if path.is_file()), *(_unreadable_path(tmp_path / kind, kind) for kind in _UNREADABLE_PATHS)]
+        labels = {path: str(path.relative_to(SAMPLE_DIR) if path.is_relative_to(SAMPLE_DIR) else path.relative_to(tmp_path)) for path in paths}
+        answers = [_detail_answer(code, plugin, path, labels[path]) for code, plugin in _PLUGIN_PARAMS for path in paths]
+        details = [detail for detail, _ in answers]
+        # Positive controls: refusals and silences both occur, and one refusal at least carries a code, so no branch of the contract is vacuous.
+        assert any(detail is None for detail in details) and any(detail is not None for detail in details), "premise: the plugins refuse some of these files with a reason and others without"
+        assert any(getattr(detail, "code", None) for detail in details), "premise: one plugin at least refuses a sample with a code (broker_scalable on the overnight account's export)"
+
+        broken = [problem for _, problems in answers for problem in problems]
+
+        assert not broken, f"{len(broken)} answer(s) break the contract of cannot_parse_detail, the first ones: {broken[:3]}"
 
 
 class TestBrokerParserCoverageHelpers:
@@ -972,9 +1668,13 @@ class TestBrokerParserCoverageHelpers:
                 quote_base_quantity=1,
             )
         }
+        from backend.test_scripts.test_services._engine_average_costs import engine_average_costs  # noqa: PLC0415 — test-local: the only DailyStateBuilder replay in this suite
+        from backend.test_scripts.test_services._engine_native_cash import engine_native_cash  # noqa: PLC0415 — test-local: the only DailyStateBuilder replay in this suite
+
+        classified_txs = [ClassifiedTransaction(tx=tx, classification="normal", share=Decimal("1"), paired_tx=None) for tx in engine_txs]
         states = (
             DailyStateBuilder(
-                classified_txs=[ClassifiedTransaction(tx=tx, classification="normal", share=Decimal("1"), paired_tx=None) for tx in engine_txs],
+                classified_txs=classified_txs,
                 in_transit_intervals=[],
                 external_cash_flows=[],
                 price_map={},
@@ -983,6 +1683,8 @@ class TestBrokerParserCoverageHelpers:
                 asset_classifications={},
                 asset_types={},
                 asset_currencies={sell.asset_id: "EUR"},
+                average_costs=engine_average_costs(classified_txs, asset_currencies={sell.asset_id: "EUR"}, target_currency="EUR", fx_rate_map={}, date_to=date(2025, 5, 27)),
+                native_cash=engine_native_cash(classified_txs, target_currency="EUR", fx_rate_map={}, date_to=date(2025, 5, 27)),
                 mark_series=mark_series,
                 target_currency="EUR",
                 date_from=date(2025, 5, 25),
@@ -1650,6 +2352,24 @@ class TestBrokerParserCoverageHelpers:
         derived = [ft for ft in out.field_todos if ft.reason_code == "derived_quantity"]
         assert len(derived) == 1, "orphan redemption must flag the derived nominal for verification"
 
+    def test_credit_agricole_derived_quantity_todo_speaks_italian_and_names_the_bond(self, tmp_path):
+        """Decision C of the i18n audit (S18-S19): the ``derived_quantity`` todo is worded in Italian, like the
+        plugin's other todos and like the file it reads. No ``importWizard.brimNotice.derived_quantity`` key
+        rewords it, so its ``message`` is what the user reads, in every UI language. Same partial download as
+        the test above: the English sentence must be gone, and the bond it is about must still be named."""
+        header = "Data operazione;Nome;Divisa;Causale;Prezzo;Divisa;Cambio;Quantità;Controvalore in Euro;Data valuta"
+        row = "21/05/2026;BTP 05/26 0.55FOICUM;EUR;TITOLI SCADUTI;100,40;000;1;0;30.105,00;21/05/2026"
+        csv_path = tmp_path / "credit_agricole-partial.csv"
+        csv_path.write_text("\n".join([header, row]) + "\n", encoding="utf-8")
+
+        out = CreditAgricoleBrokerProvider().parse(csv_path, broker_id=1)
+
+        derived = [ft for ft in out.field_todos if ft.reason_code == "derived_quantity"]
+        assert len(derived) == 1, f"premise: the orphan redemption raises one derived_quantity todo, got {[(ft.reason_code, ft.message) for ft in out.field_todos]}"
+        message = derived[0].message
+        english = ("Matured bond", "no prior position was found", "partial download", "was inferred from", "Verify it matches the holding you are closing")
+        assert ([fragment for fragment in english if fragment in message], "BTP 05/26 0.55FOICUM" in message) == ([], True), f"(English left, bond named) — the derived_quantity todo reads: {message!r}"
+
     def test_model_bond_maturity_below_par_has_no_negative_surplus(self):
         """A redemption priced below par yields no surplus (no invented negative
         income); the whole amount stays principal."""
@@ -1764,10 +2484,105 @@ class TestBrokerParserCoverageHelpers:
         assert fee_txs, "sample must contain at least one FEE row"
         assert all(tx.asset_id is None for tx in fee_txs)
 
+    def test_etoro_withdrawal_conversion_fee_with_units_is_not_dropped(self, tmp_path):
+        """A cash-only conversion fee remains a FEE even when eToro says Units=2."""
+        header, *sample_rows = read_rows(ETORO_SAMPLE)
+        type_col = header.index("Type")
+        amount_col = header.index("Amount")
+        units_col = header.index("Units")
+        zero_fee = next(row.copy() for row in sample_rows if row[type_col] == "Withdraw Fee")
+        conversion = next(row.copy() for row in sample_rows if row[type_col] == "Withdrawal Conversion Fee")
+        request = next(row.copy() for row in sample_rows if row[type_col] == "Withdraw Request")
+        conversion[amount_col] = "-1.36"
+        conversion[units_col] = "2"
+
+        stream = io.StringIO(newline="")
+        writer = csv.writer(stream)
+        writer.writerows([header, zero_fee, conversion, request])
+        synthetic = tmp_path / "etoro-withdrawal-conversion-fee.csv"
+        synthetic.write_text(stream.getvalue(), encoding="utf-8")
+
+        out = EtoroBrokerProvider().parse(synthetic, broker_id=1)
+
+        assert len(out.transactions) == 2, "only the zero-value fee may be dropped from the three source rows"
+        fees = [tx for tx in out.transactions if tx.type == TransactionType.FEE]
+        assert len(fees) == 1, "the conversion fee must produce exactly one FEE"
+        fee = fees[0]
+        assert fee.quantity == Decimal("0")
+        assert fee.cash is not None
+        assert fee.cash.amount == Decimal("-1.36")
+
+        withdrawals = [tx for tx in out.transactions if tx.type == TransactionType.WITHDRAWAL]
+        assert len(withdrawals) == 1, "the original withdrawal must remain exactly once"
+        withdrawal = withdrawals[0]
+        assert withdrawal.cash is not None
+        assert withdrawal.cash.amount == Decimal("-100.11")
+        assert not any(issue.code == "qtyZero" for issue in out.validation_issues)
+        assert sum(
+            (tx.cash.amount for tx in out.transactions if tx.cash is not None),
+            Decimal("0"),
+        ) == Decimal("-101.47")
+
+    def test_intesa_maturity_movement_flags_the_asset_as_expired(self):
+        """Regression for the *shared* maturity-notice helper (``_brim_io.detect_maturity_hits``
+        / ``MATURITY_NOTICE_KIND``), adopted by Crédit Agricole's account layout
+        (see ``test_credit_agricole_account_maturity_flags_the_asset_as_expired``
+        above) and by Intesa Sanpaolo's movements parser the same way.
+
+        The repository sample (``intesa-lista.csv``) contains no maturity/redemption
+        row on its own, so one minimal synthetic coupon row is appended — same
+        column shape as every other row in the file, with "RIMBORSO" (a shared
+        maturity keyword) folded into its ``Dettagli`` free text, exactly the way a
+        real bond-redemption coupon would read.
+
+        Asserts the *contract* the frontend actually reads — ``kind`` and the index
+        into ``transactions`` — never the Italian prose in ``reason`` (rule: never
+        assert on translated/localized text).
+        """
+        rows = read_rows(INTESA_LISTA_SAMPLE)
+        rows.append(
+            [
+                "01/08/2026",
+                "Cedole",
+                "Cedole Su EUR 35.00000 BTPIT 28GN30 RIMBORSO FINALE",
+                "Conto 0000/00000000",
+                "CONTABILIZZATO",
+                "Interessi e cedole",
+                "EUR",
+                "122,5",
+                "",
+                "",
+            ]
+        )
+
+        out = IntesaSanpaoloBrokerProvider()._parse_movements(rows, broker_id=1)
+
+        coupon_index = next(i for i, tx in enumerate(out.transactions) if tx.type == TransactionType.INTEREST and tx.date == date(2026, 8, 1) and tx.cash is not None and tx.cash.amount == Decimal("122.5"))
+        coupon = out.transactions[coupon_index]
+        assert coupon.asset_id is not None
+
+        info = out.extracted_assets[coupon.asset_id]
+        kinds = [n.kind for n in info.notices]
+        assert MATURITY_NOTICE_KIND in kinds, f"expected a maturity notice on {info.extracted_name!r}, got {kinds}"
+
+        notice = next(n for n in info.notices if n.kind == MATURITY_NOTICE_KIND)
+        assert notice.transaction_indexes == [coupon_index]
+        # Contract only: a reason must be present, its wording is not part of the contract.
+        assert notice.reason and notice.reason.strip()
+
 
 # =============================================================================
 # PLUGIN -> FRONTEND CONTRACT
 # =============================================================================
+
+
+@dataclass(frozen=True)
+class _ContractSampleSet:
+    """``test_sample_sets[position]`` of a report-set plugin; the contract tests parse its combined file."""
+
+    plugin_code: str
+    position: int
+    name: str
 
 
 class TestPluginFrontendContract:
@@ -1784,10 +2599,17 @@ class TestPluginFrontendContract:
     """
 
     # Samples whose plugin emits the richest contract surface. Add a file here and the
-    # whole class applies to it.
+    # whole class applies to it. A report-set plugin's entry names one of its sample sets:
+    # the test parses the set's combined file, built when the test runs (a member alone is refused).
     CONTRACT_SAMPLES = [
         ("broker_credit_agricole", CA_CONTI_SAMPLE),
         ("broker_credit_agricole", CA_SAMPLE),
+        ("broker_danske_bank", _ContractSampleSet("broker_danske_bank", 0, "danske_bank-main-set")),
+        ("broker_danske_bank", _ContractSampleSet("broker_danske_bank", 1, "danske_bank-gap-set")),
+        # Scalable Capital (37_brimScalable): notices only, each with the rows of the file as evidence.
+        ("broker_scalable", SAMPLE_DIR / "scalable-prime-export.csv"),
+        ("broker_scalable", SAMPLE_DIR / "scalable-broker-export.csv"),
+        ("broker_scalable_deposit", SAMPLE_DIR / "scalable-deposit-export.csv"),
     ]
 
     KNOWN_ASSET_NOTICE_KINDS = {MATURITY_NOTICE_KIND}
@@ -1799,11 +2621,32 @@ class TestPluginFrontendContract:
         "ca_account_trade_sell_quantity_presumed",
         "ca_account_trade_unresolved",
         "derived_quantity",
+        # Danske Bank (report sets, phase B): charges inside Summa, and the two legs of a demerger.
+        "danske_trade_charges_included",
+        "demerger",
+        "demerger_old_leg",
     }
 
     @staticmethod
-    def _parse(path):
-        return CreditAgricoleBrokerProvider().parse(path, broker_id=1)
+    def _plugin(code: str) -> BRIMProvider:
+        plugin = BRIMProviderRegistry.get_provider_instance(code)
+        if plugin is None:
+            pytest.fail(f"no BRIM plugin is registered as {code}: not implemented yet (BRIM report sets, phase B)", pytrace=False)
+        return plugin
+
+    @classmethod
+    def _resolve(cls, plugin: str, path) -> Path:
+        """A sample file as is; a report-set sample set as its combined file."""
+        if not isinstance(path, _ContractSampleSet):
+            return path
+        provider = cls._plugin(path.plugin_code)
+        if len(_sample_sets(provider)) <= path.position:
+            pytest.fail(f"{path.plugin_code} declares no test_sample_sets[{path.position}]: not implemented yet (BRIM report sets, phase B)", pytrace=False)
+        return _combined_sample(provider, path.position)
+
+    @classmethod
+    def _parse(cls, path, plugin: str = "broker_credit_agricole"):
+        return cls._plugin(plugin).parse(cls._resolve(plugin, path), broker_id=1)
 
     @staticmethod
     def _line_count(path) -> int:
@@ -1817,7 +2660,7 @@ class TestPluginFrontendContract:
         ``tx_index`` is a position in the returned transaction list: out of range, the
         wizard shows a correction card wired to nothing.
         """
-        out = self._parse(path)
+        out = self._parse(path, plugin)
 
         for todo in out.field_todos:
             assert 0 <= todo.tx_index < len(out.transactions), f"{todo.reason_code}: tx_index {todo.tx_index} outside 0..{len(out.transactions) - 1}"
@@ -1831,7 +2674,7 @@ class TestPluginFrontendContract:
         panel from it. A missing or free-form code lands every todo in one anonymous
         group, which is the state the step was built to replace.
         """
-        out = self._parse(path)
+        out = self._parse(path, plugin)
 
         for todo in out.field_todos:
             assert todo.reason_code, f"todo on tx {todo.tx_index} has no reason_code"
@@ -1864,8 +2707,8 @@ class TestPluginFrontendContract:
         They are 1-based and must fall inside the file: the evidence table renders them as
         a link, and a number past the end sends the reader nowhere.
         """
-        out = self._parse(path)
-        lines = self._line_count(path)
+        out = self._parse(path, plugin)
+        lines = self._line_count(self._resolve(plugin, path))
 
         for todo in out.field_todos:
             if not isinstance(todo.context, dict):
@@ -1885,14 +2728,16 @@ class TestPluginFrontendContract:
         ``code``; evidence is rendered as a table with the comment as its explanation, so
         a table without one is a grid of numbers with no statement about them.
         """
-        out = self._parse(path)
+        out = self._parse(path, plugin)
 
         for notice in out.warnings:
             assert notice.severity in {"info", "warning"}, f"{notice.code}: severity {notice.severity!r}"
             assert notice.code and notice.code.strip(), "notice with no code"
             assert notice.message and notice.message.strip(), f"{notice.code}: empty message"
             for ev in notice.evidence:
-                assert ev.title and ev.title.strip(), f"{notice.code}: evidence with no title"
+                # An empty title leaves the caption to the wizard, which shows its translated one (importWizard.evidenceRowsTitle):
+                # the Scalable plugins do so. A title of blanks is neither a caption nor that signal.
+                assert ev.title == "" or ev.title.strip(), f"{notice.code}: evidence title {ev.title!r} is blank"
                 assert ev.comment and ev.comment.strip(), f"{notice.code}: evidence table with no comment"
                 assert all(len(row) == len(ev.headers) for row in ev.rows), f"{notice.code}: evidence row width does not match headers"
                 assert not ev.row_numbers or len(ev.row_numbers) == len(ev.rows), f"{notice.code}: row_numbers must be empty or aligned with rows"
@@ -1900,7 +2745,7 @@ class TestPluginFrontendContract:
     @pytest.mark.parametrize("plugin,path", CONTRACT_SAMPLES, ids=lambda v: getattr(v, "name", v))
     def test_every_todo_evidence_is_renderable(self, plugin, path):
         """Same contract on the correction step's own evidence tables."""
-        out = self._parse(path)
+        out = self._parse(path, plugin)
 
         for todo in out.field_todos:
             for ev in todo.evidence:
@@ -1932,7 +2777,7 @@ class TestPluginFrontendContract:
     @pytest.mark.parametrize("plugin,path", CONTRACT_SAMPLES, ids=lambda v: getattr(v, "name", v))
     def test_no_sample_invents_a_reason_code_outside_the_registry(self, plugin, path):
         """Whatever the layout, the codes come from one declared list."""
-        out = self._parse(path)
+        out = self._parse(path, plugin)
 
         assert {t.reason_code for t in out.field_todos} <= self.KNOWN_REASON_CODES
 
@@ -2001,6 +2846,3317 @@ class TestPluginFrontendContract:
             if todo.severity != "blocker":
                 continue
             assert todo.field in editable, f"{todo.reason_code}: blocker on non-editable field {todo.field!r}"
+
+
+# =============================================================================
+# CRÉDIT AGRICOLE — CANONICAL CHARACTERIZATION (CSV/XLSX PARITY)
+# =============================================================================
+
+
+class TestCreditAgricoleCanonicalCharacterization:
+    """Freeze the complete canonical CA parse outputs and CSV/XLSX parity.
+
+    The expected values below are deliberately literal, readable Python structures:
+    they are not hashes, serialized blobs, or values computed from parser output at
+    test runtime. Every BRIMParseOutput channel and every nested field participates.
+    """
+
+    LAYOUTS = [
+        ("securities", CA_SAMPLE, CA_SAMPLE_XLSX, 9),
+        ("account", CA_CONTI_SAMPLE, CA_CONTI_SAMPLE_XLSX, 0),
+    ]
+
+    EXPECTED_OUTPUTS = {
+        "securities": {
+            "transactions": [
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483647,
+                    "type": "INTEREST",
+                    "date": "2026-06-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "218.75"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 1/12/2026 1.25%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-06-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-218.75"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 1/12/2026 1.25% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483646,
+                    "type": "INTEREST",
+                    "date": "2026-05-25",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "93.52"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP PIU 25-2-33 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-05-25",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-93.52"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP PIU 25-2-33 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "SELL",
+                    "date": "2026-05-21",
+                    "quantity": "-30000.000",
+                    "cash": {"code": "EUR", "amount": "30000.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "TITOLI SCADUTI: BTP 05/26 0.55FOICUM (redeemed at par 100, nominal 30000.000 [position], premium 105.00)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "INTEREST",
+                    "date": "2026-05-21",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "105.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "maturity_premium"],
+                    "description": "[TITOLI SCADUTI — premio/rivalutazione a scadenza] BTP 05/26 0.55FOICUM (surplus over par 105.00)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-05-21",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-105.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 05/26 0.55FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-05-21",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-30000.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for SELL BTP 05/26 0.55FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "INTEREST",
+                    "date": "2026-05-21",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "338.04"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 05/26 0.55FOICUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-05-21",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-338.04"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 05/26 0.55FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483644,
+                    "type": "INTEREST",
+                    "date": "2026-05-17",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "223.12"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 17-11-28 FUT CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-05-17",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-223.12"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 17-11-28 FUT CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483643,
+                    "type": "INTEREST",
+                    "date": "2026-05-16",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "324.84"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP FUT 16-11-33 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-05-16",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-324.84"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP FUT 16-11-33 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483642,
+                    "type": "INTEREST",
+                    "date": "2026-04-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "258.99"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 19-27 0.65%FOIEX",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-04-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-258.99"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 19-27 0.65%FOIEX (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483641,
+                    "type": "INTEREST",
+                    "date": "2026-04-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "295.99"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 19-27 0.65FOICUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-04-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-295.99"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 19-27 0.65FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483640,
+                    "type": "INTEREST",
+                    "date": "2026-04-27",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "105.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP FUT 27-04-37 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-04-27",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-105.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP FUT 27-04-37 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483639,
+                    "type": "INTEREST",
+                    "date": "2026-03-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "732.81"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 01/03/35 3,35%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-03-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-732.81"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 01/03/35 3,35% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483638,
+                    "type": "INTEREST",
+                    "date": "2026-03-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "360.94"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 1/3/32 1,65%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-03-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-360.94"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 1/3/32 1,65% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483646,
+                    "type": "INTEREST",
+                    "date": "2026-02-25",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "93.52"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP PIU 25-2-33 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-02-25",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-93.52"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP PIU 25-2-33 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483637,
+                    "type": "INTEREST",
+                    "date": "2026-02-15",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "98.44"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 15/02/29 0,45%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-02-15",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-98.44"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 15/02/29 0,45% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483636,
+                    "type": "INTEREST",
+                    "date": "2026-02-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "207.81"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 1/08/30 0.95%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-02-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-207.81"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 1/08/30 0.95% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483635,
+                    "type": "INTEREST",
+                    "date": "2026-02-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "131.25"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 01/08/31 0,60%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-02-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-131.25"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 01/08/31 0,60% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483647,
+                    "type": "INTEREST",
+                    "date": "2025-12-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "218.75"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 1/12/2026 1.25%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-12-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-218.75"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 1/12/2026 1.25% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483646,
+                    "type": "INTEREST",
+                    "date": "2025-11-25",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "93.52"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP PIU 25-2-33 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-11-25",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-93.52"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP PIU 25-2-33 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "INTEREST",
+                    "date": "2025-11-21",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "167.74"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 05/26 0.55FOICUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-11-21",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-167.74"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 05/26 0.55FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483644,
+                    "type": "INTEREST",
+                    "date": "2025-11-17",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "223.12"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 17-11-28 FUT CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-11-17",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-223.12"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 17-11-28 FUT CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483643,
+                    "type": "INTEREST",
+                    "date": "2025-11-16",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "180.47"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP FUT 16-11-33 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-11-16",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-180.47"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP FUT 16-11-33 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483634,
+                    "type": "SELL",
+                    "date": "2025-11-10",
+                    "quantity": "-1867.178",
+                    "cash": {"code": "EUR", "amount": "9984.47"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "FONDI: RIMBORSO: AMUNDI PRIMO INV LC",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-11-10",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-9984.47"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for SELL AMUNDI PRIMO INV LC (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "DEPOSIT",
+                    "date": "2025-11-07",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "20129.44"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for BUY AMUNDI PIO GLOB EQ G (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483633,
+                    "type": "BUY",
+                    "date": "2025-11-07",
+                    "quantity": "1843.575",
+                    "cash": {"code": "EUR", "amount": "-20129.44"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "SICAV: SOTTOSCR: AMUNDI PIO GLOB EQ G",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483641,
+                    "type": "INTEREST",
+                    "date": "2025-10-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "322.67"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 19-27 0.65FOICUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-10-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-322.67"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 19-27 0.65FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483642,
+                    "type": "INTEREST",
+                    "date": "2025-10-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "282.34"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 19-27 0.65%FOIEX",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-10-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-282.34"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 19-27 0.65%FOIEX (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483640,
+                    "type": "INTEREST",
+                    "date": "2025-10-27",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "105.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP FUT 27-04-37 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-10-27",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-105.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP FUT 27-04-37 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483638,
+                    "type": "INTEREST",
+                    "date": "2025-09-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "360.94"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 1/3/32 1,65%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-09-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-360.94"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 1/3/32 1,65% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483639,
+                    "type": "INTEREST",
+                    "date": "2025-09-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "732.81"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 01/03/35 3,35%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-09-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-732.81"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 01/03/35 3,35% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483646,
+                    "type": "INTEREST",
+                    "date": "2025-08-25",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "93.52"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP PIU 25-2-33 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-08-25",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-93.52"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP PIU 25-2-33 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483637,
+                    "type": "INTEREST",
+                    "date": "2025-08-15",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "98.44"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 15/02/29 0,45%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-08-15",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-98.44"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 15/02/29 0,45% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483636,
+                    "type": "INTEREST",
+                    "date": "2025-08-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "207.81"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 1/08/30 0.95%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-08-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-207.81"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 1/08/30 0.95% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483635,
+                    "type": "INTEREST",
+                    "date": "2025-08-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "131.25"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 01/08/31 0,60%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-08-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-131.25"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 01/08/31 0,60% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "DEPOSIT",
+                    "date": "2025-07-24",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "50683.13"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for BUY BTP 01/03/35 3,35% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483639,
+                    "type": "BUY",
+                    "date": "2025-07-24",
+                    "quantity": "50000",
+                    "cash": {"code": "EUR", "amount": "-50683.13"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "ACQ.CONT.SU MERC.: BTP 01/03/35 3,35%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "DEPOSIT",
+                    "date": "2025-07-24",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "46603.73"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for BUY BTP 1/3/32 1,65% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483638,
+                    "type": "BUY",
+                    "date": "2025-07-24",
+                    "quantity": "50000",
+                    "cash": {"code": "EUR", "amount": "-46603.73"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "ACQ.CONT.SU MERC.: BTP 1/3/32 1,65%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483647,
+                    "type": "INTEREST",
+                    "date": "2025-06-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "218.75"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 1/12/2026 1.25%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-06-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-218.75"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 1/12/2026 1.25% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483632,
+                    "type": "SELL",
+                    "date": "2025-05-26",
+                    "quantity": "-95000.000",
+                    "cash": {"code": "EUR", "amount": "95000.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "TITOLI SCADUTI: BTP 20-25 1.40FOICUM (redeemed at par 100, nominal 95000.000 [position], premium 665.00)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483632,
+                    "type": "INTEREST",
+                    "date": "2025-05-26",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "665.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "maturity_premium"],
+                    "description": "[TITOLI SCADUTI — premio/rivalutazione a scadenza] BTP 20-25 1.40FOICUM (surplus over par 665.00)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-05-26",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-665.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 20-25 1.40FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-05-26",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-95000.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for SELL BTP 20-25 1.40FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483632,
+                    "type": "INTEREST",
+                    "date": "2025-05-26",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "1506.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 20-25 1.40FOICUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-05-26",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-1506.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 20-25 1.40FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483646,
+                    "type": "INTEREST",
+                    "date": "2025-05-25",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "93.52"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP PIU 25-2-33 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-05-25",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-93.52"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP PIU 25-2-33 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "INTEREST",
+                    "date": "2025-05-21",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "348.57"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 05/26 0.55FOICUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-05-21",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-348.57"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 05/26 0.55FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483644,
+                    "type": "INTEREST",
+                    "date": "2025-05-17",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "223.12"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 17-11-28 FUT CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-05-17",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-223.12"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 17-11-28 FUT CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483643,
+                    "type": "INTEREST",
+                    "date": "2025-05-16",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "180.47"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP FUT 16-11-33 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-05-16",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-180.47"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP FUT 16-11-33 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483641,
+                    "type": "INTEREST",
+                    "date": "2025-04-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "404.14"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 19-27 0.65FOICUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-04-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-404.14"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 19-27 0.65FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483642,
+                    "type": "INTEREST",
+                    "date": "2025-04-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "353.62"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 19-27 0.65%FOIEX",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-04-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-353.62"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 19-27 0.65%FOIEX (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483640,
+                    "type": "INTEREST",
+                    "date": "2025-04-27",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "65.62"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP FUT 27-04-37 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-04-27",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-65.62"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP FUT 27-04-37 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "DEPOSIT",
+                    "date": "2025-02-17",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "15000.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for BUY BTP PIU 25-2-33 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483646,
+                    "type": "BUY",
+                    "date": "2025-02-17",
+                    "quantity": "15000",
+                    "cash": {"code": "EUR", "amount": "-15000.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "ACQ.CONT.SU MERC.: BTP PIU 25-2-33 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483637,
+                    "type": "INTEREST",
+                    "date": "2025-02-15",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "98.44"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 15/02/29 0,45%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-02-15",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-98.44"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 15/02/29 0,45% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483636,
+                    "type": "INTEREST",
+                    "date": "2025-02-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "207.81"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 1/08/30 0.95%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-02-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-207.81"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 1/08/30 0.95% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483635,
+                    "type": "INTEREST",
+                    "date": "2025-02-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "131.25"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 01/08/31 0,60%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2025-02-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-131.25"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 01/08/31 0,60% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483647,
+                    "type": "INTEREST",
+                    "date": "2024-12-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "218.75"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 1/12/2026 1.25%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2024-12-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-218.75"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 1/12/2026 1.25% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483632,
+                    "type": "INTEREST",
+                    "date": "2024-11-26",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "1028.03"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 20-25 1.40FOICUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2024-11-26",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-1028.03"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 20-25 1.40FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "INTEREST",
+                    "date": "2024-11-21",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "219.59"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 05/26 0.55FOICUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2024-11-21",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-219.59"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 05/26 0.55FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483644,
+                    "type": "INTEREST",
+                    "date": "2024-11-17",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "223.12"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 17-11-28 FUT CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2024-11-17",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-223.12"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 17-11-28 FUT CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483643,
+                    "type": "INTEREST",
+                    "date": "2024-11-16",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "180.47"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP FUT 16-11-33 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2024-11-16",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-180.47"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP FUT 16-11-33 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483641,
+                    "type": "INTEREST",
+                    "date": "2024-10-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "345.50"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 19-27 0.65FOICUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2024-10-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-345.50"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 19-27 0.65FOICUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483642,
+                    "type": "INTEREST",
+                    "date": "2024-10-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "302.31"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 19-27 0.65%FOIEX",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2024-10-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-302.31"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 19-27 0.65%FOIEX (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483640,
+                    "type": "INTEREST",
+                    "date": "2024-10-27",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "65.62"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP FUT 27-04-37 CUM",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2024-10-27",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-65.62"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP FUT 27-04-37 CUM (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483637,
+                    "type": "INTEREST",
+                    "date": "2024-08-15",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "98.44"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 15/02/29 0,45%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2024-08-15",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-98.44"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 15/02/29 0,45% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483636,
+                    "type": "INTEREST",
+                    "date": "2024-08-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "207.81"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 1/08/30 0.95%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2024-08-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-207.81"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 1/08/30 0.95% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483635,
+                    "type": "INTEREST",
+                    "date": "2024-08-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "131.25"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "CEDOLA: BTP 01/08/31 0,60%",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2024-08-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-131.25"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "auto_cash"],
+                    "description": "Auto cash for INTEREST BTP 01/08/31 0,60% (Crédit Agricole securities-only export)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483634,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-13",
+                    "quantity": "618.458",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[VERS.TITOLI — successione / transfer-in] AMUNDI PRIMO INV LC (price 4.98, qty 618.458)",
+                    "cost_basis_override": {"code": "EUR", "amount": "4.98"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483634,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-10",
+                    "quantity": "624.36",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[VERS.TITOLI — successione / transfer-in] AMUNDI PRIMO INV LC (price 5.26, qty 624.36)",
+                    "cost_basis_override": {"code": "EUR", "amount": "5.26"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483634,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-10",
+                    "quantity": "624.36",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[VERS.TITOLI — successione / transfer-in] AMUNDI PRIMO INV LC (price 5.26, qty 624.36)",
+                    "cost_basis_override": {"code": "EUR", "amount": "5.26"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483647,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "14000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 1/12/2026 1.25% (price 95.14, qty 14000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9514"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "10000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 05/26 0.55FOICUM (price 96.42, qty 10000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9642"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483641,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "14000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 19-27 0.65FOICUM (price 95.10, qty 14000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.951"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483642,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "12000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 19-27 0.65%FOIEX (price 95.10, qty 12000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.951"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483636,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "17000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 1/08/30 0.95% (price 86.09, qty 17000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.8609"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483632,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "32000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 20-25 1.40FOICUM (price 98.73, qty 32000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9873"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483644,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "29000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 17-11-28 FUT CUM (price 88.48, qty 29000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.8848"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483635,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "17000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 01/08/31 0,60% (price 81.58, qty 17000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.8158"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483640,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "7000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP FUT 27-04-37 CUM (price 72.61, qty 7000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.7261"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483643,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "19000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP FUT 16-11-33 CUM (price 80.16, qty 19000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.8016"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483637,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "17000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 15/02/29 0,45% (price 87.52, qty 17000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.8752"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483647,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "13000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 1/12/2026 1.25% (price 97.24, qty 13000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9724"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "10000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 05/26 0.55FOICUM (price 100.00, qty 10000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "1.00"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483641,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "13000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 19-27 0.65FOICUM (price 100.00, qty 13000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "1.00"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483642,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "12000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 19-27 0.65%FOIEX (price 99.18, qty 12000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9918"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483636,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "17000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 1/08/30 0.95% (price 94.97, qty 17000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9497"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483632,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "32000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 20-25 1.40FOICUM (price 100.00, qty 32000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "1.00"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483644,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "28000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 17-11-28 FUT CUM (price 100.00, qty 28000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "1.00"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483635,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "17000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 01/08/31 0,60% (price 90.48, qty 17000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9048"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483640,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "7000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP FUT 27-04-37 CUM (price 100.00, qty 7000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "1.00"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483643,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "18000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP FUT 16-11-33 CUM (price 100.00, qty 18000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "1.00"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483637,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "17000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 15/02/29 0,45% (price 93.69, qty 17000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9369"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483647,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "13000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 1/12/2026 1.25% (price 97.24, qty 13000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9724"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "10000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 05/26 0.55FOICUM (price 100.00, qty 10000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "1.00"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483641,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "13000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 19-27 0.65FOICUM (price 100.00, qty 13000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "1.00"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483642,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "11000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 19-27 0.65%FOIEX (price 99.18, qty 11000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9918"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483636,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "16000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 1/08/30 0.95% (price 94.97, qty 16000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9497"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483632,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "31000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 20-25 1.40FOICUM (price 100.00, qty 31000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "1.00"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483644,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "28000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 17-11-28 FUT CUM (price 100.00, qty 28000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "1.00"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483635,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "16000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 01/08/31 0,60% (price 90.48, qty 16000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9048"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483640,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "6000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP FUT 27-04-37 CUM (price 100.00, qty 6000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "1.00"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483643,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "18000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP FUT 16-11-33 CUM (price 100.00, qty 18000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "1.00"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483637,
+                    "type": "ADJUSTMENT",
+                    "date": "2024-06-05",
+                    "quantity": "16000",
+                    "cash": None,
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole"],
+                    "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 15/02/29 0,45% (price 93.69, qty 16000)",
+                    "cost_basis_override": {"code": "EUR", "amount": "0.9369"},
+                    "cost_basis_mode": "manual",
+                    "asset_event_id": None,
+                },
+            ],
+            "warnings": [
+                {
+                    "severity": "info",
+                    "code": "ca_succession_transfer_in",
+                    "message": "Sono stati identificati dei titoli trasferiti da un altro dossier (36 righe).\n"
+                    "Sono stati registrati come transazioni di tipo «Rettifica» perché non hanno un movimento di cassa associato: si "
+                    "suppone quindi che fossero già tuoi presso un altro broker.\n"
+                    "In caso affermativo, e se quel broker è tracciato su LibreFolio, importando l'altra metà della transazione il "
+                    "sistema proporrà di collegare le due e di trasformarle in un «Trasferimento titoli».\n"
+                    "Di seguito le righe in dettaglio:",
+                    "evidence": [
+                        {
+                            "title": "Righe di trasferimento",
+                            "headers": ["Data operazione", "Nome", "Causale", "Prezzo", "Quantità", "Controvalore in Euro"],
+                            "rows": [
+                                ["13/06/2024", "AMUNDI PRIMO INV LC", "VERS.TITOLI", "4,98", "618.458", "0,00"],
+                                ["10/06/2024", "AMUNDI PRIMO INV LC", "VERS.TITOLI", "5,26", "624.36", "0,00"],
+                                ["10/06/2024", "AMUNDI PRIMO INV LC", "VERS.TITOLI", "5,26", "624.36", "0,00"],
+                                ["05/06/2024", "BTP 1/12/2026 1.25%", "GIRO ALTRO DOSSIER", "95,14", "14000", "0,00"],
+                                ["05/06/2024", "BTP 05/26 0.55FOICUM", "GIRO ALTRO DOSSIER", "96,42", "10000", "0,00"],
+                                ["05/06/2024", "BTP 19-27 0.65FOICUM", "GIRO ALTRO DOSSIER", "95,10", "14000", "0,00"],
+                                ["05/06/2024", "BTP 19-27 0.65%FOIEX", "GIRO ALTRO DOSSIER", "95,10", "12000", "0,00"],
+                                ["05/06/2024", "BTP 1/08/30 0.95%", "GIRO ALTRO DOSSIER", "86,09", "17000", "0,00"],
+                                ["05/06/2024", "BTP 20-25 1.40FOICUM", "GIRO ALTRO DOSSIER", "98,73", "32000", "0,00"],
+                                ["05/06/2024", "BTP 17-11-28 FUT CUM", "GIRO ALTRO DOSSIER", "88,48", "29000", "0,00"],
+                                ["05/06/2024", "BTP 01/08/31 0,60%", "GIRO ALTRO DOSSIER", "81,58", "17000", "0,00"],
+                                ["05/06/2024", "BTP FUT 27-04-37 CUM", "GIRO ALTRO DOSSIER", "72,61", "7000", "0,00"],
+                                ["05/06/2024", "BTP FUT 16-11-33 CUM", "GIRO ALTRO DOSSIER", "80,16", "19000", "0,00"],
+                                ["05/06/2024", "BTP 15/02/29 0,45%", "GIRO ALTRO DOSSIER", "87,52", "17000", "0,00"],
+                                ["05/06/2024", "BTP 1/12/2026 1.25%", "GIRO ALTRO DOSSIER", "97,24", "13000", "0,00"],
+                                ["05/06/2024", "BTP 05/26 0.55FOICUM", "GIRO ALTRO DOSSIER", "100,00", "10000", "0,00"],
+                                ["05/06/2024", "BTP 19-27 0.65FOICUM", "GIRO ALTRO DOSSIER", "100,00", "13000", "0,00"],
+                                ["05/06/2024", "BTP 19-27 0.65%FOIEX", "GIRO ALTRO DOSSIER", "99,18", "12000", "0,00"],
+                                ["05/06/2024", "BTP 1/08/30 0.95%", "GIRO ALTRO DOSSIER", "94,97", "17000", "0,00"],
+                                ["05/06/2024", "BTP 20-25 1.40FOICUM", "GIRO ALTRO DOSSIER", "100,00", "32000", "0,00"],
+                                ["05/06/2024", "BTP 17-11-28 FUT CUM", "GIRO ALTRO DOSSIER", "100,00", "28000", "0,00"],
+                                ["05/06/2024", "BTP 01/08/31 0,60%", "GIRO ALTRO DOSSIER", "90,48", "17000", "0,00"],
+                                ["05/06/2024", "BTP FUT 27-04-37 CUM", "GIRO ALTRO DOSSIER", "100,00", "7000", "0,00"],
+                                ["05/06/2024", "BTP FUT 16-11-33 CUM", "GIRO ALTRO DOSSIER", "100,00", "18000", "0,00"],
+                                ["05/06/2024", "BTP 15/02/29 0,45%", "GIRO ALTRO DOSSIER", "93,69", "17000", "0,00"],
+                                ["05/06/2024", "BTP 1/12/2026 1.25%", "GIRO ALTRO DOSSIER", "97,24", "13000", "0,00"],
+                                ["05/06/2024", "BTP 05/26 0.55FOICUM", "GIRO ALTRO DOSSIER", "100,00", "10000", "0,00"],
+                                ["05/06/2024", "BTP 19-27 0.65FOICUM", "GIRO ALTRO DOSSIER", "100,00", "13000", "0,00"],
+                                ["05/06/2024", "BTP 19-27 0.65%FOIEX", "GIRO ALTRO DOSSIER", "99,18", "11000", "0,00"],
+                                ["05/06/2024", "BTP 1/08/30 0.95%", "GIRO ALTRO DOSSIER", "94,97", "16000", "0,00"],
+                                ["05/06/2024", "BTP 20-25 1.40FOICUM", "GIRO ALTRO DOSSIER", "100,00", "31000", "0,00"],
+                                ["05/06/2024", "BTP 17-11-28 FUT CUM", "GIRO ALTRO DOSSIER", "100,00", "28000", "0,00"],
+                                ["05/06/2024", "BTP 01/08/31 0,60%", "GIRO ALTRO DOSSIER", "90,48", "16000", "0,00"],
+                                ["05/06/2024", "BTP FUT 27-04-37 CUM", "GIRO ALTRO DOSSIER", "100,00", "6000", "0,00"],
+                                ["05/06/2024", "BTP FUT 16-11-33 CUM", "GIRO ALTRO DOSSIER", "100,00", "18000", "0,00"],
+                                ["05/06/2024", "BTP 15/02/29 0,45%", "GIRO ALTRO DOSSIER", "93,69", "16000", "0,00"],
+                            ],
+                            "row_numbers": [60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95],
+                            "comment": "Ogni riga qui sotto è un versamento titoli senza contropartita di cassa: nessun denaro è uscito dal " "conto, quindi la posizione è stata aperta come «Rettifica».",
+                        }
+                    ],
+                    "context": {"row_count": 36},
+                }
+            ],
+            "validation_issues": [],
+            "field_todos": [],
+            "extracted_assets": {
+                2147483647: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 1/12/2026 1.25%", "notices": []},
+                2147483646: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP PIU 25-2-33 CUM", "notices": []},
+                2147483645: {
+                    "extracted_symbol": None,
+                    "extracted_isin": None,
+                    "extracted_name": "BTP 05/26 0.55FOICUM",
+                    "notices": [{"kind": "maturity_suspected", "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: " "RIMBORSO»).", "transaction_indexes": [4, 5]}],
+                },
+                2147483644: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 17-11-28 FUT CUM", "notices": []},
+                2147483643: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP FUT 16-11-33 CUM", "notices": []},
+                2147483642: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 19-27 0.65%FOIEX", "notices": []},
+                2147483641: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 19-27 0.65FOICUM", "notices": []},
+                2147483640: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP FUT 27-04-37 CUM", "notices": []},
+                2147483639: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 01/03/35 3,35%", "notices": []},
+                2147483638: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 1/3/32 1,65%", "notices": []},
+                2147483637: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 15/02/29 0,45%", "notices": []},
+                2147483636: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 1/08/30 0.95%", "notices": []},
+                2147483635: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP 01/08/31 0,60%", "notices": []},
+                2147483634: {
+                    "extracted_symbol": None,
+                    "extracted_isin": None,
+                    "extracted_name": "AMUNDI PRIMO INV LC",
+                    "notices": [{"kind": "maturity_suspected", "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: " "RIMBORSO»).", "transaction_indexes": [42]}],
+                },
+                2147483633: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "AMUNDI PIO GLOB EQ G", "notices": []},
+                2147483632: {
+                    "extracted_symbol": None,
+                    "extracted_isin": None,
+                    "extracted_name": "BTP 20-25 1.40FOICUM",
+                    "notices": [{"kind": "maturity_suspected", "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: " "RIMBORSO»).", "transaction_indexes": [70, 71]}],
+                },
+            },
+            "checkpoints": [],
+            "verifications": [],
+        },
+        "account": {
+            "transactions": [
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-07-30",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-61.20"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "pagamento_utenze"],
+                    "description": "SDD A : UTILITY PROVIDER ADDEBITO SDD NUMERO 0000000001",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-07-29",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-500.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "prelievo_sport_autom_altra_banca"],
+                    "description": "PREL. CON CARTA 00000000 DEL 29/07/26 ALTRA BANCA -SPORT. ROMA",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-07-28",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-42.10"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "pagamento_tramite_pos"],
+                    "description": "POS CARTA 00000000 DEL 28/07/26 C/O SUPERMARKET - ROMA",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "DEPOSIT",
+                    "date": "2026-07-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "2879.70"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "accredito_emolumenti"],
+                    "description": "PENSIONE INPS 0000 000 00000000 01 DEL 01.07.2026",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "DEPOSIT",
+                    "date": "2026-07-05",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "231.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "giroconto_bonifico"],
+                    "description": "ORD:MITTENTE SAMPLE DT.ORD:000000 DESCR.OPERAZIONE SCT:RIMBORSO",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483647,
+                    "type": "INTEREST",
+                    "date": "2026-06-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "250.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
+                    "description": "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 " "RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483647,
+                    "type": "TAX",
+                    "date": "2026-06-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-31.25"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti", "withholding_tax"],
+                    "description": "[CEDOLE, DIVIDENDI, PREMI ESTRATTI — ritenuta] CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 " "NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483646,
+                    "type": "DIVIDEND",
+                    "date": "2026-06-15",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "95.40"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
+                    "description": "DIVIDENDO AZIONE SAMPLE IT0000000002 DOS:00000/00000000",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "INTEREST",
+                    "date": "2026-06-16",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "12.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
+                    "description": "DIVIDENDO CONGUAGLIO SENZA TITOLO IDENTIFICATO",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "TAX",
+                    "date": "2026-07-14",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-21.42"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "commiss_spese_su_operaz_titoli"],
+                    "description": "ADDEBITO CAPITAL GAIN (D.LGS 461/97) 0000000000000 DATA:21/05/2026",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483647,
+                    "type": "FEE",
+                    "date": "2026-06-01",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-1.50"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "commiss_spese_su_operaz_titoli"],
+                    "description": "SPESE STACCO CEDOLA DEL 01/06/2026 DOSSIER: 00000/00000000 TIT: IT0000000001",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "TAX",
+                    "date": "2026-06-30",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-87.50"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "commissioni_spese"],
+                    "description": "Imposta bollo prodotti finanziari DATA 30/06/2026 RAPP.00000/0000000000000 TIT",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "FEE",
+                    "date": "2026-06-30",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-10.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "commissioni_spese"],
+                    "description": "SPESE DI GESTIONE E AMMINISTRAZ. DOS:0000/00000000 DATA:30/06/2026",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "FEE",
+                    "date": "2026-06-30",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-4.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "interessi_competenze"],
+                    "description": "CANONE MENSILE CONTO SMART 06/26",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "INTEREST",
+                    "date": "2025-12-31",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "3.20"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "interessi_competenze"],
+                    "description": "INTERESSI CREDITORI LORDI ANNO 2025",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483647,
+                    "type": "BUY",
+                    "date": "2026-05-21",
+                    "quantity": "40000.00",
+                    "cash": {"code": "EUR", "amount": "-40000.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni", "account_trade"],
+                    "description": "NOTA INF. ACQ. TIT:BTP SAMPLE DOSS:00000/00000000",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "INTEREST",
+                    "date": "2026-06-02",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "200.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
+                    "description": "CEDOLA:BTP OTHER 1/9/2030 IT0000000003 DOS:00000/00000000 NOMINALE: 20.000,00 TASSO: 2,00",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "BUY",
+                    "date": "2026-05-10",
+                    "quantity": "20000.00",
+                    "cash": {"code": "EUR", "amount": "-20412.33"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni", "account_trade"],
+                    "description": "NOTA INF. ACQ. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483645,
+                    "type": "SELL",
+                    "date": "2026-07-20",
+                    "quantity": "-20000.00",
+                    "cash": {"code": "EUR", "amount": "20180.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni", "account_trade"],
+                    "description": "NOTA INF. VEND. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-07-15",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-5000.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni"],
+                    "description": "SOTTOSC SICAV ORD.:2026/000000001 SAMPLE GLOB EQ FUND",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": 2147483644,
+                    "type": "SELL",
+                    "date": "2025-05-26",
+                    "quantity": "-30105.000",
+                    "cash": {"code": "EUR", "amount": "30105.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "titoli_scaduti_o_estratti", "account_maturity"],
+                    "description": "[TITOLI SCADUTI O ESTRATTI — rimborso/scadenza da conto, titolo non identificato] BTP SAMPLE (source: RIMB.TIT. " "BTP SAMPLE (0000000 ) DOS:00000/00000000 26/05/25; venduto interamente a par 100, nominale derivato 30105.000)",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "DEPOSIT",
+                    "date": "2026-07-10",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "5.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "commissioni_spese"],
+                    "description": "STORNO SPESE - RIMBORSO COMMISSIONI PROMO",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "WITHDRAWAL",
+                    "date": "2026-06-20",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "-50.00"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
+                    "description": "STORNO CEDOLA ERRATA IT0000000001 DOS:00000/00000000",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+                {
+                    "broker_id": 1,
+                    "asset_id": None,
+                    "type": "DEPOSIT",
+                    "date": "2025-11-11",
+                    "quantity": "0",
+                    "cash": {"code": "EUR", "amount": "9984.47"},
+                    "link_uuid": None,
+                    "tags": ["import", "credit_agricole", "giroconto_bonifico"],
+                    "description": "ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONESCT::RIMBORSI: : : :SU SAMPLE FUND SIC AV CL B<*> " "RIFERIMENTO SCT:XX-2025-11-10-000000001 IDENTIFICATIVO SCT:",
+                    "cost_basis_override": None,
+                    "cost_basis_mode": None,
+                    "asset_event_id": None,
+                },
+            ],
+            "warnings": [
+                {
+                    "severity": "warning",
+                    "code": "ca_account_maturity_unlinked",
+                    "message": "Riga 21: scadenza/rimborso 'RIMB.TIT. BTP SAMPLE (0000000 ) DOS:00000/00000000 26/05/25' non collegabile a un titolo "
+                    "(ISIN e nominale non trovati nella stessa data); importata interamente come vendita a valore nominale (par 100, nessuna "
+                    "quota di interesse) — verifica il nominale.",
+                    "evidence": [
+                        {
+                            "title": "Riga del file",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [["26/05/2025", "TITOLI SCADUTI O ESTRATTI", "RIMB.TIT. BTP SAMPLE (0000000 ) DOS:00000/00000000 26/05/25", "30.105,00", "EUR"]],
+                            "row_numbers": [21],
+                            "comment": "Per scorporare il capitale dal premio mi serve il nominale, che di solito ricavo dalla cedola pagata lo " "stesso giorno. Qui quella cedola non c'è, quindi ho trattato tutto l'importo come rimborso alla pari.",
+                        }
+                    ],
+                    "context": {"causale": "TITOLI SCADUTI O ESTRATTI", "row": 21},
+                }
+            ],
+            "validation_issues": [],
+            "field_todos": [
+                {
+                    "tx_index": 9,
+                    "field": "asset_id",
+                    "severity": "warning",
+                    "reason_code": "ca_account_charge_unallocated",
+                    "message": "Riga 10: spesa su operazione titoli non collegata a nessun titolo. Assegnala al titolo giusto, oppure tienila così " "se riguarda il conto.",
+                    "context": {"causale": "COMMISS./SPESE SU OPERAZ. TITOLI", "row": 10},
+                    "evidence": [
+                        {
+                            "title": "Riga del file",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [["14/07/2026", "COMMISS./SPESE SU OPERAZ. TITOLI", "ADDEBITO CAPITAL GAIN (D.LGS 461/97) 0000000000000 DATA:21/05/2026", "'-21,42", "EUR"]],
+                            "row_numbers": [10],
+                            "comment": "Questa è una spesa o imposta su un'operazione in titoli, ma la descrizione non dice su quale. Resta a "
+                            "carico del conto invece che del titolo, e il costo di carico di quel titolo risulta più basso del "
+                            "reale. Scegli il titolo a cui appartiene, oppure tienila com'è se è una spesa di conto.",
+                        }
+                    ],
+                },
+                {
+                    "tx_index": 15,
+                    "field": "cash",
+                    "severity": "warning",
+                    "reason_code": "ca_account_trade_bundled_amount",
+                    "message": "Riga 16: acquisto di BTP SAMPLE 1/12/2026 — l'importo di questa riga potrebbe raggruppare più voci insieme.",
+                    "context": {
+                        "causale": "COMPRAVENDITA TITOLI/FONDI/OPZIONI",
+                        "row": 16,
+                        "isin": "IT0000000001",
+                        "cash": "40000.00",
+                        "nominale": "40000.00",
+                        "delta": "0.00",
+                        "currency": "EUR",
+                        "nominale_row": 7,
+                        "compare_nominal": True,
+                        "split_hint": "trade_charges",
+                        "split_suggestions": [
+                            "Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se " "una commissione c'è stata, è dentro questo totale.",
+                            "Se è un'obbligazione e non l'hai comprata all'emissione, il totale contiene anche il rateo " "cedolare che hai rimborsato al venditore: registralo come voce a parte, non fa parte del " "costo del titolo.",
+                            "Il totale coincide al centesimo con il valore nominale: è il caso tipico dell'acquisto " "all'emissione, alla pari e senza oneri. Se è andata così, non c'è nulla da scorporare.",
+                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del " "solo titolo e le singole voci di spesa.",
+                        ],
+                    },
+                    "evidence": [
+                        {
+                            "title": "Riga di acquisto",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [["21/05/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. ACQ. TIT:BTP SAMPLE DOSS:00000/00000000", "'-40.000,00", "EUR"]],
+                            "row_numbers": [16],
+                            "comment": "Dal conto sono usciti 40.000,00 EUR, esattamente quanto il valore nominale dichiarato dalla cedola "
+                            "alla riga 7. È il caso dell'acquisto all'emissione, alla pari e senza oneri: se è andata così non c'è "
+                            "nulla da correggere. Se invece la nota informativa espone commissioni o rateo, il file li ha inglobati "
+                            "qui dentro.",
+                        },
+                        {
+                            "title": "Cedola che ha fornito il nominale",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [["01/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 " "RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1", "218,75", "EUR"]],
+                            "row_numbers": [7],
+                            "comment": "L'ISIN IT0000000001 e il valore nominale 40.000,00 vengono da qui: è il capitale del titolo, cioè " "quanto la banca rimborsa a scadenza, non quanto hai pagato.",
+                        },
+                    ],
+                },
+                {
+                    "tx_index": 17,
+                    "field": "cash",
+                    "severity": "warning",
+                    "reason_code": "ca_account_trade_bundled_amount",
+                    "message": "Riga 18: acquisto di BTP OTHER 1/9/2030 — l'importo di questa riga potrebbe raggruppare più voci insieme.",
+                    "context": {
+                        "causale": "COMPRAVENDITA TITOLI/FONDI/OPZIONI",
+                        "row": 18,
+                        "isin": "IT0000000003",
+                        "cash": "20412.33",
+                        "nominale": "20000.00",
+                        "delta": "412.33",
+                        "currency": "EUR",
+                        "nominale_row": 17,
+                        "compare_nominal": True,
+                        "split_hint": "trade_charges",
+                        "split_suggestions": [
+                            "Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se " "una commissione c'è stata, è dentro questo totale.",
+                            "Se è un'obbligazione e non l'hai comprata all'emissione, il totale contiene anche il rateo " "cedolare che hai rimborsato al venditore: registralo come voce a parte, non fa parte del " "costo del titolo.",
+                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del " "solo titolo e le singole voci di spesa.",
+                        ],
+                    },
+                    "evidence": [
+                        {
+                            "title": "Riga di acquisto",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [["10/05/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. ACQ. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000", "'-20.412,33", "EUR"]],
+                            "row_numbers": [18],
+                            "comment": "Dal conto sono usciti 20.412,33 EUR. Guardando il resto del file ho trovato una cedola dello stesso "
+                            "titolo (riga 17) che dichiara 20.000,00 di valore nominale, cioè il capitale del titolo. I due numeri "
+                            "non coincidono (412,33 EUR di differenza): il totale di questa riga mette insieme il prezzo del "
+                            "titolo, il rateo cedolare maturato e le eventuali commissioni, e il file non li separa. La cassa è "
+                            "comunque giusta; è il costo di carico a essere approssimato.",
+                        },
+                        {
+                            "title": "Cedola che ha fornito il nominale",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [["02/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP OTHER 1/9/2030 IT0000000003 DOS:00000/00000000 NOMINALE: 20.000,00 TASSO: 2,00", "200,00", "EUR"]],
+                            "row_numbers": [17],
+                            "comment": "L'ISIN IT0000000003 e il valore nominale 20.000,00 vengono da qui: è il capitale del titolo, cioè " "quanto la banca rimborsa a scadenza, non quanto hai pagato.",
+                        },
+                    ],
+                },
+                {
+                    "tx_index": 18,
+                    "field": "quantity",
+                    "severity": "warning",
+                    "reason_code": "ca_account_trade_sell_quantity_presumed",
+                    "message": "Riga 19: vendita di BTP OTHER 1/9/2030. Ho usato 20.000,00 come quantità, cioè il valore nominale che risulta dalle " "cedole. Se hai venduto solo una parte, correggila.",
+                    "context": {"causale": "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "row": 19, "isin": "IT0000000003", "nominale": "20000.00"},
+                    "evidence": [
+                        {
+                            "title": "Riga del file",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [["20/07/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. VEND. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000", "20.180,00", "EUR"]],
+                            "row_numbers": [19],
+                            "comment": "Il file dice quanto denaro è entrato, non quante quote sono uscite. Le cedole di IT0000000003 " "riportano un nominale di 20000.00: è la posizione, quindi è giusto solo se hai venduto tutto.",
+                        }
+                    ],
+                },
+                {
+                    "tx_index": 18,
+                    "field": "cash",
+                    "severity": "warning",
+                    "reason_code": "ca_account_trade_bundled_amount",
+                    "message": "Riga 19: vendita di BTP OTHER 1/9/2030 — l'importo di questa riga potrebbe raggruppare più voci insieme.",
+                    "context": {
+                        "causale": "COMPRAVENDITA TITOLI/FONDI/OPZIONI",
+                        "row": 19,
+                        "isin": "IT0000000003",
+                        "cash": "20180.00",
+                        "nominale": "20000.00",
+                        "delta": "180.00",
+                        "currency": "EUR",
+                        "nominale_row": 17,
+                        "compare_nominal": False,
+                        "split_hint": "trade_charges",
+                        "split_suggestions": [
+                            "Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se " "una commissione c'è stata, è dentro questo totale.",
+                            "Su una vendita l'importo accreditato è già netto: per registrare il ricavo lordo scorpora qui " "le spese trattenute, l'incasso sul conto non cambia.",
+                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del " "solo titolo e le singole voci di spesa.",
+                        ],
+                    },
+                    "evidence": [
+                        {
+                            "title": "Riga di vendita",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [["20/07/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. VEND. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000", "20.180,00", "EUR"]],
+                            "row_numbers": [19],
+                            "comment": "Sul conto sono entrati 20.180,00 EUR, ed è un importo netto: le spese sulla vendita sono già state " "trattenute e il file non le espone. Il ricavo lordo e le singole spese non sono quindi ricavabili da " "questa riga.",
+                        },
+                        {
+                            "title": "Cedola che ha fornito il nominale",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [["02/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP OTHER 1/9/2030 IT0000000003 DOS:00000/00000000 NOMINALE: 20.000,00 TASSO: 2,00", "200,00", "EUR"]],
+                            "row_numbers": [17],
+                            "comment": "L'ISIN IT0000000003 e il valore nominale 20.000,00 vengono da qui: è il capitale del titolo, cioè " "quanto la banca rimborsa a scadenza, non quanto hai pagato.",
+                        },
+                    ],
+                },
+                {
+                    "tx_index": 19,
+                    "field": "asset_id",
+                    "severity": "blocker",
+                    "reason_code": "ca_account_trade_unresolved",
+                    "message": "Riga 20: operazione su 'SAMPLE GLOB EQ FUND' senza quantità ricavabile. Scegli il titolo e inserisci la quantità.",
+                    "context": {
+                        "causale": "COMPRAVENDITA TITOLI/FONDI/OPZIONI",
+                        "row": 20,
+                        "reason": "no_quantity",
+                        "split_hint": "trade_charges",
+                        "cash": "5000.00",
+                        "currency": "EUR",
+                        "compare_nominal": False,
+                        "split_suggestions": [
+                            "Il file registra già delle spese su titoli a ridosso di questa data — riga 10 (21,42 EUR). " "Sono transazioni a sé: se le scorpori anche da qui le conti due volte.",
+                            "È un fondo, non un'obbligazione: non ci sono ratei cedolari da scorporare, quindi la " "differenza rispetto al prezzo sono commissioni o imposte.",
+                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del " "solo titolo e le singole voci di spesa.",
+                        ],
+                    },
+                    "evidence": [
+                        {
+                            "title": "Riga del file",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [["15/07/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "SOTTOSC SICAV ORD.:2026/000000001 SAMPLE GLOB EQ FUND", "'-5.000,00", "EUR"]],
+                            "row_numbers": [20],
+                            "comment": "Questa riga è un'operazione su titoli e il titolo si legge ('SAMPLE GLOB EQ FUND'), ma la quantità no: "
+                            "nel file non ci sono cedole di questo strumento da cui ricavarla (i fondi non ne staccano). L'importo "
+                            "è giusto, l'ho registrata come prelievo di cassa.",
+                        }
+                    ],
+                },
+                {
+                    "tx_index": 23,
+                    "field": "asset_id",
+                    "severity": "blocker",
+                    "reason_code": "ca_account_trade_unresolved",
+                    "message": "Riga 24: sembra il disinvestimento di 'SAMPLE FUND SICAV', arrivato come bonifico. Scegli il fondo e inserisci le " "quote vendute.",
+                    "context": {
+                        "causale": "GIROCONTO/BONIFICO",
+                        "row": 24,
+                        "reason": "fund_redemption",
+                        "split_hint": "trade_charges",
+                        "cash": "9984.47",
+                        "currency": "EUR",
+                        "compare_nominal": False,
+                        "split_suggestions": [
+                            "Nei giorni intorno a questa operazione il file non registra nessuna riga di commissioni: se " "una commissione c'è stata, è dentro questo totale.",
+                            "È un fondo, non un'obbligazione: non ci sono ratei cedolari da scorporare, quindi la " "differenza rispetto al prezzo sono commissioni o imposte.",
+                            "Su una vendita l'importo accreditato è già netto: per registrare il ricavo lordo scorpora qui " "le spese trattenute, l'incasso sul conto non cambia.",
+                            "I numeri esatti sono sulla nota informativa dell'operazione: da lì leggi il controvalore del " "solo titolo e le singole voci di spesa.",
+                        ],
+                    },
+                    "evidence": [
+                        {
+                            "title": "Riga del file",
+                            "headers": ["Data Op.", "Causale", "Descrizione", "Importo", "Divisa"],
+                            "rows": [["11/11/2025", "GIROCONTO/BONIFICO", "ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONESCT::RIMBORSI: : : :SU SAMPLE FUND SIC AV CL B<*> " "RIFERIMENTO SCT:XX-2025-11-10-000000001 IDENTIFICATIVO SCT:", "9.984,47", "EUR"]],
+                            "row_numbers": [24],
+                            "comment": "Il denaro arriva da 'SAMPLE FUND SICAV' e la causale parla di rimborso sullo stesso fondo: è un "
+                            "disinvestimento pagato per bonifico, non un accredito qualsiasi. Le quote vendute il file non le dice "
+                            "— un fondo riporta il controvalore, non il numero di quote — quindi l'ho registrata come versamento di "
+                            "cassa. Cambiala in vendita, scegli il fondo e inserisci le quote: altrimenti la posizione resta aperta "
+                            "per sempre.",
+                        }
+                    ],
+                },
+            ],
+            "extracted_assets": {
+                2147483647: {"extracted_symbol": None, "extracted_isin": "IT0000000001", "extracted_name": "BTP SAMPLE 1/12/2026", "notices": []},
+                2147483646: {"extracted_symbol": None, "extracted_isin": "IT0000000002", "extracted_name": "AZIONE SAMPLE", "notices": []},
+                2147483645: {"extracted_symbol": None, "extracted_isin": "IT0000000003", "extracted_name": "BTP OTHER 1/9/2030", "notices": []},
+                2147483644: {"extracted_symbol": None, "extracted_isin": None, "extracted_name": "BTP SAMPLE", "notices": [{"kind": "maturity_suspected", "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: " "RIMBORSO»).", "transaction_indexes": [20]}]},
+            },
+            "checkpoints": [],
+            "verifications": [],
+        },
+    }
+
+    @staticmethod
+    def _parse(path: Path) -> BRIMParseOutput:
+        return CreditAgricoleBrokerProvider().parse(path, broker_id=1)
+
+    @pytest.mark.parametrize(
+        ("layout", "csv_path"),
+        [(layout, csv_path) for layout, csv_path, _, _ in LAYOUTS],
+        ids=[layout for layout, _, _, _ in LAYOUTS],
+    )
+    def test_csv_freezes_entire_output(self, layout: str, csv_path: Path):
+        """Match every CSV value, order, fake ID, message, context and reason."""
+        expected = self.EXPECTED_OUTPUTS[layout]
+        csv_out = self._parse(csv_path)
+
+        assert set(BRIMParseOutput.model_fields) == {
+            "transactions",
+            "warnings",
+            "validation_issues",
+            "field_todos",
+            "extracted_assets",
+            # BRIM report sets (phase A1): truth points, always empty for single-file plugins like CA
+            "checkpoints",
+            "verifications",
+        }
+        assert set(TXCreateItem.model_fields) == {
+            "broker_id",
+            "asset_id",
+            "type",
+            "date",
+            "quantity",
+            "cash",
+            "link_uuid",
+            "tags",
+            "description",
+            "cost_basis_override",
+            "cost_basis_mode",
+            "asset_event_id",
+        }
+        assert _json_safe(csv_out) == expected, f"{layout}: complete CSV parse output drifted"
+
+    @pytest.mark.parametrize(
+        ("layout", "xlsx_path", "xlsx_evidence_offset"),
+        [(layout, xlsx_path, offset) for layout, _, xlsx_path, offset in LAYOUTS],
+        ids=[layout for layout, _, _, _ in LAYOUTS],
+    )
+    def test_xlsx_matches_entire_literal_csv_output(
+        self,
+        layout: str,
+        xlsx_path: Path,
+        xlsx_evidence_offset: int,
+    ):
+        """Match XLSX after only the documented +9/0 evidence-row offset."""
+        pytest.importorskip("openpyxl")
+        expected = self.EXPECTED_OUTPUTS[layout]
+        xlsx_out = self._parse(xlsx_path)
+
+        assert _normalize_ca_xlsx_evidence_row_numbers(xlsx_out, xlsx_evidence_offset) == expected, f"{layout}: complete XLSX parse output drifted beyond its documented evidence-row offset"
+
+
+# =============================================================================
+# WINDOWS-1252 INVARIANCE — THE BYTE ENCODING MUST NOT CHANGE THE PARSE
+# =============================================================================
+
+BRIM_PLUGIN_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers"
+
+
+def _cp1252_unencodable(text: str) -> list[str]:
+    """The characters of ``text`` that Windows-1252 has no byte for, as ``"U+202F NARROW NO-BREAK SPACE"``."""
+    found: list[str] = []
+    for char in sorted(set(text)):
+        try:
+            char.encode("cp1252")
+        except UnicodeEncodeError:
+            found.append(f"U+{ord(char):04X} {unicodedata.name(char, 'UNNAMED')}")
+    return found
+
+
+def _windows_1252_cases() -> list[Any]:
+    """One ``pytest.param(sample, code, plugin)`` per non-ASCII sample and plugin that claims it.
+
+    Top-level samples only: ``malformed/`` holds deliberately broken fixtures. An
+    ASCII-only sample is left out, since its bytes are the same in both encodings
+    and it proves nothing. A sample that Windows-1252 cannot represent stays in the
+    matrix, marked skip, and the reason names the characters.
+
+    Samples are read with ``BRIMProvider._read_text``, the plugins' own encoding
+    fallback: a sample that is not UTF-8 (Danske's cash statement is Latin-1, as the
+    bank writes it) must join the matrix, not break the collection of this module.
+    """
+    cases: list[Any] = []
+    for sample in sorted(SAMPLE_DIR.glob("*.csv")):
+        text = BRIMProvider._read_text(sample)
+        if text.isascii():
+            continue
+        unencodable = _cp1252_unencodable(text)
+        marks = [pytest.mark.skip(reason=f"{sample.name} cannot be saved as Windows-1252: it contains {', '.join(unencodable)}")] if unencodable else []
+        cases.extend(pytest.param(sample, code, plugin, id=f"{sample.stem}-{code}", marks=marks) for code, plugin in _PLUGIN_PARAMS if plugin.can_parse(sample))
+    return cases
+
+
+_WINDOWS_1252_CASES = _windows_1252_cases()
+
+
+def _parse_outcome(plugin: BRIMProvider, path: Path) -> tuple[str, Any]:
+    """What ``plugin.parse`` makes of ``path``, as plain data that compares with ``==``.
+
+    ``("BRIMParseOutput", model_dump(mode="json"))`` or
+    ``("BRIMParseError", {"message": ..., "details": ...})``. Any other exception
+    propagates: it is a crash, not an outcome.
+    """
+    try:
+        return "BRIMParseOutput", plugin.parse(path, broker_id=1).model_dump(mode="json")
+    except BRIMParseError as exc:
+        return "BRIMParseError", {"message": exc.message, "details": exc.details}
+
+
+def _summary(outcome: tuple[str, Any]) -> str:
+    """One line for a failure message: the error message, or the output's size."""
+    kind, data = outcome
+    if kind == "BRIMParseError":
+        return f"BRIMParseError({data['message']!r})"
+    return f"BRIMParseOutput ({len(data['transactions'])} transactions, {len(data['warnings'])} warnings)"
+
+
+def _relocated(value: Any, old: str, new: str) -> Any:
+    """``value`` with ``old`` replaced by ``new`` in every string it holds, through dicts, lists and tuples."""
+    if isinstance(value, str):
+        return value.replace(old, new)
+    if isinstance(value, dict):
+        return {key: _relocated(item, old, new) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(_relocated(item, old, new) for item in value)
+    return value
+
+
+def _fixed_encoding_open_lines(module: Path) -> list[int]:
+    """Lines of ``module`` with a call named ``open`` (``open``, ``io.open``, ``path.open``…) that passes ``encoding=``."""
+    lines: list[int] = []
+    for node in ast.walk(ast.parse(module.read_text(encoding="utf-8"), filename=str(module))):
+        if not isinstance(node, ast.Call):
+            continue
+        callee = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", None)
+        if callee == "open" and any(keyword.arg == "encoding" for keyword in node.keywords):
+            lines.append(node.lineno)
+    return sorted(lines)
+
+
+class TestWindows1252Invariance:
+    """A CSV export parses the same whether it was saved as UTF-8 or as Windows-1252.
+
+    The bug: 27 plugins (31 call sites) read their file with
+    ``open(file_path, encoding="utf-8-sig")``. An export saved as Windows-1252,
+    which is what Excel on Windows and many European banks write, fails on its
+    first accented byte with ``UnicodeDecodeError``, raw or wrapped in a
+    ``BRIMParseError``. Detection mostly succeeds, because ``can_parse`` usually
+    goes through ``_read_file_head``, which already falls back: the format is
+    recognised, then the import fails. Where ``can_parse`` opens the file itself
+    (generic CSV, InvestEngine, Rabobank, Trade Republic), detection fails too.
+
+    Invariance: each top-level sample with a non-ASCII character is re-saved as
+    Windows-1252 in ``tmp_path``, under the same file name. Only the bytes change:
+    the BOM, if any, is dropped and line endings are kept. For every plugin whose
+    ``can_parse`` accepts the original, ``can_parse`` must accept the copy and
+    ``parse`` must give the same outcome: an equal ``model_dump(mode="json")``,
+    or a ``BRIMParseError`` with the same message and details. Before comparing,
+    the copy's directory is written as the sample directory, the one difference
+    that is not an encoding difference. Any other exception on the copy is a
+    failure. A sample that Windows-1252 cannot represent is listed as skipped,
+    with the character.
+
+    Written red-first, before the plugins moved to ``self._open_text``. Only the
+    plugins that read through ``_brim_io.read_rows`` (Crédit Agricole, Intesa,
+    Directa) passed then. The guard test pins the fix: no plugin may open a file
+    with a fixed encoding again.
+    """
+
+    def test_windows_1252_cases_are_not_vacuous(self):
+        """At least one (sample, plugin) case really runs: an empty or all-skipped matrix proves nothing."""
+        runnable = [case.id for case in _WINDOWS_1252_CASES if not case.marks]
+        assert runnable, "No sample reaches test_sample_parses_identically_when_saved_as_windows_1252: none has a non-ASCII character that Windows-1252 can encode, or no plugin claims one"
+
+    @pytest.mark.parametrize(("sample", "code", "plugin"), _WINDOWS_1252_CASES)
+    def test_sample_parses_identically_when_saved_as_windows_1252(self, sample: Path, code: str, plugin: BRIMProvider, tmp_path: Path):
+        """The Windows-1252 copy is accepted by ``can_parse`` and parses to the original's outcome."""
+        # Same file name: plugins check the extension, and error details may carry the name.
+        # The original is decoded like the plugins decode it, so a Latin-1 sample works too.
+        copy = tmp_path / sample.name
+        copy.write_bytes(BRIMProvider._read_text(sample).encode("cp1252"))
+
+        assert plugin.can_parse(copy), f"{code}.can_parse() accepts {sample.name} but rejects its Windows-1252 copy"
+
+        # A crash on the original would be a plugin bug unrelated to the encoding: let it surface as is.
+        expected = _parse_outcome(plugin, sample)
+        try:
+            outcome = _parse_outcome(plugin, copy)
+        except Exception as exc:
+            pytest.fail(f"{code}.parse() crashes on the Windows-1252 copy of {sample.name}: {type(exc).__name__}: {exc}")
+        actual = _relocated(outcome, str(tmp_path), str(SAMPLE_DIR))
+
+        assert actual[0] == expected[0], f"{code} on {sample.name}: the original gives {_summary(expected)}, its Windows-1252 copy gives {_summary(actual)}"
+        assert actual == expected, f"{code} on {sample.name}: the Windows-1252 copy gives a different {expected[0]} than the original"
+
+    def test_no_plugin_opens_files_with_a_fixed_encoding(self):
+        """No module of a ``broker_*/`` plugin calls ``open(..., encoding=...)``: one fixed encoding cannot read every export.
+
+        A plugin is a folder: its code is ``plugin.py``, and a ``_helper.py`` beside it is the same plugin's code, so
+        every module of the folder is read.
+        """
+        modules = sorted(BRIM_PLUGIN_DIR.glob("broker_*/*.py"))
+        assert [module for module in modules if module.name == "plugin.py"], f"No broker_*/plugin.py found in {BRIM_PLUGIN_DIR}: the scan would pass on nothing"
+
+        offenders = [f"{module.relative_to(PROJECT_ROOT)}:{line}" for module in modules for line in _fixed_encoding_open_lines(module)]
+
+        assert not offenders, (
+            f"{len(offenders)} call(s) to open(..., encoding=...) in BRIM plugins. A fixed encoding cannot read an export saved as "
+            "Windows-1252 or Latin-1 (for example re-saved with Excel on Windows). Read the file with self._open_text(file_path), "
+            'or BRIMProvider._open_text(file_path, newline="") where the csv module needs the line endings verbatim:\n' + "\n".join(f"  {offender}" for offender in offenders)
+        )
+
+
+# =============================================================================
+# THE PLUGINS' NAME AND DESCRIPTION IN THE FOUR UI CATALOGUES
+# =============================================================================
+
+# The checkout this test file belongs to, found from the file itself: the frontend sources below are read next to it.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_TRANSLATED_LANGUAGES = ("it", "fr", "es")
+_UI_LANGUAGES = ("en", *_TRANSLATED_LANGUAGES)
+_PLUGIN_TEXT_FIELDS = ("name", "description")
+
+
+def _brim_plugin_texts(language: str) -> dict:
+    """The ``brimPlugins`` section of one UI catalogue: plugin code → ``{"name": …, "description": …}``.
+
+    Merged from the catalogue's sources (``scripts/i18n_catalog.py``), never read from a build, and without the English
+    fallback the build ships: a text the language lacks is missing here, not the plugin's English under its name."""
+    section = load_catalog(language, fallback=False).get("brimPlugins")
+    assert isinstance(section, dict) and section, f"{language}.json has no brimPlugins section: every plugin would be shown in English"
+    return section
+
+
+def _plugin_text(texts: dict, code: str, field: str) -> Any:
+    """``brimPlugins.<code>.<field>`` of one catalogue, or None when the plugin or the field is missing."""
+    entry = texts.get(code)
+    return entry.get(field) if isinstance(entry, dict) else None
+
+
+class TestPluginTextCatalogues:
+    """A plugin's name and description in the UI language (``frontend/src/lib/utils/brim/pluginText.ts``).
+
+    The plugin select, the import wizard, the report-set card and the About page show ``brimPlugins.<code>.name`` and
+    ``brimPlugins.<code>.description`` from the catalogue of the UI language, and the plugin's own English text when the
+    catalogue has none. So the catalogues follow the registry: the English one *is* each plugin's ``name`` and
+    ``description``, verbatim — a plugin that rewords itself turns this red until its four entries follow — the Italian,
+    French and Spanish ones name and describe every plugin, and no catalogue keeps a plugin that is no longer registered.
+    """
+
+    @staticmethod
+    def _plugins() -> List[BRIMPluginInfo]:
+        """Every registered plugin, as ``GET /brokers/import/plugins`` lists it. Never empty: the checks would pass on nothing."""
+        plugins = BRIMProviderRegistry.list_plugin_info()
+        assert plugins, "No BRIM plugin is registered: the catalogue checks would pass on nothing"
+        return plugins
+
+    def test_the_english_catalogue_is_each_plugin_s_own_name_and_description(self):
+        texts = _brim_plugin_texts("en")
+
+        mismatches = [f"{info.code}.{field}: en.json {_plugin_text(texts, info.code, field)!r}, the plugin {getattr(info, field)!r}" for info in self._plugins() for field in _PLUGIN_TEXT_FIELDS if _plugin_text(texts, info.code, field) != getattr(info, field)]
+
+        assert not mismatches, f"{len(mismatches)} difference(s) between en.json brimPlugins and the registered plugins:\n" + "\n".join(f"  {mismatch}" for mismatch in mismatches)
+
+    @pytest.mark.parametrize("language", _TRANSLATED_LANGUAGES)
+    def test_the_translated_catalogue_names_and_describes_every_plugin(self, language: str):
+        texts = _brim_plugin_texts(language)
+
+        missing = [f"{info.code}.{field}" for info in self._plugins() for field in _PLUGIN_TEXT_FIELDS if not (isinstance(value := _plugin_text(texts, info.code, field), str) and value.strip())]
+
+        assert not missing, f"{language}.json: {len(missing)} plugin text(s) missing or empty, shown in English instead: {missing}"
+
+    @pytest.mark.parametrize("language", _UI_LANGUAGES)
+    def test_the_catalogue_holds_no_plugin_that_is_not_registered(self, language: str):
+        registered = {info.code for info in self._plugins()}
+
+        stale = sorted(set(_brim_plugin_texts(language)) - registered)
+
+        assert not stale, f"{language}.json has brimPlugins entries for {len(stale)} code(s) no registered plugin has: {stale}"
+
+
+# =============================================================================
+# GENERIC FALLBACK PLUGINS: THE PRIORITY LIMIT THE FRONTEND SHARES
+# =============================================================================
+
+# The frontend's one definition of a generic fallback plugin: ``isFallbackPlugin``, a detection_priority below this limit.
+_PLUGIN_KIND_TS = _REPO_ROOT / "frontend" / "src" / "lib" / "utils" / "brim" / "pluginKind.ts"
+_FALLBACK_LIMIT_DECLARATION = re.compile(r"^\s*export\s+const\s+FALLBACK_PLUGIN_PRIORITY_LIMIT\b[^=\n]*=\s*(\d+)\s*;", re.MULTILINE)
+# The plugins made for no broker in particular. A new generic plugin is a decision, and it is written down here.
+_GENERIC_FALLBACK_PLUGINS = frozenset({GENERIC_CSV_CODE})
+
+
+def _frontend_fallback_priority_limit() -> int:
+    """``FALLBACK_PLUGIN_PRIORITY_LIMIT`` as ``frontend/src/lib/utils/brim/pluginKind.ts`` declares it, read as text."""
+    declared = _FALLBACK_LIMIT_DECLARATION.findall(_PLUGIN_KIND_TS.read_text(encoding="utf-8"))
+    assert len(declared) == 1, f"{_PLUGIN_KIND_TS.relative_to(_REPO_ROOT)} should declare `export const FALLBACK_PLUGIN_PRIORITY_LIMIT = <n>;` once, found {declared}: the frontend's limit cannot be compared with the plugins' priorities"
+    return int(declared[0])
+
+
+class TestFallbackPluginPriorityLimit:
+    """The frontend tells a generic fallback plugin from one made for a broker by ``detection_priority`` alone.
+
+    ``isFallbackPlugin`` (``frontend/src/lib/utils/brim/pluginKind.ts``) calls a plugin a generic fallback when its
+    ``detection_priority``, as ``GET /brokers/import/plugins`` lists it, is below ``FALLBACK_PLUGIN_PRIORITY_LIMIT``: the
+    0-49 range ``BRIMProvider.detection_priority`` documents for generic fallbacks. The broker icon chain puts such a
+    plugin's icon after the portal's favicon — the generic CSV's icon is the same for every broker — while the icon of a
+    plugin made for the broker comes before it; the import wizard's wrong-broker check proposes the brokers of a generic
+    plugin only when no broker of a specific one reads the file.
+
+    So the registered priorities and the frontend's limit must agree: the plugins below the limit are exactly the generic
+    ones — today only the generic CSV — and every other plugin is at or above it. The limit is read from the frontend's
+    source, so moving it, or a plugin's priority, on one side only turns this red.
+    """
+
+    @staticmethod
+    def _priorities() -> dict:
+        """Plugin code → ``detection_priority``, as ``GET /brokers/import/plugins`` lists them. Never empty."""
+        plugins = BRIMProviderRegistry.list_plugin_info()
+        assert plugins, "No BRIM plugin is registered: the checks would pass on nothing"
+        return {info.code: info.detection_priority for info in plugins}
+
+    def test_the_frontend_limit_is_the_boundary_of_the_documented_generic_range(self):
+        limit = _frontend_fallback_priority_limit()
+
+        assert limit == 50, f"pluginKind.ts sets FALLBACK_PLUGIN_PRIORITY_LIMIT = {limit}; BRIMProvider.detection_priority documents 0-49 as generic fallbacks, 50-99 semi-generic, 100+ broker-specific: move both, or neither"
+        default = BRIMPluginInfo.model_fields["detection_priority"].default
+        assert default >= limit, f"BRIMPluginInfo.detection_priority defaults to {default}, below the limit {limit}: a plugin that does not rank itself would be a generic fallback, while the frontend reads a missing priority as 100"
+
+    def test_the_generic_plugins_are_below_the_limit(self):
+        limit = _frontend_fallback_priority_limit()
+        priorities = self._priorities()
+
+        unregistered = sorted(_GENERIC_FALLBACK_PLUGINS - priorities.keys())
+        assert not unregistered, f"Generic plugin(s) not registered: {unregistered}. Remove them from _GENERIC_FALLBACK_PLUGINS if they are gone for good."
+        ranked_as_specific = {code: priorities[code] for code in sorted(_GENERIC_FALLBACK_PLUGINS) if priorities[code] >= limit}
+        assert not ranked_as_specific, (
+            f"Generic plugin(s) at or above the frontend's limit {limit}: {ranked_as_specific}. The frontend takes them for plugins made for a broker — "
+            "their icon would come before the portal's favicon of every broker using them, and the wrong-broker check would rank their brokers with the specific plugins'"
+        )
+
+    def test_every_other_plugin_is_at_or_above_the_limit(self):
+        limit = _frontend_fallback_priority_limit()
+        priorities = self._priorities()
+
+        ranked_as_generic = {code: priority for code, priority in sorted(priorities.items()) if code not in _GENERIC_FALLBACK_PLUGINS and priority < limit}
+        assert not ranked_as_generic, (
+            f"Plugin(s) below the frontend's limit {limit} that are not generic: {ranked_as_generic}. The frontend takes them for generic fallbacks — "
+            "their icon would come after the portal's favicon, and the wrong-broker check would propose their brokers only when no specific plugin's broker reads the file. "
+            f"Rank them {limit} or more, or, if they really are made for no broker in particular, add them to _GENERIC_FALLBACK_PLUGINS"
+        )
+
+
+# =============================================================================
+# THE ICONS BUNDLED WITH THE PLUGINS: A FILE INSIDE THE SERVED STATIC FOLDER (45_pluginModules, U-6)
+# =============================================================================
+
+# The URL of a file of the BRIM plugins' static folder: ``BRIMProvider.generate_static_url`` writes it, ``GET /api/v1/uploads/plugin/brim/{path}`` serves it.
+_BRIM_STATIC_URL_PREFIX = "/api/v1/uploads/plugin/brim/"
+
+
+def _served_brim_static_folder() -> Path:
+    """The folder ``GET /api/v1/uploads/plugin/brim/{path}`` serves, ``PLUGIN_STATIC_DIRS["brim"]`` of the uploads API: the files checked here are the
+    files the app serves. Imported here rather than at the top: the uploads module loads the whole API router, which nothing else in this file needs."""
+    from backend.app.api.v1 import uploads  # noqa: PLC0415 — the API router is loaded only by the test that needs the served folder
+
+    return uploads.PLUGIN_STATIC_DIRS["brim"]
+
+
+class TestBundledPluginIcons:
+    """A plugin that bundles its icon names a file inside the static folder the app serves.
+
+    A plugin's ``icon_url`` can be any URL, or a file of the BRIM plugins' static folder named with ``generate_static_url`` and served by
+    ``GET /api/v1/uploads/plugin/brim/{path}`` (``test_api/test_uploads_api.py``, ``TestPluginStatic``). Such a bundled icon must resolve inside that
+    folder, and its file must be there. Today Scalable's two plugins bundle theirs, composed by ``scripts/compose_broker_icons.py``; a plugin that
+    bundles one later is checked the same way, with no change here.
+
+    No server and no network: the plugins, and the files of the folder the app serves.
+    """
+
+    def test_every_bundled_icon_is_a_file_inside_the_served_folder(self):
+        """For every registered plugin whose ``icon_url``, as ``GET /brokers/import/plugins`` lists it, is a file of the BRIM static folder: the path
+        resolves inside the folder and a file is there. Otherwise the endpoint answers 403 or 404 and the broker icon never shows the plugin's: it falls
+        back to the next step of its chain (``frontend/src/lib/utils/broker/brokerIconChain.svelte.ts``)."""
+        folder = _served_brim_static_folder().resolve()
+        bundled = {info.code: info.icon_url.removeprefix(_BRIM_STATIC_URL_PREFIX) for info in BRIMProviderRegistry.list_plugin_info() if (info.icon_url or "").startswith(_BRIM_STATIC_URL_PREFIX)}
+        assert bundled, "premise: one registered plugin at least bundles its icon (broker_scalable and broker_scalable_deposit do), or this check passes on nothing"
+
+        problems = []
+        for code, relative in sorted(bundled.items()):
+            path = (folder / relative).resolve()
+            if not path.is_relative_to(folder):
+                problems.append(f"{code}: {relative!r} resolves outside {folder}, to {path}")
+            elif not path.is_file():
+                problems.append(f"{code}: {relative!r} is not a file of {folder}")
+
+        assert not problems, f"{len(problems)} bundled icon(s) the app cannot serve:\n" + "\n".join(f"  {problem}" for problem in problems)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
  <img class="gallery-img" data-category="transactions" data-name="form-modal-dividend" alt="Formulario de Transacción — DIVIDENDO">
 </div>
 
-Los **dividendos** y los **intereses** representan el rendimiento generado por los activos de su cartera. Son pagos en efectivo recibidos sin vender el activo subyacente.
+Los **dividendos** y los **intereses** representan el rendimiento generado por los activos de tu cartera. Son pagos en efectivo recibidos sin vender el activo subyacente.
 
 ---
 
@@ -21,12 +21,12 @@ Los **dividendos** y los **intereses** representan el rendimiento generado por l
 
 ## 💡 Cuándo Usar
 
-Utilice estas transacciones cuando el efectivo llegue a su cuenta de corretaje como rendimiento de un activo:
+Utiliza estas transacciones cuando el efectivo llegue a tu cuenta de corretaje como rendimiento de un activo:
 
 - **Dividendo**: Ingreso de patrimonio (acciones, ETFs distribuidores).
 - **Interés**: Ingreso de instrumentos de renta fija (bonos, cuentas de ahorro, préstamos P2P, crowdfunding).
 
-*No utilice estas transacciones para la devolución del principal (por ejemplo, liquidación de vencimiento de bonos).*
+*No utilices estas transacciones para la devolución del principal (por ejemplo, liquidación de vencimiento de bonos).*
 
 ---
 
@@ -36,8 +36,8 @@ Utilice estas transacciones cuando el efectivo llegue a su cuenta de corretaje c
 
 | Concepto | Evento de Dividendo | Transacción de Dividendo |
 |----------|---------------------|--------------------------|
-| **Alcance** | Global — afecta el precio del activo | Personal — afecta su cartera |
-| **Ejemplo** | "Apple declaró $0.25/acción" | "Recibí $12.50 de mis 50 acciones" |
+| **Alcance** | Global — afecta el precio del activo | Personal — afecta tu cartera |
+| **Ejemplo** | "Apple declaró $0,25/acción" | "Recibí $12,50 de mis 50 acciones" |
 | **Registrado por** | Proveedor o manual (Editor de Datos) | Informe del bróker (importación BRIM) |
 | **Impacto en gráfico** | Marcador de diamante (◆) en el gráfico de precios | No visible en el gráfico |
 
@@ -72,7 +72,7 @@ El monto retenido típicamente se registra como una transacción separada de `TA
 
 !!! tip "Teoría y fórmulas"
 
-    Para las matemáticas de la acumulación de intereses (simple vs compuesto, convenciones de conteo de días, métricas de rendimiento), consulte:
+    Para las matemáticas de la acumulación de intereses (simple vs compuesto, convenciones de conteo de días, métricas de rendimiento), consulta:
 
     - **[📈 Eventos de Interés](../asset-events/interest.md)** — Mecánica de acumulación e impacto en el precio
     - **[📅 Convenciones de Conteo de Días](../../fundamentals/day-count.md)** — Cómo se calculan los períodos de interés

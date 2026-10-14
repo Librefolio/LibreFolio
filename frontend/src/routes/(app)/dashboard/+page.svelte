@@ -13,7 +13,7 @@
   Pattern: Svelte 5 Runes, Tailwind CSS 4, dark mode, data-testid everywhere.
 -->
 <script lang="ts">
-    import {onMount, tick, untrack} from 'svelte';
+    import {onDestroy, onMount, tick, untrack} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
     import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet, Shield} from 'lucide-svelte';
@@ -23,13 +23,40 @@
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
+    import {buildMissingFxRatesSyncRequest} from '$lib/utils/sync/syncRange';
+    import {fxPairHtml} from '$lib/utils/providerHelpers';
+    import {extractErrorMessage} from '$lib/utils/trySave';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
 
-    import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {ensureBrokersLoaded, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
+    import {
+        fetchReport,
+        invalidate,
+        peekReport,
+        portfolioError,
+        type ReportOptions,
+        type PortfolioReport,
+        type PortfolioSummary,
+        type PortfolioHistoryPoint,
+        type AllocationHistoryDimensions,
+        type PositionsContribution,
+        type PortfolioBrokerPnlHistory,
+        type PortfolioPnlCandleSeries,
+        type PortfolioIncomeHistorySeries,
+        type PortfolioCostHistorySeries,
+        type PortfolioDepositHistorySeries,
+        type PortfolioAcquisitionFundingSeries,
+    } from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
+    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {readDashboardView, writeDashboardView} from '$lib/stores/portfolio/dashboardViewStore';
+    import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
-    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {createDateRangeController} from '$lib/stores/dateRangeController.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
@@ -38,13 +65,15 @@
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
-    import RiskAnalysisPanel from '$lib/components/risk/RiskAnalysisPanel.svelte';
+    import RiskLevelsPanel from '$lib/components/risk/levels/RiskLevelsPanel.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
     import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {classifyFxSyncOutcome, formatFxSyncResult, FX_SYNC_TIMEOUT_MS, type FxPairSyncCompleteDetail, type FxSyncResponse} from '$lib/services/fxCreationSync';
     import {TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -65,9 +94,18 @@
 
     let summary = $state<PortfolioSummary | null>(null);
     let history = $state<PortfolioHistoryPoint[]>([]);
+    let brokerPnlHistory = $state<PortfolioBrokerPnlHistory[]>([]);
+    let pnlCandles = $state<PortfolioPnlCandleSeries | null>(null);
+    let pnlCandlesLoading = $state(false);
+    let incomeHistory = $state<PortfolioIncomeHistorySeries | undefined>(undefined);
+    let costHistory = $state<PortfolioCostHistorySeries | undefined>(undefined);
+    let depositHistory = $state<PortfolioDepositHistorySeries | undefined>(undefined);
+    let acquisitionFunding = $state<PortfolioAcquisitionFundingSeries | undefined>(undefined);
     let allocationHistoryFromReport = $state<AllocationHistoryDimensions | null>(null);
     let positionsContribution = $state<PositionsContribution | null>(null);
     let contributionLoading = $state(false);
+    /** A contribution already on screen is being refreshed in background: busy, but no skeleton. */
+    let contributionRefreshing = $state(false);
     let reportLoading = $state(true);
     /** True only on first load when no data exists yet. Once data is loaded, subsequent fetches are "refreshing". */
     let summaryLoading = $derived(reportLoading && !summary);
@@ -75,16 +113,29 @@
     let syncLoading = $state(false);
     let syncingCode = $state<string | null>(null);
 
+    /** The currency and broker filter the user left (E3): they last the session, so a return asks
+     *  the key it left and the cache can serve it. */
+    const restoredView = readDashboardView();
+    /** The owned brokers, when the broker list is already in memory (any in-app return): the restored
+     *  scope can then be read from the cache before the first render. On a cold load the list arrives
+     *  in onMount, and nothing is asked before it (F2). */
+    const knownOwnedBrokers: BrokerLike[] | null = getAllBrokers().length > 0 ? getOwnedBrokers() : null;
+
     /** Broker IDs selected in the filter (empty = all brokers). */
-    let selectedBrokerIds = $state<number[]>([]);
-    let allBrokers = $state<BrokerLike[]>([]);
+    let selectedBrokerIds = $state<number[]>(knownOwnedBrokers ? restoredView.brokerIds.filter((id) => knownOwnedBrokers.some((broker) => broker.id === id)) : restoredView.brokerIds);
+    let allBrokers = $state<BrokerLike[]>(knownOwnedBrokers ?? []);
+    /** F2: the owned brokers are known. Until then nothing is asked: a request without them would be
+     *  widened by the backend to every broker the user can see, viewer and editor ones included. */
+    let brokersReady = $state(knownOwnedBrokers !== null);
+    /** Bumped by «Aggiorna»: the risk levels and the lots panel ask again too (E4). */
+    let refreshVersion = $state(0);
 
     /** FIFO lots analysis panel (Posizioni tab) — mirrors brokers/[id]/+page.svelte's pattern
      *  but in runes syntax (this file is Svelte 5 runes throughout, unlike the legacy broker
      *  detail page). Scope defaults to ALL accessible brokers when no broker filter is active
      *  (activeBrokerIds undefined = "All Brokers"), so the panel analyzes the same asset across
      *  every broker that holds it — see plan_ui_broker_holdings.md multi-broker evolution. */
-    let activeAssetId = $state<number | null>(null);
+    let activeAssetId = $state<number | null>(getAssetPanelAssetId($page.url.searchParams) ?? null);
     $effect(() => {
         const paramAssetId = getAssetPanelAssetId($page.url.searchParams) ?? null;
         if (paramAssetId !== activeAssetId) activeAssetId = paramAssetId;
@@ -106,16 +157,6 @@
         void goto(buildAssetPanelUrl($page.url, null), {replaceState: true, noScroll: true});
     }
 
-    function normalizeToSlug(pair: string): string {
-        const parts = pair
-            .replace('/', '-')
-            .split('-')
-            .map((p) => p.trim().toUpperCase())
-            .filter(Boolean);
-        if (parts.length < 2) return pair.trim().toUpperCase();
-        return parts.slice(0, 2).sort().join('-');
-    }
-
     /** Debounce timer for broker filter changes. */
     let reloadTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 
@@ -134,10 +175,11 @@
     let urlDateFrom = $derived(dateRangeCtl.activePreset === 'MAX' ? 'min' : dateRangeCtl.start);
     let urlDateTo = $derived(dateRangeCtl.activePreset === 'MAX' ? 'max' : dateRangeCtl.end);
 
-    /** Display currency override — always concrete, defaults to user base currency. */
-    let targetCurrency = $state($globalSettings.default_currency || 'EUR');
-    let appliedCurrency = $state($globalSettings.default_currency || 'EUR');
-    let targetCurrencyManuallySet = $state(false);
+    /** Display currency override — always concrete, defaults to user base currency (or the one the user left). */
+    const initialCurrency = restoredView.targetCurrency ?? $defaultDisplayCurrency;
+    let targetCurrency = $state(initialCurrency);
+    let appliedCurrency = $state(initialCurrency);
+    let targetCurrencyManuallySet = $state(restoredView.targetCurrency !== null);
 
     /** Broker filter dropdown open state. */
     let brokerFilterOpen = $state(false);
@@ -156,7 +198,7 @@
     // Derived
     // =========================================================================
 
-    const baseCurrency = $derived($globalSettings.default_currency || 'EUR');
+    const baseCurrency = $derived($defaultDisplayCurrency);
 
     $effect(() => {
         if (targetCurrencyManuallySet || targetCurrency === baseCurrency) return;
@@ -179,9 +221,19 @@
      *  scaled by share; a 0% share behaves like editor/viewer and is excluded). */
     const ownedBrokerIds = $derived(allBrokers.map((b) => b.id));
 
+    /** F2: a request may leave only with an explicit owned scope. Without one the backend would
+     *  widen it to every broker the user can see; a user who owns nothing is asked nothing. */
+    const canAsk = $derived(brokersReady && ownedBrokerIds.length > 0);
+
     /** Which broker IDs to pass to the API — always the explicit owned set, so the
      *  backend never falls back to "every accessible broker" for the dashboard. */
     const activeBrokerIds = $derived(!allBrokersSelected && selectedBrokerIds.length > 0 ? selectedBrokerIds : ownedBrokerIds.length > 0 ? ownedBrokerIds : undefined);
+
+    /** GrowthChart P&L broker overlay (G1a) caller policy per plan §4.1: request
+     *  broker_pnl_history only when the effective scope has ≥2 brokers — a single
+     *  broker's line would be identical to the total and the payload is unneeded. */
+    const effectiveBrokerCount = $derived((activeBrokerIds ?? ownedBrokerIds).length);
+    const wantsBrokerPnlHistory = $derived(effectiveBrokerCount >= 2);
 
     /** AI export state — dropdown open/position handled internally by AiExportMenu. */
     let aiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
@@ -207,7 +259,8 @@
         return DASHBOARD_TAB_IDS.includes(tabId as DashboardTabId);
     }
 
-    let activeTab = $state<DashboardTabId>(DEFAULT_DASHBOARD_TAB);
+    // Read at init too, so a return to another tab does not first mount the overview and tear it down.
+    let activeTab = $state<DashboardTabId>(getResolvedTabParam($page.url.searchParams, DASHBOARD_TAB_IDS, DEFAULT_DASHBOARD_TAB));
     const dashboardTabs = $derived([
         {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'dashboard-tab-panoramica'},
         {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'dashboard-tab-posizioni'},
@@ -227,6 +280,10 @@
 
     /** FxPairAddModal state for CTA-driven pair creation */
     let showFxPairAddModal = $state(false);
+    let pageAlive = true;
+    onDestroy(() => {
+        pageAlive = false;
+    });
     let fxPairCreateSlug = $state('');
 
     /** Transaction view modal state (opened from the Transazioni tab's row double-click). */
@@ -285,6 +342,85 @@
         }
     }
 
+    /**
+     * «Sync rates» on MISSING_FX_RATES. A date is missing only when no rate exists on or
+     * before it, so the missing dates precede the pair's first stored rate and a sync of the
+     * period on screen never reaches them: the request targets the dates the issue carries,
+     * a week either side, never past today (`buildMissingFxRatesSyncRequest`).
+     *
+     * The outcome is told once the report is reloaded, because only then is it known whether
+     * the dates are covered: when the provider returned nothing for them, the toast says so
+     * instead of reporting a success the banner would contradict.
+     */
+    async function syncMissingFxRates(issue: DataQualityIssue) {
+        const request = buildMissingFxRatesSyncRequest(issue);
+        if (!request) return;
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        const coversRequestedPair = (candidate: DataQualityIssue) => (buildMissingFxRatesSyncRequest(candidate)?.pairs ?? []).some((slug) => request.pairs.includes(slug));
+        syncLoading = true;
+        syncingCode = issue.code;
+        toasts.info($_('fx.sync.inProgress'));
+        try {
+            let response: FxSyncResponse | undefined;
+            let transportError: string | undefined;
+            try {
+                response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post(request, {timeout: FX_SYNC_TIMEOUT_MS});
+            } catch (error) {
+                transportError = extractErrorMessage(error, $_('prices.sync.failedDefault'));
+            }
+            if (!current()) return;
+            const {requestedResults, operationErrors, outcome, variant: outcomeVariant} = classifyFxSyncOutcome(request.pairs, response, transportError);
+
+            // No reload after a transport error: the backend may still be writing those rates.
+            let remaining: DataQualityIssue | undefined;
+            let stillMissing: boolean | null = null;
+            if (!transportError) {
+                invalidateFxRoutes();
+                invalidate();
+                // The open lots and risk panels ask again too, as after «Aggiorna»: new rates change their figures.
+                refreshVersion += 1;
+                try {
+                    await loadAll(true, true);
+                    remaining = dataQualityIssues.find((candidate) => candidate.cta_action === 'sync_fx_pair' && coversRequestedPair(candidate));
+                    stillMissing = remaining !== undefined;
+                } catch {
+                    stillMissing = null;
+                }
+                if (!current()) return;
+            }
+
+            const tr = (key: string, opts?: any) => $_(key, opts);
+            const pairOptions = {outerFlags: true, linkToDetail: true};
+            let variant = outcomeVariant;
+            let message = transportError
+                ? request.pairs.map((slug) => buildFxSyncToast({status: 'failed', message: escapeHtml(transportError)}, slug, tr, undefined, undefined, pairOptions).message).join('\n\n')
+                : requestedResults.map((result, index) => formatFxSyncResult(result, request.pairs[index]).message).join('\n\n');
+            if (operationErrors.length > 0) message += `\n${operationErrors.map(escapeHtml).join('; ')}`;
+            if (remaining && (outcome === 'ok' || outcome === 'partial')) {
+                const params = remaining.message_params ?? {};
+                const stillMissingPairs = (buildMissingFxRatesSyncRequest(remaining)?.pairs ?? []).filter((slug) => request.pairs.includes(slug));
+                message += `\n\n${$_('dataQuality.missingFxRatesAfterSync', {
+                    values: {
+                        pairs: stillMissingPairs.map((slug) => fxPairHtml(slug, pairOptions)).join(', '),
+                        date_from: escapeHtml(String(params.date_from ?? '')),
+                        date_to: escapeHtml(String(params.date_to ?? '')),
+                        dates_count: params.dates_count ?? '',
+                    },
+                })}`;
+                if (variant === 'success') variant = 'warning';
+            }
+            notify({
+                name: 'fx.rates.synced',
+                detail: {origin: 'dashboard-banner', pairs: request.pairs, start: request.start, end: request.end, outcome, stillMissing},
+                toast: {variant, message},
+            });
+        } finally {
+            syncLoading = false;
+            syncingCode = null;
+        }
+    }
+
     async function handleBannerAction(action: string, target: string | null, _issue: DataQualityIssue) {
         if (action === 'navigate_asset' && target) {
             goto(`/assets/${target}`);
@@ -296,29 +432,33 @@
             fxPairCreateSlug = pairs[0] ?? '';
             showFxPairAddModal = true;
         } else if (action === 'sync_fx_pair') {
-            const pairs = _issue.affected_fx_pairs?.length ? _issue.affected_fx_pairs : target ? [target] : [];
-            if (pairs.length === 0) return;
-            const slugs = [...new Set(pairs.map(normalizeToSlug))];
+            await syncMissingFxRates(_issue);
+        } else if (action === 'sync_asset_prices') {
+            // STALE_PRICE: re-sync the flagged provider assets from the day after their last
+            // stored price ('resume', the rule every auto-sync uses) up to the dashboard's end
+            // date, then reload the report (the banner clears once the prices are fresh).
+            const assetIds = _issue.affected_asset_ids ?? [];
+            if (assetIds.length === 0) return;
+            const assetNames = _issue.affected_asset_names ?? [];
+            const tr = (key: string, opts?: any) => $_(key, opts);
             syncLoading = true;
             syncingCode = _issue.code;
-            toasts.info($_('fx.sync.inProgress'));
             try {
-                const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
-                    pairs: slugs,
-                    start: dateRangeCtl.start,
-                    end: dateRangeCtl.end,
-                });
-                const changed = ((response as any)?.results ?? []).reduce((sum: number, r: any) => sum + (r?.points_changed ?? r?.points_fetched ?? 0), 0);
-                if (changed === 0) {
-                    toasts.info($_('fx.sync.noNewData'));
-                } else {
-                    toasts.success(`${slugs.join(', ')} — ${$_('fx.sync.synced')} (${changed} pts)`);
+                const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post(
+                    assetIds.map((asset_id) => ({asset_id, date_range: {start: 'resume', end: dateRangeCtl.end}})),
+                    {timeout: 120 * 1000},
+                );
+                for (const result of ((response as any)?.results ?? []) as any[]) {
+                    const name = assetNames[assetIds.indexOf(result?.asset_id)] ?? `#${result?.asset_id}`;
+                    const toast = buildAssetSyncToast(result, escapeHtml(name), tr);
+                    toasts[toast.variant](toast.message);
                 }
-                invalidateFxRoutes();
                 invalidate();
+                // The open lots and risk panels ask again too, as after «Aggiorna»: new prices change their figures.
+                refreshVersion += 1;
                 await loadAll(true);
             } catch (e: any) {
-                toasts.error(`FX sync failed: ${e?.message || 'unknown'}`);
+                toasts.error(`${$_('common.sync')} — ${e?.message || $_('prices.sync.failedDefault')}`);
             } finally {
                 syncLoading = false;
                 syncingCode = null;
@@ -362,36 +502,173 @@
         dateRangeCtl.markMaxResolved(history.length > 0 ? history[0].date : null);
     }
 
-    async function loadAll(force = false) {
-        reportLoading = true;
-        const requested = targetCurrency;
-        try {
-            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, force);
-            // Cast from the Zodios union types to the concrete types the dashboard expects
-            summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
-            history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
-            allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
-            // Contribution data comes from the same report when requested
-            positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
-            resolveMaxStartFromHistory();
-            appliedCurrency = requested;
-        } finally {
+    /** What `loadAll` asks on top of the defaults: the main report, without contribution or candles. */
+    function mainReportOptions(): ReportOptions {
+        return {includeBrokerPnlHistory: wantsBrokerPnlHistory, includeIncomeHistory: true, includeCostHistory: true, includeDepositHistory: true, includeAcquisitionFunding: true};
+    }
+
+    /** The report on screen: a page that finds the same cached report again leaves its charts alone. */
+    let shownReport: PortfolioReport | null = null;
+
+    function applyReport(report: PortfolioReport | null, requested: string) {
+        shownReport = report;
+        // Cast from the Zodios union types to the concrete types the dashboard expects
+        summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
+        history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
+        brokerPnlHistory = (report?.broker_pnl_history as PortfolioBrokerPnlHistory[] | null | undefined) ?? [];
+        // Always reassigned (defaulting to null since loadAll() never requests candles):
+        // this is also what invalidates a stale candle series from a prior broker/date-range
+        // scope. loadPnlCandles() re-fetches lazily once GrowthChart notices pnlCandles==null
+        // again while still in the candles submode.
+        pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
+        // Eager (unlike pnlCandles): requested on every ordinary load per plan §4.1's
+        // sparse-payload policy, so this is always fresh — no separate lazy loader needed.
+        incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
+        costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
+        depositHistory = (report?.deposit_history as PortfolioDepositHistorySeries | null | undefined) ?? undefined;
+        acquisitionFunding = (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined;
+        allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
+        resolveMaxStartFromHistory();
+        appliedCurrency = requested;
+    }
+
+    let shownContribution: PortfolioReport['positions_contribution'] = null;
+
+    function setContribution(report: PortfolioReport | null) {
+        const contribution = report?.positions_contribution ?? null;
+        if (contribution === shownContribution) return;
+        shownContribution = contribution;
+        positionsContribution = (contribution as PositionsContribution | null | undefined) ?? null;
+    }
+
+    /** The contribution of the scope on screen as the cache holds it (null: never asked, PositionsPanel
+     *  asks when its Performance view needs it). Returns whether the cached one is stale. */
+    function showCachedContribution(): boolean {
+        const cached = peekReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, targetCurrency, true, false, false, false);
+        setContribution(cached?.report ?? null);
+        return cached?.stale === true;
+    }
+
+    /**
+     * Page cache (E1): the report of the scope on screen comes from the cache at once — stale or
+     * not — and only a stale or missing one is asked again, in background: the figures stay up and
+     * move to the fresh values when they land. A refresh that fails keeps them, with a toast.
+     */
+    let loadSeq = 0;
+
+    async function loadAll(force = false, propagateError = false) {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        if (!current() || !brokersReady) return;
+        if (!canAsk) {
             reportLoading = false;
+            return;
+        }
+        const load = ++loadSeq;
+        const requested = targetCurrency;
+        const brokerIds = activeBrokerIds;
+        const start = dateRangeCtl.start || undefined;
+        const end = dateRangeCtl.end || undefined;
+        const options = mainReportOptions();
+
+        const cached = peekReport(brokerIds, start, end, requested, false, false, true, true, options);
+        if (cached && cached.report !== shownReport) applyReport(cached.report, requested);
+        const request = !cached || cached.stale || force ? fetchReport(brokerIds, start, end, requested, force, undefined, undefined, undefined, undefined, options) : null;
+        if (showCachedContribution()) void loadContribution();
+        if (!request) {
+            reportLoading = false;
+            return;
+        }
+
+        reportLoading = true;
+        try {
+            const report = await request;
+            if (!current() || load !== loadSeq) return;
+            if (report) {
+                if (report !== shownReport) applyReport(report, requested);
+            } else if (propagateError) {
+                throw new Error($_('common.error'));
+            } else if (cached) {
+                toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`);
+            } else {
+                applyReport(null, requested);
+            }
+        } finally {
+            if (current() && load === loadSeq) reportLoading = false;
         }
     }
 
-    /** Lazy-load contribution data (called when user switches to Contribution view). */
+    function hydrateFromCache() {
+        if (!brokersReady || ownedBrokerIds.length === 0) return;
+        const cached = peekReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, targetCurrency, false, false, true, true, mainReportOptions());
+        if (!cached) return;
+        applyReport(cached.report, targetCurrency);
+        showCachedContribution();
+    }
+
+    async function handleFxPairCreated() {
+        if (!pageAlive) return;
+        invalidateFxRoutes();
+        invalidate();
+        await loadAll(true);
+    }
+
+    async function handleFxPairCreationSynced(detail: FxPairSyncCompleteDetail) {
+        if (!pageAlive || !isClientSessionCurrent(detail.sessionGeneration)) return;
+        // The sync interceptor marks portfolio/risk caches stale at commit time, when it wrote something.
+        await loadAll(true, true);
+    }
+
+    /**
+     * The contribution of the scope on screen: asked by PositionsPanel when its Performance view has
+     * none, and by `loadAll` when the cached one is stale — then in background, with the cached rows
+     * kept on screen (`contributionRefreshing`, not the skeleton of `contributionLoading`).
+     */
     async function loadContribution() {
-        if (positionsContribution || contributionLoading) return;
-        contributionLoading = true;
+        if (!canAsk || contributionLoading || contributionRefreshing) return;
         const requested = targetCurrency;
+        const brokerIds = activeBrokerIds;
+        const start = dateRangeCtl.start || undefined;
+        const end = dateRangeCtl.end || undefined;
+        const scope = () => `${activeBrokerIds?.join(',')}|${dateRangeCtl.start}|${dateRangeCtl.end}|${targetCurrency}`;
+        const askedScope = scope();
+        const cached = peekReport(brokerIds, start, end, requested, true, false, false, false);
+        if (cached && !cached.stale) {
+            setContribution(cached.report);
+            return;
+        }
+        if (cached) contributionRefreshing = true;
+        else contributionLoading = true;
         try {
             // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
-            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, false, true, false, false, false);
-            positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
-            appliedCurrency = requested;
+            const report = await fetchReport(brokerIds, start, end, requested, false, true, false, false, false);
+            if (!pageAlive || scope() !== askedScope) return;
+            if (report) {
+                setContribution(report);
+                appliedCurrency = requested;
+            } else if (!cached) {
+                setContribution(null);
+            }
         } finally {
             contributionLoading = false;
+            contributionRefreshing = false;
+        }
+    }
+
+    /** Lazy-load the synthetic P&L candle series (G1b — called by GrowthChart's
+     *  onRequestPnlCandles when the user first activates the candles submode; caller
+     *  policy per plan §4.1: "expensive OHLC work stays off ordinary reports"). */
+    async function loadPnlCandles() {
+        if (!canAsk || pnlCandles || pnlCandlesLoading) return;
+        pnlCandlesLoading = true;
+        const requested = targetCurrency;
+        try {
+            // includeHistory/includeAllocationHistory/includeContribution/includeBreakdown=false:
+            // only pnl_candles is read below.
+            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, false, false, false, false, false, {includePnlCandles: true});
+            pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
+        } finally {
+            pnlCandlesLoading = false;
         }
     }
 
@@ -399,13 +676,14 @@
     // Event handlers
     // =========================================================================
 
-    function toggleBroker(id: number) {
-        if (selectedBrokerIds.includes(id)) {
-            selectedBrokerIds = selectedBrokerIds.filter((x) => x !== id);
-        } else {
-            selectedBrokerIds = [...selectedBrokerIds, id];
-        }
+    function selectBrokers(ids: number[]) {
+        selectedBrokerIds = ids;
+        writeDashboardView({brokerIds: ids});
         scheduleReload();
+    }
+
+    function toggleBroker(id: number) {
+        selectBrokers(selectedBrokerIds.includes(id) ? selectedBrokerIds.filter((x) => x !== id) : [...selectedBrokerIds, id]);
     }
 
     /** Fires loadAll after a 2-second quiet period (anti-bounce for rapid clicks). */
@@ -417,11 +695,16 @@
         }, 2000);
     }
 
+    /** «Aggiorna» (E4): report, contribution, risk and lots are all asked again; what is on screen stays meanwhile. */
     async function handleSync() {
         syncLoading = true;
-        invalidate();
-        await loadAll(true);
-        syncLoading = false;
+        requestPortfolioRefresh();
+        refreshVersion += 1;
+        try {
+            await loadAll(true);
+        } finally {
+            syncLoading = false;
+        }
     }
 
     async function loadAiExportCompatibility() {
@@ -438,6 +721,9 @@
     }
 
     function handleAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
+        // F2: a portfolio export without the owned scope would be widened by the backend to every
+        // broker the user can see. The trigger is disabled until then; this guards the call itself.
+        if (!canAsk) return Promise.reject(new Error('Owned brokers are not loaded'));
         return prepareAiExport({
             context: {
                 domain: 'portfolio',
@@ -504,15 +790,28 @@
     // Lifecycle
     // =========================================================================
 
+    // Figures already known when a card mounts — served from the cache on a return, or kept from an
+    // earlier load on a tab switch — appear at their value instead of counting up from 0. The Risk
+    // panel sets its own context for its cards, which come from the risk cache, not from this report.
+    setTweenHydration(() => summary !== null);
+    hydrateFromCache();
+
     onMount(() => {
         document.addEventListener('click', handleDocumentClick);
         void loadAiExportCompatibility();
         void (async () => {
             await Promise.all([ensureBrokersLoaded(), ensureAssetsLoaded()]);
+            if (!pageAlive) return;
             // F2: dashboard scope = owned brokers only (share > 0). A user who owns
             // nothing (viewer/editor elsewhere, or fresh install) gets an empty
             // dashboard — no fetch, so viewer/editor data never leaks into totals.
             allBrokers = getOwnedBrokers();
+            const kept = selectedBrokerIds.filter((id) => allBrokers.some((broker) => broker.id === id));
+            if (kept.length !== selectedBrokerIds.length) {
+                selectedBrokerIds = kept;
+                writeDashboardView({brokerIds: kept});
+            }
+            brokersReady = true;
             if (allBrokers.length > 0) {
                 await loadAll();
             } else {
@@ -523,11 +822,11 @@
     });
 </script>
 
-<div class="space-y-4" data-testid="dashboard-page" aria-busy={reportLoading || contributionLoading || syncLoading} data-busy={reportLoading || contributionLoading || syncLoading ? 'true' : 'false'}>
+<div class="space-y-4" data-testid="dashboard-page" use:guideAnchor={'page.dashboard'} aria-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading} data-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading ? 'true' : 'false'}>
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
     <PageToolbar
-        thresholds={{oneRow: 1000, denseRow: 810, stackFilters: 430, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 370}}
+        thresholds={{oneRow: 1000, denseRow: 990, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 460}}
         tabs={dashboardTabs}
         {activeTab}
         ontabchange={handleTabChange}
@@ -559,6 +858,7 @@
                             bind:value={targetCurrency}
                             compact={true}
                             configuredOnly={true}
+                            testId="dashboard-target-currency"
                             defaultCurrency={baseCurrency}
                             createForexLabel={$_('common.createForex')}
                             dropdownPosition="bottom"
@@ -570,23 +870,26 @@
                             }}
                             onchange={() => {
                                 targetCurrencyManuallySet = true;
+                                writeDashboardView({targetCurrency});
                                 void loadAll();
                             }}
                         />
                     </div>
                 </div>
 
-                <!-- Broker multi-select panel -->
-                <div class="relative">
+                <!-- Broker multi-select panel. With one broker selected the label is that
+                     broker's name, of any length: the trigger shrinks and truncates it
+                     instead of pushing out of the bar (the full name stays in the DOM). -->
+                <div class="relative min-w-0">
                     <button
                         bind:this={brokerFilterTriggerEl}
-                        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
+                        class="flex items-center gap-1.5 min-w-0 max-w-full px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
                        {brokerFilterActive ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
                         onclick={toggleBrokerFilterDropdown}
                         data-testid="broker-filter-trigger"
                     >
-                        {brokerFilterLabel}
-                        <svg class="w-3 h-3 transition-transform {brokerFilterOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span class="truncate">{brokerFilterLabel}</span>
+                        <svg class="w-3 h-3 shrink-0 transition-transform {brokerFilterOpen ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
                         </svg>
                     </button>
@@ -604,18 +907,12 @@
                                 <button
                                     type="button"
                                     class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                    onclick={() => {
-                                        selectedBrokerIds = allBrokers.map((b) => b.id);
-                                        scheduleReload();
-                                    }}>{$_('common.selectAll')}</button
+                                    onclick={() => selectBrokers(allBrokers.map((b) => b.id))}>{$_('common.selectAll')}</button
                                 >
                                 <button
                                     type="button"
                                     class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                    onclick={() => {
-                                        selectedBrokerIds = [];
-                                        scheduleReload();
-                                    }}>{$_('common.clearAll')}</button
+                                    onclick={() => selectBrokers([])}>{$_('common.clearAll')}</button
                                 >
                             </div>
                             <!-- Broker list -->
@@ -656,7 +953,7 @@
                 compatibility={aiExportCompatibility}
                 memoryKey="portfolio"
                 defaultSelectionId="portfolio.pac_planning"
-                disabled={aiExportCatalogLoading || aiExportCatalogFailed}
+                disabled={aiExportCatalogLoading || aiExportCatalogFailed || !canAsk}
                 labels={aiExportLabels}
                 showLabel={showActionLabels}
                 onprepare={handleAiExport}
@@ -711,7 +1008,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                 <!-- Growth Chart — 3/5 -->
                 <div class="lg:col-span-3">
-                    <GrowthChart {history} loading={historyLoading} baseCurrency={appliedCurrency} />
+                    <GrowthChart {history} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={loadPnlCandles} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
                 </div>
 
                 <!-- Allocation Panel — 2/5 -->
@@ -720,24 +1017,53 @@
         </div>
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
-            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} analyzedAssetId={activeAssetId} />
-            <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)} brokers={allBrokers} currency={activeAsset?.currency ?? appliedCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} />
+            <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->
+            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={canAsk ? loadContribution : undefined} onAnalyze={openAssetPanel} analyzedAssetId={activeAssetId} />
+            <LotsAnalysisPanel
+                open={activeAssetId != null}
+                assetId={activeAssetId}
+                brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)}
+                brokers={allBrokers}
+                currency={activeAsset?.currency ?? appliedCurrency}
+                assetName={activeAsset?.display_name ?? null}
+                onClose={closeAssetPanel}
+                ready={canAsk}
+                {refreshVersion}
+            />
         </div>
     {:else if activeTab === 'rischio'}
         <div data-testid="dashboard-risk-tab">
-            <RiskAnalysisPanel
-                scope={{kind: 'portfolio'}}
-                dateStart={dateRangeCtl.start}
-                dateEnd={dateRangeCtl.end}
-                targetCurrency={appliedCurrency}
-                assetIds={[...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))]}
-                title={$_('risk.dashboardTitle')}
-                subtitle={brokerFilterActive ? $_('risk.dashboardFullPortfolio') : ''}
-                onsynced={async () => {
-                    invalidate();
-                    await loadAll(true);
-                }}
-            />
+            <!-- The risk scope is the *whole* portfolio — every broker the user owns (F2,
+                 as the rest of the Dashboard) — even when a broker filter is on, which is
+                 what the subtitle announces. Never without `broker_ids`: the backend would
+                 widen it to every broker the user can see, editor and viewer ones included,
+                 so the panel mounts only once the owned brokers are known. `summary` follows
+                 the filter, so its net worth belongs to a different question: passing it
+                 would print one broker's money beside every broker's risk. -->
+            {#if canAsk}
+                <RiskLevelsPanel
+                    scope={{kind: 'portfolio', broker_ids: ownedBrokerIds}}
+                    dateStart={dateRangeCtl.start}
+                    dateEnd={dateRangeCtl.end}
+                    targetCurrency={appliedCurrency}
+                    assetIds={[...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))]}
+                    scopeValue={brokerFilterActive || !summary ? null : parseFloat(summary.net_worth.amount)}
+                    title={$_('risk.dashboardTitle')}
+                    subtitle={brokerFilterActive ? $_('risk.dashboardFullPortfolio') : ''}
+                    {refreshVersion}
+                    onsynced={async () => {
+                        invalidate();
+                        await loadAll(true);
+                    }}
+                />
+            {:else if brokersReady}
+                <p class="py-12 text-center text-sm italic text-gray-400 dark:text-gray-500" data-testid="dashboard-risk-no-owned">{$_('common.noData')}</p>
+            {:else}
+                <!-- Owned brokers still loading (cold load): say so instead of an empty tab. -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-12 text-center" data-testid="dashboard-risk-loading">
+                    <RefreshCw class="text-libre-green animate-spin mx-auto" size={28} />
+                </div>
+            {/if}
         </div>
     {:else if activeTab === 'transazioni'}
         <div data-testid="dashboard-transactions-tab">
@@ -767,18 +1093,7 @@
 <!-- FxPairAddModal — opened from DataQualityBanner CTA -->
 {#if showFxPairAddModal}
     {@const fxParts = fxPairCreateSlug.includes('-') ? fxPairCreateSlug.split('-') : fxPairCreateSlug.split('/')}
-    <FxPairAddModal
-        bind:open={showFxPairAddModal}
-        initialBase={fxParts[0] ?? ''}
-        initialQuote={fxParts[1] ?? ''}
-        dateStart={dateRangeCtl.start}
-        dateEnd={dateRangeCtl.end}
-        oncreated={() => {
-            invalidateFxRoutes();
-            invalidate();
-            loadAll();
-        }}
-    />
+    <FxPairAddModal bind:open={showFxPairAddModal} initialBase={fxParts[0] ?? ''} initialQuote={fxParts[1] ?? ''} oncreated={handleFxPairCreated} onsynced={handleFxPairCreationSynced} />
 {/if}
 
 <!-- Transaction view modal — opened from the Transazioni tab's row double-click -->

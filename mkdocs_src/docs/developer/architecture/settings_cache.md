@@ -2,7 +2,7 @@
 
 Backend services cache provider responses and computed aggregates in **named TTL caches** built
 on [theine](https://github.com/Yiling-J/theine) (Rust-backed core). A small registry in
-`backend/app/utils/cache_utils.py` tracks every cache by name, and three endpoints under
+`backend/app/utils/runtime/cache.py` tracks every cache by name, and three endpoints under
 `/api/v1/settings/cache/*` expose that registry to the UI.
 
 ## 🧱 The named-cache registry
@@ -10,7 +10,7 @@ on [theine](https://github.com/Yiling-J/theine) (Rust-backed core). A small regi
 Services obtain a cache through the registry, never by constructing one ad hoc:
 
 ```python
-from backend.app.utils.cache_utils import get_ttl_cache
+from backend.app.utils.runtime.cache import get_ttl_cache
 
 _fx_fetch_cache = get_ttl_cache("fx_provider_responses", maxsize=200, ttl=300)
 ```
@@ -39,6 +39,11 @@ Registry-level helpers: `clear_cache(name)`, `clear_all_caches()`, `list_caches(
 `get_cache_stats(name)` (stats for the admin views), and `close_all_caches()` — called at
 application shutdown to stop the timer-wheel threads.
 
+The FX service also calls `clear_cache(name)` itself, because its writes make cached portfolio results
+stale: every rate write — a provider sync that changed points, a manual upsert, a deletion that removed
+rows — clears `portfolio_layer2` and `portfolio_blob` (see
+[FX Architecture](../backend/fx/architecture.md#portfolio-cache-invalidation)).
+
 ### 🗂️ Caches registered today
 
 Caches register lazily at import time, so the list below is the full registry as of 2026-09-03
@@ -52,7 +57,7 @@ Caches register lazily at import time, so the list below is the full registry as
 | `asset_current_fetch` | 300 | 2 min | `asset_source` |
 | `asset_metadata_fetch` | 200 | 30 min | `asset_source` |
 | `fx_provider_responses` | 200 | 5 min | `fx` |
-| `portfolio_blob` | 30 | 24 h | `portfolio_engine` |
+| `portfolio_blob` | 30 | 24 h | `financial_math/portfolio/engine.py` |
 | `portfolio_layer2` | 20 | 30 min | `portfolio_service` |
 | `portfolio_wac` | 200 | 1 h | `portfolio_service` |
 | `upload_metadata` | 500 | 1 h | `static_uploads` |
@@ -61,6 +66,11 @@ Caches register lazily at import time, so the list below is the full registry as
 | `yfinance_currency` | 2000 | 24 h | Yahoo Finance provider |
 | `scheduled_investment` | 256 | 48 h | scheduled-investment provider |
 | `risk_optimization` / `risk_simulation` | 32 | 30 min | risk quant engines |
+
+Two module-local caches stay outside the registry, so the admin panel does not list them: the
+image-preview cache (`PreviewCache` in `backend/app/api/v1/uploads.py`, sized by
+`PREVIEW_CACHE_MAX_MB`, 1 h TTL) and the link-finder's 15-minute query cache in
+`backend/app/services/web_link_finder.py`.
 
 ## 🌐 The three admin endpoints
 
@@ -77,6 +87,10 @@ The read-vs-clear split is a **deliberate access decision** (2026-09-03): cache 
 operational trivia useful to anyone ("is the search cache even populated?"), while *clearing*
 forces provider re-fetches for the whole instance and stays behind the admin gate. Both clears
 are audit-logged with the admin's id and username.
+
+The registry is per process (`_cache_registry` is a module-level dict): under
+`uvicorn --workers N`, a status read or a clear reaches only the worker that served the request.
+A restart empties every worker's caches.
 
 !!! warning "A clear is a slowdown, not a reset button"
 

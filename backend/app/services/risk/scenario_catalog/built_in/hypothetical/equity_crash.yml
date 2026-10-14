@@ -18,9 +18,28 @@ defaults:
   bucket_shocks:
     STOCK: -0.35
     ETF: -0.25
+    BOND: -0.02
+    CRYPTO: -0.40
     FUND: -0.25
+    CROWDFUND: -0.10
+    HOLD: 0.0
+    COMMODITY: -0.10
+    REAL_ESTATE: -0.20
     INDEX: -0.35
     OTHER: 0.0
+    # An ETF is shocked as what it holds, so each subtype mirrors its content type.
+    # The generic ETF above keeps a blended shock because its content is unstated.
+    ETF_STOCK: -0.35
+    ETF_BOND: -0.02
+    ETF_COMMODITY: -0.10
+    ETF_REAL_ESTATE: -0.20
+    ETF_CRYPTO: -0.40
+    ETF_MONETARY: 0.0
+    # Real-estate crowdfunding is shocked as the loan it is, not as the property behind it:
+    # illiquid and not marked to market, its risk is a default that arrives late — so it moves
+    # like CROWDFUND. Known limit: this understates credit risk in a prolonged property crisis,
+    # which an instantaneous shock such as this one does not model.
+    CROWDFUND_REAL_ESTATE: -0.10
 editable:
   dimension: false
   bucket_shocks: true

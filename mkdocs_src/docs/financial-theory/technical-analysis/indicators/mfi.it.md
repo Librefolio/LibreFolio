@@ -39,7 +39,7 @@ Un aumento di prezzo su volumi elevati produce un flusso monetario positivo molt
 
 | Parametro | Chiave | Predefinito | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Finestra di accumulo per il flusso monetario positivo/negativo. |
+| Periodo ($N$) | `period` | 14 | Finestra di accumulo per il flusso monetario positivo/negativo, in sedute. |
 | Ipercomprato | `overbought` | 80 | Soglia per la zona di ipercomprato. |
 | Ipervenduto | `oversold` | 20 | Soglia per la zona di ipervenduto. |
 
@@ -51,15 +51,15 @@ MFI riutilizza l'esatta normalizzazione dell'RSI, $100 - 100/(1+x)$, ma sostitui
 
 ```mermaid
 flowchart LR
- HLC["📈 Massimo / Minimo / Chiusura"] --> TP["🎯 Prezzo Tipico"]
- TP --> DIR["➕➖ Direzione vs TP precedente"]
- V["📦 Volume"] --> RMF["💰 Flusso Monetario Lordo = TP × V"]
- TP --> RMF
- DIR --> SPLIT["🔀 Flusso Positivo / Negativo"]
- RMF --> SPLIT
- SPLIT --> SUMN["🔁 Somma su N barre"]
- SUMN --> RATIO["📐 Rapporto di Flusso Monetario"]
- RATIO --> MFI["💸 MFI = 100 − 100/(1+MFR)"]
+    HLC["📈 Massimo / Minimo / Chiusura"] --> TP["🎯 Prezzo Tipico"]
+    TP --> DIR["➕➖ Direzione vs TP precedente"]
+    V["📦 Volume"] --> RMF["💰 Flusso Monetario Lordo = TP × V"]
+    TP --> RMF
+    DIR --> SPLIT["🔀 Flusso Positivo / Negativo"]
+    RMF --> SPLIT
+    SPLIT --> SUMN["🔁 Somma su N barre"]
+    SUMN --> RATIO["📐 Rapporto di Flusso Monetario"]
+    RATIO --> MFI["💸 MFI = 100 − 100/(1+MFR)"]
 ```
 
 !!! tip "MFI vs RSI"

@@ -72,6 +72,7 @@
     function descriptionLabel(description: string): string {
         if (description === 'Unallocated income') return translateOr($_, 'dashboard.unallocatedIncome', description);
         if (description === 'Unallocated costs') return translateOr($_, 'dashboard.unallocatedCosts', description);
+        if (description === 'FX on cash') return translateOr($_, 'dashboard.fxOnCash', description);
         if (description === 'Other / reconciliation residual') return translateOr($_, 'dashboard.otherReconciliationResidual', description);
         return description;
     }

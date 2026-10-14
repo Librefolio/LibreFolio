@@ -1,76 +1,114 @@
 # 🏦 Brókeres
 
-Un **bróker** en LibreFolio representa una cuenta de corretaje — el lugar donde residen tus inversiones (por ejemplo, Interactive Brokers, Degiro, una cuenta bancaria).
+Un **bróker** es una de tus cuentas — en una casa de bolsa, un banco o un exchange: el lugar donde viven tus inversiones y tu efectivo. Cada transacción y cada informe subido pertenece a un bróker, así que necesitas al menos uno antes de empezar.
 
-Todas las transacciones, informes y datos de importación están vinculados a un bróker. Necesitas al menos un bróker para empezar a rastrear tu cartera.
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista de brókeres" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+La página **Brókeres** muestra una tarjeta por cada bróker, con su valor (**NAV**) en la divisa elegida en **Divisa** en la parte superior de la página. Haz clic en una tarjeta para abrir el bróker.
+
+**Ganancia/Pérdida** es el NAV menos el capital que entró en el bróker: tus depósitos menos los retiros, más el coste de los títulos que aportaste sin efectivo, más lo que trasladaste desde tus otros brókeres menos lo que trasladaste a ellos, cada movimiento valorado el día en que llegó. Así, mover dinero o títulos entre dos de tus brókeres no es una ganancia en una tarjeta y una pérdida en la otra, y mientras una transferencia está en tránsito, su valor permanece en la tarjeta del bróker que la envió. El efectivo mantenido en otra divisa se valora al último tipo de cambio, así que el efecto del tipo de cambio sobre él cuenta en la Ganancia/Pérdida, no en el capital. El porcentaje entre paréntesis es la ganancia sobre ese capital: muestra 0,00 % cuando ese capital es cero o negativo, por ejemplo cuando el bróker ha enviado más de lo que ha recibido. → [Transferencias internas](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
 
 !!! note "Los brókeres compartidos muestran tu participación"
 
-    En un bróker que coposees, el patrimonio neto mostrado en la tarjeta del bróker (y en la pestaña Descripción general del bróker) se **escala según tu porcentaje de propiedad** — un Propietario al 50% ve la mitad del valor de la cuenta. Los Editores y Visores siempre ven los importes completos. Consulta [Uso compartido del bróker](sharing.md).
+    En un bróker del que eres copropietario, los valores de su tarjeta y de su pestaña **Resumen** se **escalan según tu porcentaje de propiedad**: un Propietario con el 50% ve la mitad de la cuenta. Los Editores y los Lectores siempre ven los importes completos. Consulta [Compartir brókeres](sharing.md).
+
+---
+
+## ➕ Crear un bróker
+
+1. Abre **Brókeres** desde la barra lateral y haz clic en **Agregar Bróker**.
+2. Escribe un **Nombre** — el único campo obligatorio — y configura las opciones que necesites.
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Formulario de edición del bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    </div>
+
+3. Haz clic en **Crear**: el bróker aparece en tu lista, listo para transacciones e informes.
+
+??? info "⚙️ Los campos opcionales: qué hace cada uno"
+
+    - **Descripción** — tus propias notas.
+    - **Plugin de importación predeterminado** — el importador que el [Asistente de importación](../transactions/import/index.md) propone para los archivos de este bróker.
+    - **URL del portal** — el sitio web del bróker, que se abre desde la página del bróker. El icono del bróker es, en este orden: tu **URL del Icono Personalizado**; el icono del **Plugin de importación predeterminado**, cuando ese importador está hecho para este bróker; el icono del sitio web; el icono de un importador genérico como el CSV genérico; si no, un maletín.
+    - **Fecha de Apertura de Cuenta** y **Cuenta activa** — cuándo se abrió la cuenta y si sigue abierta. Un bróker cerrado aparece atenuado en la lista.
+    - **Opciones de trading** — **Permitir Compra con Apalancamiento** y **Permitir Venta en Corto (Short)**, explicadas en [Opciones de trading](info.md#trading-options).
+    - **Saldos iniciales** (solo al crear) — tu efectivo inicial. LibreFolio registra un **Depósito** por divisa, **con fecha de hoy**: si el dinero ya estaba ahí antes, cambia la fecha de esos depósitos en la página [Transacciones](../transactions/index.md).
+
+??? warning "🏷️ “Ya existe un bróker llamado…” — cuándo aparece"
+
+    Los nombres de bróker son únicos en todo el servidor, entre todos sus usuarios. Elige otro nombre o cambia el nombre del bróker existente si es tuyo.
+
+    Los brókeres de otros usuarios que no puedes abrir aparecen en **Otros Brókeres Existentes**. Su botón de compartir muestra quién tiene acceso, para que sepas a quién preguntar: cualquier usuario con sesión iniciada en este LibreFolio puede verlo, para cualquier bróker.
+
+---
+
+## ✏️ Editar o eliminar un bróker
+
+- **Editar** — el lápiz de la tarjeta del bróker o **Editar** en la barra de herramientas del bróker. Los Propietarios y los Editores pueden editar un bróker.
+- **Eliminar** — la papelera de la tarjeta del bróker. Solo un Propietario puede eliminar un bróker. Si aún contiene transacciones, LibreFolio indica cuántas y ofrece **Ir a transacciones** o **Eliminar bróker y transacciones**, que las elimina también.
+
+---
+
+## 🗂️ Dentro de un bróker
+
+La tarjeta de un bróker abre su página de detalle en la pestaña **Resumen**:
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista de brókeres" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="brokers" data-name="detail" alt="Detalle del bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
----
+La barra de herramientas de la parte superior se aplica a todas las pestañas:
 
-## ➕ Creando un bróker
+- el **rango de fechas** y la **Divisa** de las cifras;
+- **Editar**, **Compartir bróker** (abre la pestaña **Info**) y **Actualizar**;
+- **Exportación IA**, que copia al portapapeles un prompt ya preparado sobre este bróker; consulta [Exportación IA de bróker](../ai-export/broker.md).
 
-1. Navega a la página de **Brókeres** desde la barra lateral
-2. Haz clic en **"Agregar Bróker"**
-3. Completa los detalles: nombre, moneda base y, opcionalmente, un ícono
- <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Formulario de edición del bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
- </div>
+Debajo, cinco pestañas:
 
-4. El bróker aparece en tu lista, listo para recibir transacciones e informes
- <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="detail" alt="Formulario de edición del bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
- </div>
----
-
-## 🗂️ Disposición de detalles del bróker
-
-Una vez que seleccionas un bróker de la lista, la interfaz se divide en cuatro pestañas principales:
-
-1. **Descripción general**: Visualización del patrimonio neto, métricas de rendimiento, historial de crecimiento y gráficos de asignación limitados exclusivamente a esta cuenta de corretaje (ver **[Descripción general del panel de control](../dashboard/index.md)**).
-2. **Posiciones**: Lista de posiciones abiertas, ponderaciones de activos y métricas de rendimiento dentro de este bróker, con acceso al panel en línea de Análisis de Lotes FIFO (ver **[Posiciones del panel de control](../dashboard/positions.md)**).
-3. **Transacciones**: El registro de todas las actividades financieras, incluyendo entradas manuales, importaciones de estados de cuenta e historiales (ver **[Transacciones del bróker](import.md)**).
-4. **Información**: Metadatos del bróker, configuraciones de sobregiro/venta en corto, Exportación de IA y controles de uso compartido en línea (ver **[Configuración e información](info.md)** y **[Broker AI Export](../ai-export/broker.md)**).
+1. **Resumen** — cómo va la cuenta (más abajo).
+2. **Posiciones** — lo que tienes en este bróker (más abajo).
+3. **Riesgo** — el análisis de riesgos del Panel, limitado a este bróker (consulta [Pestaña Riesgo del Panel](../dashboard/index.md#risk-tab)).
+4. **Transacciones** — el libro mayor de este bróker, entradas manuales, importaciones e informes subidos (consulta [Transacciones del bróker](import.md)).
+5. **Info** — detalles de la cuenta, opciones de trading y uso compartido (consulta [Configuración e información](info.md)).
 
 ---
 
-## 📈 Pestaña de Descripción general
+## 📈 Pestaña Resumen
 
-La pestaña **Descripción general** actúa como un panel de control local para el bróker seleccionado. Contiene los mismos elementos que la **[Descripción general del panel de control](../dashboard/index.md)** principal, pero limitados exclusivamente a esta cuenta de corretaje:
+La pestaña **Resumen** responde a “¿cómo va esta cuenta?” con los mismos bloques que el [Resumen del Panel](../dashboard/index.md), limitados a este bróker:
 
-- **Tarjetas KPI locales**: Patrimonio Neto, Pérdidas y Ganancias del Período y Rendimientos específicos de este bróker. (Ver **[Tarjetas KPI del panel de control](../dashboard/kpi-cards.md)** para detalles de cálculo).
-- **Panel de saldos en efectivo**: Efectivo líquido mantenido en esta cuenta de corretaje, desglosado por moneda.
-- **Gráfico de crecimiento**: Crecimiento histórico del valor de esta cuenta (ver **[Gráfico de crecimiento de la cartera](../dashboard/charts.md#portfolio-growth-chart)**).
-- **Panel de asignación**: Composición de la cartera (por Tipo, Sector y Geografía) para las posiciones mantenidas en este bróker específico (ver **[Panel de asignación](../dashboard/charts.md#allocation-panel)**).
+- **Tarjetas KPI** — **P&L período**, **Rendimientos** y **Patrimonio neto** ([Tarjetas KPI](../dashboard/kpi-cards.md)).
+- **Saldos de efectivo** — el efectivo que hay aquí, por divisa.
+- **Gráfico de crecimiento** — las vistas **Abs**, **%** y **P&L**, con el P&L como **Línea**, **Velas** o **Ingresos** ([Gráfico de crecimiento de la cartera](../dashboard/charts.md#portfolio-growth-chart), [Modo P&L](../dashboard/charts.md#pnl-mode)). La vista que elijas se comparte con el Panel.
+- **Asignación** — por tipo, sector y zona geográfica ([Panel de asignación](../dashboard/charts.md#allocation-panel)).
+
+Volver a un bróker que ya abriste muestra sus últimas cifras al instante, actualizadas en segundo plano si algo cambió ([Volver y actualizar](../dashboard/index.md#coming-back-and-refreshing)). **Actualizar** recalcula a petición, incluida la pestaña **Riesgo** y el panel de lotes.
 
 ---
 
-## 🔍 Pestaña de Posiciones
+## 🔍 Pestaña Posiciones
 
-La pestaña **Posiciones** enumera todos los activos activos actualmente mantenidos bajo este bróker. Es idéntica en funcionalidad a la vista principal de **[Posiciones del panel de control](../dashboard/positions.md)**, pero limitada solo a este bróker:
+La pestaña **Posiciones** lista lo que tienes en este bróker, en el mismo panel que las [Posiciones del Panel](../dashboard/positions.md):
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-positions" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Posiciones (Tabla)" alt="Vista de tabla de posiciones del bróker">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Posiciones (Mapa / Treemap)" alt="Vista de mapa de posiciones del bróker">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Rendimiento (Tabla)" alt="Vista de tabla de rendimiento del bróker">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Rendimiento (Mapa / Gráfico)" alt="Vista de mapa de rendimiento del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Cartera (Tabla)" alt="Vista de tabla de la cartera del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Cartera (Mapa / Treemap)" alt="Vista de mapa de la cartera del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Periodo (Tabla)" alt="Vista de tabla del período del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Periodo (Mapa / Gráfico)" alt="Vista de mapa del período del bróker">
 </div>
 
-- **Interruptores y diseños**: Puedes alternar entre métricas de **Posición** (cantidades, valores, ponderaciones) y **Rendimiento** (P&L no realizado, % ROI), y elegir entre un diseño de **Tabla** o **Mapa** (treemap).
-- **Análisis FIFO**: Haz clic en cualquier fila o tarjeta de activo para expandir el panel de **Análisis de Lotes FIFO** en línea debajo de la lista. (Ver **[Análisis de Lotes FIFO](../dashboard/positions.md#fifo-lots-analysis)** para reglas de coincidencia detalladas).
+- **Cartera** muestra tus posiciones (cantidad, valor, peso); **Periodo** muestra las ganancias y pérdidas de cada posición en las fechas seleccionadas. Ambos se presentan como **Tabla** o **Mapa**.
+- La columna **YOC** muestra el [Rendimiento sobre coste](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) de cada posición en este bróker.
+- **Analizar lotes** abre el panel de [Análisis de lotes FIFO](../dashboard/positions.md#fifo-lots-analysis) debajo de la lista: lo encontrarás en el menú **⋮** de una fila, o haz clic con el botón derecho en el activo de la tabla o del mapa.
 
 ---
 
-## 📑 En Esta Sección
+## 📑 En esta sección
 
-- 📥 **[Transacciones del bróker](import.md)** — Registra transacciones manualmente con alcance limitado a este bróker, inicia el asistente de importación masiva BRIM y gestiona los archivos de informes subidos.
-- ⚙️ **[Configuración e información](info.md)** — Ajustes de metadatos (sobregiros, ventas en corto), generador de indicaciones de Exportación de IA limitadas y el panel de uso compartido de bróker en línea.
-- 🤝 **[Uso compartido del bróker](sharing.md)** — Guía detallada sobre permisos de roles (Propietario, Editor, Visor) y configuraciones de porcentaje de activos.
-- 🧠 **[Broker AI Export](../ai-export/broker.md)** — Tareas con alcance de broker, cobertura de datos, muestreo exacto, disponibilidad y privacidad.
+- 📥 **[Transacciones del bróker](import.md)** — añade transacciones a este bróker, importa extractos y gestiona sus informes subidos.
+- ⚙️ **[Configuración e información](info.md)** — detalles de la cuenta, opciones de trading y el panel para compartir.
+- 🧠 **[Exportación IA de bróker](../ai-export/broker.md)** — qué contiene una exportación de bróker y los análisis que puedes pedirle a una IA.
+- 🤝 **[Compartir brókeres](sharing.md)** — roles (Propietario, Editor, Lector) y porcentajes de propiedad.
 
+La página Brókeres, el formulario **Agregar Bróker** y la página del bróker tienen cada uno una breve guía contextual: puedes repetirlas desde [Configuración → Preferencias → Introducción y guías](../settings/preferences.md#onboarding-and-guides).

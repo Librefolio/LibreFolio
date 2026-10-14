@@ -24,6 +24,16 @@
  *
  * `createEventDispatcher` is Svelte 4 API kept alive by Svelte 5's legacy layer:
  * `$on()` is gone, and the listener arrives through the `$$events` prop instead.
+ *
+ * The last block pins markup no user looks at and Chrome's password manager
+ * reads (developer note, 30/09: Chrome offered saved credentials on the login
+ * password field only, never on the username; `LoginCard.test.ts` tells the
+ * story in full). Decision D2 aligns all three credential forms on one contract:
+ * every field with an `id`, a `name`, the right `autocomplete` token and a
+ * visually hidden `<label for>` reading its placeholder's key; the username safe
+ * from autocapitalisation and spell-check; no empty `id` anywhere. On a sign-up
+ * form it is what lets Chrome offer a generated password on both password
+ * fields and save the new account under the username just typed.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable} from 'svelte/store';
@@ -464,5 +474,94 @@ describe('RegisterCard — clearing an error', () => {
         await submit();
 
         await waitFor(() => expect(banner()).toBeNull());
+    });
+});
+
+describe("RegisterCard — the markup Chrome's password manager reads", () => {
+    // Decision D2 (30/09). The label key of each field is the key its
+    // placeholder already shows, so sighted users see no change at all.
+    const FIELDS = [
+        {testId: 'register-username', id: 'register-username', name: 'username', autocomplete: 'username', type: 'text', key: 'auth.username'},
+        {testId: 'register-email', id: 'register-email', name: 'email', autocomplete: 'email', type: 'email', key: 'auth.email'},
+        {testId: 'register-password', id: 'register-password', name: 'new-password', autocomplete: 'new-password', type: 'password', key: 'auth.password'},
+        {testId: 'register-confirm-password', id: 'register-confirm-password', name: 'confirm-password', autocomplete: 'new-password', type: 'password', key: 'auth.confirmPassword'},
+    ];
+
+    /** Mounts the card and returns the element everything it rendered lives in. */
+    function mountCard(): HTMLElement {
+        return render(RegisterCard).container;
+    }
+
+    function input(testId: string): HTMLInputElement {
+        return screen.getByTestId(testId) as HTMLInputElement;
+    }
+
+    /**
+     * The named attributes of one element as a single object, `null` where
+     * absent, so a red shows every mismatch in one diff instead of the first.
+     */
+    function attributes(el: Element, names: readonly string[]): Record<string, string | null> {
+        return Object.fromEntries(names.map((name) => [name, el.getAttribute(name)]));
+    }
+
+    /** Tag and test id of an element: enough for a red to say which one it means. */
+    function describeElement(el: Element): string {
+        const testId = el.getAttribute('data-testid');
+        return testId ? `${el.tagName.toLowerCase()}[data-testid="${testId}"]` : el.tagName.toLowerCase();
+    }
+
+    it.each(FIELDS)('names $testId by id, name and autocomplete', ({testId, id, name, autocomplete, type}) => {
+        mountCard();
+
+        expect(attributes(input(testId), ['id', 'name', 'autocomplete', 'type'])).toEqual({id, name, autocomplete, type});
+    });
+
+    it.each(FIELDS)('labels $testId with the key its placeholder shows', ({testId, key}) => {
+        mountCard();
+        const field = input(testId);
+
+        expect(screen.getByLabelText(key)).toBe(field);
+        // A `<label for>`, specifically: an `aria-label` would satisfy the query
+        // above and give the password manager no label element to read.
+        expect(field.labels).toHaveLength(1);
+        const label = field.labels![0];
+        expect(label).toHaveAttribute('for', field.id);
+        expect(field).toHaveAttribute('placeholder', key);
+        expect(label.textContent?.trim()).toBe(key);
+        // Hidden from sight, not from assistive technology.
+        expect(label).not.toHaveAttribute('hidden');
+        expect(label).not.toHaveAttribute('aria-hidden', 'true');
+    });
+
+    it('keeps a phone keyboard from capitalising or correcting the username', () => {
+        mountCard();
+
+        expect(attributes(input('register-username'), ['autocapitalize', 'spellcheck'])).toEqual({autocapitalize: 'none', spellcheck: 'false'});
+    });
+
+    it('leaves no element with an empty id', () => {
+        // Both `PasswordInput`s printed `id=""`: invalid HTML, and a target no
+        // label can point at.
+        const root = mountCard();
+
+        expect(Array.from(root.querySelectorAll('[id=""]'), describeElement)).toEqual([]);
+    });
+
+    it('gives every id in the card to one element only', () => {
+        // A guard for the ids the fix introduces: two password fields built from
+        // one component are exactly where a copied id would slip in.
+        const root = mountCard();
+        const ids = Array.from(root.querySelectorAll('[id]'), (el) => el.id).filter((id) => id !== '');
+
+        expect([...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))]).toEqual([]);
+    });
+
+    it('keeps the four fields in the one registration form', () => {
+        // Chrome reads a sign-up as one `<form>`: the username and both new
+        // passwords must share it. A guard, not a change.
+        mountCard();
+        const form = screen.getByTestId('register-form');
+
+        for (const {testId} of FIELDS) expect(input(testId).form, testId).toBe(form);
     });
 });

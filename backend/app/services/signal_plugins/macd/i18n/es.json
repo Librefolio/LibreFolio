@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "macd": {
+      "name": "MACD",
+      "description": "Momentum entre medias móviles",
+      "line": "MACD",
+      "lineDescription": "EMA rápida menos EMA lenta.",
+      "signal": "Línea de señal",
+      "signalDescription": "Suavizado EMA de la línea MACD.",
+      "histogram": "Histograma",
+      "histogramDescription": "Distancia entre MACD y su línea de señal."
+    }
+  }
+}

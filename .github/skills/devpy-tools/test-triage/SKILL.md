@@ -135,7 +135,7 @@ had printed:
 ⚠️  Removing existing test database: .../app.db
 ✅ Test database removed
 ❌ Create database via Alembic migrations - FAILED
-❌ Server is currently running on port 6041
+❌ Server is currently running on the selected test lane port
 ```
 
 The database was deleted, then the migration that should have rebuilt it

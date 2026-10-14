@@ -1,0 +1,11 @@
+{
+  "risk": {
+    "analytics": {
+      "correlation": {
+        "name": "Correlación",
+        "description": "Matriz de correlación de Pearson sobre rendimientos en la divisa objetivo.",
+        "help": "Este panel analiza las correlaciones de dos en dos de todos los activos examinados, calculadas en el periodo elegido y teniendo en cuenta los posibles cambios de divisa. Un valor alto, cercano a +1, indica que dos activos se mueven juntos y se diversifican poco; cercano a 0, que se mueven por su cuenta; negativo, que uno amortigua al otro. Haz clic en el icono para ver la guía."
+      }
+    }
+  }
+}

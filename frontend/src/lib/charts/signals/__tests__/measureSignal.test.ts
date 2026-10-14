@@ -29,6 +29,10 @@ function values(points: LineDataPoint[]): number[] {
     return points.map((point) => point.value);
 }
 
+function markMissing(data: LineDataPoint[], date: string): LineDataPoint[] {
+    return data.map((point) => (point.date === date ? {...point, missing: true} : point));
+}
+
 describe('MeasureSignal — default style', () => {
     it('ships a dotted orange line pinned at the start and arrowed at the end', () => {
         expect(MeasureSignal.getDefaultStyle()).toEqual({
@@ -77,6 +81,13 @@ describe('MeasureSignal — the drawn segment', () => {
         expect(measure('2026-03-30', '2026-04-04').computePoints(chart)).toEqual([]);
         expect(measure('2026-04-01', '2026-04-09').computePoints(chart)).toEqual([]);
         expect(measure('2026-04-01', '2026-04-04').computePoints([])).toEqual([]);
+    });
+
+    it.each([
+        ['start', '2026-04-01'],
+        ['end', '2026-04-04'],
+    ] as const)('draws nothing when the %s endpoint is marked missing', (_endpoint, date) => {
+        expect(measure('2026-04-01', '2026-04-04').computePoints(markMissing(chart, date))).toEqual([]);
     });
 
     it('draws nothing before both dates have been picked', () => {
@@ -162,6 +173,27 @@ describe('MeasureSignal — the measurement', () => {
         expect(measure('2026-04-01', '2026-04-09').getMeasurement(chart)).toBeNull();
     });
 
+    it.each([
+        ['start', '2026-04-01'],
+        ['end', '2026-04-04'],
+    ] as const)('has nothing to report when the %s endpoint is marked missing', (_endpoint, date) => {
+        expect(measure('2026-04-01', '2026-04-04').getMeasurement(markMissing(chart, date))).toBeNull();
+    });
+
+    it('continues to measure Price endpoints explicitly marked available', () => {
+        const available = chart.map((point) => ({...point, missing: false}));
+        const ruler = measure('2026-04-01', '2026-04-04');
+
+        expect(values(ruler.computePoints(available))).toEqual([100, 110, 120, 130]);
+        expect(ruler.getMeasurement(available)).toMatchObject({
+            startValue: 100,
+            endValue: 130,
+            deltaAbs: 30,
+            deltaPct: 30,
+            days: 3,
+        });
+    });
+
     it('counts elapsed days across a month boundary', () => {
         const spanning: LineDataPoint[] = [
             {date: '2026-01-31', value: 100},
@@ -208,6 +240,13 @@ describe('MeasureSignal — measuring another signal', () => {
         // A benchmark that starts later than the measure is simply not comparable.
         expect(measure('2026-04-01', '2026-04-04').getMeasurementForSignal([{date: '2026-04-02', value: 20}])).toBeNull();
         expect(measure('2026-04-01', '2026-04-04').getMeasurementForSignal([])).toBeNull();
+    });
+
+    it('returns nothing when either overlay endpoint is marked missing', () => {
+        const ruler = measure('2026-04-01', '2026-04-04');
+
+        expect(ruler.getMeasurementForSignal(markMissing(overlay, '2026-04-01'))).toBeNull();
+        expect(ruler.getMeasurementForSignal(markMissing(overlay, '2026-04-04'))).toBeNull();
     });
 
     it('has nothing to report before both dates have been picked', () => {

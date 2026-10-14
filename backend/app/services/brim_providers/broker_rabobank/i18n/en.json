@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_rabobank": {
+      "description": "Import transactions from Rabobank Dutch CSV export. Supports funds, dividends, deposits, withdrawals, fees, and interest.",
+      "name": "Rabobank"
+    }
+  }
+}

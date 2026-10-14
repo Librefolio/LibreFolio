@@ -1,1 +1,1 @@
-/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/mkdocs_src/docs/financial-theory/technical-analysis/indicators/index.en.md
+../../../../../../../mkdocs_src/docs/financial-theory/technical-analysis/indicators/index.en.md

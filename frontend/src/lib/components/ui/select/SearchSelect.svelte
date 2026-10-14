@@ -1,11 +1,12 @@
 <!--
   SearchSelect.svelte - Svelte 5
 
-  Dropdown select with fuzzy search functionality.
-  Supports keyboard navigation and custom item rendering via snippets.
+  Dropdown select with search: a substring match on value, label, searchText and emoji icon,
+  best matches first (see optionFilter.ts). Supports keyboard navigation and custom item
+  rendering via snippets.
 -->
 <script lang="ts">
-    import type {Snippet} from 'svelte';
+    import {untrack, type Snippet} from 'svelte';
     import type {SelectOption} from './types';
     import {filterOptions, firstSelectable as firstSelectableIn, isSelectable, stepSelectable} from './optionFilter';
     import {ChevronDown, Search, X, Plus} from 'lucide-svelte';
@@ -85,6 +86,7 @@
     let highlightedIndex = $state(0);
     let inputRef: HTMLInputElement | null = $state(null);
     let containerRef: HTMLDivElement | null = $state(null);
+    let listRef: HTMLDivElement | null = $state(null);
     let computedPosition: 'top' | 'bottom' = $state('bottom');
     let dynamicMaxHeight = $state(0);
     /** Timestamp when trigger received focus — used to debounce Enter after advanceFocus */
@@ -113,7 +115,7 @@
     // Calculate max height based on maxVisibleItems
     let maxDropdownHeight = $derived(maxVisibleItems * ITEM_HEIGHT);
 
-    // Filter options based on search query — see `optionFilter.ts` for the section-title rule.
+    // Filter options based on search query — see `optionFilter.ts` for the section-title and ranking rules.
     let filteredOptions = $derived(filterOptions(options, searchQuery));
 
     function firstSelectable(): number {
@@ -185,6 +187,24 @@
         if (next !== -1 && next !== highlightedIndex) highlightedIndex = next;
     });
 
+    /*
+     * A new query is a new question, so its answer starts at the top: the highlight — the row Enter
+     * picks — goes to the best match, and the list scrolls back to show it. Without this the
+     * highlight stayed on whatever index it had, even when the pointer had put it there, and a
+     * scrolled list kept hiding the best match under the fold (R13). Keyed on the query value, not
+     * on the input event, because the clear button changes the query without typing.
+     */
+    let lastQuery = '';
+    $effect(() => {
+        const query = searchQuery;
+        if (query === lastQuery) return;
+        lastQuery = query;
+        untrack(() => {
+            highlightedIndex = Math.max(firstSelectable(), 0);
+            if (listRef) listRef.scrollTop = 0;
+        });
+    });
+
     // Close on click outside
     $effect(() => {
         if (!isOpen) return;
@@ -221,8 +241,10 @@
 
     function openDropdown() {
         if (disabled) return;
-        // Prevent immediate reopen after close (touch event race)
-        if (Date.now() - lastClosedAt < 200) return;
+        // A tap that chooses an option can be followed by a ghost click on the trigger underneath
+        // (touch event race): ignore an opening within 200 ms of a touch or pen close. A mouse or
+        // keyboard close never blocks the next opening — a real click there is never a ghost.
+        if (closedByTouch && Date.now() - lastClosedAt < 200) return;
         updateDropdownPosition();
         isOpen = true;
         searchQuery = '';
@@ -231,11 +253,33 @@
 
     /** Timestamp of last close — used to prevent immediate reopen on touch devices */
     let lastClosedAt = 0;
+    /** Pointer type of the last press inside this select; a key press inside it clears it. */
+    let lastPointerType = '';
+    /** Whether the last close came from a touch or pen press — the only close a ghost click can follow. */
+    let closedByTouch = false;
+
+    $effect(() => {
+        const container = containerRef;
+        if (!container) return;
+        const onPointerDown = (event: PointerEvent) => {
+            lastPointerType = event.pointerType ?? '';
+        };
+        const onKeyDown = () => {
+            lastPointerType = '';
+        };
+        container.addEventListener('pointerdown', onPointerDown, true);
+        container.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            container.removeEventListener('pointerdown', onPointerDown, true);
+            container.removeEventListener('keydown', onKeyDown, true);
+        };
+    });
 
     function closeDropdown() {
         isOpen = false;
         searchQuery = '';
         lastClosedAt = Date.now();
+        closedByTouch = lastPointerType === 'touch' || lastPointerType === 'pen';
         // Return focus to the trigger so the next click works reliably
         if (containerRef) {
             const trigger = containerRef.querySelector<HTMLElement>('[role="combobox"]');
@@ -308,6 +352,12 @@
         // When open with inlineSearch, handle keyboard navigation here too
         if (inlineSearch) {
             handleSearchKeydown(event);
+        } else if (event.key === 'Escape') {
+            // Open list, focus back on the trigger (Shift+Tab from its search box): the Escape closes
+            // the list, and the modal around the select stays open.
+            event.preventDefault();
+            event.stopPropagation();
+            closeDropdown();
         }
     }
 
@@ -334,7 +384,10 @@
                 }
                 break;
             case 'Escape':
+                // Reached only with the list open: the select consumes this Escape, so a modal
+                // around it (ModalBase closes on the same key bubbling up) stays open.
                 event.preventDefault();
+                event.stopPropagation();
                 closeDropdown();
                 break;
         }
@@ -449,7 +502,7 @@
             {/if}
 
             <!-- Options List -->
-            <div class="overflow-y-auto options-list" id={listboxId} role="listbox" aria-busy={loading} style="max-height: {dynamicMaxHeight}px">
+            <div bind:this={listRef} class="overflow-y-auto options-list" id={listboxId} role="listbox" aria-busy={loading} style="max-height: {dynamicMaxHeight}px">
                 {#if loading}
                     <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                         {$_('common.loading')}

@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetDrawdown": {
+        "name": "Drawdown per asset",
+        "description": "Quanto ogni asset selezionato è sceso dal proprio massimo, quanto è durata e se è rientrata."
+      }
+    }
+  }
+}

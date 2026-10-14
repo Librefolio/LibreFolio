@@ -2,7 +2,7 @@
 
 ## 💡 ¿Qué es el NAV?
 
-El **Valor Liquidativo Neto (NAV)** es la valoración total de mercado de su cartera en un punto en el tiempo $t$. Responde a: *"¿Cuánto vale la cartera en este momento?"*
+El **Valor Liquidativo Neto (NAV)** es la valoración total de mercado de tu cartera en un punto en el tiempo $t$. Responde a: *"¿Cuánto vale la cartera en este momento?"*
 
 ---
 
@@ -22,6 +22,14 @@ $$
 \cdot \mathrm{fx}(\mathrm{ccy}_{mark}, C^*, t)
 $$
 
+y el efectivo de cada bróker, mantenido en las divisas en que se registró y valorado al tipo de cambio de $t$:
+
+$$
+\mathrm{Cash}(t) = \sum_{b \in S} \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t)
+$$
+
+con $N_{b,c}(t)$ el saldo que el bróker $b$ mantiene en la divisa $c$ en la fecha $t$, en proporción a la [cuota de propiedad](../../../../user/brokers/sharing.md) del bróker, y $\mathrm{fx}(c, C^*, t)$ el último tipo de cambio en la fecha $t$ o anterior ($1$ para $c = C^*$). Por tanto, el efectivo mantenido en otra divisa mueve el NAV cuando se mueve su tipo de cambio.
+
 🔗 Ver **[Portfolio Engine — §5 Aggregation](index.md#5-portfolio-aggregation)** para la derivación completa.
 
 ---
@@ -35,7 +43,7 @@ La marca $\operatorname{mark}(a,t)$ proviene del resolver unificado:
 3. **CARRIED** — última observación anterior a $t$, proyectada hacia adelante (LOCF).
 4. **MISSING** — sin observación en o antes de la fecha $t$.
 
-Las marcas permanecen en moneda nativa hasta la valoración; la conversión FX ocurre en $t$. El PMC **nunca** se utiliza para la valoración. Ver [Resolución de Precios](price-resolution.md).
+Las marcas permanecen en moneda nativa hasta la valoración, y también los saldos de efectivo, cada uno en la divisa en que se registró; la conversión FX ocurre en $t$. El PMC **nunca** se utiliza para la valoración. Ver [Resolución de Precios](price-resolution.md).
 
 ---
 
@@ -43,7 +51,7 @@ Las marcas permanecen en moneda nativa hasta la valoración; la conversión FX o
 
 | Componente | Monto |
 |------------|-------|
-| Valor de Mercado de Activos | €32,759 |
+| Valor de Mercado de Activos | €32.759 |
 | Saldo de Efectivo | €631 |
 | En Tránsito | €0 |
 

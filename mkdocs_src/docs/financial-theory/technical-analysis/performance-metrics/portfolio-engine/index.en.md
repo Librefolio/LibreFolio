@@ -2,7 +2,7 @@
 
 ## 💡 Overview
 
-This page formally defines the mathematical model underlying LibreFolio's portfolio calculation engine. All other metric pages ([NAV](nav.md), [Book Value](book-value.md), [Period P&L](period-pnl.md), [WAC](../weighted-average-cost.md), [Deposited Capital](deposited-capital.md)) reference this page for their precise computation rules.
+This page formally defines the mathematical model underlying LibreFolio's portfolio calculation engine. All other metric pages ([NAV](nav.md), [Book Value](book-value.md), [Period P&L](period-pnl.md), [Yield on Cost](yield-on-cost.md), [WAC](../weighted-average-cost.md), [Deposited Capital](deposited-capital.md)) reference this page for their precise computation rules.
 
 ---
 
@@ -38,6 +38,7 @@ $$
 - `estimated=True` means TRADE-origin. A stale carried MARKET quote is stale, not estimated.
 - Marks stay in native currency; each consumer converts to $C^*$ at valuation date $t$.
 - Cost-basis FX remains pinned to the transaction date.
+- Cash stays in the currency it was recorded in, broker by broker, and is valued at the rate of $t$ (§5); each cash movement is still booked, and each external cash flow enters the capital, at the rate of its own date.
 - WAC is **never** used as valuation price.
 
 See [Price Resolution](price-resolution.md) for the resolver contract and data-quality semantics.
@@ -56,28 +57,30 @@ $$
 $$
 
 $$
-\mathrm{CB}(a,b,t) = q(a,b,t) \cdot w(a,b,t) \cdot \mathrm{fx}\bigl(\mathrm{ccy}_w, C^*, t\bigr)
+\mathrm{CB}(a,b,t) = q(a,b,t) \cdot w(a,b,t)
 $$
 
 $$
 \mathrm{UGL}(a,b,t) = \mathrm{MV}(a,b,t) - \mathrm{CB}(a,b,t)
 $$
 
-Where $w(a,b,t)$ is the [Weighted Average Cost](../weighted-average-cost.md) for position $(a,b)$ at date $t$.
+Where $w(a,b,t)$ is the [Weighted Average Cost](../weighted-average-cost.md) for position $(a,b)$ at date $t$, kept in $C^*$ at historical rates (§4): the cost basis takes no exchange rate at $t$, so for a foreign asset the exchange-rate effect is part of $\mathrm{UGL}$.
 
 ---
 
 ## 📐 4. WAC Iterative Update
 
-Maintained per-position $(a,b)$ with pool state $(\hat{q}, \hat{c})$:
+Maintained per-position $(a,b)$ with pool state $(\hat{q}, \hat{c})$, the cost $\hat{c}$ kept in $C^*$:
 
-**Acquisition** (qty $> 0$, unit cost $u$):
+**Acquisition** (qty $> 0$, amount $P$ paid in currency $c$ on date $d$):
 
 $$
 \hat{q}_{\text{new}} = \hat{q} + q_{\text{tx}}, \quad
-\hat{c}_{\text{new}} = \hat{c} + u \cdot q_{\text{tx}}, \quad
+\hat{c}_{\text{new}} = \hat{c} + P \cdot \mathrm{fx}(c, C^*, d), \quad
 w = \frac{\hat{c}_{\text{new}}}{\hat{q}_{\text{new}}}
 $$
+
+$P$ is the cash paid for a BUY, or the per-unit cost basis override times $q_{\text{tx}}$ for a TRANSFER or ADJUSTMENT; $\mathrm{fx}(C^*, C^*, d) = 1$. When no rate exists on or before $d$, or the acquisition has no cost basis, the quantity enters and the cost does not: the position's cost is flagged incomplete instead of counting zero.
 
 **Reduction** (qty $< 0$):
 
@@ -86,6 +89,8 @@ w_{\text{pre}} = \frac{\hat{c}}{\hat{q}}, \quad
 \hat{q}_{\text{new}} = \hat{q} - |q_{\text{tx}}|, \quad
 \hat{c}_{\text{new}} = \hat{q}_{\text{new}} \cdot w_{\text{pre}}
 $$
+
+**Split** (linked to a split event): $\hat{q}$ changes, $\hat{c}$ does not.
 
 !!! info "Ordering"
 
@@ -110,6 +115,14 @@ $$
 $$
 \mathrm{UGL}(t) = \mathrm{NAV}(t) - \mathrm{Book}(t)
 $$
+
+$\mathrm{Cash}(t)$ is each broker's cash, kept in the currencies it was recorded in and valued at the rate of $t$:
+
+$$
+\mathrm{Cash}(t) = \sum_{b \in S} \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t)
+$$
+
+where $N_{b,c}(t)$ is the balance of broker $b$ in currency $c$ after its movements dated on or before $t$, scaled by the broker's [ownership share](../../../../user/brokers/sharing.md), and $\mathrm{fx}(c, C^*, t)$ is the latest rate on or before $t$ ($1$ for $c = C^*$). The same term is in NAV and in Book, so the exchange-rate effect on cash cancels in UGL: it is booked as an exchange result (§6) and belongs to the Total P&L.
 
 ---
 
@@ -141,6 +154,22 @@ Three accumulator pools track cash provenance. $K$ and $R$ are maintained **per-
 
 If departure and arrival dates differ, the transfer is in-transit: subtracted from $s$ at departure day, added to $d$ at arrival day. Between those dates, $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$ by the in-transit amount — handled by proportional reconciliation.
 
+### 💱 Exchange Result on Foreign Cash {: #exchange-result-on-foreign-cash }
+
+Each cash movement enters the broker's cash, and its pools, at the rate of its own date; the balance held afterwards follows the rate (§5). On every day $t$ on which the rate of a foreign currency held as cash in $S$ changes — its first known rate included — after that day's cash movements and before that day's transactions update the pools, each broker $b$ holding foreign cash is revalued:
+
+$$
+\varepsilon_b(t) = \sum_{c} N_{b,c}(t) \cdot \mathrm{fx}(c, C^*, t) - \mathrm{Cash}^{\text{replay}}_b(t)
+$$
+
+$$
+\mathrm{Cash}^{\text{replay}}_b \mathrel{+}= \varepsilon_b, \qquad
+R_b \mathrel{+}= \varepsilon_b, \qquad
+\text{if } R_b < 0\text{: } K_b \mathrel{+}= R_b,\; R_b = 0
+$$
+
+$\mathrm{Cash}^{\text{replay}}_b(t)$ is the cash the replay carries for $b$: its value at the previous revaluation plus every later movement at the rate of its own date. A gain goes to the returns; a loss consumes them first and then the capital, exactly like a FEE. The capital baseline does not move: an exchange result is a result, not a contribution, so it is in NAV, Total P&L, ROI, TWRR and MWRR, never in the deposited capital.
+
 ### 🧮 Aggregation for output
 
 $$
@@ -157,7 +186,14 @@ $$
 \mathrm{Cash}_{\text{like}}(t) \approx \sum_{b \in S} K_b(t) + \sum_{b \in S} R_b(t)
 $$
 
-Proportional per-broker scaling applied if drift $> 0.01$ (from FX rounding or in-transit timing).
+Both pools are first clamped at zero per broker. If the pools are not empty and the drift still exceeds $0.01$, the **summed** pools are scaled to $\mathrm{Cash}_{\text{like}}$, the cash plus the cash in transit — an aggregate scaling, not a per-broker one, each result floored at zero:
+
+$$
+\mathrm{CashFromCapital}(t) = \sum_{b \in S} K_b(t) \cdot \frac{\mathrm{Cash}_{\text{like}}(t)}{\sum_{b \in S} K_b(t) + \sum_{b \in S} R_b(t)}, \qquad
+\mathrm{CashFromReturns}(t) = \mathrm{Cash}_{\text{like}}(t) - \mathrm{CashFromCapital}(t)
+$$
+
+Otherwise $\mathrm{CashFromCapital}(t) = \min\bigl(\sum_b K_b(t),\, \mathrm{Cash}_{\text{like}}(t)\bigr)$ and $\mathrm{CashFromReturns}$ is the rest, floored at zero. The exchange results on cash at rest are booked into the pools (above), so the drift left comes from in-transit timing: cash in transit — and the move of its exchange rate while it travels — is in no broker's pools.
 
 ---
 
@@ -186,23 +222,29 @@ $$
 \mathrm{PnL}_{period} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Unallocated fees/income without `asset_id` are grouped per broker as other period effects.
+Since UGL cannot contain the exchange result on cash (§5), Other splits into each broker's exchange result over the period and what remains:
+
+$$
+\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
+$$
+
+Unallocated fees/income without `asset_id` are grouped per broker as other period effects, and so is $\mathrm{FXonCash}_b$: one row per broker holding foreign cash, shown when its result is not zero. See [Period P&L — FX on Cash](period-pnl.md#fx-on-cash).
 
 ---
 
 ## 📐 8. Realized Gain/Loss
 
-On SELL of $|q_s|$ units from position $(a,b)$:
+On SELL of $|q_s|$ units from position $(a,b)$ on date $t$:
 
 $$
-C = |q_s| \cdot w_{\text{pre}}(a,b) \cdot \mathrm{fx}(\mathrm{ccy}_w, C^*, t)
+C = |q_s| \cdot w_{\text{pre}}(a,b)
 $$
 
 $$
-\mathrm{Realized} = P_{\text{sell}} - C
+\mathrm{Realized} = P_{\text{sell}} \cdot \mathrm{fx}(\mathrm{ccy}_{\text{sell}}, C^*, t) - C
 $$
 
-Where $w_{\text{pre}}$ is the WAC **before** the pool reduction (same value used by 3-pool SELL rule above).
+Where $w_{\text{pre}}$ is the WAC in $C^*$ **before** the pool reduction (same value used by 3-pool SELL rule above): the units sold leave at their historical cost, with no conversion at the sale date. A sale whose proceeds cannot be converted, or drawn from a position whose cost is incomplete, is left out of Realized.
 
 ---
 
@@ -213,7 +255,7 @@ Where $w_{\text{pre}}$ is the WAC **before** the pool reduction (same value used
 | Pre-frame | $[t_{\mathrm{first}},\ t_0)$ | Cash, qty, WAC, pools — no market evaluation |
 | Frame | $[t_0,\ t_1]$ | Full daily: prices, FX, position states, portfolio states |
 
-Pre-frame transactions update accumulators (cash ledger, WAC pools, 3-pool K/R/W) without consuming price or FX data. This enables efficient range-based caching.
+Pre-frame transactions update accumulators (cash ledger, WAC pools, 3-pool K/R/W) without any market evaluation: no price is read and no position is valued. Each movement is converted at the rate of its own date, as in the frame, and on every day the rate of a held foreign currency changes, the cash is revalued at that day's rate and the exchange result enters the pools (§6), so the pools are correct at $t_0$. This enables efficient range-based caching.
 
 ---
 
@@ -229,6 +271,7 @@ Computed **after** daily states, as a separate pass:
 | MWRR | XIRR solving $\sum \frac{CF_i}{(1+r)^{d_i/365}} = 0$ | [MWRR](mwrr.md) |
 | Simple ROI | $(\mathrm{NAV} - \text{NetInvested}) / \text{NetInvested}$ | [ROI](roi.md) |
 | Net annualized return | $(1+r_{\mathrm{net}})^{365/d}-1$, suppressed below 30 days | [Net Annualized Return](net-annualized-return.md) |
+| Yield on Cost | Trailing-365-day gross transaction income per eligible historical unit, divided by residual unit WAC at $t_1$ | [Yield on Cost](yield-on-cost.md) |
 | Timing Effect | $\text{MWRR}_{\text{cum}} - \text{TWRR}_{\text{cum}}$ | [Timing Effect](timing-effect.md) |
 
 ---
@@ -238,6 +281,7 @@ Computed **after** daily states, as a separate pass:
 - 💼 [NAV](nav.md) — snapshot valuation
 - 🧭 [Price Resolution](price-resolution.md) — unified valuation resolver
 - 📈 [Net Annualized Return](net-annualized-return.md) — holdings, period, and FIFO CAGR definitions
+- 💸 [Yield on Cost](yield-on-cost.md) — trailing gross recorded income relative to residual unit WAC
 - 📖 [Book Value](book-value.md) — cost basis aggregate
 - 📊 [Period P&L](period-pnl.md) — windowed gain/loss with contribution
 - 💸 [Deposited Capital](deposited-capital.md) — 3-pool details and worked examples

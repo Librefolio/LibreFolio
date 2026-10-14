@@ -6,14 +6,14 @@
 
 ## 📥 Cómo exportar
 
-Para exportar su historial de transacciones desde Charles Schwab:
+Para exportar tu historial de transacciones desde Charles Schwab:
 
-1. Inicie sesión en su [Charles Schwab Client Portal](https://www.schwab.com).
-2. Vaya a la pestaña **Accounts** y seleccione **History**.
-3. Seleccione la cuenta que desea exportar (si tiene varias cuentas).
-4. Seleccione el rango de fechas deseado.
-5. Haga clic en el enlace **Export** (generalmente ubicado en la esquina superior derecha de la tabla de transacciones) y seleccione **CSV**.
-6. Guarde el archivo en su computadora.
+1. Inicia sesión en tu [Charles Schwab Client Portal](https://www.schwab.com).
+2. Ve a la pestaña **Accounts** y selecciona **History**.
+3. Selecciona la cuenta que deseas exportar (si tienes varias cuentas).
+4. Selecciona el rango de fechas deseado.
+5. Haz clic en el enlace **Export** (generalmente ubicado en la esquina superior derecha de la tabla de transacciones) y selecciona **CSV**.
+6. Guarda el archivo en tu computadora.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <!-- [Screenshot Placeholder: Charles Schwab Portal - History tab and Export link] -->
@@ -23,7 +23,7 @@ Para exportar su historial de transacciones desde Charles Schwab:
 
 !!! warning "Do Not Modify Headers"
 
-    Los archivos CSV de Schwab incluyen filas de resumen/metadatos cerca del final. El analizador BRIM ignora las filas que no corresponden a transacciones y puede emitir advertencias por acciones desconocidas o filas no válidas. No edite manualmente la exportación.
+    Los archivos CSV de Schwab incluyen filas de resumen/metadatos cerca del final. El analizador BRIM ignora las filas que no corresponden a transacciones y puede emitir advertencias por acciones desconocidas o filas no válidas. No edites manualmente la exportación.
 
 ## 📝 Notas
 

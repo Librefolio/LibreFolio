@@ -55,9 +55,9 @@ from backend.app.schemas.common import (
 )
 from backend.app.schemas.prices import FAAssetEventPoint, FACurrentValue, FAHistoricalData, FAPricePoint
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
-from backend.app.utils.geo_utils import normalize_country_keys
-from backend.app.utils.identifier_utils import normalize_other_identifiers
-from backend.app.utils.sector_fin_utils import normalize_sector
+from backend.app.utils.asset.geo import normalize_country_keys
+from backend.app.utils.asset.identifier import normalize_other_identifiers
+from backend.app.utils.asset.sector import normalize_sector
 
 # ============================================================================
 # ENUMS FOR FINANCIAL CALCULATIONS
@@ -475,7 +475,7 @@ class FASectorArea(BaseDistribution):
     Validates sector names against FinancialSector enum:
     - Industrials, Technology, Financials, Consumer Discretionary,
       Health Care, Real Estate, Basic Materials, Energy, Consumer Staples,
-      Telecommunication, Utilities, Other
+      Telecommunication, Utilities, Corporate Bonds, Government Bonds, Other
 
     Unknown sectors are mapped to "Other" with warning log.
     Weights are automatically merged if multiple input keys map to same sector.
@@ -625,6 +625,7 @@ class FAAssetCreateItem(StrictModel):
     icon_url: Optional[str] = Field(None, description="URL to asset icon (local or remote)")
     quote_base_quantity: Optional[int] = Field(1, description="How many units the raw market quote refers to")
     active: bool = Field(True, description="Whether asset is active")
+    is_benchmark: bool = Field(False, description="Offer this asset as a comparison benchmark in risk and chart selectors")
     user_url: Optional[str] = Field(None, description="User-defined URL (notes, external dashboard, etc.)")
 
     # Classification metadata (optional)
@@ -709,6 +710,7 @@ class FAAinfoFiltersRequest(StrictModel):
     currency: Optional[str] = Field(None, description="Filter by currency (ISO 4217)")
     asset_type: Optional[AssetType] = Field(None, description="Filter by asset type enum")
     active: Optional[bool] = Field(None, description="Tri-state filter: True = only active, False = only inactive, None (default) = no filter (return both)")
+    is_benchmark: Optional[bool] = Field(None, description="Tri-state filter: True = only benchmarks, False = only non-benchmarks, None (default) = no filter")
 
     # Search in display_name (partial match)
     search: Optional[str] = Field(None, description="Search in display_name (partial match)")
@@ -762,6 +764,7 @@ class FAinfoResponse(StrictModel):
     asset_type: Optional[str] = Field(None, description="Asset type")
     quote_base_quantity: Optional[int] = Field(1, description="How many units the raw market quote refers to")
     active: bool = Field(..., description="Whether asset is active")
+    is_benchmark: bool = Field(False, description="Asset is offered as a comparison benchmark")
     user_url: Optional[str] = Field(None, description="User-defined URL (notes, external dashboard, etc.)")
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
@@ -771,6 +774,10 @@ class FAinfoResponse(StrictModel):
     # transactions in brokers the current user OWNs with a positive share.
     tx_count: int = Field(0, description="Total transactions referencing this asset (any broker)")
     tx_count_own: int = Field(0, description="Transactions in brokers the current user owns (share > 0)")
+    # Positions open now (quantity > 0), which a transaction count cannot tell: an asset sold in
+    # full still has transactions. "My assets" means held now, not traded once.
+    held_by_me: bool = Field(False, description="A positive quantity is held now in a broker the current user owns (share > 0)")
+    held_by_others: bool = Field(False, description="A positive quantity is held now in a broker the current user does not own")
 
     # Identifier columns (one per IdentifierType)
     identifier_isin: Optional[str] = Field(None, description="ISIN code")
@@ -799,6 +806,7 @@ class FAAssetDeleteResult(BaseDeleteResult):
     asset_id: int = Field(..., description="Asset ID")
     display_name: Optional[str] = Field(None, description="Asset display name (for UI feedback)")
     error_code: Optional[str] = Field(None, description="Structured error code: 'HAS_TRANSACTIONS' | 'NOT_FOUND' | None")
+    transaction_count: Optional[int] = Field(None, ge=0, description="Global transaction count when deletion is blocked")
     # Inherits from BaseDeleteResult:
     # - success: bool
     # - deleted_count: int (always 0 or 1 for single asset)
@@ -822,8 +830,9 @@ class FAAssetPatchItem(StrictModel):
     - Field absent in patch: IGNORE (keep existing value)
 
     For classification_params:
-    - If None: Set DB column to NULL
-    - If present: Full replace (no merge of subfields)
+    - If None or an empty object: Set DB column to NULL
+    - Otherwise: Replace provided fields atomically, preserve omitted fields
+    - Explicit null subfields remove only that classification block
     """
 
     asset_id: int = Field(..., description="Asset ID to update")
@@ -836,6 +845,7 @@ class FAAssetPatchItem(StrictModel):
     quote_base_quantity: Optional[int] = Field(None, description="Update quote base quantity")
     classification_params: Optional[FAClassificationParams] = Field(None, description="Update classification (None = clear)")
     active: Optional[bool] = Field(None, description="Update active status")
+    is_benchmark: Optional[bool] = Field(None, description="Update benchmark availability")
     user_url: Optional[str] = Field(None, description="Update user-defined URL (None = clear)")
 
     # Identifier fields (one per IdentifierType)

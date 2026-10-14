@@ -1,1 +1,0 @@
-/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/mkdocs_src/docs/financial-theory/portfolio-theory/risk-metrics/max-drawdown.en.md

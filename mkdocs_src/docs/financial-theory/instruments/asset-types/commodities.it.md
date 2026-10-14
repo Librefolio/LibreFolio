@@ -1,4 +1,4 @@
-# ![](../../../static/icons/asset-types/hold.png){: width="32" style="vertical-align: middle;" } Materie Prime
+# ![](../../../static/icons/asset-types/commodity.png){: width="32" style="vertical-align: middle;" } Materie Prime
 
 Le **Materie Prime** (Commodities) sono asset fisici — materie prime o beni di base — detenuti per la preservazione del valore a lungo termine o come copertura contro l'inflazione. In LibreFolio, questa categoria comprende metalli preziosi, energia e altri depositi di valore tangibili.
 
@@ -8,12 +8,12 @@ Le **Materie Prime** (Commodities) sono asset fisici — materie prime o beni di
 
 | Proprietà | Dettaglio |
 |----------|--------|
-| **Codice in LibreFolio** | `HOLD` |
+| **Codice in LibreFolio** | `COMMODITY` |
 | **Prezzi** | Prezzi spot dalle borse delle merci, o valutazione manuale |
 | **Valuta** | Tipicamente quotate in USD (oro, petrolio) ma possono essere in qualsiasi valuta |
 | **Dividendi** | Nessuno — le materie prime non generano reddito |
 | **Stoccaggio** | Le materie prime fisiche possono comportare costi di stoccaggio/assicurazione |
-| **Provider tipici** | Yahoo Finance (es. `GC=F` per i futures sull'oro), Manuale |
+| **Provider tipici** | Yahoo Finance (es. `GC=F` per i futures sull'oro), o prezzi inseriti manualmente nell'[editor dati](../../../user/assets/detail/data-editor.md) |
 
 ---
 

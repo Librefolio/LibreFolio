@@ -2,6 +2,8 @@
 
 LibreFolio exposes **22 backend-calculated technical indicators**, grouped by the market property they measure. The same mathematical contracts power Asset charts, compatible FX charts, annotations, and analytical consumers such as AI Export.
 
+Indicators count **sessions**, not calendar days: a session is a day on which the series has a quote of its own — a price for an Asset, a published rate for an FX pair. A day the series fills with the last known value — a weekend, a market holiday, any day without a quote — is not a session, and neither is a stored price dated on a weekend or a market holiday that only repeats the close before it (a [stored carry](../risk-metrics/data-quality.md#stored-carries)). Periods, warm-up and minimum history all count sessions, so SMA 200 averages the last 200 sessions, about 290 calendar days. The chart keeps its calendar dates: an indicator has values on sessions only, and its line bridges the closed days in between. The one calendar-window exception is the calendar rolling return behind the chart's [Rolling Return mode](../../../user/assets/detail/chart.md#primary-modes), which compares each date with the resolved close exactly $N$ calendar days earlier.
+
 !!! info "Price fields matter"
 
     Not every indicator can run on every series. **9 of the 22** are close-only

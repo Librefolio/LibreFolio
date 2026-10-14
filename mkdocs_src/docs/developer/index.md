@@ -29,8 +29,9 @@ Set up your local development environment and learn the daily workflow:
 - 🧩 **Technologies & Patterns**:
     - ⚡ [Async Architecture](architecture/patterns/async.md) — async/await, aiosqlite, non-blocking I/O
     - 🔌 [Registry & Plugin System](architecture/patterns/registry_pattern.md) — Provider plugins for BRIM, Assets, FX
+    - 🧰 [Tool Plugins](architecture/patterns/tool_plugins.md) — Atomic, typed calculations behind a versioned catalogue (first tool: the PAC allocator), each computed in a spawned process the executor owns
     - 🗄️ [Database Migrations](architecture/patterns/alembic.md) — Alembic workflow, SQLite batch mode
-    - ⚙️ [Configuration](../admin/configuration.md) — `.env`, Pydantic BaseSettings
+    - ⚙️ [Configuration](architecture/settings.md) — `.env` loading, Pydantic `BaseSettings`, global settings (admin options: [Configuration](../admin/configuration.md))
 - 🔐 **Core Systems**:
     - 🛡️ [Security & Authentication](architecture/security.md) — JWT cookies, endpoint protection
     - 👤 [Users & Roles](architecture/users_and_brokers.md) — Login flow, session, user roles
@@ -47,10 +48,12 @@ Set up your local development environment and learn the daily workflow:
 
 - 📥 **[BRIM (Broker Report Import Manager)](backend/brim/architecture.md)** — CSV/Excel import pipeline, plugin architecture
 - 📈 **[Asset Pricing & Metadata](backend/assets/architecture.md)** — How asset prices and metadata are fetched and managed
+- 🧮 **[Financial Math Layer](backend/financial_math.md)** — The one home of financial calculations: package map, layer rules, guards
 - 📏 **[Price Resolver](backend/transactions/price_resolver.md)** — The single daily valuation-mark source behind NAV/MWRR/TWRR/ROI
 - 💱 **[Foreign Exchange (FX)](backend/fx/architecture.md)** — Multi-provider currency conversion system
     - 🔀 [FX Configuration & Routing](backend/fx/configuration.md) — Chain routing algorithm
     - 🔌 [FX Providers](backend/fx/providers/index.md) — ECB, FED, BOE, SNB technical details
+- 📉 **[Risk Engine](backend/risk/architecture.md)** — Bulk risk analytics behind `/api/v1/risk`: plugin catalogue, eligibility verdicts, simulation and optimization in spawned worker pools
 - 🗃️ **[Database Schema](architecture/database/index.md)** — SQLite schema split by subsystem (Users, Brokers, Assets, FX)
 
 ---
@@ -64,6 +67,7 @@ Set up your local development environment and learn the daily workflow:
     - 🎨 [Styling](frontend/styling.md) — Tailwind CSS 4 and theming
 - 🌍 **[Internationalization (i18n)](frontend/i18n.md)** — Multi-language support, audit CLI, key management
 - 🔗 **[FX Chain Algorithm](frontend/fx-chain-algorithm.md)** — DFS + graphology for multi-step FX routes
+- 🧭 **[Onboarding Guides](frontend/onboarding.md)** — Welcome setup, intro tour and contextual guides, with versioned per-user progress kept by the backend
 
 ---
 

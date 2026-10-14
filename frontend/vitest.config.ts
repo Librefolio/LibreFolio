@@ -13,6 +13,9 @@ export default defineConfig({
     plugins: [svelte(), svelteTesting()],
     test: {
         include: ['src/**/*.test.ts'],
+        // The translation catalogue (src/lib/i18n/<lang>.json) is generated from its sources and not tracked:
+        // generate it once before any test imports or reads it.
+        globalSetup: ['./scripts/i18n-catalog-build.mjs'],
         // L'ambiente resta `node` per i ~190 test esistenti, che non toccano il DOM
         // e in jsdom pagherebbero l'avvio senza guadagnarci nulla. I component test
         // lo chiedono file per file con `// @vitest-environment jsdom` in testa.
@@ -53,6 +56,7 @@ export default defineConfig({
             $test: path.resolve(__dirname, 'src/__tests__'),
             '$app/navigation': path.resolve(__dirname, 'src/__mocks__/$app/navigation.ts'),
             '$app/environment': path.resolve(__dirname, 'src/__mocks__/$app/environment.ts'),
+            '$app/stores': path.resolve(__dirname, 'src/__mocks__/$app/stores.ts'),
         },
     },
 });

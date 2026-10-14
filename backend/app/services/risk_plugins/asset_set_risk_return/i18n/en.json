@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetRiskReturn": {
+        "name": "Per-asset risk and return",
+        "description": "Annualised volatility against expected return, one point per selected asset."
+      }
+    }
+  }
+}

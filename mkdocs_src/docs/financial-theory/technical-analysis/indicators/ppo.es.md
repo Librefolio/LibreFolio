@@ -36,9 +36,9 @@ Una lectura MACD de €2 significa algo muy diferente para una acción de €10 
 
 | Parámetro | Clave | Valor por Defecto | Descripción |
 |---|---|---|---|
-| Período Rápido | `fastPeriod` | 12 | Ventana EMA a corto plazo (días). |
-| Período Lento | `slowPeriod` | 26 | Ventana EMA a largo plazo (días), también el denominador normalizador del PPO. |
-| Período de Señal | `signalPeriod` | 9 | Suavizado EMA aplicado a la línea PPO. |
+| Período Rápido | `fastPeriod` | 12 | Ventana EMA a corto plazo (sesiones). |
+| Período Lento | `slowPeriod` | 26 | Ventana EMA a largo plazo (sesiones), también el denominador normalizador del PPO. |
+| Período de Señal | `signalPeriod` | 9 | Suavizado EMA aplicado a la línea PPO (sesiones). |
 
 ---
 
@@ -48,22 +48,22 @@ La salida de paso banda de MACD (ver [MACD](macd.md)) tiene una amplitud que esc
 
 ```mermaid
 flowchart LR
- C["💹 Cierre"] --> EF["📉 EMA rápida"]
- C --> ES["📉 EMA lenta"]
- EF --> DIFF["➖ EMA rápida − EMA lenta"]
- ES --> DIFF
- DIFF --> AGC["🎚️ ÷ EMA lenta ×100 (AGC)"]
- AGC --> PPO["📐 Línea PPO"]
- PPO --> SIG["🔁 EMA(signalPeriod)"]
- PPO --> HIST["📊 Histograma = PPO − Señal"]
- SIG --> HIST
+    C["💹 Cierre"] --> EF["📉 EMA rápida"]
+    C --> ES["📉 EMA lenta"]
+    EF --> DIFF["➖ EMA rápida − EMA lenta"]
+    ES --> DIFF
+    DIFF --> AGC["🎚️ ÷ EMA lenta ×100 (AGC)"]
+    AGC --> PPO["📐 Línea PPO"]
+    PPO --> SIG["🔁 EMA(signalPeriod)"]
+    PPO --> HIST["📊 Histograma = PPO − Señal"]
+    SIG --> HIST
 ```
 
 !!! info "Mismos cruces, escala diferente"
 
     Cada regla de cruce que se aplica a MACD (la línea cruza la señal, el histograma cambia
     de signo) se aplica idénticamente a PPO — solo cambian las unidades, de precio a porcentaje.
-    Use PPO en lugar de MACD siempre que compare el impulso *entre* diferentes
+    Usa PPO en lugar de MACD siempre que compares el impulso *entre* diferentes
     instrumentos; use MACD cuando trabaje con un solo instrumento en sus unidades nativas.
 
 :material-link: [Oscilador de Porcentaje de Precio en StockCharts](https://school.stockcharts.com/doku.php?id=technical_indicators:price_oscillators_ppo){ target="_blank" }

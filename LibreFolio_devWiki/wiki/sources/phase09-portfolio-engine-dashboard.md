@@ -37,7 +37,7 @@ Phase 09 Milestone 2 delivers the production-grade portfolio calculation engine 
 - **Dashboard KPI cards**: Net Worth / Period P&L / Returns (TWRR + MWRR). GrowthChart has 3 series: NAV / invested capital / cash.
 - **Frontend store**: `portfolioStore.svelte.ts` (156 lines) — `fetchReport()` → `POST /portfolio/report`. Cache key = `broker_ids|dateFrom|dateTo|currency|contrib_flag`.
 - **ECharts + Emoji**: `AllocationPieChart` supports Noto Color Emoji (loaded via FontFace API for sector emoji). FX bulk fetch for currency conversion.
-- **Known issues at ingest** (RESOLVED 2026-07-06, commit `78aaa0a3` — see [[sources/phase09-m1-m2-archive-2026-07]]):
+- **Known issues at ingest** (RESOLVED 2026-07-06, commit `13052a006` — see [[sources/phase09-m1-m2-archive-2026-07]]):
   - ~~Bug 2: P2P/crowdfund `current_value=None` (no TRANSACTION_IMPLIED fallback in service holdings loop)~~ — fixed
   - ~~WAC computed 2× per asset (engine pre-load + service per-call redundancy)~~ — improved via `_compute_period_summary_metrics()` shared helper
   - ~~Realized/income/fees computed 2× (summary + contribution separate loops)~~ — improved, see [[entities/portfolio-service]] item 3 caveat
@@ -60,10 +60,10 @@ Phase 09 Milestone 2 delivers the production-grade portfolio calculation engine 
 | MWRR fix analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md` |
 | P&L breakdown analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/pnl_breakdown_analysis.md` |
 | Dashboard UI plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_ui_dashboard.md` |
-| Engine | `backend/app/services/portfolio_engine.py` |
+| Engine | `backend/app/services/financial_math/portfolio/engine.py` |
 | Service | `backend/app/services/portfolio_service.py` |
 | API | `backend/app/api/v1/portfolio_api.py` |
 | Frontend store | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
-| ROI utilities | `backend/app/utils/financial/roi_utils.py` |
-| FIFO utilities | `backend/app/utils/financial/fifo_utils.py` |
-| WAC utilities | `backend/app/utils/financial/wac_utils.py` |
+| ROI utilities | `backend/app/services/financial_math/returns.py` |
+| FIFO utilities (fifo_utils.py, deleted 2026-09-03 → the FIFO engine) | `backend/app/services/financial_math/fifo/engine.py` |
+| WAC utilities (wac_utils.py, deleted 2026-10-07 → the average-cost function) | `backend/app/services/financial_math/average_cost.py` |

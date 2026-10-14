@@ -8,8 +8,9 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
-    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {currentLanguage} from '$lib/stores/app/language';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
     import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
@@ -21,7 +22,7 @@
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
-    import RiskAnalysisPanel from '$lib/components/risk/RiskAnalysisPanel.svelte';
+    import RiskLevelsPanel from '$lib/components/risk/levels/RiskLevelsPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
@@ -30,22 +31,43 @@
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
     import type {FilterValue} from '$lib/components/table/types';
     import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '../../transactions/filterState';
-    import {fetchReport, invalidate, type AllocationHistoryDimensions, type PortfolioHistoryPoint, type PortfolioSummary, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {
+        fetchReport,
+        invalidate,
+        peekReport,
+        portfolioError,
+        type PortfolioReport,
+        type AllocationHistoryDimensions,
+        type PortfolioHistoryPoint,
+        type PortfolioSummary,
+        type PositionsContribution,
+        type PortfolioIncomeHistorySeries,
+        type PortfolioCostHistorySeries,
+        type PortfolioDepositHistorySeries,
+        type PortfolioAcquisitionFundingSeries,
+        type PortfolioPnlCandleSeries,
+    } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getBrokerRole, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {goto} from '$app/navigation';
     import type {BrokerSummary} from '$lib/types';
     import {parseCurrencyAmount, safeCurrency, safeString} from '$lib/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-    import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
+    import CurrencyAmount from '$lib/components/ui/display/CurrencyAmount.svelte';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -58,6 +80,14 @@
 
     let portfolioSummary: PortfolioSummary | null = null;
     let portfolioHistory: PortfolioHistoryPoint[] = [];
+    let incomeHistory: PortfolioIncomeHistorySeries | undefined = undefined;
+    let costHistory: PortfolioCostHistorySeries | undefined = undefined;
+    let depositHistory: PortfolioDepositHistorySeries | undefined = undefined;
+    let acquisitionFunding: PortfolioAcquisitionFundingSeries | undefined = undefined;
+    // G1b — lazy, unlike the income family above: the OHLC composition is expensive, so it
+    // is fetched only when the user first opens the candles submode (plan §4.1 caller policy).
+    let pnlCandles: PortfolioPnlCandleSeries | null = null;
+    let pnlCandlesLoading = false;
     let allocationHistoryFromReport: AllocationHistoryDimensions | null = null;
     let positionsContribution: PositionsContribution | null = null;
     let contributionLoading = false;
@@ -160,7 +190,7 @@
     let displayDateFrom = isMaxPending ? 'min' : dateFrom;
     let activePreset: any = isMaxPending ? 'MAX' : null;
 
-    let targetCurrency = get(globalSettings).default_currency || 'EUR';
+    let targetCurrency = get(defaultDisplayCurrency);
     let targetCurrencyManuallySet = false;
 
     let canEdit = false;
@@ -184,7 +214,7 @@
         : [];
 
     let baseCurrency = 'EUR';
-    $: baseCurrency = $globalSettings.default_currency || 'EUR';
+    $: baseCurrency = $defaultDisplayCurrency;
     $: if (!targetCurrencyManuallySet && targetCurrency !== baseCurrency) {
         const hadLoadedData = portfolioSummary !== null || portfolioHistory.length > 0;
         targetCurrency = baseCurrency;
@@ -195,11 +225,11 @@
     $: aiExportLabels = buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'));
 
     $: brokerTabs = [
-        {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'broker-tab-panoramica'},
-        {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'broker-tab-posizioni'},
+        {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'broker-tab-panoramica', guideAnchor: 'broker.detail.overview'},
+        {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'broker-tab-posizioni', guideAnchor: 'broker.detail.positions'},
         {id: 'rischio', label: $_('risk.title'), icon: Shield, testId: 'broker-tab-risk'},
-        {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'broker-tab-transazioni'},
-        {id: 'info', label: $_('brokers.info'), icon: Info, testId: 'broker-tab-info'},
+        {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'broker-tab-transazioni', guideAnchor: 'broker.detail.transactions'},
+        {id: 'info', label: $_('brokers.info'), icon: Info, testId: 'broker-tab-info', guideAnchor: 'broker.detail.info'},
     ];
 
     async function loadAiExportCompatibility() {
@@ -237,9 +267,10 @@
         toasts.info(messages.privacyNotice);
     }
 
-    onMount(() => {
+    onMount(async () => {
         void loadAiExportCompatibility();
-        void Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded(), ensureAssetsLoaded()]);
+        await Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded(), ensureAssetsLoaded()]);
+        if (broker) onboardingGuide.maybeStartContextual('broker_detail_guide');
     });
 
     async function loadBroker() {
@@ -256,17 +287,71 @@
         }
     }
 
+    /** Bumped by «Aggiorna»: the risk levels and the lots panel ask again too (E4). */
+    let refreshVersion = 0;
+    // Figures already known when a card mounts appear at their value instead of counting up from 0;
+    // the Risk panel sets its own context for its cards.
+    setTweenHydration(() => portfolioSummary !== null);
+
+    /**
+     * Page cache (E1): the overview of the scope on screen comes from the cache at once — stale or
+     * not — and only a stale or missing one is asked again; a refresh that fails keeps it, with a toast.
+     */
     async function loadOverview(force = false) {
+        const options = {includeIncomeHistory: true, includeCostHistory: true, includeDepositHistory: true, includeAcquisitionFunding: true};
+        const cached = peekReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, false, false, true, true, options);
+        if (cached) applyOverview(cached.report);
+        if (cached && !cached.stale && !force) {
+            reportLoading = false;
+            return;
+        }
         reportLoading = true;
         try {
-            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, force);
-            portfolioSummary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
-            portfolioHistory = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
-            allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
-            positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
-            resolveMaxStartFromHistory();
+            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, force, undefined, undefined, undefined, undefined, options);
+            if (report || !cached) applyOverview(report);
+            else toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`);
         } finally {
             reportLoading = false;
+        }
+    }
+
+    function applyOverview(report: PortfolioReport | null) {
+        portfolioSummary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
+        portfolioHistory = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
+        // Eager per plan §4.1's sparse-payload caller policy ("Dashboard/Broker overview true").
+        incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
+        costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
+        depositHistory = (report?.deposit_history as PortfolioDepositHistorySeries | null | undefined) ?? undefined;
+        acquisitionFunding = (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined;
+        allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
+        positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
+        // Scope, currency or date range may have changed, so any previously fetched
+        // candle series is stale. Nulling it lets GrowthChart ask again on its next
+        // candles activation instead of rendering the old window's OHLC.
+        pnlCandles = null;
+        resolveMaxStartFromHistory();
+    }
+
+    /**
+     * G1b lazy candle fetch, scoped to THIS broker.
+     *
+     * Deliberately not the Dashboard's loader: that one requests the currently selected
+     * portfolio scope, so reusing it here would paint whole-portfolio OHLC under a single
+     * broker's heading — a wrong number, which is worse than the empty plot this replaces
+     * because an empty plot is visible and a wrong number is not.
+     *
+     * `brokerPnlHistory` stays unpassed on purpose: plan §3.3 says "one broker or Broker
+     * detail: total candle only", and the per-broker overlay is exactly what must not appear.
+     */
+    async function loadPnlCandles() {
+        if (pnlCandles || pnlCandlesLoading) return;
+        pnlCandlesLoading = true;
+        try {
+            // Only pnl_candles is read, so every other section is switched off.
+            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, false, false, false, false, false, {includePnlCandles: true});
+            pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
+        } finally {
+            pnlCandlesLoading = false;
         }
     }
 
@@ -339,7 +424,8 @@
     }
 
     async function handleRefresh() {
-        invalidate();
+        requestPortfolioRefresh();
+        refreshVersion += 1;
         await Promise.all([loadBroker(), loadOverview(true)]);
         if (txLoaded) await loadTransactions(true);
     }
@@ -352,10 +438,11 @@
         await loadOverview();
     }
 
-    function formatDate(dateStr: unknown): string {
+    // In the interface locale (M-18): the template passes `$uiLocaleStore`, read there so it is tracked.
+    function formatDate(dateStr: unknown, locale: string): string {
         const str = safeString(dateStr);
         if (!str) return '-';
-        return new Date(str).toLocaleDateString(undefined, {
+        return new Date(str).toLocaleDateString(locale, {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
@@ -369,13 +456,13 @@
         return 0;
     }
 
-    function formatSharePercentage(value: number | string | (string | null)[] | null | undefined): string {
-        return (Math.round(toNumber(value) * 10000) / 100).toFixed(1);
+    function formatSharePercentage(value: number | string | (string | null)[] | null | undefined, locale: string): string {
+        return formatPercent(Math.round(toNumber(value) * 10000) / 100, {signed: false, digits: 1, locale});
     }
 </script>
 
 <div class="space-y-6" data-testid="broker-detail-page">
-    <div class="flex items-center space-x-4">
+    <div class="flex items-center space-x-4" use:guideAnchor={'broker.detail.header'} data-testid="broker-detail-header">
         <button class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors" data-testid="broker-back-button" on:click={handleBack} title={$_('common.back')}>
             <ArrowLeft size={20} />
         </button>
@@ -394,7 +481,7 @@
                             data-testid="broker-quota-badge"
                         >
                             {#if broker.user_share_percentage != null}
-                                <span class="text-xs font-medium">{formatSharePercentage(broker.user_share_percentage)}%</span>
+                                <span class="text-xs font-medium">{formatSharePercentage(broker.user_share_percentage, $uiLocaleStore)}</span>
                             {/if}
                             {#if role === 'OWNER'}<Crown size={13} />{:else if role === 'EDITOR'}<Pencil size={13} />{:else}<Eye size={13} />{/if}
                         </span>
@@ -442,7 +529,7 @@
              content, so it disappeared on Posizioni/Transazioni even though those tabs
              depend on the same date-scoped data). -->
         <PageToolbar
-            thresholds={{oneRow: 1000, denseRow: 800, stackFilters: 470, oneColumn: 430, labelHideActions: 270, labelHideTabs: 370}}
+            thresholds={{oneRow: 1000, denseRow: 840, stackFilters: 530, oneColumn: 430, labelHideActions: 270, labelHideTabs: 660}}
             tabs={brokerTabs}
             {activeTab}
             ontabchange={handleTabChange}
@@ -474,6 +561,7 @@
                             <CurrencySearchSelect
                                 bind:value={targetCurrency}
                                 compact={true}
+                                testId="broker-detail-target-currency"
                                 dropdownPosition="bottom"
                                 placeholder={baseCurrency}
                                 onchange={() => {
@@ -548,7 +636,7 @@
                         <div class="flex flex-wrap gap-2">
                             {#each [...broker.cash_balances].sort((a, b) => parseCurrencyAmount(b.amount) - parseCurrencyAmount(a.amount)) as balance}
                                 <span class="inline-flex items-center px-3 py-1.5 bg-gray-50 dark:bg-slate-700 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-100">
-                                    {@html formatCurrencyAmountHtml(parseCurrencyAmount(balance.amount), balance.code)}
+                                    <CurrencyAmount amount={parseCurrencyAmount(balance.amount)} code={balance.code} />
                                 </span>
                             {/each}
                         </div>
@@ -559,7 +647,7 @@
 
                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                     <div class="lg:col-span-3">
-                        <GrowthChart history={portfolioHistory} loading={reportLoading && portfolioHistory.length === 0} baseCurrency={targetCurrency || baseCurrency} />
+                        <GrowthChart history={portfolioHistory} {pnlCandles} onRequestPnlCandles={loadPnlCandles} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={reportLoading && portfolioHistory.length === 0} baseCurrency={targetCurrency || baseCurrency} />
                     </div>
                     <AllocationPanel
                         summary={portfolioSummary}
@@ -585,18 +673,24 @@
                     onAnalyze={openAssetPanel}
                     analyzedAssetId={activeAssetId}
                 />
-                <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} />
+                <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} {refreshVersion} />
             </div>
         {:else if activeTab === 'rischio'}
             <div data-testid="broker-risk-tab">
-                <RiskAnalysisPanel
+                <!-- Same component as Dashboard, same props, one different scope:
+                     that is the whole difference, and it is what makes the two
+                     pages comparable. `portfolioSummary` here is fetched for this
+                     broker alone, so its net worth answers this exact scope. -->
+                <RiskLevelsPanel
                     scope={{kind: 'portfolio', broker_ids: [broker.id]}}
                     dateStart={dateFrom}
                     dateEnd={dateTo}
                     targetCurrency={targetCurrency || baseCurrency}
                     assetIds={[...new Set((portfolioSummary?.holdings ?? []).map((holding) => holding.asset_id))]}
+                    scopeValue={portfolioSummary ? parseFloat(portfolioSummary.net_worth.amount) : null}
                     title={$_('risk.brokerTitle')}
                     internalSubset={true}
+                    {refreshVersion}
                     onsynced={async () => {
                         invalidate();
                         await Promise.all([loadBroker(), loadOverview(true)]);
@@ -687,7 +781,7 @@
                         {#if safeString(broker.opened_at)}
                             <div class="flex justify-between">
                                 <span class="text-gray-500 dark:text-gray-400">{$_('brokers.openedAt')}</span>
-                                <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.opened_at)}</span>
+                                <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.opened_at, $uiLocaleStore)}</span>
                             </div>
                         {/if}
                         <div class="flex justify-between">
@@ -704,7 +798,7 @@
                         </div>
                         <div class="flex justify-between border-t border-gray-100 dark:border-slate-700 pt-2 mt-2">
                             <span class="text-gray-500 dark:text-gray-400">{$_('brokers.createdInSystem')}</span>
-                            <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.created_at)}</span>
+                            <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.created_at, $uiLocaleStore)}</span>
                         </div>
                     </div>
 
@@ -714,7 +808,7 @@
                             <div class="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
                                 <div class="text-sm text-gray-500 dark:text-gray-400">{$_('common.totalValue')}</div>
                                 <div class="text-2xl font-bold text-libre-green">
-                                    {@html formatCurrencyAmountHtml(parseCurrencyAmount(totalValue.amount), totalValue.code)}
+                                    <CurrencyAmount amount={parseCurrencyAmount(totalValue.amount)} code={totalValue.code} />
                                 </div>
                             </div>
                         {/if}

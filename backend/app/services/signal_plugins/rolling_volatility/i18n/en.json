@@ -1,0 +1,10 @@
+{
+  "signals": {
+    "riskRollingVolatility": {
+      "name": "Rolling Volatility",
+      "description": "Annualized sample volatility over a rolling window of price-only daily returns.",
+      "output": "Volatility",
+      "outputDescription": "Annualized sample standard deviation, in percentage points."
+    }
+  }
+}

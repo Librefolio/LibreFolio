@@ -6,7 +6,8 @@ Downloads external JS libraries and font resources to local directories
 for offline use.  Maintains versioned cache with automatic cleanup.
 
 Supported resource types:
-  - "js"   → single-file JS library (MathJax, etc.)
+  - "js"   → single-file JS library (MathJax, etc.), plus the "companions" it
+             loads from beside itself (MathJax's fonts), as its bundle names them
   - "font" → multi-file Google Fonts resource (CSS + woff2 subsets)
 
 Usage:
@@ -22,6 +23,7 @@ import json
 import re
 import shutil
 import sys
+import urllib.parse
 import urllib.request
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -38,11 +40,45 @@ CACHE_CHECK_INTERVAL_HOURS = 24  # Skip check if checked within this time
 # the emoji font for months — flags rendered as letters on Windows). Hard
 # failures are collected here and turn into a non-zero exit code so
 # `dev.py front build` / `docker build` stop instead of shipping a broken build.
-_HARD_FAILURES: list[str] = []
+#
+# 21/09: I1 was right about *silence* and wrong about *scope*. It made every
+# resource fatal to every build, so an asset that only the documentation ships
+# — MathJax lands in `mkdocs_src/`, and `grep -rn mathjax frontend/` finds
+# nothing — aborted the build of the application. On a fresh worktree that is
+# fatal before any test can run, while an older worktree with a warm cache goes
+# green: the two lanes differ in age, not in health, and the green one means
+# nothing.
+#
+# So a failure is now attributed to the build that actually consumes it. The
+# missing verdict was never "present" or "fail" — it was **"absent, and not
+# needed for what you are building"**. The attribution is derived from
+# `vendor_dir_key`, never from a resource name: a hand-written exemption list
+# would rot exactly the way a hand-written directory list does.
+_HARD_FAILURES: list["_Failure"] = []
+
+
+class _Failure(str):
+    """A hard-failure message that remembers which build consumes the resource.
+
+    Subclasses ``str`` on purpose: the collected messages are printed and
+    substring-matched by callers and tests, and that contract predates the
+    attribution. The consumer rides along as an attribute instead of changing
+    the element type.
+    """
+
+    consumer: str | None
+    """Which build ships this resource, or ``None`` when the attribution is unknown."""
+
+    def __new__(cls, text: str, consumer: str | None) -> "_Failure":
+        failure = super().__new__(cls, text)
+        failure.consumer = consumer
+        return failure
 
 
 def _hard_fail(name: str, reason: str) -> None:
-    _HARD_FAILURES.append(f"{name}: {reason}")
+    vendor_key = LIBRARIES.get(name, {}).get("vendor_dir_key")
+    consumer = CONSUMERS.get(vendor_key) if vendor_key else None
+    _HARD_FAILURES.append(_Failure(f"{name}: {reason}", consumer))
 
 # Libraries to cache
 # type="js"   → single file download
@@ -53,6 +89,12 @@ LIBRARIES = {
         "url": "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js",
         "target": "tex-mml-chtml.js",
         "vendor_dir_key": "mkdocs",
+        # The CHTML output loads its fonts from beside the script ([mathjax]/output/chtml/fonts/woff-v2). The script
+        # alone drew every formula in the page's font: letters upright, fractions clipped (R2 M-19).
+        "companions": {
+            "pattern": r"MathJax_[A-Za-z0-9-]+\.woff",
+            "dir": "output/chtml/fonts/woff-v2",
+        },
     },
     "noto-color-emoji": {
         "type": "font",
@@ -60,6 +102,10 @@ LIBRARIES = {
         "file_prefix": "noto-color-emoji",
         "css_file": "noto-color-emoji.css",
         "vendor_dir_key": "fonts",
+        # Only the flags are served from this font — through the 'LF Flags' face of
+        # frontend/static/lf-flags.css, which points at subset 0. The other subsets would be dead
+        # weight, and one of them holds digits, '#' and '*'.
+        "keep_unicode_ranges": ["U+1f1e6-1f1ff"],
     },
 }
 
@@ -67,6 +113,13 @@ LIBRARIES = {
 VENDOR_DIRS = {
     "mkdocs": Path(__file__).parent.parent / "mkdocs_src" / "docs" / "javascripts" / "vendor",
     "fonts": Path(__file__).parent.parent / "frontend" / "static" / "fonts" / "noto-color-emoji",
+}
+
+#: Which build ships each vendor directory. ``docker`` consumes both, because
+#: the image copies ``mkdocs_src/site/`` alongside the frontend bundle.
+CONSUMERS = {
+    "mkdocs": "mkdocs",
+    "fonts": "frontend",
 }
 
 # Backward compat alias
@@ -172,6 +225,19 @@ def _parse_google_fonts_css(css_text: str):
     return subsets
 
 
+def _normalise_unicode_range(unicode_range: str) -> str:
+    """Compare unicode-ranges as Google writes them or as a config does: no spaces, lowercase."""
+    return re.sub(r"\s+", "", unicode_range).lower()
+
+
+def _kept_ranges_fingerprint(config: dict) -> Optional[list[str]]:
+    """The subsets a font resource keeps, as the manifest stores them (None: every subset)."""
+    keep = config.get("keep_unicode_ranges")
+    if keep is None:
+        return None
+    return sorted({_normalise_unicode_range(r) for r in keep})
+
+
 def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, no nested logic
     vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False
 ) -> bool:
@@ -180,11 +246,18 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
 
     Fetches the CSS from Google Fonts, extracts woff2 URLs, downloads each
     subset file, and writes a local CSS with relative paths.
+
+    With ``keep_unicode_ranges`` only the subsets whose unicode-range is in that list are kept,
+    numbered from 0 in the order Google serves them. The stored fingerprint of that list is part of
+    "already up-to-date", so a changed list rewrites the cache even when Google's CSS did not change.
+    Files are written only once every kept subset has downloaded; then the resource's stale
+    ``<prefix>.N.woff2`` files are removed.
     """
     print(f"🔤 Checking font {name}...")
 
     lib_data = manifest.get("libraries", {}).get(name, {})
     current_hash = lib_data.get("current_hash")
+    kept_fingerprint = _kept_ranges_fingerprint(config)
 
     target_dir = vendor_dir
     css_path = target_dir / config["css_file"]
@@ -207,7 +280,7 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
     css_text = css_bytes.decode("utf-8")
     css_hash = get_file_hash(css_bytes)
 
-    if current_hash == css_hash and not force and file_exists:
+    if current_hash == css_hash and not force and file_exists and lib_data.get("kept_unicode_ranges") == kept_fingerprint:
         print(f"  ✓ Already up-to-date (CSS hash: {css_hash})")
         return False
 
@@ -218,6 +291,14 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
         if not file_exists:
             _hard_fail(name, "no subsets parsed, no cached version")
         return False
+
+    if kept_fingerprint is not None:
+        subsets = [subset for subset in subsets if _normalise_unicode_range(subset["unicode_range"]) in kept_fingerprint]
+        if not subsets:
+            print(f"  ⚠️  No subset matches keep_unicode_ranges {kept_fingerprint}")
+            if not file_exists:
+                _hard_fail(name, "no subset matches keep_unicode_ranges, no cached version")
+            return False
 
     print(f"  📋 Found {len(subsets)} subsets")
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -237,6 +318,7 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
 
     total_size = 0
     failed_subsets = 0
+    downloaded: list[tuple[str, bytes]] = []
     font_family = " ".join(w.capitalize() for w in name.split("-"))
     for i, subset in enumerate(subsets):
         local_filename = f"{prefix}.{i}.woff2"
@@ -248,9 +330,7 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
             failed_subsets += 1
             continue
 
-        woff2_path = target_dir / local_filename
-        with open(woff2_path, "wb") as f:
-            f.write(woff2_content)
+        downloaded.append((local_filename, woff2_content))
         total_size += len(woff2_content)
 
         # Build CSS block
@@ -273,6 +353,16 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
         _hard_fail(name, f"{failed_subsets}/{len(subsets)} font subsets failed to download")
         return False
 
+    # Every subset is in hand: only now does the cache change.
+    for local_filename, woff2_content in downloaded:
+        with open(target_dir / local_filename, "wb") as f:
+            f.write(woff2_content)
+    kept_files = {local_filename for local_filename, _ in downloaded}
+    for stale in target_dir.glob(f"{prefix}.*.woff2"):
+        if stale.name not in kept_files:
+            stale.unlink()
+            print(f"  🗑️  Removed stale subset: {stale.name}")
+
     # Write local CSS
     css_content = "\n".join(local_css_lines) + "\n"
     with open(css_path, "w") as f:
@@ -285,6 +375,7 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
         manifest["libraries"][name] = {"versions": []}
 
     manifest["libraries"][name]["current_hash"] = css_hash
+    manifest["libraries"][name]["kept_unicode_ranges"] = kept_fingerprint
     manifest["libraries"][name]["url"] = config["css_url"]
     manifest["libraries"][name]["type"] = "font"
     manifest["libraries"][name]["subset_count"] = len(subsets)
@@ -302,18 +393,25 @@ def _download_font_resource(  # noqa: C901 — flat download/manifest pipeline, 
     return True
 
 
-def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:  # noqa: C901 — flat update pipeline with guard returns, no nested logic
+def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:
     """
     Update a single library.
 
     Returns True if updated, False if already up-to-date.
-    Dispatches to type-specific handler (js or font).
+    Dispatches to type-specific handler (js or font). A js library's companions
+    are checked on every run, whether the script itself changed or not.
     """
     resource_type = config.get("type", "js")
     if resource_type == "font":
         return _download_font_resource(vendor_dir, manifest, name, config, force)
+    updated = _update_js_file(vendor_dir, manifest, name, config, force)
+    if config.get("companions"):
+        updated = _update_companions(vendor_dir, manifest, name, config, force) or updated
+    return updated
 
-    # Original single-file JS logic
+
+def _update_js_file(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:  # noqa: C901 — flat update pipeline with guard returns, no nested logic
+    """The single-file JS logic: True if the script was written, False if up to date or not downloadable."""
     print(f"📦 Checking {name}...")
 
     lib_data = manifest.get("libraries", {}).get(name, {})
@@ -398,6 +496,91 @@ def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, fo
     return True
 
 
+#: A font file's first bytes, by extension: an error page served with a 200 must not be cached as a font.
+_FILE_SIGNATURES = {".woff": b"wOFF", ".woff2": b"wOF2"}
+
+
+def _usable(file_name: str, content: Optional[bytes]) -> bool:
+    if not content:
+        return False
+    signature = _FILE_SIGNATURES.get(Path(file_name).suffix.lower())
+    return signature is None or content.startswith(signature)
+
+
+def _update_companions(vendor_dir: Path, manifest: dict, name: str, config: dict, force: bool = False) -> bool:  # noqa: C901 — flat download/manifest pipeline, no nested logic
+    """
+    Download the files a JS library loads from beside itself, as its cached script names them.
+
+    The names come from the script (``companions.pattern``) and the address from
+    the library's own URL, so a new version brings its own list. Every file is
+    downloaded again when the script changes. A file that cannot be downloaded
+    keeps its cached copy; without one, it is a hard failure for the library's
+    consumer, as the script is. Files the script no longer names are removed once
+    every named one is in place.
+
+    Returns True when a file was written or removed.
+    """
+    spec = config["companions"]
+    script = vendor_dir / name / config["target"]
+    if not script.exists():
+        return False  # the script's own failure is already recorded
+    names = sorted(set(re.findall(spec["pattern"], script.read_text(encoding="utf-8", errors="replace"))))
+    if not names:
+        _hard_fail(name, f"the cached script names no file like {spec['pattern']}: its companions cannot be listed")
+        return False
+
+    lib = manifest.setdefault("libraries", {}).setdefault(name, {"versions": []})
+    record = lib.get("companions") or {}
+    script_hash = lib.get("current_hash")
+    # No record: nothing says which script the files on disk belong to.
+    refresh = force or not record or record.get("for_hash") != script_hash
+    # An empty dir (or ".") is the script's own folder, never the host's root.
+    rel = spec["dir"].strip("/")
+    target_dir = vendor_dir / name / rel
+    base_url = urllib.parse.urljoin(config["url"], f"{rel}/" if rel else "./")
+
+    files, kept, missing, written = {}, [], [], 0
+    for file_name in names:
+        path = target_dir / file_name
+        if path.exists() and not refresh:
+            files[file_name] = record.get("files", {}).get(file_name) or {
+                "hash": get_file_hash(path.read_bytes()), "size": path.stat().st_size}
+            continue
+        content = download_file(base_url + file_name)
+        if not _usable(file_name, content):
+            (kept if path.exists() else missing).append(file_name)
+            continue
+        if not path.exists() or path.read_bytes() != content:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+            written += 1
+        files[file_name] = {"hash": get_file_hash(content), "size": len(content)}
+
+    if missing:
+        print(f"  ❌ {len(missing)} of {len(names)} companion file(s) not downloaded and not cached")
+        _hard_fail(name, f"{len(missing)} of {len(names)} companion file(s) not downloaded, no cached copy: "
+                         f"{', '.join(missing)}")
+        return written > 0
+    removed = 0
+    if target_dir.exists():
+        # Only what the pattern names is a companion: the folder may hold the script itself, or other files.
+        for stale in sorted(p for p in target_dir.iterdir()
+                            if p.is_file() and re.fullmatch(spec["pattern"], p.name) and p.name not in names):
+            stale.unlink()
+            removed += 1
+    if kept:
+        # Retried on the next run: the record is written only once every file is current.
+        print(f"  ⚠️  {len(kept)} companion file(s) not downloaded, keeping the cached copies")
+    else:
+        lib["companions"] = {"dir": spec["dir"], "for_hash": script_hash, "files": files}
+    size_kb = sum(entry["size"] for entry in files.values()) / 1024
+    if written or removed:
+        print(f"  ✅ Companions: {written} written, {removed} removed ({len(names)} files, {size_kb:.0f} KB)")
+    else:
+        print(f"  ✓ Companions up-to-date ({len(names)} files, {size_kb:.0f} KB)")
+    return bool(written or removed)
+
+
 def update_all_libraries(force: bool = False):
     """Update all configured libraries."""
     print("=" * 60)
@@ -432,17 +615,39 @@ def add_arguments(parser) -> None:
     """Add arguments to a parser (reusable for both standalone and subparser)."""
     parser.add_argument("--force", "-f", action="store_true",
                         help="Force re-download even if cached")
+    parser.add_argument("--required-for", action="append", choices=sorted(set(CONSUMERS.values())),
+                        metavar="CONSUMER",
+                        help="Only fail for resources this build ships (repeatable). "
+                             "Default: every consumer, so a standalone cache refresh "
+                             "still reports everything.")
 
 
 def run_from_args(args) -> int:
     """Execute the command from parsed args."""
     try:
         update_all_libraries(force=getattr(args, 'force', False))
-        if _HARD_FAILURES:
+        required = set(getattr(args, "required_for", None) or CONSUMERS.values())
+        fatal, deferred = [], []
+        for failure in _HARD_FAILURES:
+            # An unattributed resource stays fatal everywhere: narrowing may
+            # only ever excuse a consumer we positively know does not ship it.
+            consumer = getattr(failure, "consumer", None)
+            bucket = fatal if consumer is None or consumer in required else deferred
+            bucket.append(failure)
+
+        if deferred:
+            # Not this build's problem, but never silent: the resource is still
+            # missing, and the build that ships it will still stop.
+            print("-" * 60)
+            print("⚠️  Missing resources that this build does not ship:")
+            for failure in deferred:
+                print(f"   - {failure}  (needed by: {failure.consumer})")
+
+        if fatal:
             # I1: a build missing a resource it cannot cache is a broken build.
             print("-" * 60)
             print("❌ Resource cache incomplete — the build would ship without these:")
-            for failure in _HARD_FAILURES:
+            for failure in fatal:
                 print(f"   - {failure}")
             return 1
         return 0

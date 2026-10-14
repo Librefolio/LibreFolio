@@ -29,7 +29,7 @@ from backend.app.schemas.assets import (
 )
 from backend.app.schemas.common import Currency
 from backend.app.schemas.prices import FAAssetEventPoint
-from backend.app.services.asset_source_providers.scheduled_investment import ScheduledInvestmentProvider, _compute_value_at, _generate_schedule_values
+from backend.app.services.asset_source_providers.scheduled_investment.plugin import ScheduledInvestmentProvider, _compute_value_at, _generate_schedule_values
 
 
 async def _history_values(params: dict, start: date, end: date):

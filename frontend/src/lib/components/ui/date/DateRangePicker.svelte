@@ -22,14 +22,14 @@
     import {_} from '$lib/i18n';
     import type {CalendarHighlights} from './CalendarMonth.svelte';
     import CalendarMonth from './CalendarMonth.svelte';
-    import {SimpleSelect} from '$lib/components/ui/select';
+    import CompactDurationBadge from './CompactDurationBadge.svelte';
     import {attachLayoutDebugExtra, type LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import {parseTypedDate} from '$lib/utils/core/parseTypedDate';
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {dateArrowStep, resetDateArrowHold} from '$lib/utils/core/dateArrowStep';
 
-    import {numericArrows} from '$lib/actions/numericArrows';
     import {portal} from '$lib/actions/portal';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
     // =========================================================================
     // Types
     // =========================================================================
@@ -50,6 +50,10 @@
         showPresets?: boolean;
         /** Show custom window input */
         showCustomWindow?: boolean;
+        /** Quick presets to leave out (e.g. MAX where its «all history» sentinel has no period to resolve to). Default: none. */
+        excludePresets?: readonly QuickPreset[];
+        /** Extra classes for the frame around the two date fields, appended to its own (e.g. an explicit height). */
+        fieldsClass?: string;
         /** Show date input fields (From/To) — set false to show only presets */
         showDateFields?: boolean;
         /** Compact mode (smaller text, tighter spacing) */
@@ -106,6 +110,8 @@
         activePreset = $bindable(null),
         showPresets = true,
         showCustomWindow = true,
+        excludePresets = [],
+        fieldsClass = '',
         showDateFields = true,
         compact = false,
         stacked = false,
@@ -208,16 +214,30 @@
     // Preset Definitions
     // =========================================================================
 
-    const presets: {key: QuickPreset; label: string; months?: number; weeks?: number; years?: number}[] = [
-        {key: '1W', label: '1W', weeks: 1},
-        {key: '1M', label: '1M', months: 1},
-        {key: '3M', label: '3M', months: 3},
-        {key: '6M', label: '6M', months: 6},
-        {key: '1Y', label: '1Y', years: 1},
-        {key: '2Y', label: '2Y', years: 2},
+    // Labels follow the interface language: the unit letter of a count-based preset is the reader's
+    // (1W/1Y in English, 1S/1A in Italian, French and Spanish); the keys stay the same everywhere.
+    const weeksLabel = (n: number) => $_('datePicker.presets.weeks', {values: {n}});
+    const monthsLabel = (n: number) => $_('datePicker.presets.months', {values: {n}});
+    const yearsLabel = (n: number) => $_('datePicker.presets.years', {values: {n}});
+
+    let presets: {key: QuickPreset; label: string; months?: number; weeks?: number; years?: number}[] = $derived([
+        {key: '1W', label: weeksLabel(1), weeks: 1},
+        {key: '1M', label: monthsLabel(1), months: 1},
+        {key: '3M', label: monthsLabel(3), months: 3},
+        {key: '6M', label: monthsLabel(6), months: 6},
+        {key: '1Y', label: yearsLabel(1), years: 1},
+        {key: '2Y', label: yearsLabel(2), years: 2},
         {key: 'YTD', label: $_('datePicker.presets.ytd')},
         {key: 'MAX', label: $_('datePicker.presets.max')},
-    ];
+    ]);
+
+    /**
+     * Whether a quick preset is drawn: all of them, except those the caller leaves out. Applied
+     * inside each group, so leaving one out never moves another into a different group.
+     */
+    function isOffered(preset: {key: QuickPreset}): boolean {
+        return !excludePresets.includes(preset.key);
+    }
 
     // "Jolly" fill badges — two independent pools, each belonging to one of the two visual
     // blocks (Block A = core presets, Block B = YTD/Tutti/Personalizzato). They are NEVER shown
@@ -225,17 +245,17 @@
     // decides how many of each to render, only to fill leftover space that would otherwise stay
     // empty, never as the cause of an extra line wrap.
     // Duration pool — extends the core year progression (Block A).
-    const durationFillPresets: {key: QuickPreset; label: string; years: number}[] = [
-        {key: '3Y', label: '3Y', years: 3},
-        {key: '5Y', label: '5Y', years: 5},
-        {key: '10Y', label: '10Y', years: 10},
-    ];
+    let durationFillPresets: {key: QuickPreset; label: string; years: number}[] = $derived([
+        {key: '3Y', label: yearsLabel(3), years: 3},
+        {key: '5Y', label: yearsLabel(5), years: 5},
+        {key: '10Y', label: yearsLabel(10), years: 10},
+    ]);
     // Period pool — extends the "start of period to today" family alongside YTD (Block B).
-    const periodFillPresets: {key: QuickPreset; label: string}[] = [
+    let periodFillPresets: {key: QuickPreset; label: string}[] = $derived([
         {key: 'MTD', label: $_('datePicker.presets.mtd')},
         {key: 'QTD', label: $_('datePicker.presets.qtd')},
         {key: 'WTD', label: $_('datePicker.presets.wtd')},
-    ];
+    ]);
 
     const granularityOptions: {value: Granularity; labelKey: string; shortKey: string}[] = [
         {value: 'days', labelKey: 'datePicker.granularity.days', shortKey: 'datePicker.granularity.daysShort'},
@@ -875,33 +895,6 @@
         onchange?.(newStart, newEnd);
     }
 
-    function toggleCustomEdit(e?: MouseEvent) {
-        e?.stopPropagation();
-        customEditing = !customEditing;
-        // Apply immediately when opening (so the initial values take effect)
-        if (customEditing) {
-            handleCustomApply();
-        }
-    }
-
-    // Auto-apply custom window when amount or granularity ACTUALLY change (not on every render).
-    // We use a plain object (not $state) to track previous values — avoids infinite loops.
-    const _prev = {amt: 3, gran: 'years' as Granularity};
-    $effect(() => {
-        const amt = customAmount;
-        const gran = customGranularity;
-        if (customEditing && amt > 0 && (amt !== _prev.amt || gran !== _prev.gran)) {
-            _prev.amt = amt;
-            _prev.gran = gran;
-            // Break synchronous effect chain to avoid re-entrance
-            queueMicrotask(() => handleCustomApply());
-        }
-    });
-
-    function handleGranularityChange(v: string) {
-        customGranularity = v as Granularity;
-    }
-
     // =========================================================================
     // Typed date fields
     //
@@ -1114,7 +1107,7 @@
         if (iso === 'max') return displayDate(todayIso());
         if (compact) return iso; // YYYY-MM-DD — fits narrow cells
         const d = new Date(iso + 'T00:00:00');
-        return d.toLocaleDateString('en', {day: '2-digit', month: 'short', year: 'numeric'});
+        return d.toLocaleDateString(uiLocale(), {day: '2-digit', month: 'short', year: 'numeric'});
     }
 
     /** Highlights object for CalendarMonth instances */
@@ -1134,7 +1127,7 @@
 <svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
 
 {#snippet coreButtons()}
-    {#each presets.slice(0, 6) as preset, i}
+    {#each presets.slice(0, 6).filter(isOffered) as preset, i}
         <button
             type="button"
             bind:this={coreBadgeRefs[i]}
@@ -1150,7 +1143,7 @@
 {#snippet durationJollyButtons()}
     <!-- Duration pool (3Y/5Y/10Y) — JS-measured, never a fixed CSS breakpoint set. Fills
          leftover space in Block A only up to how many actually fit (see measureAndFill). -->
-    {#each durationFillPresets.slice(0, extrasToShowDuration) as preset}
+    {#each durationFillPresets.slice(0, extrasToShowDuration).filter(isOffered) as preset}
         <button
             type="button"
             data-testid="date-preset-{preset.key.toLowerCase()}"
@@ -1164,7 +1157,7 @@
 
 {#snippet periodJollyButtons()}
     <!-- Period pool (WTD/MTD/QTD) — same idea as durationJollyButtons but for Block B. -->
-    {#each periodFillPresets.slice(0, extrasToShowPeriod) as preset}
+    {#each periodFillPresets.slice(0, extrasToShowPeriod).filter(isOffered) as preset}
         <button
             type="button"
             data-testid="date-preset-{preset.key.toLowerCase()}"
@@ -1177,7 +1170,7 @@
 {/snippet}
 
 {#snippet trailingButtons()}
-    {#each presets.slice(6) as preset, i}
+    {#each presets.slice(6).filter(isOffered) as preset, i}
         <button
             type="button"
             bind:this={trailingBadgeRefs[i]}
@@ -1192,39 +1185,21 @@
 
 {#snippet customWindowArea()}
     {#if showCustomWindow}
-        {#if customEditing}
-            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-            <div
-                bind:this={customEditRef}
-                class="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/10 dark:bg-amber-500/20 rounded-lg border border-amber-400/40 drp-trigger"
-                role="group"
-                onclick={(e) => e.stopPropagation()}
-                onkeydown={(e) => {
-                    if (e.key === 'Escape') customEditing = false;
-                }}
-            >
-                <input
-                    type="number"
-                    use:numericArrows
-                    bind:value={customAmount}
-                    data-testid="date-range-custom-amount"
-                    min="1"
-                    max="999"
-                    class="zoom-guard-exempt w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-                <SimpleSelect value={customGranularity} options={granularitySelectOptions} onchange={handleGranularityChange} class="inline-block w-auto" dropdownPosition="auto" compact showChevron={false} />
-            </div>
-        {:else}
-            <button
-                type="button"
-                bind:this={customPlainBtnRef}
-                data-testid="date-preset-custom"
-                data-active={effectivePreset === 'custom' ? 'true' : 'false'}
-                class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                    {effectivePreset === 'custom' ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
-                onclick={(e) => toggleCustomEdit(e)}>{effectivePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find((o) => o.value === customGranularity)?.shortKey ?? 'common.custom').toUpperCase()}` : $_('common.custom')}</button
-            >
-        {/if}
+        <CompactDurationBadge
+            bind:amount={customAmount}
+            bind:unit={customGranularity}
+            bind:editing={customEditing}
+            bind:buttonElement={customPlainBtnRef}
+            bind:editorElement={customEditRef}
+            active={effectivePreset === 'custom'}
+            options={granularitySelectOptions}
+            customLabel={$_('common.custom')}
+            min={1}
+            max={999}
+            buttonTestId="date-preset-custom"
+            amountTestId="date-range-custom-amount"
+            onapply={handleCustomApply}
+        />
     {/if}
 {/snippet}
 
@@ -1299,7 +1274,7 @@
                 bind:this={triggerEl}
                 class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen
                     ? 'ring-1 ring-libre-green border-libre-green'
-                    : ''}"
+                    : ''} {fieldsClass}"
             >
                 <!-- A label, so the padding around the field is part of the field. -->
                 <label class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">

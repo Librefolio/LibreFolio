@@ -43,7 +43,7 @@ every open item listed in the Milestone 2 analysis docs (`implementation_status_
 ## Key Takeaways
 
 ### Resolved (≈20 items) — already fixed by later implementation work (this session's Holdings/Performance
-refactor of 2026-07-06, commit `78aaa0a3`, plus prior work)
+refactor of 2026-07-06, commit `13052a006`, plus prior work)
 
 - `get_summary()` now wired to `PortfolioCalculationEngine` (reads `engine_result.position_states_end`,
   date-aware at `date_to`) — previously used a separate "latest price only" / today-biased loop.
@@ -126,12 +126,12 @@ future ingests.
 | Role | Path |
 |------|------|
 | Archived index (new) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/README.md` |
-| Active M3 index (root) | `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/README.md` |
+| Active M3 index (root) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/README.md` |
 | Phase status doc | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-dashboard.md` |
 | M1 backend plans | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_1/` |
 | M2 dashboard + engine plans | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/` |
 | Holdings/Performance refactor notes | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/lowDashboard/Low-dashboard_implementation_notes.md` |
 | Service (get_summary, get_positions_contribution) | `backend/app/services/portfolio_service.py` |
-| Engine | `backend/app/services/portfolio_engine.py` |
-| Failing test (unrelated) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_transaction_implied.py` |
+| Engine | `backend/app/services/financial_math/portfolio/engine.py` |
+| Failing test (unrelated) | *deleted 2026-07-14* (test_transaction_implied.py, no successor) — [[problems/test-transaction-implied-constructor-mismatch]] |
 | DataTable component (unrelated bug) | `frontend/src/lib/components/table/DataTable.svelte` |

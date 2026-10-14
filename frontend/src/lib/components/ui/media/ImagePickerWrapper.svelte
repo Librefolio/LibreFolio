@@ -26,6 +26,7 @@
     interface Props {
         /** Whether the picker modal is open */
         open?: boolean;
+        zIndex?: number;
         /** Title for the AssetPickerModal */
         title?: string;
         /** Preset for ImageEditModal (avatar, broker-icon, asset-icon, custom) */
@@ -42,7 +43,7 @@
         oncancel?: () => void;
     }
 
-    let {open = $bindable(false), title = '', preset = 'custom', initialUrl = '', circularPreview = false, filterImages = true, onchange, oncancel}: Props = $props();
+    let {open = $bindable(false), zIndex = 50, title = '', preset = 'custom', initialUrl = '', circularPreview = false, filterImages = true, onchange, oncancel}: Props = $props();
 
     // Internal state
     let showImageEditor = $state(false);
@@ -95,7 +96,7 @@
 </script>
 
 <!-- Asset Picker Modal -->
-<AssetPickerModal {circularPreview} {filterImages} {initialUrl} on:cancel={handlePickerCancel} on:select={handlePickerSelect} on:upload={handlePickerUpload} {open} {title} />
+<AssetPickerModal {circularPreview} {filterImages} {initialUrl} on:cancel={handlePickerCancel} on:select={handlePickerSelect} on:upload={handlePickerUpload} {open} {title} {zIndex} />
 
 <!-- Image Edit Modal (shown when user uploads from picker) -->
-<ImageEditModal file={imageEditorFile} on:cancel={handleEditorCancel} on:complete={handleEditorComplete} on:error={handleEditorError} open={showImageEditor} {preset} />
+<ImageEditModal file={imageEditorFile} on:cancel={handleEditorCancel} on:complete={handleEditorComplete} on:error={handleEditorError} open={showImageEditor} {preset} {zIndex} />

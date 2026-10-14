@@ -6,7 +6,7 @@
      * Features: currency filter (SearchSelect), unified date range picker with presets,
      * global abs/% slider toggle, Sync All, Refresh All, Add Pair.
      */
-    import {onMount} from 'svelte';
+    import {onDestroy, onMount} from 'svelte';
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import {get} from 'svelte/store';
@@ -28,7 +28,7 @@
     import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, displayFxDelta, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
@@ -38,6 +38,10 @@
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import type {FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
 
     // =========================================================================
     // Types
@@ -54,6 +58,10 @@
     // =========================================================================
 
     let pairs = $state<FxPairState[]>([]);
+    let pageAlive = true;
+    onDestroy(() => {
+        pageAlive = false;
+    });
     let loading = $state(true);
     let error = $state<string | null>(null);
 
@@ -108,12 +116,19 @@
 
     // Modals
     let addModalOpen = $state(false);
+    let fxTourPreview = $state(false);
     let syncModalOpen = $state(false);
     let settingsModalOpen = $state(false);
     /** Slug of the pair currently being configured via per-card ⚙️ (null = global) */
     let settingsTargetSlug = $state<string | null>(null);
     /** Settings to pass to the modal (global or pair-specific) */
     let settingsForModal = $derived(settingsTargetSlug ? getSettingsForPair(settingsTargetSlug, 'fx') : getGlobalSettings('fx'));
+    let settingsAxisContext = $derived.by(() => {
+        if (!settingsTargetSlug) return $_('common.preview');
+        const pair = pairs.find((item) => item.config.slug === settingsTargetSlug);
+        if (!pair) return settingsTargetSlug.replace('-', '/');
+        return isCardInverted(settingsTargetSlug) ? `${pair.config.quote}/${pair.config.base}` : `${pair.config.base}/${pair.config.quote}`;
+    });
     let signalDefinitions = $state<SignalDefinition[]>([]);
     let signalResultsByPair = $state(new Map<string, SignalInstanceResult[]>());
     let signalCatalogFailed = $state(false);
@@ -175,11 +190,8 @@
                 break;
             }
         }
-        if (!refPoint || refPoint.rate === null || lastPoint.rate === null || refPoint.rate === 0 || lastPoint.rate === 0) return null;
-        const refVal = displayFxRate(refPoint.rate, inverted);
-        const lastVal = displayFxRate(lastPoint.rate, inverted);
-        if (refVal === null || lastVal === null) return null;
-        return ((lastVal - refVal) / refVal) * 100;
+        if (!refPoint) return null;
+        return displayFxDelta(refPoint.rate, lastPoint.rate, inverted)?.pct ?? null;
     }
 
     function fxPointToLineDataPoint(point: FxDataPoint, inverted: boolean): LineDataPoint {
@@ -282,18 +294,23 @@
         await loadPairSources();
         // Load asset list for cross-domain signal selection
         loadAssetList();
+        onboardingGuide.maybeStartContextual('fx_page_guide');
     });
 
     // =========================================================================
     // Data Loading
     // =========================================================================
 
-    async function loadPairSources() {
+    async function loadPairSources(propagateError = false) {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        if (!current()) return;
         loading = true;
         error = null;
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
-            const items = (response as any)?.items || [];
+            if (!current()) return;
+            const items = response?.items ?? [];
 
             // Group by unique pair (base/quote)
             const pairMap = new Map<string, FxPairConfig>();
@@ -308,7 +325,7 @@
                     });
                 }
                 const steps = item.chain_steps ?? [];
-                const providerCode = steps.length === 1 ? steps[0].provider : 'CHAIN:' + steps.map((s: any) => s.provider).join('+');
+                const providerCode = item.is_chain ? 'CHAIN:' + steps.map((s) => s.provider).join('+') : steps[0].provider;
                 pairMap.get(slug)!.providers.push({
                     providerCode,
                     priority: item.priority,
@@ -330,10 +347,12 @@
                 loading: true,
             }));
         } catch (e: any) {
+            if (!current()) return;
             console.error('Failed to load pair sources:', e);
-            error = e?.message || 'Failed to load FX pairs';
+            error = e?.message || $_('fx.loadFailed');
+            if (propagateError) throw e;
         } finally {
-            loading = false;
+            if (current()) loading = false;
         }
 
         // Wave 2 — rates, signals, "All" resolution — deliberately OUTSIDE the
@@ -341,7 +360,7 @@
         // renders as soon as the pairs are known and each card fills in on its
         // own (loading={pair.loading}). fetchAllPairData() owns its own errors
         // and clears `loading` on every path.
-        if (!error) await fetchAllPairData();
+        if (current() && !error) await fetchAllPairData(propagateError);
     }
 
     /**
@@ -379,8 +398,10 @@
         displayDateStart = 'min';
     }
 
-    async function fetchAllPairData() {
-        if (pairs.length === 0) return;
+    async function fetchAllPairData(propagateError = false) {
+        const sessionGeneration = getClientSessionGeneration();
+        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
+        if (!current() || pairs.length === 0) return;
         void getSettingsVersion();
 
         const bulkRequests: Array<{
@@ -452,6 +473,7 @@
         signalRequestFailed = false;
         try {
             const bulkResult = await loadFxRatesAndSignalsBulk(bulkRequests);
+            if (!current()) return;
             for (const [slug, context] of requestContexts) {
                 const state = resultStateForPair(slug);
                 const mapped = mapSignalInstanceResults(context.configs, context.plan, bulkResult.signalsBySlug.get(slug) ?? []);
@@ -467,6 +489,7 @@
             }));
             resolveMaxStartFromPairs();
         } catch (requestError) {
+            if (!current()) return;
             console.error('Failed to fetch FX rates/signals bulk:', requestError);
             signalRequestFailed = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
             // Fallback: update with whatever is cached
@@ -474,6 +497,7 @@
                 const existingData = getFxStore(nf.slug).getRange(dateStart, dateEnd).data;
                 pairs[nf.index] = {...pairs[nf.index], data: existingData, loading: false};
             }
+            if (propagateError) throw requestError;
         }
     }
 
@@ -759,7 +783,20 @@
     }
 
     function handleAddPair() {
+        if (onboardingGuide.active?.flow === 'fx_page_guide') {
+            onboardingGuide.dismissHost();
+        }
+        fxTourPreview = false;
         addModalOpen = true;
+        onboardingGuide.maybeStartContextual('fx_guide');
+    }
+
+    function closeAddPair() {
+        addModalOpen = false;
+        fxTourPreview = false;
+        if (onboardingGuide.active?.flow === 'fx_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
     }
 
     function handleSyncAll() {
@@ -821,13 +858,13 @@
                     perPairResults.push({
                         label: `${pair.base}/${pair.quote}`,
                         success: true,
-                        detail: $_('fx.delete.resultDeleted', {values: {count: rateCount}}),
+                        detail: $_('fx.delete.resultDeleted', {values: {n: rateCount}}),
                     });
                 } catch (pairErr: any) {
                     perPairResults.push({
                         label: `${pair.base}/${pair.quote}`,
                         success: false,
-                        detail: pairErr?.message || 'Error',
+                        detail: pairErr?.message || $_('common.error'),
                     });
                 }
             }
@@ -884,11 +921,16 @@
         }
     }
 
-    async function handlePairCreated(detail: {base: string; quote: string; hasRealProvider: boolean}) {
+    async function handlePairCreated() {
+        if (!pageAlive) return;
         addModalOpen = false;
-        // Reload pair sources and fetch data (sync already done by modal)
         await loadPairSources();
-        await fetchAllPairData();
+    }
+
+    async function handlePairCreationSynced(detail: FxPairSyncCompleteDetail) {
+        if (!pageAlive || !isClientSessionCurrent(detail.sessionGeneration)) return;
+        // Creation refresh has settled; the helper invalidated only the new pairs.
+        await loadPairSources(true);
     }
 
     async function handleSynced() {
@@ -915,7 +957,7 @@
          philosophy as PageToolbar's own container-driven tiers, just via native CSS here since
          no JS threshold tuning is needed for a simple 2-block header). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div use:guideAnchor={'fx.page.overview'} data-testid="fx-page-overview-guide-target">
             <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                 {$_('fx.title')}
                 {#if pairs.length > 0}
@@ -941,7 +983,7 @@
                 />
             {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
-            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" onclick={handleAddPair}>
+            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.page.add'} onclick={handleAddPair}>
                 <Plus size={16} />
                 {$_('fx.actions.addPair')}
             </button>
@@ -957,7 +999,7 @@
          oneColumn:    [ datepicker       ]  whole bar now ONE column — actions moved BELOW,
                        [ currency-filters ]  still a labeled 2×2 grid (only position changed)
                        [ actions ── 2×2   ]  (narrowest tier — Round 12 removed iconOnly) -->
-    <PageToolbar thresholds={{oneRow: 1120, denseRow: 930, stackFilters: 440, oneColumn: 400, labelHideActions: 260, labelHideTabs: 370}} testId="fx-controls" filterRowTestId="fx-filter-bar" layoutDebugName="fxList">
+    <PageToolbar thresholds={{oneRow: 1120, denseRow: 1030, stackFilters: 560, oneColumn: 400, labelHideActions: 260, labelHideTabs: 370}} testId="fx-controls" filterRowTestId="fx-filter-bar" layoutDebugName="fxList">
         {#snippet filters({layoutMode, filtersStacked})}
             <!-- DateRangePicker. Round 14 bugfix: `contents` (not `flex flex-1 ...`) — see
                  assets/+page.svelte's equivalent wrapper for the full explanation. -->
@@ -973,7 +1015,7 @@
                  to fill the capped width evenly instead of staying at their fixed w-28/w-40 and
                  leaving the extra space as empty justify-around gaps — wide components read
                  better than empty space between small fixed-width controls. -->
-            <div class="flex items-center gap-3 shrink-0 {filtersStacked ? 'w-full justify-around' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
+            <div class="flex items-center gap-3 shrink-0 {filtersStacked ? 'w-full justify-around' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''} use:guideAnchor={'fx.page.filters'} data-testid="fx-page-filters">
                 <div class={filtersStacked ? 'flex-1 min-w-0' : 'w-28 sm:w-40'} data-testid="fx-currency-filter">
                     <CurrencySearchSelect
                         allowedCurrencies={allowedForFilter1}
@@ -1048,6 +1090,7 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 data-testid="fx-sync-all-button"
+                use:guideAnchor={'fx.page.sync'}
                 onclick={handleSyncAll}
             >
                 <RotateCw size={14} />
@@ -1076,7 +1119,7 @@
     {:else if error}
         <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
             <p class="text-red-600 dark:text-red-400">{error}</p>
-            <button class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" onclick={loadPairSources}>
+            <button class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" onclick={() => loadPairSources()}>
                 {$_('common.retry')}
             </button>
         </div>
@@ -1088,7 +1131,7 @@
             {#if pairs.length === 0}
                 <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('fx.empty.noPairsTitle')}</h3>
                 <p class="text-gray-500 dark:text-gray-400 mb-4">{$_('fx.empty.noPairsDesc')}</p>
-                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleAddPair}>
+                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" use:guideAnchor={'fx.add'} onclick={handleAddPair}>
                     <Plus size={16} class="inline mr-1" />
                     {$_('fx.empty.addFirstPair')}
                 </button>
@@ -1172,13 +1215,15 @@
 />
 
 <!-- Add Pair Modal -->
-<FxPairAddModal bind:open={addModalOpen} {dateEnd} {dateStart} onclose={() => (addModalOpen = false)} oncreated={handlePairCreated} />
+<FxPairAddModal bind:open={addModalOpen} tourPreview={fxTourPreview} onclose={closeAddPair} oncreated={handlePairCreated} onsynced={handlePairCreationSynced} />
 
 <!-- Sync Modal -->
 <FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} />
 
 <!-- Chart Settings Modal (global or per-card depending on settingsTargetSlug) -->
 <ChartSettingsModal
+    axisContext={settingsAxisContext}
+    axisDomain="fx"
     availableAssets={availableAssetsList}
     availablePairs={pairs.map((p) => `${p.config.base}-${p.config.quote}`)}
     {signalDefinitions}

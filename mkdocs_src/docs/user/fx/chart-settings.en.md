@@ -1,21 +1,24 @@
 # ⚙️ Chart Settings
 
-The **Chart Settings** modal customizes chart appearance and overlay signals. The same modal serves both the [FX List](index.md) and the [Assets](../assets/index.md) pages, with **independent settings per scope** — changing the FX defaults never touches asset charts, and vice versa.
+The **Chart Settings** window changes how charts look and which overlays they draw. It serves both
+the [FX list](index.md) and the [Assets list](../assets/index.md), and each list keeps its own
+settings: changing the FX charts never touches the asset charts.
 
 ---
 
-## 🔓 Accessing Chart Settings
+## 🔓 Open chart settings
 
-The modal opens from the list pages, in two flavors:
+- 🌐 **For all charts** — click **Settings** (⚙️) in the list toolbar. The window is titled
+  **Chart Settings**. Applying it replaces the custom settings of every chart in the list, detail
+  pages included, and the window warns you about it.
+- 🎯 **For one chart** — click ⚙️ on a card. The window is titled **Chart Settings (Local)**, and
+  its settings apply to that chart only.
 
-- 🌐 **Global** — the settings button (⚙️) in the list-page toolbar. These settings become the default for every chart in the scope; applying them replaces all per-card customizations (the modal warns you about this).
-- 🎯 **Local** — the settings button (⚙️) on any pair or asset card. These settings override the global ones for that card only.
+!!! note "Detail pages use inline panels"
 
-!!! note "Detail pages use inline panels instead"
-
-    On the [Pair Detail page](detail/index.md) (and on asset detail pages) the ⚙️
-    button toggles an inline **aesthetics panel** and the 📈 button toggles the
-    inline **signals panel** — same settings, same per-item storage, no modal.
+    On a [pair detail page](detail/index.md) (and on an asset detail page), ⚙️ on the chart opens
+    the same appearance settings in a panel, and the **Signals** panel above the chart holds the
+    overlays. They are the same settings as the card's local ones.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -23,44 +26,68 @@ The modal opens from the list pages, in two flavors:
 
 ---
 
-## 👀 Live Preview
+## 👀 Preview before you apply
 
-The modal always shows a **preview chart** with an Abs/% toggle, so you see the effect of every change before applying it:
-
+The window shows a preview chart with its own **Abs** / **%** switch. Your charts change only when
+you click **Apply**; **Cancel** asks before discarding your changes.
 
 <div class="screenshot-container" style="max-width: 620px; margin: 1rem auto;">
     <img class="gallery-img" data-category="assets" data-name="chart-settings" alt="Chart settings modal with the live preview">
 </div>
 
-- 🌐 **Global mode** — the preview draws a synthetic demo curve. Backend indicators cannot run in the browser, so the modal asks the server to compute them live on that curve: what you see matches what real charts will render.
-- 🎯 **Local mode** — the preview uses the card's **real price data**. Backend indicators show the last applied configuration; a banner reminds you to Apply to refresh them.
+- 🌐 **For all charts**, the preview draws a demo curve. The server computes the indicators on it,
+  so they look exactly as they will on your real charts.
+- 🎯 **For one chart**, the preview uses that chart's real data. Indicators show the last applied
+  settings until you click **Apply**, and a banner reminds you of it.
 
 ---
 
-## 🎛️ Available Settings
+## 🎨 Appearance
 
-### 🎨 Appearance
-
-| Setting | Description |
-|---------|-------------|
-| **Baseline Colors** | Color the line green above / red below the baseline |
-| **Area Fill** | Gradient fill under the line |
+| Setting | What it does |
+|---------|--------------|
+| **Baseline Colors** | Green above, red below the start of the period |
+| **Area Fill** | Gradient under the line |
 | **Grid Lines** | Horizontal dashed grid |
-| **Stale Gradient** | Fade older data towards the background |
-| **Y-Axis Scale** | Auto, Include 0, or a Custom min/max range |
+| **Stale Gradient** | Fades the days without a new value, which repeat an earlier one |
 
-### 📈 Overlay Signals
+### 📏 Axis ranges
 
-The modal manages the same overlay signals as the detail-page [Signals panel](detail/signals.md), added from three category dropdowns:
+**Y-Axis Scale** has one row for each axis on the chart: the main axis (the rate, or the percentage
+in % view) and one for each indicator scale, such as the **RSI axis**. Indicators that share a
+scale share a row.
 
-- 🧮 **Technical Indicators** — the backend plugin catalog for the current scope: **9 FX-compatible indicators** here, 22 on the Assets scope. The dropdown is a searchable tree grouped by family (trend, momentum, volatility, …). The math behind each indicator lives in [Technical Indicators — Financial Theory](../../financial-theory/technical-analysis/indicators/index.md).
-- ↔️ **Data Comparison** — overlay another configured FX pair or an asset on the same chart.
-- 📐 **Synthetic Benchmarks** — parameter-generated reference curves ([Linear](../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md), [Compound](../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md), [Sine Wave](../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md)). They are pure mathematics — not custom baskets and not market data.
+- **Auto** fits the data on that axis.
+- **Include 0** fits the data and also shows zero.
+- **Custom** uses the **Min** and **Max** you type.
 
-Each configured signal becomes a card with inline parameters, a 📖 link to its theory page, and per-signal diagnostics once it has been computed.
+The **Abs** and **%** views keep separate ranges: switch the preview to **%** to set the
+percentage one.
 
 ---
 
-## 💾 Persistence
+## 📈 Overlay signals
 
-Chart settings are stored locally in your browser's `localStorage`, separately for the FX and Assets scopes, with per-card overrides on top of the scope defaults. They survive across sessions — even after closing and reopening the browser — and will only be lost if you clear your browser cache/storage or if the storage expires (browser-dependent, typically months to years).
+Add overlays from three dropdowns, the same as in the detail page's [Signals panel](detail/signals.md):
+
+- 🧮 **Technical Indicators** — 9 indicators work on FX rates (asset charts offer more), grouped by
+  family with a search box. The math is in
+  [Technical Indicators — Financial Theory](../../financial-theory/technical-analysis/indicators/index.md).
+- ↔️ **Data Comparison** — another FX pair or an asset on the same chart.
+- 📐 **Synthetic Benchmarks** — reference curves built from parameters alone, not market data:
+  [Linear](../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md),
+  [Compound](../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md) and
+  [Sine Wave](../../financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md).
+
+Each signal becomes a card with its parameters, a 📖 link to its theory page and, once computed, a
+diagnostics icon.
+
+---
+
+## 💾 Where settings are saved
+
+- Chart settings are saved in **this browser**, for your user, separately for the FX and asset
+  lists. A chart's own settings sit on top of its list's settings.
+- They are not stored on the server: another browser or device starts from the defaults, and
+  clearing this site's browser data resets them.
+- The selected period is not a chart setting: the pages of the same browser tab share it.

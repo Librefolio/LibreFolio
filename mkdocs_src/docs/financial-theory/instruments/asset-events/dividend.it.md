@@ -25,13 +25,13 @@ Nella **data ex-dividend**, il prezzo del titolo teoricamente scende dell'**esat
 
 !!! example "Example"
 
-    **Apple (AAPL)** quota a $180.00. Un dividendo trimestrale di $0.25 stacca il dividendo (ex-date).
+    **Apple (AAPL)** quota a $180,00. Un dividendo trimestrale di $0,25 stacca il dividendo (ex-date).
 
-    - **Prima della chiusura della data ex**: $180.00
-    - **Apertura data ex** (teorica): $179.75
-    - **Differenza**: −$0.25 (= importo del dividendo)
+    - **Prima della chiusura della data ex**: $180,00
+    - **Apertura data ex** (teorica): $179,75
+    - **Differenza**: −$0,25 (= importo del dividendo)
 
-    In pratica, le forze di mercato possono far variare il prezzo di apertura effettivo, ma la borsa **aggiusta il prezzo di riferimento** verso il basso esattamente di $0.25.
+    In pratica, le forze di mercato possono far variare il prezzo di apertura effettivo, ma la borsa **aggiusta il prezzo di riferimento** verso il basso esattamente di $0,25.
 
 ---
 
@@ -67,9 +67,9 @@ $$
 
 In LibreFolio, un evento `DIVIDEND` (e la corrispondente transazione di portafoglio) viene registrato con:
 
-- **Date**: La data ex-dividend
-- **Amount**: L'importo del pagamento in contanti per azione
-- **Currency**: La valuta del pagamento (es. USD, EUR)
+- **Data**: La data ex-dividend
+- **Importo**: L'importo del pagamento in contanti per azione
+- **Valuta**: La valuta del pagamento (es. USD, EUR)
 
 ### The Differenza Contabile: Dividendo vs Interesse
 È fondamentale distinguere tra una transazione di **Dividendo** e una di **Interesse** a livello di database:

@@ -1,6 +1,7 @@
 ---
 title: "MWRR pole when the period starts on a data-less day"
 category: problem
+status: resolved
 date: 2026-09-02
 tags: [backend, roi, mwrr, xirr, fifo, portfolio]
 related:
@@ -47,5 +48,5 @@ short windows to catch it.
 | Role | Path |
 |------|------|
 | Fix | `backend/app/services/portfolio_service.py` (period re-basing, two branches) |
-| XIRR solver | `backend/app/utils/financial/roi_utils.py` (calculate_mwrr, calculate_mwrr_series) |
+| XIRR solver | `backend/app/services/financial_math/returns.py` (calculate_mwrr, calculate_mwrr_series) |
 | Tests | `backend/test_scripts/test_services/test_financial/` |

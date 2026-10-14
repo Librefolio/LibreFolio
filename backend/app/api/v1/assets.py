@@ -233,6 +233,7 @@ async def list_assets(
     currency: Optional[str] = Query(None, description="Filter by currency (ISO 4217, e.g., USD)"),
     asset_type: Optional[AssetType] = Query(None, description="Filter by asset type enum"),
     active: Optional[bool] = Query(None, description="Tri-state: true = only active, false = only inactive, omit = return both (default)"),
+    is_benchmark: Optional[bool] = Query(None, description="Tri-state: true = only benchmarks, false = only non-benchmarks, omit = return both (default)"),
     search: Optional[str] = Query(None, description="Search in display_name (partial match)"),
     isin: Optional[str] = Query(None, description="Exact ISIN match"),
     ticker: Optional[str] = Query(None, description="Exact ticker match"),
@@ -252,6 +253,7 @@ async def list_assets(
     - `currency`: Filter by currency code (e.g., "USD", "EUR")
     - `asset_type`: Filter by type enum (STOCK, ETF, BOND, etc.)
     - `active`: Include only active assets (default: true)
+    - `is_benchmark`: Include only assets flagged as comparison benchmarks (omit for both)
     - `search`: Search text in display_name (case-insensitive partial match)
     - `isin`: Exact ISIN match
     - `ticker`: Exact ticker match
@@ -280,6 +282,7 @@ async def list_assets(
             currency=currency,
             asset_type=asset_type,
             active=active,
+            is_benchmark=is_benchmark,
             search=search,
             isin=isin,
             ticker=ticker,
@@ -1032,9 +1035,21 @@ async def upsert_events_bulk(
     Creates or updates manual asset events. Auto-generated events from providers
     are NOT affected — dedup is scoped by provider_assignment_id.
 
+    An event without ``id`` is matched on (date, type) and updated in place, so
+    transactions linked to it stay linked. An event with ``id`` edits that manual
+    event, date and type included; each item is validated as a whole before
+    anything is written.
+
     **R3-3 Policy D**: returns HTTP 400 if any submitted event carries a
     currency code different from its parent asset's currency (symmetric to
     ``bulk_upsert_prices``).
+
+    Also HTTP 400: ``EVENT_NOT_EDITABLE`` (the id is unknown, of another asset,
+    or of a provider event) and ``EVENT_KEY_CONFLICT`` (an edit that changes its
+    date or type would land on a key another edit of the item ends on, or that a
+    manual event the item does not edit holds; or an event without ``id`` would
+    take a key an edit ends on). Two events without ``id`` on one date and type
+    are both stored. The same id twice in one item is a 422.
     """
     try:
         result = await AssetSourceManager.bulk_upsert_events(assets, session)
@@ -1044,8 +1059,8 @@ async def upsert_events_bulk(
             success_count=result["success_count"],
         )
     except AssetSourceError as e:
-        # Hard-400 on currency mismatch (and similar client-side validation errors).
-        status = 400 if e.error_code in ("EVENT_CURRENCY_MISMATCH",) else 500
+        # Hard-400 on client-side validation errors; ``detail`` starts with the code.
+        status = 400 if e.error_code in ("EVENT_CURRENCY_MISMATCH", "EVENT_NOT_EDITABLE", "EVENT_KEY_CONFLICT") else 500
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Error in bulk upsert events: {e}")

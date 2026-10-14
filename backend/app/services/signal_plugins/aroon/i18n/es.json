@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "aroon": {
+      "name": "Aroon",
+      "description": "Recencia de máximos y mínimos",
+      "up": "Aroon Up",
+      "upDescription": "Recencia del máximo del período.",
+      "down": "Aroon Down",
+      "downDescription": "Recencia del mínimo del período.",
+      "oscillator": "Oscilador Aroon",
+      "oscillatorDescription": "Diferencia entre Aroon Up y Aroon Down."
+    }
+  }
+}

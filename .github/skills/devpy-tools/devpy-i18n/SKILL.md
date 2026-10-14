@@ -1,6 +1,6 @@
 ---
 name: devpy-i18n
-description: "Use this skill when the user needs to manage frontend translations (i18n): audit keys, add/remove/update translations, search for keys or values, check for duplicates, or understand the i18n namespace structure."
+description: "Use this skill when the user needs to manage frontend translations (i18n): audit keys, add/remove/update translations, find which source file holds a key (base, subsystem folders, plugin i18n fragments), build or check the generated catalogue, move/split keys between sources, absorb a branch's catalogue changes, search for keys or values, check for duplicates, or understand the i18n namespace structure."
 ---
 
 # i18n Management (Frontend Translations)
@@ -8,17 +8,19 @@ description: "Use this skill when the user needs to manage frontend translations
 ## Commands
 
 ```bash
-./dev.py i18n audit                          # Full audit report
+./dev.py i18n audit                          # Full audit report (reads the sources, checks them strictly)
 ./dev.py i18n audit --duplicates             # Show duplicate values
 ./dev.py i18n audit --format xlsx            # Export as Excel
 ./dev.py i18n audit --format md              # Export as Markdown
 
+./dev.py i18n where "ns.key"                 # The source file that holds a key, or the one `add` would use
 ./dev.py i18n add "ns.key" --en "English" --it "Italiano" --fr "Français" --es "Español"
-./dev.py i18n remove "ns.key"                # Remove key from all languages
+./dev.py i18n add "brimPlugins.broker_x.name" --en … --it … --fr … --es … --into brim_providers/broker_x
+./dev.py i18n remove "ns.key"                # Remove key from all languages and sources
 ./dev.py i18n remove "ns.key" -f             # Force (no confirmation)
-./dev.py i18n update "ns.key" --it "Nuovo"   # Update single language
+./dev.py i18n update "ns.key" --it "Nuovo"   # Update single language, in the key's source
 
-./dev.py i18n search "query"                 # Search in values (all languages)
+./dev.py i18n search "query"                 # Search in values (all languages); shows each key's Source
 ./dev.py i18n search "query" -k              # Search in key names only
 ./dev.py i18n search "query" -v              # Verbose (show all languages)
 ./dev.py i18n search "query" -l it           # Search only in Italian
@@ -27,26 +29,67 @@ description: "Use this skill when the user needs to manage frontend translations
 ./dev.py i18n tree common                    # Tree under "common" namespace
 ./dev.py i18n tree --counts                  # Show key counts per namespace
 ./dev.py i18n tree -d                        # Show duplicates in tree
+
+./dev.py i18n build                          # Regenerate src/lib/i18n/<lang>.json from the sources
+./dev.py i18n check                          # Validate the sources, strictly (four languages, one owner per key)
+./dev.py i18n check --against REV            # …and prove the catalogue equal, key by key, to a git revision
+./dev.py i18n move "ns.prefix" --into SOURCE # Move a subtree, in every language, to base / a subsystem / <family>/<plugin>
+./dev.py i18n split                          # Put every key where its declared prefix says (re-runnable)
+./dev.py i18n absorb --base REV --theirs REV [--prefer ours|theirs]   # Replay a branch's key changes (old layout)
 ```
 
-## Translation Files
+Every command that writes edits the **sources** and regenerates the catalogue by itself.
 
-- Location: `frontend/src/lib/i18n/{en,it,fr,es}.json`
-- Library: svelte-i18n
-- Languages: EN (primary), IT, FR, ES
-- ~1476 keys per language (post 2026-07 cleanup campaign, 2 rounds — removed 194 dead/duplicate keys)
+## The Catalogue: Sources and the Generated File
+
+- **Generated, never edited**: `frontend/src/lib/i18n/{en,it,fr,es}.json` is built by `scripts/i18n_catalog.py`
+  (stdlib, Python 3.9+, since the npm hooks run it with the system `python3`), ignored by git and read-only, with a
+  `.generated` sha256 stamp. A hand edit stops the next build: move the change to its source (`where` tells which).
+  It is written by `./dev.py front build`, the npm pre-hooks of `dev`/`build`/`build:debug`/`check`/`check:watch`
+  (`frontend/scripts/i18n-catalog-build.mjs`, also `npm run i18n:build`), Vitest's `globalSetup`, `./dev.py lint
+  --dead-code` and the AI Export probe. A running `npm run dev` does not see a hand edit of a source until
+  `./dev.py i18n build` (the CLI commands rebuild by themselves).
+- **Sources**:
+  - `frontend/src/lib/i18n/base/<lang>.json` — the generic vocabulary (`common`, `datePicker`, `csvImport`,
+    `dataEditor`, `sectors`, `table`, …): it owns every key nobody else claims;
+  - `frontend/src/lib/i18n/<subsystem>/<lang>.json` — one folder per subsystem (`pacAllocator`, `risk`,
+    `importWizard`, `assets`, `brokers`, `transactions`, `onboarding`, `settings`, `aiExport`, `charts`, `dashboard`,
+    `tools`, `fx`, `files`, `app`, `auth`, `dataQuality`), whose `prefixes.txt` declares the key prefixes it owns;
+  - `backend/app/services/<family>/<plugin>/i18n/<lang>.json` — a plugin's own texts, with absolute keys
+    (`{"brimPlugins": {"broker_x": {"name": …}}}`): BRIM names and descriptions, signal and risk-analytic texts,
+    an asset provider's `providerParams`, a tool's name and description.
+- **Ownership**: a plugin owns exactly the keys its fragment holds; otherwise the subsystem with the **longest
+  declared prefix**; otherwise `base`. A key in two sources, a string in one and a branch in another, or a key outside
+  the folder its prefix names is an error. Keys several plugins share (`signals.reference.*`,
+  `signals.riskRollingReturn.*`) and the `risk.warnings.*` vocabulary stay in their subsystem.
+- **Languages**: EN is mandatory. In a build a translation a source lacks falls back to English with a warning;
+  `./dev.py i18n check`, the audit and the gates fail on it. Backend tests read the catalogue with
+  `scripts.i18n_catalog.load_catalog(lang, fallback=False)`, never from a frontend build.
+- **Branches on an older layout** (one `<lang>.json`, or `base/` before the split): keep our side of the catalogue in
+  the merge, then `./dev.py i18n absorb --base <merge-base> --theirs <their commit>` and `check --against <their
+  commit>`. A value both sides changed is a conflict: listed, nothing written, unless `--prefer ours|theirs`.
+- Library: svelte-i18n. Languages: EN (primary), IT, FR, ES. Read the live key count from `./dev.py i18n audit`.
+
+## Gates
+
+- `./dev.py test … utils gate-i18n-catalog` — the library's rules, both ways, and the repository's sources (strict
+  merge, four languages, generator format, ignore rules).
+- `./dev.py test … utils gate-plugin-i18n-ownership` — read from the registries: every plugin's keys live in its own
+  `i18n/` fragment, and no fragment holds another plugin's or a shared key (R1–R4).
+- `./dev.py test … utils gate-i18n-usage` — the audit's *used / dead / not verified* classifier (below).
 
 ## Locale File Format — canonical form is `indent=2`
 
-The canonical serialization is the one `./dev.py i18n` produces:
-**`indent=2`, `ensure_ascii=False`** (accented characters stay literal), trailing newline.
-Prettier is configured to agree with it byte-for-byte:
+The canonical serialization is the one `./dev.py i18n` (`scripts/i18n_catalog.py`) produces, for every source and
+for the generated catalogue: **`indent=2`, `ensure_ascii=False`** (accented characters stay literal), trailing
+newline; each source keeps its own key order in each language. The gate `utils gate-i18n-catalog` fails on a source in
+any other form. Prettier is configured to agree with it byte-for-byte on the sources under `src/`:
 
 - `frontend/.prettierrc` has a `*.json` override setting `tabWidth: 2` (the global
   `tabWidth` is 4, which is correct for `.ts`/`.svelte` but wrong for these files).
 - `frontend/package.json` includes `json` in the `format`/`format:check` globs, so
-  `./dev.py front format` and `./dev.py front check` actually cover the locale files.
-  (`src/lib/api/openapi.json` is excluded via `.prettierignore`.)
+  `./dev.py front format` and `./dev.py front check` actually cover the locale sources.
+  (`src/lib/api/openapi.json` and the generated `src/lib/i18n/*.json` are excluded via `.prettierignore`.)
 
 **Why this matters**: before this alignment, `.json` was not in the format glob at all,
 so the locale files were never checked by Prettier. Anyone editing them by hand — rather
@@ -59,11 +102,12 @@ few keys. Aligning Prettier to the tool means both paths converge on one form.
 the diff size and key parity:
 
 ```bash
-git --no-pager diff --stat -- 'frontend/src/lib/i18n/*.json'   # should be small
+git --no-pager diff --stat -- frontend/src/lib/i18n 'backend/app/services/*/*/i18n'   # should be small
+./dev.py i18n check                                                                  # strict: same keys in 4 languages
 ```
 
-A key removed from some languages but not others is worse than an unused key — always
-verify all four locales end up with the same key set.
+A key removed from some languages but not others is worse than an unused key — `./dev.py i18n check` (and the audit)
+fail on it, source by source.
 
 ## Key Naming Conventions
 
@@ -81,20 +125,28 @@ whether its text happens to match another key elsewhere:
 
 `transactions.fields.*`, `transactions.types.*`, `transactions.errors.*`, `transactions.fieldErrors.*`,
 `assets.types.*`, `assets.events.types.*`, `assetDetail.eventType.*`, `assetDetail.eventTypeTooltip.*`,
-`chartSettings.params.*`, `chartSettings.signals.*`, `sectors.*`, `settings.globalSettingCategories.*`,
+`chartSettings.params.*`, `sectors.*`, `settings.globalSettingCategories.*`,
 `settings.globalSettingDescriptions.*`, `settings.globalSettingNames.*`, `settings.globalSettingUnits.*`,
 `settings.global.scheduler.historyDays*` (day-of-week lookup), `importWizard.confidence.*`,
 `importWizard.confidenceTip.*`, `importWizard.fileStatus.*`, `fileStatus.*`, `dataQuality.cta.*`,
-`auth.passwordStrength.*` (incl. `.rules.*`).
+`auth.passwordStrength.*` (incl. `.rules.*`), `providerErrors.*` (backend error codes),
+`aiExport.additionalData.reason.*` (backend f-string, `ai_export/analyses/catalog.py:77`).
+
+`chartSettings.signals.*` is **not** a dynamic prefix any more: its keys are literals in
+`lib/charts/signals/registry.ts` (`displayNameKey`), plus the `Full` suffix appended at
+`ChartSignalsSection.svelte:142` (`` `${definition.displayNameKey}Full` ``). Merge one only by updating
+the registry. The `*Abbr` keys had no reader and were removed in the Release 2 audit.
 
 **Partially-protected namespaces — do NOT blanket-protect the whole prefix, only these specific keys**
 (discovered during round 2 of the 2026-07 campaign; the audit tool's dynamic-prefix detector flags the
 *whole* bare namespace as "potentially used" if even ONE key under it is referenced dynamically, which
 is overly conservative for merge purposes — verify per-key with grep, don't assume):
-- `importWizard.*` bare namespace: only `importWizard.step1Title/.step2Title/.step3Title/.step4Title`
-  are truly dynamic (`` $t(`importWizard.${stepKey}`) `` over a fixed `STEPS` array in
-  `ImportWizardModal.svelte`). Every other bare `importWizard.*` key (`.back`, `.cancel`, `.continue`,
-  `.import`, `.sourceFile`, etc.) is a literal call site and safe to merge.
+- `importWizard.*` bare namespace: only the step titles are truly dynamic —
+  `step1Title`, `step2Title`, `step3Title`, `step4Title`, `stepAssetsTitle`, `stepDuplicatesTitle`,
+  `stepFixTitle` and `reportSet.gapFix.stepTitle`, read as `` $t(`importWizard.${step.titleKey}`) `` over the
+  fixed `STEP_DEFS` list in `ImportWizardModal.svelte` (`titleKey:` values). Every other bare
+  `importWizard.*` key (`.back`, `.cancel`, `.continue`, `.import`, `.sourceFile`, etc.) is a literal
+  call site and safe to merge.
 - `chartSettings.*` bare namespace: only `chartSettings.badgeDividend/.badgeInterest/.badgePriceAdjustment/
   .badgeMaturitySettlement/.badgeSplit/.badgePoints` are truly dynamic (`` $t(`chartSettings.${EVENT_BADGE_KEY[evType] ?? 'badgePoints'}`) ``
   in `ChartSignalsSection.svelte`). Other bare `chartSettings.*` keys (`.apply`, `.discard`, `.preview`,
@@ -105,31 +157,79 @@ is overly conservative for merge purposes — verify per-key with grep, don't as
   if you also update that array's literal entries, but low value (short generic words), generally left
   alone.
 
-## Backend-Driven Dynamic Keys (auto-detected since 2026-07 tool fix)
+## How the Audit Decides "Used" (since the Release 2 audit, 2026-10)
 
-The backend can emit an i18n key as **data**, not just the frontend calling it statically. Confirmed
-pattern: `backend/app/services/portfolio_engine.py` / `portfolio_service.py` set a
-`message_i18n_key="dataQuality.xxx"` field on API response objects (data-quality issues), consumed
-dynamically via `$_(issue.message_i18n_key, {values: ...})` in
-`frontend/src/lib/components/ui/feedback/DataQualityBanner.svelte`.
+`./dev.py i18n audit` gives each key one of three verdicts (`scripts/i18n_usage.py`, gate
+`./dev.py test … utils gate-i18n-usage`):
 
-`./dev.py i18n audit` now automatically scans `backend/**/*.py` for any `..._i18n_key="ns.key"` /
-`'ns.key'` literal assignment (see `find_used_keys_in_backend()` in `frontend/scripts/i18n-audit.py`)
-and treats those keys as used — no manual cross-checking needed anymore. If you introduce a NEW
-backend-driven key mechanism with a different field-name suffix than `..._i18n_key`, update that
-function's regex accordingly.
+- **used** — proven: a literal, a resolved template, or a member the producer or the building file names;
+- **not verified** — under a real family (or only under a legacy truncated prefix), final segment built
+  at runtime and named nowhere. **Not evidence of death** — never remove one without a per-key grep;
+- **dead** — no evidence anywhere. The only actionable list.
 
-Similarly, `` $t(`prefix.wordSuffix${var}` `` `` `` -style camelCase-continuation dynamic templates
-(no dot before the interpolation — e.g. `settings.global.scheduler.historyDays${day}` in
-`SchedulerConfigModal.svelte`) are now detected too (see the second `patterns_dynamic` regex in
-`find_used_keys_in_sources()`), in addition to the classic dot-anchored `` `prefix.${var}` `` form.
+What counts as evidence:
+
+- **Product sources only.** `*.test.ts`, `*.spec.ts`, `__tests__/` and `__mocks__/` prove nothing: a key
+  only a test names is dead to every user (774 strings and 19 prefixes came only from tests before).
+  Generated API clients (`lib/api/generated.ts`, `generated-tools.ts`, `*.generated.ts`) prove nothing
+  either: they exist only after `api sync`, so a verdict resting on them would flip on a fresh clone.
+- **Any whole-key literal**, quoted or in a backtick without interpolation, whoever receives it:
+  `translateOr($_, 'k', …)`, `label('k', …)`, `translate('k')`, `tr('k', …)`, `afterCopyKey: 'k'`,
+  ternaries across lines, arrays, and **backend** literals (dictionaries such as
+  `_message_key_for_issue` in `lots_analysis_service.py`, `..._i18n_key=` fields, `x-i18n-key` schemas).
+- **Templates**, nested ones included (`` `…${$t(`ns.band.${b}`)}…` ``): constants, literal
+  conditionals, typed unions and single-literal parameter types (`prefix: 'errors'`) are expanded;
+  camelCase continuations (`historyDays${day}`) and `'ns.cat.' + code` concatenations are families.
+- **Family members**: the producer's vocabulary (any identifier case, Title Case names without spaces —
+  `"Health Care"` → `HealthCare` — dotted codes, codes beginning with a digit such as `"3m"`, matched in
+  any case: `IN_TRANSIT` proves `in_transit`); the `titleKey:` values or map values the interpolation
+  itself names; and, for narrow families only (two dots or a camelCase continuation), any word the
+  **building file** quotes (`text('compute.title')` over `` `${KEY}.${key}` ``) **or a module it imports
+  directly** (the bands of `correlationHelpers.ts` for the heatmap). One hop only: a word two imports
+  away, or in a neighbour nobody imports, proves nothing, and a wide family (`ns.${x}`) reads no import.
+- **Shapes**: a template with several runtime segments, or one before a literal tail
+  (`` `assets.providerParams.${code}.${kind}.${field.key}` ``, `` `assets.panels.${panel.id}Hint` ``),
+  keeps its shape. A key with exactly that shape is used when every slot is a word of the building file,
+  of its direct imports or of the producer; a typed-union slot takes only its members. One slot named
+  nowhere leaves the key not verified, and a template without a dotted literal head has no shape.
+- **Backend f-string families** (`f"aiExport.additionalData.reason.{reason}"`) and suffixes
+  (`` `${displayNameKey}Full` ``).
+- A backend family whose namespace exists but holds no key is listed under 👻 (today:
+  `tools.allocation.constraints.` ← `pac_allocator/evaluator.py:968`, a field nobody reads).
+- A key that only **unreferenced sources** keep alive is listed under 📦, with the verdict it would get
+  without them. A source is unreferenced when no SvelteKit entry (route files, hooks, service worker)
+  reaches it through static or dynamic imports. Informational: decide whether the source is dead, then
+  remove it with its keys (`AgeLabel.svelte` and its five `planner.age.*` keys went this way). Today
+  `onboardingTourSurfaces.svelte.ts` and `stores/core/EditBuffer.ts` are unreferenced but read no key.
+
+Known limit: the backend vocabulary is shared by every family, so a common word ("assets") can still
+make a dead key look used under a family (`…planner.result.sections.assets` was removed by hand). And
+a member two imports away stays not verified (`chartSettings.params.amplitude`, `histogramScale`).
+
+If you introduce a NEW backend-driven key mechanism, make sure the key is a literal somewhere, or a
+dotted f-string head: then the audit sees it with no tool change.
 
 ## Rules for New Keys
 
+0. **Let the tool place it**: `./dev.py i18n where <key>` names the source a new key goes to, and `./dev.py i18n add`
+   writes it there. A plugin's own texts go in its fragment (`--into <family>/<plugin>`): under a branch only plugins
+   hold (`brimPlugins.<new>`, `risk.analytics.<new>`, `assets.providerParams.<new>`) `add` refuses to guess and asks
+   for `--into`. A new top-level namespace lands in `base` with a notice: keep it there only if it is generic,
+   otherwise `--into <subsystem>` (or create the subsystem's folder with its `prefixes.txt`).
 1. **Search first**: check if the value already exists under `common.*`
 2. **Generic values** → use `common.*`
 3. **Feature-specific** → use the feature namespace
 4. **Never duplicate** a `common.*` value unless the meaning is genuinely different
+5. **A locale-sensitive ICU message must differ across locales.** svelte-i18n 4.0.1 caches each
+   formatter by message text only (`getMessageFormatter`, `runtime.js:383-392`, `:496`), so a
+   `plural`/`selectordinal`/`number`/`date`/`time` text byte-identical in two catalogues keeps the rules
+   of whichever locale compiled it first after an in-place language switch (`0 position` vs
+   `0 positions`). Make the texts differ — e.g. FR adds a `many` branch identical to `other`, which
+   changes no rendering. Gate: `frontend/src/lib/i18n/catalogIcuLocale.test.ts`.
+6. **Count from the digits shown**: an ICU `count` next to a formatted decimal comes from
+   `plannerPlainDecimalCount` / `plannerQuantityCount` (`planner/format.ts`), never from `Number(…)`
+   (`"1.00000000000000000001"` is plural; a masked value is plural). Gate:
+   `planner/pluralCountSites.test.ts`.
 
 ## Duplicate Strategy
 
@@ -151,11 +251,12 @@ Consolidate under `common.*` only when **meaning, context AND value match in all
 - `nav.settings` vs `sharedResource.settings` — ES diverges: "Configuración" vs "Ajustes".
 - `chartSettings.discard` vs `common.discard` — FR diverges: "Rejeter" vs "Abandonner".
 
-**Signal abbreviations (intentional):**
-- `chartSettings.signals.ema` / `.emaAbbr` — Name may become "Exponential Moving Average" while abbreviation stays "EMA". Consistent pattern for all signals.
+**Signal name and long name:**
+- `chartSettings.signals.<signal>` / `<signal>Full` — short name vs long name of a local signal; the
+  `Full` key is read by suffix (`ChartSignalsSection.svelte:142`). Backend plugins carry their own
+  `signals.<plugin>.{name,output}`, often identical ("EMA"/"EMA"): metadata emitted by the backend, keep.
 
 **Discovered during 2026-07 cleanup campaign (do NOT re-consolidate):**
-- `dashboard.holdings` vs `dashboard.positions` — "Holdings" and "Positions" are distinct portfolio concepts, not interchangeable despite similar translations.
 - `transactions.promote.fieldTags` vs `transactions.fields.tags` / `transactions.form.tags` — promote-merge UI field label vs generic field/form label; `transactions.fields.*` is dynamic-prefix protected anyway.
 - `transactions.linkTooltip.generic` vs `transactions.types.CASH_TRANSFER` — generic tooltip copy vs the actual transaction-type label (dynamic-prefix protected).
 - `assets.confirm.confirmChange` vs `assets.confirm.identifierChanged` — generic confirm-change prompt vs a specific "identifier changed" warning; same FR text today but distinct triggers.
@@ -163,7 +264,7 @@ Consolidate under `common.*` only when **meaning, context AND value match in all
 - `assetDetail.eventType.SPLIT` vs `assets.schedule.split` — corporate-action event type (dynamic-prefix protected) vs a scheduler action verb.
 - `transactions.form.transferCashTitle` ("Wire Transfer") vs `transactions.types.CASH_TRANSFER` ("Cash Transfer") — modal title vs transaction-type label; kept separate pending a possible future copy-consistency pass (not a merge candidate as-is).
 
-**New canonical `common.*` keys created by the 2026-07 merge pass** (prefer these over creating new feature-namespaced duplicates): `common.broker`, `common.provider`, `common.providers`, `common.active`, `common.seeAll`, `common.from`, `common.to`, `common.tags`, `common.preview`, `common.import`, `common.rowN`, `common.saveCancelled`, `common.assets`, `common.recentTransactions`, `common.addRow`, `common.clearSelection`, `common.syncFxRates`, `common.linkedEvent`, `common.currentPrice`, `common.resetAllChanges`, `common.apply`, `common.deselectAll`, `common.discardImport` (in addition to the pre-existing `common.description`, `common.type`, `common.date`, `common.status`, `common.error`, `common.cancel`, `common.resetAll` — note `common.resetAll` means "Reset All **to Defaults**" (settings-specific) and is NOT the same as `common.resetAllChanges` = plain "Reset All" button, don't conflate them).
+**New canonical `common.*` keys created by the 2026-07 merge pass** (prefer these over creating new feature-namespaced duplicates): `common.broker`, `common.provider`, `common.providers`, `common.active`, `common.from`, `common.to`, `common.tags`, `common.preview`, `common.import`, `common.rowN`, `common.saveCancelled`, `common.assets`, `common.addRow`, `common.clearSelection`, `common.syncFxRates`, `common.linkedEvent`, `common.currentPrice`, `common.resetAllChanges`, `common.apply`, `common.deselectAll`, `common.discardImport` (in addition to the pre-existing `common.description`, `common.type`, `common.date`, `common.status`, `common.error`, `common.cancel`, `common.resetAll` — note `common.resetAll` means "Reset All **to Defaults**" (settings-specific) and is NOT the same as `common.resetAllChanges` = plain "Reset All" button, don't conflate them). `common.seeAll` and `common.recentTransactions` lost their last reader and were removed in the Release 2 audit: re-add them only with a caller.
 
 **Round 2 additional accepted-duplicates (kept separate on purpose):**
 - `dashboard.capitalBaseline` / `.capitalBaselineTooltip` / `dashboard.netDepositedCapital` — legend label vs tooltip-line label vs a distinct net-deposited metric; same text today but different UI roles, may diverge later (same pattern as signal name/abbr).
@@ -171,3 +272,19 @@ Consolidate under `common.*` only when **meaning, context AND value match in all
 - `assets.schedule.currency` vs `settings.categoryCurrency` — investment-schedule form field label vs a settings-tab category name; both happen to use the ES "Moneda" wording today but serve different UI roles.
 - `assets.sync.assetsCount` (lowercase "assets", used inline like "12 assets") vs `common.assets` (Title-case "Assets", section/page heading) — casing carries grammatical meaning (mid-sentence count vs heading), not a mergeable pair despite case-insensitive match.
 - `importWizard.sourceFile` ("File") vs `uploads.file` ("file") — same case-sensitivity distinction as above.
+
+**Release 2 audit (2026-10) — condensed, prefer the surviving keys:**
+- `uploads.previewZoomIn` / `.previewZoomOut` → `uploads.zoomIn` / `.zoomOut` (file preview and image cropper);
+- `uploads.size` → `uploads.fileSize` (asset picker, file table, file edit modal);
+- `assetDetail.editorTip{Desktop,Mobile}` and `fxDetail.editorTip{Desktop,Mobile}` → `dataEditor.editorTip{Desktop,Mobile}`
+  (the same data-editor tip on the asset and FX pages);
+- `brokers.lots.modal.{currentValue,fifoPnl,openQuantity,openReturn,originalQuantity,totalPnl}` and
+  `brokers.lots.tooltip.totalPnl` → `brokers.lots.{…}` (one lot field, one label, in the custody modal,
+  the lots table and the chart tooltips).
+
+Of the 112 groups identical in all four languages, the rest were kept on purpose: backend signal-plugin
+metadata (`signals.<plugin>.{name,output}`, «Overbought»/«Oversold»/«Neutral» per plugin), the PAC
+planner's per-module namespaces, generic words in different roles («Period», «Type», «Status», «Price»),
+and the `risk.*` and `dashboard.*` groups, kept separate while those areas were under active work.
+(`dashboard.holdings` vs `dashboard.positions` no longer applies: `dashboard.holdings` had no reader
+and was removed.)

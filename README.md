@@ -17,8 +17,8 @@
   <a href="https://github.com/Librefolio/LibreFolio/actions/workflows/release.yml"><img src="https://github.com/Librefolio/LibreFolio/actions/workflows/release.yml/badge.svg" alt="Build Status"></a>
   <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/github/v/release/Librefolio/LibreFolio?label=changelog&color=blue" alt="Changelog"></a>
-  <a href="https://github.com/orgs/Librefolio/packages/container/package/librefolio"><img src="https://img.shields.io/badge/container-ghcr.io-blue?logo=github" alt="Docker Registry"></a>
   <a href="https://github.com/Librefolio/LibreFolio/stargazers"><img src="https://img.shields.io/github/stars/Librefolio/LibreFolio.svg" alt="GitHub stars"></a>
+  <a href="https://github.com/Librefolio/LibreFolio/pkgs/container/librefolio"><img src="https://ghcr-badge.elias.eu.org/shield/Librefolio/LibreFolio/librefolio" alt="GHCR downloads"></a>
 </p>
 
 ---
@@ -30,6 +30,20 @@ Your data stays on your server. No third-party cloud. No tracking.
 📚 **Full Documentation**: [https://librefolio.github.io/LibreFolio/](https://librefolio.github.io/LibreFolio/)
 
 📋 **What's new**: [Changelog](CHANGELOG.md) · [Releases](https://github.com/Librefolio/LibreFolio/releases)
+
+---
+
+## Star History
+
+<p align="center">
+  <a href="https://www.star-history.com/?repos=librefolio%2Flibrefolio&type=date&legend=top-left">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=librefolio/librefolio&type=date&theme=dark&legend=top-left" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=librefolio/librefolio&type=date&legend=top-left" />
+      <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=librefolio/librefolio&type=date&legend=top-left" />
+    </picture>
+  </a>
+</p>
 
 ---
 
@@ -114,7 +128,7 @@ Run LibreFolio using the official pre-built image. No development tools or compi
 
 Access: **http://localhost:6040**. The first registered user automatically becomes the administrator.
 
-> 🪶 **Image variants**: `latest` is the full image (docs images included, fully offline). `latest-light` is the same application **without the documentation images** — several hundred MB lighter. Docs text pages are still bundled; documentation images load on demand from the online docs site, so viewing them requires an internet connection. To use it, set `image: ghcr.io/librefolio/librefolio:latest-light` in `docker-compose.yml`.
+> 🪶 **Image variants**: `latest` is the **light** image: the same application **without the documentation screenshots**, which load on demand from the online docs site (so viewing them requires an internet connection); the documentation text pages are still bundled. Each release is also published as `X.Y.Z` — the **full** image, screenshots included, documentation fully offline — and `X.Y.Z-light`. Version tags have no `v` (e.g. `1.1.0`). See [Image Variants](https://librefolio.github.io/LibreFolio/user/installation/#image-variants-full-and-light).
 
 For complete guide, auto-updates (Watchtower), and backups, see the [🐳 User Installation Manual](https://librefolio.github.io/LibreFolio/user/installation/).
 

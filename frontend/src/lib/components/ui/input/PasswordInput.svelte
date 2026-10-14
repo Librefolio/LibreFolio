@@ -10,6 +10,7 @@
     export let autocomplete: AutoFill = 'current-password';
     export let hasError: boolean = false;
     export let id: string = '';
+    export let name: string = '';
     export let testId: string = '';
 
     // Internal state
@@ -22,6 +23,7 @@
 
 <div class="relative">
     <input
+        autocapitalize="none"
         {autocomplete}
         bind:value
         class="w-full px-4 py-3 pr-12 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
@@ -33,11 +35,13 @@
         class:focus:ring-red-400={hasError}
         data-testid={testId || undefined}
         {disabled}
-        {id}
+        id={id || undefined}
+        name={name || undefined}
         on:blur
         on:input
         on:keydown
         {placeholder}
+        spellcheck="false"
         type={showPassword ? 'text' : 'password'}
     />
     <button class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors p-1" {disabled} on:click={toggleVisibility} tabindex="-1" title={showPassword ? 'Hide password' : 'Show password'} type="button">

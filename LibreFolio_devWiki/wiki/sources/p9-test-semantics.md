@@ -54,7 +54,7 @@ P9 repeatedly refused to accept a green as evidence. Two habits carried it:
 
 | Role | Path |
 |------|------|
-| Cache wrapper | `backend/app/utils/cache_utils.py` |
+| Cache wrapper | `backend/app/utils/runtime/cache.py` |
 | Consolidation and chunking | `scripts/test_runner/_consolidate.py` |
 | Triage protocol | `.github/skills/devpy-tools/test-triage/SKILL.md` |
 | Original plan | `LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-p9-test-semantics-COMPLETO.md` |

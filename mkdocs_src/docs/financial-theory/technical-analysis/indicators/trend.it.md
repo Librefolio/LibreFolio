@@ -1,6 +1,6 @@
 # 🧭 Indicatori di Tendenza
 
-Gli indicatori di tendenza rispondono alla domanda più basilare nell'analisi tecnica: *"in quale direzione sta andando effettivamente il prezzo, una volta filtrato il rumore quotidiano?"* Agiscono tutti come **filtri passa-basso** sulla serie dei prezzi, smussando le fluttuazioni a breve termine per rivelare la direzione sottostante.
+Gli indicatori di tendenza rispondono alla domanda più basilare nell'analisi tecnica: *"in quale direzione sta andando effettivamente il prezzo, una volta filtrato il rumore da una seduta all'altra?"* Agiscono tutti come **filtri passa-basso** sulla serie dei prezzi, smussando le fluttuazioni a breve termine per rivelare la direzione sottostante.
 
 ---
 
@@ -44,13 +44,13 @@ Un indicatore di tendenza stima la **media locale** del processo dei prezzi (o, 
 
 ```mermaid
 flowchart LR
- P["💹 Serie OHLC / Prezzo"] --> EMA["📉 EMA"]
- P --> SMA["📏 SMA"]
- P --> KAMA["🛣️ KAMA"]
- P --> ADX["💹 ADX (+DI/-DI)"]
- P --> AROON["⏱️ Aroon"]
- EMA & SMA & KAMA --> DIR["🧭 Stima direzione"]
- ADX & AROON --> STR["💪 Stima forza / tempistica"]
+    P["💹 Serie OHLC / Prezzo"] --> EMA["📉 EMA"]
+    P --> SMA["📏 SMA"]
+    P --> KAMA["🛣️ KAMA"]
+    P --> ADX["💹 ADX (+DI/-DI)"]
+    P --> AROON["⏱️ Aroon"]
+    EMA & SMA & KAMA --> DIR["🧭 Stima direzione"]
+    ADX & AROON --> STR["💪 Stima forza / tempistica"]
 ```
 
 !!! info "Direzione vs Forza"

@@ -416,6 +416,21 @@ class TestCashRequiredTypes:
                 date=date.today(),
             )
 
+    @pytest.mark.parametrize(
+        "transaction_type",
+        [TransactionType.DIVIDEND, TransactionType.INTEREST],
+    )
+    def test_income_zero_cash_valid(self, transaction_type):
+        """TX-S-056: Zero cash stays valid for retained YOC `net_zero` semantics."""
+        tx = TXCreateItem(
+            broker_id=1,
+            asset_id=1,
+            type=transaction_type,
+            date=date.today(),
+            cash=Currency(code="EUR", amount=Decimal("0")),
+        )
+        assert tx.cash.amount == Decimal("0")
+
 
 # ============================================================================
 # 1.7 ASSET OPTIONAL TYPES

@@ -20,8 +20,11 @@ These Playwright tests cover fundamental UI components that are used across the 
 # Run all front-utility tests
 ./dev.py test front-utility all
 
-# List available tests
-./dev.py test front-utility --list
+# List the units (actions), each with its description
+./dev.py test front-utility --help
+
+# List the Playwright tests of every unit, without running them (Vitest files are not listed)
+./dev.py test front-utility all --list
 
 # Run a specific test file
 ./dev.py test front-utility auth
