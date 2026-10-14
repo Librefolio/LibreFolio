@@ -35,9 +35,11 @@ Yield on Cost and `price_change_1d`, which are ratios and must keep their value.
   error and writes nothing; its messages carry no values. A test file and a runner entry,
   `utils normalize-dashboard-fixture`, come with it.
 
-## Still open
+## The privacy question
 
-A uniform scale leaves recoverable ratios: the developer's decision is pending.
+A uniform scale leaves recoverable ratios. The developer decided on 2026-10-14 — option (a) — that the fixture is
+published as it is. M's shots of the allocation and positions groups, taken again after the cure, show the stacks at
+100 % (2026-10-14, 10 of 10); the journal and the backlog carry no figure of the fixture.
 
 ## Prevention
 
