@@ -33,7 +33,7 @@ from backend.app.schemas.settings import (
     UserSettingsUpdate,
     validate_global_setting_value,
 )
-from backend.app.services.global_settings_service import get_setting_value
+from backend.app.services.accounts.global_settings_service import get_setting_value
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
