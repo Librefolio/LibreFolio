@@ -16,7 +16,7 @@ Una release di sicurezza: aggiorna al più presto ogni installazione 1.2.0, e og
 #### 🔒 Sicurezza
 
 - Il server tiene ogni file che serve dentro la cartella a cui appartiene. Un indirizzo costruito ad arte poteva far restituire alle pagine dell'app e della documentazione file presi da altre parti del server, senza accedere; era possibile dalla v0.4.24. Le icone dei plugin, che avevano già un controllo, ora usano lo stesso controllo più rigoroso.
-- I file caricati e i report dei broker si aprono nel browser solo come contenuto che non può essere eseguito. L'anteprima testuale di un file caricato è sempre testo semplice, e un report di un broker si apre direttamente solo se è un PDF, un'immagine, testo semplice, CSV o JSON; ogni altro tipo viene scaricato. Prima, un utente con accesso poteva caricare una pagina web che veniva eseguita per un altro utente che ne apriva l'anteprima.
+- I file caricati e i report dei broker si aprono nel browser solo come contenuto che non può essere eseguito. L'anteprima testuale di un file caricato è sempre testo semplice, e un report di un broker si apre direttamente solo se è un PDF, un'immagine PNG, JPEG, GIF, WebP o BMP, testo semplice, CSV o JSON; ogni altro tipo viene scaricato. Prima, un utente con accesso poteva caricare una pagina web che veniva eseguita per un altro utente che ne apriva l'anteprima.
 
 ---
 

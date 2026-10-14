@@ -16,7 +16,7 @@ A security release: update every 1.2.0 installation, and any older one, as soon 
 #### 🔒 Security
 
 - The server keeps every file it serves inside the folder it belongs to. A crafted address could make the pages of the app and of the documentation return files from elsewhere on the server, without signing in; this was possible since v0.4.24. The plugin icons, which already had a check, now use the same stricter one.
-- Uploaded files and broker reports open in the browser only as content that cannot run. The text preview of an uploaded file is always plain text, and a broker report opens in place only when it is a PDF, an image, plain text, CSV or JSON; every other type is downloaded. Before, a signed-in user could upload a web page that ran for another user who opened its preview.
+- Uploaded files and broker reports open in the browser only as content that cannot run. The text preview of an uploaded file is always plain text, and a broker report opens in place only when it is a PDF, a PNG, JPEG, GIF, WebP or BMP picture, plain text, CSV or JSON; every other type is downloaded. Before, a signed-in user could upload a web page that ran for another user who opened its preview.
 
 ---
 
