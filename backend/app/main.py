@@ -5,7 +5,6 @@ Main entry point for the backend API.
 
 import asyncio
 import contextlib
-import os
 import sqlite3
 import subprocess
 import sys
@@ -67,7 +66,7 @@ from backend.app.utils.runtime.version import get_git_version
 # NOTE: Do NOT check sys.argv here - it causes issues when this module is imported
 # by other scripts (like test_runner). The --test flag is handled by dev.py which
 # sets LIBREFOLIO_TEST_MODE env var before starting uvicorn.
-if os.environ.get("LIBREFOLIO_TEST_MODE", "").lower() in ("1", "true", "yes"):
+if is_test_mode():
     set_test_mode(True)
     print("[LibreFolio] 🧪 Test mode enabled (LIBREFOLIO_TEST_MODE env var)")
 
