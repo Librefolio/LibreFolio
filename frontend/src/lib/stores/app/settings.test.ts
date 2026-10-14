@@ -15,7 +15,7 @@
  *
  * The second describe is the one place this file loads. It pins how `globalSettings.load()` reads `enable_registration`
  * (K, step 22), the setting the login page follows to offer «Register here»: as the backend reads a `bool` setting
- * (`_convert_value` in `backend/app/services/global_settings_service.py`), true exactly when `value.lower()` is `true`,
+ * (`_convert_value` in `backend/app/services/accounts/global_settings_service.py`), true exactly when `value.lower()` is `true`,
  * `1`, `yes` or `on` and false for anything else, and open when the answer has no such row, the backend default
  * (`GLOBAL_SETTINGS_DEFAULTS`). `GET /settings/global` is answered one call at a time (`mockResolvedValueOnce`); the
  * client fails again right after.

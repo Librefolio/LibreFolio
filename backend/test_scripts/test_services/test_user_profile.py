@@ -283,8 +283,8 @@ from sqlalchemy import delete, select
 from backend.app.db.models import Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.brokers import BRCreateItem, BRDeleteItem
 from backend.app.schemas.common import Currency
-from backend.app.services.broker_service import BrokerService
-from backend.app.services.transaction_service import TransactionService
+from backend.app.services.brokers.broker_service import BrokerService
+from backend.app.services.transactions.transaction_service import TransactionService
 
 
 class _InjectedFailure(RuntimeError):

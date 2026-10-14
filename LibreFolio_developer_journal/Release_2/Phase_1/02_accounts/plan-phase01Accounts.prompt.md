@@ -628,7 +628,7 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 
 ## 17. Avanzamento
 
-### A1 — servizi account in `services/accounts/` (CP1) — in corso
+### A1 — servizi account in `services/accounts/` (CP1) ✅ (2026-10-14, integrato il 15/10 in `769cc31cb`)
 
 #### A1.0 — Basi prima delle modifiche ✅ (2026-10-14)
 > **Note implementazione**:
@@ -761,6 +761,20 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > prima e dopo); per avere una base dei conteggi della suite avrei dovuto annullare lo spostamento. Per una rinomina
 > pura, raccolta uguale e zero rossi sono la prova.
 
+#### A1.8 — Verifica facoltativa: cosa vede oggi un utente nuovo ✅ (2026-10-14)
+> **Note implementazione**, in sola lettura. Il developer pensava «solo nomi broker e nomi utenti». In realtà un utente
+> loggato, anche senza broker, vede:
+> - **utenti**: con `GET /users/search` username e avatar di tutti gli utenti attivi; con `?admins=true` anche
+>   l'**email degli admin** (`schemas/users.py:22`, per il suggerimento «chiedi all'admin» degli aggiornamenti);
+> - **broker**: con `GET /brokers?include_inaccessible=true` id, nome e icona di **tutti** i broker a cui non ha
+>   accesso (`broker_service.py:318-328`, il «discovery payload»);
+> - **file caricati**: `GET /uploads` elenca i file di tutti (con `uploaded_by_user_id`), e dettaglio, anteprima e
+>   download (`GET /uploads/file/{id}`) sono aperti a ogni utente loggato. Solo la cancellazione (`uploads.py:322`)
+>   controlla proprietario o admin;
+> - **catalogo condiviso**, per scelta di prodotto: tutti gli asset con prezzi ed eventi, le coppie FX e i tassi;
+> - **senza login**: `GET /settings/global` (già segnalato, §2).
+>
+> Transazioni, broker accessibili e report BRIM restano legati all'accesso al broker.
 ### Checkpoint A1 (CP1) 🧊 (2026-10-14, notte) — FROZEN, in attesa del commit del coordinatore
 > - **Delta** (non in stage):
 >   - 6 file rinominati: `backend/app/services/{auth,user,settings,global_settings,onboarding,donation_popup}_service.py`
@@ -806,17 +820,188 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   `PasswordChangeModal`, `RegisterCard` e `validate_password` di `scripts/user_cli.py`; l'API chiede solo 8
 >   caratteri. Va nel backlog come A-6.
 
-#### A1.8 — Verifica facoltativa: cosa vede oggi un utente nuovo ✅ (2026-10-14)
-> **Note implementazione**, in sola lettura. Il developer pensava «solo nomi broker e nomi utenti». In realtà un utente
-> loggato, anche senza broker, vede:
-> - **utenti**: con `GET /users/search` username e avatar di tutti gli utenti attivi; con `?admins=true` anche
->   l'**email degli admin** (`schemas/users.py:22`, per il suggerimento «chiedi all'admin» degli aggiornamenti);
-> - **broker**: con `GET /brokers?include_inaccessible=true` id, nome e icona di **tutti** i broker a cui non ha
->   accesso (`broker_service.py:318-328`, il «discovery payload»);
-> - **file caricati**: `GET /uploads` elenca i file di tutti (con `uploaded_by_user_id`), e dettaglio, anteprima e
->   download (`GET /uploads/file/{id}`) sono aperti a ogni utente loggato. Solo la cancellazione (`uploads.py:322`)
->   controlla proprietario o admin;
-> - **catalogo condiviso**, per scelta di prodotto: tutti gli asset con prezzi ed eventi, le coppie FX e i tassi;
-> - **senza login**: `GET /settings/global` (già segnalato, §2).
+
+### A2 — frontend in `lib/features/` (CP2) — in corso
+
+#### A2.0 — Via, inventario e risposte ✅ (2026-10-15)
+> **Note implementazione**:
+> - **Via del coordinatore** (15/10, 00:26), alla lettera: «**A1 è in `dev_release2`**: merge `769cc31cb` […]
+>   **Via per A2, A3, A4, A5, A6 e A8**, nell'ordine del tuo piano, con un checkpoint FROZEN ciascuno. A2: settings,
+>   support e ora anche auth. A7 aspetta i CP2 e CP4 di H; A9 i CP4 e CP6.» Base: HEAD `769cc31cb`, worktree pulito.
+> - **Inventario**: `git grep "components/(auth|settings|support)/"` (fuori dal journal) dà 129 righe.
+>   - Codice di A, onboarding, rotte e runner: 14 file, 56 righe.
+>   - devWiki: 28 righe di tabelle «Source files» in 14 pagine, più 4 righe di prosa che restano (cronaca).
+>   - Documentazione per sviluppatori: 9 righe in 5 pagine (`docs-writer`).
+>   - File di altri:
+>     - lo script del cricchetto colori `frontend/scripts/theme/theme-roles.mjs:75`, `:83`, con un'eccezione legata al
+>       percorso esatto `lib/components/support/supportLinks.ts`: spostando il file, G4 e m2 diventerebbero rossi;
+>     - il suo gate `themeRoles.gate.test.ts:444`, `:445`, `:478`;
+>     - un commento di `gallery.spec.ts:2322`;
+>     - `scripts/visual_review/data/navigation_map.it.md:43`;
+>     - `layout/ChangelogModal.svelte:17` (H).
+>   - Restano di proposito:
+>     - la baseline del cricchetto (22 righe): per uno spostamento puro il gate accoppia i file per nome;
+>     - il percorso inventato di `test_docs_links_gate.py:87`;
+>     - la cache di graphify.
+> - **Risposte del coordinatore** (15/10, ~00:40):
+>   - AboutTab: «sì, spostalo in `lib/features/settings/tabs/` con il suo test».
+>   - `ChangelogModal.svelte:17`: «sì, la riga d'import la cambi tu, come per `main.py` in A1».
+>   - Righe del programma colori (eccezione del cricchetto, `gallery.spec.ts:2322`, `navigation_map.it.md:43`): le
+>     cambio io, solo il testo del percorso, nello stesso commit di A2, **dopo** l'ok del coordinatore colori,
+>     inoltrato dal coordinatore 1.3.
+>   - D-A14 cade: le chiavi i18n non contengono i percorsi.
+> - **Forma delle cartelle**: cartelle piatte, cambia solo il prefisso e nessun import relativo. Le sottocartelle
+>   `components/` del §3.2 sarebbero state una seconda modifica dentro la rinomina.
+>   - `lib/features/auth/`: `LoginCard`, `RegisterCard`, `ForgotPasswordCard`;
+>   - `lib/features/settings/` e `tabs/`;
+>   - `lib/features/support/`, più `DonationPopupModal`;
+>   - `lib/features/update-check/`: `UpdateAvailableModal`, `AskAdminModal` (D-A13).
+> - **Script**: `/tmp/libreFolio_a2_rewrite.py`, sostituzione dei prefissi; i file d'altri solo con `--extra`. Prova a
+>   vuoto in `/tmp/libreFolio_a2_rewrite_dry.log`.
+
+#### A2.1 — Basi prima delle modifiche ✅ (2026-10-15)
+> **Note implementazione** (corsia 6182, un'invocazione alla volta, HEAD `769cc31cb`):
+> - `front-utility core-unit`: 130 file, 4 245 test.
+> - `front-utility component-unit`: 118 file, 3 162 test.
+> - `front-utility onboarding-component-unit`: 15 file, 437 test.
+> - `node frontend/scripts/theme/theme-roles.mjs --check`: pulito.
+> - `check-orphans`: 364 test unitari del frontend, tutti raggiungibili.
+> - `dev.py lint --dead-code --scope frontend` (knip): i reperti di oggi, in `/tmp/libreFolio_a2_base_knip.log`.
+
+#### A2.2 — Spostamento ✅ (2026-10-15)
+> **Note implementazione**:
+> - 44 file spostati con `mv`, senza stage. Nessun file nascosto, nessuna collisione.
+>   - `components/auth/{LoginCard,RegisterCard,ForgotPasswordCard}` → `features/auth/`.
+>   - `components/auth/DonationPopupModal` → `features/support/`.
+>   - `components/auth/{UpdateAvailableModal,AskAdminModal}` → `features/update-check/`.
+>   - `components/settings/*` → `features/settings/`, e `tabs/*` → `features/settings/tabs/`.
+>   - `components/support/*` → `features/support/`.
+>   - I test si spostano con i loro componenti; le cartelle vecchie sono cancellate.
+> - Somiglianza: 39 file identici. Cambiano solo righe d'import in `DonationPopupModal` (3 su 84, 96,4 %),
+>   `GlobalSettingsTab` (10 su 836), `PreferencesTab` (4 su 357), `AboutTab` (3 su 639) e `ProfileTab` (1 su 595).
+
+#### A2.3 — Riscrittura dei riferimenti ✅ (2026-10-15)
+> **Note implementazione**:
+> - Con `python3 /tmp/libreFolio_a2_rewrite.py --extra frontend/src/lib/components/layout/ChangelogModal.svelte` (log
+>   `/tmp/libreFolio_a2_rewrite.log`): 29 file.
+> - **Codice**, 15 file (57 righe):
+>   - i 5 spostati qui sopra;
+>   - le rotte `routes/+page.svelte` (3) e `routes/(app)/settings/+page.svelte` (4);
+>   - l'onboarding: `DeferredAppPopups.svelte` (2), `WelcomeForm.svelte` (2), e un `vi.mock` ciascuno in
+>     `WelcomeForm.test.ts` e `WelcomePage.test.ts`;
+>   - `layout/ChangelogModal.svelte:17`, autorizzato;
+>   - il gate `clipboardSink.gate.test.ts:495`, `:509`;
+>   - un commento di `e2e/support-copy-and-go.spec.ts:11`;
+>   - i 19 percorsi del runner `_frontend_utility.py`.
+> - **devWiki**: 28 righe di tabelle «Source files» in 14 pagine (C6). Le 4 righe di prosa restano (A-4).
+
+#### A2.4 — Righe del programma colori ✅ (2026-10-15)
+> **Note implementazione**:
+> - **Ok del coordinatore colori**, inoltrato dal coordinatore 1.3 (15/10, ~00:45): «le righe nei loro file le cambi
+>   tu, **nello stesso commit dello spostamento**, così i gate restano verdi a ogni commit». Righe autorizzate:
+>   `theme-roles.mjs:75`, `:83`; `themeRoles.gate.test.ts:444`, `:445` (anche `otherLinks.ts`, il controllo negativo
+>   sul file vicino), `:478`; il commento di `gallery.spec.ts:2380`; `navigation_map.it.md:43`, solo il mio percorso.
+>   `themeRoles.baseline.tsv` non si tocca.
+> - **Applicato**: `python3 /tmp/libreFolio_a2_rewrite.py --extra` sui 4 file. Il diff ha esattamente quelle 7 righe.
+> - **Prima, senza le righe**: il gate dava rosso su `supportLinks.ts`, già accoppiato al file vecchio («was
+>   lib/components/support/supportLinks.ts»), con R2 m2 e 11 G4 sui colori dei marchi, più R1 sul totale m2 (da 1 782 a
+>   1 793).
+> - **Dopo**: `node frontend/scripts/theme/theme-roles.mjs --check` → «Colour gates: clean». `--report` → «Ratchet: 0
+>   violations, 0 files dropped (--update tightens), **22 moves recognized**. Grammar: 0 violations.»: sono le 22 righe
+>   della baseline.
 >
-> Transazioni, broker accessibili e report BRIM restano legati all'accesso al broker.
+> **⚠️ Fuori pista**: l'inventario non vedeva che lo script del cricchetto lega un'eccezione al percorso esatto di un
+> file. Per gli spostamenti puri il gate accoppia le righe della baseline per nome, ma non le sue tabelle di eccezioni.
+
+#### A2.5 — Documentazione per sviluppatori (`docs-writer`) ✅ (2026-10-15)
+> **Note implementazione**:
+> - **Le 9 citazioni**, in 5 pagine:
+>   - `architecture/settings_cache.md:103`;
+>   - `frontend/components/core-ui/modals.md:129`;
+>   - `frontend/components/features/auth.md:38`, `:71`;
+>   - `frontend/components/features/settings.md:43`, `:207`, `:208`;
+>   - `frontend/i18n.md:283`, `:314`.
+> - **Disegno «Directory Structure»** di `frontend/index.md`: tolte le righe `auth/` e `settings/` sotto
+>   `components/`, aggiunto un nodo `features/` con quelle due. Il commento del nodo («One folder per domain: its
+>   components, state and logic») l'ho aggiunto io, come le altre voci di `lib/`.
+>   - Il disegno era già incompleto: senza `features/`, e con metà delle cartelle di `components/` (segnalato da FE1).
+> - **Prove**:
+>   - `grep -rn -E "components/(auth|settings|support)/" mkdocs_src/docs/developer`: vuoto;
+>   - `dev.py mkdocs build` (strict): exit 0;
+>   - `dev.py mkdocs check-links`: exit 0, 95 link validi.
+
+#### A2.6 — Controlli statici ✅ (2026-10-15)
+> **Note implementazione**:
+> - **Grep dei vecchi percorsi** in `frontend/`, `scripts/`, `.github/`, `backend/` e `mkdocs_src/docs/developer/`: resta
+>   solo il percorso inventato `test_docs_links_gate.py:87`, voluto.
+> - **`dev.py front build --debug`** (dopo lo spostamento): exit 0, svelte-check «0 errors and 0 warnings».
+> - **`dev.py front check`**: exit 0, «0 errors and 0 warnings».
+> - **Prettier** (`frontend/node_modules/.bin/prettier --check`), sui file spostati e modificati: tutti a posto.
+> - **`check_source_paths.py`**: 5 percorsi mancanti (8 occorrenze), tutti generati e già mancanti
+>   (`htmlcov-*`, `frontend/coverage-js/`, una cartella di sonde); nessuno di quelli spostati. Il numero dipende da
+>   cosa c'è sul disco: `frontend/build/`, `generated.ts` e `backend/data/prod/` ora esistono.
+> - **File**: 44 cancellati, 44 nuovi (esattamente gli spostati), 35 modificati.
+
+#### A2.7 — Test ✅ (2026-10-15)
+> **Note implementazione** (corsia 6182):
+> - `front-utility core-unit`: 130 file, **4 245 test**, come la base (contiene i gate dei colori).
+> - `front-utility component-unit`: 118 file, **3 162 test**, come la base.
+> - `front-utility onboarding-component-unit`: 15 file, **437 test**, come la base.
+> - E2E (`/tmp/libreFolio_a2_e2e.sh`, sul frontend ricostruito dopo lo spostamento), tutte exit 0:
+>   - `front-utility auth`: 29;
+>   - `front-utility settings`: 45;
+>   - `front-utility scheduler`: 17;
+>   - `front-utility support-copy-and-go`: 16;
+>   - `front-user account-deletion`: 1;
+>   - `front-utility onboarding-tour`: 10;
+>   - `front-utility theme-roles`: 8;
+>   - `front-utility changelog-locale`: 2.
+> - `check-orphans`: 364 test unitari e 118 spec registrati e raggiungibili da `all`.
+> - knip (`dev.py lint --dead-code --scope frontend`): identico alla base, una volta normalizzati i prefissi spostati.
+>   L'unico reperto nelle cartelle toccate, `isImagePublished` in `update-check/updateCheck.ts`, c'era già.
+> - Porta 6182 libera dopo le run.
+
+#### A2.8 — Due commenti sfuggiti ad A1 ✅ (2026-10-15)
+> **Note implementazione**:
+> - Segnalati da H tramite il coordinatore e corretti in questo lotto:
+>   - `frontend/e2e/files-uploader.spec.ts:71` → `backend/app/services/accounts/onboarding_service.py`;
+>   - `frontend/src/lib/stores/app/settings.test.ts:18` → `backend/app/services/accounts/global_settings_service.py`.
+> - Prettier: a posto.
+> - Grep dei percorsi completi dei sei moduli in tutto il repo (fuori dal journal e da `TODO_Completati.md`): restano
+>   la cache di graphify, che è generata, e la prosa della devWiki (A-4).
+> - Restano due nomi senza cartella, ancora giusti perché il nome non è cambiato: `stores/app/auth.ts:118`
+>   (`donation_popup_service.py`) e `stores/app/globalSettings.ts:44` (`global_settings_service.py`).
+>
+> **⚠️ Fuori pista**: in A1 la riscrittura copriva `backend/`, `scripts/`, `dev.py`, `.github/` e la devWiki, non
+> `frontend/`. Il grep di chiusura aveva lo stesso perimetro, quindi non poteva trovarli.
+
+### Checkpoint A2 (CP2) 🧊 (2026-10-15, notte) — FROZEN, in attesa del commit del coordinatore
+> - **Delta** (non in stage, sulla base `769cc31cb`):
+>   - 44 file spostati;
+>   - 36 file di codice, documentazione e devWiki modificati;
+>   - in più questo piano e la sezione A del backlog.
+> - **Conflitti attesi con `dev_release2`** (`8250d92b3`, che contiene H CP1): due file in comune, nessun conflitto
+>   previsto.
+>   - `decisions/scheduler-converts-at-decision.md`: H tocca le righe 95-96, A la 99.
+>   - Backlog: ognuno scrive nella sua sezione.
+> - **Commit proposti**:
+>   1. `refactor(frontend): move auth/settings/support UI`;
+>   2. `docs(journal): A2 frontend move, A backlog`.
+> - **Ingresso in `dev_release2`**: prima delle 08:45 o dopo la finestra della galleria. Fra le 08:00 e le 08:45
+>   aspetta il via del coordinatore.
+>
+> **Esito**: il coordinatore ha committato `73b8cbebd` (`refactor(frontend): move auth/settings/support UI`: 44
+> rinomine, 39 al 100 % e le altre fra il 94 % e il 99 %) e `40146a5d9` (journal). Poi ha aggiornato la base con il merge
+> `54f872995` di `dev_release2` a `8250d92b3`, che contiene H CP1: unione automatica, worktree pulito.
+
+#### A2.9 — Validazione leggera della revisione combinata `54f872995` ✅ (2026-10-15)
+> **Note implementazione** (`bash /tmp/libreFolio_a2v_validate.sh`, corsia 6182):
+> - **Cosa porta il merge**: H CP1 cambia 68 file del backend e degli script. Nel frontend cambia solo un commento di
+>   `update-check/updateCheck.test.ts`, quindi la build del frontend di A2 resta valida. Lock delle dipendenze
+>   invariati.
+> - `dev.py front check`: exit 0, «0 errors and 0 warnings».
+> - `front-utility core-unit`: 130 file, **4 245 test**, come prima.
+> - `node frontend/scripts/theme/theme-roles.mjs --check`: «Colour gates: clean». `--report`: «Ratchet: 0 violations,
+>   0 files dropped, 22 moves recognized. Grammar: 0 violations».
+> - E2E sul backend riordinato da H: `front-utility auth` 29 passati, `front-utility settings` 45 passati.
+> - Porta 6182 libera, worktree pulito dopo le prove.

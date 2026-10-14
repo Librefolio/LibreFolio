@@ -58,7 +58,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import BRDeleteItem
 from backend.app.services import brim_provider
 from backend.app.services.accounts import user_service
-from backend.app.services.broker_service import BrokerService
+from backend.app.services.brokers.broker_service import BrokerService
 from backend.test_scripts.test_api.test_broker_access_api import (
     API_BASE,
     SOLE_ADMIN_DELETE_DETAIL,

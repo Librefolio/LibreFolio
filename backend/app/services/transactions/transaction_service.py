@@ -1,0 +1,135 @@
+"""
+Transaction Service for LibreFolio.
+
+Centralizes all transaction business logic:
+- CRUD operations with validation
+- Link resolution for paired transactions (TRANSFER, FX_CONVERSION)
+- Balance validation (cash and asset positions)
+
+Atomic multi-broker semantics (Part 3):
+- All bulk endpoints accept items spanning multiple brokers in a single batch.
+- Access check (EDITOR) is enforced once per distinct `broker_id` touched.
+- Any exception, access denial, or balance violation → full session rollback,
+  `rolled_back=True`, per-item `status` in {failed, simulated, not_attempted}.
+- The router never commits when `rolled_back=True`.
+
+``TransactionService`` is composed of one mixin per theme, each in its own module:
+``access``, ``validation``, ``queries``, ``balances``, ``event_suggestions``, ``promotion``, ``auto_cost``.
+The class keeps ``delete_by_broker`` and ``execute_batch``, whose stages live in ``transaction_batch_stages``
+(parse, access, balances, response), ``batch_edits``, ``batch_creates`` and ``batch_costs``.
+"""
+
+from __future__ import annotations
+
+from typing import List, Optional
+
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.app.db.models import Transaction
+from backend.app.schemas.transactions import TXBatchResponse
+from backend.app.services.transactions.access import TransactionAccessMixin
+from backend.app.services.transactions.auto_cost import TransactionAutoCostMixin
+from backend.app.services.transactions.balances import TransactionBalancesMixin
+from backend.app.services.transactions.batch_costs import compute_wac_and_fx_issues, validate_cost_basis
+from backend.app.services.transactions.batch_creates import apply_creates, apply_promotes, resolve_create_links
+from backend.app.services.transactions.batch_edits import apply_deletes, apply_splits, apply_updates, validate_updated_pairs
+from backend.app.services.transactions.event_suggestions import TransactionEventSuggestionsMixin
+from backend.app.services.transactions.promotion import TransactionPromotionMixin
+from backend.app.services.transactions.queries import TransactionQueryMixin
+from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
+from backend.app.services.transactions.transaction_batch_stages import finalize_response, parse_inputs, preload_and_authorize, validate_balances
+from backend.app.services.transactions.validation import TransactionValidationMixin
+
+
+class TransactionService(TransactionAccessMixin, TransactionValidationMixin, TransactionQueryMixin, TransactionBalancesMixin, TransactionEventSuggestionsMixin, TransactionPromotionMixin, TransactionAutoCostMixin):
+    """
+    Service for managing transactions.
+
+    All methods are async and expect an AsyncSession.
+    The caller is responsible for commit when `rolled_back=False`.
+    """
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    # =========================================================================
+    # DELETE OPERATIONS (internal — delete_by_broker only)
+    # =========================================================================
+
+    async def delete_by_broker(self, broker_id: int) -> int:
+        """
+        Delete all transactions for a broker (internal helper for BrokerService).
+
+        Skips access control and balance validation — caller is expected to have
+        already verified OWNER permissions on the broker.
+        """
+        stmt = select(Transaction).where(Transaction.broker_id == broker_id)
+        result = await self.session.execute(stmt)
+        txs = result.scalars().all()
+        tx_ids = [tx.id for tx in txs if tx.id is not None]
+
+        if tx_ids:
+            await self.session.execute(update(Transaction).where(Transaction.related_transaction_id.in_(tx_ids)).values(related_transaction_id=None))
+
+        count = 0
+        for tx in txs:
+            await self.session.delete(tx)
+            count += 1
+
+        return count
+
+    # =========================================================================
+    # UNIFIED BATCH PIPELINE (replaces separate create/update/delete bulk)
+    # =========================================================================
+
+    async def execute_batch(
+        self,
+        creates_raw: List[dict],
+        updates_raw: List[dict],
+        deletes: List[int],
+        splits_raw: List[dict] | None = None,
+        promotes_raw: List[dict] | None = None,
+        user_id: Optional[int] = None,
+        commit: bool = False,
+    ) -> TXBatchResponse:
+        """Unified pipeline for both /validate (commit=False) and /commit (commit=True).
+
+        Order: parse → access → delete → split → update → create → promote →
+        link → WAC → cost basis → balance replay → response.
+
+        ``commit`` selects response semantics only. The caller still owns the
+        session commit or rollback.
+        """
+        context = TransactionBatchContext.from_inputs(
+            creates_raw=creates_raw,
+            updates_raw=updates_raw,
+            deletes=deletes,
+            splits_raw=splits_raw,
+            promotes_raw=promotes_raw,
+            user_id=user_id,
+            commit_requested=commit,
+        )
+
+        parse_inputs(context)
+        if await preload_and_authorize(self, context):
+            return TXBatchResponse(
+                committed=False,
+                issues=context.issues,
+                results=[],
+                success_count=0,
+            )
+
+        await apply_deletes(self, context)
+        await apply_splits(self, context)
+        await apply_updates(self, context)
+        await validate_updated_pairs(self, context)
+
+        await apply_creates(self, context)
+        await apply_promotes(self, context)
+        resolve_create_links(self, context)
+
+        await compute_wac_and_fx_issues(self, context)
+        await validate_cost_basis(self, context)
+        await validate_balances(self, context)
+        return finalize_response(context)

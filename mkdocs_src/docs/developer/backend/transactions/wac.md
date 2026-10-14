@@ -314,7 +314,7 @@ with the layer's command:
 | `PortfolioCalculationEngine.calculate()` (`financial_math/portfolio/engine.py`) | `build_cost_positions()`: one per `(asset_id, broker_id)` | The report's target currency | `True` |
 | `compute_wac_iterative()` (`portfolio_service.py`) | The one `(broker, asset)` asked for | The override, or `determine_target_currency()` | `False` |
 | `LotsAnalysisService` (`lots_analysis_service.py`) | One per broker, plus `"__all__"` pooling every broker in scope | The analysis `target_currency` | `False` |
-| `BrokerService.get_summary()` (`broker_service.py`) | One per asset held at the broker | The asset's own currency, one call per currency | `False` |
+| `BrokerService.get_summary()` (`brokers/summary.py`) | One per asset held at the broker | The asset's own currency, one call per currency | `False` |
 
 ### ⚙️ Portfolio engine {: #portfolio-engine }
 

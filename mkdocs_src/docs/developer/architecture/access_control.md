@@ -84,12 +84,12 @@ If a broker has only one user with the `OWNER` role:
 
 ## 🔧 Implementation Details
 
-The logic is centralized in `backend/app/services/broker_service.py`.
+The logic is centralized in `backend/app/services/brokers/access.py` (`BrokerAccessMixin`, part of `BrokerService`).
 
 - 🔍 **`_check_user_access(broker_id, user_id, min_role)`**: Core internal method to verify permissions.
-- ➕ **`add_access()`**: Grants access to a new user (OWNER only).
-- 🔄 **`update_access()`**: Changes an existing user's role (OWNER only).
-- ❌ **`remove_access()`**: Revokes access (OWNER can remove anyone; others can only remove themselves).
+- 📋 **`list_accesses()`**: The users with access to a broker, with role and share.
+- 🔄 **`bulk_update_access()`**: Replaces a broker's whole access configuration in one step (OWNER only): adds,
+  role changes and removals; at least one OWNER must remain, and the shares add up to at most 100 %.
 - 🚪 **`leave_broker()`** / **`update_own_role()`**: The self-service paths described above.
 
 ### 🌐 API Endpoints
