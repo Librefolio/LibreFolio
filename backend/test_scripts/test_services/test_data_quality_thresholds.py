@@ -58,7 +58,7 @@ CONSUMERS = {
     # The holdings read positions through the dust threshold...
     "backend/app/services/portfolio_service.py": {"TRANSACTION_IMPLIED_GRACE_DAYS", "QUANTITY_DUST_THRESHOLD"},
     # ...and so do the asset list's held-now flags.
-    "backend/app/services/asset_sources/crud.py": {"QUANTITY_DUST_THRESHOLD"},
+    "backend/app/services/assets/crud.py": {"QUANTITY_DUST_THRESHOLD"},
     "backend/app/services/series_preparation.py": {"STALE_PRICE_THRESHOLD_DAYS"},
     "backend/app/services/risk/eligibility.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},
     "backend/app/services/risk/service.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},

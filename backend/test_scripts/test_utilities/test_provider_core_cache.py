@@ -1,7 +1,7 @@
 """
 Test: Provider Core Cache & Thread Isolation.
 
-Tests the canonical asset-source core and legacy facade contracts:
+Tests the canonical asset-source core contracts:
 - _run_provider_in_thread(): thread isolation, timeout, exception propagation
 - _asset_history_cache: smart range with per-date granularity
 - _asset_current_cache: simple TTL cache for current values
@@ -33,39 +33,15 @@ from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
 from backend.app.schemas.assets import FAAssetPatchItem, FACurrentValue, FAHistoricalData, FAPricePoint
 from backend.app.schemas.provider import FAProviderConfigBase, ProbeOperation
-from backend.app.services import asset_source as legacy_asset_source
-from backend.app.services import asset_sources as canonical_asset_sources
-from backend.app.services.asset_source import (
-    AssetCRUDService,
-    AssetSearchService,
-    AssetSourceError,
-    AssetSourceManager,
-    AssetSourceProvider,
-)
-from backend.app.services.asset_sources import core as asset_source_core
-from backend.app.services.asset_sources import metadata as metadata_operations
-from backend.app.services.asset_sources import price_query as price_query_operations
-from backend.app.services.asset_sources import price_store as price_store_operations
-from backend.app.services.asset_sources import provider_management as provider_management_operations
-from backend.app.services.asset_sources import refresh as refresh_operations
-from backend.app.services.asset_sources import search as search_operations
-from backend.app.services.asset_sources.core import (
-    AssetSourceError as CanonicalAssetSourceError,
-)
-from backend.app.services.asset_sources.core import (
-    AssetSourceProvider as CanonicalAssetSourceProvider,
-)
-from backend.app.services.asset_sources.core import (
-    _asset_current_cache,
-    _asset_history_cache,
-    _asset_metadata_cache,
-    _run_provider_in_thread,
-    _search_query_cache,
-    _search_result_cache,
-)
-from backend.app.services.asset_sources.crud import AssetCRUDService as CanonicalAssetCRUDService
-from backend.app.services.asset_sources.manager import AssetSourceManager as CanonicalAssetSourceManager
-from backend.app.services.asset_sources.search import AssetSearchService as CanonicalAssetSearchService
+from backend.app.services.assets import core as asset_source_core
+from backend.app.services.assets import metadata as metadata_operations
+from backend.app.services.assets import price_query as price_query_operations
+from backend.app.services.assets import price_store as price_store_operations
+from backend.app.services.assets import provider_management as provider_management_operations
+from backend.app.services.assets import refresh as refresh_operations
+from backend.app.services.assets import search as search_operations
+from backend.app.services.assets.core import AssetSourceError, AssetSourceProvider, _asset_current_cache, _asset_history_cache, _asset_metadata_cache, _run_provider_in_thread, _search_query_cache, _search_result_cache
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -92,25 +68,8 @@ def _clear_caches():
 
 
 # ============================================================================
-# Canonical Modules & Legacy Compatibility
+# Canonical Modules
 # ============================================================================
-
-
-@pytest.mark.parametrize(
-    ("symbol_name", "legacy_symbol", "canonical_symbol"),
-    [
-        ("AssetSourceProvider", AssetSourceProvider, CanonicalAssetSourceProvider),
-        ("AssetSourceError", AssetSourceError, CanonicalAssetSourceError),
-        ("AssetSourceManager", AssetSourceManager, CanonicalAssetSourceManager),
-        ("AssetCRUDService", AssetCRUDService, CanonicalAssetCRUDService),
-        ("AssetSearchService", AssetSearchService, CanonicalAssetSearchService),
-    ],
-)
-def test_legacy_and_canonical_public_symbols_share_identity(symbol_name, legacy_symbol, canonical_symbol):
-    """The legacy facade and canonical package must expose the same objects."""
-    assert legacy_symbol is canonical_symbol
-    assert getattr(legacy_asset_source, symbol_name) is canonical_symbol
-    assert getattr(canonical_asset_sources, symbol_name) is canonical_symbol
 
 
 @pytest.mark.parametrize(
@@ -173,24 +132,20 @@ def test_normal_and_cold_discovery_keep_provider_base_identity():
     AssetProviderRegistry.auto_discover()
     normal_instances = _registered_provider_instances(AssetProviderRegistry)
     assert all(isinstance(provider, AssetSourceProvider) for provider in normal_instances)
-    assert all(isinstance(provider, CanonicalAssetSourceProvider) for provider in normal_instances)
 
     cold_probe = textwrap.dedent("""
         from backend.app.services.assets.registry import AssetProviderRegistry
 
         AssetProviderRegistry.auto_discover()
 
-        from backend.app.services.asset_source import AssetSourceProvider as LegacyProvider
-        from backend.app.services.asset_sources.core import AssetSourceProvider as CanonicalProvider
+        from backend.app.services.assets.core import AssetSourceProvider
 
         providers = [
             AssetProviderRegistry.get_provider_instance(item["code"])
             for item in AssetProviderRegistry.list_providers()
         ]
         assert providers
-        assert LegacyProvider is CanonicalProvider
-        assert all(isinstance(provider, CanonicalProvider) for provider in providers)
-        assert all(isinstance(provider, LegacyProvider) for provider in providers)
+        assert all(isinstance(provider, AssetSourceProvider) for provider in providers)
         """)
     completed = subprocess.run(
         [sys.executable, "-c", cold_probe],

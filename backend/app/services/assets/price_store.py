@@ -33,8 +33,8 @@ from backend.app.schemas.common import (
     FxBackwardFillInfo,
 )
 from backend.app.schemas.prices import FAAssetEventPoint, FAAssetEventPointOut, FAEventBulkDeleteResponse, FAEventDeleteItemResult, FAEventQueryResult, FAEventUpsertPoint
-from backend.app.services.asset_sources import core
-from backend.app.services.asset_sources.core import (
+from backend.app.services.assets import core
+from backend.app.services.assets.core import (
     AssetSourceError,
 )
 from backend.app.services.fx.fx import convert_bulk

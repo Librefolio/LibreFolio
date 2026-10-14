@@ -66,13 +66,11 @@ from backend.app.schemas.signals import (
     SignalCatalogResponse,
     SignalDomain,
 )
-from backend.app.services.asset_source import (
-    AssetCRUDService,
-    AssetSearchService,
-    AssetSourceError,
-    AssetSourceManager,
-)
+from backend.app.services.assets.core import AssetSourceError
+from backend.app.services.assets.crud import AssetCRUDService
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.assets.search import AssetSearchService
 from backend.app.services.signal_service import SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
 

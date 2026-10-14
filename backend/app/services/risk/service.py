@@ -54,10 +54,10 @@ from backend.app.schemas.risk import (
     RiskStressMethod,
     RiskWarning,
 )
-from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.financial_math.portfolio.data_quality import normalize_fx_pair_slug
-from backend.app.services.market_calendar import ensure_market_holidays
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.risk.base import (
     RiskAnalytic,

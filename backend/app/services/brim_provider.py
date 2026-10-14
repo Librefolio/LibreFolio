@@ -76,7 +76,7 @@ from backend.app.schemas.brim import (
     is_fake_asset_id,
 )
 from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.asset_source import AssetCRUDService
+from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 

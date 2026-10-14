@@ -40,11 +40,11 @@ from backend.app.config import (
 from backend.app.db.post_migration import configured_sqlite_path, run_post_migration_fixes
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import configure_logging, get_logger
+from backend.app.services.assets.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
 from backend.app.services.fx.registry import FXProviderRegistry
-from backend.app.services.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )

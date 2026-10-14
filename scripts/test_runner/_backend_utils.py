@@ -109,7 +109,7 @@ def utils_cache_utils(verbose: bool = False, test_names: list = None) -> bool:
 def utils_provider_core_cache(verbose: bool = False, test_names: list = None) -> bool:
     """Test provider core cache & thread isolation infrastructure."""
     print_section("Utils: Provider Core Cache & Thread Isolation")
-    print_info("Testing: backend/app/services/asset_source.py (core cache + _run_provider_in_thread)")
+    print_info("Testing: backend/app/services/assets/core.py (core cache + _run_provider_in_thread)")
     print_info("Tests: Thread isolation, timeout, caches (history/current/metadata/search), probe bypass")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_provider_core_cache.py", test_names)
     return run_command(cmd, "Provider core cache tests", verbose=verbose)

@@ -117,7 +117,7 @@ class DrawdownPlugin(SignalPlugin):
             total_points=2,
             normalized_tolerance=1e-6,
             # E1: with full_history the fetch path ignores total_points and loads
-            # from the start of the available history (see asset_source).
+            # from the start of the available history (see assets/price_query.py).
             full_history=params.full_history,
         )
 

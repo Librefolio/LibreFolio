@@ -102,7 +102,7 @@ Two JSON-safety helpers coexist with **opposite** error policies, and they must 
   checks a value is natively JSON-serializable and raises `ValueError` otherwise. Used by Pydantic
   `field_validator`s on contract boundaries (signals, AI Export payloads), where a non-JSON value
   means the *producer* is broken and must be rejected.
-- **`_json_safe_details`** (local to `backend/app/services/asset_source.py`) — the **sanitizer**:
+- **`_json_safe_details`** (defined in `backend/app/services/assets/core.py`) — the **sanitizer**:
   stringifies anything non-primitive and never raises. It exists for one field
   (`AssetSourceError.details` in provider diagnostics), preserves `None`/empty as "omit the field",
   and sanitizes one list level deep — exactly what provider-error localization needs.
