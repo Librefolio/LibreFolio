@@ -11386,7 +11386,7 @@
     }
   },
   "CHANGELOG.md#1.2.1": {
-    "md5": "70bbf03df74a16214e892cbe16a39022",
+    "md5": "f4106fcd9073e541ba0f78681a30380c",
     "langs_done": [
       "es",
       "fr",
@@ -11395,17 +11395,17 @@
     "last_translated": "2026-10-14T17:22:03.938430+00:00",
     "langs": {
       "it": {
-        "stamped_at": "2026-10-14T17:22:03.938430+00:00",
+        "stamped_at": "2026-10-14T17:42:29.098239+00:00",
         "stamped_by": "translate-stamp",
         "index": 0
       },
       "fr": {
-        "stamped_at": "2026-10-14T17:22:03.938430+00:00",
+        "stamped_at": "2026-10-14T17:42:29.098239+00:00",
         "stamped_by": "translate-stamp",
         "index": 0
       },
       "es": {
-        "stamped_at": "2026-10-14T17:22:03.938430+00:00",
+        "stamped_at": "2026-10-14T17:42:29.098239+00:00",
         "stamped_by": "translate-stamp",
         "index": 0
       }
