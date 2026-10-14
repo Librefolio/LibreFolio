@@ -1864,6 +1864,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 - **T-B2 · Ruoli in attesa del giro 2 della designer** — medio; T, 14/10.
   - Sono derivati provvisori, calcolati solo dai suoi valori: hover e premuto in chiaro, fondale delle modali, inverso
     dei tooltip, tinte di avviso, errore e informazione.
+  - **Stati sulla barra verde** (T-3, 15/10): i colori di stato del chiaro sono scuri e sul verde sparirebbero. Le icone
+    di `ConnectionSecurityIndicator` restano legacy finché la designer non sceglie fra un sotto-albero `.dark` sulla
+    barra (che sfugge al Lab) e ruoli dedicati «stato su marchio».
   - Da decidere con lei:
     - guadagno e perdita distinti da successo ed errore;
     - l'info `#155EEF`, molto saturo;
@@ -1885,6 +1888,15 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Una fonte sola per le regole: è di A, che possiede la registrazione (F13).
 
   Dettagli: piano di T, passo T-2.
+- **T-B5 · Il tema scelto dall'header non sopravvive a un nuovo accesso** — basso; T (trovato da `test-author`), 15/10.
+  - `ThemeToggle` scrive solo `localStorage`; all'accesso `auth.ts` riapplica il tema salvato nell'account
+    (`applyTheme`), quindi una scelta fatta dall'header si perde se diverge da quella salvata. Comportamento di prima di
+    T, non di colore.
+  - **Accessibilità della shell, anche questa di prima:** la chiusura mobile della barra laterale non ha nome
+    accessibile; il `title` del pulsante di compressione e l'`aria-label` del fondale sono in inglese fisso; le
+    schermate d'attesa della shell scrivono «Loading...» e «Checking authentication...» in inglese.
+
+  Dettagli: piano di T, passo T-3.
 
 ---
 

@@ -181,8 +181,8 @@ Per ogni ondata: lotti di ≤ 15 file; gate eseguiti in serie da T; gallery e re
 | # | Contenuto | Stato |
 |---|---|---|
 | 1 | T-0, T-1 con il diff del CSS compilato | ✅ checkpoint `2018fd853`, integrato con `4e024dfe8` |
-| 2 | T-2, poi integrazione subito: A aspetta | ✅ pronto il 14/10, FROZEN in attesa del commit |
-| 3 | T-3 con la gallery completa | ⏳ |
+| 2 | T-2, poi integrazione subito: A aspetta | ✅ checkpoint `a73eb7eda`, integrato con `d80b986bf` |
+| 3 | T-3 con la gallery completa | ✅ codice e test pronti il 15/10; aspetta la base con G e la gallery del coordinatore |
 
 ## Avanzamento
 
@@ -329,3 +329,81 @@ Per ogni ondata: lotti di ≤ 15 file; gate eseguiti in serie da T; gallery e re
 >   della corsia, come prevede il piano (E2E e scatti). Lo snapshot del DB è in `.testLog/00_archive/`, ignorato.
 > - **Il server di test ricostruisce il frontend all'avvio** (api sync, check, build di debug): circa 2 minuti prima
 >   di rispondere.
+>
+> **Checkpoint 2:** commit `a73eb7eda` del coordinatore, merge di base `d80b986bf` con avanzamento veloce del target.
+> Il developer ha approvato gli scatti. Poi G è entrata in `dev_release2` (`265ae5c6e`): la base di T si aggiorna
+> al checkpoint di T-3.
+
+### T-3 — ✅ 15/10/2026 (checkpoint 3, prima della gallery)
+
+> **Note implementazione:** classi soltanto, markup non riordinato (vincolo della 1.3 sui file condivisi).
+> - `routes/(app)/+layout.svelte`:
+>   - i 6 involucri `bg-libre-beige dark:bg-slate-900` diventano `bg-lf-app`;
+>   - i 4 testi di caricamento diventano `text-lf-link`.
+> - `layout/Sidebar.svelte`:
+>   - barra `bg-lf-brand text-lf-on-brand`;
+>   - divisori, hover e voce attiva su `on-brand/10`, `/20` e `/30`;
+>   - riquadro del logo `bg-lf-logo`, prima `style="background:#fff"`;
+>   - tooltip a barra chiusa `bg-lf-inverse`;
+>   - fondale mobile `bg-lf-overlay`;
+>   - email e versione `on-brand/70`, prima `/50` e `/40`: la correzione D-T6, 6:1.
+> - `layout/Header.svelte`:
+>   - `bg-lf-app border-lf-subtle`;
+>   - icona del menu `text-lf-primary`;
+>   - punto di sicurezza `bg-lf-danger ring-lf-app`;
+>   - caffè `text-lf-donate hover:bg-lf-hover`.
+> - `ThemeToggle`, `PrivacyToggle`: `text-lf-secondary hover:bg-lf-hover`.
+> - `LanguageSelector`, `HelpMenu` (OK di A): pulsanti `text-lf-secondary`; menu `bg-lf-card border-lf-subtle`, voci
+>   `text-lf-primary hover:bg-lf-hover`, lingua scelta `bg-lf-selected`; icone di bug e caffè `text-lf-warning` e
+>   `text-lf-donate`. Prettier ha riunito su una riga i due `<button>` accorciati (formato, non ordine).
+> - `ConnectionSecurityIndicator`: etichetta, dettagli e link su `on-brand`.
+>
+>   Restano legacy, di proposito, i colori di stato sulla barra verde:
+>   - le icone (`emerald-300`, `lime-200`, `red-300`);
+>   - la tinta rossa dello stato «insicuro»;
+>   - l'avviso ambra per l'admin.
+>
+>   I ruoli di stato del chiaro sono scuri e sul verde sparirebbero. Un sotto-albero `.dark` sulla barra risolverebbe,
+>   ma toglierebbe la barra alla modifica dal vivo del Lab, che sovrascrive i ruoli su `<html>`: decide la designer
+>   (T-B2).
+>
+> **Evidenze:**
+> - **Cricchetto:** `--update` stringe la baseline, m1 11.325 → 11.185 e m2 1.782 → 1.781, solo gli 8 file della
+>   shell; `--check` pulito. In calo:
+>
+>   | File | m1 |
+>   |---|---|
+>   | `Sidebar` | 33 → 0, e un `#ffffff` in meno |
+>   | `HelpMenu` | 48 → 0 |
+>   | `+layout` | 20 → 0 |
+>   | `LanguageSelector` | 14 → 0 |
+>   | `Header` | 13 → 0 |
+>   | `ConnectionSecurityIndicator` | 11 → 7 |
+>   | `ThemeToggle`, `PrivacyToggle` | 4 → 0 ciascuno |
+> - **Test di `test-author`:** `e2e/layout/theme-roles.spec.ts` ora ha 7 test per progetto.
+>   - (b) con l'utente E2E su `/dashboard`, in chiaro e scuro: `app-shell` e `app-header` = `--lf-surface-app`, bordo
+>     = `--lf-border-subtle`; la barra laterale = `--lf-brand` con il testo `--lf-on-brand`; il bordo della voce
+>     attiva = `--lf-on-brand`;
+>   - (c) controllo negativo in scuro: la card legacy `dashboard-cash-balances` = `var(--theme-bg-card)` e ≠
+>     `--lf-surface-card`; il menu della lingua migrato = `--lf-surface-card`.
+>
+>   Dopo l'accesso il test ricarica la pagina, perché il login riapplica il tema dell'account.
+> - **Esecuzioni nella corsia 6155**, in serie, tutte verdi:
+>   - E2E `theme-roles` 14/14, `connection-security` 8, `header-scroll` 4, `document-title` 22, `app-start-auth`
+>     3, `changelog-locale` 2, `onboarding-tour` 10, `onboarding-guides` 24 (le guide puntano le voci della barra);
+>   - `core-unit` 4.245, `component-unit` 3.162, `onboarding-component-unit` 437.
+> - **Controlli:**
+>   - `front check` 0/0; Prettier verde;
+>   - `tsc` E2E: gli stessi 2 errori di prima, in file che T non tocca.
+> - **16 scatti** in `files/T3-shots/` della sessione T:
+>   - dashboard, asset, impostazioni; barra mobile aperta; menu della lingua;
+>   - chiaro e scuro, desktop 1440×900 e mobile.
+>
+>   In scuro le card delle pagine restano ardesia sul fondo verde-nero dell'app: è il «rimasto indietro» voluto da D-T3.
+>
+> **⚠️ Fuori pista:**
+> - **`html.dark body` dipinge ancora il blu notte di P1 dove la shell non copre**, per esempio con il rimbalzo dello
+>   scorrimento su iOS. Va con la pulizia B6, insieme al `body` chiaro, che è bianco. Non tolto ora: cambierebbe il
+>   fondo di pagine fuori dalla shell (per esempio il Lab di L).
+> - **Osservazioni di `test-author` fuori perimetro**, nel backlog come T-B5: il tema dell'header perso a un nuovo
+>   accesso; l'accessibilità della shell, preesistente.
