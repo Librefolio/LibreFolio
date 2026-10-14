@@ -86,7 +86,7 @@ from backend.app.services.accounts.global_settings_service import get_max_upload
 from backend.app.services.brim_parse_pool import parse_file_offloaded
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
 from backend.app.services.brim_report_sets import BRIMSetError, BRIMSetIncomplete
-from backend.app.services.broker_service import BROKER_NAME_RECOVERY, BrokerService
+from backend.app.services.brokers.broker_service import BROKER_NAME_RECOVERY, BrokerService
 from backend.app.services.files.file_preview import (
     FilePreviewLinks,
     UnsupportedPreviewError,

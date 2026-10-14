@@ -1,0 +1,337 @@
+"""
+Batch stages on saved rows, for ``TransactionService.execute_batch``: deletes, splits of linked pairs, updates,
+and the check of the pairs an update touched.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+from backend.app.db.models import Transaction, TransactionType
+from backend.app.schemas.common import Currency
+from backend.app.schemas.transactions import (
+    TXBatchResultItem,
+    TXUpdateItem,
+    TXValidationCode,
+    TXValidationIssue,
+    get_swap_group,
+    tags_to_csv,
+    validate_transaction_business_rules,
+)
+from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
+from backend.app.utils.datetime_utils import utcnow
+
+if TYPE_CHECKING:
+    from backend.app.services.transactions.transaction_service import TransactionService
+
+
+async def apply_deletes(
+    service: TransactionService,
+    context: TransactionBatchContext,
+) -> None:
+    """Apply requested deletes while preserving linked-pair integrity."""
+    id_set_deletes = set(context.deletes)
+    for index, transaction_id in enumerate(context.deletes):
+        transaction = context.existing_by_id.get(transaction_id)
+        if transaction is None:
+            context.issues.append(
+                TXValidationIssue(
+                    operation="delete",
+                    index=index,
+                    ref_id=transaction_id,
+                    error=f"Transaction {transaction_id} not found",
+                    code=TXValidationCode.TX_NOT_FOUND.value,
+                    params={"id": transaction_id},
+                )
+            )
+            continue
+        if transaction.related_transaction_id and transaction.related_transaction_id not in id_set_deletes:
+            context.issues.append(
+                TXValidationIssue(
+                    operation="delete",
+                    index=index,
+                    ref_id=transaction_id,
+                    error=f"Cannot delete linked transaction {transaction_id} without its pair {transaction.related_transaction_id}",
+                    code="pairDeleteIncomplete",
+                    params={
+                        "id": transaction_id,
+                        "partnerId": transaction.related_transaction_id,
+                    },
+                )
+            )
+            continue
+        try:
+            previous = context.earliest_date_by_broker.get(transaction.broker_id)
+            context.earliest_date_by_broker[transaction.broker_id] = transaction.date if previous is None else min(previous, transaction.date)
+            await service.session.delete(transaction)
+            context.results.append(
+                TXBatchResultItem(
+                    operation="delete",
+                    index=index,
+                    ids=[transaction_id],
+                    status="success",
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            context.issues.append(
+                TXValidationIssue(
+                    operation="delete",
+                    index=index,
+                    ref_id=transaction_id,
+                    error=str(exc),
+                )
+            )
+
+
+async def apply_splits(
+    service: TransactionService,
+    context: TransactionBatchContext,
+) -> None:
+    """Split linked pairs before dependent updates run."""
+    for original_index, item in context.parsed_splits:
+        transaction_a = context.existing_by_id.get(item.id_a)
+        transaction_b = context.existing_by_id.get(item.id_b)
+        if transaction_a is None or transaction_b is None:
+            missing_id = item.id_a if transaction_a is None else item.id_b
+            context.issues.append(
+                TXValidationIssue(
+                    operation="split",
+                    index=original_index,
+                    ref_id=missing_id,
+                    error=f"Transaction {missing_id} not found",
+                    code=TXValidationCode.TX_NOT_FOUND.value,
+                )
+            )
+            continue
+        if transaction_a.related_transaction_id != item.id_b or transaction_b.related_transaction_id != item.id_a:
+            context.issues.append(
+                TXValidationIssue(
+                    operation="split",
+                    index=original_index,
+                    ref_id=item.id_a,
+                    error=f"Transactions {item.id_a} and {item.id_b} are not a linked pair",
+                    code=TXValidationCode.SPLIT_IDS_MISMATCH.value,
+                )
+            )
+            continue
+
+        split_types = service.SPLIT_TYPE_MAP.get(transaction_a.type)
+        if split_types is None:
+            context.issues.append(
+                TXValidationIssue(
+                    operation="split",
+                    index=original_index,
+                    ref_id=item.id_a,
+                    error=f"Type {transaction_a.type.value} cannot be split",
+                    code=TXValidationCode.TYPE_CANNOT_SPLIT.value,
+                )
+            )
+            continue
+
+        from_type, to_type = split_types
+        if transaction_a.type == TransactionType.TRANSFER:
+            if transaction_a.quantity < Decimal("0"):
+                transaction_from, transaction_to = transaction_a, transaction_b
+            else:
+                transaction_from, transaction_to = transaction_b, transaction_a
+        elif transaction_a.amount < Decimal("0"):
+            transaction_from, transaction_to = transaction_a, transaction_b
+        else:
+            transaction_from, transaction_to = transaction_b, transaction_a
+
+        transaction_from.type = from_type
+        transaction_to.type = to_type
+        transaction_from.related_transaction_id = None
+        transaction_to.related_transaction_id = None
+
+        if split_types != (
+            TransactionType.ADJUSTMENT,
+            TransactionType.ADJUSTMENT,
+        ):
+            transaction_from.asset_id = None
+            transaction_to.asset_id = None
+
+        transaction_from.updated_at = utcnow()
+        transaction_to.updated_at = utcnow()
+
+        for transaction in (transaction_from, transaction_to):
+            previous = context.earliest_date_by_broker.get(transaction.broker_id)
+            context.earliest_date_by_broker[transaction.broker_id] = transaction.date if previous is None else min(previous, transaction.date)
+
+        context.results.append(
+            TXBatchResultItem(
+                operation="split",
+                index=original_index,
+                ids=[transaction_from.id, transaction_to.id],
+                status="success",
+            )
+        )
+
+
+async def apply_updates(
+    service: TransactionService,
+    context: TransactionBatchContext,
+) -> None:
+    """Apply parsed updates and validate each merged final state."""
+    for original_index, item in context.parsed_updates:
+        transaction = context.existing_by_id.get(item.id)
+        if transaction is None:
+            context.issues.append(
+                TXValidationIssue(
+                    operation="update",
+                    index=original_index,
+                    ref_id=item.id,
+                    error=f"Transaction {item.id} not found",
+                    code=TXValidationCode.TX_NOT_FOUND.value,
+                    params={"id": item.id},
+                )
+            )
+            continue
+        try:
+            check_date = _apply_update_type_and_date(transaction, item)
+            _apply_update_values(transaction, item)
+            await _apply_update_event(service, transaction, item)
+            rule_errors = _validate_updated_final_state(transaction, item)
+            if rule_errors:
+                for rule_error in rule_errors:
+                    context.issues.append(
+                        TXValidationIssue(
+                            operation="update",
+                            index=original_index,
+                            ref_id=item.id,
+                            error=rule_error.message(),
+                            code=rule_error.type,
+                            params=(dict(rule_error.context) if rule_error.context else None),
+                        )
+                    )
+                continue
+
+            transaction.updated_at = utcnow()
+            previous = context.earliest_date_by_broker.get(transaction.broker_id)
+            context.earliest_date_by_broker[transaction.broker_id] = check_date if previous is None else min(previous, check_date)
+            context.results.append(
+                TXBatchResultItem(
+                    operation="update",
+                    index=original_index,
+                    ids=[item.id],
+                    status="success",
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            context.issues.append(
+                TXValidationIssue(
+                    operation="update",
+                    index=original_index,
+                    ref_id=item.id,
+                    error=str(exc),
+                )
+            )
+
+
+def _apply_update_type_and_date(
+    transaction: Transaction,
+    item: TXUpdateItem,
+):
+    """Apply type/date fields and return the earliest replay date."""
+    check_date = transaction.date
+    if item.type is not None and item.type != transaction.type:
+        allowed = get_swap_group(transaction.type)
+        if item.type not in allowed:
+            raise ValueError(f"Cannot change type from {transaction.type.value} to {item.type.value} (allowed swaps: {', '.join(tx_type.value for tx_type in allowed)})")
+        transaction.type = item.type
+    if item.date is not None:
+        check_date = min(check_date, item.date)
+        transaction.date = item.date
+    return check_date
+
+
+def _apply_update_values(
+    transaction: Transaction,
+    item: TXUpdateItem,
+) -> None:
+    """Apply optional scalar fields without changing their current semantics."""
+    if item.quantity is not None:
+        transaction.quantity = item.quantity
+    if item.cash is not None:
+        transaction.amount = item.cash.amount
+        transaction.currency = item.cash.code
+    if item.tags is not None:
+        transaction.tags = tags_to_csv(item.tags)
+    if item.description is not None:
+        transaction.description = item.description
+    if item.cost_basis_override is not None:
+        transaction.cost_basis_override = item.cost_basis_override.amount
+        transaction.cost_basis_currency = item.cost_basis_override.code
+
+
+async def _apply_update_event(
+    service: TransactionService,
+    transaction: Transaction,
+    item: TXUpdateItem,
+) -> None:
+    """Apply the event-link sentinel or validate a concrete event."""
+    if item.asset_event_id is None:
+        return
+    if item.asset_event_id == 0:
+        transaction.asset_event_id = None
+        return
+    if transaction.asset_id is None:
+        raise ValueError("Cannot link asset_event_id: transaction has no asset_id")
+    await service._validate_asset_event_link(
+        item.asset_event_id,
+        transaction.asset_id,
+    )
+    transaction.asset_event_id = item.asset_event_id
+
+
+def _validate_updated_final_state(
+    transaction: Transaction,
+    item: TXUpdateItem,
+):
+    """Run shared business rules against the merged ORM state."""
+    final_cash = Currency(code=transaction.currency, amount=transaction.amount) if transaction.currency else None
+    return validate_transaction_business_rules(
+        tx_type=transaction.type,
+        asset_id=transaction.asset_id,
+        quantity=transaction.quantity,
+        cash=final_cash,
+        asset_event_id=transaction.asset_event_id,
+        cost_basis_mode=item.cost_basis_mode,
+    )
+
+
+async def validate_updated_pairs(
+    service: TransactionService,
+    context: TransactionBatchContext,
+) -> None:
+    """Validate pair description/tag equality after updates."""
+    for original_index, item in context.parsed_updates:
+        if item.tags is None and item.description is None:
+            continue
+        transaction = context.existing_by_id.get(item.id)
+        if not transaction or not transaction.related_transaction_id:
+            continue
+        partner = context.existing_by_id.get(transaction.related_transaction_id)
+        if partner is None:
+            partner = await service.session.get(
+                Transaction,
+                transaction.related_transaction_id,
+            )
+        if partner is not None:
+            description_result = service._validate_pair_description_tags(
+                transaction,
+                partner,
+            )
+            if description_result is not None:
+                error_message, error_code, error_params = description_result
+                context.issues.append(
+                    TXValidationIssue(
+                        operation="update",
+                        index=original_index,
+                        ref_id=item.id,
+                        error=error_message,
+                        code=error_code,
+                        params=error_params,
+                    )
+                )
