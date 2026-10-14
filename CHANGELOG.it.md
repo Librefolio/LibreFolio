@@ -7,9 +7,21 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ---
 
-## [1.2.0] - 2026-10-19
+## [1.2.0] - 2026-10-14
 
-**In preparazione: v1.2.0.** Queste funzionalità e correzioni sono in fase di preparazione; questa versione non è ancora stata rilasciata.
+Cosa aggiunge la 1.2 rispetto alla 1.1:
+
+- 🧰 **Strumenti**: una nuova sezione, con il primo strumento, l'**Allocatore PAC**, che calcola gli acquisti per avvicinare l'allocazione ai pesi obiettivo.
+- 📉 **Rischio**: la scheda Rischio della Dashboard e dei broker risponde a quattro domande, e l'analisi del rischio esce dalla beta, tranne la simulazione.
+- 💰 **Costo d'acquisto e P&L**: grazie alla segnalazione [#32](https://github.com/Librefolio/LibreFolio/issues/32) abbiamo evidenziato un problema nel calcolo del costo di ogni acquisto quando ci sono dei cambi di valuta, e di conseguenza le metriche nelle KPI card come il P&L risultavano scorrette. Adesso l'algoritmo è stato corretto e ogni acquisto viene convertito al cambio del suo giorno, garantendo totali corretti.
+- 💱 **Liquidità in altre valute**: adesso la liquidità tenuta in un'altra valuta viene valutata al cambio di ogni giorno, e la vista Periodo mostra quanto il cambio l'ha fatta guadagnare o perdere.
+- 📊 **Dashboard**: sono stati aggiunti la modalità privacy, la vista P&L nel grafico Crescita, il rendimento sul costo, i benchmark e una visualizzazione nel grafico a torta per i nove nuovi tipi di asset.
+- 📥 **Import**: Scalable Capital, Danske Bank (alpha) e gli estratti DEGIRO in ogni lingua; e adesso, se carichi un file sul broker sbagliato, l'app te lo dice subito.
+- 🌍 **Lingue**: numeri, date e il changelog seguono la lingua dell'interfaccia.
+- 👋 **Primo accesso**: adesso i nuovi utenti hanno un tour iniziale e delle guide che gli mostrano l'interfaccia durante il primo accesso.
+- ⚡ **Prestazioni**: le pagine scaricano meno dati, e i report non si bloccano più sulle storie di cambi molto lunghe.
+- 🔒 **Sicurezza**: chiusa una falla di tipo XSS, alcune API adesso richiedono l'accesso, e la barra laterale dice se la connessione è sicura.
+- 🐛 **Correzioni**: corretti molti difetti, alcuni presenti dalla v0.9.0.
 
 ### ✨ Aggiunto
 
