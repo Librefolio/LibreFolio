@@ -1904,6 +1904,36 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
   Dettagli: README della 56.
 
+## T (colori) · Token e tema (Phase_1/10_colorSystem)
+
+> Workstream T del programma colori, aperto il 14/10 (D-T1). Da non confondere con la sezione «T · Matematica
+> finanziaria e riordino (43)». Piano: [T-tokensTheme](../Phase_1/10_colorSystem/T-tokensTheme/plan-phase01TokensTheme.prompt.md).
+
+- **T-B1 · I requisiti della password detti anche a chi usa un lettore di schermo** — basso; T, 14/10.
+  - Oggi ✓ e ✗ distinguono un requisito soddisfatto senza affidarsi al colore, ma non hanno testo per i lettori di
+    schermo.
+  - Servono due chiavi i18n («soddisfatto», «non soddisfatto») in testo nascosto: lo fa A, che possiede la card di
+    registrazione dopo il giro di T.
+
+  Dettagli: piano di T, passo T-2.
+- **T-B2 · Ruoli in attesa del giro 2 della designer** — medio; T, 14/10.
+  - Sono derivati provvisori, calcolati solo dai suoi valori: hover e premuto in chiaro, fondale delle modali, inverso
+    dei tooltip, tinte di avviso, errore e informazione.
+  - Da decidere con lei:
+    - guadagno e perdita distinti da successo ed errore;
+    - l'info `#155EEF`, molto saturo;
+    - le opacità delle colline del login in scuro;
+    - palette categoriale e colori dei grafici.
+  - Le otto correzioni minime di contrasto (D-T6) vanno confermate.
+
+  Dettagli: piano di T, «Autorizzazione e decisioni»; `frontend/src/lib/theme/tokens.css`.
+- **T-B3 · Uno scanner dei colori solo, con L** — basso; T, 14/10.
+  - Il cricchetto (`frontend/scripts/theme/theme-roles.mjs`) copia la regex delle classi di palette dallo scanner del
+    Designer Lab (`scan-colors.mjs`).
+  - Quando L entra in `dev_release2`, un modulo comune evita che i due conteggi divergano.
+
+  Dettagli: piano di T, passo T-1.
+
 ---
 
 ## Sessioni della 1.3.0 (fase 01)
