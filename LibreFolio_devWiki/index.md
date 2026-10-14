@@ -492,7 +492,7 @@
 | [[entities/portfolio-engine]] | Portfolio engine, `financial_math/portfolio/` since 2026-10-12 (six modules; one 2 872-line file before) — ScopeAwareClassifier→DailyStateBuilder→DerivedViewsBuilder→PortfolioCalculationEngine. Costs from one `compute_average_costs()` call (2026-10-07); cash from one `compute_native_cash()` call, foreign cash revalued on rate-change days (2026-10-11); internal transfers as zero-sum flows between broker lines (2026-10-11) |
 | [[entities/portfolio-service]] | PortfolioService (2 358 lines at `5d0585595`) — orchestration, L2 TTL cache, get_report/summary/history/contribution. Since 2026-10-07 `compute_wac_iterative()` is a facade over `compute_average_costs()`; realized P&L and period-boundary costs come from the engine. Since lot 41 cards, headline, histories and contributions read the run's native cash (headline = Σ cards, «FX on cash» rows) and the cards the engine's capital |
 | [[entities/test-runner]] | `scripts/test_runner/` — **30 flat modules, 15 categories, 250 `add_test()` call sites**, registry built by 14 explicit `populate_registry()` calls (no auto-discovery). Rewritten from the code 2026-09-01 |
-| [[entities/video-promo-remotion]] | Remotion-based promotional video pipeline (React, i18n-driven) |
+| [[entities/video-promo-remotion]] | Remotion promotional video (React, i18n-driven) — **moved to the business repository on 2026-10-14**; its asset sync still reads `mkdocs_src/docs/gallery/` and `static/` |
 | [[entities/time-series-aggregation]] | `timeSeriesAggregation.ts` — foundational bucketing/aggregation/hysteresis/debounce utility for resolution-aware charts |
 
 ## Workflows
