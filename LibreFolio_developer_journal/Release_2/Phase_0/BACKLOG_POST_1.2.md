@@ -1983,7 +1983,10 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - 15 menzioni in prosa, in 14 file. Le tabelle «Source files» sono già aggiornate (C6).
   - `domains/auth.md` descrive una gestione utenti dalla UI che non esiste (F-002 l'ha già corretta).
   - `domains/layout-settings.md` descrive un footer con il ticker che non esiste.
-  - Dettagli: idem, §2 «Deriva della devWiki» e «A1.4».
+  - Dopo A2 (15/10), 4 righe di prosa citano ancora le cartelle frontend spostate: `features/F-104.md:26`,
+    `features/F-002.md:35`, `problems/copy-buttons-without-http-fallback.md:31`, `:33`. Le ultime due sono una tabella
+    del corpo, non «Source files».
+  - Dettagli: idem, §2 «Deriva della devWiki», «A1.4» e «A2.3».
 - **A-5 · Formato preesistente in file toccati da A1** — minimo; A (14/10).
   - black riformatterebbe 4 file, già così alla base: `scripts/user_cli.py`, `scripts/coverage_analysis.py`,
     `test_portfolio_api.py`, `test_portfolio_wac.py`.
