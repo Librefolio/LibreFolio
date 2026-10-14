@@ -7,9 +7,21 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ---
 
-## [1.2.0] - 2026-10-19
+## [1.2.0] - 2026-10-14
 
-**Preparación de la v1.2.0.** Estas características y correcciones están en preparación; esta versión aún no se ha publicado.
+Lo que la 1.2 añade a la 1.1:
+
+- 🧰 **Herramientas**: una nueva sección, con su primera herramienta, el **Asignador PAC**, que calcula las compras que acercan tu asignación a sus pesos objetivo.
+- 📉 **Riesgo**: la pestaña Riesgo del Panel y de las páginas de bróker responde a cuatro preguntas, y el análisis de riesgos sale de beta, excepto la simulación.
+- 💰 **Coste de compra y P&L**: gracias a la incidencia [#32](https://github.com/Librefolio/LibreFolio/issues/32), encontramos un problema en cómo se calculaba el coste de cada compra cuando intervenían tipos de cambio, por lo que las métricas de las tarjetas KPI, como el P&L, eran incorrectas. El algoritmo ya está corregido: cada compra se convierte al tipo de cambio de su propia fecha, y los totales son correctos.
+- 💱 **Efectivo en otras divisas**: el efectivo que tienes en otra divisa ahora se valora al cambio de cada día, y la vista Periodo muestra cuánto le ha hecho ganar o perder el tipo de cambio.
+- 📊 **Panel**: llegan el modo privacidad, la vista de P&L del gráfico Crecimiento, el Rendimiento sobre coste y los índices de referencia, y el donut muestra los nueve nuevos tipos de activo agrupados en sus familias.
+- 📥 **Importaciones**: Scalable Capital, Danske Bank (alfa) y los extractos de DEGIRO en cualquier idioma; y si subes un archivo al bróker equivocado, la aplicación ahora te lo dice enseguida.
+- 🌍 **Idiomas**: los números, las fechas y el registro de cambios siguen el idioma de la interfaz.
+- 👋 **Primer inicio de sesión**: los nuevos usuarios ahora reciben un recorrido rápido y guías que les muestran la interfaz la primera vez que inician sesión.
+- ⚡ **Rendimiento**: las páginas descargan menos datos, y los informes ya no se atascan con historiales de tipos de cambio muy largos.
+- 🔒 **Seguridad**: se ha cerrado un problema de cross-site scripting (XSS), algunos endpoints de la API ahora requieren iniciar sesión, y la barra lateral te indica si tu conexión es segura.
+- 🐛 **Correcciones**: se han corregido muchos defectos, algunos presentes desde la v0.9.0.
 
 ### ✨ Añadido
 

@@ -7,9 +7,21 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.2.0] - 2026-10-19
+## [1.2.0] - 2026-10-14
 
-**Préparation de la v1.2.0.** Ces fonctionnalités et correctifs sont en cours de préparation ; cette version n'a pas été publiée.
+Ce que la 1.2 ajoute à la 1.1 :
+
+- 🧰 **Outils** : une nouvelle section, avec son premier outil, l'**Allocateur PAC**, qui calcule les achats qui rapprochent votre allocation de ses poids cibles.
+- 📉 **Risque** : l'onglet Risque du Tableau de bord et des pages Courtiers répond à quatre questions, et l'analyse des risques quitte la bêta, sauf la simulation.
+- 💰 **Coût d'achat et P&L** : grâce au signalement [#32](https://github.com/Librefolio/LibreFolio/issues/32), nous avons trouvé un problème dans le calcul du coût de chaque achat en présence de taux de change, si bien que les indicateurs des cartes KPI, comme le P&L, étaient faux. L'algorithme est désormais corrigé : chaque achat est converti au taux de sa propre date, et les totaux sont justes.
+- 💱 **Liquidités dans d'autres devises** : les liquidités détenues dans une autre devise sont désormais valorisées au taux de chaque jour, et la vue Période montre combien le taux de change leur a fait gagner ou perdre.
+- 📊 **Tableau de bord** : le mode confidentialité, la vue P&L du graphique Croissance, le Rendement sur coût et les indices de référence font leur apparition, et le diagramme en anneau montre les neuf nouveaux types d'actifs regroupés dans leurs familles.
+- 📥 **Imports** : Scalable Capital, Danske Bank (alpha) et les relevés DEGIRO dans n'importe quelle langue ; et si vous téléversez un fichier vers le mauvais courtier, l'application vous le signale désormais tout de suite.
+- 🌍 **Langues** : les nombres, les dates et le journal des modifications suivent la langue de l'interface.
+- 👋 **Première connexion** : les nouveaux utilisateurs ont désormais une visite rapide et des guides qui leur montrent l'interface la première fois qu'ils se connectent.
+- ⚡ **Performances** : les pages téléchargent moins de données, et les rapports ne se bloquent plus sur de très longs historiques de taux de change.
+- 🔒 **Sécurité** : une faille de cross-site scripting (XSS) est fermée, certains points de terminaison de l'API exigent désormais une connexion, et la barre latérale vous indique si votre connexion est sécurisée.
+- 🐛 **Corrections** : de nombreux défauts sont corrigés, dont certains présents depuis la v0.9.0.
 
 ### ✨ Ajouté
 
