@@ -28,6 +28,13 @@
 > in `dev_release2`. La run finale con coverage sull'albero del codice (`10e646f79`) era verde, 0 rossi; la galleria
 > finale anche. Le sessioni figlie della release (R, V, U, T, I, M, W) sono archiviate: il loro lavoro aperto è in
 > questo file, sezione per sezione. Da qui si pianifica la 1.3.0.
+>
+> **Dopo il rilascio, sempre il 14/10**: la pipeline di rilascio è verde (run 38540086298) e la pagina wiki della
+> release è `released`. Il repo è stato ripulito: il progetto video è passato al repo business; `POC_UX`, `dev.sh` e
+> il pacchetto `engineering-skills` sono usciti, la storia no. I branch locali `e-alfy-*` delle sessioni archiviate
+> sono cancellati, tutti già contenuti in `dev_release2`. Il CHANGELOG ha un capitolo `[Unreleased]` con la sola
+> sezione «🧹 Repository cleanup»: le voci della 1.3.0 vanno lì. Due decisioni aperte del developer: **C-92** qui
+> sotto e il grafo della devWiki («Devwiki e grafo», sezione C).
 
 1. Questo file, per sapere cosa resta e dove sono i dettagli.
 2. Le regole del progetto: [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md). La
@@ -362,11 +369,19 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
 - **C-91 · Collaudare gli import di Interactive Brokers e Fineco su report veri** — minimo; utente C, chat del 04/09.
   Sono ancora Beta, scritti su esempi trovati online: chiedere all'utente un report vero con i numeri cambiati,
   ricavarne fixture sintetiche e, se regge, togliere il Beta. Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 32.
+- **C-92 · Il capitolo 1.2.0 del CHANGELOG non cita due idee dell'utente C che sono nel codice** — minimo, decisione
+  del developer; coordinatore, 14/10. I settori «Obbligazioni societarie» e «Titoli di Stato», assegnati da Borsa
+  Italiana, e l'import CSV delle distribuzioni per settore e paese sono nella 1.2.0, ma il capitolo non li nomina. Due
+  strade: aggiungerle come correzione dopo il rilascio, in 4 lingue con lo stamp del pezzo (il capitolo è rilasciato,
+  quindi `translate-validate` è severo), oppure lasciare il capitolo com'è. Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voci 8 e 17.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
   `graph.json` già presente, `./dev.py graph update` non si ferma: per questo non l'ho lanciato. Il grafo è fermo al
-  10/09 (cache AST `v0.8.46`). Strade: fissare graphify alla 0.8.x, oppure un corpus senza link esterni.
+  10/09 (cache AST `v0.8.46`). Strade: fissare graphify alla 0.8.x, oppure un corpus senza link esterni. Nello stesso
+  giro, `check_source_paths.py`: segnala come mancanti le cartelle di output della coverage (`frontend/coverage-js/`,
+  `htmlcov-backend/`, `htmlcov-backend-e2e/`, `htmlcov-frontend/`), ignorate da git, quando non sono sul disco (in ogni
+  worktree nuovo, e nel checkout principale dopo la pulizia del 14/10). Dovrebbe saltare i percorsi ignorati da git.
 
 ## Risk · Rischio (02)
 
