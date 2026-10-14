@@ -22,7 +22,7 @@ from backend.app.config import PROJECT_ROOT, TEST_LANE_HEADER, is_test_mode
 from backend.app.db.models import User
 from backend.app.logging_config import get_logger
 from backend.app.schemas.system import ConnectionSecurityResponse, ContainerImageStatusResponse, DependencyInfo, HealthCheckResponse, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
-from backend.app.services.container_registry import probe_container_image
+from backend.app.services.platform.container_registry import probe_container_image
 from backend.app.services.provider_registry import AssetProviderRegistry, BRIMProviderRegistry, FXProviderRegistry, SignalPluginRegistry
 from backend.app.utils.runtime.network import classify_ip, client_address
 from backend.app.utils.runtime.version import get_git_version

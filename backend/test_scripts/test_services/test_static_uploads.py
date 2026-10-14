@@ -20,8 +20,8 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-import backend.app.services.static_uploads as static_uploads
-from backend.app.services.static_uploads import (
+import backend.app.services.files.static_uploads as static_uploads
+from backend.app.services.files.static_uploads import (
     UploadSecurityError,
     _detect_actual_mime_type,
     _load_metadata,

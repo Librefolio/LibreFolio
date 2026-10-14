@@ -174,7 +174,7 @@ cache and the dismissal, and reports errors.
 The update check reports a new release only once its Docker image can be pulled from GHCR.
 GHCR's anonymous token handshake is not available to browsers through CORS, so the frontend
 calls `GET /api/v1/system/container-image-status?tag=X.Y.Z` (authenticated) and the backend
-performs it (`backend/app/services/container_registry.py`):
+performs it (`backend/app/services/platform/container_registry.py`):
 
 1. Accept only a stable `X.Y.Z` tag; both the route's query pattern and the service check it.
 2. Send an anonymous `HEAD` for the tag's manifest on `ghcr.io/librefolio/librefolio`. Any

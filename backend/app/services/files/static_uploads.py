@@ -16,7 +16,7 @@ Storage structure:
     └── {uuid}.json      # Metadata sidecar
 
 Usage:
-    from backend.app.services.static_uploads import (
+    from backend.app.services.files.static_uploads import (
         save_upload,
         list_uploads,
         get_upload_info,

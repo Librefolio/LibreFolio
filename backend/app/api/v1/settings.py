@@ -40,8 +40,8 @@ from backend.app.services.onboarding_service import (
     transition_onboarding_progress,
     transition_onboarding_step_progress,
 )
-from backend.app.services.scheduler import read_job_log
-from backend.app.services.scheduler.state import load_state
+from backend.app.services.platform.scheduler import read_job_log
+from backend.app.services.platform.scheduler.state import load_state
 from backend.app.services.settings_service import (
     GlobalSettingNotFoundError,
     GlobalSettingValueError,
