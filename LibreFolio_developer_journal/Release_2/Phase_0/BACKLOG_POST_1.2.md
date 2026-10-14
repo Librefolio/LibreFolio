@@ -24,6 +24,11 @@
 
 ## 🧭 Ripartire da qui
 
+> **La 1.2.0 è uscita il 14/10/2026**: tag `v1.2.0`, commit `cf00fac7d` su `main`, con lo stesso albero di `a3fe2eb04`
+> in `dev_release2`. La run finale con coverage sull'albero del codice (`10e646f79`) era verde, 0 rossi; la galleria
+> finale anche. Le sessioni figlie della release (R, V, U, T, I, M, W) sono archiviate: il loro lavoro aperto è in
+> questo file, sezione per sezione. Da qui si pianifica la 1.3.0.
+
 1. Questo file, per sapere cosa resta e dove sono i dettagli.
 2. Le regole del progetto: [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md). La
    decisione 10 dice che la matematica finanziaria ha una casa sola, `backend/app/services/financial_math/`.
