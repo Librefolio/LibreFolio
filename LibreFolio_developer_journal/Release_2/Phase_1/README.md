@@ -14,7 +14,8 @@
    funzioni, superfici condivise, cancelli, decisioni aperte.
 3. Questo README: chi lavora dove, su quale corsia, a che punto.
    Le decisioni che aspettano il developer: [decisioni-analisi-20261014.md](decisioni-analisi-20261014.md).
-4. I vincoli del programma colori (cartelle 55 e 56 in `Phase_0`): il §7 del piano.
+4. I vincoli del programma colori: il §7 del piano. Il programma ha la sua cartella, [`10_colorSystem/`](10_colorSystem/README.md),
+   scritta solo dal coordinatore colori.
 5. Le voci chiuse dalla 1.3 che nascono in `Phase_0` si marcano ✅ anche lì (decisione del
    developer): le marca il coordinatore a ogni treno.
 
