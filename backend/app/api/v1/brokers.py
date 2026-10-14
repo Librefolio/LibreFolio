@@ -82,6 +82,7 @@ from backend.app.schemas.brokers import (
 )
 from backend.app.schemas.uploads import FilePreviewResponse
 from backend.app.services import brim_gap_fix, brim_provider, brim_report_sets
+from backend.app.services.accounts.global_settings_service import get_max_upload_mb
 from backend.app.services.brim_parse_pool import parse_file_offloaded
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
 from backend.app.services.brim_report_sets import BRIMSetError, BRIMSetIncomplete
@@ -92,7 +93,6 @@ from backend.app.services.files.file_preview import (
     build_image_preview_url,
     build_preview_response,
 )
-from backend.app.services.global_settings_service import get_max_upload_mb
 from backend.app.services.provider_registry import BRIMProviderRegistry
 
 logger = get_logger(__name__)

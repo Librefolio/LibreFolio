@@ -341,3 +341,145 @@
   - Piano di R spostato in `Phase_1/10_colorSystem/R-colorRefactor/` con un `git mv` del coordinatore (`74e94dee6`);
     tolta la cartella vuota rimasta. R deve correggere il link al backlog (riga 8).
   - R prosegue con W8–W9 (lotto D).
+
+## 23:05 — Checkpoint 2 di L; finestra di domani
+
+- **L, checkpoint 2:** `87ceceede` (54 file): selettore di elementi (5b), test unitari ed E2E, categoria
+  `front-designer-lab`, documentazione.
+  - Controllo a campione: 15 file, 394 test.
+  - Merge di base `afea11fe2` → `bb87b0ab7`, albero = simulazione. Piano spostato in
+    `Phase_1/10_colorSystem/L-designerLab/` (`93bf8c98a`), cartella vuota tolta. L corregge il link al backlog (riga 6).
+  - **Gallery A/B:** domani, dopo l'ingresso di G e una nuova base di L, con le maschere della misura finale.
+    Integrazione di L dopo la A/B.
+  - **Nota per l'integrazione di R:** il test E2E L3 dipende da un colore del grafico della crescita nel catalogo. Al
+    cancello di R vanno fatti girare anche i test `front-designer-lab`.
+- **1.3:** il developer ha dato un via parziale (`afea11fe2`). H, X, A, W e J lavorano al primo checkpoint sulle corsie
+  6181–6185, con suite backend complete anche stanotte.
+- **Finestra di domani, 15/10:** dalle 09:00, circa 2 ore (misura finale di G sul `dev_release2` con G, poi candidata di
+  R per A+B+C). Conferma alla 1.3 15 minuti prima; poi altre finestre per la A/B di L e i piloti di T.
+
+## 23:20 — T-1 integrato in `dev_release2`
+
+- **T-1 (B1, fondamenta):** checkpoint `2018fd853`, 12 file.
+  - `tokens.css` con i ruoli `--lf-*` e le utility `@theme inline`; correzioni di contrasto D-T6 commentate.
+  - `app.css`: eccezioni `:where` sulle 4 regole strutturali di P1, tolte 2 regole morte, `@source not`.
+  - Scanner `theme-roles.mjs` e baseline TSV: m1 11.435 classi, m2 1.785 letterali, 315 file.
+  - Gate `themeRoles` e `themeTokens` in `core-unit`; istruzioni per gli agenti e skill `theme-roles`.
+  - Prove dichiarate da T: CSS compilato, 22 file su 23 identici, nel ventitreesimo solo variabili, 4 selettori e 2
+    regole morte; `core-unit` 130 file / 4.245 test; dead code identico.
+  - Controllo a campione del coordinatore: gate 50/50, `--check` pulito; esclusioni del Lab (anche la rotta) e dei
+    test verificate.
+- **Merge di base** `793395913` (1.3) → `4e024dfe8`, albero = simulazione.
+- **`dev_release2`:** avanzamento veloce `793395913` → `4e024dfe8`, annunciato prima alla 1.3. Il file non committato
+  della 1.3 non è stato toccato. Alla 1.3 sono state girate la sintassi del taglio dichiarato e la regola di
+  risoluzione dei conflitti.
+- **Conseguenze:**
+  - R, al prossimo merge di base: conflitto additivo atteso in `_frontend_utility.py` (gate di R e di T dopo
+    `clipboardSink`); va ricatturato il CSS compilato di riferimento.
+  - L e G: le loro modifiche sono fuori dal perimetro del cricchetto (Lab esentato, E2E esclusi). G-4 non tocca
+    classi. Va verificato `--check` sull'albero fuso al loro ingresso.
+- **T** riparte con T-2 (accesso); prima dell'integrazione, gli scatti dell'accesso vanno al developer.
+
+## 23:30 — Lotto D di R
+
+- **Lotto D:** `98731240d` (32 file).
+  - W8: `lib/theme/themeMode.ts` è l'unico lettore del tema; 16 osservatori e 23 controlli `dark` passano da lì; gate
+    `themeModeReads`.
+  - W9: gli ultimi 4 file con stili P8 passano a `--lf-cmp-*`; 728 token in tutto.
+  - Letterali fuori da `lib/theme`: hex 1.554 → 88, funzioni 198 → 50.
+  - Controllo a campione: 43/43.
+  - Nuova voce R-7: `SemiDonutChart` e l'anteprima a tabella di `FilePreviewModal` leggono il tema solo al disegno.
+- **Merge di base con `6ab653dd4` (dentro c'è T-1) lasciato aperto:** conflitto atteso in `_frontend_utility.py`, lista
+  di `core-unit`. R risolve tenendo tutte le righe, mette in stage quel solo file e valida la revisione combinata
+  (`core-unit`, `--check` di T, `svelte-check`, CSS di riferimento ricostruito e prova combinata). Poi il coordinatore
+  chiude il merge.
+- **Cancello unico A+B+C+D** domani, dopo la misura di G.
+- **23:40, merge di base di R chiuso:** `418ea8042` (genitori `98731240d` e `6ab653dd4`).
+  - Conflitto nel runner risolto da R tenendo le 5 righe.
+  - Il cricchetto di T ha visto lo scambio D3 in `themeStore.ts` (`#156534` → `#166534`). R ha usato l'`--accept` di T,
+    autorizzato dal coordinatore, con la motivazione D3.
+  - Revisione combinata: `core-unit` 136 file / 4.335 test, `--check` pulito (81 file sotto la registrazione: li stringe
+    T), `svelte-check` 0/0, CSS identico al target.
+  - T avvisato: la riga di `themeStore.ts` cambierà di nuovo in T-4.
+
+## 23:50 — Checkpoint del codice di G
+
+- **G, checkpoint 1:**
+  - `e23bf842c` `fix(assets): chip names provider on late catalogue` (G-4);
+  - `0076f4269` `test(gallery): deterministic shots, guard to exit`: `galleryShot.ts`, test paths, G-3, G-6 (uscita
+    sicura), `live_price_check.py`, piano 56, backlog G-1…G-8.
+- **Prove dichiarate da G:**
+  - statica pulita; test G-4 verde senza righe live;
+  - promote-merge 4/4; `g-verify2` 64/66, con i 2 rossi rifatti da soli verdi 2/2 (lentezza con carico 40–94 delle
+    corsie della 1.3);
+  - `live_price_check.py` riconosce la run nulla di `g-final-r2`.
+- **Merge di base con `424adb31c`, lasciato aperto per G.** Conflitti:
+  - `BACKLOG` (sezione G accanto a quella di T): si somma;
+  - posizione del piano, che git ha già portato in `10_colorSystem/G-galleryDeterminism/`;
+  - `README` del toolkit: si somma, e gli esempi passano da `python3` a `pipenv run python`.
+
+  G valida la revisione combinata (`--check`, `core-unit`, `front check`, G-4 da solo, `live_price_check`), poi il
+  coordinatore chiude il merge e integra G.
+- **Changelog di G-4**, da girare alla 1.3 dopo l'integrazione: «🐛 Fixed — The asset page now names the data provider
+  (for example «Yahoo Finance») instead of its internal code when the provider list arrives after the asset.»
+- **Misura del 15/10, comandi di G:**
+  1. `dev.py front build`, una volta sola;
+  2. `gallery_snapshot.sh g-final2-r1|r2 --port 6150 --data-dir /tmp/librefolio-r2-main`;
+  3. `live_price_check` su ogni snapshot;
+  4. `gallery_tool diff … --emit-masks` e `stability`.
+
+  Il cancello di R userà `--ignore-masks …/g-final2__r1__vs__r2/masks --stability …/stability.json`.
+- **Per la designer:**
+  - il tooltip «Promuovi coppia» resta sopra il titolo del modale di unione per 30 s;
+  - lo spazio di 8 px del filtro «Caricato da».
+- **Wiki, da proporre al historian:** G-6 (rotte tolte con la pagina viva), `networkidle` che in una SPA si risolve
+  subito, due comportamenti di Playwright 1.61.
+
+## 23:55 — T-2 e G integrati in `dev_release2`
+
+- **T-2 (accesso), checkpoint `a73eb7eda`, 20 file.**
+  - Card, campi, icone `User`/`Mail`/`Lock` (prop `icon` di `PasswordInput`), box dei requisiti sulla famiglia
+    `success`, barra a 3 stati, via il sottotitolo e la chiave `auth.registerTitle` (4 sorgenti).
+  - Pagina 404 e link del caffè sui ruoli. E2E `theme-roles` 8/8; baseline stretta (m1 11.325, m2 1.782).
+  - **Scatti approvati dal developer:** 28 PNG in `review/T2-auth/` della sessione del coordinatore.
+  - **Per la designer, da T:**
+    - in scuro lo sfondo del login è ancora vecchio (T-5, dopo G);
+    - il riquadro terminale di «password dimenticata» resta ardesia (manca un ruolo «codice»);
+    - il caffè in chiaro è `#895000` (5,95:1), più bruno del render;
+    - i controlli in alto cambiano con T-3.
+- **G:** merge di base chiuso dal coordinatore, `d1f98bbfb`. G aveva risolto il backlog, il piano spostato in
+  `G-galleryDeterminism/` e il README con `pipenv run python -m …live_price_check`.
+- **Integrazione:**
+  1. T: merge di base `d672b45da` → `d80b986bf`, albero = simulazione; avanzamento veloce di `dev_release2` a
+     `d80b986bf`.
+  2. G: merge di `d80b986bf` → `60b3f27aa`, albero = simulazione; avanzamento veloce di `dev_release2` a `60b3f27aa`.
+  3. Controllo d'integrazione nella corsia 6150: `core-unit` 130 file, 4.245 test verdi; `--check` pulito.
+- **1.3:** ha sospeso i suoi commit fino alla conferma dello SHA. Da dirle:
+  - T-B4 è nella sezione «T (colori)»;
+  - la riga di changelog di G-4;
+  - FE5 (la pagina dell'asset) ora è libera.
+- **Domani alle 09:00:** misura finale sul `dev_release2` con G (comandi di G, `live_price_check` con pipenv).
+
+## 00:30 (15/10) — T-3, la shell
+
+- **T-3:** `bd51acbc2` (13 file).
+  - Barra laterale `bg-lf-brand` nei due temi (D-T2); sfondo dell'app `bg-lf-app`; intestazione e controlli in alto
+    sui ruoli.
+  - Nei file condivisi con la 1.3 cambiano solo le classi: le righe si pareggiano.
+  - E2E `theme-roles` 14/14, compreso il controllo negativo sulla card legacy in scuro; baseline stretta (m1 11.185,
+    m2 1.781).
+  - Nuove voci di backlog di T: T-B2 (stati del controllo di sicurezza sulla barra verde) e T-B5 (il tema scelto
+    dall'header si perde al login; l'accessibilità della shell).
+- **Merge di base con `833507302`** (G, T-2, documenti) → `dad0f6292`, albero = simulazione.
+- **Integrazione:** dopo la gallery candidata di domani e la revisione del developer, perché cambiano tutte le
+  schermate autenticate. 16 scatti di T in `review/T3-shell/`, sessione del coordinatore.
+- **T-5** (sfondo del login, `AnimatedBackground` passato a T dopo l'ingresso di G) autorizzato subito. Se il suo
+  checkpoint arriva entro le 09:00, la candidata copre T-3 e T-5 insieme.
+- **Calendario del 15/10:**
+  1. 09:00 misura finale di G sul target: r1 e r2 sullo stesso SHA, che fanno da riferimento dello stesso giorno;
+  2. candidata di R (lotti A–D);
+  3. candidata di L, con il Lab acceso e inattivo, contro r1: rende superflua la gallery «A» di L;
+  4. candidata di T (T-3, più T-5 se pronto).
+
+  R, L e T entrano solo dopo le loro candidate, così il target resta quello di r1. La 1.3 ferma le suite complete
+  nella finestra (09:00–12:00 circa), con conferma alle 08:45.

@@ -94,7 +94,7 @@ Table `user_onboarding_progress`: one row per user and guided onboarding flow, `
   the last terminal transition: the service sets one and clears the other.
 - 🔢 **`version`**: the content version the status refers to, `CHECK (version >= 1)`
   (`ck_user_onboarding_progress_version`). The current version of every flow is
-  `ONBOARDING_FLOW_VERSIONS` in `backend/app/services/onboarding_service.py`. A row behind it is
+  `ONBOARDING_FLOW_VERSIONS` in `backend/app/services/accounts/onboarding_service.py`. A row behind it is
   reported with `update_available` (optional replay); a complete or skip request must send the
   current version as `expected_version`, or it gets `409` `onboarding_version_mismatch`.
 

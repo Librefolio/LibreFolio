@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `./dev.sh` is gone: it only translated the old `db:upgrade`-style commands into `./dev.py` ones. The messages that still suggested it now name the `./dev.py` command.
 - An unused third-party skill pack (`.github/skills/engineering-skills/`) and a few leftover files in the repository root are removed.
 
+### 🐛 Fixed
+
+- The asset page now names the data provider (for example "Yahoo Finance") instead of its internal code when the provider list arrives after the asset.
+
 ---
 
 ## [1.2.0] - 2026-10-14

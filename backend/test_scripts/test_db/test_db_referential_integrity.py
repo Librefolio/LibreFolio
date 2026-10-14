@@ -53,7 +53,7 @@ from backend.app.db import (
 )
 from backend.app.db.models import FxRate, OnboardingFlow, OnboardingStatus, User, UserOnboardingProgress, UserOnboardingStepProgress
 from backend.app.db.session import get_async_engine, get_sync_engine
-from backend.app.services.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS, ensure_onboarding_progress
+from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS, ensure_onboarding_progress
 from backend.app.utils.datetime_utils import utcnow
 
 # ============================================================================

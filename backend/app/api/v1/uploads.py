@@ -30,6 +30,7 @@ from backend.app.schemas.uploads import (
     UploadListResponse,
     UploadResponse,
 )
+from backend.app.services.accounts.global_settings_service import get_max_upload_mb
 from backend.app.services.files.file_preview import (
     FilePreviewLinks,
     UnsupportedPreviewError,
@@ -45,7 +46,6 @@ from backend.app.services.files.static_uploads import (
     list_uploads,
     save_upload,
 )
-from backend.app.services.global_settings_service import get_max_upload_mb
 
 logger = structlog.get_logger(__name__)
 

@@ -33,8 +33,8 @@ from backend.app.db.base import SQLModel  # imports every model: SQLModel.metada
 from backend.app.db.models import GlobalSetting, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.auth import AuthLoginRequest, AuthLoginResponse, AuthRegisterRequest, ChangePasswordRequest
-from backend.app.services import auth_service, user_service
-from backend.app.services.global_settings_service import is_registration_enabled
+from backend.app.services.accounts import auth_service, user_service
+from backend.app.services.accounts.global_settings_service import is_registration_enabled
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -421,7 +421,7 @@ class TestLogin:
 
         from backend.app.db.session import get_async_engine  # noqa: PLC0415 — test-only local import
         from backend.app.schemas.settings import UserSettingsUpdate  # noqa: PLC0415 — test-only local import
-        from backend.app.services import settings_service, user_service  # noqa: PLC0415 — test-only local import
+        from backend.app.services.accounts import settings_service, user_service  # noqa: PLC0415 — test-only local import
 
         async with httpx.AsyncClient() as client:
             timestamp = int(datetime.now().timestamp() * 1000)
