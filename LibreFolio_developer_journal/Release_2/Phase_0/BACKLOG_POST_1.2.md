@@ -1828,6 +1828,16 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     compilato identico alla baseline. Si chiude con il commit del checkpoint e il cancello A.
 - **R-3 · Hex nei `<style>` in variabili CSS con lo stesso valore** (P8: `DataTable*`, modali file e immagini,
   `ConfirmModal`) — medio; coordinatore, 14/10. Dettagli: [report 02](55_colorSystem/analysis/02_ui_components.md), §4.
+  - Stato (R, 14/10): codice nel checkpoint del lotto C (W6–W7).
+    - 16 componenti, 908 dichiarazioni, 604 token `--lf-cmp-<componente>-<ruolo>` con gemelle `-dark`, su `:root` in
+      `lib/theme/components/{table,media,files,dialogs}.css`, importati dai componenti; le regole `.dark` restano
+      dove sono.
+    - I valori sono quelli che la build emetteva: esbuild quantizza i colori delle dichiarazioni, ma non quelli delle
+      custom property.
+    - Fuori dal CSS, cioè cheetah-grid e SVG in data URL, i colori vanno in `lib/theme/drawnColors.ts`.
+    - Prove: CSS compilato identico regola per regola; definizioni presenti con ogni pagina che le usa; gate
+      `themeComponentTokens` in `core-unit` (definizione unica, import, nessun token orfano).
+    - Si chiude con il commit e il cancello C.
 - **R-4 · Funzioni fragili e refusi senza effetto visibile** — basso; coordinatore, 14/10.
   - `hexToRgba` e la concatenazione `+ '88'` accettano solo `#rrggbb`.
   - La meta `theme-color` scura è `#156534` invece di `#166534`.
@@ -1841,6 +1851,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Da correggere quando un colore con spazi ci arriverà (fase B), con la gallery.
 
   Dettagli: piano R, «W0», nota «Fuori pista».
+- **R-6 · Viola della linea di anteprima negli editor dei dati** — minimo; coordinatore, 14/10.
+  - `color: '#a855f7'` scritto a mano in `assets/AssetDataEditorSection.svelte:248` e in
+    `fx/FxDataEditorSection.svelte:129`.
+  - Fuori dal perimetro di R: sono cartelle della 1.3. Passa alla fase B.
+  - Fino ad allora è un'eccezione del cricchetto (W10).
+
+  Dettagli: piano R, «W7», nota sulle eccezioni del cricchetto.
 
 ## G · Gallery deterministica (56)
 

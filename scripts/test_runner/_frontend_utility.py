@@ -112,6 +112,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/htmlSink.gate.test.ts",
             "src/clipboardSink.gate.test.ts",
             "src/themeColorMeta.gate.test.ts",
+            "src/themeComponentTokens.gate.test.ts",
             "src/lib/api/dashboardReportFixture.test.ts",
             "src/lib/theme/colorAlpha.test.ts",
             "src/lib/theme/chartTheme.test.ts",

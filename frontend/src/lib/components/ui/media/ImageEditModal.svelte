@@ -19,6 +19,7 @@
     import {blobToFile, getCroppedImageFromCropper, IMAGE_PRESETS, type PresetName} from '$lib/utils/files/imageCrop';
 
     import {numericArrows} from '$lib/actions/numericArrows';
+    import '$lib/theme/components/media.css';
     // Props
     export let open: boolean = false;
     export let zIndex: number = 50;
@@ -514,23 +515,23 @@
         align-items: center;
         justify-content: space-between;
         padding: 0.625rem 1rem;
-        border-bottom: 1px solid #e5e7eb;
+        border-bottom: 1px solid var(--lf-cmp-image-edit-divider-border);
         flex-shrink: 0;
     }
 
     :global(.dark) .modal-header {
-        border-bottom-color: #374151;
+        border-bottom-color: var(--lf-cmp-image-edit-divider-border-dark);
     }
 
     .modal-title {
         font-size: 1rem;
         font-weight: 600;
-        color: #111827;
+        color: var(--lf-cmp-image-edit-title-text);
         margin: 0;
     }
 
     :global(.dark) .modal-title {
-        color: #f3f4f6;
+        color: var(--lf-cmp-image-edit-title-text-dark);
     }
 
     .header-actions {
@@ -548,29 +549,29 @@
         border-radius: 0.375rem;
         border: none;
         background: transparent;
-        color: #6b7280;
+        color: var(--lf-cmp-image-edit-header-btn-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .header-btn:hover {
-        background: #f3f4f6;
-        color: #374151;
+        background: var(--lf-cmp-image-edit-btn-hover-bg);
+        color: var(--lf-cmp-image-edit-btn-text);
     }
 
     .header-btn.reset {
-        background: rgba(245, 158, 11, 0.1);
-        color: #f59e0b;
+        background: var(--lf-cmp-image-edit-header-btn-reset-bg);
+        color: var(--lf-cmp-image-edit-header-btn-reset-text);
     }
 
     .header-btn.reset:hover {
-        background: rgba(245, 158, 11, 0.2);
-        color: #d97706;
+        background: var(--lf-cmp-image-edit-header-btn-reset-hover-bg);
+        color: var(--lf-cmp-image-edit-header-btn-reset-hover-text);
     }
 
     :global(.dark) .header-btn:hover {
-        background: #374151;
-        color: #d1d5db;
+        background: var(--lf-cmp-image-edit-btn-hover-bg-dark);
+        color: var(--lf-cmp-image-edit-btn-text-dark);
     }
 
     /* Body */
@@ -601,57 +602,57 @@
         flex: 1;
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-cmp-image-edit-field-border);
         border-right: none;
         border-radius: 0.375rem 0 0 0.375rem;
-        background: white;
-        color: #374151;
+        background: var(--lf-cmp-image-edit-field-bg);
+        color: var(--lf-cmp-image-edit-field-text);
         outline: none;
     }
 
     .filename-input:focus {
-        border-color: #1a4031;
+        border-color: var(--lf-cmp-image-edit-accent-border);
     }
 
     :global(.dark) .filename-input {
-        background: #374151;
-        border-color: #4b5563;
-        color: #f3f4f6;
+        background: var(--lf-cmp-image-edit-field-bg-dark);
+        border-color: var(--lf-cmp-image-edit-field-border-dark);
+        color: var(--lf-cmp-image-edit-field-text-dark);
     }
 
     :global(.dark) .filename-input:focus {
-        border-color: #10b981;
+        border-color: var(--lf-cmp-image-edit-accent-border-dark);
     }
 
     .format-select {
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-cmp-image-edit-field-border);
         border-radius: 0 0.375rem 0.375rem 0;
-        background: #f3f4f6;
-        color: #374151;
+        background: var(--lf-cmp-image-edit-format-select-bg);
+        color: var(--lf-cmp-image-edit-field-text);
         cursor: pointer;
         outline: none;
     }
 
     :global(.dark) .format-select {
-        background: #4b5563;
-        border-color: #4b5563;
-        color: #f3f4f6;
+        background: var(--lf-cmp-image-edit-format-select-bg-dark);
+        border-color: var(--lf-cmp-image-edit-field-border-dark);
+        color: var(--lf-cmp-image-edit-field-text-dark);
     }
 
     /* Quality spinner (inline with filename) */
     .quality-spinner {
         display: flex;
         align-items: center;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-cmp-image-edit-field-border);
         border-radius: 0.375rem;
         overflow: hidden;
         flex-shrink: 0;
     }
 
     :global(.dark) .quality-spinner {
-        border-color: #4b5563;
+        border-color: var(--lf-cmp-image-edit-field-border-dark);
     }
 
     .spin-btn {
@@ -661,8 +662,8 @@
         width: 26px;
         height: 26px;
         border: none;
-        background: #f3f4f6;
-        color: #374151;
+        background: var(--lf-cmp-image-edit-btn-hover-bg);
+        color: var(--lf-cmp-image-edit-btn-text);
         cursor: pointer;
         font-size: 0.8125rem;
         font-weight: 600;
@@ -670,29 +671,29 @@
     }
 
     .spin-btn:hover {
-        background: #e5e7eb;
+        background: var(--lf-cmp-image-edit-spin-btn-hover-bg);
     }
 
     :global(.dark) .spin-btn {
-        background: #374151;
-        color: #d1d5db;
+        background: var(--lf-cmp-image-edit-btn-hover-bg-dark);
+        color: var(--lf-cmp-image-edit-btn-text-dark);
     }
 
     :global(.dark) .spin-btn:hover {
-        background: #4b5563;
+        background: var(--lf-cmp-image-edit-spin-btn-hover-bg-dark);
     }
 
     .quality-value {
         padding: 0 0.375rem;
         font-size: 0.6875rem;
         font-family: monospace;
-        color: #374151;
+        color: var(--lf-cmp-image-edit-quality-value-text);
         min-width: 32px;
         text-align: center;
     }
 
     :global(.dark) .quality-value {
-        color: #e5e7eb;
+        color: var(--lf-cmp-image-edit-quality-value-text-dark);
     }
 
     /* Cropper section with eye toggle on LEFT */
@@ -708,13 +709,13 @@
         align-items: center;
         justify-content: center;
         border-radius: 0.5rem;
-        background: rgb(255 255 255 / 0.55);
-        color: var(--color-libre-green, #16a34a);
+        background: var(--lf-cmp-image-edit-cropper-guard-bg);
+        color: var(--color-libre-green, var(--lf-cmp-image-edit-cropper-guard-text));
         cursor: progress;
     }
 
     :global(.dark) .cropper-guard {
-        background: rgb(15 23 42 / 0.55);
+        background: var(--lf-cmp-image-edit-cropper-guard-bg-dark);
     }
 
     .filename-input:disabled,
@@ -742,20 +743,20 @@
         height: 30px;
         border: none;
         border-radius: 0.25rem;
-        background: rgba(0, 0, 0, 0.5);
-        color: rgba(255, 255, 255, 0.7);
+        background: var(--lf-cmp-image-edit-ellipse-toggle-bg);
+        color: var(--lf-cmp-image-edit-ellipse-toggle-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .ellipse-toggle:hover {
-        background: rgba(0, 0, 0, 0.7);
-        color: white;
+        background: var(--lf-cmp-image-edit-ellipse-toggle-hover-bg);
+        color: var(--lf-cmp-image-edit-on-fill-text);
     }
 
     .ellipse-toggle.active {
-        background: rgba(16, 185, 129, 0.8);
-        color: white;
+        background: var(--lf-cmp-image-edit-ellipse-toggle-active-bg);
+        color: var(--lf-cmp-image-edit-on-fill-text);
     }
 
     /* ========= BOTTOM PANEL (2 columns) ========= */
@@ -764,12 +765,12 @@
         grid-template-columns: 1fr 1fr;
         gap: 0.5rem 1rem;
         padding: 0.625rem 0.75rem;
-        background: #f3f4f6;
+        background: var(--lf-cmp-image-edit-bottom-panel-bg);
         border-radius: 0.5rem;
     }
 
     :global(.dark) .bottom-panel {
-        background: #1a2332;
+        background: var(--lf-cmp-image-edit-bottom-panel-bg-dark);
     }
 
     .panel-col {
@@ -788,12 +789,12 @@
     .panel-label {
         font-size: 0.6875rem;
         font-weight: 500;
-        color: #6b7280;
+        color: var(--lf-cmp-image-edit-muted-text);
         min-width: 48px;
     }
 
     :global(.dark) .panel-label {
-        color: #9ca3af;
+        color: var(--lf-cmp-image-edit-muted-text-dark);
     }
 
     /* Preset buttons */
@@ -809,45 +810,45 @@
         padding: 0.1875rem 0.5rem;
         font-size: 0.625rem;
         font-weight: 500;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-cmp-image-edit-field-border);
         border-radius: 0.25rem;
-        background: white;
-        color: #374151;
+        background: var(--lf-cmp-image-edit-field-bg);
+        color: var(--lf-cmp-image-edit-btn-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .preset-btn:hover,
     .aspect-btn:hover {
-        border-color: #1a4031;
-        color: #1a4031;
+        border-color: var(--lf-cmp-image-edit-accent-border);
+        color: var(--lf-cmp-image-edit-preset-btn-hover-text);
     }
 
     .preset-btn.active,
     .aspect-btn.active {
-        background: #1a4031;
-        border-color: #1a4031;
-        color: white;
+        background: var(--lf-cmp-image-edit-accent-bg);
+        border-color: var(--lf-cmp-image-edit-accent-border);
+        color: var(--lf-cmp-image-edit-preset-btn-active-text);
     }
 
     :global(.dark) .preset-btn,
     :global(.dark) .aspect-btn {
-        background: #374151;
-        border-color: #4b5563;
-        color: #d1d5db;
+        background: var(--lf-cmp-image-edit-field-bg-dark);
+        border-color: var(--lf-cmp-image-edit-field-border-dark);
+        color: var(--lf-cmp-image-edit-btn-text-dark);
     }
 
     :global(.dark) .preset-btn:hover,
     :global(.dark) .aspect-btn:hover {
-        border-color: #10b981;
-        color: #10b981;
+        border-color: var(--lf-cmp-image-edit-accent-border-dark);
+        color: var(--lf-cmp-image-edit-preset-btn-hover-text-dark);
     }
 
     :global(.dark) .preset-btn.active,
     :global(.dark) .aspect-btn.active {
-        background: #10b981;
-        border-color: #10b981;
-        color: white;
+        background: var(--lf-cmp-image-edit-accent-bg-dark);
+        border-color: var(--lf-cmp-image-edit-accent-border-dark);
+        color: var(--lf-cmp-image-edit-preset-btn-active-text-dark);
     }
 
     /* Dimensions */
@@ -862,40 +863,40 @@
         padding: 0.1875rem 0.25rem;
         font-size: 0.6875rem;
         font-family: monospace;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-cmp-image-edit-field-border);
         border-radius: 0.25rem;
-        background: white;
-        color: #374151;
+        background: var(--lf-cmp-image-edit-field-bg);
+        color: var(--lf-cmp-image-edit-field-text);
         text-align: center;
         outline: none;
     }
 
     .dim-input:focus {
-        border-color: #1a4031;
+        border-color: var(--lf-cmp-image-edit-accent-border);
     }
 
     :global(.dark) .dim-input {
-        background: #374151;
-        border-color: #4b5563;
-        color: #f3f4f6;
+        background: var(--lf-cmp-image-edit-field-bg-dark);
+        border-color: var(--lf-cmp-image-edit-field-border-dark);
+        color: var(--lf-cmp-image-edit-field-text-dark);
     }
 
     :global(.dark) .dim-input:focus {
-        border-color: #10b981;
+        border-color: var(--lf-cmp-image-edit-accent-border-dark);
     }
 
     .dim-sep {
-        color: #9ca3af;
+        color: var(--lf-cmp-image-edit-faint-text);
         font-size: 0.6875rem;
     }
 
     .dim-unit {
         font-size: 0.625rem;
-        color: #9ca3af;
+        color: var(--lf-cmp-image-edit-faint-text);
     }
 
     :global(.lock-icon) {
-        color: #9ca3af;
+        color: var(--lf-cmp-image-edit-faint-text);
         margin-left: 0.125rem;
     }
 
@@ -913,7 +914,7 @@
 
     .scale-x {
         font-size: 0.625rem;
-        color: #9ca3af;
+        color: var(--lf-cmp-image-edit-faint-text);
     }
 
     .scale-input {
@@ -921,22 +922,22 @@
         padding: 0.1875rem 0.25rem;
         font-size: 0.6875rem;
         font-family: monospace;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-cmp-image-edit-field-border);
         border-radius: 0.25rem;
-        background: white;
-        color: #374151;
+        background: var(--lf-cmp-image-edit-field-bg);
+        color: var(--lf-cmp-image-edit-field-text);
         text-align: center;
         outline: none;
     }
 
     .scale-input:focus {
-        border-color: #1a4031;
+        border-color: var(--lf-cmp-image-edit-scale-input-focus-border);
     }
 
     :global(.dark) .scale-input {
-        background: #374151;
-        border-color: #4b5563;
-        color: #f3f4f6;
+        background: var(--lf-cmp-image-edit-field-bg-dark);
+        border-color: var(--lf-cmp-image-edit-field-border-dark);
+        color: var(--lf-cmp-image-edit-field-text-dark);
     }
 
     /* Info values (right column) */
@@ -947,26 +948,26 @@
     .info-value {
         font-size: 0.6875rem;
         font-family: monospace;
-        color: #4b5563;
+        color: var(--lf-cmp-image-edit-info-value-text);
     }
 
     :global(.dark) .info-value {
-        color: #9ca3af;
+        color: var(--lf-cmp-image-edit-info-value-text-dark);
     }
 
     /* Error */
     .error-message {
         padding: 0.5rem 0.75rem;
-        background-color: #fef2f2;
-        border: 1px solid #fecaca;
+        background-color: var(--lf-cmp-image-edit-error-message-bg);
+        border: 1px solid var(--lf-cmp-image-edit-error-message-border);
         border-radius: 0.375rem;
-        color: #dc2626;
+        color: var(--lf-cmp-image-edit-error-message-text);
         font-size: 0.8125rem;
     }
 
     :global(.dark) .error-message {
-        background-color: rgba(220, 38, 38, 0.1);
-        border-color: rgba(220, 38, 38, 0.3);
+        background-color: var(--lf-cmp-image-edit-error-message-bg-dark);
+        border-color: var(--lf-cmp-image-edit-error-message-border-dark);
     }
 
     /* Footer */
@@ -975,14 +976,14 @@
         justify-content: flex-end;
         gap: 0.5rem;
         padding: 0.625rem 1rem;
-        border-top: 1px solid #e5e7eb;
-        background: #f9fafb;
+        border-top: 1px solid var(--lf-cmp-image-edit-divider-border);
+        background: var(--lf-cmp-image-edit-footer-bg);
         flex-shrink: 0;
     }
 
     :global(.dark) .modal-footer {
-        background: #111827;
-        border-top-color: #374151;
+        background: var(--lf-cmp-image-edit-footer-bg-dark);
+        border-top-color: var(--lf-cmp-image-edit-divider-border-dark);
     }
 
     .btn {
@@ -1004,38 +1005,38 @@
     }
 
     .btn-primary {
-        background: #1a4031;
-        color: white;
+        background: var(--lf-cmp-image-edit-accent-bg);
+        color: var(--lf-cmp-image-edit-on-fill-text);
     }
 
     .btn-primary:hover:not(:disabled) {
-        background: #143326;
+        background: var(--lf-cmp-image-edit-btn-primary-hover-bg);
     }
 
     :global(.dark) .btn-primary {
-        background: #10b981;
+        background: var(--lf-cmp-image-edit-accent-bg-dark);
     }
 
     :global(.dark) .btn-primary:hover:not(:disabled) {
-        background: #059669;
+        background: var(--lf-cmp-image-edit-btn-primary-hover-bg-dark);
     }
 
     .btn-secondary {
-        background: #e5e7eb;
-        color: #374151;
+        background: var(--lf-cmp-image-edit-btn-secondary-bg);
+        color: var(--lf-cmp-image-edit-btn-text);
     }
 
     .btn-secondary:hover:not(:disabled) {
-        background: #d1d5db;
+        background: var(--lf-cmp-image-edit-btn-secondary-hover-bg);
     }
 
     :global(.dark) .btn-secondary {
-        background: #374151;
-        color: #d1d5db;
+        background: var(--lf-cmp-image-edit-btn-secondary-bg-dark);
+        color: var(--lf-cmp-image-edit-btn-text-dark);
     }
 
     :global(.dark) .btn-secondary:hover:not(:disabled) {
-        background: #4b5563;
+        background: var(--lf-cmp-image-edit-btn-secondary-hover-bg-dark);
     }
 
     :global(.animate-spin) {
@@ -1053,15 +1054,15 @@
 
     /* Confirmation Dialog — backdrop handled by ModalBase */
     .confirm-dialog {
-        background: white;
+        background: var(--lf-cmp-image-edit-confirm-dialog-bg);
         border-radius: 0.75rem;
         padding: 1.5rem;
         width: 100%;
     }
 
     :global(.dark) .confirm-dialog {
-        background: #1f2937;
-        border: 1px solid #374151;
+        background: var(--lf-cmp-image-edit-confirm-dialog-bg-dark);
+        border: 1px solid var(--lf-cmp-image-edit-confirm-dialog-border-dark);
     }
 
     .confirm-header {
@@ -1079,21 +1080,21 @@
         margin: 0;
         font-size: 1rem;
         font-weight: 600;
-        color: #d97706;
+        color: var(--lf-cmp-image-edit-confirm-title-text);
     }
 
     :global(.dark) .confirm-header h3 {
-        color: #fbbf24;
+        color: var(--lf-cmp-image-edit-confirm-title-text-dark);
     }
 
     .confirm-message {
-        color: #6b7280;
+        color: var(--lf-cmp-image-edit-muted-text);
         margin-bottom: 1.5rem;
         line-height: 1.5;
     }
 
     :global(.dark) .confirm-message {
-        color: #9ca3af;
+        color: var(--lf-cmp-image-edit-muted-text-dark);
     }
 
     .confirm-actions {
@@ -1103,13 +1104,13 @@
     }
 
     .btn-warning {
-        background: #f59e0b;
-        color: white;
+        background: var(--lf-cmp-image-edit-btn-warning-bg);
+        color: var(--lf-cmp-image-edit-on-fill-text);
         border: none;
     }
 
     .btn-warning:hover {
-        background: #d97706;
+        background: var(--lf-cmp-image-edit-btn-warning-hover-bg);
     }
 
     /* Mobile: single column */

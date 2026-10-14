@@ -5,6 +5,7 @@
     import {t} from '$lib/i18n';
     import {ChevronDown, ChevronLeft, ChevronRight} from 'lucide-svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
+    import '$lib/theme/components/table.css';
 
     interface Props {
         pageIndex: number;
@@ -183,17 +184,17 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.5rem 1rem;
-        background: white;
-        border: 1px solid #e2e8f0;
+        background: var(--lf-cmp-datatable-pagination-surface-bg);
+        border: 1px solid var(--lf-cmp-datatable-pagination-border);
         border-radius: 1rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 6px -1px var(--lf-cmp-datatable-pagination-balloon-shadow);
         pointer-events: auto;
         max-width: calc(100vw - 2rem);
     }
 
     :global(.dark) .pagination-balloon {
-        background: #1e293b;
-        border-color: #334155;
+        background: var(--lf-cmp-datatable-pagination-surface-bg-dark);
+        border-color: var(--lf-cmp-datatable-pagination-border-dark);
     }
 
     /* Row layout */
@@ -223,45 +224,45 @@
         gap: 0.25rem;
         padding: 0.25rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-datatable-pagination-border);
         border-radius: 6px;
-        background: white;
-        color: #475569;
+        background: var(--lf-cmp-datatable-pagination-page-size-btn-bg);
+        color: var(--lf-cmp-datatable-pagination-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .page-size-btn:hover {
-        border-color: #cbd5e1;
-        background: #f8fafc;
+        border-color: var(--lf-cmp-datatable-pagination-page-size-btn-hover-border);
+        background: var(--lf-cmp-datatable-pagination-page-size-btn-hover-bg);
     }
 
     :global(.dark) .page-size-btn {
-        background: #0f172a;
-        border-color: #334155;
-        color: #e2e8f0;
+        background: var(--lf-cmp-datatable-pagination-page-size-btn-bg-dark);
+        border-color: var(--lf-cmp-datatable-pagination-border-dark);
+        color: var(--lf-cmp-datatable-pagination-text-dark);
     }
 
     :global(.dark) .page-size-btn:hover {
-        border-color: #475569;
-        background: #1e293b;
+        border-color: var(--lf-cmp-datatable-pagination-page-size-btn-hover-border-dark);
+        background: var(--lf-cmp-datatable-pagination-page-size-btn-hover-bg-dark);
     }
 
     .page-size-dropdown {
         position: fixed;
         min-width: 60px;
-        background: white;
-        border: 1px solid #e2e8f0;
+        background: var(--lf-cmp-datatable-pagination-surface-bg);
+        border: 1px solid var(--lf-cmp-datatable-pagination-border);
         border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        box-shadow: 0 4px 12px var(--lf-cmp-datatable-pagination-dropdown-shadow);
         max-height: calc(100vh - 1rem);
         overflow-y: auto;
         z-index: 10;
     }
 
     :global(.dark) .page-size-dropdown {
-        background: #1e293b;
-        border-color: #334155;
+        background: var(--lf-cmp-datatable-pagination-surface-bg-dark);
+        border-color: var(--lf-cmp-datatable-pagination-border-dark);
     }
 
     .dropdown-option {
@@ -272,48 +273,48 @@
         text-align: left;
         border: none;
         background: transparent;
-        color: #475569;
+        color: var(--lf-cmp-datatable-pagination-text);
         cursor: pointer;
         transition: all 0.1s;
     }
 
     .dropdown-option:hover {
-        background: #f1f5f9;
+        background: var(--lf-cmp-datatable-pagination-hover-bg);
     }
 
     .dropdown-option.selected {
-        background: #f0fdf4;
-        color: #1a4031;
+        background: var(--lf-cmp-datatable-pagination-option-selected-bg);
+        color: var(--lf-cmp-datatable-pagination-accent-text);
         font-weight: 500;
     }
 
     :global(.dark) .dropdown-option {
-        color: #e2e8f0;
+        color: var(--lf-cmp-datatable-pagination-text-dark);
     }
 
     :global(.dark) .dropdown-option:hover {
-        background: #334155;
+        background: var(--lf-cmp-datatable-pagination-hover-bg-dark);
     }
 
     :global(.dark) .dropdown-option.selected {
-        background: #1a4031;
-        color: #4ade80;
+        background: var(--lf-cmp-datatable-pagination-option-selected-bg-dark);
+        color: var(--lf-cmp-datatable-pagination-accent-text-dark);
     }
 
     .page-size-label {
         font-size: 0.75rem;
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-pagination-faint-text);
         white-space: nowrap;
     }
 
     .divider {
         width: 1px;
         height: 1.5rem;
-        background: #e2e8f0;
+        background: var(--lf-cmp-datatable-pagination-divider-bg);
     }
 
     :global(.dark) .divider {
-        background: #334155;
+        background: var(--lf-cmp-datatable-pagination-divider-bg-dark);
     }
 
     .nav-btn {
@@ -325,14 +326,14 @@
         border: none;
         border-radius: 6px;
         background: transparent;
-        color: #64748b;
+        color: var(--lf-cmp-datatable-pagination-btn-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .nav-btn:hover:not(:disabled) {
-        background: #f1f5f9;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-pagination-hover-bg);
+        color: var(--lf-cmp-datatable-pagination-btn-hover-text);
     }
 
     .nav-btn:disabled {
@@ -341,12 +342,12 @@
     }
 
     :global(.dark) .nav-btn {
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-pagination-btn-text-dark);
     }
 
     :global(.dark) .nav-btn:hover:not(:disabled) {
-        background: #334155;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-pagination-hover-bg-dark);
+        color: var(--lf-cmp-datatable-pagination-btn-hover-text-dark);
     }
 
     .page-numbers {
@@ -366,23 +367,23 @@
         border: none;
         border-radius: 6px;
         background: transparent;
-        color: #64748b;
+        color: var(--lf-cmp-datatable-pagination-btn-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .page-btn:hover {
-        background: #f1f5f9;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-pagination-hover-bg);
+        color: var(--lf-cmp-datatable-pagination-btn-hover-text);
     }
 
     :global(.dark) .page-btn {
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-pagination-btn-text-dark);
     }
 
     :global(.dark) .page-btn:hover {
-        background: #334155;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-pagination-hover-bg-dark);
+        color: var(--lf-cmp-datatable-pagination-btn-hover-text-dark);
     }
 
     .page-input {
@@ -391,25 +392,25 @@
         text-align: center;
         font-size: 0.8125rem;
         font-weight: 500;
-        border: 1px solid #1a4031;
+        border: 1px solid var(--lf-cmp-datatable-pagination-page-input-border);
         border-radius: 6px;
-        background: #f0fdf4;
-        color: #1a4031;
+        background: var(--lf-cmp-datatable-pagination-page-input-bg);
+        color: var(--lf-cmp-datatable-pagination-accent-text);
     }
 
     .page-input:focus {
         outline: none;
-        box-shadow: 0 0 0 2px rgba(26, 64, 49, 0.2);
+        box-shadow: 0 0 0 2px var(--lf-cmp-datatable-pagination-page-input-focus-shadow);
     }
 
     :global(.dark) .page-input {
-        background: #1e293b;
-        border-color: #4ade80;
-        color: #4ade80;
+        background: var(--lf-cmp-datatable-pagination-page-input-bg-dark);
+        border-color: var(--lf-cmp-datatable-pagination-page-input-border-dark);
+        color: var(--lf-cmp-datatable-pagination-accent-text-dark);
     }
 
     :global(.dark) .page-input:focus {
-        box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.2);
+        box-shadow: 0 0 0 2px var(--lf-cmp-datatable-pagination-page-input-focus-shadow-dark);
     }
 
     .ellipsis {
@@ -418,7 +419,7 @@
         justify-content: center;
         width: 20px;
         height: 28px;
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-pagination-faint-text);
         font-size: 0.75rem;
     }
 
@@ -429,7 +430,7 @@
 
     .total-text {
         font-size: 0.75rem;
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-pagination-faint-text);
         white-space: nowrap;
     }
 
