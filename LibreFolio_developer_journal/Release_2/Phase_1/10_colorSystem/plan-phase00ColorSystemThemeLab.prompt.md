@@ -96,11 +96,11 @@
 | Lettera | Sessione | Cartella del piano | Corsia (porta + dati) | Stato |
 |---|---|---|---|---|
 | — | coordinatore | questo file | 6150 + `/tmp/librefolio-r2-main` | — |
-| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | piano approvato il 14/10; branch `e-alfy-designer-lab`; passi 0–5 `6e967202e`, base allineata (`150f2716a`); passo 5b (selettore di elementi, §5.6 del progetto), poi passo 6 |
+| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | piano approvato il 14/10; branch `e-alfy-designer-lab`; passi 0–5 `6e967202e`, passi 5b–6 `87ceceede`; base allineata (`93bf8c98a`, piano spostato in `L-designerLab/`); manca la gallery A/B, domani dopo G |
 | G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | piano approvato il 14/10; branch `e-alfy-g-gallery-deterministica`; G-4 corretto, G-3 pronto, t* = 3600 ms (D1, developer); compito B in corso |
-| R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154 + `/tmp/librefolio-r2-r` | piano approvato il 14/10; branch `e-alfy-r-fattorizzazione-colori`; lotto A (W0–W2) `d80b9e0cd`, lotto B (W3–W5) `75c45d923`, base allineata a `dev_release2` (`f53d979ef`); prosegue con il lotto C; i cancelli A e B aspettano G |
+| R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154 + `/tmp/librefolio-r2-r` | piano approvato il 14/10; branch `e-alfy-r-fattorizzazione-colori`; lotto A (W0–W2) `d80b9e0cd`, lotto B (W3–W5) `75c45d923`, lotto C (W6–W7) `0b660632f`; base allineata (`74e94dee6`, piano spostato in `R-colorRefactor/`); prosegue con il lotto D; i cancelli A+B+C dopo l'ingresso di G |
 | — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | su richiesta |
-| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | analisi approvata dal developer il 14/10 alle 22:00; branch `e-alfy-t-tokens-theme`; T-0 e T-1 in corso |
+| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | analisi approvata dal developer il 14/10 alle 22:00; branch `e-alfy-t-tokens-theme`; T-1 (fondamenta, gate) `2018fd853` **integrato in `dev_release2`** (`4e024dfe8`); T-2 accesso in corso |
 
 Superfici condivise e relativi proprietari:
 
