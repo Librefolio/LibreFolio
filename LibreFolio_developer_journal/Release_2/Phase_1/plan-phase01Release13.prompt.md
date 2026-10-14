@@ -373,14 +373,24 @@ poi backend intera con gli stessi conteggi della base; `ruff`, `black`, codice m
 reperti nuovi; `api sync` senza differenze; `mkdocs build` stretto e `check-links`; le
 rinomine con somiglianza ≥ 95 % in `git diff -M`; i `patch` dei test sui nuovi percorsi.
 
-### Nuove schermate (regole del programma colori, fino ai token)
+### Nuove schermate (regole del programma colori)
 
-Nessun esadecimale nuovo, niente `!important`, nessuna palette nuova; i pattern esistenti
-(card `bg-white dark:bg-slate-800`, bordi `border-gray-200 dark:border-slate-700`, testi
-gray-900/700/500 con il dark, bottone primario `bg-libre-green`); stati e badge con le
-funzioni condivise di R appena entra il suo lotto A; grafici solo da `chartTheme.ts` dopo
-il lotto B; `app.css` non si tocca; ogni schermata nuova entra nella galleria con lo
-scatto assestato di G.
+**Decisione del developer (14/10, riportata dal coordinatore colori)**: si va subito ai ruoli `--lf-*` e alle utility
+semantiche, del tipo `bg-card` e `text-primary`, pubblicate dal workstream T dei colori. Le scale di Tailwind non
+vengono ritinte, e un controllo conterà le classi di palette rimaste.
+
+- **Dopo la pubblicazione delle utility di T**: nelle schermate nuove della 1.3 niente classi di palette per fondi,
+  testi e bordi (`bg-white`, `text-gray-*`, `border-slate-*`…), solo le utility dei ruoli. I nomi arrivano con
+  l'analisi di T.
+- **Prima di quella pubblicazione**: si costruisce la logica e si rinvia la parte visiva, oppure si usano i pattern
+  esistenti (card `bg-white dark:bg-slate-800`, bordi `border-gray-200 dark:border-slate-700`, testi gray-900/700/500
+  con il dark, primario `bg-libre-green`), con una voce nel backlog della sessione per migrarli.
+- **Sempre**:
+  - nessun esadecimale nuovo, niente `!important`, nessuna palette nuova;
+  - stati e badge con le funzioni condivise di R (`lib/theme/toneClasses.ts`) appena entra il suo lotto A; grafici
+    solo da `chartTheme.ts` dopo il lotto B;
+  - `app.css` non si tocca;
+  - ogni schermata nuova entra nella galleria con lo scatto assestato di G.
 
 ### Dipendenze Python
 
