@@ -51,6 +51,8 @@
         toPercentSeries,
     } from './lotWacPriceChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {themed} from '$lib/theme/themePair';
+    import {LOT_CHART_COLORS, LOT_WAC_COLORS} from '$lib/theme/chartTheme';
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
@@ -328,7 +330,7 @@
 
     function getSeriesColor(series: BrokerSeries): string {
         if (series.isCombined || series.brokerId == null) {
-            return isDark ? '#94a3b8' : '#475569';
+            return themed(LOT_WAC_COLORS.combinedSeries, isDark);
         }
 
         const colors = getBrokerColor(series.brokerId, brokers);
@@ -547,35 +549,35 @@
                 label: labels.markerLegend.buy,
                 symbol: BUY_MARKER_SYMBOL,
                 symbolSize: 12,
-                color: isDark ? '#86efac' : '#16a34a',
+                color: themed(LOT_WAC_COLORS.markers.buy, isDark),
             },
             {
                 key: 'sell',
                 label: labels.markerLegend.sell,
                 symbol: SELL_MARKER_SYMBOL,
                 symbolSize: 12,
-                color: isDark ? '#fca5a5' : '#dc2626',
+                color: themed(LOT_WAC_COLORS.markers.sell, isDark),
             },
             {
                 key: 'transfer',
                 label: labels.markerLegend.transfer,
                 symbol: TRANSFER_MARKER_SYMBOL,
                 symbolSize: 16,
-                color: isDark ? '#93c5fd' : '#1d4ed8',
+                color: themed(LOT_WAC_COLORS.markers.transfer, isDark),
             },
             {
                 key: 'adjustment',
                 label: labels.markerLegend.adjustment,
                 symbol: 'rect',
                 symbolSize: 11,
-                color: isDark ? '#fcd34d' : '#d97706',
+                color: themed(LOT_WAC_COLORS.markers.adjustment, isDark),
             },
             {
                 key: 'split',
                 label: labels.markerLegend.split,
                 symbol: SPLIT_MARKER_SYMBOL,
                 symbolSize: 18,
-                color: isDark ? '#c4b5fd' : '#7c3aed',
+                color: themed(LOT_WAC_COLORS.markers.split, isDark),
             },
         ];
     }
@@ -855,7 +857,7 @@
     });
 
     function incomeMarkerColor(): string {
-        return isDark ? '#c4b5fd' : '#7c3aed';
+        return themed(LOT_WAC_COLORS.incomeMarker, isDark);
     }
 
     function incomeEventTypeLabel(type: LotIncomeEvent['type']): string {
@@ -976,7 +978,7 @@
     }
 
     function lotBubbleFillColor(brokerId: number | null): string {
-        if (brokerId == null) return isDark ? '#94a3b8' : '#475569';
+        if (brokerId == null) return themed(LOT_WAC_COLORS.noBrokerBubble, isDark);
         const colors = getBrokerColor(brokerId, brokers);
         return isDark ? colors.vivid : colors.vividLight;
     }
@@ -1188,12 +1190,12 @@
                 symbolOffset: [entry.offsetX, 0],
                 itemStyle: {
                     color: entry.point.fillColor,
-                    borderColor: isDark ? '#0f172a' : '#ffffff',
+                    borderColor: themed(LOT_CHART_COLORS.markerRing, isDark),
                     borderWidth: entry.point.estimatedAtCost ? 2.5 : 1.5,
                     borderType: entry.point.estimatedAtCost ? 'dashed' : 'solid',
                     opacity: entry.point.active ? 0.9 : 0.22,
                 },
-                emphasis: {scale: true, itemStyle: {opacity: 1, borderColor: isDark ? '#e2e8f0' : '#0f172a', borderWidth: 2}},
+                emphasis: {scale: true, itemStyle: {opacity: 1, borderColor: themed(LOT_CHART_COLORS.markerEmphasisRing, isDark), borderWidth: 2}},
             })),
             symbolSize: (_value: unknown, params: any) => params?.data?.symbolSize ?? 18,
             cursor: onSelectionChange ? 'pointer' : 'default',
@@ -1218,7 +1220,7 @@
                 symbolOffset: [entry.offsetX, 0],
                 itemStyle: {
                     color: lotStateColor(entry.point.state, isDark),
-                    borderColor: isDark ? '#0f172a' : '#ffffff',
+                    borderColor: themed(LOT_CHART_COLORS.markerRing, isDark),
                     borderWidth: 1,
                     opacity: entry.point.active ? 1 : 0.28,
                 },
@@ -1288,7 +1290,7 @@
 
         const marketHasData = groupedChartData.marketPricePoints.some((point) => point[valueKey] != null);
         if (marketHasData) {
-            const marketColor = isDark ? '#4ade80' : '#16a34a';
+            const marketColor = themed(LOT_WAC_COLORS.marketLine, isDark);
             // Where the value is estimated from the last-known trade (no real quote), dash the segment
             // that *ends* on that point so the estimated stretch reads as such while staying one curve.
             const marketData = aggregateValuePoints(groupedChartData.marketPricePoints, valueKey).map((item) => {
@@ -1329,13 +1331,13 @@
                 itemStyle: {
                     color: definition.color,
                     opacity: 0.96,
-                    borderColor: isDark ? '#0f172a' : '#ffffff',
+                    borderColor: themed(LOT_CHART_COLORS.markerRing, isDark),
                     borderWidth: 1.5,
                 },
                 emphasis: {
                     scale: 1.15,
                     itemStyle: {
-                        borderColor: isDark ? '#e2e8f0' : '#0f172a',
+                        borderColor: themed(LOT_CHART_COLORS.markerEmphasisRing, isDark),
                         borderWidth: 2,
                     },
                 },
@@ -1521,7 +1523,7 @@
                     symbol: 'none',
                     animation: false,
                     label: {show: false},
-                    lineStyle: {color: isDark ? 'rgba(148,163,184,0.75)' : 'rgba(71,85,105,0.6)', width: 1.5, type: 'solid'},
+                    lineStyle: {color: themed(LOT_WAC_COLORS.zeroLine, isDark), width: 1.5, type: 'solid'},
                     data: [{yAxis: 0}],
                 },
                 z: 0,

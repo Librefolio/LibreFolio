@@ -1810,6 +1810,11 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Stessi valori, divergenze con un nome.
 
   Dettagli: [report 04](55_colorSystem/analysis/04_charts_dataviz.md), §1–§3.
+  - Stato (R, 14/10): codice nel checkpoint del lotto B (W3–W5). `lib/theme/themePair.ts` (`themed()`),
+    `chartTheme.ts`, `chartPalettes.ts`, `chartColorScales.ts`: 229 siti in 33 file; neutri, palette, serie, formule e
+    lotti; ogni divergenza ha un nome (`CHART_GAIN_LOSS.price` `#ef4444` / `.portfolio` `#dc2626`, box del tooltip
+    comune e della candela, interesse di Growth e dei lotti…). Il dividendo di Growth e dei lotti è ora una voce sola. Si
+    chiude con il commit e il cancello B.
 - **R-2 · Funzioni condivise per segno, stati e badge** — medio; coordinatore, 14/10.
   - Oggi: ternario guadagno/perdita in almeno 20 punti e 7 mappe di stato indipendenti.
   - Output identici.

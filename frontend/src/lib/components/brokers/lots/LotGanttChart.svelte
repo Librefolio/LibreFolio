@@ -49,6 +49,8 @@
     import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {themed} from '$lib/theme/themePair';
+    import {LOT_CHART_COLORS, LOT_GANTT_COLORS} from '$lib/theme/chartTheme';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -710,7 +712,7 @@
         html += buildTooltipDivider(theme.border);
         html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.openingPriceReference', 'Opening price')), escapeHtml(formatMoneyField(firstPresentUnknown(lotDto?.opening_unit_price, meta.unitPrice))));
         if (isEstimatedAtCost && !isClosedLot) {
-            const estimatedColor = themeDark ? '#fbbf24' : '#d97706';
+            const estimatedColor = themed(LOT_GANTT_COLORS.estimatedValue, themeDark);
             const estLabel = `<span style="color:${estimatedColor};font-weight:600">⚠ ${escapeHtml(translateOr($t, 'brokers.lots.estimatedCurrentValue', 'Estimated current value'))}</span>`;
             const estValue = `<span style="color:${estimatedColor}">${escapeHtml(formatMoneyField(valueField))}</span>`;
             html += buildTooltipRow(estLabel, estValue);
@@ -728,7 +730,7 @@
         const showFees = lotDto != null && isUnknownOrNonZero(allocatedFees);
         const showTaxes = lotDto != null && isUnknownOrNonZero(allocatedTaxes);
         if (showFees || showTaxes) {
-            const costColor = themeDark ? '#f87171' : '#dc2626';
+            const costColor = themed(LOT_GANTT_COLORS.cost, themeDark);
             const costField = (amount: number | null): string => (amount == null ? escapeHtml('\u2014') : `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(amount))}</span>`);
             if (showFees) {
                 html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.allocatedFees', 'Fees')), costField(allocatedFees));
@@ -791,11 +793,11 @@
                     silent: true,
                     shape: {...rectShape, r: 8},
                     style: {
-                        fill: meta.pulse ? (themeDark ? 'rgba(168, 85, 247, 0.16)' : 'rgba(147, 51, 234, 0.12)') : themeDark ? 'rgba(96, 165, 250, 0.10)' : 'rgba(59, 130, 246, 0.08)',
-                        stroke: meta.pulse ? (themeDark ? '#c084fc' : '#7c3aed') : themeDark ? '#60a5fa' : '#2563eb',
+                        fill: meta.pulse ? themed(LOT_GANTT_COLORS.pulseBand.fill, themeDark) : themed(LOT_GANTT_COLORS.highlightBand.fill, themeDark),
+                        stroke: meta.pulse ? themed(LOT_GANTT_COLORS.pulseBand.stroke, themeDark) : themed(LOT_GANTT_COLORS.highlightBand.stroke, themeDark),
                         lineWidth: meta.pulse ? 2 : 1,
                         shadowBlur: meta.pulse ? 18 : 0,
-                        shadowColor: meta.pulse ? 'rgba(168, 85, 247, 0.35)' : 'transparent',
+                        shadowColor: meta.pulse ? LOT_GANTT_COLORS.pulseBand.glow : 'transparent',
                     },
                 };
             },
@@ -846,7 +848,7 @@
                 const baseColor = segmentBaseColor(meta, themeDark);
                 const selected = selectedLotIdSet.has(meta.lotId);
                 const pulsing = pulseState?.lotId === meta.lotId;
-                const borderColor = pulsing ? (themeDark ? '#c084fc' : '#7c3aed') : selected ? (themeDark ? '#e0f2fe' : '#0f172a') : withAlpha(baseColor, themeDark ? 0.92 : 0.85);
+                const borderColor = pulsing ? themed(LOT_GANTT_COLORS.pulseBand.stroke, themeDark) : selected ? themed(LOT_GANTT_COLORS.selectedSegmentBorder, themeDark) : withAlpha(baseColor, themeDark ? 0.92 : 0.85);
                 const label = buildSegmentLabel(meta, Math.max(0, rectShape.width - 24));
                 const labelFits = rectShape.width >= 28;
                 const edgeMarkerX = Math.max(coordSys.x + 4, Math.min(rectShape.x + 8, coordSys.x + coordSys.width - 6));
@@ -889,7 +891,7 @@
                             ],
                         },
                         style: {
-                            stroke: themeDark ? 'rgba(226,232,240,0.48)' : 'rgba(71,85,105,0.45)',
+                            stroke: themed(LOT_GANTT_COLORS.lineageConnector, themeDark),
                             lineWidth: 1.5,
                             fill: 'none',
                         },
@@ -937,7 +939,7 @@
                         y: startCoord[1],
                         style: {
                             text: label,
-                            fill: themeDark ? '#f8fafc' : '#0f172a',
+                            fill: themed(LOT_GANTT_COLORS.segmentLabel, themeDark),
                             fontSize: 11,
                             fontWeight: pulsing ? 700 : 600,
                             textAlign: 'left',
@@ -965,7 +967,14 @@
                 const coord = api.coord([meta.dateMs, meta.laneIndex]);
                 const coordSys = params.coordSys as {x: number; width: number};
                 if (coord[0] < coordSys.x - 10 || coord[0] > coordSys.x + coordSys.width + 10) return null;
-                const color = meta.kind === 'SELL' || meta.kind === 'ADJUSTMENT_OUT' ? (themeDark ? '#f87171' : '#dc2626') : meta.kind === 'TRANSFER' ? (themeDark ? '#c084fc' : '#7c3aed') : meta.kind === 'SPLIT' ? (themeDark ? '#facc15' : '#ca8a04') : themeDark ? '#34d399' : '#059669';
+                const color =
+                    meta.kind === 'SELL' || meta.kind === 'ADJUSTMENT_OUT'
+                        ? themed(LOT_GANTT_COLORS.events.sell, themeDark)
+                        : meta.kind === 'TRANSFER'
+                          ? themed(LOT_GANTT_COLORS.events.transfer, themeDark)
+                          : meta.kind === 'SPLIT'
+                            ? themed(LOT_GANTT_COLORS.events.split, themeDark)
+                            : themed(LOT_GANTT_COLORS.events.buy, themeDark);
                 return {
                     type: 'text',
                     info: {lotId: meta.lotId},
@@ -976,7 +985,7 @@
                     style: {
                         text: eventMarkerSymbol(meta.kind),
                         fill: color,
-                        stroke: themeDark ? '#0f172a' : '#ffffff',
+                        stroke: themed(LOT_CHART_COLORS.markerRing, themeDark),
                         lineWidth: 3,
                         fontSize: meta.kind === 'SPLIT' ? 18 : 15,
                         fontWeight: 800,
@@ -1429,7 +1438,7 @@
         <div class="flex w-fit overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-gantt-state-filter">
             <button
                 class="px-3 py-1 transition-colors {openSelected ? '' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                style={openSelected ? `background-color:${lotStateColor('OPEN', isDark)};color:${isDark ? '#0f172a' : '#ffffff'}` : ''}
+                style={openSelected ? `background-color:${lotStateColor('OPEN', isDark)};color:${themed(LOT_GANTT_COLORS.stateChipText, isDark)}` : ''}
                 onclick={() => onToggleOpen?.()}
                 data-testid="lot-gantt-filter-open"
                 aria-pressed={openSelected}
@@ -1439,7 +1448,7 @@
             </button>
             <button
                 class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {closedSelected ? '' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                style={closedSelected ? `background-color:${lotStateColor('CLOSED', isDark)};color:${isDark ? '#0f172a' : '#ffffff'}` : ''}
+                style={closedSelected ? `background-color:${lotStateColor('CLOSED', isDark)};color:${themed(LOT_GANTT_COLORS.stateChipText, isDark)}` : ''}
                 onclick={() => onToggleClosed?.()}
                 data-testid="lot-gantt-filter-closed"
                 aria-pressed={closedSelected}

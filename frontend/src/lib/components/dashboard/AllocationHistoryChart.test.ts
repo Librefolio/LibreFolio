@@ -43,7 +43,10 @@
  * ## How the expectations are built
  *
  * Families, sums and ranks are counted in the test, from the fixture's weights and K's real
- * `assetTypeFamily`; the palette is read from the component by name (`$test/sourcePalettes`), never copied.
+ * `assetTypeFamily`; the palette is imported from `$lib/theme/chartPalettes`, the module the chart takes it from,
+ * never copied — and the series colours the mounted chart hands ECharts are compared with it, so these tests also
+ * prove that the chart draws that palette: its light half in every block but one (jsdom's document carries no `dark`
+ * class), its dark half in the block that mounts the chart under that class.
  * Every type fixture is chosen so that grouping by content would draw something else, and a barrier says
  * so: without it, the comparison could not tell the two resolvers apart. No order rests on a tie. The
  * shades D375 removes are the ones `buildAllocationHierarchy` hands the subtypes of the same weights —
@@ -78,7 +81,7 @@
  *
  * @module components/dashboard/AllocationHistoryChart.test
  */
-import {existsSync, readFileSync} from 'node:fs';
+import {existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -176,10 +179,10 @@ import {flushSync, tick} from 'svelte';
 import {get} from 'svelte/store';
 import {locale, waitLocale} from 'svelte-i18n';
 import {render, setupI18n, waitFor} from '$test/component';
-import {parseSourcePalette} from '$test/sourcePalettes';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {ALLOCATION_HISTORY_PALETTE} from '$lib/theme/chartPalettes';
 import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
 import {buildTooltipByThreshold, buildTooltipHeader, buildTooltipTheme} from '$lib/components/charts/echartsTooltipHelpers';
 import {timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
@@ -190,12 +193,10 @@ import {getAssetTypeEmoji} from './allocationTypeEmoji';
 // =============================================================================
 
 /**
- * The generated client and the chart's source, from the frontend root vitest runs in, as the pie's test
- * resolves its files. Not `new URL(…, import.meta.url)`: under jsdom the global `URL` is jsdom's, and
- * `fileURLToPath` refuses what it builds.
+ * The generated client, from the frontend root vitest runs in, as the pie's test resolves its files. Not
+ * `new URL(…, import.meta.url)`: under jsdom the global `URL` is jsdom's, and `fileURLToPath` refuses what it builds.
  */
 const GENERATED_TS = join(process.cwd(), 'src', 'lib', 'api', 'generated.ts');
-const CHART_SOURCE = join(process.cwd(), 'src', 'lib', 'components', 'dashboard', 'AllocationHistoryChart.svelte');
 
 /** The `data-testid` of the chart's container: the one element given a layout below. */
 const CHART_CONTAINER_TESTID = 'allocation-history-chart';
@@ -543,8 +544,12 @@ type Taxonomy = typeof import('$lib/utils/assetTypes');
 
 let AllocationHistoryChart: ChartComponent;
 let K: Taxonomy;
-/** `PALETTE_LIGHT` of the chart, read by name: jsdom's document carries no `dark` class (checked per mount). */
-let palette: string[];
+/**
+ * The light palette the chart draws with, `ALLOCATION_HISTORY_PALETTE.light`: jsdom's document carries no `dark`
+ * class (checked per mount). Imported, not copied: the series colours below are compared with it, so a chart drawing
+ * any other palette fails them.
+ */
+const palette: readonly string[] = ALLOCATION_HISTORY_PALETTE.light;
 let restoreLayout: (() => void) | undefined;
 
 /**
@@ -565,7 +570,6 @@ beforeAll(async () => {
     await setupI18n();
     K = await import('$lib/utils/assetTypes');
     AllocationHistoryChart = (await import('./AllocationHistoryChart.svelte')).default;
-    palette = parseSourcePalette(readFileSync(CHART_SOURCE, 'utf8'), 'PALETTE_LIGHT', 'AllocationHistoryChart.svelte');
     restoreLayout = layOutChartContainer();
 });
 
@@ -589,9 +593,9 @@ function historyOf(days: readonly Day[]): Array<{date: string; components: Alloc
     return days.map(({date, weights}) => ({date, components: weights.map(([name, percent]) => ({name, value: String(percent), amount: String(percent * 1000)}))}));
 }
 
-/** Mounts the chart on `days`, as the allocation panel does, and waits for its first full option. */
-async function mountChart(days: readonly Day[], dimension: Dimension) {
-    expect(document.documentElement.classList.contains('dark'), 'precondition: the light theme, whose palette the expectations read').toBe(false);
+/** Mounts the chart on `days`, as the allocation panel does, in `theme`, and waits for its first full option. */
+async function mountChart(days: readonly Day[], dimension: Dimension, theme: 'light' | 'dark' = 'light') {
+    expect(document.documentElement.classList.contains('dark'), `precondition: the ${theme} theme, whose palette the expectations read`).toBe(theme === 'dark');
     const view = render(AllocationHistoryChart, {props: {data: historyOf(days), dimension, height: '400px'}});
     await waitFor(() => expect(lastFullOption(), 'the chart never handed ECharts a full option').toBeDefined(), {timeout: 5_000});
     expect(chartInstances, 'the chart did not create exactly one ECharts instance').toHaveLength(1);
@@ -1256,6 +1260,36 @@ describe('AllocationHistoryChart — sector and geography draw as before (D375 l
         expect(html).toBe(buildTooltipHeader(uiDay(ONE_DATE), theme.mutedColor) + buildTooltipByThreshold(items, 3, theme, remainingLabel()));
         expect(html).not.toMatch(/\d{4}-\d{2}-\d{2}/);
         expect(html).not.toMatch(/data-allocation-(family|member)/);
+    });
+});
+
+// =============================================================================
+// The dark theme — the dark half of the palette
+// =============================================================================
+
+/**
+ * Every other block draws in the light theme, jsdom's default, and reads `ALLOCATION_HISTORY_PALETTE.light`. Its dark
+ * half is measured in `colors.test.ts` and `allocationHierarchy.test.ts`, which says something about this chart only
+ * while the chart draws it in the dark theme. So the chart is mounted under the `dark` class of <html>, which it
+ * reads when it draws, on each colouring path: the type dimension's families and the raw categories of the other two.
+ */
+describe('AllocationHistoryChart — the dark theme draws ALLOCATION_HISTORY_PALETTE.dark', () => {
+    afterEach(() => {
+        document.documentElement.classList.remove('dark');
+    });
+
+    it.each([{title: 'type', dimension: 'type' as Dimension, weights: D15_WEIGHTS}, ...UNTOUCHED])('$title: each series in the dark entry of its rank', async ({dimension, weights}) => {
+        const order = expectedOrder(dimension, weights);
+        // Control: the two halves differ on the slots drawn, so a chart deaf to the theme fails below.
+        expect(ALLOCATION_HISTORY_PALETTE.dark.slice(0, order.length)).not.toEqual(ALLOCATION_HISTORY_PALETTE.light.slice(0, order.length));
+
+        document.documentElement.classList.add('dark');
+        await mountChart(oneDay(weights), dimension, 'dark');
+
+        expect(
+            drawnSeries().map(({id, itemStyle}) => ({id, color: itemStyle?.color})),
+            'the series, each in the dark entry of its rank',
+        ).toEqual(order.map((id, rank) => ({id, color: ALLOCATION_HISTORY_PALETTE.dark[rank]})));
     });
 });
 
