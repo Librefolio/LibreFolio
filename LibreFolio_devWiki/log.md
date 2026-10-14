@@ -3461,3 +3461,9 @@ messages that still suggested it name `./dev.py` now), the unused `engineering-s
 `graphify-out/` and 26 leftovers of the June semantic run in `graphify-out/` (`.chunk_files_*.txt`,
 `chunk15_summary.json`; `cost.json` stays, graphify protects it). The history is not rewritten: everything stays in the
 tags up to v1.2.0. Graph: not updated (P-6).
+
+## [2026-10-14] ingest | Release 1.2.0 published — the release page is `released`
+The two rows that existed only after publication are filled on [[sources/release-1.2.0]]: the tag `v1.2.0` is on
+`cf00fac7d`, the merge of PR #46 into `main`, with the tree of `a3fe2eb04` on `dev_release2`; the release pipeline's
+run 38540086298 is green (images `1.2.0`, `1.2.0-light` and `latest`, the `docker pull` lines on the GitHub release,
+the docs site deployed from `cf00fac7d`). Status `released`; index row updated. Graph: not updated (P-6).
