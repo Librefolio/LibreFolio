@@ -637,6 +637,16 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Alternative**: correggere solo i file e lasciare il resto com'è.
 - **Per chi usa già LibreFolio**: chi condivide l'istanza smette di vedere i file e i broker degli altri.
 
+#### 37. Le regole della password, uguali dappertutto — 🟢 (A-6)
+- **Oggi**: le regole della password (lunghezza, maiuscole, cifre…) sono scritte in quattro posti: l'indicatore di
+  robustezza, la finestra del cambio password, la registrazione e la riga di comando. Il server, invece, chiede solo
+  8 caratteri: chi usa l'API direttamente può scegliere una password che l'app rifiuterebbe.
+- **Proposta**: le regole si scrivono una volta sola nel backend, che le applica anche all'API; il frontend le mostra
+  prendendole da lì. Le password già salvate restano valide: le regole contano solo quando se ne sceglie una nuova.
+- **Perché**: quattro copie prima o poi divergono, e un controllo solo nel browser si aggira.
+- **Alternative**: lasciare le copie e allinearle a mano.
+- **Per chi usa già LibreFolio**: niente di visibile nell'app, che le applica già.
+
 ## 3. Decisioni di coordinamento (già prese; correggibili)
 
 - **Forma comune del riordino**. Perché: sei sessioni spostano file insieme, e serve una regola sola per non
