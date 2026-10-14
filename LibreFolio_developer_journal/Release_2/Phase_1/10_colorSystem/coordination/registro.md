@@ -16,8 +16,10 @@
 > Regola git (cc7a94501, `.github/copilot-instructions.md`): in locale fa tutto il coordinatore (commit per i worker,
 > merge, basi); il push resta al developer.
 > Dal 14/10 sera il programma sta in `Phase_1/10_colorSystem` (prima: `Phase_0/55_colorSystem` e
-> `Phase_0/56_galleryDeterminism`). I branch dei figli ricevono lo spostamento al loro prossimo merge di base, con
-> `-c merge.directoryRenames=true`.
+> `Phase_0/56_galleryDeterminism`). I piani dei figli (`L-designerLab/`, `R-colorRefactor/`, il piano di G) restano nel
+> vecchio percorso nei loro branch. Il rilevamento delle cartelle rinominate di git non li sposta, come verificato con
+> `merge-tree`. Al prossimo merge di base, a worktree fermo, il coordinatore li sposta con un `git mv` nel branch del
+> figlio; il figlio poi corregge i link relativi del proprio piano.
 
 | Lettera | Sessione (id) | Worktree | Branch | Corsia | Stato |
 |---|---|---|---|---|---|
@@ -169,3 +171,21 @@
     attribuirne la causa.
 - **Suggerimento per il developer:** togliere da Spotlight `LibreFolio-worktrees/` e `LibreFolio_subRepo/` (Privacy di
   Spotlight). Più worktree con `node_modules` e 1,3 GB di PNG appesantiscono ogni reindicizzazione.
+
+## 20:45 — Giro 1 della designer; il programma in `Phase_1/10_colorSystem`
+
+- **Richiesta del developer:** registrare il materiale della designer in una sottocartella di `Phase_1`, insieme ai
+  piani e ai materiali del programma.
+  - `Phase_0/55_colorSystem` → `Phase_1/10_colorSystem`; `Phase_0/56_galleryDeterminism` →
+    `10_colorSystem/G-galleryDeterminism`. Commit `f3f25c9c7`: rinomini, materiale della designer, pacchetto inviato,
+    registro, analisi dei workstream.
+  - Numero 10: il primo libero nella numerazione della 1.3 (01–09).
+- **Link del backlog nelle sezioni L, R e G** (righe ~1804–1836): puntano ancora a `55_`/`56_`. Si correggono alla
+  riconciliazione, quando entrano i lotti dei figli, per non creare conflitti con le loro righe.
+- **Piani dei figli:** al loro prossimo merge di base, `git mv` del coordinatore nella nuova cartella. `merge-tree` ha
+  mostrato che git non li sposta da solo.
+- **Giro 1 della designer** (`designer-feedback/2026-10-14-round1-auth/`):
+  - palette chiara e scura con 16 ruoli, icone nei campi, via «Crea un account», box dei requisiti;
+  - analisi in `analisi.md`: leve centrali, 5 correzioni di contrasto, piano T a fasi B1–B6, decisioni D-T1…D-T3.
+- **Sito MkDocs:** aggiornarlo solo alla fine, a colori definiti (decisione del developer). Registrato nel README del
+  programma e nelle fasi del piano generale.
