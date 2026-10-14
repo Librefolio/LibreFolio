@@ -46,6 +46,7 @@
     import {themed} from '$lib/theme/themePair';
     import {GEO_MAP_COLORS} from '$lib/theme/chartTheme';
     import {GEO_CHOROPLETH_SCALE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
     const KEY = 'tools.pacAllocator.planner.result';
 
     interface Props {
@@ -94,11 +95,10 @@
 
     onMount(() => {
         const readTheme = () => {
-            dark = document.documentElement.classList.contains('dark');
+            dark = isDarkTheme();
         };
         readTheme();
-        const observer = new MutationObserver(readTheme);
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const observer = onThemeClassChange(readTheme);
         loadWorldMap()
             .then((names) => {
                 geoNames = names;

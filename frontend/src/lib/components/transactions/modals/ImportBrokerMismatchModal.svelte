@@ -12,6 +12,7 @@
     import {AlertTriangle, CheckCircle2, MessageSquareText, XCircle} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import '$lib/theme/components/dialogs.css';
 
     /** A broker as the modal shows it: the icon fields follow BrokerIcon's chain. */
     export interface BrokerMismatchBroker {
@@ -173,33 +174,33 @@
         align-items: center;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid var(--lf-cmp-broker-mismatch-border);
     }
 
     :global(.dark) .modal-header {
-        border-bottom-color: #334155;
+        border-bottom-color: var(--lf-cmp-broker-mismatch-border-dark);
     }
 
     .modal-title {
         flex: 1;
         font-size: 1.125rem;
         font-weight: 600;
-        color: #0f172a;
+        color: var(--lf-cmp-broker-mismatch-strong-text);
         margin: 0;
     }
 
     :global(.dark) .modal-title {
-        color: #f1f5f9;
+        color: var(--lf-cmp-broker-mismatch-strong-text-dark);
     }
 
     .counter {
         font-size: 0.75rem;
-        color: #64748b;
+        color: var(--lf-cmp-broker-mismatch-muted-text);
         white-space: nowrap;
     }
 
     :global(.dark) .counter {
-        color: #94a3b8;
+        color: var(--lf-cmp-broker-mismatch-muted-text-dark);
     }
 
     .modal-body {
@@ -211,25 +212,25 @@
     }
 
     .message {
-        color: #475569;
+        color: var(--lf-cmp-broker-mismatch-message-text);
         line-height: 1.6;
         margin: 0;
         overflow-wrap: anywhere;
     }
 
     :global(.dark) .message {
-        color: #94a3b8;
+        color: var(--lf-cmp-broker-mismatch-message-text-dark);
     }
 
     .reason {
-        border-left: 3px solid #f59e0b;
-        background: #fffbeb;
+        border-left: 3px solid var(--lf-cmp-broker-mismatch-reason-border);
+        background: var(--lf-cmp-broker-mismatch-reason-bg);
         border-radius: 6px;
         padding: 0.625rem 0.875rem;
     }
 
     :global(.dark) .reason {
-        background: rgba(245, 158, 11, 0.12);
+        background: var(--lf-cmp-broker-mismatch-reason-bg-dark);
     }
 
     .reason-label {
@@ -238,23 +239,23 @@
         gap: 0.375rem;
         font-size: 0.75rem;
         font-weight: 600;
-        color: #92400e;
+        color: var(--lf-cmp-broker-mismatch-reason-label-text);
         margin-bottom: 0.25rem;
     }
 
     :global(.dark) .reason-label {
-        color: #fcd34d;
+        color: var(--lf-cmp-broker-mismatch-reason-label-text-dark);
     }
 
     .reason-text {
         margin: 0;
         font-size: 0.875rem;
-        color: #334155;
+        color: var(--lf-cmp-broker-mismatch-reason-body-text);
         line-height: 1.5;
     }
 
     :global(.dark) .reason-text {
-        color: #e2e8f0;
+        color: var(--lf-cmp-broker-mismatch-reason-body-text-dark);
     }
 
     .section {
@@ -268,11 +269,11 @@
         font-weight: 600;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: #64748b;
+        color: var(--lf-cmp-broker-mismatch-muted-text);
     }
 
     :global(.dark) .section-label {
-        color: #94a3b8;
+        color: var(--lf-cmp-broker-mismatch-muted-text-dark);
     }
 
     .targets {
@@ -286,24 +287,24 @@
         align-items: center;
         gap: 0.75rem;
         padding: 0.625rem 0.75rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-broker-mismatch-border);
         border-radius: 8px;
-        background: #f8fafc;
+        background: var(--lf-cmp-broker-mismatch-party-bg);
     }
 
     :global(.dark) .party {
-        border-color: #334155;
-        background: rgba(15, 23, 42, 0.4);
+        border-color: var(--lf-cmp-broker-mismatch-border-dark);
+        background: var(--lf-cmp-broker-mismatch-party-bg-dark);
     }
 
     .party.from {
-        border-color: #fecaca;
-        background: #fef2f2;
+        border-color: var(--lf-cmp-broker-mismatch-party-from-border);
+        background: var(--lf-cmp-broker-mismatch-party-from-bg);
     }
 
     :global(.dark) .party.from {
-        border-color: #7f1d1d;
-        background: rgba(127, 29, 29, 0.15);
+        border-color: var(--lf-cmp-broker-mismatch-party-from-border-dark);
+        background: var(--lf-cmp-broker-mismatch-party-from-bg-dark);
     }
 
     label.target {
@@ -311,15 +312,15 @@
     }
 
     .target.selected {
-        border-color: #1a4031;
-        background: #f0fdf4;
-        box-shadow: 0 0 0 1px #1a4031;
+        border-color: var(--lf-cmp-broker-mismatch-target-selected-border);
+        background: var(--lf-cmp-broker-mismatch-target-selected-bg);
+        box-shadow: 0 0 0 1px var(--lf-cmp-broker-mismatch-target-selected-shadow);
     }
 
     :global(.dark) .target.selected {
-        border-color: #4ade80;
-        background: rgba(22, 101, 52, 0.18);
-        box-shadow: 0 0 0 1px #4ade80;
+        border-color: var(--lf-cmp-broker-mismatch-target-selected-border-dark);
+        background: var(--lf-cmp-broker-mismatch-target-selected-bg-dark);
+        box-shadow: 0 0 0 1px var(--lf-cmp-broker-mismatch-target-selected-shadow-dark);
     }
 
     .party-text {
@@ -331,12 +332,12 @@
 
     .party-name {
         font-weight: 600;
-        color: #0f172a;
+        color: var(--lf-cmp-broker-mismatch-strong-text);
         overflow-wrap: anywhere;
     }
 
     :global(.dark) .party-name {
-        color: #f1f5f9;
+        color: var(--lf-cmp-broker-mismatch-strong-text-dark);
     }
 
     .plugin-chip {
@@ -352,23 +353,23 @@
     }
 
     .plugin-chip.refuses {
-        background: #fee2e2;
-        color: #991b1b;
+        background: var(--lf-cmp-broker-mismatch-plugin-chip-refuses-bg);
+        color: var(--lf-cmp-broker-mismatch-plugin-chip-refuses-text);
     }
 
     :global(.dark) .plugin-chip.refuses {
-        background: rgba(220, 38, 38, 0.2);
-        color: #fca5a5;
+        background: var(--lf-cmp-broker-mismatch-plugin-chip-refuses-bg-dark);
+        color: var(--lf-cmp-broker-mismatch-plugin-chip-refuses-text-dark);
     }
 
     .plugin-chip.reads {
-        background: #dcfce7;
-        color: #166534;
+        background: var(--lf-cmp-broker-mismatch-plugin-chip-reads-bg);
+        color: var(--lf-cmp-broker-mismatch-plugin-chip-reads-text);
     }
 
     :global(.dark) .plugin-chip.reads {
-        background: rgba(34, 197, 94, 0.18);
-        color: #86efac;
+        background: var(--lf-cmp-broker-mismatch-plugin-chip-reads-bg-dark);
+        color: var(--lf-cmp-broker-mismatch-plugin-chip-reads-text-dark);
     }
 
     .plugin-name {
@@ -390,11 +391,11 @@
         align-items: center;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        border-top: 1px solid #e2e8f0;
+        border-top: 1px solid var(--lf-cmp-broker-mismatch-border);
     }
 
     :global(.dark) .modal-footer {
-        border-top-color: #334155;
+        border-top-color: var(--lf-cmp-broker-mismatch-border-dark);
     }
 
     .spacer {
@@ -421,44 +422,44 @@
     }
 
     .btn-secondary {
-        background: #f1f5f9;
-        color: #475569;
+        background: var(--lf-cmp-broker-mismatch-btn-secondary-bg);
+        color: var(--lf-cmp-broker-mismatch-btn-secondary-text);
     }
 
     .btn-secondary:hover:not(:disabled) {
-        background: #e2e8f0;
+        background: var(--lf-cmp-broker-mismatch-btn-secondary-hover-bg);
     }
 
     :global(.dark) .btn-secondary {
-        background: #334155;
-        color: #e2e8f0;
+        background: var(--lf-cmp-broker-mismatch-btn-secondary-bg-dark);
+        color: var(--lf-cmp-broker-mismatch-btn-secondary-text-dark);
     }
 
     .btn-primary {
-        background: #1a4031;
-        color: white;
+        background: var(--lf-cmp-broker-mismatch-btn-primary-bg);
+        color: var(--lf-cmp-broker-mismatch-btn-primary-text);
     }
 
     .btn-primary:hover:not(:disabled) {
-        background: #153428;
+        background: var(--lf-cmp-broker-mismatch-btn-primary-hover-bg);
     }
 
     .btn-danger-outline {
         background: transparent;
-        border-color: #fca5a5;
-        color: #dc2626;
+        border-color: var(--lf-cmp-broker-mismatch-btn-danger-outline-border);
+        color: var(--lf-cmp-broker-mismatch-btn-danger-outline-text);
     }
 
     .btn-danger-outline:hover:not(:disabled) {
-        background: #fef2f2;
+        background: var(--lf-cmp-broker-mismatch-btn-danger-outline-hover-bg);
     }
 
     :global(.dark) .btn-danger-outline {
-        border-color: #7f1d1d;
-        color: #f87171;
+        border-color: var(--lf-cmp-broker-mismatch-btn-danger-outline-border-dark);
+        color: var(--lf-cmp-broker-mismatch-btn-danger-outline-text-dark);
     }
 
     :global(.dark) .btn-danger-outline:hover:not(:disabled) {
-        background: rgba(220, 38, 38, 0.12);
+        background: var(--lf-cmp-broker-mismatch-btn-danger-outline-hover-bg-dark);
     }
 </style>

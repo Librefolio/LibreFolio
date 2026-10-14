@@ -42,6 +42,7 @@
     import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {themed} from '$lib/theme/themePair';
     import {CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Props
@@ -145,12 +146,8 @@
 
     onMount(() => {
         // Watch for dark-mode class changes on <html>
-        const observer = new MutationObserver(() => {
+        const observer = onThemeClassChange(() => {
             if (chartContainer && data.length > 0) renderChart();
-        });
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ['class'],
         });
         return () => {
             observer.disconnect();
@@ -191,10 +188,10 @@
 
     function buildTooltipHeader(date: string, bucketInfo?: {bucketStart: string; bucketEnd: string}): string {
         if (resolution === 'daily') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${themed(CHART_TOOLTIP_COLORS.candlestickBox.heading, isDarkProp ?? document.documentElement.classList.contains('dark'))}">${formatDay(date)}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${themed(CHART_TOOLTIP_COLORS.candlestickBox.heading, isDarkProp ?? isDarkTheme())}">${formatDay(date)}</div>`;
         }
 
-        const dark = isDarkProp ?? document.documentElement.classList.contains('dark');
+        const dark = isDarkProp ?? isDarkTheme();
         // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
         const info = bucketSpanUpTo(date, bucketInfo ?? {bucketStart: date, bucketEnd: date});
 
@@ -317,7 +314,7 @@
             });
         }
 
-        const dark = isDarkProp ?? document.documentElement.classList.contains('dark');
+        const dark = isDarkProp ?? isDarkTheme();
 
         const greenColor = dark ? COLORS.greenDark : COLORS.greenLight;
         const redColor = dark ? COLORS.redDark : COLORS.redLight;

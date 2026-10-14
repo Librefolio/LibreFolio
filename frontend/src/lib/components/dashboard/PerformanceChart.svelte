@@ -29,6 +29,7 @@
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
     import {CHART_GAIN_LOSS, PERFORMANCE_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface AssetPeriodContribution {
         asset_id: number;
@@ -427,7 +428,7 @@
     });
 
     function syncTheme() {
-        isDark = document.documentElement.classList.contains('dark');
+        isDark = isDarkTheme();
     }
 
     function buildAxisRich(themeDark: boolean, desktop = false) {
@@ -1115,11 +1116,10 @@
 
     onMount(() => {
         syncTheme();
-        darkModeObserver = new MutationObserver(() => {
+        darkModeObserver = onThemeClassChange(() => {
             syncTheme();
             renderChart();
         });
-        darkModeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
 
         return () => {
             tooltipCleanup?.();

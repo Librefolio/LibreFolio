@@ -12,6 +12,7 @@
     import katex from 'katex';
     import 'katex/dist/katex.min.css';
     import '$lib/theme/components/files.css';
+    import {isDarkTheme} from '$lib/theme/themeMode';
 
     interface Props {
         open?: boolean;
@@ -291,7 +292,7 @@
                 if (token !== tableToken) return;
                 // Firmer grid lines than the stock theme: with faint borders there is no way to
                 // tell a short value from one the column is cutting off.
-                const tableTheme = document.documentElement.classList.contains('dark') ? buildDarkSpreadsheetTheme() : (cheetahGrid.themes?.MATERIAL_DESIGN?.extends?.({...SPREADSHEET_LIGHT_BORDERS}) ?? 'MATERIAL_DESIGN');
+                const tableTheme = isDarkTheme() ? buildDarkSpreadsheetTheme() : (cheetahGrid.themes?.MATERIAL_DESIGN?.extends?.({...SPREADSHEET_LIGHT_BORDERS}) ?? 'MATERIAL_DESIGN');
 
                 // Tinting whole rows, not single cells: the rows are what the caller is
                 // pointing at, and a single highlighted cell reads as a selection instead.
