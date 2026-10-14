@@ -7,10 +7,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
 
-from backend.app.services.scheduler.jobs import run_current_price_refresh, run_history_sync
-from backend.app.services.scheduler.leader import am_i_leader
-from backend.app.services.scheduler.settings import SchedulerSettings, load_scheduler_settings
-from backend.app.services.scheduler.state import SchedulerState, load_state, save_state
+from backend.app.services.platform.scheduler.jobs import run_current_price_refresh, run_history_sync
+from backend.app.services.platform.scheduler.leader import am_i_leader
+from backend.app.services.platform.scheduler.settings import SchedulerSettings, load_scheduler_settings
+from backend.app.services.platform.scheduler.state import SchedulerState, load_state, save_state
 
 logger = structlog.get_logger(__name__)
 
