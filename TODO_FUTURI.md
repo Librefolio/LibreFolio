@@ -1953,6 +1953,16 @@ guida del segnale e che su mobile sparisce è un difetto: è stato assegnato a K
   segnali di rischio**.
 - Nelle zone dove sono oggi, descrivere la scheda e mettere i link ai segnali.
 
+## 📈 Grafici da un video di analisi del portafoglio
+
+**Data aggiunta**: 27 Luglio 2026 (era `idee_per_grafici.md` nella radice, spostato qui il 14/10/2026) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
+
+### Contesto
+Usare come base i grafici mostrati in questo video: https://www.youtube.com/watch?v=B6mLq6UUTWw
+
+### Azione Futura
+Analizzarli, poi implementarne alcuni o tutti.
+
 ## 📈 Scala logaritmica nei grafici
 
 **Data aggiunta**: 30 Settembre 2026 (appunto del 26/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
