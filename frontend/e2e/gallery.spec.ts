@@ -2377,7 +2377,7 @@ test.describe('Gallery Screenshots', () => {
         // The five share buttons, in the order SupportActions draws them (SOCIAL_SHARE_ORDER).
         const SHARE_PLATFORMS = ['x', 'reddit', 'facebook', 'instagram', 'tiktok'] as const;
         // Duplicated on purpose, as in support-copy-and-go.spec.ts: SHARE_HASHTAGS in
-        // src/lib/components/support/supportLinks.ts, the same line in every language.
+        // src/lib/features/support/supportLinks.ts, the same line in every language.
         const SHARE_HASHTAG_LINE = '#LibreFolio #OpenSource #SelfHosted #PortfolioTracker #PersonalFinance';
 
         test('donation popup after sign-in - all languages and themes', async ({page}, testInfo) => {

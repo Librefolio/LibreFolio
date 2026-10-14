@@ -6,9 +6,9 @@
     import {AppWindow, Check, ChevronDown, Container, Copy, ExternalLink, Github, Globe, HardDrive, Heart, Info, Languages, Layers, Maximize2, Monitor, Scale, SunMoon, Tag} from 'lucide-svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import SupportActions from '$lib/components/support/SupportActions.svelte';
-    import SocialShareModal from '$lib/components/support/SocialShareModal.svelte';
-    import type {SocialPlatform} from '$lib/components/support/supportLinks';
+    import SupportActions from '$lib/features/support/SupportActions.svelte';
+    import SocialShareModal from '$lib/features/support/SocialShareModal.svelte';
+    import type {SocialPlatform} from '$lib/features/support/supportLinks';
     import ToolAboutPanel from '$lib/features/tools/ToolAboutPanel.svelte';
     import {mapBackendSignalDefinition} from '$lib/charts/signals/catalogMapper';
     import {getRegisteredSignalTypes} from '$lib/charts/signals/registry';
