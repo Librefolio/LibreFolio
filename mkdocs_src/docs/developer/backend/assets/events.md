@@ -41,7 +41,7 @@ erDiagram
 
 ## 🔄 Dedup Strategy
 
-`_upsert_asset_events()` (`asset_sources/price_store.py`) writes both kinds of events **in place**,
+`_upsert_asset_events()` (`assets/price_store.py`) writes both kinds of events **in place**,
 one source per call: a sync passes the assignment's id, the manual upsert passes `None`. It groups
 the incoming events by `(date, type)` and matches each key against the stored rows of the **same**
 source only (same `asset_id` and `provider_assignment_id`, `IS NULL` for manual events):

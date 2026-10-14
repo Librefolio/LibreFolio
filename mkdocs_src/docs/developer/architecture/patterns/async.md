@@ -59,7 +59,7 @@ event loop before it starts.
 ### 🧵 Canonical Provider Thread Boundary
 
 The single provider isolation helper is
-`backend/app/services/asset_sources/core.py::_run_provider_in_thread()`. Manager operation
+`backend/app/services/assets/core.py::_run_provider_in_thread()`. Manager operation
 modules and `AssetSearchService` route provider I/O through it. For every call, the helper:
 
 1. starts a worker with `asyncio.to_thread()`;

@@ -1,20 +1,20 @@
 ---
-applyTo: "backend/app/services/asset_source_providers/**,backend/app/services/asset_source.py"
+applyTo: "backend/app/services/asset_source_providers/**,backend/app/services/assets/**"
 ---
 
 # Asset Source Providers
 
 ## Architecture
 
-All asset providers extend `AssetSourceProvider` (abstract base in `asset_source.py`) and are auto-discovered via `@register_provider(AssetProviderRegistry)`.
+All asset providers extend `AssetSourceProvider` (abstract base in `assets/core.py`) and are auto-discovered via `@register_provider(AssetProviderRegistry)`.
 
 ### Base Class
 
-The abstract base class `AssetSourceProvider` is defined in `backend/app/services/asset_source.py`. Read that file for the full contract (abstract methods, properties, return types). Key elements: `get_current_value()`, `get_history_value()`, `search()` (optional), `fetch_asset_metadata()` (optional), `params_schema` property for dynamic frontend forms.
+The abstract base class `AssetSourceProvider` is defined in `backend/app/services/assets/core.py`. Read that file for the full contract (abstract methods, properties, return types). Key elements: `get_current_value()`, `get_history_value()`, `search()` (optional), `fetch_asset_metadata()` (optional), `params_schema` property for dynamic frontend forms.
 
 ### Thread Isolation
 
-All provider calls go through `_run_provider_in_thread()` in `asset_source.py` — each call runs in a dedicated thread with its own event loop. Providers can use **sync I/O directly** (no `asyncio.to_thread()` needed inside providers).
+All provider calls go through `_run_provider_in_thread()` in `assets/core.py` — each call runs in a dedicated thread with its own event loop. Providers can use **sync I/O directly** (no `asyncio.to_thread()` needed inside providers).
 
 ### Cache Core (5 caches)
 

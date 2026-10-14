@@ -92,7 +92,7 @@ or in calendar-return mode, it reloads the chart silently instead of merging.
 
 `POST /api/v1/assets/prices/current` takes a list of asset ids and answers
 `FACurrentPriceResponse` (`results`, `success_count`). `get_current_prices_bulk`
-(`backend/app/services/asset_sources/price_query.py`) resolves every asset in parallel:
+(`backend/app/services/assets/price_query.py`) resolves every asset in parallel:
 
 ```mermaid
 sequenceDiagram
@@ -114,7 +114,7 @@ sequenceDiagram
 ```
 
 - A provider answer has `source: "provider:<code>"` and is cached for two minutes
-  (`_asset_current_cache`, `backend/app/services/asset_sources/core.py`).
+  (`_asset_current_cache`, `backend/app/services/assets/core.py`).
 - An asset with no price at all comes back with `value: null` and an `error`.
 - **Side effect**: a provider quote dated today creates or extends today's `PriceHistory` row. A
   database fallback is never written back. This write is why the frontend treats the call as a

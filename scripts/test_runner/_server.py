@@ -218,7 +218,7 @@ class SharedTestServer:
         # so every job is due the moment a test server starts: the loop wakes up
         # 5s in and starts refreshing prices against *live* providers. Measured,
         # that alone moved backend coverage by ~700-1300 lines between two
-        # identical runs (asset_source.py: 542 then 234) and dragged the network
+        # identical runs (the asset pricing service: 542 then 234) and dragged the network
         # into the suite — one run recorded the Bank of England answering HTML.
         # None of it is attributable to a test. The gallery already disables the
         # scheduler for the same reason: it must not change data mid-run.

@@ -15,9 +15,8 @@ from backend.app.schemas.provider import (
     FAProviderSearchResponse,
     FAProviderSearchResultItem,
 )
-from backend.app.services import web_link_finder
-from backend.app.services.asset_sources import core
-from backend.app.services.asset_sources.core import AssetSourceProvider
+from backend.app.services.assets import core, web_link_finder
+from backend.app.services.assets.core import AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 
 logger = structlog.get_logger(__name__)

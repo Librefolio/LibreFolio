@@ -43,7 +43,7 @@ from backend.app.schemas.assets import (
 )
 from backend.app.schemas.common import Currency as CurrencyAmount
 from backend.app.schemas.provider import FAVolumeKind
-from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.core import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector

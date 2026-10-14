@@ -147,7 +147,7 @@ Frontend tooltip: `💰 {value} (flag ISO3) 💱` / `orig. {originalValue} (orig
 |------|------|
 | Transaction service | `backend/app/services/transaction_service.py` |
 | Transaction API | `backend/app/api/v1/transactions.py` |
-| Asset source (prices, events) | `backend/app/services/asset_source.py` |
+| Asset source (prices, events) | `backend/app/services/assets/` |
 | Assets API | `backend/app/api/v1/assets.py` |
 | Schemas (prices, assets) | `backend/app/schemas/prices.py`, `backend/app/schemas/assets.py` |
 | Price chart (event tooltip) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |

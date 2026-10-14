@@ -81,5 +81,5 @@ These are outside Phase 07 scope but landed in the same commit batch:
 | FX sync (fallback) | `backend/app/services/fx/fx.py` |
 | Dockerfile | `Dockerfile` |
 | update_js_cache | `scripts/update_js_cache.py` |
-| Asset source (race fix) | `backend/app/services/asset_source.py` |
+| Asset source (race fix) | `backend/app/services/assets/provider_management.py` |
 

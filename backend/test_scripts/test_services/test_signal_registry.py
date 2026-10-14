@@ -39,7 +39,7 @@ from backend.app.services.signal_plugins.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 
 # I10 — executable but catalog-hidden. The registry still resolves and runs it
-# (asset_source/SignalService go through get_plugin), while every public
+# (assets.price_query/SignalService go through get_plugin), while every public
 # catalog surface is built from list_definitions() and must not see it.
 CALENDAR_SIGNAL_CODE = "ASSET_CALENDAR_ROLLING_RETURN"
 CALENDAR_REPRESENTATIVE_WINDOWS = (1, 7, 14, 30, 60, 90, 365, 1095)

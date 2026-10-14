@@ -52,7 +52,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk/registry.py` | `RiskAnalyticRegistry`. |
 | `backend/app/services/provider_registry.py` | The `register_plugin` decorator and the folder discovery shared by every plugin registry. |
 | `backend/app/services/series_preparation.py` | Joint calendar, target-currency conversion, simple returns, carried points. |
-| `backend/app/services/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
+| `backend/app/services/assets/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
 | `backend/app/services/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
 | `backend/app/config.py` | `RISK_SIMULATION_*` and `RISK_OPTIMIZATION_*` worker settings. |
 | `frontend/src/lib/risk/riskRequest.ts` | Request builders and canonicalization. |
@@ -360,7 +360,7 @@ behind stored carries is in [Data Quality](../../../financial-theory/technical-a
 
 Some price sources store a row for every calendar day, repeating Friday's close on weekends and
 on exchange holidays. Read as quotes, those rows would add zero-return observations to every
-joint calendar. `backend/app/services/market_calendar.py` defines the rule once, for risk and
+joint calendar. `backend/app/services/assets/market_calendar.py` defines the rule once, for risk and
 signals alike: **a row dated on a weekend or on a market holiday whose close equals exactly the
 close of the row before it is a carry, not a quote** (`is_market_closed_repeat`). A crypto asset
 that moves on a Saturday, or a genuinely flat weekday, stays a quote.
@@ -376,7 +376,7 @@ that moves on a Saturday, or a genuinely flat weekday, stays a quote.
 - `RiskService` awaits the table once per request and passes it to every preparation.
   `series_preparation.mark_market_closed_carries()` turns stored carries into carried points,
   `eligibility.load_price_window_facts()` applies the same rule in SQL, and the signal price query
-  (`backend/app/services/asset_sources/price_query.py`) applies it when signals are requested.
+  (`backend/app/services/assets/price_query.py`) applies it when signals are requested.
 
 ### ✅ Analysis Eligibility {: #eligibility }
 
