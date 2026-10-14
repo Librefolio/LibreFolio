@@ -1,5 +1,25 @@
 # Giro 1 della designer: analisi e piano per applicarlo (14/10/2026)
 
+> **Decisioni del developer, 14/10 sera, dopo questa analisi.** Cambiano la strategia del §4.
+>
+> - **D-T1:** si apre T subito, in parallelo a R.
+> - **D-T2:** il developer ha sentito la designer. Testuale: «voleva che il verde della barra menù fosse lo stesso che
+>   si vede nella card di login in alto, quella dove c'è il logo, sia in chiaro che in scuro (con la declinazione del
+>   colore), l'avorio dovrebbe essere lo sfondo dell'app in chiaro, e l'altro in scuro».
+>   - La barra laterale prende il verde della testata nei due temi.
+>   - `#F1EDE3`/`#131A17` sono lo **sfondo dell'app**.
+>   - «Sfondo pagina» `#F7F4ED`/`#0F1412` resta lo sfondo della pagina di login.
+>   - La barra del titolo della PWA segue la barra laterale.
+> - **D-T3: soluzione finale subito.** Testuale: «facciamo direttamente quella e attendiamo che i sotto agenti
+>   convertano tutti i componenti alla nuova tecnologia, anzi così è più facile vedere componenti che sono rimasti
+>   indietro […] o tramite build o tramite rendering».
+>   - Quindi niente ritintura delle scale Tailwind né del bianco: la strategia «per leve» del §4 è superata.
+>   - Al suo posto: ruoli `--lf-*` e utility semantiche usate dai componenti, con una migrazione a ondate.
+>   - Un componente non migrato conserva l'aspetto di oggi. Si riconosce nel rendering (gallery) e nel build (un gate a
+>     cricchetto sulle classi di palette).
+>
+> Il resto dell'analisi (dove vivono i ruoli, contrasti, dipendenze, domande per la designer) resta valido.
+>
 > Coordinatore colori, 14/10/2026 sera. La richiesta, trascritta, sta nel [README](README.md); l'originale in
 > [`note-originali.txt`](note-originali.txt).
 >
@@ -84,6 +104,10 @@ Da sapere, non da correggere per forza:
   - non soddisfatto `#687066`: 4,7:1.
 
 ## 4. Il piano: ritingere alla fonte, poi i componenti
+
+> ⚠️ **Superato dalla decisione D-T3 del developer** (in testa al documento): niente ritintura delle scale e del bianco;
+> ruoli e utility, con la migrazione dei componenti. Il testo resta come storia del ragionamento. Restano validi l'uso
+> dei ruoli `--lf-*`, la sequenza B2–B6 e i vincoli.
 
 **B1 · Fondamenta.** Tocca solo `app.css` e il nuovo `lib/theme/tokens.css`: nessun componente.
 
