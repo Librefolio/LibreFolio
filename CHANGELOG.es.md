@@ -7,9 +7,21 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ---
 
-## [1.2.0] - 2026-10-19
+## [1.2.0] - 2026-10-14
 
-**Preparación de la v1.2.0.** Estas características y correcciones están en preparación; esta versión aún no se ha publicado.
+Lo que la 1.2 añade a la 1.1:
+
+- 🧰 **Herramientas**: una nueva sección, con su primera herramienta, el **Asignador PAC**, que calcula las compras que acercan tu asignación a sus pesos objetivo.
+- 📉 **Riesgo**: la pestaña Riesgo del Panel y de las páginas de bróker responde a cuatro preguntas, y el análisis de riesgos sale de beta, excepto la simulación.
+- 💰 **Coste de compra y P&L**: gracias a la incidencia [#32](https://github.com/Librefolio/LibreFolio/issues/32), encontramos un problema en cómo se calculaba el coste de cada compra cuando intervenían tipos de cambio, por lo que las métricas de las tarjetas KPI, como el P&L, eran incorrectas. El algoritmo ya está corregido: cada compra se convierte al tipo de cambio de su propia fecha, y los totales son correctos.
+- 💱 **Efectivo en otras divisas**: el efectivo que tienes en otra divisa ahora se valora al cambio de cada día, y la vista Periodo muestra cuánto le ha hecho ganar o perder el tipo de cambio.
+- 📊 **Panel**: llegan el modo privacidad, la vista de P&L del gráfico Crecimiento, el Rendimiento sobre coste y los índices de referencia, y el donut muestra los nueve nuevos tipos de activo agrupados en sus familias.
+- 📥 **Importaciones**: Scalable Capital, Danske Bank (alfa) y los extractos de DEGIRO en cualquier idioma; y si subes un archivo al bróker equivocado, la aplicación ahora te lo dice enseguida.
+- 🌍 **Idiomas**: los números, las fechas y el registro de cambios siguen el idioma de la interfaz.
+- 👋 **Primer inicio de sesión**: los nuevos usuarios ahora reciben un recorrido rápido y guías que les muestran la interfaz la primera vez que inician sesión.
+- ⚡ **Rendimiento**: las páginas descargan menos datos, y los informes ya no se atascan con historiales de tipos de cambio muy largos.
+- 🔒 **Seguridad**: se ha cerrado un problema de cross-site scripting (XSS), algunos endpoints de la API ahora requieren iniciar sesión, y la barra lateral te indica si tu conexión es segura.
+- 🐛 **Correcciones**: se han corregido muchos defectos, algunos presentes desde la v0.9.0.
 
 ### ✨ Añadido
 
@@ -157,9 +169,9 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 #### 📈 Gráficos
 
-- Los ejes de importes de los gráficos Growth y Performance ya no muestran la misma etiqueta dos veces (`5.5k` mostrado como `6k` junto a un `6k` real, `1.25M` como `1.3M`), y un borde del eje colocado automáticamente más allá de los datos ya no se etiqueta como si fuera un paso normal. El P&L total de la información emergente de Growth ahora se muestra como `EUR -12.00`, al igual que los demás importes, en lugar de `−EUR 12.00`.
+- Los ejes de importes de los gráficos Crecimiento y Performance ya no muestran la misma etiqueta dos veces (`5.5k` mostrado como `6k` junto a un `6k` real, `1.25M` como `1.3M`), y un borde del eje colocado automáticamente más allá de los datos ya no se etiqueta como si fuera un paso normal. El P&L total de la información emergente del gráfico Crecimiento ahora se muestra como `EUR -12.00`, al igual que los demás importes, en lugar de `−EUR 12.00`.
 - El gráfico comparativo de lotes ya no deja una franja vacía a la izquierda de sus importes, algo especialmente visible en móviles.
-- En resolución semanal o mensual, la semana o el mes que aún no ha terminado se lee bien en los gráficos de activos y de tipos de cambio: sus eventos ya no desaparecen, sus marcadores se sitúan en su punto como los demás, y su información emergente fecha el valor en su último día con precio, ya no en el domingo ni en el último día del mes que aún está por llegar. Presente desde la v1.0.0.
+- En resolución semanal o mensual, la semana o el mes que aún no ha terminado se lee bien en los gráficos de activos y de tipos de cambio, el gráfico Crecimiento, el histórico de la asignación y el gráfico comparativo de lotes: su información emergente fecha el valor en su último día con datos, ya no en el domingo ni en el último día del mes que aún está por llegar. En los gráficos de activos y de tipos de cambio sus eventos ya no desaparecen y sus marcadores se sitúan en su punto como los demás; en el gráfico Crecimiento su punto se sitúa en ese día, por lo que la línea ya no llega a una fecha que aún está por llegar. Presente desde la v1.0.0.
 
 #### 📉 Análisis de riesgos
 

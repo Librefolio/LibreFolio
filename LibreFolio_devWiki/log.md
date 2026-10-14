@@ -3414,3 +3414,33 @@ links it (ask the developer first) without copying its seven steps. **Created** 
 (V-3; not in the code, after 1.2), linked from [[decisions/single-docker-image]], [[features/F-062]] (whose
 dependency line was also corrected: the toolchain lives in the builder stage), [[decisions/transfer-pair-same-asset-opposite-quantity]]
 and [[decisions/data-quality-proved-on-real-data]]. Graph: not updated (P-6).
+
+## [2026-10-14] ingest | Trains 94–99 and the coordinator's commits
+Base `bae15c3cf`; four read-only digests, every claim re-checked on the code and on git. **C-59** (`ce09c6ac4`):
+uvicorn's extras in the lock — [[decisions/single-docker-image]], [[decisions/python-stays-on-3-13]]. **U-6/U-6b**:
+the bundled Schwab logo undone by the developer — [[problems/schwab-favicon-blocked-by-orb]] now *accepted*, with his
+hypothesis (our bursts of requests); Scalable without exporter 1.0.0 and D4 «Tagesgeld» on
+[[decisions/scalable-two-accounts-two-plugins]]. **V** (trains 94–96): created [[problems/transaction-form-saved-a-refused-date]]
+(V-37, since v1.1.0; V-37b after 1.2); T1, T4, V-38 on [[sources/phase00-data-quality-e2e-2026-10]]. **I, lot 52**:
+three rows in [[concepts/echarts-chart-gotchas]] (`containLabel` and the unrounded time extent, `outerBounds` before
+`hideOverlap` — a3, not (a) — and `dataZoom` linear in time, Z2); the running period on every chart on
+[[problems/event-markers-lost-in-the-last-partial-period]]. **I-M30, plan 54**: created
+[[problems/gallery-fixture-normalizer-scaled-ratios]] — no numbers, no detail of the scale; linked from
+[[concepts/ci-release-pipeline]] and [[decisions/gallery-is-a-release-gate-with-real-data]]. **T-PAC, plan 53**:
+[[features/F-107]] and [[decisions/pac-rounding-against-the-plan]] (the margin is in the computation). **M**: batches
+39–42 and the final gallery on [[sources/phase00-translation-round12-2026-10]]; [[features/F-106]] (Tools stable).
+**The dirty version** verified on pipeline run 77 — [[problems/release-shots-show-dirty-version]]. And
+[[sources/release-1.2.0]]. Graph: not updated (P-6).
+
+## [2026-10-14] ingest | Release day — the release page of 1.2.0 ready for the tag
+Base `a28beed92` (the chapter's introduction and date). [[sources/release-1.2.0]]: status `ready-for-tag`, the date
+2026-10-14, the approved introduction quoted as it stands in the chapter (checked identical), the counts at
+`a28beed92` (25 ✨ with 27 sub-items, 152 🐛 in 13 groups, 32 🔄, 7 ⚠️), R's final run on `10e646f79` (0 reds;
+pytest 12 936, vitest 11 515, Playwright 1 221; backend 91.54 %, frontend 71.17 %, a lower bound for its E2E part),
+the green gallery (251/0/1, then 20/0 and, after I-M30, 10/0), the gates, the developer's decision on the gallery
+fixture (option (a), published as it is — no figure of the fixture anywhere), and the backlog C-79…C-84 with M-33. The
+table «To fill at the tag» is filled except two rows that exist only after publication — the tagged commit and the
+release pipeline's run — which the next ingest fills. Also [[problems/gallery-fixture-normalizer-scaled-ratios]] (the
+decision), [[sources/r-full-run-coverage-2026-10-12]] (a pointer to the final run), and a C-82 note on
+[[problems/jscoverage-teardown-spends-the-test-budget]] and [[problems/login-returns-before-the-app-has-started]].
+Graph: not updated (P-6).

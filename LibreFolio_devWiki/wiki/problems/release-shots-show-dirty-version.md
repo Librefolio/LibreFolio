@@ -44,6 +44,10 @@ Workstream M's batch 34 (train 80):
 *Resolved in the code; to verify on the first nightly after the push.* Left in the backlog: M-25 (low) — a local
 `dev.py docker build` can reuse a frontend built for another version.
 
+*Verified on 2026-10-13* (the coordinator): the first pipeline after the push, run 77 on the merge of PR #42 into
+`main` (commit 1ee978788), reports `v1.1.0-1648-g1ee978788` — `git describe` of that merge — without `-dirty`.
+The developer's question 11 is closed.
+
 ## Source files
 
 | Role | Path |

@@ -25,9 +25,6 @@ The **Brokers** page shows one card per broker, with its value (**NAV**) in the 
     </div>
 
 3. Click **Create**: the broker appears in your list, ready for transactions and reports.
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Edit Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
 
 ??? info "⚙️ The optional fields — what each one does"
 
@@ -54,6 +51,12 @@ The **Brokers** page shows one card per broker, with its value (**NAV**) in the 
 ---
 
 ## 🗂️ Inside a broker
+
+A broker's card opens its detail page on the **Overview** tab:
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Detail" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
 
 The toolbar at the top applies to every tab:
 

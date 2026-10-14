@@ -322,6 +322,15 @@ def utils_docs_fr_typography(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Docs French typography tests", verbose=verbose)
 
 
+def utils_normalize_dashboard_fixture(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the gallery dashboard fixture normalizer: money scaled, shares and fractions left alone, invariants loud and value-free."""
+    print_section("Utils: Dashboard Fixture Normalizer")
+    print_info("Testing: scripts/normalize_dashboard_fixture.py (_walk, _verify, normalize_file), dev.py mkdocs normalize-dashboard-fixture")
+    print_info("Tests: money and per-unit prices scaled, allocation shares, Yield on Cost and one-day price change untouched, shares summing to 100, YoC = gross/WAC and price change vs P&L change enforced, messages without values, the committed fixture")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_normalize_dashboard_fixture.py", test_names)
+    return run_command(cmd, "Dashboard fixture normalizer tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     if _common.nothing_left_to_run("utils"):
@@ -586,6 +595,16 @@ Tests for utility modules and helper functions:
         # registration, and the site configuration MkDocs loads (plugins and hooks) to render one
         # page in memory (Page.render, no build) and to dispatch on_nav on navigations built in
         # the test. No DB, no server, no network, no writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "normalize-dashboard-fixture",
+        utils_normalize_dashboard_fixture,
+        name="Dashboard Fixture Normalizer",
+        desc="The gallery dashboard fixture normalizer scales money (currency objects and money-named plain numbers, per-unit prices included) to the target net worth and leaves quantities, percents, the allocation shares (summary and history, every dimension), the Yield on Cost fraction and the one-day price change fraction alone, whatever their money-like key name; after the transform every non-empty allocation list sums to 100 within the rounding of its shares, every available Yield on Cost equals gross income per unit over WAC, and every market-priced holding's one-day price change matches its one-day P&L change percent, or the script exits 1 without writing; its failure messages name the path family, never a sum, a share, a ratio, a Yield on Cost or a price change; the committed fixture passes the script's own invariants",
+        # Synthetic reports under tmp_path, plus a read-only copy of frontend/e2e/dashboard-report.json:
+        # no DB, no server, no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")
