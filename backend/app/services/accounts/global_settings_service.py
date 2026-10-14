@@ -9,7 +9,7 @@ Pass keys from SETTINGS_REGISTRY (backend.app.schemas.settings) rather than
 raw string literals; defaults stay in GLOBAL_SETTINGS_DEFAULTS.
 
 Usage:
-    from backend.app.services.global_settings_service import (
+    from backend.app.services.accounts.global_settings_service import (
         get_session_ttl_hours,
         get_max_upload_mb,
         is_registration_enabled,

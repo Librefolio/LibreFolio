@@ -74,7 +74,7 @@ review validates the description; the dossier's habit — record the approval, a
 | Role | Path |
 |------|------|
 | Tables and seed | `backend/alembic/versions/004_release_1_2_0_schema.py` |
-| Lazy `pending` rows | `backend/app/services/onboarding_service.py` |
+| Lazy `pending` rows | `backend/app/services/accounts/onboarding_service.py` |
 | Test-user seeding | `backend/test_scripts/test_db/populate_mock_data.py` |
 | Migration check | `backend/test_scripts/test_db/db_schema_validate.py` |
 | Disposable E2E accounts | `frontend/e2e/fixtures/onboarding-accounts.ts` |
