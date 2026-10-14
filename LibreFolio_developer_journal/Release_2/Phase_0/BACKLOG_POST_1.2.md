@@ -71,6 +71,8 @@
 | [Piano della 52](52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md) | L'ultima etichetta degli assi del tempo sui telefoni, le date dei tooltip, il periodo in corso di Growth, Alloc e lotti | chiuso nel treno 97 |
 | [Piano della 53](53_pacTests/plan-phase00PacTests.prompt.md) | I test del PAC (T-PAC): mappa, coperture, test che mentono, difetti D1–D4, lotti A–C | aperto: tutto dopo la 1.2 (C-69, C-73…C-78) |
 | [Piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md) | La fixture della galleria: quote, YoC e variazione di un giorno non più scalate (I-M30) | chiuso nel treno 99; la privacy resta una domanda del developer |
+| [Programma colori 55](55_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L e R | aperto il 14/10: L e R in avvio, prima l'analisi |
+| [README della 56](56_galleryDeterminism/README.md) | Gallery deterministica: 27 schermate instabili su 177, fallimenti sotto carico; workstream G | aperto il 14/10: G in avvio, prima l'analisi |
 | [Rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md) | La run completa con coverage sull'albero candidato al tag (`10e646f79`): 0 rossi | C-79 |
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
 | [`TODO_FUTURI.md`](../../../TODO_FUTURI.md) | Il futuro deliberato, non backlog | 53 temi |
@@ -1781,3 +1783,60 @@ plugin.
   - La correzione è di M (galleria) o dei dati di test: rinominare la chiave cambia le icone di tutti i broker mock.
 
   Dettagli: piano della 45, sezione «10», U-6 (passo 8) e U-6b.
+
+## L · Designer Lab (55)
+
+- **L-1 · Designer Lab v1** — medio; coordinatore, 14/10, approvato dal developer lo stesso giorno.
+  - Pagina nascosta `/designer-lab`, solo nelle build di debug; il server di test la serve già, perché usa sempre la
+    build di debug.
+  - Catalogo dei colori generato al build.
+  - Modifica dal vivo di variabili CSS, colori dei fogli di stile e colori dei grafici.
+  - Export JSON + Markdown con file e riga, per l'agente.
+
+  Dettagli: [progetto](55_colorSystem/design-designerLab.md); piano del figlio in `55_colorSystem/L-designerLab/`.
+
+## R · Fattorizzazione colori a parità di aspetto (55)
+
+Ogni ondata va dimostrata con una gallery dello stesso giorno `identical` (a parte le schermate instabili della 56).
+Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano generale, «Decisioni del developer»).
+
+- **R-1 · Colori dei grafici in un modulo unico** — alto; coordinatore, 14/10.
+  - Oggi: 4 set per assi, griglie e tooltip; 3 palette di allocazione; coppie chiaro/scuro scritte in 17 grafici.
+  - Stessi valori, divergenze con un nome.
+
+  Dettagli: [report 04](55_colorSystem/analysis/04_charts_dataviz.md), §1–§3.
+- **R-2 · Funzioni condivise per segno, stati e badge** — medio; coordinatore, 14/10.
+  - Oggi: ternario guadagno/perdita in almeno 20 punti e 7 mappe di stato indipendenti.
+  - Output identici.
+
+  Dettagli: [report 03](55_colorSystem/analysis/03_semantic_dynamic_logic.md), §1–§3.
+- **R-3 · Hex nei `<style>` in variabili CSS con lo stesso valore** (P8: `DataTable*`, modali file e immagini,
+  `ConfirmModal`) — medio; coordinatore, 14/10. Dettagli: [report 02](55_colorSystem/analysis/02_ui_components.md), §4.
+- **R-4 · Funzioni fragili e refusi senza effetto visibile** — basso; coordinatore, 14/10.
+  - `hexToRgba` e la concatenazione `+ '88'` accettano solo `#rrggbb`.
+  - La meta `theme-color` scura è `#156534` invece di `#166534`.
+
+  Dettagli: [report 01](55_colorSystem/analysis/01_theme_foundation.md), §6.5; [report 04](55_colorSystem/analysis/04_charts_dataviz.md), §5.
+
+## G · Gallery deterministica (56)
+
+- **G-1 · 27 schermate instabili su 177** — medio; coordinatore, 14/10, misura di due esecuzioni identiche.
+  - Sfondo animato del login non congelato.
+  - Scorrimento di pochi pixel nel pannello lotti.
+  - Altre instabili da analizzare.
+
+  Dettagli: [README della 56](56_galleryDeterminism/README.md) e [stabilità](56_galleryDeterminism/evidence/stability-2026-10-14.md).
+- **G-2 · 4–5 test desktop falliti in ogni esecuzione completa a 10 worker, ogni volta diversi** — medio; coordinatore,
+  14/10.
+  - Login fermo su «auth-loading» nel primo blocco; modali delle transazioni.
+  - Passano in un secondo tentativo isolato.
+  - Da analizzare con `test-triage`: non sono classificati.
+
+  Dettagli: README della 56.
+- **G-3 · `Dashboard Risk › what-if crisis replay` su desktop** — medio-basso; coordinatore, 14/10.
+  - Fallisce in 2 esecuzioni su 3.
+  - Il menu contiene «Global Financial Crisis», ma `chooseReplayPreset`
+    (`frontend/e2e/fixtures/galleryRiskDashboard.ts:146`) non si ferma mai sulla voce.
+  - Il messaggio d'errore non descrive ciò che succede.
+
+  Dettagli: README della 56.
