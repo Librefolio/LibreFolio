@@ -284,3 +284,60 @@
   - L-10 (catalogo dei ruoli) dopo T-1. Assegnata a L la riga Python di `tw_custom_re` (estensione di ④), per tenere la
     parità con la regex JS.
   - L-11 («mostra i rimasti indietro») va nel backlog.
+
+## 22:15 — Tagli della 1.3 e M2 di T
+
+- **Regola «chi parte prima», accettata.** Vale per i tagli FE5 (X), FE8a (W), FE6 `GrowthChart` (Y) e `DataTable` (Y,
+  ondata W6).
+  - Se il taglio non è iniziato, T converte il file di oggi.
+  - Se è iniziato, T lo lascia per ultimo nell'ondata.
+  - Mai due persone sullo stesso file nello stesso momento.
+  - Annuncio fra coordinatori all'inizio e all'ingresso di ogni file di taglio.
+  - Gli spostamenti puri vanno in qualunque ordine.
+- **Taglio dichiarato nel cricchetto di T:** lo script della baseline sposta i conteggi del file vecchio sui nuovi; la
+  somma e il totale non salgono. La sintassi va girata alla 1.3 quando T-1 è pronto.
+- **M2 a T:** R è d'accordo. Recepiti i suoi 6 punti:
+  - nomi CSS;
+  - test esclusi;
+  - multinsieme dei valori al posto del conteggio, commenti ignorati;
+  - R-2 coperto da M1;
+  - esenzioni dei percorsi di L;
+  - cali senza toccare la baseline.
+
+  Recepite anche le sue eccezioni: `lotColor`, generatori di `colors.ts`, `hslToHex` di `MeasurePanel`, il `#000` di
+  `ChartSettingsModal`, `#a855f7` degli editor (R-6), il falso positivo `rgba(var(--lf-cmp-…))`.
+- **W10 di R**, ridotto a: elenco delle eccezioni, gate D4 (`themeMode.ts`), inventario, backlog, wiki, handoff.
+- **Dopo le 22:45:** dire a R e a L di riprendere i comandi pesanti, quando G libera la macchina.
+
+## 22:21 — Misura finale di G conclusa
+
+- Le 2 gallery complete e il diff sono finiti alle 22:20, dentro la finestra; la porta 6153 è libera.
+  - r1: 249 passati, 2 rossi. r2: 248 passati, 3 rossi.
+  - G analizza in sola lettura; i rerun dei rossi saranno filtrati a 1 worker, con avviso.
+- Finestra chiusa in anticipo: R e L riprendono i comandi pesanti; T ha `npm ci`, build e test pre-approvati.
+- 1.3: FE6 (`GrowthChart`) dopo il lotto D; `AssetModal` e le modali delle transazioni si possono tagliare subito, con
+  annuncio; la pagina dell'asset dopo G. Chiesta a T una baseline del cricchetto adatta ai merge (una riga per file),
+  con regola di risoluzione «il più stretto, poi il gate deve passare».
+
+## 22:40 — Lotto C di R; misura di G da rifare
+
+- **G, misura finale contaminata.** Alle 22:02:33, durante r2, un poll del prezzo live di AAPL è arrivato a Yahoo e ha
+  scritto la candela di oggi nel DB condiviso (`Intra-day price extend` nel log della corsia).
+  - Causa: nell'`afterEach` della gallery, `page.unrouteAll()` viene chiamato con la pagina ancora viva; lo stesso in
+    `cleanupGalleryAccount`. Il difetto c'era già.
+  - Correzione approvata, la scrive test-author: favicon → `about:blank` → `unrouteAll` → registro offline. Verifica:
+    zero `current_value for` e zero `Intra-day price extend` nel log.
+  - **Nuovo ordine:**
+    1. checkpoint di G;
+    2. integrazione in `dev_release2`;
+    3. domani, misura finale (2 gallery complete) sul `dev_release2` con G. Fa anche da riferimento dello stesso giorno
+       per i cancelli A+B+C di R;
+    4. candidata di R;
+    5. evidenze di G in un checkpoint successivo.
+- **R, lotto C:** `0b660632f` (27 file).
+  - 604 token `--lf-cmp-*` in `lib/theme/components/*.css`, più `drawnColors.ts` e il gate `themeComponentTokens`.
+  - Controllo a campione: 3 file, 42 test.
+  - Merge di base `aa2adbbf5` → `85e61abe8`, albero = simulazione `ef4190f09`.
+  - Piano di R spostato in `Phase_1/10_colorSystem/R-colorRefactor/` con un `git mv` del coordinatore (`74e94dee6`);
+    tolta la cartella vuota rimasta. R deve correggere il link al backlog (riga 8).
+  - R prosegue con W8–W9 (lotto D).
