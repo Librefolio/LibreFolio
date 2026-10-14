@@ -97,10 +97,10 @@
 |---|---|---|---|---|
 | — | coordinatore | questo file | 6150 + `/tmp/librefolio-r2-main` | — |
 | L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | piano approvato il 14/10; branch `e-alfy-designer-lab`; passi 0–5 `6e967202e`, passi 5b–6 `87ceceede`; base allineata (`93bf8c98a`, piano spostato in `L-designerLab/`); manca la gallery A/B, domani dopo G |
-| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | piano approvato il 14/10; branch `e-alfy-g-gallery-deterministica`; G-4 corretto, G-3 pronto, t* = 3600 ms (D1, developer); compito B in corso |
+| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | codice `e23bf842c` + `0076f4269` **integrato in `dev_release2`** (`60b3f27aa`); misura finale il 15/10 alle 09:00 sul target, poi checkpoint delle evidenze |
 | R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154 + `/tmp/librefolio-r2-r` | piano approvato il 14/10; branch `e-alfy-r-fattorizzazione-colori`; lotti A `d80b9e0cd`, B `75c45d923`, C `0b660632f`, D `98731240d`: codice completo; base allineata con T-1 (`418ea8042`); cancello unico A+B+C+D dopo l'ingresso di G, poi W10 |
 | — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | su richiesta |
-| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | analisi approvata dal developer il 14/10 alle 22:00; branch `e-alfy-t-tokens-theme`; T-1 (fondamenta, gate) `2018fd853` **integrato in `dev_release2`** (`4e024dfe8`); T-2 accesso in corso |
+| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | analisi approvata dal developer il 14/10 alle 22:00; branch `e-alfy-t-tokens-theme`; T-1 (fondamenta, gate) `2018fd853` e T-2 (accesso) `a73eb7eda` **integrati in `dev_release2`** (`d80b986bf`); prossimo T-3 (shell) |
 
 Superfici condivise e relativi proprietari:
 
