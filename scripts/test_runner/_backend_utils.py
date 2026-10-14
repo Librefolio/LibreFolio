@@ -70,6 +70,15 @@ def utils_container_registry(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Container registry tests", verbose=verbose)
 
 
+def utils_served_content_types(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that uploaded content reaches the browser only as types that cannot run."""
+    print_section("Utils: Served Content Types")
+    print_info("Testing: backend/app/api/v1/uploads.py (serve_file text preview), backend/app/api/v1/brokers.py (download_file)")
+    print_info("Tests: text preview always text/plain with nosniff; broker reports inline only for safe types with download=false, attachment otherwise; nosniff on every report")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_served_content_types.py", test_names)
+    return run_command(cmd, "Served content type tests", verbose=verbose)
+
+
 def utils_coverage_js_adapter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the JS/Svelte coverage adapter that feeds coverage_analysis."""
     print_section("Utils: JS Coverage Adapter")
@@ -406,6 +415,17 @@ Tests for utility modules and helper functions:
         utils_container_registry,
         name="Container Registry",
         desc="Trusted GHCR challenge/token flow, result mapping, endpoint guards, secret redaction",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "served-content-types",
+        utils_served_content_types,
+        name="Served Content Types",
+        desc="Uploaded content reaches the browser only as types that cannot run: the text preview of an upload is text/plain; charset=utf-8 with X-Content-Type-Options: nosniff whatever type was stored (a CSV still readable, whole or windowed); a broker report opens inline only with download=false and a type that cannot carry active content (PDF, PNG, CSV, JSON, plain text), while HTML, SVG, XML, XHTML and unknown types are attachments, download=true (the default) is always an attachment, and every answer carries nosniff",
+        # Fresh apps holding the uploads and broker import routers, called through httpx's in-process
+        # ASGI transport; sign-in and session dependencies overridden, storage lookups monkeypatched to
+        # files under tmp_path. No DB, no server, no network.
         isolation="pure",
     )
     add_test(cat, "provider-core-cache", utils_provider_core_cache, name="Provider Core Cache", desc="Thread isolation, timeout, caches")
