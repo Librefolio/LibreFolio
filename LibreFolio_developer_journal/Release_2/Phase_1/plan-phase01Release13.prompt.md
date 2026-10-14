@@ -441,7 +441,9 @@ insieme solo se:
 Altrimenti servono due checkpoint in fila.
 
 **`npm ci` prima della prima run di test**: anche i test del solo backend avviano il server condiviso, che costruisce il
-frontend se manca. Senza `node_modules`, la build chiama `npx` (vietato). Regola C5.
+frontend se manca. Senza `node_modules`, la build chiama `npx` (vietato). Regola C5. Poi, una volta, `dev.py front
+build --debug` e `dev.py mkdocs build` (trovato da J): il limite d'avvio del server condiviso (300 s,
+`scripts/test_runner/_server.py:48`) comprende anche la build di debug e il sito, che in un worktree nuovo non ci stanno.
 
 **Taglio dichiarato** (dal programma colori, 14/10). Dopo l'ingresso di T-1, il cricchetto dei colori vuole i file
 nuovi senza classi di palette e tollera solo le rinomine. Un taglio crea file nuovi con le classi del file di
@@ -451,32 +453,49 @@ partenza, quindi:
 - il totale non deve salire;
 - il coordinatore ne controlla il diff prima del commit.
 
-**Conflitti sulla baseline.** La baseline ha una riga per file e le chiavi ordinate, quindi rami che toccano file
-diversi non vanno in conflitto. Sulla stessa riga:
-- si tiene il valore più stretto, mai il più alto;
-- poi il gate deve passare sull'albero fuso;
-- se non passa, c'è una regressione vera o manca un taglio dichiarato: non si allarga la baseline per farlo passare.
+**Conflitti sulla baseline** (`frontend/src/themeRoles.baseline.tsv`, una riga per file, chiavi ordinate: rami che
+toccano file diversi non vanno in conflitto). Sulla stessa riga:
+- vince il lato più stretto: il conteggio delle classi minore e i soli colori letterali presenti in tutti e due i lati;
+- una riga tolta da un lato resta tolta; una riga aggiunta da un taglio resta;
+- lo fa `node frontend/scripts/theme/theme-roles.mjs --resolve` dagli stage dell'indice, poi
+  `git add frontend/src/themeRoles.baseline.tsv`;
+- poi `node frontend/scripts/theme/theme-roles.mjs --check` (o `core-unit`) deve passare sull'albero fuso; se non passa,
+  c'è una regressione vera o manca un taglio dichiarato: non si allarga la baseline per farlo passare.
 
-La sintassi esatta dello script arriva dal coordinatore colori con T-1. Le rinomine pure non ne hanno bisogno.
+**Il comando del taglio dichiarato** (da qualunque cartella; percorsi relativi a `frontend/src`, ammessi anche con
+`frontend/src/` o `src/` davanti):
+
+```bash
+node frontend/scripts/theme/theme-roles.mjs --split lib/components/assets/AssetModal.svelte:lib/components/assets/AssetModalPrices.svelte,lib/components/assets/AssetModalProvider.svelte
+```
+
+- Il file vecchio può restare come una delle parti.
+- Le parti, insieme, non possono superare le classi del vecchio né avere colori letterali che il vecchio non aveva;
+  altrimenti il comando esce con un errore e non scrive.
+- Aggiunge una riga `~split` alla baseline.
+
+Le rinomine pure non ne hanno bisogno.
 
 ### Nuove schermate (regole del programma colori)
 
 **Decisione del developer (14/10, riportata dal coordinatore colori)**: si va subito ai ruoli `--lf-*` e alle utility
-semantiche, del tipo `bg-card` e `text-primary`, pubblicate dal workstream T dei colori. Le scale di Tailwind non
-vengono ritinte, e un controllo conterà le classi di palette rimaste.
+semantiche pubblicate dal workstream T dei colori. Le scale di Tailwind non vengono ritinte.
 
-- **Dopo la pubblicazione delle utility di T**: nelle schermate nuove della 1.3 niente classi di palette per fondi,
-  testi e bordi (`bg-white`, `text-gray-*`, `border-slate-*`…), solo le utility dei ruoli. I nomi arrivano con
-  l'analisi di T.
-- **Prima di quella pubblicazione**: si costruisce la logica e si rinvia la parte visiva, oppure si usano i pattern
-  esistenti (card `bg-white dark:bg-slate-800`, bordi `border-gray-200 dark:border-slate-700`, testi gray-900/700/500
-  con il dark, primario `bg-libre-green`), con una voce nel backlog della sessione per migrarli.
-- **Sempre**:
-  - nessun esadecimale nuovo, niente `!important`, nessuna palette nuova;
-  - stati e badge con le funzioni condivise di R (`lib/theme/toneClasses.ts`) appena entra il suo lotto A; grafici
-    solo da `chartTheme.ts` dopo il lotto B;
-  - `app.css` non si tocca;
-  - ogni schermata nuova entra nella galleria con lo scatto assestato di G.
+**In vigore da T-1** (`2018fd853`, in `dev_release2` dal 14/10 alle 23:10 con `4e024dfe8`). Due gate in `core-unit`,
+`themeRoles` e `themeTokens`, fanno rispettare le regole:
+- **un file frontend nuovo nasce a zero**: nessuna classe di palette (`bg-white`, `text-gray-*`, `dark:bg-slate-*`…) né
+  colori scritti a mano; solo le utility `*-lf-*` (sezione «Design System» di
+  `.github/instructions/frontend.instructions.md`, skill `.github/skills/design-tools/theme-roles/`);
+- **un file esistente non può salire**, né nelle classi legacy né nei colori letterali;
+- **le rinomine pure** (`git mv` più import) non richiedono nulla;
+- mai `dark:` sui ruoli, e mai classi di ruolo e di palette sullo stesso elemento.
+
+Sempre:
+- nessun esadecimale nuovo, niente `!important`, nessuna palette nuova;
+- stati e badge con le funzioni condivise di R (`lib/theme/toneClasses.ts`) appena entra il suo lotto A;
+- grafici solo da `chartTheme.ts` dopo il lotto B;
+- `app.css` non si tocca;
+- ogni schermata nuova entra nella galleria con lo scatto assestato di G.
 
 ### Dipendenze Python
 
