@@ -33,6 +33,18 @@
 | ECharts è importato direttamente in 28 file | `import … from 'echarts'`, nessun modulo centrale | Niente avvolgimento centrale di `init`: si interviene sul prototipo delle istanze (§5.3) |
 | Distribuzione dei 1.821 colori scritti a mano (produzione) | Inventario per zona: 1.084 in `<style>` dei `.svelte`, 69 in file `.css`, 533 negli script dei `.svelte` (477 nei grafici), 118 in `.ts` (94 nei grafici), 17 nel markup | ~95 % diventa modificabile dal vivo con le tecniche del §5 |
 
+> **Errata (14/10, dalle analisi di implementazione di L e R).** Due righe della tabella sono sbagliate. Valgono i piani
+> dei due workstream.
+>
+> - **Ridisegno dei grafici.** Gli osservatori del tema sono 16, non 17, e solo 12 ridisegnano il grafico a qualunque
+>   cambio di classe su `<html>`. `ScatterChart`, `CorrelationHeatmap`, `ExposureBars` ed `ExposureMaps` aggiornano
+>   solo uno `$state` `dark`, quindi aggiungere e togliere una classe non li ridisegna. `SemiDonutChart` non ha
+>   osservatore. `OtherPeriodEffectsTable` osserva `data-row-id`, non il tema. Come il Lab ridisegna questi grafici lo
+>   decide lo spike di L (N1); R conserva il ridisegno a qualunque cambio di classe anche quando riunisce gli osservatori
+>   (W8).
+> - **Ripartizione per zona.** I totali (hex 1.610 + funzioni 211 = 1.821) sono confermati, la ripartizione no:
+>   `color_inventory.py` non classifica le zone. La misura per zona la dà lo scanner del Lab (passo 1 di L).
+
 ## 2. Architettura
 
 ```mermaid

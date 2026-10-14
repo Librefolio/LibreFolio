@@ -843,6 +843,9 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   sonde della classe C, che oggi falliscono in modo visibile ma sotto carico possono diventare instabili; e lo stesso
   difetto fuori dalla galleria, in `transactions/tx-picker-pagination.spec.ts:161` (`isEnabled({timeout})`). Dettagli:
   [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezioni «10.0» e «10.1».
+  - Stato (coordinatore, 14/10): la parte della galleria passa al workstream G (56), per decisione del developer (D4
+    di G); se ne segue lo stato nella sezione «G · Gallery deterministica». Qui resta solo
+    `transactions/tx-picker-pagination.spec.ts:161`.
 - ✅ **M-16 · Il pulsante di avanzamento del wizard di import prima che arrivino i broker** — chiusa nella 1.2 da I,
   treno 48 (`3cd25af4f`): Avanti disabilitato finché la lista dei broker non arriva. Origine: test-author di M,
   12/10, fuori dal perimetro di M. Al passo 1 «Avanti: Seleziona File» resta abilitato mentre la lista dei broker si
