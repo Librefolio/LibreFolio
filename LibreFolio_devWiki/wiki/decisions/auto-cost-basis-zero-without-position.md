@@ -80,8 +80,8 @@ incoming rows, so the default path produces it. Checked at `083ed26dc`:
 | Role | Path |
 |------|------|
 | WAC facade — zero WAC without rows | `backend/app/services/portfolio_service.py` |
-| Auto writes the WAC (`_compute_wac_for_auto_items`) | `backend/app/services/transactions/transaction_service.py` |
-| Required-cost-basis check, Auto rows skipped | `backend/app/services/transactions/transaction_batch_stages.py` |
+| Auto writes the WAC (`_compute_wac_for_auto_items`) | `backend/app/services/transactions/auto_cost.py` |
+| Required-cost-basis check, Auto rows skipped | `backend/app/services/transactions/batch_costs.py` |
 | `ADD_ZERO_COST`, empty-pool unit cost | `backend/app/services/financial_math/average_cost.py` |
 | Form default (Auto) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
 | Bulk default for new rows (Auto) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |

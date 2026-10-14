@@ -69,7 +69,7 @@ confirmed by a red test enters 1.2:
 
 | Role | Path |
 |------|------|
-| `_validate_linked_pair` | `backend/app/services/transactions/transaction_service.py` |
+| `_validate_linked_pair` | `backend/app/services/transactions/validation.py` |
 | `findPromoteMatch` | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
 | `cashAmountsCancel` | `frontend/src/lib/utils/transactions/promoteHelpers.ts` |
 | `assetQuantitiesCancel` | `frontend/src/lib/utils/transactions/promoteSuggest.ts` |

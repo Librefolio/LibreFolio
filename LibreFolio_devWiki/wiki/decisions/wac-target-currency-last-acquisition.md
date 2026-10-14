@@ -84,7 +84,7 @@ split or an acquisition of unknown cost — or there is no addition at all — i
 |------|------|
 | determine_target_currency | `backend/app/services/financial_math/average_cost.py` |
 | WAC facade `compute_wac_iterative()` (override, or this rule) | `backend/app/services/portfolio_service.py` |
-| Currency sentinella logic | `backend/app/services/transactions/transaction_service.py` |
+| Currency sentinella logic | `backend/app/services/transactions/auto_cost.py` |
 | `POST /portfolio/wac` | `backend/app/api/v1/portfolio_api.py` |
 | PAC planner (passes T as override) | `backend/app/services/portfolio_allocation_source.py` |
 | Frontend chip selector | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |

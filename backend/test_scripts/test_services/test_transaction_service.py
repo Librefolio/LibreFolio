@@ -37,10 +37,8 @@ from backend.app.schemas.transactions import (
     TXTransferPromoteRequest,
     TXUpdateItem,
 )
-from backend.app.services.transactions.transaction_service import (
-    TransactionService,
-    _parse_lenient,
-)
+from backend.app.services.transactions.transaction_batch_stages import _parse_lenient
+from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._tx_test_helpers import create_bulk, delete_bulk, update_bulk
 
