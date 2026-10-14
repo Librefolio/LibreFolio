@@ -226,3 +226,43 @@
   - T fa per primo le modifiche visive e toglie la chiave `auth.registerTitle` (sorgente ceduta per quel solo cambio).
   - Restano di A: `PasswordInput`, `routes/+page.svelte`, `ForgotPasswordCard`, `DonationPopupModal`; chiedere prima.
   - Avvisare la 1.3 quando il cambio di T entra in `dev_release2`.
+
+## 21:27 — Il coordinatore 1.3 libera i file condivisi di T
+
+- **`ui/input/PasswordInput.svelte`:** T può aggiungere una prop per l'icona a sinistra. Il K-17 di A arriva più tardi,
+  su righe diverse; chi arriva per secondo somma le modifiche.
+- **Shell** (`routes/(app)/+layout.svelte`, `layout/Sidebar.svelte`, `layout/Header.svelte`): T li usa come piloti.
+  - Vincolo: cambiare solo le classi, senza riordinare il markup.
+  - La 1.3 aggiungerà più avanti righe funzionali: area degli avvisi d'istanza (H), nota legale, condizione sui link di
+    donazione (A).
+  - Unico conflitto possibile: `Header.svelte` intorno alla riga 242 (link «Buy Me a Coffee»); lo risolve chi arriva
+    per secondo.
+- **La 1.3** userà solo le utility dei ruoli nelle nuove schermate. Aspetta da T la tabella ruolo → utility.
+- Inoltrato a T.
+- **Da sincronizzare in `coordination/registro.md`** del repo al prossimo commit del coordinatore.
+
+## 21:40 — L: documentazione della categoria del runner
+
+- **Assegnato a L, estensione di ①:** citare `front-designer-lab` dove la documentazione elenca le categorie del runner.
+  - File: `test-walkthrough/{front-overview,index,api,runner_architecture}.md` e
+    `.github/instructions/frontend-testing.instructions.md`.
+  - Solo aggiunte, una riga per posto, scritte da `docs-writer`.
+  - Build MkDocs strict e `check-links` dopo le 22:45; `translate-stamp` se le pagine sono tradotte.
+  - È documentazione del codice di L, non dei colori: non rientra nella regola «MkDocs solo alla fine».
+
+## 22:00 — Analisi di T approvata dal developer
+
+- **Testuale:** «Sì, approva T con tutte le raccomandazioni e le tue integrazioni».
+  - Piano approvato in modalità `interactive` (richiesta `d6b05edb`).
+  - Decisioni inoltrate a T per messaggio.
+- **Decisioni:**
+  - D-T4 nomi (§3.2); D-T5 hex più `color-mix`; D-T6 le 8 correzioni di contrasto subito, commentate; D-T8 gate
+    (M2 in attesa dell'OK di R); D-T9 file extra; D-T12 istruzioni per gli agenti, limitate;
+  - D-T7 `page`; D-T10 T con sotto-agenti; D-T13 3 ruoli; D-T14 `border-lf-subtle`;
+  - **D-T11:** nessun rilascio della 1.3 con W1–W4 a metà, comunicato al coordinatore 1.3.
+- **OK di A**, dal coordinatore 1.3: `ForgotPasswordCard`, la barra in alto di `routes/+page.svelte`, `HelpMenu`.
+  Condizioni: solo classi colore, markup non riordinato; A arriva dopo il merge di T. `routes/+error.svelte` va a T.
+- **R:** chiesto l'accordo su M2 al posto della parte equivalente di W10/D7. Avvisato che dovrà ricatturare il CSS di
+  riferimento dopo l'ingresso di T-1.
+- **L:** requisiti per lo scanner (`lf-`, catena di `@theme inline`) e proposta «mostra i rimasti indietro».
+- **Analisi di T** copiata in `coordination/workstream-analyses/T-analisi-implementazione-20261014.md`.
