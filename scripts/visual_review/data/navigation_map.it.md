@@ -40,7 +40,7 @@
 
 | Shot | Viewport/lingue | Route | Come arrivarci (IT) | Utente / dati | Componenti |
 |---|---|---|---|---|---|
-| auth/01-login | entrambi / 4 | `/` | Aprire l'app da disconnessi: pagina di login | nessuno | `routes/+page.svelte`, `lib/components/auth/LoginCard.svelte` |
+| auth/01-login | entrambi / 4 | `/` | Aprire l'app da disconnessi: pagina di login | nessuno | `routes/+page.svelte`, `lib/features/auth/LoginCard.svelte` |
 | auth/02-register-empty | entrambi / 4 | `/` | Login → link «Registrati» → modale di registrazione vuota | nessuno | `auth/RegisterCard.svelte` |
 | auth/03-register-filled | entrambi / 4 | `/` | Come sopra, poi compilare utente `demo_user`, email `demo@example.com`, password `MyStr0ng!Pass`. Mostra il misuratore di robustezza | nessuno (solo input) | `auth/RegisterCard.svelte` |
 | auth/update-available-modal | entrambi / 4 | `/dashboard` (dopo il login) | Accedere da admin: si apre da solo il popup «Aggiornamento disponibile v99.9.0» | admin. **MOCK**: release finta in localStorage e `container-image-status` intercettato | `auth/UpdateAvailableModal.svelte` |

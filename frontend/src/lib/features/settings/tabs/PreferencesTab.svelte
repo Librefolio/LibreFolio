@@ -9,10 +9,10 @@
     import {debug} from '$lib/debug';
     import {Coins, Compass, Globe, Palette} from 'lucide-svelte';
     import type {SelectOption} from '$lib/components/ui/select';
-    import SettingsLayout from '$lib/components/settings/SettingsLayout.svelte';
-    import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
-    import SettingCurrency from '$lib/components/settings/SettingCurrency.svelte';
-    import SettingTheme from '$lib/components/settings/SettingTheme.svelte';
+    import SettingsLayout from '$lib/features/settings/SettingsLayout.svelte';
+    import SettingSelect from '$lib/features/settings/SettingSelect.svelte';
+    import SettingCurrency from '$lib/features/settings/SettingCurrency.svelte';
+    import SettingTheme from '$lib/features/settings/SettingTheme.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';

@@ -13,16 +13,16 @@
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
-    import SettingToggle from '$lib/components/settings/SettingToggle.svelte';
-    import SettingNumber from '$lib/components/settings/SettingNumber.svelte';
-    import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
-    import SettingCurrency from '$lib/components/settings/SettingCurrency.svelte';
-    import SettingTheme from '$lib/components/settings/SettingTheme.svelte';
-    import SettingActions from '$lib/components/settings/SettingActions.svelte';
-    import SettingBulkActions from '$lib/components/settings/SettingBulkActions.svelte';
-    import SchedulerConfigModal from '$lib/components/settings/SchedulerConfigModal.svelte';
-    import SchedulerLogModal from '$lib/components/settings/SchedulerLogModal.svelte';
-    import CachePanel from '$lib/components/settings/CachePanel.svelte';
+    import SettingToggle from '$lib/features/settings/SettingToggle.svelte';
+    import SettingNumber from '$lib/features/settings/SettingNumber.svelte';
+    import SettingSelect from '$lib/features/settings/SettingSelect.svelte';
+    import SettingCurrency from '$lib/features/settings/SettingCurrency.svelte';
+    import SettingTheme from '$lib/features/settings/SettingTheme.svelte';
+    import SettingActions from '$lib/features/settings/SettingActions.svelte';
+    import SettingBulkActions from '$lib/features/settings/SettingBulkActions.svelte';
+    import SchedulerConfigModal from '$lib/features/settings/SchedulerConfigModal.svelte';
+    import SchedulerLogModal from '$lib/features/settings/SchedulerLogModal.svelte';
+    import CachePanel from '$lib/features/settings/CachePanel.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 

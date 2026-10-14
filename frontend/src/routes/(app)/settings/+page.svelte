@@ -3,10 +3,10 @@
     import {page} from '$app/stores';
     import {Info, Shield, Sliders, User} from 'lucide-svelte';
     import {auth} from '$lib/stores/app/auth';
-    import ProfileTab from '$lib/components/settings/tabs/ProfileTab.svelte';
-    import PreferencesTab from '$lib/components/settings/tabs/PreferencesTab.svelte';
-    import AboutTab from '$lib/components/settings/tabs/AboutTab.svelte';
-    import GlobalSettingsTab from '$lib/components/settings/tabs/GlobalSettingsTab.svelte';
+    import ProfileTab from '$lib/features/settings/tabs/ProfileTab.svelte';
+    import PreferencesTab from '$lib/features/settings/tabs/PreferencesTab.svelte';
+    import AboutTab from '$lib/features/settings/tabs/AboutTab.svelte';
+    import GlobalSettingsTab from '$lib/features/settings/tabs/GlobalSettingsTab.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
 
     type TabId = 'profile' | 'preferences' | 'about' | 'admin';
