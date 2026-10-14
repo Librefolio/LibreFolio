@@ -326,6 +326,16 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
 - **C-84 · Le versioni scritte a mano nei file del progetto** — minimo; coordinatore, 14/10. `pyproject.toml` e
   `frontend/package.json` dicono ancora 1.1.0, fissate il 05/08; nessuno le legge, perché la versione dell'app viene da
   `git describe`. Da allineare a ogni rilascio, o da togliere.
+- **C-85 · Mostrare che si sta aspettando il server, nelle richieste importanti** — medio; developer, 14/10, dalla
+  verifica sul server della build `v1.1.0-1674-g797a7e432` (voce 7). Le sue parole: «quando un pacchetto è in volo non si
+  ha chiaro che si sta attendendo la risposta, dobbiamo aggiungere nel backlog un task che si occupa di rendere palese
+  in qualche modo che si sta aspettando una risposta dal server per le domande importanti».
+  - Il caso visto: nel grafico P&L della Dashboard, cambiando i broker del filtro, le linee si aggiornano solo quando
+    arriva la risposta, e nel frattempo niente dice che il calcolo è in corso.
+  - Da fare: l'elenco delle richieste lente o importanti (il report della Dashboard e dei broker, il Rischio, i lotti,
+    l'AI Export, il PAC, i sync), e per ciascuna un segnale uniforme di attesa sul contenuto che cambierà: uno stato
+    «in aggiornamento» sul grafico o sul pannello, e i dati vecchi attenuati invece che lasciati come se fossero
+    attuali. Da progettare insieme, con un componente comune, e dopo la 1.2.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6).
 
 ## Risk · Rischio (02)
