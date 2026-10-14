@@ -31,8 +31,19 @@
  *
  * The eye button is found by role, as the component's only button: its `title`
  * is an English sentence, and a test does not select on user-facing text.
+ *
+ * The decorative icon (workstream T, step T-2: the designer's round 1 puts a
+ * lock inside the password fields of the credential forms). The optional `icon`
+ * prop draws the component it is given — a lucide icon — on the left inside the
+ * field. It is decoration: `aria-hidden="true"`, so the field's `<label for>`
+ * stays its only name, and it is no second button beside the eye. Its test id is
+ * derived from the field's, `${testId}-icon`, and like `id` and `name` it is not
+ * printed at all when there is nothing to derive it from. Its colour and the
+ * input's left padding are classes, which these tests never read: the colours
+ * are `e2e/layout/theme-roles.spec.ts`'s, in a real browser.
  */
 import {afterEach, describe, expect, it} from 'vitest';
+import {Lock} from 'lucide-svelte';
 import {cleanup, fireEvent, render, screen, within} from '$test/component';
 import PasswordInput from './PasswordInput.svelte';
 
@@ -49,6 +60,11 @@ function setup(props: Record<string, unknown> = {}) {
  */
 function attributes(el: Element, names: readonly string[]): Record<string, string | null> {
     return Object.fromEntries(names.map((name) => [name, el.getAttribute(name)]));
+}
+
+/** The icons the field draws outside its eye button: the decorative one, when it is given one. */
+function iconsBesideTheEye(container: HTMLElement): SVGSVGElement[] {
+    return Array.from(container.querySelectorAll('svg')).filter((svg) => svg.closest('button') === null);
 }
 
 afterEach(cleanup);
@@ -84,6 +100,55 @@ describe('PasswordInput — keeping the keyboard out of the secret', () => {
 
         // The barrier: prove the field really turned into text, or the next
         // assertion would only re-check the masked field it started as.
+        expect(input).toHaveAttribute('type', 'text');
+        expect(attributes(input, ['autocapitalize', 'spellcheck'])).toEqual({autocapitalize: 'none', spellcheck: 'false'});
+    });
+});
+
+describe('PasswordInput — the decorative icon inside the field', () => {
+    it('draws no icon without the prop', () => {
+        const {container} = setup();
+
+        // The barrier: the eye draws its own svg, so an icon that is absent here
+        // was not asked for — not lost by an environment that renders no svg.
+        expect(within(container).getByRole('button').querySelector('svg')).not.toBeNull();
+        expect(screen.queryByTestId(`${TEST_ID}-icon`)).toBeNull();
+        expect(iconsBesideTheEye(container)).toEqual([]);
+    });
+
+    it('draws the icon it is given inside the field, hidden from assistive technology', () => {
+        const {container, input} = setup({icon: Lock});
+        const icon = screen.getByTestId(`${TEST_ID}-icon`);
+
+        expect(icon.tagName.toLowerCase()).toBe('svg');
+        expect(icon).toHaveAttribute('aria-hidden', 'true');
+        // Inside the field: the positioned wrapper the input sits in, not the
+        // eye button, which draws its own svg.
+        expect(icon.parentElement).toBe(input.parentElement);
+        const beside = iconsBesideTheEye(container);
+        expect(beside).toHaveLength(1);
+        expect(beside[0]).toBe(icon);
+    });
+
+    it('prints no test id on the icon when the field has none', () => {
+        // `null` means *absent*: neither `data-testid=""` nor `"-icon"`, the
+        // same rule as `id` and `name` above.
+        const {container} = render(PasswordInput, {icon: Lock});
+        const icons = iconsBesideTheEye(container);
+
+        expect(icons, 'premise: the icon is drawn').toHaveLength(1);
+        expect(icons[0]).toHaveAttribute('aria-hidden', 'true');
+        expect(icons[0].getAttribute('data-testid')).toBeNull();
+        expect(Array.from(container.querySelectorAll('[data-testid]'), (el) => el.getAttribute('data-testid'))).toEqual([]);
+    });
+
+    it('stays out of the way of the eye: still one button, still showing the password', async () => {
+        // `getByRole('button')` throws on a second button: an icon drawn as a
+        // control would be one more tab stop with no name.
+        const {input, container} = setup({icon: Lock});
+
+        await fireEvent.click(within(container).getByRole('button'));
+
         expect(input).toHaveAttribute('type', 'text');
         expect(attributes(input, ['autocapitalize', 'spellcheck'])).toEqual({autocapitalize: 'none', spellcheck: 'false'});
     });

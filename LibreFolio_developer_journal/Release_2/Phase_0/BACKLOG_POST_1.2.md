@@ -1942,6 +1942,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Quando L entra in `dev_release2`, un modulo comune evita che i due conteggi divergano.
 
   Dettagli: piano di T, passo T-1.
+- **T-B4 · Le cinque regole della password scritte due volte** — basso; T (trovato da `test-author`), 14/10.
+  - Le stesse regole stanno in `ui/input/PasswordStrength.svelte` (la lista mostrata) e in
+    `auth/RegisterCard.svelte` (la validazione del modulo). Oggi coincidono; se divergessero, la lista direbbe
+    «soddisfatta» mentre il modulo rifiuta la password.
+  - Una fonte sola per le regole: è di A, che possiede la registrazione (F13).
+
+  Dettagli: piano di T, passo T-2.
 
 ---
 
