@@ -1794,6 +1794,25 @@ plugin.
   - Export JSON + Markdown con file e riga, per l'agente.
 
   Dettagli: [progetto](55_colorSystem/design-designerLab.md); piano del figlio in `55_colorSystem/L-designerLab/`.
+- **L-2 · L'inventario Python legge il catalogo JS** — basso; L, 14/10 (decisione 4: una fonte sola, passaggio separato).
+  Oggi le due implementazioni danno conteggi identici (verifica riga per riga) e devono restare allineate a mano.
+  Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 1».
+- **L-3 · Campionario dei componenti negli stati principali** — medio; L, 14/10 (decisione 6: dopo la v1).
+  Dettagli: [progetto](55_colorSystem/design-designerLab.md), §11.6.
+- **L-4 · Salvataggio dell'export sul server di test** — basso; L, 14/10 (decisione 3: solo download nella v1).
+  Serve un endpoint solo in modalità test. Dettagli: [progetto](55_colorSystem/design-designerLab.md), §11.3.
+- **L-5 · Contratto `themeRevision` con R** — basso; L, 14/10.
+  - Se R-1 sostituisce gli osservatori dei grafici con uno store, il Lab può incrementarlo invece di riapplicare le opzioni.
+  - Oggi la ri-applicazione dal vivo copre tutti i grafici.
+
+  Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Correzioni al progetto» 1.
+- **L-6 · Indice «visto dal vivo» per valore** — basso; L, 14/10.
+  - Le schede dell'app non riferiscono al Lab quali valori del catalogo hanno davvero visto, nel CSSOM o in `setOption`.
+  - La portata reale di L3 (colori derivati, palette predefinita di ECharts) resta dichiarata ma non misurata.
+
+  Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Correzioni al progetto» 2.
+- **L-7 · Accettazione dal vivo con la designer** — medio; L, 14/10: è la DoD esterna del passo 4, su
+  `scripts/visual_review/designer_live.sh`. Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 4».
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
