@@ -392,8 +392,9 @@ dall'audit del 14/10: ogni sessione le riverifica nell'analisi.
   moduli per tema e un `__init__.py` con la sola docstring (niente barile). L'hub `schemas/__init__.py` resta e
   continua a esportare i nomi pubblici; chi importa una classe la prende dal modulo che la definisce. Nomi di classe
   invariati, quindi OpenAPI e impronte dei Tool invariati.
-- **C4 — Classi di servizio grandi.** Si tagliano in mixin per tema, composti nella classe in `service.py`; metodi
-  pubblici e patch sui metodi restano invariati. Le funzioni di modulo vanno nei moduli per tema e le patch puntano al
+- **C4 — Classi di servizio grandi.** Si tagliano in mixin per tema, composti nella classe del servizio, che resta nel
+  suo file con il suo nome (C1: per esempio `services/transactions/transaction_service.py`); metodi pubblici e patch
+  sui metodi restano invariati. Le funzioni di modulo vanno nei moduli per tema e le patch puntano al
   modulo che le definisce. Guardia contro le patch mute: uno script AST usa e getta in `/tmp`, oppure un test di
   `test-author` dove serve.
 - **C5 — `npm ci`.** Permesso a ogni sessione, solo dal lock e solo nel proprio worktree, quando serve a un controllo.
@@ -431,6 +432,19 @@ poi backend intera con gli stessi conteggi della base; `ruff`, `black`, codice m
 reperti nuovi; `api sync` senza differenze; `mkdocs build` stretto e `check-links`; le
 rinomine con somiglianza ≥ 95 % in `git diff -M`; i `patch` dei test sui nuovi percorsi.
 
+**Rinomina e taglio nello stesso commit** (chiarimento del coordinatore, 14/10, caso del PL2 di X). Sono ammessi
+insieme solo se:
+- nessun file è insieme rinominato e tagliato;
+- ogni rinomina resta ≥ 95 % in `git diff --cached -M`, che il coordinatore controlla allo staging;
+- il messaggio di commit elenca a parte le rinomine e i tagli.
+
+Altrimenti servono due checkpoint in fila.
+
+**`npm ci` prima della prima run di test**: anche i test del solo backend avviano il server condiviso, che costruisce il
+frontend se manca. Senza `node_modules`, la build chiama `npx` (vietato). Regola C5. Poi, una volta, `dev.py front
+build --debug` e `dev.py mkdocs build` (trovato da J): il limite d'avvio del server condiviso (300 s,
+`scripts/test_runner/_server.py:48`) comprende anche la build di debug e il sito, che in un worktree nuovo non ci stanno.
+
 **Taglio dichiarato** (dal programma colori, 14/10). Dopo l'ingresso di T-1, il cricchetto dei colori vuole i file
 nuovi senza classi di palette e tollera solo le rinomine. Un taglio crea file nuovi con le classi del file di
 partenza, quindi:
@@ -439,32 +453,49 @@ partenza, quindi:
 - il totale non deve salire;
 - il coordinatore ne controlla il diff prima del commit.
 
-**Conflitti sulla baseline.** La baseline ha una riga per file e le chiavi ordinate, quindi rami che toccano file
-diversi non vanno in conflitto. Sulla stessa riga:
-- si tiene il valore più stretto, mai il più alto;
-- poi il gate deve passare sull'albero fuso;
-- se non passa, c'è una regressione vera o manca un taglio dichiarato: non si allarga la baseline per farlo passare.
+**Conflitti sulla baseline** (`frontend/src/themeRoles.baseline.tsv`, una riga per file, chiavi ordinate: rami che
+toccano file diversi non vanno in conflitto). Sulla stessa riga:
+- vince il lato più stretto: il conteggio delle classi minore e i soli colori letterali presenti in tutti e due i lati;
+- una riga tolta da un lato resta tolta; una riga aggiunta da un taglio resta;
+- lo fa `node frontend/scripts/theme/theme-roles.mjs --resolve` dagli stage dell'indice, poi
+  `git add frontend/src/themeRoles.baseline.tsv`;
+- poi `node frontend/scripts/theme/theme-roles.mjs --check` (o `core-unit`) deve passare sull'albero fuso; se non passa,
+  c'è una regressione vera o manca un taglio dichiarato: non si allarga la baseline per farlo passare.
 
-La sintassi esatta dello script arriva dal coordinatore colori con T-1. Le rinomine pure non ne hanno bisogno.
+**Il comando del taglio dichiarato** (da qualunque cartella; percorsi relativi a `frontend/src`, ammessi anche con
+`frontend/src/` o `src/` davanti):
+
+```bash
+node frontend/scripts/theme/theme-roles.mjs --split lib/components/assets/AssetModal.svelte:lib/components/assets/AssetModalPrices.svelte,lib/components/assets/AssetModalProvider.svelte
+```
+
+- Il file vecchio può restare come una delle parti.
+- Le parti, insieme, non possono superare le classi del vecchio né avere colori letterali che il vecchio non aveva;
+  altrimenti il comando esce con un errore e non scrive.
+- Aggiunge una riga `~split` alla baseline.
+
+Le rinomine pure non ne hanno bisogno.
 
 ### Nuove schermate (regole del programma colori)
 
 **Decisione del developer (14/10, riportata dal coordinatore colori)**: si va subito ai ruoli `--lf-*` e alle utility
-semantiche, del tipo `bg-card` e `text-primary`, pubblicate dal workstream T dei colori. Le scale di Tailwind non
-vengono ritinte, e un controllo conterà le classi di palette rimaste.
+semantiche pubblicate dal workstream T dei colori. Le scale di Tailwind non vengono ritinte.
 
-- **Dopo la pubblicazione delle utility di T**: nelle schermate nuove della 1.3 niente classi di palette per fondi,
-  testi e bordi (`bg-white`, `text-gray-*`, `border-slate-*`…), solo le utility dei ruoli. I nomi arrivano con
-  l'analisi di T.
-- **Prima di quella pubblicazione**: si costruisce la logica e si rinvia la parte visiva, oppure si usano i pattern
-  esistenti (card `bg-white dark:bg-slate-800`, bordi `border-gray-200 dark:border-slate-700`, testi gray-900/700/500
-  con il dark, primario `bg-libre-green`), con una voce nel backlog della sessione per migrarli.
-- **Sempre**:
-  - nessun esadecimale nuovo, niente `!important`, nessuna palette nuova;
-  - stati e badge con le funzioni condivise di R (`lib/theme/toneClasses.ts`) appena entra il suo lotto A; grafici
-    solo da `chartTheme.ts` dopo il lotto B;
-  - `app.css` non si tocca;
-  - ogni schermata nuova entra nella galleria con lo scatto assestato di G.
+**In vigore da T-1** (`2018fd853`, in `dev_release2` dal 14/10 alle 23:10 con `4e024dfe8`). Due gate in `core-unit`,
+`themeRoles` e `themeTokens`, fanno rispettare le regole:
+- **un file frontend nuovo nasce a zero**: nessuna classe di palette (`bg-white`, `text-gray-*`, `dark:bg-slate-*`…) né
+  colori scritti a mano; solo le utility `*-lf-*` (sezione «Design System» di
+  `.github/instructions/frontend.instructions.md`, skill `.github/skills/design-tools/theme-roles/`);
+- **un file esistente non può salire**, né nelle classi legacy né nei colori letterali;
+- **le rinomine pure** (`git mv` più import) non richiedono nulla;
+- mai `dark:` sui ruoli, e mai classi di ruolo e di palette sullo stesso elemento.
+
+Sempre:
+- nessun esadecimale nuovo, niente `!important`, nessuna palette nuova;
+- stati e badge con le funzioni condivise di R (`lib/theme/toneClasses.ts`) appena entra il suo lotto A;
+- grafici solo da `chartTheme.ts` dopo il lotto B;
+- `app.css` non si tocca;
+- ogni schermata nuova entra nella galleria con lo scatto assestato di G.
 
 ### Dipendenze Python
 
@@ -686,3 +717,40 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > - `GrowthChart` è anche nel lotto D, quindi il taglio FE6 viene dopo quel lotto, non dopo il B;
 > - `AssetModal` e le tre modali delle transazioni sono già fuori dai lotti di R, quindi X e W possono tagliarle
 >   prima del lotto A.
+
+### Via parziale al codice ✅ (2026-10-14, 22:55)
+
+> **Note implementazione**: il developer, a metà lettura delle decisioni (finite le 11 di Account e accessi, con note
+> sue), ha delegato al coordinatore: «vedi tu se aspettare che leggo tutto, o intanto grazie a queste riesci ad avviare
+> qualche lavoro». Partono solo i primi checkpoint, tutti di riordino puro e senza decisioni di prodotto aperte:
+> H CP1 (`platform/`, `files/`), X0 e CP1 (registri per famiglia), A1 (`accounts/`), W0 e W1 (transazioni e broker),
+> J-0 e CP-1 (PAC). Base portata a `c9bb8f257` (regole C1–C7 nel §6) con un fast-forward dei cinque worktree, puliti.
+> Approvazione in modalità interattiva, con le parole del developer alla lettera e le risposte di coordinamento.
+> Z resta fermo: la sua prima parte dipende dalle decisioni 31 e 32.
+>
+> **Fuori pista**: le note del developer cambiano il perimetro di A (registrate nel piano di A alla fine di A1):
+> - D-A16 respinta: l'invito non vincola l'email;
+> - niente `LIBREFOLIO_SUPPORT_URL`;
+> - limite dei tentativi disattivabile solo da variabile, più una zona «controlli di sicurezza» per l'admin;
+> - scheda Utenti confermata.
+>
+> Restano aperti, con una proposta del coordinatore:
+> - scadenza del token di setup;
+> - dove l'admin vede l'abbonamento;
+> - meccanismo delle sessioni;
+> - cancellazione di un utente da parte dell'admin;
+> - `LIBREFOLIO_PUBLIC_URL`.
+>
+> Le note restano nel file delle decisioni, non committate, finché il developer legge.
+>
+> **Fuori pista**: il testo che accompagnava l'approvazione dei piani (parole del developer, perimetro, base, risposte di
+> coordinamento) non è arrivato alle sessioni. L'app consegna solo «piano approvato».
+> - W è rimasto FROZEN, come vuole il protocollo, e ha chiesto il testo.
+> - H, A, X e J sono partiti, credendo a un'approvazione diretta del developer. Il loro perimetro coincideva comunque
+>   con il primo checkpoint, perché lo dicevano già i loro piani.
+> - Il testo è stato rimandato a tutte e cinque come messaggio alle 23:01.
+> - **Regola da qui in poi**: a ogni approvazione di un piano, il testo va mandato anche come messaggio.
+>
+> Programma colori: finestra della galleria domani, 15/10, dalle 09:00, per circa 2 ore. Nella finestra, niente suite
+> complete né build pesanti nelle corsie della 1.3; inizio e fine li conferma il coordinatore colori. G-8 (catalogo dei
+> Tool oltre i 2 s sotto carico, `schemas/tools.py:83`) va a J, dopo il suo primo checkpoint.
