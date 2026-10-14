@@ -47,9 +47,22 @@
   6. **B6:** pulizia di P1 con la migrazione delle pagine.
 
   Per la designer, il giro 2 si fa nel Designer Lab sulla build di T.
-- **Aperte:**
-  - del developer: D-T1 aprire T adesso, D-T2 la barra laterale avorio, D-T3 il bianco delle card;
-  - della designer: cinque correzioni di contrasto e i ruoli mancanti.
+- **Decisioni del developer (14/10 sera)**, testuali in testa ad `analisi.md`:
+  - **D-T1:** T si apre subito, in parallelo a R.
+  - **D-T2:**
+    - barra laterale = verde della testata della card di login, nei due temi;
+    - `#F1EDE3`/`#131A17` = sfondo dell'app;
+    - `#F7F4ED`/`#0F1412` = pagina di login;
+    - la barra del titolo della PWA segue la barra laterale.
+  - **D-T3: soluzione finale subito.**
+    - Ruoli `--lf-*` e utility semantiche nei componenti, migrazione di tutto il frontend a ondate di sotto-agenti.
+    - Niente ritintura delle scale Tailwind né del bianco: la «B1 per leve» qui sopra è superata.
+    - I componenti rimasti indietro si vedono: vecchio aspetto nel rendering, gate a cricchetto nel build.
+- **Schermate di accesso** (accordo col coordinatore 1.3, 14/10):
+  - le modifiche visive le fa T per primo, compresa la chiave `auth.registerTitle`, tolta dai cataloghi in quello
+    stesso cambio;
+  - A aspetta il loro ingresso prima delle modifiche funzionali.
+- **Della designer, ancora aperte:** cinque correzioni di contrasto e i ruoli mancanti.
 
 ## 🛤️ Workstream e corsie
 
@@ -60,6 +73,7 @@
 | G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | piano approvato il 14/10; branch `e-alfy-g-gallery-deterministica`; G-4 corretto, G-3 pronto, t* = 3600 ms (D1, developer); compito B in corso |
 | R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154 + `/tmp/librefolio-r2-r` | piano approvato il 14/10; branch `e-alfy-r-fattorizzazione-colori`; lotto A (W0–W2) `d80b9e0cd`, lotto B (W3–W5) `75c45d923`, base allineata a `dev_release2` (`f53d979ef`); prosegue con il lotto C; i cancelli A e B aspettano G |
 | — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | su richiesta |
+| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | aperto il 14/10 sera (D-T1): prima l'analisi d'implementazione, nessun codice |
 
 Superfici condivise e relativi proprietari:
 
