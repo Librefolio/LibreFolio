@@ -1181,6 +1181,7 @@ nav:
               - Pages: developer/frontend/pages/index.md
           - "🎨 Design System & UI":
               - Styling: developer/frontend/styling.md
+              - Designer Lab: developer/frontend/designer-lab.md
               - 🧩 Components:
                   - Overview: developer/frontend/components/index.md
                   - 🏗️ Core UI:
