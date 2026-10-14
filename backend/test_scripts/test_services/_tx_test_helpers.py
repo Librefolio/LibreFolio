@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from typing import List, Optional
 
 from backend.app.schemas.transactions import TXCreateItem, TXUpdateItem
-from backend.app.services.transaction_service import TransactionService
+from backend.app.services.transactions.transaction_service import TransactionService
 
 
 async def create_bulk(
