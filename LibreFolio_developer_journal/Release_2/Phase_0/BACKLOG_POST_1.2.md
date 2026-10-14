@@ -1869,6 +1869,15 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
 
 Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).
 
+- ✅ **Voce 5 di `TODO_ProssimeAttivita` · Link alle transazioni nella modale di cancellazione dell'asset** — chiusa da X il
+  14/10 senza codice: già fatta il 10/09 in `e50d66408` (conteggio e link nella cancellazione singola e in quella multipla,
+  `FAAssetDeleteResult.transaction_count`, E2E in `e2e/assets/asset-list.spec.ts`); nella devWiki F-095 era già
+  `documented`, e `domains/assets.md` non la elenca più fra le cose da fare. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «2.5».
+- **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1).
+  La docstring di `api/v1/fx.py:767` cita ancora «``services/fx.py``», che dal CP1 è `services/fx/fx.py`: è nella
+  descrizione dell'endpoint in `openapi.json`, quindi resta fino al PL4, che dà alla funzione la sua casa definitiva.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1.
+
 ## W · Import e transazioni (fase 01)
 
 Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md).
