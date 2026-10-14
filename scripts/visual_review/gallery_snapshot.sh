@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# Capture a LibreFolio gallery run as an immutable snapshot (visual review safety net).
+#
+# Usage (from any directory):
+#   scripts/visual_review/gallery_snapshot.sh <label> [--checkout PATH] [--port N] [--data-dir PATH]
+#                                             [--work-dir PATH] [-- <extra `dev.py mkdocs gallery` args>]
+# Examples:
+#   scripts/visual_review/gallery_snapshot.sh ref-2026-10-20
+#   scripts/visual_review/gallery_snapshot.sh dash-only -- -f "Dashboard" --desktop-only
+#   scripts/visual_review/gallery_snapshot.sh cand-T --checkout ../LibreFolio-worktrees/t --port 6151 --data-dir /tmp/librefolio-r2-t
+#
+# Defaults: the checkout that contains this script; port 6150 + data dir /tmp/librefolio-r2-main (coordinator
+# lane, Release 2 convention); work dir $LF_VISUAL_REVIEW_DIR or ~/LibreFolio_visual_review, never inside a checkout.
+# The gallery writes git-ignored PNGs into <checkout>/mkdocs_src/docs/gallery. Only the PNGs written by THIS run
+# (newer than a start stamp) are copied to <work>/snapshots/<label>/png, so images left by failed or filtered
+# tests never pollute a snapshot: they are listed in stale_not_regenerated.txt. A busy port stops the script
+# (no --force, by policy). A linked worktree must reuse the main venv: export PIPENV_CUSTOM_VENV_NAME first.
+set -euo pipefail
+
+usage() { sed -n '2,20p' "$0"; exit 2; }
+[[ $# -ge 1 && "$1" != -* ]] || usage
+LABEL=$1; shift
+CHECKOUT=$(cd "$(dirname "$0")/../.." && pwd)
+PORT=6150
+DATA_DIR=/tmp/librefolio-r2-main
+WORK=${LF_VISUAL_REVIEW_DIR:-$HOME/LibreFolio_visual_review}
+EXTRA=()
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --checkout) CHECKOUT=$2; shift 2 ;;
+        --port) PORT=$2; shift 2 ;;
+        --data-dir) DATA_DIR=$2; shift 2 ;;
+        --work-dir) WORK=$2; shift 2 ;;
+        --) shift; EXTRA=("$@"); break ;;
+        *) echo "unknown argument: $1" >&2; usage ;;
+    esac
+done
+
+CHECKOUT=$(cd "$CHECKOUT" && pwd -P)
+refuse_inside() { case "$1/" in "$CHECKOUT/"*) echo "work dir $1 is inside the checkout $CHECKOUT: choose a path outside it" >&2; exit 2 ;; esac; }
+case "$WORK" in /*) ;; *) WORK="$PWD/$WORK" ;; esac
+refuse_inside "$WORK"
+mkdir -p "$WORK"
+WORK=$(cd "$WORK" && pwd -P)
+refuse_inside "$WORK"
+GIT_DIR=$(git -C "$CHECKOUT" rev-parse --path-format=absolute --git-dir)
+GIT_COMMON=$(git -C "$CHECKOUT" rev-parse --path-format=absolute --git-common-dir)
+if [[ "$GIT_DIR" != "$GIT_COMMON" && -z "${PIPENV_CUSTOM_VENV_NAME:-}" ]]; then
+    echo "$CHECKOUT is a linked worktree: export PIPENV_CUSTOM_VENV_NAME=<main venv name> so pipenv reuses the main environment" >&2
+    exit 2
+fi
+
+DEST="$WORK/snapshots/$LABEL"
+GAL="$CHECKOUT/mkdocs_src/docs/gallery"
+[[ -e "$DEST" ]] && { echo "snapshot already exists: $DEST" >&2; exit 2; }
+[[ -d "$GAL" ]] || { echo "gallery dir not found: $GAL" >&2; exit 2; }
+if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "port $PORT is busy — refusing to start (no --force by policy)" >&2
+    lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >&2 || true
+    exit 3
+fi
+
+mkdir -p "$DEST/png"
+STAMP="$DEST/.start-stamp"
+touch "$STAMP"
+SHA=$(git -C "$CHECKOUT" rev-parse HEAD)
+DIRTY=$(git -C "$CHECKOUT" status --porcelain | wc -l | tr -d ' ')
+START_ISO=$(date '+%Y-%m-%dT%H:%M:%S%z')
+START_S=$(date +%s)
+echo "snapshot=$LABEL sha=$SHA dirty_files=$DIRTY port=$PORT data_dir=$DATA_DIR work=$WORK extra=${EXTRA[*]:-}"
+
+set +e
+(
+    cd "$CHECKOUT" &&
+    LIBREFOLIO_TEST_DATA_DIR="$DATA_DIR" pipenv run python dev.py mkdocs gallery --test-port "$PORT" ${EXTRA[@]+"${EXTRA[@]}"}
+) 2>&1 | tee "$DEST/gallery.log"
+RC=${PIPESTATUS[0]}
+set -e
+END_S=$(date +%s)
+
+(cd "$GAL" && find . -name '*.png' -newer "$STAMP" -print0 | rsync -a --from0 --files-from=- ./ "$DEST/png/")
+(cd "$GAL" && find . -name '*.png' ! -newer "$STAMP" | sed 's|^\./||' | sort) > "$DEST/stale_not_regenerated.txt"
+NEW=$(find "$DEST/png" -name '*.png' | wc -l | tr -d ' ')
+STALE=$(wc -l < "$DEST/stale_not_regenerated.txt" | tr -d ' ')
+sed 's/\x1b\[[0-9;]*m//g' "$DEST/gallery.log" | grep -E '^\s+\[(desktop|mobile)\] ›|^\s+[0-9]+ (failed|passed|skipped)' > "$DEST/failures.txt" || true
+
+cat > "$DEST/meta.json" <<EOF
+{
+  "label": "$LABEL",
+  "checkout": "$CHECKOUT",
+  "commit": "$SHA",
+  "dirty_files": $DIRTY,
+  "started": "$START_ISO",
+  "duration_s": $((END_S - START_S)),
+  "exit_code": $RC,
+  "port": $PORT,
+  "data_dir": "$DATA_DIR",
+  "extra_args": "${EXTRA[*]:-}",
+  "png_captured": $NEW,
+  "png_stale_not_regenerated": $STALE
+}
+EOF
+rm -f "$STAMP"
+echo "---"
+cat "$DEST/meta.json"
+echo "failed/passed summary: $DEST/failures.txt"
+if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "WARNING: port $PORT still has a listener after the run" >&2
+fi
+exit "$RC"
