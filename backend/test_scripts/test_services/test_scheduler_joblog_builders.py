@@ -24,7 +24,7 @@ import pytest
 from backend.app.config import DEFAULT_TEST_DATA_DIR
 from backend.app.schemas.prices import FACurrentPriceItem
 from backend.app.schemas.refresh import FARefreshResult, FXSyncPairResult, SyncStatus
-from backend.app.services.scheduler import joblog
+from backend.app.services.platform.scheduler import joblog
 
 
 @pytest.fixture

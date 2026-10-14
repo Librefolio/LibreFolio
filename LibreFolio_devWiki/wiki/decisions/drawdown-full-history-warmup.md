@@ -50,4 +50,4 @@ exports never get the shortened variant.
 | Plan aggregation | `backend/app/services/signal_service.py` (`requires_full_history`) |
 | Fetch window | `backend/app/services/asset_source.py` (`get_prices_bulk`) |
 | AI Export full-history call | `backend/app/services/ai_export/components/drawdown_context.py` |
-| Sentinel resolution | `backend/app/services/date_sentinel.py` |
+| Sentinel resolution | `backend/app/services/platform/date_sentinel.py` |

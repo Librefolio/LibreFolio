@@ -75,7 +75,6 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.schemas.wac import WACMissingPairInfo, WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.accounts.settings_service import get_effective_base_currency
-from backend.app.services.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.services.financial_math.average_cost import (
     CostEffect,
     CostPosition,
@@ -104,6 +103,7 @@ from backend.app.services.financial_math.yield_on_cost import (
     compute_yield_on_cost_dependency_identity,
 )
 from backend.app.services.fx import convert_bulk
+from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 _logger = structlog.get_logger(__name__)
@@ -674,10 +674,10 @@ class PortfolioService:
 
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
         """
-        from backend.app.services.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.models import ValuationSource  # noqa: PLC0415
+        from backend.app.services.platform.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS  # noqa: PLC0415
 
         today = date_type.today()
         valuation_date = date_to or today
