@@ -101,6 +101,21 @@ broker_router = APIRouter(prefix="/brokers", tags=["BR (Broker)"])
 
 brim_router = APIRouter(prefix="/import", tags=["BR Import"])
 
+# Report types a browser may display in place. HTML, SVG, XML and every other type are always served as a download.
+INLINE_SAFE_MEDIA_TYPES = frozenset(
+    {
+        "application/pdf",
+        "application/json",
+        "text/plain",
+        "text/csv",
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "image/bmp",
+    }
+)
+
 
 async def _get_brim_file_with_access(
     file_id: str,
@@ -770,11 +785,15 @@ async def download_file(
 
     media_type = mimetypes.guess_type(file_info.filename)[0] or "application/octet-stream"
 
+    # Shown in the browser only when the type cannot carry active content; anything else is a download.
+    inline = not download and media_type in INLINE_SAFE_MEDIA_TYPES
+
     return FileResponse(
         path=file_path,
         filename=file_info.filename,
         media_type=media_type,
-        content_disposition_type="attachment" if download else "inline",
+        content_disposition_type="inline" if inline else "attachment",
+        headers={"X-Content-Type-Options": "nosniff"},
     )
 
 

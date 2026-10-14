@@ -422,7 +422,8 @@ async def serve_file(  # noqa: C901 — flat preview-mode dispatch with early re
 
             from fastapi.responses import PlainTextResponse  # noqa: PLC0415 — lazy import / avoid circular
 
-            return PlainTextResponse(content=content, media_type=mime_type)
+            # Always plain text, whatever the stored type: an uploaded document is shown, never run.
+            return PlainTextResponse(content=content, headers={"X-Content-Type-Options": "nosniff"})
         except Exception as e:
             logger.exception("Failed to read text preview", error=str(e), file_id=file_id)
             raise HTTPException(status_code=500, detail="Failed to read file preview") from e
