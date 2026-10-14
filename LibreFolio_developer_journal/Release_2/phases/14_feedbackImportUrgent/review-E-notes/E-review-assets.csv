@@ -1,0 +1,4 @@
+date,type,quantity,amount,currency,asset,description
+2020-01-06,DEPOSIT,0,50,USD,,Synthetic review funding
+2020-01-07,BUY,2,-20,USD,XX0000000017,Synthetic review purchase
+2020-01-07,FEE,0,-1,USD,,Synthetic review fee

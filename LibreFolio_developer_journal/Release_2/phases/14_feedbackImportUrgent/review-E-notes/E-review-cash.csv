@@ -1,0 +1,8 @@
+date,type,quantity,amount,currency,asset,description
+2020-01-09,DEPOSIT,0,7,USD,,Later day control
+2020-01-07,WITHDRAWAL,0,-60,USD,,Cash group withdrawal
+2020-01-07,FEE,0,-10,USD,,Cash group fee
+2020-01-07,TAX,0,-5,USD,,Cash group tax
+2020-01-07,DEPOSIT,0,70,USD,,Cash group deposit
+2020-01-07,DEPOSIT,0,5,EUR,,Other currency control
+2020-01-08,DEPOSIT,0,10,USD,,Next day control

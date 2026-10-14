@@ -175,6 +175,7 @@ Aggiornare subito ogni step con data, nota e detour; nessun commit/staging/push.
 > HEAD `4a73f5f63447e01b51993afb2e3c73e2c22a9a28`, no scheduler/reload.
 > `index.html` su disco e servito via HTTP:
 > `e5f091dd6d5521e473281fdbbde6d01140fcef20008615edc4b4516bf6906256`.
-> Checklist in `~/Documents/test-ui-urgenti/REVIEW-E-R3.md`.
+> Checklist in `~/Documents/test-ui-urgenti/REVIEW-E-R3.md`, archiviata il 14/10/2026 in
+> [review-E-notes/REVIEW-E-R3.md](review-E-notes/REVIEW-E-R3.md).
 > La consegna tecnica non anticipa l'accettazione del dev; nessun passo di
 > implementazione o verifica richiesto resta pendente.
