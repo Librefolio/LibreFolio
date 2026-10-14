@@ -493,6 +493,16 @@
         void $assetProvidersVersion;
         return isParametricProvider(providerAssignment?.provider_code);
     });
+    // The providers' names come from the same cache, which may land after the asset (both load in parallel): read in the
+    // template alone, a name read before it kept the raw code (`yfinance`) for good.
+    let assetProviderName = $derived.by(() => {
+        void $assetProvidersVersion;
+        return assetInfo?.provider_code ? getAssetProviderName(assetInfo.provider_code) : '';
+    });
+    let assignmentProviderName = $derived.by(() => {
+        void $assetProvidersVersion;
+        return providerAssignment?.provider_code ? getAssetProviderName(providerAssignment.provider_code) : '';
+    });
     let isManualOnly = $derived(providerAssignmentLoaded && !providerAssignment);
     let isInactive = $derived(assetInfo?.active === false);
     let syncDisabledReason = $derived(isManualOnly ? $t('assetDetail.syncDisabledManual') : isInactive ? $t('assetDetail.syncDisabledInactive') : '');
@@ -2739,7 +2749,7 @@
                             {#if providerIconUrl}
                                 <img src={providerIconUrl} alt="" class="w-3.5 h-3.5 rounded-sm object-contain" />
                             {/if}
-                            {getAssetProviderName(assetInfo.provider_code)}
+                            {assetProviderName}
                         </span>
                     {:else}
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"> ✏️ Manual </span>
@@ -3525,7 +3535,7 @@
                                         {#if providerIconUrl}
                                             <img src={providerIconUrl} alt="" class="w-4 h-4 rounded-sm object-contain" />
                                         {/if}
-                                        {getAssetProviderName(providerAssignment.provider_code)}
+                                        {assignmentProviderName}
                                     </span>
                                     <span class="text-gray-400">→</span>
                                     <span class="font-mono text-gray-500 dark:text-gray-400">{providerAssignment.identifier} ({providerAssignment.identifier_type})</span>

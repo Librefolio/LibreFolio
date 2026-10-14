@@ -27,12 +27,12 @@ Ramo di integrazione: `dev_release2` (condiviso con il programma colori). Corsie
 | Lettera | Sessione | Corsia | Data-dir | Ramo | HEAD | Stato |
 |---|---|---|---|---|---|---|
 | — | Coordinatore 1.3 (in place) | 6180 | `/tmp/librefolio-r13-main` | `dev_release2` | — | attivo |
-| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-h-piattaforma` | `459131eb8` | analisi consegnata, in attesa del via (sessione `8490facf`) |
-| A | A - Account e accessi | 6182 | `/tmp/librefolio-r13-a` | `e-alfy-a-account-e-accessi` | `459131eb8` | analisi consegnata, in attesa del via (sessione `119ed166`) |
-| X | X - Plugin asset e ricerca | 6183 | `/tmp/librefolio-r13-x` | `e-alfy-x-plugin-asset-e-ricerca` | `459131eb8` | analisi consegnata, in attesa del via (sessione `ad5f37c8`) |
-| W | W - Import e transazioni | 6184 | `/tmp/librefolio-r13-w` | `e-alfy-w-import-e-transazioni` | `459131eb8` | analisi consegnata, in attesa del via (sessione `e71e0e34`) |
-| J | J - Numeri e analisi | 6185 | `/tmp/librefolio-r13-j` | `e-alfy-j-numeri-e-analisi` | `459131eb8` | analisi consegnata, in attesa del via (sessione `4c677a01`) |
-| Z | Z - Sospensione e risveglio | 6186 | `/tmp/librefolio-r13-z` | `e-alfy-z-sospensione-e-risveglio` | `459131eb8` | analisi consegnata, in attesa del via (sessione `d401e062`) |
+| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-h-piattaforma` | `c9bb8f257` | via parziale 14/10 22:55: solo CP1, rinomina `platform/` e `files/` (sessione `8490facf`) |
+| A | A - Account e accessi | 6182 | `/tmp/librefolio-r13-a` | `e-alfy-a-account-e-accessi` | `c9bb8f257` | via parziale 14/10 22:55: solo A1, rinomina `accounts/`; il resto aspetta i punti aperti delle note dev (sessione `119ed166`) |
+| X | X - Plugin asset e ricerca | 6183 | `/tmp/librefolio-r13-x` | `e-alfy-x-plugin-asset-e-ricerca` | `c9bb8f257` | via parziale 14/10 22:55: solo X0 e CP1, registri per famiglia (sessione `ad5f37c8`) |
+| W | W - Import e transazioni | 6184 | `/tmp/librefolio-r13-w` | `e-alfy-w-import-e-transazioni` | `c9bb8f257` | via parziale 14/10 22:55: solo W0 e W1, rinomina transazioni e broker (sessione `e71e0e34`) |
+| J | J - Numeri e analisi | 6185 | `/tmp/librefolio-r13-j` | `e-alfy-j-numeri-e-analisi` | `faa8ce01b` | J-0 committato (base `all-backend` 12 965 passati); in corso CP-1, riordino del PAC (sessione `4c677a01`) |
+| Z | Z - Sospensione e risveglio | 6186 | `/tmp/librefolio-r13-z` | `e-alfy-z-sospensione-e-risveglio` | `459131eb8` | analisi consegnata; aspetta le decisioni 31 e 32 del developer (sessione `d401e062`) |
 | B | B - Backup e Docker | 6187 | `/tmp/librefolio-r13-b` | — | — | dopo il primo checkpoint di H |
 | E | E - Email | 6188 | `/tmp/librefolio-r13-e` | — | — | dopo token e inviti di A |
 | Y | Y - Cruscotto e grafici | 6189 | `/tmp/librefolio-r13-y` | — | — | dopo il lotto B dei colori |
