@@ -45,6 +45,7 @@
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
     import {buildOhlcQuad} from '$lib/components/charts/candlestickChartHelpers';
     import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
+    import {withHexAlpha} from '$lib/theme/colorAlpha';
     import {ChartLine, ChartCandlestick, Coins} from 'lucide-svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
@@ -1690,7 +1691,7 @@
                     smooth: false,
                     symbol: 'none',
                     lineStyle: {color: cc('bookAssetLike'), width: 1, opacity: 0.7},
-                    areaStyle: {color: cc('bookAssetLike') + '44'},
+                    areaStyle: {color: withHexAlpha(cc('bookAssetLike'), '44')},
                     itemStyle: {color: cc('bookAssetLike')},
                     emphasis: {focus: 'series'},
                 },
@@ -1702,7 +1703,7 @@
                     smooth: false,
                     symbol: 'none',
                     lineStyle: {color: cc('cashContributed'), width: 1, opacity: 0.7},
-                    areaStyle: {color: cc('cashContributed') + '44'},
+                    areaStyle: {color: withHexAlpha(cc('cashContributed'), '44')},
                     itemStyle: {color: cc('cashContributed')},
                     emphasis: {focus: 'series'},
                 },
@@ -1714,7 +1715,7 @@
                     smooth: false,
                     symbol: 'none',
                     lineStyle: {color: cc('cashGenerated'), width: 1, opacity: 0.7},
-                    areaStyle: {color: cc('cashGenerated') + '44'},
+                    areaStyle: {color: withHexAlpha(cc('cashGenerated'), '44')},
                     itemStyle: {color: cc('cashGenerated')},
                     emphasis: {focus: 'series'},
                 },

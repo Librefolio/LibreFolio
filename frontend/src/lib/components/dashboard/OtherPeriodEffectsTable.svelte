@@ -17,6 +17,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     type OtherPeriodEffect = NonNullable<PositionsContribution['other_effects']>[number];
 
@@ -87,8 +88,8 @@
     }
 
     function amountColorClass(value: number | null): string {
-        if (value == null || value === 0) return 'text-gray-500 dark:text-gray-400';
-        return value > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
+        if (value == null || value === 0) return SIGN_TEXT.portfolio.zero;
+        return value > 0 ? SIGN_TEXT.portfolio.gain : SIGN_TEXT.portfolio.loss;
     }
 
     function formatAmount(value: number | null): string {

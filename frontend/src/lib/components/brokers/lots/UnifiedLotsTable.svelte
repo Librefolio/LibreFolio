@@ -17,6 +17,7 @@
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import {filterStates, findBroker, formatLotQuantityCell, formatLotQuantityMasked, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumCompleteOrNull, sumNumeric, weightedAverageCompleteOrNull} from './unifiedLotsTableHelpers';
     import {isUnknownOrNonZero} from './lotChartShared';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotCustodySummarySchema = z.infer<typeof schemas.LotCustodySummarySchema>;
@@ -202,7 +203,7 @@
 
     function signedAmountCell(value: number | null): HtmlCell | string {
         if (value == null) return '—';
-        const classes = value > 0 ? 'text-green-600 dark:text-green-400' : value < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400';
+        const classes = value > 0 ? SIGN_TEXT.portfolio.gain : value < 0 ? SIGN_TEXT.portfolio.loss : SIGN_TEXT.portfolio.zero;
         return {
             type: 'html',
             html: `<span class="font-medium tabular-nums ${classes}">${escapeHtml(formatCurrencyAmountPlain(value, currency, {showSign: value !== 0}))}</span>`,
@@ -211,7 +212,7 @@
 
     function signedPercentCell(value: number | null): HtmlCell | string {
         if (value == null) return '—';
-        const classes = value > 0 ? 'text-green-600 dark:text-green-400' : value < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400';
+        const classes = value > 0 ? SIGN_TEXT.portfolio.gain : value < 0 ? SIGN_TEXT.portfolio.loss : SIGN_TEXT.portfolio.zero;
         return {
             type: 'html',
             html: `<span class="font-medium tabular-nums ${classes}">${escapeHtml(formatPercent(value))}</span>`,

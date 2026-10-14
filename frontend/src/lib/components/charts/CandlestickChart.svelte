@@ -25,7 +25,8 @@
     import {_ as t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {LineDataPoint} from './LineChart.svelte';
-    import {COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
+    import {COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {toRgba} from '$lib/theme/colorAlpha';
     import {signalLabelToHtml} from '$lib/charts/signalLabel';
     import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
@@ -341,7 +342,7 @@
         const volumeData: any[] = data.map((d) => ({
             value: d.volume ?? 0,
             itemStyle: {
-                color: isBullishBar(d) ? hexToRgba(greenColor, 0.55) : hexToRgba(redColor, 0.55),
+                color: isBullishBar(d) ? toRgba(greenColor, 0.55) : toRgba(redColor, 0.55),
             },
         }));
 
