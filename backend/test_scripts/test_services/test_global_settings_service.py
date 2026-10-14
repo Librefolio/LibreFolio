@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import GlobalSetting
 from backend.app.db.session import get_async_engine
-from backend.app.services.global_settings_service import (
+from backend.app.services.accounts.global_settings_service import (
     _convert_value,
     get_max_upload_mb,
     get_session_ttl_hours,
