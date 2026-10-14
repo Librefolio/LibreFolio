@@ -47,7 +47,7 @@ from backend.app.schemas.risk import (
     RiskValueStatus,
 )
 from backend.app.schemas.risk_scenarios import RiskScenarioDimension
-from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk import acquired
 from backend.app.services.risk import base as risk_base
