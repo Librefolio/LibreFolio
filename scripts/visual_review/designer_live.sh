@@ -2,10 +2,11 @@
 # Start a LibreFolio TEST server for a designer's live review, on its own lane (visual review).
 #
 # Usage: scripts/visual_review/designer_live.sh [--refresh] [--port N] [--data-dir PATH]
-#                                               [--from PATH] [--from-port N] [--debug]
+#                                               [--from PATH] [--from-port N]
 #   First start (or --refresh): copies the data of the latest gallery run (default: the coordinator lane,
 #   /tmp/librefolio-r2-main on port 6150) into --data-dir, so the live app shows the same data as the
-#   screenshots. Later gallery runs wipe their own lane, not this one. --debug serves the frontend debug build.
+#   screenshots. Later gallery runs wipe their own lane, not this one. The test server always serves the frontend
+#   debug build (dev.py forces it with --test), so the hidden debug-only pages are available too.
 #   The server listens on 0.0.0.0, so a designer on the same network can open http://<this-machine>:<port>.
 #   Test data only — never production data. Stop with Ctrl+C.
 set -euo pipefail
@@ -15,7 +16,6 @@ SRC_PORT=6150
 DATA=/tmp/librefolio-color-review
 PORT=6160
 REFRESH=0
-DEBUG_ARGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
         --refresh) REFRESH=1; shift ;;
@@ -23,7 +23,6 @@ while [[ $# -gt 0 ]]; do
         --data-dir) DATA=$2; shift 2 ;;
         --from) SRC=$2; shift 2 ;;
         --from-port) SRC_PORT=$2; shift 2 ;;
-        --debug) DEBUG_ARGS=(--debug); shift ;;
         *) echo "unknown argument: $1" >&2; sed -n '2,11p' "$0"; exit 2 ;;
     esac
 done
@@ -61,4 +60,4 @@ cat <<EOF
 
 EOF
 cd "$REPO"
-exec pipenv run python dev.py server --test --port "$PORT" --data-dir "$DATA" --no-scheduler --no-reload ${DEBUG_ARGS[@]+"${DEBUG_ARGS[@]}"}
+exec pipenv run python dev.py server --test --port "$PORT" --data-dir "$DATA" --no-scheduler --no-reload
