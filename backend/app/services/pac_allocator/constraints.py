@@ -78,7 +78,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from backend.app.services.pac_allocator.evaluator import exact_decision_id
+from backend.app.services.pac_allocator.evaluation.evaluator import exact_decision_id
 from backend.app.services.pac_allocator.ledger import (
     _ROUNDED_FAMILIES as LEDGER_ROUNDED_FAMILIES,  # single source of truth for which families are rounded
 )

@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from babel.numbers import get_currency_precision
 
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.pac_allocator import (
     AmountFeeCap,
     CurrencyIssueParam,
     DomainAssetIdentity,
@@ -36,10 +36,10 @@ from backend.app.schemas.pac_allocator import (
     WholeQuantityCapability,
     WholeQuantityMinimum,
 )
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.pac_allocator import (
     ExactNumber as WireExactNumber,
 )
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.pac_allocator import (
     ExactRatio as WireExactRatio,
 )
 from backend.app.services.pac_allocator.issues import (

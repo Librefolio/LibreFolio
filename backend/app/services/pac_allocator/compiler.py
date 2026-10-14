@@ -61,7 +61,7 @@ from backend.app.services.pac_allocator.constraints import (
     build_scenario_facts,
     compile_hard_constraints,
 )
-from backend.app.services.pac_allocator.evaluator import evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,

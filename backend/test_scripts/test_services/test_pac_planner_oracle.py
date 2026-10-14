@@ -65,7 +65,7 @@ from typing import Callable
 
 import pytest
 
-from backend.app.services.pac_allocator.evaluator import (
+from backend.app.services.pac_allocator.evaluation.evaluator import (
     ExactEvaluatorError,
     build_exact_policy_view,
     evaluate_exact_candidate,

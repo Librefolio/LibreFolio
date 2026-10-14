@@ -11,7 +11,7 @@ from typing import Any, cast, get_args
 
 import pytest
 
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.pac_allocator import (
     PAC_PLAN_INPUT_ADAPTER,
     REBALANCER_PLAN_INPUT_ADAPTER,
     FiniteDecimal,
@@ -19,7 +19,7 @@ from backend.app.schemas.pac_allocator import (
     PlannerIssueCode,
     PlannerIssuePath,
 )
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.pac_allocator import (
     ExactRatio as WireExactRatio,
 )
 from backend.app.services.pac_allocator.issues import (

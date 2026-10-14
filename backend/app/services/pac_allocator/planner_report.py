@@ -3,7 +3,7 @@
 Maps the exact domain — an ``ExactPlannerScenario`` plus the
 ``ExactEvaluation`` produced by replaying a candidate, plus ``solver.py``'s
 floating evidence and ``proof.py``'s conclusion — onto the frozen wire
-contract in ``schemas/pac_allocator.py``.
+contract in ``schemas/pac_allocator/pac_allocator.py``.
 
 **This module computes no economics.** Every figure it publishes already
 exists, exact, on the evaluation; its job is to re-express those figures in
@@ -24,7 +24,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.pac_allocator import (
     AvailableExactNumber,
     CanonicalKeyUnit,
     ContributionFundingSourceRef,
@@ -69,7 +69,7 @@ from backend.app.schemas.pac_allocator import (
     ValuationMoneyUnit,
     WholeQuantityInstruction,
 )
-from backend.app.services.pac_allocator.evaluator import exact_scenario_fingerprint
+from backend.app.services.pac_allocator.evaluation.evaluator import exact_scenario_fingerprint
 from backend.app.services.pac_allocator.models import (
     ExactAsset,
     ExactEvaluation,

@@ -592,7 +592,7 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
-    print_info("Testing: backend/app/services/portfolio_allocation_source.py")
+    print_info("Testing: backend/app/services/pac_allocator/source/portfolio_allocation_source.py")
     print_info("Tests: selectors, exact facts, saved evidence, provenance and no side effects")
 
     cmd = _build_pytest_cmd(

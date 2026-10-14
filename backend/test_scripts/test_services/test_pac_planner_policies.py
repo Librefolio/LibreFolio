@@ -86,7 +86,7 @@ from backend.app.services.pac_allocator.constraints import (
     order_prices,
     valuation_rate,
 )
-from backend.app.services.pac_allocator.evaluator import (
+from backend.app.services.pac_allocator.evaluation.evaluator import (
     build_exact_policy_view,
     evaluate_exact_candidate,
     exact_decision_id,

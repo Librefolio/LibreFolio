@@ -32,7 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from itertools import product as _cartesian_product
 
-from backend.app.services.pac_allocator.evaluator import (
+from backend.app.services.pac_allocator.evaluation.evaluator import (
     ExactEvaluatorError,
     evaluate_exact_candidate,
 )

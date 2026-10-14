@@ -38,14 +38,14 @@ from random import Random
 
 import pytest
 
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.pac_allocator import (
     _PLANNER_FIXED_DECIMAL,
     ExactMoney,
     ExactPrice,
     FiniteDecimal,
     _exact_fraction,
 )
-from backend.app.schemas.pac_allocator import ExactRatio as WireExactRatio
+from backend.app.schemas.pac_allocator.pac_allocator import ExactRatio as WireExactRatio
 from backend.app.services.pac_allocator.numeric import ExactRatio as R
 from backend.app.services.pac_allocator.numeric import post_half_up
 from backend.app.services.pac_allocator.wire_numbers import (

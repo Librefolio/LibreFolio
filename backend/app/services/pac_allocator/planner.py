@@ -63,7 +63,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.pac_allocator import (
     DeploymentUnavailable,
     InfeasibilityProvenProof,
     NotProvenProof,
@@ -85,7 +85,7 @@ from backend.app.schemas.pac_allocator import (
 )
 from backend.app.services.pac_allocator import planner_report as report
 from backend.app.services.pac_allocator.compiler import compile_policy_program
-from backend.app.services.pac_allocator.evaluator import ExactEvaluatorError, build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups
+from backend.app.services.pac_allocator.evaluation.evaluator import ExactEvaluatorError, build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
