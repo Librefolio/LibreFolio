@@ -41,9 +41,9 @@
 | Shot | Viewport/lingue | Route | Come arrivarci (IT) | Utente / dati | Componenti |
 |---|---|---|---|---|---|
 | auth/01-login | entrambi / 4 | `/` | Aprire l'app da disconnessi: pagina di login | nessuno | `routes/+page.svelte`, `lib/features/auth/LoginCard.svelte` |
-| auth/02-register-empty | entrambi / 4 | `/` | Login → link «Registrati» → modale di registrazione vuota | nessuno | `auth/RegisterCard.svelte` |
-| auth/03-register-filled | entrambi / 4 | `/` | Come sopra, poi compilare utente `demo_user`, email `demo@example.com`, password `MyStr0ng!Pass`. Mostra il misuratore di robustezza | nessuno (solo input) | `auth/RegisterCard.svelte` |
-| auth/update-available-modal | entrambi / 4 | `/dashboard` (dopo il login) | Accedere da admin: si apre da solo il popup «Aggiornamento disponibile v99.9.0» | admin. **MOCK**: release finta in localStorage e `container-image-status` intercettato | `auth/UpdateAvailableModal.svelte` |
+| auth/02-register-empty | entrambi / 4 | `/` | Login → link «Registrati» → modale di registrazione vuota | nessuno | `lib/features/auth/RegisterCard.svelte` |
+| auth/03-register-filled | entrambi / 4 | `/` | Come sopra, poi compilare utente `demo_user`, email `demo@example.com`, password `MyStr0ng!Pass`. Mostra il misuratore di robustezza | nessuno (solo input) | `lib/features/auth/RegisterCard.svelte` |
+| auth/update-available-modal | entrambi / 4 | `/dashboard` (dopo il login) | Accedere da admin: si apre da solo il popup «Aggiornamento disponibile v99.9.0» | admin. **MOCK**: release finta in localStorage e `container-image-status` intercettato | `lib/features/update-check/UpdateAvailableModal.svelte` |
 
 ## onboarding
 
@@ -105,16 +105,16 @@ Tutti con l'utente admin, su `/settings`, entrambi i viewport e 4 lingue.
 
 | Shot | Viewport/lingue | Route | Come arrivarci (IT) | Utente / dati | Componenti |
 |---|---|---|---|---|---|
-| settings/user-preferences | entrambi / 4 | `/settings` | Menu → Impostazioni → scheda «Preferenze» | admin | `routes/(app)/settings/+page.svelte`, `settings/tabs/PreferencesTab.svelte` |
-| settings/global-settings | entrambi / 4 | `/settings` | Impostazioni → scheda «Amministrazione/Globali» (alto su desktop) | admin | `settings/tabs/GlobalSettingsTab.svelte` |
-| settings/about | entrambi / 4 | `/settings` | Impostazioni → scheda «Informazioni» | admin | `settings/tabs/AboutTab.svelte` |
-| settings/password-modal | entrambi / 4 | `/settings` | Impostazioni → pulsante «Cambia password» | admin | `settings/+page.svelte` (modale password, ?) |
-| settings/profile | entrambi / 4 | `/settings` | Impostazioni → scheda «Profilo» (alto su desktop) | admin | `settings/tabs/ProfileTab.svelte` |
-| settings/scheduler-config | entrambi / 4 | `/settings` | Scheda Globali → se serve, sbloccare il lucchetto 🔒 → pulsante configurazione scheduler | admin | `settings/SchedulerConfigModal.svelte`, `GlobalSettingsTab.svelte` |
-| settings/scheduler-log | entrambi / 4 | `/settings` | Scheda Globali → clic sulla riga di stato dello scheduler → modale log | admin | `settings/SchedulerLogModal.svelte` |
+| settings/user-preferences | entrambi / 4 | `/settings` | Menu → Impostazioni → scheda «Preferenze» | admin | `routes/(app)/settings/+page.svelte`, `lib/features/settings/tabs/PreferencesTab.svelte` |
+| settings/global-settings | entrambi / 4 | `/settings` | Impostazioni → scheda «Amministrazione/Globali» (alto su desktop) | admin | `lib/features/settings/tabs/GlobalSettingsTab.svelte` |
+| settings/about | entrambi / 4 | `/settings` | Impostazioni → scheda «Informazioni» | admin | `lib/features/settings/tabs/AboutTab.svelte` |
+| settings/password-modal | entrambi / 4 | `/settings` | Impostazioni → pulsante «Cambia password» | admin | `lib/features/settings/PasswordChangeModal.svelte`, aperta da `ProfileTab.svelte` |
+| settings/profile | entrambi / 4 | `/settings` | Impostazioni → scheda «Profilo» (alto su desktop) | admin | `lib/features/settings/tabs/ProfileTab.svelte` |
+| settings/scheduler-config | entrambi / 4 | `/settings` | Scheda Globali → se serve, sbloccare il lucchetto 🔒 → pulsante configurazione scheduler | admin | `lib/features/settings/SchedulerConfigModal.svelte`, `GlobalSettingsTab.svelte` |
+| settings/scheduler-log | entrambi / 4 | `/settings` | Scheda Globali → clic sulla riga di stato dello scheduler → modale log | admin | `lib/features/settings/SchedulerLogModal.svelte` |
 | settings/changelog-modal | entrambi / 4 | `/dashboard` | (mobile: ☰) → clic sul numero di versione in fondo al menu laterale | admin | `layout/ChangelogModal.svelte`, `layout/Sidebar.svelte` |
 | settings/changelog-modal-search | entrambi / 4 | `/dashboard` | Nel changelog → cercare «Docker» → clic sul primo risultato | admin | `ChangelogModal.svelte` |
-| settings/cache-panel | entrambi / 4 | `/settings` | Globali → sblocca 🔒 → categoria «Memoria» → pannello cache | admin | `settings/CachePanel.svelte` |
+| settings/cache-panel | entrambi / 4 | `/settings` | Globali → sblocca 🔒 → categoria «Memoria» → pannello cache | admin | `lib/features/settings/CachePanel.svelte` |
 | settings/about-plugin-diagnostics | entrambi / 4 | `/settings` | Informazioni → espandere «Diagnostica plugin» (alto su desktop) | admin | `AboutTab.svelte` |
 | settings/about-tool-diagnostics | entrambi / 4 | `/settings` | Informazioni → «Diagnostica plugin» → sezione strumenti → espandere «Diagnostica strumenti», scorrere in fondo | admin | `AboutTab.svelte` (pannello tool) |
 | settings/onboarding-replay | entrambi / 4 | `/settings?tab=preferences` | Preferenze → categoria «Onboarding» (mobile: menu a tendina delle categorie) | admin | `features/onboarding/components/OnboardingReplaySection.svelte` |
@@ -146,8 +146,8 @@ Shot PAC: dati scenario, non scritti nel DB.
 
 | Shot | Viewport/lingue | Route | Come arrivarci (IT) | Utente / dati | Componenti |
 |---|---|---|---|---|---|
-| support/donation-popup | entrambi / 4 | `/dashboard` | Accedere → popup donazione con i pulsanti social (X, Reddit, Facebook, Instagram, TikTok) | admin. **MOCK**: la risposta del login viene forzata a `show_donation_popup=true` | `auth/DonationPopupModal.svelte` |
-| support/social-share-modal | entrambi / 4 | `/settings` | Impostazioni → Informazioni → card supporto → «Reddit» → modale di condivisione, messaggio scrollato in fondo | admin | `support/SocialShareModal.svelte`, `AboutTab.svelte` |
+| support/donation-popup | entrambi / 4 | `/dashboard` | Accedere → popup donazione con i pulsanti social (X, Reddit, Facebook, Instagram, TikTok) | admin. **MOCK**: la risposta del login viene forzata a `show_donation_popup=true` | `lib/features/support/DonationPopupModal.svelte` |
+| support/social-share-modal | entrambi / 4 | `/settings` | Impostazioni → Informazioni → card supporto → «Reddit» → modale di condivisione, messaggio scrollato in fondo | admin | `lib/features/support/SocialShareModal.svelte`, `AboutTab.svelte` |
 
 ## files
 
@@ -290,6 +290,4 @@ Laboratorio di rischio:
 
 Su ogni riga resta un "?" dove non ho verificato:
 - **Etichette dei pulsanti:** le etichette italiane esatte (es. «Analizza lotti», «Dividi», «Promuovi») sono dedotte dai `data-testid`, non lette dai file di lingua.
-- **Componenti:**
-  - la modale password è dichiarata dentro `settings/+page.svelte`, ma non l'ho aperta per verificare;
-  - le liste transazioni della dashboard, forse live, sono da verificare.
+- **Componenti:** le liste transazioni della dashboard, forse live, sono da verificare.
