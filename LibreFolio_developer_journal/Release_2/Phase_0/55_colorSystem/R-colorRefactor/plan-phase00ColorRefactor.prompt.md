@@ -98,6 +98,7 @@ green/emerald, errori in ambra, info sky/blue, contrasto, palette dei grafici, t
 | `chartPalettes.ts` | palette categoriali e scale |
 | `toneClasses.ts` | classi Tailwind letterali per segno, stati e badge |
 | `components/{table,media,files,dialogs}.css` | token di componente `--lf-cmp-<area>-<ruolo>` e gemelle `-dark`, su `:root` |
+| `drawnColors.ts` (W7) | colori che una `var()` non raggiunge: tema di cheetah-grid, SVG in data URL (`LazyImage`, avatar di `FilesTable`) |
 | `themeMode.ts` (W8) | `isDarkTheme()`, `onThemeClassChange(cb)` |
 
 Regole:
@@ -115,6 +116,10 @@ Regole:
   file originale = quelli del file nuovo dopo aver sostituito i riferimenti a `lib/theme/**` con i loro valori.
 - **CSS Tailwind compilato** (W1, W2): build prima e dopo, CSS identico.
 - **CSS dei componenti** (W6, W7): CSS compilato di ogni componente identico dopo la sostituzione delle `var()`.
+  - `r3.py verify`: a livello di sorgente, dichiarazione per dichiarazione, con lo stesso esbuild di Vite.
+  - `r3_css_compare.py`: sulla build, regola per regola, contro la baseline.
+  - `r3_reach.py`: sul manifest Vite, ogni entry che usa un token carica anche la sua definizione.
+  - `w7_ts.py`: con controllo di annullamento, per i colori disegnati fuori dal CSS.
 
 ## 4. Passi
 
@@ -295,8 +300,252 @@ Regole:
 > - Il target ha 4 commit di soli documenti dopo la base comune `c942889e1`: nessun file di `frontend/` o del runner.
 
 ### W6–W7 — R-3 `<style>` (tabelle; media, file, dialoghi)
+
+**Metodo (vale per W6 e W7).** Strumento di sessione `r3.py`, che legge sempre l'originale da `git show HEAD:` e quindi
+si può rilanciare.
+- Ogni colore letterale di un `<style>` diventa `var(--lf-cmp-<componente>-<ruolo>)`, oppure la gemella `-dark`
+  nelle regole `.dark`, che restano dove sono. Lo stesso vale per hex, `rgb()`/`hsl()` e i nomi (`white`, `black`, i
+  nomi CSS dentro `color-mix()`).
+- Le definizioni stanno su `:root` in `lib/theme/components/<area>.css`, importato dallo `<script>` del componente.
+- Selettori, ordine, specificità e `!important` non cambiano.
+- **Valori come li emetteva la build.** Esbuild di Vite (0.27.2, target `chrome107/edge107/firefox104/safari16`)
+  quantizza i colori delle dichiarazioni normali (`rgb(0 0 0 / 0.1)` → `#0000001a`, alfa 26/255), ma **non tocca** le
+  custom property. Se nella definizione restasse il letterale originale, l'alfa cambierebbe di un livello.
+  - Ogni definizione porta quindi il testo esatto che la build emetteva per quel letterale, con l'originale in commento
+    quando è diverso.
+  - Le custom property già esistenti (`--highlight-base`…) e i fallback dentro `var()` restano scritti come prima: la
+    build li lasciava intatti.
+- **Ruoli.**
+  - Un ruolo raggruppa le dichiarazioni dello stesso componente con lo stesso tipo di proprietà e la stessa coppia
+    chiaro/scuro.
+  - La coppia chiaro/scuro si trova dal selettore senza `.dark`: prima lista uguale, poi lista contenuta, poi
+    sovrapposta.
+  - I nomi sono curati a mano (`r3_names.json`). I ruoli condivisi hanno nomi di funzione (`surface-bg`, `border`,
+    `muted-text`, `accent-bg`, `on-accent-text`, `field-*`), gli altri il nome dell'elemento.
+  - **Un nome = un significato:** quando lo stesso valore serve concetti diversi, il ruolo si divide. Per esempio
+    riga selezionata e badge di successo, intestazione e hover della riga, testo della cella e badge neutro.
+- **Colore parametrico:** `rgba(245, 158, 11, var(--stale-opacity, 0.04))` (righe stale di DataTable) diventa
+  `rgba(var(--lf-cmp-datatable-row-stale-rgb), var(--stale-opacity, 0.04))`, con la variabile che contiene solo i tre
+  canali.
+- **Prove:**
+  1. sorgente (`r3.py verify`): dichiarazioni allineate a quelle di HEAD, con le `var()` sostituite dai valori
+     centrali e minificate con lo stesso esbuild e lo stesso target, devono dare testo identico;
+  2. CSS compilato (`r3_css_compare.py`): a valle della build, `var()` sostituite e hash svelte normalizzati, ogni
+     file di asset deve risultare identico regola per regola al riferimento (liste di selettori espanse).
+
+#### W6 — tabelle ✅ (14/10/2026)
+
+> **Note implementazione**: `lib/theme/components/table.css`, 241 definizioni per 7 componenti:
+> - `DataTable` (55 ruoli), `DataTableColumnFilter` (34), `DataTablePagination` (18), `DataTableToolbar` (11);
+> - le tre tabelle di dominio: `UnifiedLotsTable` (3), `OtherPeriodEffectsTable` (2), `RiskReturnLevel` (3).
+>
+> 383 letterali in 382 dichiarazioni. Evidenze:
+> - `r3.py verify`: OK, nessuna definizione inutilizzata;
+> - build e `r3_css_compare.py` contro la baseline: **OK**, 4 file identici regola per regola (`trySave`,
+>   `DataTableToolbar`, `RiskPartialNotice`, `assetPanelUrl`) e gli altri 19 identici byte per byte;
+> - Prettier pulito, `svelte-check` 0 errori e 0 avvisi;
+> - Vitest correlati: 43 file e 1.291 test verdi; gate dei sorgenti: 5 file e 67 test verdi;
+> - knip invariato (38 righe).
+>
+> Il blocco `:root` finisce nel CSS condiviso `trySave`, che contiene già gli stili di DataTable. Il manifest Vite lo
+> conferma: arriva a tutte le 11 pagine che usano i componenti.
+>
+> **⚠️ Fuori pista**:
+> - Il primo abbinamento chiaro/scuro falliva sulle liste di selettori (spazi dopo la virgola normalizzati in ordine
+>   diverso). Corretto, e aggiunto l'abbinamento per lista contenuta o sovrapposta.
+> - In modalità dev (server Vite, senza minificazione) i colori con alfa ora valgono come in produzione: per esempio
+>   26/255 invece di 0,1. La produzione, cioè gallery e utenti, è identica.
+> - Pilota su `ContextMenu` riportato a HEAD prima di W6: rientra in W7.
+
+#### W7 — media, file, dialoghi; colori disegnati fuori dal CSS ✅ (14/10/2026)
+
+> **Note implementazione**:
+> - **`<style>`.** 9 componenti, 528 letterali, 363 definizioni:
+>   - `media.css`, 239 definizioni: `ImageEditModal` 43 ruoli, `AssetPickerModal` 25 + 1, `FileUploader` 29,
+>     `FileEditModal` 28, `ImageCropper` 19;
+>   - `files.css`, 78 definizioni: `FileGrid` 22, `FilePreviewModal` 23;
+>   - `dialogs.css`, 46 definizioni: `ConfirmModal` 19, `ContextMenu` 8.
+>
+>   Ruoli particolari:
+>   - Le custom property di cropperjs (`--theme-color`, `--cropper-backdrop-color`,
+>     `--cropper-selection-outline-color`) puntano ai token. I nomi restano quelli della libreria.
+>   - Le maniglie laterali del cropper (bianche nei due temi) sono un solo ruolo, `handle-side-bg`: la regola scura
+>     copre tutte e quattro le maniglie.
+> - **Stile inline** di `AssetPickerModal`: il rosso del pulsante che svuota l'URL diventa
+>   `var(--lf-cmp-asset-picker-url-clear-btn-text)`, `#dc2626` come prima. Gli stili inline non passano da esbuild,
+>   quindi il valore resta quello scritto.
+> - **Colori disegnati fuori dal CSS** → nuovo `lib/theme/drawnColors.ts`:
+>   - tema scuro di cheetah-grid, spostato alla lettera (funzione che crea un oggetto nuovo a ogni chiamata);
+>   - bordi del tema chiaro (`{...SPREADSHEET_LIGHT_BORDERS}`, sempre un oggetto nuovo);
+>   - ambra delle righe indicate;
+>   - colori delle SVG segnaposto di `LazyImage`, interpolati nella stessa stringa;
+>   - iniziale bianca degli avatar di `FilesTable`.
+>
+> Evidenze:
+> - `r3.py verify` sui 16 componenti: **908 dichiarazioni, 604 definizioni, nessuna inutilizzata, OK**. Il controllo
+>   riporta lo spostamento di `FilePreviewModal` sul testo di HEAD.
+> - `w7_ts.py`: annullando ogni sostituzione si riottiene il testo d'ingresso, byte per byte. `conserve.py` OK su
+>   `FilesTable` (1) e `LazyImage` (11).
+> - Build e `r3_css_compare.py`: **OK**, 8 file identici regola per regola e 15 byte per byte.
+> - `r3_reach.py`, sul manifest Vite: ognuna delle 36 entry, statiche e dinamiche, che carica una regola con
+>   `var(--lf-cmp-…)` carica anche la definizione.
+> - `svelte-check` 0 errori e 0 avvisi. Prettier pulito.
+> - Vitest correlati: 60 file e 1.664 test. **Vitest completo: 364 file e 11.213 test verdi**, come nel lotto B.
+> - knip invariato (38 righe); `check-orphans` pulito; `git diff --check` pulito.
+> - **Gate nuovo** `src/themeComponentTokens.gate.test.ts`, scritto da `test-author` e registrato in `core-unit`
+>   accanto a `themeColorMeta`. Controlli:
+>   - (a) ogni `var(--lf-cmp-…)` di un `.svelte` nomina, per intero, un token definito una volta sola;
+>   - (b) ogni componente che legge un token importa il file d'area che lo definisce (il messaggio dice la riga da
+>     aggiungere);
+>   - (c) nessun token definito due volte, nessuno non letto;
+>   - (d) ogni file d'area è un solo `:root` di dichiarazioni, e fuori dai file d'area un token si nomina solo come
+>     lettura di un componente;
+>   - (e) controlli positivi: la scansione legge qualcosa.
+>
+>   17 test alla prima stesura (8 su alberi sintetici che rompono ogni regola, 9 sui file veri, di cui uno che li
+>   altera in memoria e vede ogni controllo diventare rosso); 18 dopo il ritocco del percorso (vedi «Cancello C»).
+>   `check-orphans`: 365 file unitari raggiungibili.
+>
+>   Note del `test-author`, verificate:
+>   - 3 gemelle `-dark` senza chiaro: ruoli solo scuri, come nel sorgente;
+>   - 6 gemelle uguali al chiaro: le regole `.dark` ridichiaravano lo stesso valore; da unire nella fase B;
+>   - 3 `white` senza commento: la build li lasciava `white`, cioè nello shorthand `border` e in `color-mix()`; lo
+>     conferma la baseline compilata.
+>
+> **⚠️ Fuori pista**:
+> - Tre valori `rgba()` che la build lasciava in forma di funzione (nello shorthand `border` e nell'`outline`):
+>   esbuild li comprimeva (`rgba(255,255,255,.6)`) e Prettier li riallargava. Ora sono scritti come nel sorgente; la
+>   custom property li porta invariati.
+> - **`LazyImage` non è più un'eccezione del cricchetto.** L'analisi la escludeva per le SVG in stringa, ma i due
+>   colori si interpolano nella stessa stringa: la data URL è identica.
+> - Eccezioni che restano per W10:
+>   - il generatore `lotColor`;
+>   - il `#000` dimostrativo di `ChartSettingsModal`;
+>   - `hslToHex` di `MeasurePanel`;
+>   - il viola `#a855f7` della linea di anteprima in `assets/AssetDataEditorSection.svelte:248` e
+>     `fx/FxDataEditorSection.svelte:129`: cartelle della 1.3, fuori perimetro, voce R-6 del backlog, decisione del
+>     coordinatore al checkpoint B.
+
 ### Cancello C
+
+> **Stato del lotto C (W6–W7), 14/10:** codice e prove di codice completi.
+> - 16 componenti e 908 dichiarazioni → 604 token `--lf-cmp-*` in 4 file centrali.
+> - 3 file con colori disegnati fuori dal CSS → `drawnColors.ts`.
+> - CSS compilato identico.
+> - Aspetta il merge di G e il via del coordinatore per la gallery, eventualmente insieme ad A e B.
+>
+> **Inventario** (`scripts/visual_review/color_inventory.py`, solo codice di prodotto). Letterali fuori da `lib/theme/**`
+> e da `app.css`, dalla base `b631308` al lotto C:
+> - hex: 1.554 → 229;
+> - funzioni colore: 198 → 72.
+>
+> Nel perimetro di R restano solo:
+> - commenti che citano un valore;
+> - le eccezioni (generatori `lotColor` e `colors.ts`, il `#000` dimostrativo);
+> - funzioni costruite su token (`color-mix()` dei lotti, `rgba(var(…))` delle righe stale).
+>
+> W9 ne toglie altri 163. Ciò che resta fuori dal perimetro (`TransactionsTable`, `supportLinks`, `ChangelogModal`,
+> `AnimatedBackground`, `LoadingSpinner`…) lo blocca il cricchetto M2 di T, che dal 14/10 prende la parte «colori
+> letterali» di W10 (vedi W10).
+>
+> **⏸️ Finestra di quiete 21:25–22:45 ✅ chiusa in anticipo alle 22:20** (coordinatore: misura finale del rumore
+> della gallery di G).
+> - Nella finestra solo codice, piano e analisi statica.
+> - Il ritocco del percorso del gate l'ha scritto un nuovo `test-author`, in sola modifica (il primo non esisteva
+>   più); il nuovo l'ha verificato dopo l'apertura.
+>
+> **Ritocco del gate ✅ (14/10/2026, 22:25).** `themeComponentTokens.gate.test.ts` non legge più:
+> - i percorsi del Designer Lab, per intero (D7): il Lab legge, compone e sovrascrive i token dal vivo, per mestiere;
+> - i file di test (`*.test.ts`, `__tests__/`, `__mocks__/`), come nei gate fratelli: un test non è un lettore di
+>   produzione, e T (B5) scriverà test che nominano i `--lf-cmp-*`.
+>
+> > **Note implementazione**:
+> > - Nuovo filtro `isScanned(path)`, applicato sia alla scansione di `src` sia agli alberi sintetici; `SELF` tolto.
+> > - 18 test. Nuovi casi:
+> >   - il filtro, su 18 percorsi, compresi i quasi omonimi che vanno letti;
+> >   - un file di test o del Lab può nominare token in ogni forma, mentre lo stesso testo in un percorso normale
+> >     diventa rosso;
+> >   - un token letto solo dal Lab risulta non usato per (c).
+> > - Prova di efficacia del `test-author`: tre mutazioni del filtro, ciascuna fa diventare rossi i test giusti.
+> > - Prefissi verificati sul design di L: la rotta è `src/routes/designer-lab/`, fuori dai gruppi.
+> > - Evidenze:
+> >   - Vitest sul file: 18/18; Prettier invariato;
+> >   - `core-unit`, corsia 6154: **132 file e 4.242 test verdi**; il gate gira dentro `core-unit` (registrato
+> >     accanto a `themeColorMeta`, verde nei risultati delle 22:26);
+> >   - `check-orphans`: 365 file unitari raggiungibili;
+> >   - `git diff --check` pulito; porta 6154 libera.
 ### W8 — osservatori (D4) · W9 — P8 fuori elenco (D5) · W10 — cricchetto (D7), inventario, backlog, wiki, handoff
+
+> **Preparazione offline (14/10, durante la finestra di quiete).** Niente scritto nel worktree: gli script stanno
+> nella sessione e si applicano dopo il commit del lotto C.
+>
+> **W8 (`w8_apply.py`)**, nuovo `lib/theme/themeMode.ts`:
+> - `isDarkTheme()`;
+> - `onThemeClassChange(onChange)`: osserva `class` su `<html>` e restituisce il `MutationObserver` già attivo.
+>
+> I file si trovano per contenuto, quindi gli spostamenti della 1.3 non lo toccano. Il dry-run trova:
+> - 19 file;
+> - **16 osservatori del tema**, tutti con `{attributes: true, attributeFilter: ['class']}` su
+>   `document.documentElement`;
+> - 23 controlli `classList.contains('dark')` nel codice e 1 in un commento (`scatterChartHelpers.ts`);
+> - 8 osservatori non di tema lasciati stare (`Header`, onboarding, `RiskCardGrid`, `scrollOnOverflow`, visibilità di
+>   `AllocationHistoryChart`, `OtherPeriodEffectsTable`).
+>
+> Il controllo di annullamento dà OK.
+> - **Nomi delle variabili invariati** (`darkModeObserver`, `observer`, `darkObserver`) e così `disconnect()`:
+>   `chartCoreHelpers.test.ts` cerca `\n    let darkModeObserver` nel sorgente di GrowthChart per delimitare il
+>   watcher del resize.
+> - Stesso ridisegno a ogni cambio di classe e stessa consegna in microtask; la callback ora non riceve argomenti:
+>   nessuna la usava.
+> - Test da chiedere a `test-author` per `themeMode`:
+>   - qualunque classe scatena, gli altri attributi no;
+>   - nessun argomento alla callback;
+>   - dopo `disconnect()` niente più chiamate;
+>   - solo `<html>`.
+>
+> **W9 (`r3.py`, 4 componenti in più):**
+> - `routes/(app)/files/+page.svelte` → `files.css`, 28 ruoli;
+> - `brokers/BrokerImportFilesModal.svelte` → `files.css`, 11;
+> - `transactions/modals/ImportBrokerMismatchModal.svelte` → `dialogs.css`, 27;
+> - `ui/display/CompactCashCell.svelte` → `table.css`, 10.
+>
+> In tutto 172 letterali e 76 ruoli, con nomi curati. Ritocchi a `r3.py`:
+> - riscrive solo le sezioni dei componenti selezionati e conserva le altre (prova di andata e ritorno sui 4 file
+>   d'area: identici);
+> - controlla le definizioni inutilizzate solo per i componenti selezionati;
+> - accetta i componenti sotto `routes/`.
+>
+> Divergenza da lasciare: il focus di `CompactCashCell` è `#10b981` (emerald) mentre il commento dice «libre-green».
+>
+> **W10 e il cricchetto M2 di T** (proposta del coordinatore, 14/10 alle 21:56; risposta di R alle 22:05).
+> - **Proposta.** M2, il gate di T (workstream «token e tema», corsia 6155), prende la parte «colori letterali» del
+>   cricchetto di D7: hex, `rgb()`, `hsl()` e `oklch()` fuori da `lib/theme/**`, `app.css`, `app.html` e `static/`,
+>   contati per file, solo in discesa, tollerante alle rinomine.
+> - **Risposta di R: d'accordo, con 6 buchi segnalati** (scansione statica in sola lettura, `m2_holes.py` nella sessione):
+>   1. i nomi CSS: 13 in 7 file, 4 dopo W9; R-3 ne aveva tolti circa 70;
+>   2. i test, da escludere: 44 file con letterali, 8 toccati o creati da R;
+>   3. gli scambi a conteggio pari: 9 letterali nei commenti in 6 file; meglio confrontare i valori per file;
+>   4. le classi Tailwind di R-2: se T non ha un cricchetto sulle classi di palette, la protezione resta in W10 fino
+>      a B2;
+>   5. l'esenzione D7 dei percorsi di L;
+>   6. la base: i cali vanno accettati senza un file condiviso fra le corsie.
+> - **Eccezioni consegnate** per l'elenco di T:
+>   - `lotColor`;
+>   - i generatori di `colors.ts` (:57-62, :100-103);
+>   - `MeasurePanel` (`hslToHex`, nessun letterale);
+>   - il `#000` di `ChartSettingsModal`;
+>   - il `#a855f7` (R-6);
+>   - i due `rgba(var(--lf-cmp-…-rgb), …)` di `DataTable`, costruiti su token.
+> - **W10 ridotto a:**
+>   - la consegna dell'elenco;
+>   - un gate su D4: il tema si legge solo da `themeMode.ts`;
+>   - inventario, backlog, wiki, handoff.
+> - **Confermato dal coordinatore** (22:05):
+>   - T recepisce in M2 i 6 punti e le eccezioni.
+>   - Il punto 4 lo copre M1 di T, il cricchetto per file sulle classi legacy: nessuna aggiunta per R-2.
+>   - Il punto 6 è già la regola di T: i cali passano senza toccare la sua baseline, che T stringe ai checkpoint.
+>   - W10 resta come descritto sopra.
+>   - I gate `themeColorMeta` e `themeComponentTokens` restano; quello della meta passa a T con T-4.
 
 ## 5. Test da adattare (`test-author`)
 

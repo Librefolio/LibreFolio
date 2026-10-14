@@ -18,6 +18,7 @@
     import {translateOr} from '$lib/utils/core/translateOr';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
+    import '$lib/theme/components/table.css';
 
     type OtherPeriodEffect = NonNullable<PositionsContribution['other_effects']>[number];
 
@@ -277,11 +278,11 @@
     }
 
     .other-period-effects-datatable :global(.datatable thead) {
-        background: rgb(255 255 255 / 0.5);
+        background: var(--lf-cmp-period-effects-header-bg);
     }
 
     :global(.dark) .other-period-effects-datatable :global(.datatable thead) {
-        background: rgb(30 41 59 / 0.4);
+        background: var(--lf-cmp-period-effects-header-bg-dark);
     }
 
     .other-period-effects-datatable :global(.datatable th) {
@@ -292,12 +293,12 @@
     .other-period-effects-datatable :global(.datatable td) {
         padding: 0.5rem 0.75rem;
         font-size: 0.75rem;
-        border-bottom-color: rgb(229 231 235 / 0.7);
+        border-bottom-color: var(--lf-cmp-period-effects-cell-border);
         background: transparent;
     }
 
     :global(.dark) .other-period-effects-datatable :global(.datatable td) {
-        border-bottom-color: rgb(30 41 59);
+        border-bottom-color: var(--lf-cmp-period-effects-cell-border-dark);
         background: transparent;
     }
 
