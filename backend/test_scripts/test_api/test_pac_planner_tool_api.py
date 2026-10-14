@@ -40,7 +40,7 @@ from structlog.testing import capture_logs
 
 from backend.app.config import get_settings
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.pac_allocator import PAC_PLAN_INPUT_ADAPTER, PAC_PLAN_OUTPUT_ADAPTER
+from backend.app.schemas.pac_allocator.pac_allocator import PAC_PLAN_INPUT_ADAPTER, PAC_PLAN_OUTPUT_ADAPTER
 from backend.app.services import user_service
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
 from backend.app.services.tool_plugins.pac_allocator.plugin import _log_engine_failure
