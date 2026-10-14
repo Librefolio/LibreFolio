@@ -341,3 +341,19 @@
   - Piano di R spostato in `Phase_1/10_colorSystem/R-colorRefactor/` con un `git mv` del coordinatore (`74e94dee6`);
     tolta la cartella vuota rimasta. R deve correggere il link al backlog (riga 8).
   - R prosegue con W8–W9 (lotto D).
+
+## 23:05 — Checkpoint 2 di L; finestra di domani
+
+- **L, checkpoint 2:** `87ceceede` (54 file): selettore di elementi (5b), test unitari ed E2E, categoria
+  `front-designer-lab`, documentazione.
+  - Controllo a campione: 15 file, 394 test.
+  - Merge di base `afea11fe2` → `bb87b0ab7`, albero = simulazione. Piano spostato in
+    `Phase_1/10_colorSystem/L-designerLab/` (`93bf8c98a`), cartella vuota tolta. L corregge il link al backlog (riga 6).
+  - **Gallery A/B:** domani, dopo l'ingresso di G e una nuova base di L, con le maschere della misura finale.
+    Integrazione di L dopo la A/B.
+  - **Nota per l'integrazione di R:** il test E2E L3 dipende da un colore del grafico della crescita nel catalogo. Al
+    cancello di R vanno fatti girare anche i test `front-designer-lab`.
+- **1.3:** il developer ha dato un via parziale (`afea11fe2`). H, X, A, W e J lavorano al primo checkpoint sulle corsie
+  6181–6185, con suite backend complete anche stanotte.
+- **Finestra di domani, 15/10:** dalle 09:00, circa 2 ore (misura finale di G sul `dev_release2` con G, poi candidata di
+  R per A+B+C). Conferma alla 1.3 15 minuti prima; poi altre finestre per la A/B di L e i piloti di T.
