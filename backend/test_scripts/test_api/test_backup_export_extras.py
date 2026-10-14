@@ -44,7 +44,7 @@ from backend.app.schemas.assets import FAAssetCreateItem, FABulkAssetCreateRespo
 from backend.app.schemas.common import Currency
 from backend.app.schemas.fx import FXUpsertItem
 from backend.app.schemas.prices import FAAssetEventPoint, FAEventUpsert
-from backend.app.services.backup_service import EVENT_COLUMNS, FX_RATE_COLUMNS
+from backend.app.services.platform.backup_service import EVENT_COLUMNS, FX_RATE_COLUMNS
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success, unique_id
 

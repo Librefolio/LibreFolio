@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.services.date_sentinel import resolve_date_sentinels
+from backend.app.services.platform.date_sentinel import resolve_date_sentinels
 from backend.app.utils.datetime_utils import utcnow
 
 
