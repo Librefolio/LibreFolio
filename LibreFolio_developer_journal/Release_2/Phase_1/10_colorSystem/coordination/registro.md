@@ -266,3 +266,21 @@
   riferimento dopo l'ingresso di T-1.
 - **L:** requisiti per lo scanner (`lf-`, catena di `@theme inline`) e proposta «mostra i rimasti indietro».
 - **Analisi di T** copiata in `coordination/workstream-analyses/T-analisi-implementazione-20261014.md`.
+
+## 22:05 — Rilascio della 1.3; L e i ruoli di T
+
+- **Coordinatore 1.3** (`e41e0e2b1`): le ondate W1–W4 di T diventano cancelli del rilascio.
+  - Nuovo traguardo: «spostamenti di cambi, asset e transazioni integrati → W4».
+  - Dopo il cancello A, X darà priorità a FE4 e FE5, W a FE8.
+- **Risposta del coordinatore colori:**
+  - W4 dipende da FE8a, non da FE8b. Le due modali hanno 1 e 12 classi Tailwind; i loro colori stanno nello stile e
+    passano da `--lf-cmp-*` (lotto D) e da B5.
+  - **Correzione:** la regola del developer («neutri e stati») include tabelle, pannelli e neutri dei grafici. Per un tag
+    servono quindi W1–W6 (neutri e stati), B2, B4 (solo neutri e guadagno/perdita), B5, e con essi anche i lotti C e D
+    di R. Non bloccano solo le palette categoriali e dei dati.
+  - Detto alla 1.3 di portare al developer un eventuale scontro con le date.
+- **L:**
+  - Il selettore di elementi funziona con T-1 così com'è (`@theme inline` porta a `var(--lf-…)`).
+  - L-10 (catalogo dei ruoli) dopo T-1. Assegnata a L la riga Python di `tw_custom_re` (estensione di ④), per tenere la
+    parità con la regex JS.
+  - L-11 («mostra i rimasti indietro») va nel backlog.
