@@ -250,6 +250,24 @@ def utils_runtime_isolation(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Runtime isolation tests", verbose=verbose)
 
 
+def utils_confined_path(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a request path joined to a folder never leaves that folder."""
+    print_section("Utils: Confined Path")
+    print_info("Testing: backend/app/utils/runtime/paths.py (confined_path)")
+    print_info("Tests: paths inside returned resolved; parent segments leaving, absolute paths, a sibling folder sharing the name prefix, symlinks pointing outside and a NUL byte refused")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_confined_path.py", test_names)
+    return run_command(cmd, "Confined path tests", verbose=verbose)
+
+
+def utils_static_route_confinement(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the routes serving files by request path never leave their folder."""
+    print_section("Utils: Static Route Confinement")
+    print_info("Testing: backend/app/main.py (frontend_catchall, mkdocs_static), backend/app/api/v1/uploads.py (serve_plugin_static)")
+    print_info("Tests: raw ASGI requests landing outside the served folder → SPA fallback / 404 / 403, never the outside content; the files of each folder still served")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_static_route_confinement.py", test_names)
+    return run_command(cmd, "Static route confinement tests", verbose=verbose)
+
+
 def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> bool:
     """Test the test-runner CLI's own command-building contract."""
     print_section("Utils: Test Runner CLI")
@@ -510,6 +528,26 @@ Tests for utility modules and helper functions:
         desc="Per-lane port/data propagation, production guards, readiness identity and process ownership",
         # Only monkeypatches os.environ/sys.argv and builds argparse parsers;
         # no DB, no server, no filesystem writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "confined-path",
+        utils_confined_path,
+        name="Confined Path",
+        desc="confined_path keeps a request path inside the folder it is joined to: a file inside, parent segments coming back inside, an empty path (the resolved root), a missing file inside and a symlink pointing inside are returned resolved, also when the root itself sits behind a symlink; parent segments leaving at any depth, an absolute path outside, a sibling folder sharing the root's name prefix, a symlink pointing outside and a NUL byte are refused (None)",
+        # A function over folders built under tmp_path: no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "static-route-confinement",
+        utils_static_route_confinement,
+        name="Static Route Confinement",
+        desc="The frontend catch-all, the documentation and the plugin icon routes serve the files of their own folder only: a path landing outside it (parent segments at several depths, an absolute path, a sibling folder sharing the plugin folder's name prefix) gets the SPA fallback (200.html, else index.html), the documentation's 404 and a 403, never the outside content, and a path the OS rejects gets a 403 from the plugin route; build files, client-side routes, documentation folders, the site index and plugin icons are still served",
+        # Raw ASGI calls on the global app (the lifespan never runs) and on a fresh app holding the
+        # uploads router with sign-in overridden; folders under tmp_path swapped in for the module
+        # globals by monkeypatch. No DB, no server, no network.
         isolation="pure",
     )
     add_test(
