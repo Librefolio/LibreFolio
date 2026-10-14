@@ -1,0 +1,13 @@
+LibreFolio v1.2 — Note della designer (review colori)
+Data:
+
+Formato consigliato (una nota per riga o per blocco):
+  <nome card> · <chiaro | scuro | entrambi> · <desktop | mobile | entrambi>: nota
+Esempio:
+  dashboard/kpi-top · scuro · desktop: il verde delle variazioni positive è troppo acceso rispetto al resto
+
+== Note generali (palette, ruoli dei colori, idee) ==
+
+
+== Note per schermata ==
+

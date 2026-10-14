@@ -10,7 +10,8 @@
 #   scripts/visual_review/gallery_snapshot.sh cand-T --checkout ../LibreFolio-worktrees/t --port 6151 --data-dir /tmp/librefolio-r2-t
 #
 # Defaults: the checkout that contains this script; port 6150 + data dir /tmp/librefolio-r2-main (coordinator
-# lane, Release 2 convention); work dir $LF_VISUAL_REVIEW_DIR or ~/LibreFolio_visual_review, never inside a checkout.
+# lane, Release 2 convention); work dir $LF_VISUAL_REVIEW_DIR, else <folder of the main checkout>/LibreFolio_subRepo/
+# LibreFolio_visual_review when LibreFolio_subRepo exists, else ~/LibreFolio_visual_review — never inside a checkout.
 # The gallery writes git-ignored PNGs into <checkout>/mkdocs_src/docs/gallery. Only the PNGs written by THIS run
 # (newer than a start stamp) are copied to <work>/snapshots/<label>/png, so images left by failed or filtered
 # tests never pollute a snapshot: they are listed in stale_not_regenerated.txt. A busy port stops the script
@@ -23,7 +24,7 @@ LABEL=$1; shift
 CHECKOUT=$(cd "$(dirname "$0")/../.." && pwd)
 PORT=6150
 DATA_DIR=/tmp/librefolio-r2-main
-WORK=${LF_VISUAL_REVIEW_DIR:-$HOME/LibreFolio_visual_review}
+WORK=${LF_VISUAL_REVIEW_DIR:-}
 EXTRA=()
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -37,6 +38,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 CHECKOUT=$(cd "$CHECKOUT" && pwd -P)
+if [[ -z "$WORK" ]]; then
+    MAIN=$(dirname "$(git -C "$CHECKOUT" rev-parse --path-format=absolute --git-common-dir)")
+    if [[ -d "$(dirname "$MAIN")/LibreFolio_subRepo" ]]; then WORK="$(dirname "$MAIN")/LibreFolio_subRepo/LibreFolio_visual_review"; else WORK="$HOME/LibreFolio_visual_review"; fi
+fi
 refuse_inside() { case "$1/" in "$CHECKOUT/"*) echo "work dir $1 is inside the checkout $CHECKOUT: choose a path outside it" >&2; exit 2 ;; esac; }
 case "$WORK" in /*) ;; *) WORK="$PWD/$WORK" ;; esac
 refuse_inside "$WORK"
@@ -81,25 +86,39 @@ END_S=$(date +%s)
 (cd "$GAL" && find . -name '*.png' -newer "$STAMP" -print0 | rsync -a --from0 --files-from=- ./ "$DEST/png/")
 (cd "$GAL" && find . -name '*.png' ! -newer "$STAMP" | sed 's|^\./||' | sort) > "$DEST/stale_not_regenerated.txt"
 NEW=$(find "$DEST/png" -name '*.png' | wc -l | tr -d ' ')
+# Keep Playwright's failure evidence (screenshots, error-context.md) with the snapshot when the run failed.
+if [[ $RC -ne 0 && -d "$CHECKOUT/frontend/test-results" ]]; then cp -R "$CHECKOUT/frontend/test-results" "$DEST/test-results"; fi
 STALE=$(wc -l < "$DEST/stale_not_regenerated.txt" | tr -d ' ')
 sed 's/\x1b\[[0-9;]*m//g' "$DEST/gallery.log" | grep -E '^\s+\[(desktop|mobile)\] ›|^\s+[0-9]+ (failed|passed|skipped)' > "$DEST/failures.txt" || true
 
-cat > "$DEST/meta.json" <<EOF
-{
-  "label": "$LABEL",
-  "checkout": "$CHECKOUT",
-  "commit": "$SHA",
-  "dirty_files": $DIRTY,
-  "started": "$START_ISO",
-  "duration_s": $((END_S - START_S)),
-  "exit_code": $RC,
-  "port": $PORT,
-  "data_dir": "$DATA_DIR",
-  "extra_args": "${EXTRA[*]:-}",
-  "png_captured": $NEW,
-  "png_stale_not_regenerated": $STALE
+# Written by Python so that every value is JSON-escaped (a filter such as `-g 'a\(b'` used to break the file).
+(
+    cd "$CHECKOUT" &&
+    LF_META_PATH="$DEST/meta.json" LF_META_LABEL="$LABEL" LF_META_CHECKOUT="$CHECKOUT" LF_META_COMMIT="$SHA" \
+    LF_META_DIRTY="$DIRTY" LF_META_STARTED="$START_ISO" LF_META_DURATION="$((END_S - START_S))" LF_META_RC="$RC" \
+    LF_META_PORT="$PORT" LF_META_DATA_DIR="$DATA_DIR" LF_META_EXTRA="${EXTRA[*]:-}" LF_META_NEW="$NEW" \
+    LF_META_STALE="$STALE" pipenv run python -c '
+import json, os
+e = os.environ
+meta = {
+    "label": e["LF_META_LABEL"],
+    "checkout": e["LF_META_CHECKOUT"],
+    "commit": e["LF_META_COMMIT"],
+    "dirty_files": int(e["LF_META_DIRTY"]),
+    "started": e["LF_META_STARTED"],
+    "duration_s": int(e["LF_META_DURATION"]),
+    "exit_code": int(e["LF_META_RC"]),
+    "port": int(e["LF_META_PORT"]),
+    "data_dir": e["LF_META_DATA_DIR"],
+    "extra_args": e["LF_META_EXTRA"],
+    "png_captured": int(e["LF_META_NEW"]),
+    "png_stale_not_regenerated": int(e["LF_META_STALE"]),
 }
-EOF
+with open(e["LF_META_PATH"], "w", encoding="utf-8") as f:
+    json.dump(meta, f, indent=2)
+    f.write("\n")
+'
+)
 rm -f "$STAMP"
 echo "---"
 cat "$DEST/meta.json"
