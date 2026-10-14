@@ -40,7 +40,7 @@ from backend.app.services.asset_sources.core import (
     AssetSourceError,
     AssetSourceProvider,
 )
-from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.services.assets.registry import AssetProviderRegistry
 
 logger = structlog.get_logger(__name__)
 

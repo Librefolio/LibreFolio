@@ -77,7 +77,7 @@ from backend.app.schemas.brim import (
 )
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.asset_source import AssetCRUDService
-from backend.app.services.provider_registry import BRIMProviderRegistry
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)

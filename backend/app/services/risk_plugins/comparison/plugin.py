@@ -21,7 +21,7 @@ from backend.app.schemas.risk import (
     RiskWarning,
 )
 from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_asset_return_points,
     require_annualization_factor,
@@ -43,6 +43,7 @@ from backend.app.services.risk.metrics import (
     comparison_summary,
     pearson_correlation,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 @dataclass(frozen=True)

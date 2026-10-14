@@ -25,7 +25,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import Currency
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncLegDetail, FXSyncPairResult, SyncDateRangeModel, SyncStatus
-from backend.app.services.provider_registry import FXProviderRegistry
+from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.utils.runtime.cache import clear_cache, get_ttl_cache
 
 logger = get_logger(__name__)

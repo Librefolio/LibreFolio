@@ -24,7 +24,8 @@ from backend.app.schemas.assets import (
     FASectorArea,
 )
 from backend.app.services.asset_source import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 
 @register_provider(AssetProviderRegistry)

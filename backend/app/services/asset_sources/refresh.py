@@ -37,7 +37,7 @@ from backend.app.services.asset_sources.core import (
     AssetSourceProvider,
 )
 from backend.app.services.asset_sources.price_store import PriceStoreOperations
-from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
