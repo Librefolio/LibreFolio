@@ -517,9 +517,10 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 
 > **Note implementazione**: base della fase `459131eb8` (piano generale, README, sezioni H…Y del
 > backlog). Avviate in modo piano, agente `coordinated-workstream`, prima consegna = solo analisi:
-> H (`e-alfy-sturdy-memory`, 6181), A (`e-alfy-legendary-winner`, 6182), X (`e-alfy-cuddly-engine`,
-> 6183), W (`e-alfy-fluffy-meme`, 6184), J (`e-alfy-crispy-goggles`, 6185), Z
-> (`e-alfy-potential-sniffle`, 6186). Ogni worktree è nato da `origin/dev_release2` (`6d0b1266c`) ed
+> H (`e-alfy-h-piattaforma`, 6181), A (`e-alfy-a-account-e-accessi`, 6182), X
+> (`e-alfy-x-plugin-asset-e-ricerca`, 6183), W (`e-alfy-w-import-e-transazioni`, 6184), J
+> (`e-alfy-j-numeri-e-analisi`, 6185), Z (`e-alfy-z-sospensione-e-risveglio`, 6186); l'app rinomina
+> i rami dal nome della sessione poco dopo la creazione. Ogni worktree è nato da `origin/dev_release2` (`6d0b1266c`) ed
 > è stato portato alla base con `merge --ff-only`; verificati HEAD, pulizia e presenza del file
 > dell'agente e del piano.
 >
