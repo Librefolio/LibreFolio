@@ -3452,3 +3452,12 @@ folder stays in the tags v0.9.0 to v1.2.0. Updated [[entities/video-promo-remoti
 are now what the video's asset sync still reads here (the gallery screenshots and `docs/static/`, through
 `LIBREFOLIO_MKDOCS_SRC`). A note on [[sources/source-code-v0.9.0-batch]]. Graph: not updated (P-6) — graphify 0.9.54 no
 longer indexes the corpus's out-of-root symlinks.
+
+## [2026-10-14] file | Repository cleanup after 1.2.0
+Besides the video project: the early UI mockups (`mkdocs_src/docs/POC_UX/`, 75 images, ~158 MB, always excluded from
+the docs build) leave the repository, with their `exclude_docs` entry, the `/POC_UX/` segment in the two docs scripts
+and the `POC UX` entry of `EN_ONLY_SECTIONS` — updated [[concepts/mkdocs-suffix-i18n]]. Also gone: `dev.sh` (the
+messages that still suggested it name `./dev.py` now), the unused `engineering-skills` pack, the stray root
+`graphify-out/` and 26 leftovers of the June semantic run in `graphify-out/` (`.chunk_files_*.txt`,
+`chunk15_summary.json`; `cost.json` stays, graphify protects it). The history is not rewritten: everything stays in the
+tags up to v1.2.0. Graph: not updated (P-6).
