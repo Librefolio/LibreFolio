@@ -1875,7 +1875,32 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
 
 ## J · Numeri e analisi (fase 01)
 
-Piano: [`05_numbersAnalysis`](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md).
+Piano: [`05_numbersAnalysis`](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md). Righe scritte da J
+il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`.
+
+- **J-1 · Copie della matematica comune fuori dall'inventario del 43** — basso; J, 14/10 (analisi). Ognuna va nel
+  lotto che unifica la sua famiglia:
+  - `risk/metrics.py:741` (giorni di calendario → osservazioni, con 365) → U4a, CP-10;
+  - `portfolio_service.py:824` (G/L % della posizione) → U4b, CP-4;
+  - `series_preparation.py:184` (fattore di cambio ricavato dal close) → U1, CP-11;
+  - `fx.py:717` (inversione del tasso nella catena delle rotte) → U1, nei file di X dopo il suo PL4 (D-J17);
+  - `ai_export/components/fx_timing_context.py:361-362` (rendimenti dal minimo e dal massimo) → U9, CP-12;
+  - frontend, per Y con U8: `lib/charts/signals/CompoundSignal.ts:69` (curva what-if, eccezione interattiva da
+    dichiarare, R19) e `lib/components/risk/levels/levelHelpers.ts:359` (rendimento che recupera una perdita).
+
+  Dettagli: [piano J](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §1.2 «Copie nuove».
+- **J-2 · Il server di test costruisce frontend e documentazione dentro i 300 s d'avvio** — basso, infrastruttura; J,
+  14/10 (base di J-0). In un worktree nuovo il primo `all-backend` cade anche dopo `npm ci`: prima di uvicorn
+  `dev.py server --test` fa la build di debug del frontend (~4 min) e quella del sito, se mancano, dentro
+  `STARTUP_TIMEOUT` (`scripts/test_runner/_server.py:48`), con lo stdout in `DEVNULL` (`:274-275`). Rimedio di oggi:
+  `front build --debug` e `mkdocs build` prima della base. Da decidere: build fuori dal tempo massimo o un messaggio
+  che dica cosa manca. Il runner è condiviso: lo assegna il coordinatore. Dettagli: piano J, §10 «`all-backend` — la
+  base».
+- **J-3 · Monte Carlo e ricampionamento a 365 giorni fissi** — da verificare; T, 11/10 (piano 43, §5, «da segnalare a
+  parte»), ripresa da J, che ora possiede il rischio. `risk/quant/quantlib_worker.py:116,195` e
+  `risk/quant/resampling.py:235` contano 365 giorni all'anno, mentre il resto del rischio usa il fattore osservato. Può
+  essere una convenzione di calendario coerente: prima un test che lo provi, poi l'eventuale cura in CP-10. Dettagli:
+  [piano 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), §5.
 
 ## Z · Sospensione e risveglio (fase 01)
 
