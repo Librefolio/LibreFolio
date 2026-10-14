@@ -475,7 +475,7 @@ def services_fx_core(verbose: bool = False, test_names: list = None) -> bool:
 def services_static_uploads(verbose: bool = False, test_names: list = None) -> bool:
     """Test static uploads service."""
     print_section("Services: Static Uploads")
-    print_info("Testing: backend/app/services/static_uploads.py")
+    print_info("Testing: backend/app/services/files/static_uploads.py")
     print_info("Tests: File save/list/get/delete, security validation, user filtering")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_static_uploads.py", test_names)
@@ -642,7 +642,7 @@ def services_asset_sync_counts(verbose: bool = False, test_names: list = None) -
 def services_scheduler_state(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler state persistence (load/save/atomic/corrupt)."""
     print_section("Services: Scheduler State Persistence")
-    print_info("Testing: backend/app/services/scheduler/state.py")
+    print_info("Testing: backend/app/services/platform/scheduler/state.py")
     print_info("Tests: load/save, atomic write, corrupt/partial JSON recovery")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_state.py", test_names)
     return run_command(cmd, "Scheduler state persistence tests", verbose=verbose)
@@ -651,7 +651,7 @@ def services_scheduler_state(verbose: bool = False, test_names: list = None) -> 
 def services_scheduler_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler settings parsing (_parse_times, _parse_days)."""
     print_section("Services: Scheduler Settings Parsing")
-    print_info("Testing: backend/app/services/scheduler/settings.py")
+    print_info("Testing: backend/app/services/platform/scheduler/settings.py")
     print_info("Tests: _parse_times, _parse_days — pure functions, no DB")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_settings.py", test_names)
     return run_command(cmd, "Scheduler settings parsing tests", verbose=verbose)
@@ -660,7 +660,7 @@ def services_scheduler_settings(verbose: bool = False, test_names: list = None) 
 def services_scheduler_due(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler due-check logic (due_current_price, due_history_sync)."""
     print_section("Services: Scheduler Due-Check Logic")
-    print_info("Testing: backend/app/services/scheduler/scheduler.py")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py")
     print_info("Tests: SD-001..010 — never run, overdue, wrong day, multi-slot, midnight crossing")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_due.py", test_names)
     return run_command(cmd, "Scheduler due-check tests", verbose=verbose)
@@ -669,7 +669,7 @@ def services_scheduler_due(verbose: bool = False, test_names: list = None) -> bo
 def services_scheduler_leader(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler leader election (mocked psutil)."""
     print_section("Services: Scheduler Leader Election")
-    print_info("Testing: backend/app/services/scheduler/leader.py")
+    print_info("Testing: backend/app/services/platform/scheduler/leader.py")
     print_info("Tests: SL-001..007 — single/multi-worker, zombie, PID1, --reload, exception safe")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_leader.py", test_names)
     return run_command(cmd, "Scheduler leader election tests", verbose=verbose)
@@ -712,7 +712,7 @@ def services_donation_popup(verbose: bool = False, test_names: list = None) -> b
 def services_date_sentinel(verbose: bool = False, test_names: list = None) -> bool:
     """Test date sentinel resolution (min/max/passthrough, broker filter)."""
     print_section("Services: Date Sentinel Resolution")
-    print_info("Testing: backend/app/services/date_sentinel.py (resolve_date_sentinels)")
+    print_info("Testing: backend/app/services/platform/date_sentinel.py (resolve_date_sentinels)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_date_sentinel.py", test_names)
     return run_command(cmd, "Date sentinel tests", verbose=verbose)
 
@@ -720,7 +720,7 @@ def services_date_sentinel(verbose: bool = False, test_names: list = None) -> bo
 def services_file_preview(verbose: bool = False, test_names: list = None) -> bool:
     """Test file preview service helpers (CSV/Excel/text detection)."""
     print_section("Services: File Preview Helpers")
-    print_info("Testing: backend/app/services/file_preview.py")
+    print_info("Testing: backend/app/services/files/file_preview.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_file_preview.py", test_names)
     return run_command(cmd, "File preview tests", verbose=verbose)
 
@@ -745,7 +745,7 @@ def services_provider_registry_misc(verbose: bool = False, test_names: list = No
 def services_scheduler_joblog_misc(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler job log read/rotate helpers."""
     print_section("Services: Scheduler Job Log Helpers")
-    print_info("Testing: backend/app/services/scheduler/joblog.py")
+    print_info("Testing: backend/app/services/platform/scheduler/joblog.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_joblog_misc.py", test_names)
     return run_command(cmd, "Scheduler job log tests", verbose=verbose)
 
@@ -753,7 +753,7 @@ def services_scheduler_joblog_misc(verbose: bool = False, test_names: list = Non
 def services_scheduler_jobs(verbose: bool = False, test_names: list = None) -> bool:
     """Test the two scheduler job bodies end to end, with the bulk calls doubled."""
     print_section("Services: Scheduler Job Bodies")
-    print_info("Testing: backend/app/services/scheduler/jobs.py")
+    print_info("Testing: backend/app/services/platform/scheduler/jobs.py")
     print_info("Tests: _classify_job_status, run_current_price_refresh, run_history_sync")
     print_info("get_current_prices_bulk / bulk_refresh_prices / sync_pairs_bulk doubled — no provider calls, no price writes")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_jobs.py", test_names)
@@ -763,7 +763,7 @@ def services_scheduler_jobs(verbose: bool = False, test_names: list = None) -> b
 def services_scheduler_joblog_builders(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler job log entry builders and the append/rotate/read round trip."""
     print_section("Services: Scheduler Job Log Builders")
-    print_info("Testing: backend/app/services/scheduler/joblog.py")
+    print_info("Testing: backend/app/services/platform/scheduler/joblog.py")
     print_info("Tests: append/rotate/read round trip, build_current_price_entry, build_history_sync_entry, StrEnum guard")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_joblog_builders.py", test_names)
     return run_command(cmd, "Scheduler job log builder tests", verbose=verbose)
@@ -772,7 +772,7 @@ def services_scheduler_joblog_builders(verbose: bool = False, test_names: list =
 def services_scheduler_settings_misc(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler settings local-time-to-UTC conversion."""
     print_section("Services: Scheduler Settings TZ Conversion")
-    print_info("Testing: backend/app/services/scheduler/settings.py (_local_times_to_utc)")
+    print_info("Testing: backend/app/services/platform/scheduler/settings.py (_local_times_to_utc)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_settings_misc.py", test_names)
     return run_command(cmd, "Scheduler settings TZ conversion tests", verbose=verbose)
 
