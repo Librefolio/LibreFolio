@@ -7,9 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.2.0] - 2026-10-19
+## [1.2.0] - 2026-10-14
 
-**Preparing v1.2.0.** These features and fixes are in preparation; this version has not been released.
+What 1.2 adds to 1.1:
+
+- 🧰 **Tools**: a new section, with its first tool, the **PAC allocator**, which works out the purchases that bring your allocation closer to its target weights.
+- 📉 **Risk**: the Risk tab of the Dashboard and broker pages answers four questions, and Risk Analysis leaves beta, except the simulation.
+- 💰 **Purchase cost and P&L**: thanks to the report in [#32](https://github.com/Librefolio/LibreFolio/issues/32), we found a problem in how the cost of each purchase was calculated when exchange rates were involved, so metrics on the KPI cards such as the P&L were wrong. The algorithm is now fixed: each purchase is converted at its own date's rate, and the totals are right.
+- 💱 **Cash in other currencies**: cash held in another currency is now valued at each day's rate, and the Period view shows how much the exchange rate made it gain or lose.
+- 📊 **Dashboard**: privacy mode, the P&L view in the Growth chart, Yield on Cost and benchmarks are new, and the pie chart shows the nine new asset types grouped in their families.
+- 📥 **Imports**: Scalable Capital, Danske Bank (alpha), and DEGIRO statements in any language; and if you upload a file to the wrong broker, the app now tells you right away.
+- 🌍 **Languages**: numbers, dates and the changelog follow the interface language.
+- 👋 **First sign-in**: new users now get a quick tour and guides that show them the interface the first time they sign in.
+- ⚡ **Performance**: pages download less data, and reports no longer stall on very long exchange-rate histories.
+- 🔒 **Security**: a cross-site scripting (XSS) issue is closed, some API endpoints now require signing in, and the sidebar tells you whether your connection is secure.
+- 🐛 **Fixes**: many defects are fixed, some of them present since v0.9.0.
 
 ### ✨ Added
 

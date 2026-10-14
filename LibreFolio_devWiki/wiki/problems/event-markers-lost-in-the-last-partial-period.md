@@ -59,14 +59,19 @@ marker … vanished», and are green with the cure.
   in `PriceChartFull` and `CandlestickChart`. Present since v1.0.0 as well.
 - One more of the same family, recorded by T and not touched: the lot comparison chart (`LotComparisonChart.svelte`)
   dates its open period on the theoretical end too, since 1.1.0. The Growth and allocation history charts already
-  read the open period right.
+  read the open period right. *Update (train 99, I's lot 52)*: that reading was too kind to both; one rule for every
+  chart now — the running period ends on
+  its last day with data, through `bucketSpanUpTo`: the lot comparison chart's tooltip (`848906fa2`), the allocation
+  history's week (`da26ded78`), and the Growth chart, whose buckets were dated at their theoretical end so that the
+  running period had no value and the line stopped early (`e1f2753ee`).
 
 ## Status
 
 Resolved. The [1.2.0] chapter carries one 🐛 line for both halves, under «📈 Charts»: «At weekly or monthly
 resolution, the week or month not over yet reads right on the asset and FX charts…», «Present since v1.0.0»
-(`fcc4ac96f`, extended with the tooltip in `ef666fdee`). The backlog entry T-EVW, the same defect seen in the code,
-is closed with a pointer to R-5 (`fafe68863`).
+(`fcc4ac96f`, extended with the tooltip in `ef666fdee`, then to the Growth, allocation history and lot comparison
+charts in `10e646f79`). The backlog entry T-EVW, the same defect seen in the code, is closed with a pointer to R-5
+(`fafe68863`).
 
 ## Source files
 
