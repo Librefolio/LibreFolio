@@ -10,7 +10,9 @@ Tools for reviewing LibreFolio's look with a designer and for checking that a re
 - count every colour expression of the frontend (**colour inventory**).
 
 First used for the colour review of v1.2 (October 2026). All outputs are large and go **outside the
-repository**, to `--work-dir`, else `$LF_VISUAL_REVIEW_DIR`, else `~/LibreFolio_visual_review`.
+repository**, to `--work-dir`, else `$LF_VISUAL_REVIEW_DIR`, else `LibreFolio_subRepo/LibreFolio_visual_review` next to the
+main checkout when `LibreFolio_subRepo` exists (the developer's layout; worktrees resolve the main checkout through git),
+else `~/LibreFolio_visual_review`.
 
 | File | What it does |
 |---|---|
@@ -52,7 +54,7 @@ Two captures of the same commit show what changes on its own:
 ```bash
 scripts/visual_review/gallery_snapshot.sh base-r1
 scripts/visual_review/gallery_snapshot.sh base-r2
-W=~/LibreFolio_visual_review
+W=/Users/ea_enel/Documents/00_My/LibreFolio_subRepo/LibreFolio_visual_review   # the default work dir on the developer's machine
 pipenv run python -m scripts.visual_review.gallery_tool diff $W/snapshots/base-r1 $W/snapshots/base-r2 \
     --out $W/diffs/noise --emit-masks
 pipenv run python -m scripts.visual_review.gallery_tool stability $W/diffs/noise   # stability.md / .json
@@ -95,11 +97,11 @@ Build the frontend first (`./dev.py front build`): the palette table reads the r
 
 ### 4. Live server for the designer
 ```bash
-scripts/visual_review/designer_live.sh            # --refresh to re-copy the latest gallery data, --debug for the debug build
+scripts/visual_review/designer_live.sh            # --refresh to re-copy the latest gallery data
 ```
 - Address: `http://localhost:6160`, or `http://<this-machine>:6160` from the same network.
 - Login: `e2e_test_admin` / `E2eAdminPass123!`.
-- `--debug` rebuilds the frontend of this checkout.
+- The test server always serves the frontend debug build, so debug-only pages (e.g. the Designer Lab) are there too.
 
 ### 5. Colour inventory and team notes
 ```bash
