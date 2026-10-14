@@ -9,7 +9,8 @@
 > Fonti: la lista delle funzioni per il cloud (dal repo business: «Feature SaaS Readiness»,
 > «Decisioni Aperte», «Piano Operativo», prompt «Milestone v1.3 Cloud-ready core»),
 > `Release_2/Phase_0/BACKLOG_POST_1.2.md`, i piani di `Phase_0` (43, 45, 13, 02, 21, 09,
-> 53, 55, 56), `TODO_FUTURI.md`, 4 audit del codice in sola lettura (14/10).
+> 53; le cartelle 55 e 56 del programma colori, ora in `Phase_1/10_colorSystem/`), `TODO_FUTURI.md`, 4 audit del codice
+> in sola lettura (14/10).
 >
 > Le sigle fra parentesi (F26, PL2, C-79…) servono solo a ritrovare la voce nelle fonti.
 
@@ -396,6 +397,14 @@ fermati all'handoff, porta verificata libera.
 
 ## 7. Coordinamento con il programma colori (sessione «UI color analysis»)
 
+- Il programma colori vive in `Phase_1/10_colorSystem/` (spostato da `Phase_0/55` e `56` il 14/10, su richiesta del
+  developer), con il suo README e i suoi registri: li scrive solo il coordinatore colori. Le cartelle della 1.3 usano
+  i numeri 01–09.
+- Le schermate di accesso (`auth/LoginCard`, `RegisterCard`, `ui/input/PasswordStrength`), giro 1 della designer:
+  le modifiche visive le fa per primo il workstream T dei colori (strada (a), scelta dal coordinatore 1.3 il 14/10),
+  compresa la rimozione della chiave `auth.registerTitle` dalle sorgenti i18n di `auth`. A le sposta e ci fa le
+  modifiche funzionali (inviti, setup) dopo il merge di T. Se T tarda, A sposta i file con un `git mv` puro e T
+  applica le sue modifiche sui percorsi nuovi.
 - Ordine dei loro merge: galleria deterministica (G) → Designer Lab (L, indipendente) →
   fattorizzazione dei colori (R) a lotti A (alfa, segni, stati, badge), B (grafici),
   C (tabelle, media, file, dialoghi), D; poi i token della fase B, dopo il report della
