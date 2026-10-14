@@ -1,7 +1,7 @@
 ---
 title: "Domain: ASSETS"
 category: domain
-features: [F-024, F-025, F-026, F-027, F-028, F-029, F-030, F-031, F-032, F-033, F-034, F-035, F-036, F-114]
+features: [F-024, F-025, F-026, F-027, F-028, F-029, F-030, F-031, F-032, F-033, F-034, F-035, F-036, F-095, F-114]
 status: stable
 mkdocs: "developer/backend/assets/architecture.md"
 ---
@@ -35,6 +35,7 @@ The asset detail page is the richest view in LibreFolio: a full price history ch
 | [[F-034]] | Scheduled Investment Provider (synthetic yield) | backend | support — loan/structured product price synthesis | implemented |
 | [[F-035]] | CSS Scraper Provider (arbitrary web scraping) | backend | support — scrapes any web page for a price | implemented |
 | [[F-036]] | Provider Comparison Modal (diff provider vs DB) | frontend | support — shows diff between provider data and stored data | implemented |
+| [[F-095]] | Asset Delete — Transaction Count Link | fullstack | support — a blocked delete shows the transaction count and links to them | documented |
 
 ## Architecture at a glance
 
@@ -85,7 +86,6 @@ graph TD
 - [[F-029]] Metadata Refresh — already implemented but not yet documented; mkdocs page planned.
 - [[F-036]] Provider Comparison Modal — already implemented; mkdocs page planned.
 - [[F-094]] Sync Date Range Dialog — let users choose the historical range when syncing.
-- [[F-095]] Asset Delete — Transaction Count Link — show transaction count before delete confirmation.
 - [[F-096]] Scheduled Investment — Decoupled Frequencies + Anchor Day — idea for finer-grained schedule control.
 
 ## See also

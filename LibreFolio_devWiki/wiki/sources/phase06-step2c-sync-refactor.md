@@ -180,7 +180,7 @@ if (result.error_code === "HAS_TRANSACTIONS") {
 |------|------|
 | Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step2/plan-phase06Step2cSyncDeleteRefactor.prompt.md` |
 | Asset sync backend | `backend/app/services/asset_source.py` (bulk_refresh_prices) |
-| FX sync backend | `backend/app/services/fx.py` (sync_pairs_bulk) |
+| FX sync backend | `backend/app/services/fx/fx.py` (sync_pairs_bulk) |
 | SyncModalBase | `frontend/src/lib/components/ui/modals/SyncModalBase.svelte` |
 | FxSyncModal | `frontend/src/lib/components/fx/FxSyncModal.svelte` |
 | AssetSyncModal | `frontend/src/lib/components/assets/AssetSyncModal.svelte` |

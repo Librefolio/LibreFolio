@@ -85,7 +85,7 @@ i18n keys + balance walk tests (8/8 pass) + FormModal context-aware validate + D
 | Asset source (auto-populate removed) | `backend/app/services/asset_source.py` |
 | DistributionEditor | `frontend/src/lib/components/ui/input/DistributionEditor.svelte` |
 | FX pair page | `frontend/src/routes/(app)/fx/[pair]/+page.svelte` |
-| FX service (errors fix) | `backend/app/services/fx.py` |
+| FX service (errors fix) | `backend/app/services/fx/fx.py` |
 | dev.py (build order) | `dev.py` |
 | AssetModal (data-testid) | `frontend/src/lib/components/assets/AssetModal.svelte` |
 | Test asset source | `backend/test_scripts/test_services/test_asset_source.py` |

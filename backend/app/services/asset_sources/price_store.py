@@ -37,7 +37,7 @@ from backend.app.services.asset_sources import core
 from backend.app.services.asset_sources.core import (
     AssetSourceError,
 )
-from backend.app.services.fx import convert_bulk
+from backend.app.services.fx.fx import convert_bulk
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)

@@ -38,7 +38,7 @@ from backend.app.schemas.risk_scenarios import (
     RiskScenarioMissingHistoryPolicy,
 )
 from backend.app.services.data_quality_thresholds import REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE, STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskAssetClassification,
@@ -50,6 +50,7 @@ from backend.app.services.risk.metrics import (
     current_buy_and_hold_returns,
     hypothetical_stress_return,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.utils.asset.geo import normalize_country_to_iso3
 from backend.app.utils.asset.sector import FinancialSector
 

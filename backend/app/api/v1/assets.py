@@ -72,11 +72,9 @@ from backend.app.services.asset_source import (
     AssetSourceError,
     AssetSourceManager,
 )
-from backend.app.services.provider_registry import (
-    AssetProviderRegistry,
-    SignalPluginRegistry,
-)
+from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.signal_service import SignalRequestValidationError
+from backend.app.services.signals.registry import SignalPluginRegistry
 
 logger = get_logger(__name__)
 

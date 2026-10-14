@@ -102,7 +102,7 @@ from backend.app.services.financial_math.yield_on_cost import (
     calculate_yield_on_cost_for_positions,
     compute_yield_on_cost_dependency_identity,
 )
-from backend.app.services.fx import convert_bulk
+from backend.app.services.fx.fx import convert_bulk
 from backend.app.services.settings_service import get_effective_base_currency
 from backend.app.utils.runtime.cache import get_ttl_cache
 

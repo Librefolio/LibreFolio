@@ -18,7 +18,7 @@ from backend.app.schemas.portfolio import (
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.fifo.models import FifoEvent, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, opening_reference_price
-from backend.app.services.fx import convert_bulk
+from backend.app.services.fx.fx import convert_bulk
 
 
 class FxRateResolver:

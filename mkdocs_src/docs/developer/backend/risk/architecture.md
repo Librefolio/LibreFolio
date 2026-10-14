@@ -49,7 +49,8 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk/quant/` | The simulation and optimization boundary: engine request and result models, content-keyed caches, spawn worker pools, the QuantLib and Riskfolio workers, the NumPy block bootstrap. |
 | `backend/app/services/risk/scenario_catalog/` | Built-in YAML scenarios and the loader that runs at startup. |
 | `backend/app/services/risk_plugins/` | The analytics, one folder each: the code in `<analytic_code>/plugin.py`, the `risk.analytics.*` name and description in its `i18n/` fragment. |
-| `backend/app/services/provider_registry.py` | `RiskAnalyticRegistry` and the `register_plugin` decorator. |
+| `backend/app/services/risk/registry.py` | `RiskAnalyticRegistry`. |
+| `backend/app/services/provider_registry.py` | The `register_plugin` decorator and the folder discovery shared by every plugin registry. |
 | `backend/app/services/series_preparation.py` | Joint calendar, target-currency conversion, simple returns, carried points. |
 | `backend/app/services/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
 | `backend/app/services/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
@@ -272,7 +273,7 @@ to the context's values when left at `None`.
 
 ### 🔌 Registration and Discovery {: #registry }
 
-`RiskAnalyticRegistry` (`backend/app/services/provider_registry.py`) specializes the shared plugin
+`RiskAnalyticRegistry` (`backend/app/services/risk/registry.py`) specializes the shared plugin
 registry described in [Registry Pattern](../../architecture/patterns/registry_pattern.md):
 
 - **Discovery** loads every analytic folder's `plugin.py`, as
@@ -714,9 +715,10 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.risk import RiskMode, RiskOutputKind, RiskScopeKind
 from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import require_primary_returns
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext, RiskSeriesInputs
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class MyAnalyticParams(BaseModel):

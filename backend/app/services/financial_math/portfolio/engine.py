@@ -24,7 +24,7 @@ from backend.app.services.financial_math.portfolio.daily_state import DailyState
 from backend.app.services.financial_math.portfolio.derived_views import build_cost_positions
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, PortfolioCalculationResult, SplitHistory, SplitRecord
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
-from backend.app.services.fx import convert_bulk
+from backend.app.services.fx.fx import convert_bulk
 from backend.app.services.settings_service import get_effective_base_currency
 from backend.app.utils.runtime.cache import get_ttl_cache
 

@@ -38,5 +38,5 @@ All financial calculations in LibreFolio are performed exclusively in the backen
 |------|------|
 | Transaction service (FIFO, ROI) | `backend/app/services/transaction_service.py` |
 | Asset service (sync, caching) | `backend/app/services/asset_source.py` |
-| FX service (conversion graph) | `backend/app/services/fx.py` |
+| FX service (conversion graph) | `backend/app/services/fx/fx.py` |
 | API schemas | `backend/app/schemas/` |
