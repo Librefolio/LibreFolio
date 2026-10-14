@@ -26,7 +26,7 @@ from sqlalchemy.pool import NullPool
 
 from backend.app.db.base import SQLModel  # imports every model, so SQLModel.metadata holds the whole schema
 from backend.app.db.session import get_async_engine
-from backend.app.services import user_service
+from backend.app.services.accounts import user_service
 
 # ============================================================================
 # PYTEST FIXTURES

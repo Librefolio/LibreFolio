@@ -435,7 +435,7 @@ def services_broker(verbose: bool = False, test_names: list = None) -> bool:
 def services_user_profile(verbose: bool = False, test_names: list = None) -> bool:
     """Test user profile update service."""
     print_section("Services: User Profile")
-    print_info("Testing: backend/app/services/user_service.py (update_profile)")
+    print_info("Testing: backend/app/services/accounts/user_service.py (update_profile)")
     print_info("Tests: Update username/email, uniqueness validation, error handling")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_user_profile.py", test_names)
@@ -455,7 +455,7 @@ def services_edge_cases(verbose: bool = False, test_names: list = None) -> bool:
 def services_global_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test GlobalSettingsService."""
     print_section("Services: Global Settings Service")
-    print_info("Testing: backend/app/services/global_settings_service.py")
+    print_info("Testing: backend/app/services/accounts/global_settings_service.py")
     print_info("Tests: Type conversion, DB reads with defaults, TTL/upload/registration getters")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_global_settings_service.py", test_names)
@@ -505,7 +505,7 @@ def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> 
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test settings service: user settings CRUD, get_effective_base_currency."""
     print_section("Services: Settings Service")
-    print_info("Testing: backend/app/services/settings_service.py")
+    print_info("Testing: backend/app/services/accounts/settings_service.py")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_settings_service.py", test_names)
     return run_command(cmd, "Settings service tests", verbose=verbose)
@@ -704,7 +704,7 @@ def services_config_misc(verbose: bool = False, test_names: list = None) -> bool
 def services_donation_popup(verbose: bool = False, test_names: list = None) -> bool:
     """Test donation-popup trigger decision logic (should_show_donation_popup, record_login_and_maybe_show_popup)."""
     print_section("Services: Donation Popup")
-    print_info("Testing: backend/app/services/donation_popup_service.py")
+    print_info("Testing: backend/app/services/accounts/donation_popup_service.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_donation_popup_service.py", test_names)
     return run_command(cmd, "Donation popup service tests", verbose=verbose)
 

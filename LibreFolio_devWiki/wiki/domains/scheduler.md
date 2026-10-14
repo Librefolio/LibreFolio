@@ -76,7 +76,7 @@ Once the scheduler is running, [[F-091]] Multi-Worker Cache Server (planned idea
 | Role | Path |
 |------|------|
 | Global settings API (scheduler config) | `backend/app/api/v1/settings.py` |
-| Global settings service | `backend/app/services/global_settings_service.py` |
+| Global settings service | `backend/app/services/accounts/global_settings_service.py` |
 | Asset sync service (called by scheduler) | `backend/app/services/asset_source.py` |
 | FX sync service (called by scheduler) | `backend/app/services/fx.py` |
 | Scheduler module (planned) | `backend/app/services/scheduler/scheduler.py` (not yet created) |
