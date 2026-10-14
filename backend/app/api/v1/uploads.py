@@ -46,6 +46,7 @@ from backend.app.services.static_uploads import (
     list_uploads,
     save_upload,
 )
+from backend.app.utils.runtime.paths import confined_path
 
 logger = structlog.get_logger(__name__)
 
@@ -532,16 +533,11 @@ async def serve_plugin_static(
 
     # Build path and validate
     base_dir = PLUGIN_STATIC_DIRS[provider_type]
-    file_path = base_dir / path
 
-    # Security: prevent path traversal
-    try:
-        file_path = file_path.resolve()
-        base_resolved = base_dir.resolve()
-        if not str(file_path).startswith(str(base_resolved)):
-            raise HTTPException(status_code=403, detail="Access denied")
-    except (OSError, ValueError):
-        raise HTTPException(status_code=400, detail="Invalid path") from None
+    # Security: the requested path must stay inside the plugin's static folder
+    file_path = confined_path(base_dir, path)
+    if file_path is None:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
