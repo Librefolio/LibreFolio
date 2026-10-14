@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### 🔄 Changed
+
+#### 🛠️ Development
+
+- `./dev.py mkdocs video` is removed: the promotional video project now lives outside this repository.
+
+---
+
 ## [1.2.0] - 2026-10-14
 
 What 1.2 adds to 1.1:

@@ -15,18 +15,6 @@ description: "Use this skill when the user needs to build, serve, or deploy MkDo
 ./dev.py mkdocs check-links           # Validate cross-boundary links (frontend/backend → docs)
 ```
 
-## Promotional Video
-
-Manage the Remotion promo-video project (`mkdocs_src/videoClipPrject/video_promo`):
-
-```bash
-./dev.py mkdocs video sync                       # Sync AI assets for the promo video (npm run sync)
-./dev.py mkdocs video start                      # Start Remotion studio (interactive preview/editor)
-./dev.py mkdocs video build                      # Build all promo videos (npm run build:all)
-./dev.py mkdocs video build --locale it          # Build a single locale (en|it|es|fr|all)
-./dev.py mkdocs video review                     # Generate review assets (npm run review:assets --clean)
-```
-
 ## Gallery Screenshots
 
 Generate automatic screenshots for documentation (light/dark × desktop/mobile × 4 languages):
