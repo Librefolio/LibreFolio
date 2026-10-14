@@ -9,11 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### 🔄 Changed
+### 🧹 Repository cleanup
 
-#### 🛠️ Development
-
-- `./dev.py mkdocs video` is removed: the promotional video project now lives outside this repository.
+- The promotional video experiment leaves the repository (`mkdocs_src/videoClipPrject/` and `./dev.py mkdocs video`): it never reached the app or the documentation, and it now lives outside this repository.
 
 ---
 
