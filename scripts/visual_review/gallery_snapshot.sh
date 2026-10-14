@@ -10,7 +10,8 @@
 #   scripts/visual_review/gallery_snapshot.sh cand-T --checkout ../LibreFolio-worktrees/t --port 6151 --data-dir /tmp/librefolio-r2-t
 #
 # Defaults: the checkout that contains this script; port 6150 + data dir /tmp/librefolio-r2-main (coordinator
-# lane, Release 2 convention); work dir $LF_VISUAL_REVIEW_DIR or ~/LibreFolio_visual_review, never inside a checkout.
+# lane, Release 2 convention); work dir $LF_VISUAL_REVIEW_DIR, else <folder of the main checkout>/LibreFolio_subRepo/
+# LibreFolio_visual_review when LibreFolio_subRepo exists, else ~/LibreFolio_visual_review — never inside a checkout.
 # The gallery writes git-ignored PNGs into <checkout>/mkdocs_src/docs/gallery. Only the PNGs written by THIS run
 # (newer than a start stamp) are copied to <work>/snapshots/<label>/png, so images left by failed or filtered
 # tests never pollute a snapshot: they are listed in stale_not_regenerated.txt. A busy port stops the script
@@ -23,7 +24,7 @@ LABEL=$1; shift
 CHECKOUT=$(cd "$(dirname "$0")/../.." && pwd)
 PORT=6150
 DATA_DIR=/tmp/librefolio-r2-main
-WORK=${LF_VISUAL_REVIEW_DIR:-$HOME/LibreFolio_visual_review}
+WORK=${LF_VISUAL_REVIEW_DIR:-}
 EXTRA=()
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -37,6 +38,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 CHECKOUT=$(cd "$CHECKOUT" && pwd -P)
+if [[ -z "$WORK" ]]; then
+    MAIN=$(dirname "$(git -C "$CHECKOUT" rev-parse --path-format=absolute --git-common-dir)")
+    if [[ -d "$(dirname "$MAIN")/LibreFolio_subRepo" ]]; then WORK="$(dirname "$MAIN")/LibreFolio_subRepo/LibreFolio_visual_review"; else WORK="$HOME/LibreFolio_visual_review"; fi
+fi
 refuse_inside() { case "$1/" in "$CHECKOUT/"*) echo "work dir $1 is inside the checkout $CHECKOUT: choose a path outside it" >&2; exit 2 ;; esac; }
 case "$WORK" in /*) ;; *) WORK="$PWD/$WORK" ;; esac
 refuse_inside "$WORK"
@@ -81,6 +86,8 @@ END_S=$(date +%s)
 (cd "$GAL" && find . -name '*.png' -newer "$STAMP" -print0 | rsync -a --from0 --files-from=- ./ "$DEST/png/")
 (cd "$GAL" && find . -name '*.png' ! -newer "$STAMP" | sed 's|^\./||' | sort) > "$DEST/stale_not_regenerated.txt"
 NEW=$(find "$DEST/png" -name '*.png' | wc -l | tr -d ' ')
+# Keep Playwright's failure evidence (screenshots, error-context.md) with the snapshot when the run failed.
+if [[ $RC -ne 0 && -d "$CHECKOUT/frontend/test-results" ]]; then cp -R "$CHECKOUT/frontend/test-results" "$DEST/test-results"; fi
 STALE=$(wc -l < "$DEST/stale_not_regenerated.txt" | tr -d ' ')
 sed 's/\x1b\[[0-9;]*m//g' "$DEST/gallery.log" | grep -E '^\s+\[(desktop|mobile)\] ›|^\s+[0-9]+ (failed|passed|skipped)' > "$DEST/failures.txt" || true
 

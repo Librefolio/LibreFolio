@@ -521,7 +521,7 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
   `portfolio_service.py:1139-1146`, `:1184-1191`; `schemas/portfolio.py:165`; `test_data_quality_report.py:3`; nel runner
   `_archive.py:7`, `_run_cache.py:7-10`, `_cli.py:470`, `:568-572`, `__init__.py:15-31`, `_consolidate.py:69-71`,
   `_frontend_ai_export.py:69-71`; `EditBuffer.ts:10`.
-- **C-33 · Costo medio dei trasferimenti e del promote: tre possibili difetti** — **confermati da P il 09/10** con test
+- ✅ **C-33 · Costo medio dei trasferimenti e del promote: tre possibili difetti** — **confermati da P il 09/10** con test
   rossi, tutti già nella v1.1.0; ✅ **corretti il 09/10 (treno 28)** per decisione del developer («Correggere 1 e 2 nel
   backend con una sola cura, e 3 facendo chiedere il costo anche col promote»; data d'uscita: «Alla data in cui le quote
   escono dal broker d'origine»), piano `phases/40_transferCostBasis/`. Erano, letti da Q: (1) un transfer in Auto di un'intera posizione riceverebbe costo 0, perché la gamba in uscita

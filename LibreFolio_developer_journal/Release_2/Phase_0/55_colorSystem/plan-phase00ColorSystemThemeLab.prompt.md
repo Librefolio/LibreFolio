@@ -27,9 +27,9 @@
 | Lettera | Sessione | Cartella del piano | Corsia (porta + dati) | Stato |
 |---|---|---|---|---|
 | — | coordinatore | questo file | 6150 + `/tmp/librefolio-r2-main` | — |
-| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | da avviare: prima l'analisi |
-| G | `G - Gallery deterministica` | `../56_galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | da avviare: prima l'analisi |
-| R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154 + `/tmp/librefolio-r2-r` | da avviare: prima l'analisi |
+| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | piano approvato il 14/10; branch `e-alfy-designer-lab`; spike, poi passi 1–3 |
+| G | `G - Gallery deterministica` | `../56_galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | piano approvato il 14/10; branch `e-alfy-g-gallery-deterministica`; passi 0–2 e correzione G-4 |
+| R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154 + `/tmp/librefolio-r2-r` | piano approvato il 14/10; branch `e-alfy-r-fattorizzazione-colori`; lotto A (W0–W2) nel checkpoint `d80b9e0cd`, base aggiornata con `dev_release2` (`b1fcc3c48`); prosegue con W3, il cancello A aspetta G |
 | — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | su richiesta |
 
 Superfici condivise e relativi proprietari:
@@ -38,10 +38,24 @@ Superfici condivise e relativi proprietari:
 |---|---|
 | `vite.config.ts`, `src/routes/+layout.svelte` | L |
 | Moduli centrali dei colori (`lib/theme/**`, nuovi) | R |
+| Meta `theme-color` in `app.html`, `static/offline.html`, `themeStore.ts` (D3) | R |
 | `frontend/e2e/gallery.spec.ts` e fixture della gallery | G |
+| `routes/(app)/assets/[id]/+page.svelte`, solo il nome del provider (G-4) | G |
 | `app.css` | nessuno finché non arriva il report della designer |
 | Catalogo del test runner | `test-author` |
-| Questo piano e il backlog post-1.2 | coordinatore |
+| Questo piano e le sezioni L, G, R del backlog post-1.2 | coordinatore |
+| `CHANGELOG.md` `[Unreleased]`, cataloghi i18n | coordinatore della 1.3 |
+
+Integrazione in `dev_release2`, solo per merge del coordinatore; il push lo fa il developer:
+
+- **Ordine:** G, poi L, che è indipendente, poi i lotti di R (A, B, C, D), ognuno dopo il suo cancello gallery.
+- **Coordinatore della 1.3:** lavora sullo stesso checkout (`Phase_1/`). Ci avvisiamo a vicenda prima di ogni merge,
+  rebase o reset di `dev_release2`, e ognuno committa solo i propri percorsi, indicati uno per uno.
+- **Spostamenti di cartelle della 1.3 (piano 43, FE2–FE11):** seguono i lotti di R.
+  - Subito: le cartelle in cui R non tocca nulla.
+  - Dopo il lotto A: `fx`, `assets`, `transactions`, PAC, `ui/feedback`, `ui/display`.
+  - Dopo il lotto B: `charts`, `dashboard`, `risk`, `brokers`.
+  - Dopo il lotto C: tabelle, media, `files` e dialoghi.
 
 ---
 

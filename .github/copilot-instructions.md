@@ -50,12 +50,28 @@ LibreFolio/
 - **Incremental Alembic migrations (released)** — ship schema changes as new migrations to protect existing installs; edit `001_initial.py` only for brand-new never-shipped tables; `db create-clean` only for fresh/test DBs
 - **After modifying API** — run `./dev.py api sync` to regenerate TypeScript client
 - **After modifying DB models** — add an incremental Alembic migration (`./dev.py db migrate "…"`); use `db create-clean` only for fresh/test DBs
-- **NEVER run `git commit`** — the agent must only *propose* commit messages
-  (e.g. write them to `/tmp/libreFolio_commit_*.txt` or print them inline).
-  The user performs the actual commit manually. Staging (`git add`) and read-only
-  git commands (`git status`, `git diff`, `git log --no-pager`) are allowed.
-  Same rule for `git push`, `git reset --hard`, `git rebase`, `git checkout -- …`
-  and any other history-mutating operation: **never** execute, only suggest.
+- **Git: local yes, remote only the developer** (developer decision, 14/10/2026).
+  - **Allowed locally**, when the task needs it: commit, merge, fast-forward,
+    cherry-pick, branch create and rename.
+  - **The developer's alone:** `git push`, force-push, and any change to remotes or to
+    remote branches and tags. They push when they want, after their own review.
+  - **Coordinated work:** only the coordinator mutates history; child workstreams never
+    commit or merge. See `.github/agents/release-coordinator.agent.md` («Git authority»)
+    and `.github/agents/coordinated-workstream.agent.md` («Git policy»).
+  - **Guardrails, always:**
+    - **Never destroy work you do not own.** No `reset --hard`, `checkout -- …`,
+      `restore`, `clean -fd` or `stash drop` on changes you did not create: a dirty tree
+      is someone's open work.
+    - **Never rewrite history that already exists on `origin`.** No amend or rebase of
+      pushed commits.
+    - Delete or force-update a branch only if all of its commits are already in the
+      target or preserved elsewhere.
+    - Before every history operation, record HEAD and `git status --porcelain`. After
+      it, verify HEAD, parents and cleanliness, and report the resulting SHAs.
+    - Stage explicit, reviewed paths only. Never `git add -A` on a checkout shared with
+      other sessions or with the developer's IDE.
+    - Never commit secrets or ignored/generated artifacts.
+    - Commit messages follow Conventional Commits (skill `caveman-commit`).
 
 ## Terminal Command Rules
 
