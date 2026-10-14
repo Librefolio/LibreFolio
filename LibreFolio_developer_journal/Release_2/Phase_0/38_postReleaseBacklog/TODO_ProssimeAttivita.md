@@ -1,5 +1,12 @@
 # TODO Prossime Attività
 
+> **Archiviato il 14/10/2026** (era nella radice del repo, fermo al 18/07/2026). Superato da
+> [`BACKLOG_POST_1.2.md`](../BACKLOG_POST_1.2.md) e dalla [09](../09_feedbackJobs/README.md). Verificato quel giorno:
+> la voce 0 (FEE/TAX, Fase 2) è in `09_feedbackJobs/04_brim_import.md`; le voci 5–24 hanno tutte il loro dettaglio in
+> `TODO_FUTURI.md` o nel backlog, comprese la 7 (`## 🔍 BRIM Auto-Detect Broker via Account Code`) e la 15 (le pagine
+> di dettaglio di trade e fee); la 12 è il pannello analisi lotti, già fatto; la 25 (TanStack) non vale più, perché
+> TanStack è uscito dal frontend. I percorsi e i numeri di riga qui sotto descrivono luglio 2026.
+
 Backlog azionabile e ordinato per complessità (facile → complesso), con impatto utente finale stimato.
 
 - **Relazione con gli altri file**: `TODO_FUTURI.md` resta l'archivio raw delle idee (contesto estenso, cronologico). `TODO_Completati.md` resta lo storico di ciò che è fatto/scartato. Questo file è il **backlog curato**: per le voci con spec completa qui sotto, il contenuto è stato rimosso da `TODO_FUTURI.md` per evitare doppioni (di norma solo il titolo/idea resta lì se serve contesto storico). Per le voci "solo indice", il dettaglio estenso resta in `TODO_FUTURI.md` — qui c'è solo la sintesi + priorità.

@@ -480,7 +480,7 @@ def database_file_owned_exclusively(reason: str):
 
     ``db create`` deletes ``app.db`` and rebuilds it from the migrations. A server
     attached to the old inode keeps writing to a file nobody can see, and
-    ``dev.sh db:upgrade`` rightly refuses to run at all — so, before this existed,
+    ``dev.py db upgrade`` rightly refuses to run at all — so, before this existed,
     ``./dev.py test all-backend`` could not get past its own database category.
 
     Restarting is cheap and, under coverage, safe: ``stop()`` waits for

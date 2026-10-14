@@ -77,7 +77,7 @@ def _db_create_body(verbose: bool = False) -> bool:
     print_info("The backend server is NOT used in this test")
 
     # The precondition is checked *before* the destructive step, not by the
-    # migration that follows it. `dev.sh db:upgrade` refuses to run while a
+    # migration that follows it. `dev.py db upgrade` refuses to run while a
     # server holds the test port — correct, but by then the file would already be
     # gone, and the run would continue against a database with no tables.
     # Measured on `all-backend`: 13 failures and 116 `no such table: users`
