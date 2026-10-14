@@ -68,7 +68,7 @@ PRIORITY_MAP = {
     "backend/app/utils/": "LOW",
     "backend/app/services/accounts/global_settings_service.py": "LOW",
     "backend/app/services/accounts/settings_service.py": "LOW",
-    "backend/app/services/static_uploads.py": "LOW",
+    "backend/app/services/files/static_uploads.py": "LOW",
     "backend/app/services/provider_registry.py": "LOW",
     "backend/app/schemas/": "LOW",
     # INFRA — not unit-testable
