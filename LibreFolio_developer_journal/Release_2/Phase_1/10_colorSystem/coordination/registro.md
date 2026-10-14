@@ -459,3 +459,27 @@
   - la riga di changelog di G-4;
   - FE5 (la pagina dell'asset) ora è libera.
 - **Domani alle 09:00:** misura finale sul `dev_release2` con G (comandi di G, `live_price_check` con pipenv).
+
+## 00:30 (15/10) — T-3, la shell
+
+- **T-3:** `bd51acbc2` (13 file).
+  - Barra laterale `bg-lf-brand` nei due temi (D-T2); sfondo dell'app `bg-lf-app`; intestazione e controlli in alto
+    sui ruoli.
+  - Nei file condivisi con la 1.3 cambiano solo le classi: le righe si pareggiano.
+  - E2E `theme-roles` 14/14, compreso il controllo negativo sulla card legacy in scuro; baseline stretta (m1 11.185,
+    m2 1.781).
+  - Nuove voci di backlog di T: T-B2 (stati del controllo di sicurezza sulla barra verde) e T-B5 (il tema scelto
+    dall'header si perde al login; l'accessibilità della shell).
+- **Merge di base con `833507302`** (G, T-2, documenti) → `dad0f6292`, albero = simulazione.
+- **Integrazione:** dopo la gallery candidata di domani e la revisione del developer, perché cambiano tutte le
+  schermate autenticate. 16 scatti di T in `review/T3-shell/`, sessione del coordinatore.
+- **T-5** (sfondo del login, `AnimatedBackground` passato a T dopo l'ingresso di G) autorizzato subito. Se il suo
+  checkpoint arriva entro le 09:00, la candidata copre T-3 e T-5 insieme.
+- **Calendario del 15/10:**
+  1. 09:00 misura finale di G sul target: r1 e r2 sullo stesso SHA, che fanno da riferimento dello stesso giorno;
+  2. candidata di R (lotti A–D);
+  3. candidata di L, con il Lab acceso e inattivo, contro r1: rende superflua la gallery «A» di L;
+  4. candidata di T (T-3, più T-5 se pronto).
+
+  R, L e T entrano solo dopo le loro candidate, così il target resta quello di r1. La 1.3 ferma le suite complete
+  nella finestra (09:00–12:00 circa), con conferma alle 08:45.

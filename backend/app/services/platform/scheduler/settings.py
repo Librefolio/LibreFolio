@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.settings import SETTINGS_REGISTRY
-from backend.app.services.global_settings_service import get_setting_value
+from backend.app.services.accounts.global_settings_service import get_setting_value
 
 try:
     from zoneinfo import ZoneInfo

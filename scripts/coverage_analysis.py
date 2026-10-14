@@ -55,7 +55,7 @@ PRIORITY_MAP = {
     "backend/app/services/asset_source.py": "HIGH",
     "backend/app/services/fx.py": "HIGH",
     "backend/app/services/brokers/": "HIGH",
-    "backend/app/services/user_service.py": "HIGH",
+    "backend/app/services/accounts/user_service.py": "HIGH",
     "backend/app/services/transactions/": "HIGH",
     "backend/app/services/brim_provider.py": "HIGH",
     # MEDIUM — API endpoints
@@ -66,9 +66,9 @@ PRIORITY_MAP = {
     "backend/app/services/brim_providers/": "MEDIUM",
     # LOW — utilities, infrastructure
     "backend/app/utils/": "LOW",
-    "backend/app/services/global_settings_service.py": "LOW",
-    "backend/app/services/settings_service.py": "LOW",
-    "backend/app/services/static_uploads.py": "LOW",
+    "backend/app/services/accounts/global_settings_service.py": "LOW",
+    "backend/app/services/accounts/settings_service.py": "LOW",
+    "backend/app/services/files/static_uploads.py": "LOW",
     "backend/app/services/provider_registry.py": "LOW",
     "backend/app/schemas/": "LOW",
     # INFRA — not unit-testable

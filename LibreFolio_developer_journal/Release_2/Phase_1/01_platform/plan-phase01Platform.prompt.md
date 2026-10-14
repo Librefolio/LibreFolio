@@ -1,0 +1,639 @@
+# H · Piattaforma — analisi d'implementazione (fase 01, 1.3.0)
+
+> **Piano della sessione H · Piattaforma** (fase 01, 1.3.0).
+>
+> - L'analisi è del 14/10 ed è stata consegnata al coordinatore della 1.3.
+> - Via libera parziale il 14/10 alle 22:55: per ora solo CP1 (§14 «Avanzamento»).
+>
+> - Worktree `LibreFolio-worktrees/e-alfy-sturdy-memory`, ramo `e-alfy-h-piattaforma` (l'app lo ha rinominato all'avvio).
+> - Base dell'analisi `459131eb8`; base di CP1 `c9bb8f257`.
+> - Corsia: porta 6181, data-dir `/tmp/librefolio-r13-h`. Coordinatore: «Release 1.3 planning».
+> - Il grafo della devWiki manca, come previsto. Ho letto le pagine committate: `domains/infrastructure`,
+>   `domains/scheduler`, `domains/auth`, `features/F-062`, `problems/stale-frontend-after-update-html-cached` e
+>   `problems/stale-version-file-shadows-git-describe`.
+
+## 0. Dipendenza in arrivo
+
+Il CP2 dipende da un commit del coordinatore su `main.py`, da integrare prima del taglio.
+
+- Il taglio di `main.py` (CP2) parte dopo quel commit e dopo l'aggiornamento di base. Se, quando CP1 è integrato, il
+  commit non c'è ancora, proseguo con i lotti che non toccano i gestori statici e il lifespan di `main.py`.
+- La rinomina (CP1) non ne dipende: in `main.py` cambia solo due import in testa.
+
+## 1. Stato reale (verificato sul codice, 14/10)
+
+| Tema | Cosa c'è | Riga |
+|---|---|---|
+| `services/` in cima | 47 voci. Le mie: `scheduler/` (7 file, 705 righe), `container_registry.py` 225, `date_sentinel.py` 74, `data_quality_thresholds.py` 48 (solo costanti), `backup_service.py` 183, `static_uploads.py` 534, `file_preview.py` 316 | — |
+| `main.py` (523 righe) | Bootstrap del DB (`_alembic_head_revision` :83, `ensure_database_exists` :101, `run_post_migration_fixes_at_startup` :222); `lifespan` :244-333; seed delle impostazioni e prewarm :336-354; app :357; CORS :367; GZip :379; router :382; serving di MkDocs e della SPA :385-523 (`ImmutableStaticFiles` :473-480) | — |
+| Letture di env fuori da `config.py` | `main.py:70` (TEST_MODE); `auth_service.py:104` (JWT_SECRET, A); `web_link_finder.py:124-162` (7 letture, X); `donation_popup_service.py:39` (A); `scheduler.py:97` (NO_SCHEDULER); `system.py:260` (lane id dei test, resta) | — |
+| `config.py` | `Settings` (pydantic-settings, legge `.env`); `get_settings()` costruisce una nuova istanza a ogni chiamata; RISK idle 600 s (:131-132) | — |
+| Segreti | Nessun `*_FILE`. JWT casuale per processo se manca (`auth_service.py:104`); `dev.py:160-168` lo genera una volta e lo passa ai worker. Nessuna chiave d'istanza, nessuna `secrets/`, `cryptography` assente dal lock | — |
+| `.env.example` | 84 righe, incompleto: mancano JWT_SECRET, RISK_*, NO_SCHEDULER, DISABLE_DONATION_POPUP. **Il Dockerfile lo copia come `/app/.env`**: ogni variabile nuova deve restare commentata | `Dockerfile` `COPY .env.example ./.env` |
+| `system.py` | info (pubblico: versioni delle dipendenze e dell'OS), plugin-diagnostics, container-image-status, connection, health, test-lane-health. Niente ready, version, config pubblica | — |
+| Versione | `utils/runtime/version.py:41-49` legge `VERSION` prima di `git describe` (R2). `dev.py:1626-1641` e `release.yml:123-141` lo scrivono. `pyproject.toml:7` e `package.json:4` dicono ancora 1.1.0 (C-84) | — |
+| Scritture HTTP | **70** endpoint POST/PUT/PATCH/DELETE: 64, più 6 in `fx.py`, i cui router hanno nomi diversi | — |
+| Frontend | `routes/(app)/+layout.svelte` (274 righe, legacy `$:`); interceptor centrale in `lib/api/zodios-client.ts:122`; toast via `notify()`; banner ambra già esistente (`OnboardingBootstrapBanner`); i18n per sottosistema (`lib/i18n/<sub>/`) | — |
+| Docker | `EXPOSE 6040 6041`; compose espone `${TEST_PORT:-6041}:6041` (C-37); `env_file` porta `PORT` nel container (N-8); `cmd_docker_exec` senza `--user` (`dev.py:1803`, 32-3) | — |
+| Registro | GHCR (lettura anonima, 14/10): il tag `test` c'è ancora, insieme a latest, nightly, nightly-light e 7 numerici (C-26) | — |
+| Fuso orario (P-4) | `tzdata` non è nel lock. `python:3.13-slim` (trixie) installa `tzdata` ma non `tzdata-legacy`: alias come `Asia/Calcutta` o `US/Eastern` probabilmente assenti. Da provare nell'immagine (Docker oggi spento). Effetto: un nome legacy salvato su un host e portato nell'immagine fa ricadere lo scheduler in UTC senza avviso (`scheduler.py:21-24`) | — |
+| Test accoppiati a `main.py` | `test_post_migration.py` (circa 25 patch su `main`, alcune `raising=False`, cioè mute), `test_market_calendar.py`, `test_signal_runtime.py`, `test_risk_scenario_catalog.py`; `test_db_config.py:124` importa `ensure_database_exists` da `main` | — |
+
+## 2. Già fatto, contraddetto, da sapere
+
+- **F28**: fatto quasi tutto (HTML in revalidate, chunk immutabili). Resta questo: `ImmutableStaticFiles` mette `immutable` su tutto `/_app`,
+  anche su `_app/version.json`. Oggi non lo legge nessuno (`updated` non è usato), quindi l'impatto è basso. La cura:
+  `immutable` solo sotto `_app/immutable/`.
+- **F27**: le variabili esistono già (`config.py:131-132`). Mancano il default di 60 s nel profilo gestito e la doc.
+- **D-P7** (developer, 12/10): `utils/runtime/version.py` e `cache.py` restano in `utils/`. Le proposte di P2.3
+  (`platform/version.py`, `platform/cache.py`) sono decadute.
+- **P2.2** mette anche `provider_registry` in `platform/`, ma quel file è di X (PL2): lo sposta X, se vuole.
+- **C-49**: la voce dice «nessun endpoint SSE», ma uno c'è, `/api/v1/assets/provider/search/stream`. Diagnosi nel §12.
+- **JWT_SECRET**: la specifica del business (F03) chiede di salvarlo. Vale la regola testuale del developer: resta
+  casuale se manca, si aggiunge solo `JWT_SECRET_FILE`.
+- **Header nuovi (F15)**: il PDF degli upload si apre in un iframe della stessa origine
+  (`FilePreviewModal.svelte:790`). Con X-Frame-Options il valore deve essere `SAMEORIGIN`, mai `DENY`.
+
+## 3. Disegno
+
+### 3.1 Albero di arrivo (backend)
+
+```text
+backend/app/
+  main.py                      ~40 righe: settings → logging → app → install_middleware → router → static
+  config.py                    configurazione unica: Settings a sezioni, sorgente *_FILE, PROFILE_DEFAULTS,
+                               env_value()/env_secret() per i nomi dinamici (plugin di X)
+  services/platform/           __init__ solo docstring
+    lifecycle.py               lifespan + STARTUP_STEPS / SHUTDOWN_STEPS espliciti (nome, chiamata tardiva, timeout facoltativo)
+    database_bootstrap.py      ensure_database_exists, head Alembic, post-migration, sonda di prontezza
+    middleware.py              MIDDLEWARE_STACK ordinato: CORS, GZip, header di sicurezza, sola lettura
+    static_site.py             SPA + MkDocs, politica della cache
+    security_headers.py · read_only.py · instance_key.py · config_audit.py · instance_config.py · metrics.py (facoltativo)
+    scheduler/ · container_registry.py · date_sentinel.py · data_quality_thresholds.py · backup_service.py   (spostati)
+  services/files/              static_uploads.py · file_preview.py   (spostati, nomi invariati)
+```
+
+- **Passi d'avvio**: due tuple esplicite e ordinate. Ogni passo chiama la sua funzione con una lambda risolta al
+  momento della chiamata, così i `monkeypatch` sul modulo continuano a funzionare.
+  - L'ordine d'avvio di oggi, da conservare: log, segnali, catalogo dei tool, cartelle dei dati, scenari, avatar, DB,
+    post-migration, impostazioni globali, prewarm dei provider, festività, scheduler.
+  - L'ordine di spegnimento è quello di oggi, che non è l'inverso dell'avvio.
+  - Le altre sessioni aggiungono una riga: B un passo «ripristino in attesa» prima del DB; Z i suoi passi di risveglio
+    e il tempo massimo di spegnimento.
+- **Middleware**: una lista ordinata, la prima voce è la più esterna. Z vi aggiunge il tracciamento dell'attività.
+
+### 3.2 Configurazione unica (`config.py`)
+
+- La precedenza: `NOME` (env o `.env`) → `NOME_FILE` → default del profilo → default del codice.
+  - `_FILE` vale per i campi segreti (`SecretStr`).
+  - Un `_FILE` che manca o non si legge ferma l'avvio con un errore chiaro.
+  - Se ci sono sia `NOME` sia `NOME_FILE`, vince `NOME` con un avviso (D3).
+- **Ogni variabile tiene la sorgente di oggi**:
+  - i campi di `Settings` leggono l'ambiente e `.env`;
+  - le variabili lette oggi solo da `os.environ` (`LIBREFOLIO_DATA_DIR`, `_TEST_DATA_DIR`, `_TEST_MODE`,
+    `_LOG_LEVEL`, `_NO_SCHEDULER`, `JWT_SECRET`, `_DISABLE_DONATION_POPUP`, `_WEB_LINK_FINDER_*`) restano solo
+    ambiente, in un modello senza `env_file`;
+  - altrimenti cambierebbero comportamento `uvicorn` lanciato a mano e l'immagine, dove `.env` è la copia di
+    `.env.example`.
+- `PROFILE_DEFAULTS`: ogni campo dipendente dal profilo dichiara il suo valore `managed`. Si applica solo se il campo
+  non è stato impostato (`model_fields_set`).
+- **Sezioni per proprietario (D2)**: `config.py` diventa il pacchetto `backend/app/config/`. Il percorso d'import non
+  cambia.
+  - `__init__.py` è di H: la base comune (sorgente `_FILE`, default del profilo, guardie, `get_settings()`), più le
+    funzioni e i campi di oggi, `RISK_*` compresi.
+  - Le variabili nuove vanno in un file per sezione, scritto dal proprietario: `platform.py` (H), `accounts.py` (A),
+    `plugins.py` (X), `sleep_wake.py` (Z), `backup.py` (B), `email.py` (E).
+  - `.env.example` ha le stesse sezioni. Così circa 30 variabili nuove da 5 sessioni non passano da un file con un solo
+    scrittore.
+- `env_value(name)` ed `env_secret(name)` servono per i nomi dinamici, per esempio gli override dei campi dei plugin
+  di X.
+- **Guardie**:
+  - nessuna lettura di `os.environ` in `backend/app` fuori da `config.py` (eccezioni: lane id dei test, scritture di
+    `spawn_worker`);
+  - ogni campo di `Settings` compare in `.env.example`.
+- **Spostamento delle letture sparse**:
+  - `main.py:70` e `scheduler.py:97`, file miei;
+  - `auth_service.py:104` e `donation_popup_service.py:39`, di A, una riga ciascuno;
+  - `web_link_finder.py`, di X, 7 letture.
+
+### 3.3 Segreti e chiave d'istanza (F03)
+
+- `JWT_SECRET_FILE`: un campo `SecretStr`. Va corretto anche `dev.py:_ensure_shared_jwt_secret`, che non deve
+  generare un segreto quando c'è `JWT_SECRET_FILE`, altrimenti `NOME` vincerebbe sul file.
+- `instance_key.py`, la chiave d'istanza:
+  - precedenza: `LIBREFOLIO_INSTANCE_KEY` → `LIBREFOLIO_INSTANCE_KEY_FILE` → `<DATA_DIR>/secrets/instance.key`;
+  - il file si crea **al primo uso**: 32 byte casuali in base64url, cartella 0700, file 0600, scritti in un file
+    temporaneo `O_EXCL` e poi `os.link`, sicuro anche con più worker;
+  - all'avvio si controllano solo i permessi;
+  - `derive_key(purpose)` fa HKDF-SHA256 con la sola libreria standard. Serve a X (cifratura) e a B (backup), senza
+    dipendenze nuove per H;
+  - `secrets/` entra nei percorsi gestiti dei controlli prod/test (`validate_test_data_dir`).
+- `config_audit.py` raccoglie gli avvisi, codice + gravità + parametri. Al via: JWT effimero, JWT corto, NOME insieme a
+  `_FILE`, permessi larghi sulla chiave generata (non sui `_FILE` dell'utente: i Docker secrets sono spesso 0444),
+  `SESSION_COOKIE_SECURE=never`, metriche senza token, log
+  DEBUG/TRACE, sola lettura attiva. A aggiunge «registrazione aperta e istanza pubblica».
+  - Gli avvisi vanno nei log all'avvio e alla UI dell'admin (§3.4).
+
+### 3.4 Configurazione pubblica e area avvisi (frontend)
+
+- **Backend**:
+  - `GET /api/v1/system/instance`, pubblico: `profile`, `read_only`, più le sezioni dei proprietari (link, flag
+    donazione e aggiornamenti, registrazione), secondo D2;
+  - `GET /api/v1/system/admin-notices`, solo admin: viene da `config_audit`.
+- **Frontend**, nuova feature `lib/features/instance/`:
+  - `instanceConfig.svelte.ts`: `load()` idempotente, tollerante agli errori;
+  - `instanceNotices.svelte.ts`: registro con `show`, `hide` e `list`; campi id, gravità, chiave i18n, parametri,
+    chiudibile, azione, pubblico;
+  - `InstanceNotices.svelte`: le classi ambra di `OnboardingBootstrapBanner`, nessun esadecimale; passerà alle funzioni
+    di stato di R dopo il loro lotto A;
+  - un aggancio nell'interceptor di `zodios-client.ts`: il codice `instance_read_only` diventa un `notify()` tradotto.
+- **`(app)/+layout.svelte`**: `<InstanceNotices/>` in `<main>`, sopra lo `<slot/>`. `instanceConfig.load()` parte
+  all'`onMount`. Il controllo degli aggiornamenti per l'admin rispetta il flag.
+- **i18n**: nuovo sottosistema `lib/i18n/instance/` (prefisso `instance.`), nelle 4 lingue.
+- **Test**: i due test del layout (`layout.gate`, `layout.authGate`) mockano ogni import, quindi vanno aggiunti due
+  `vi.mock`.
+
+### 3.5 Prontezza e versione (F08), C-84, R2
+
+- **Endpoint**:
+  - `GET /system/ready`: 200 se il DB risponde e la revisione è uguale alla head (calcolata una volta e messa in
+    cache); altrimenti 503 con i motivi;
+  - `GET /system/version`: `get_version_info()`.
+- **R2**:
+  - `get_git_version()`: se esiste `.git` (file o cartella) vince `git describe`; `VERSION` vale solo senza `.git` o se
+    `git describe` fallisce; altrimenti `unknown`;
+  - `dev.py` e la CI continuano a scrivere `VERSION` per l'immagine, che non ha `.git`;
+  - `test_version.py:96` va riscritto.
+- **C-84** (D6):
+  - proposta: `0.0.0` con un commento in `pyproject.toml`; `0.0.0` in `package.json` e nelle due righe radice di
+    `package-lock.json`;
+  - alternativa: allinearle a ogni rilascio.
+- **Facoltativo**: `/metrics` in formato Prometheus scritto a mano, nessuna dipendenza.
+  - Spento di default (`LIBREFOLIO_METRICS_ENABLED=0`); token facoltativo con `_FILE`.
+  - Contenuto: richieste per classe di stato, job dello scheduler (da `scheduler_state.json`), ultimo aggiornamento
+    dei prezzi, dimensione del DB.
+- **`/system/info`** oggi è pubblico ed espone le versioni delle dipendenze e dell'OS. Proposta D14: dietro login. Lo
+  usano solo pagine con sessione (Informazioni, changelog, layout dell'admin); la versione resta pubblica su
+  `/system/version`. Va adattato `test_system_api`.
+
+### 3.6 Profilo gestito e sola lettura (F05, parte H)
+
+- `LIBREFOLIO_PROFILE=selfhosted|managed` risolve i default.
+- Middleware ASGI `read_only`, default-deny per i metodi di scrittura sotto `/api/v1`:
+  - il middleware gira prima del routing, e FastAPI mette `scope["route"]` solo durante il matching
+    (`fastapi/routing.py:836`). Per questo cerca da sé la rotta con `route.matches(scope)`, solo per i metodi di
+    scrittura, e confronta metodo e template con una allow-list centrale;
+  - risposta 403 `{"detail": "<testo EN>", "code": "instance_read_only"}`;
+  - lo scheduler non passa da HTTP, quindi continua a scrivere i prezzi.
+- **Guardie**:
+  - ogni voce dell'allow-list deve esistere fra le rotte di `app`;
+  - ogni rotta di scrittura deve stare in una delle due liste, permesse o bloccate. Chi aggiunge una scrittura la
+    classifica nel suo lotto, e intanto resta bloccata.
+- **Bozza dell'allow-list**, 32 permessi e 38 bloccati su 70 (decisione §10 n. 1):
+
+| Permessi | Endpoint |
+|---|---|
+| Accesso | `POST /auth/login`, `/auth/logout`, `/auth/change-password` (D4) |
+| Preferenze personali | `PUT /settings/user` (lingua, tema, valuta base, avatar); onboarding ×4 (`complete`/`skip` di flusso e passo) |
+| Admin senza dati | `POST /settings/cache/clear-all`, `/settings/cache/clear/{name}` (D4) |
+| Letture via POST | `/ai-export/snapshot`; `/portfolio/{wac,allocation-source,report,lots/analysis}`; `/risk/{query,eligibility}`; `/signals/preview`; `/tools/compute`; `/transactions/{validate,events/suggest,promote-suggest}` (`validate` fa sempre rollback); `/brokers/import/{sets/preview,duplicates,asset-candidates,gap-fix}` (`gap-fix` calcola soltanto, verificato); `/assets/prices/query`; `/assets/events/query`; `/fx/currencies/convert`; `/assets/provider/probe` (prova senza salvare, verificato) |
+| Dati di mercato | `POST /assets/prices/current` (scrive la barra del giorno, C-83) |
+| Export | `POST /backup/export` |
+| **Bloccati** | creazione, modifica e cancellazione di asset, broker, accessi, prezzi, eventi, cambi, rotte, transazioni (commit, promote), upload, import (upload, parse, delete, combine), restore, impostazioni globali, registrazione, profilo, cancellazione dell'account; sync manuali di prezzi e cambi e refresh dei provider (D4) |
+
+- **Frontend**: avviso non chiudibile «istanza in sola lettura» nell'area avvisi; toast tradotto sulle scritture
+  rifiutate. Disattivare i pulsanti pagina per pagina resta alle sessioni proprietarie, che hanno un `isReadOnly()`.
+- **Default `managed`** proposti: idle dei worker di rischio 60 s (F27), CSP in sola segnalazione e frame-ancestors
+  `'self'` accesi (D5); popup di donazione spento (decide A).
+
+### 3.7 Lotto operativo
+
+| Voce | Cura |
+|---|---|
+| P-4 | Prova nell'immagine (`zoneinfo.available_timezones()`, `Asia/Calcutta`, `US/Eastern`). Se mancano: `tzdata-legacy` via apt nel Dockerfile, così un nome salvato altrove non fa ricadere lo scheduler in UTC. Facoltativo `tzdata` PyPI per le installazioni senza Docker (finestra delle dipendenze) |
+| M-25 | `_docker_ensure_assets_built()`: versione congelata all'inizio, `LF_APP_VERSION` passato al build del frontend, `frontend/build/.build-version`, ricostruzione se diversa |
+| C-37 | Togliere `${TEST_PORT:-6041}:6041` dal compose e `6041` da `EXPOSE`; verificare i test d'immagine (`utils dev-cli-image`, `release-image-contract`) |
+| N-8 | `environment: - PORT=6040` nei due compose |
+| 32-3 | `docker compose exec librefolio sh -c 'exec gosu "$LIBREFOLIO_UID:$LIBREFOLIO_GID" python dev.py "$@"' sh …`; commento del compose e doc |
+| C-26 | Verificato il 14/10: il tag `test` è su GHCR. Cancellarlo è un'azione remota del developer: istruzioni nell'handoff |
+| F28 | `immutable` solo sotto `_app/immutable/`; il resto di `/_app` in `no-cache` |
+| F27 | Default `managed` di 60 s, `.env.example`, doc admin. Cosa trattiene AI Export (+265 MB) resta a J |
+| F15 | Sempre: `X-Content-Type-Options: nosniff` e `Referrer-Policy: strict-origin-when-cross-origin`. Dietro una variabile (spenti in selfhosted, accesi in managed, D5): `X-Frame-Options: SAMEORIGIN` più `frame-ancestors 'self'`, e `Content-Security-Policy-Report-Only` sull'HTML della SPA, non su `/mkdocs`. La CSP applicata aspetta `app.html` (lotto A dei colori) |
+
+Il lotto si divide in due:
+
+- **CP7a, parte Docker**: P-4, M-25, C-37, N-8, 32-3, C-26. Non dipende dagli altri CP: se B ne ha bisogno prima, la
+  anticipo subito dopo CP3. Dopo CP7a i file Docker passano a B.
+- **CP7b, parte HTTP**: F28, F27, F15.
+
+## 4. Checkpoint e passi (lotti piccoli)
+
+| CP | Contenuto | Sblocca | Dipende da |
+|---|---|---|---|
+| CP1 | **Rinomina** (`git mv`) verso `services/platform/` e `services/files/`, più gli import, le patch dei test, le stringhe del runner, `coverage_analysis.py:71`, la doc per sviluppatori, la mappa in `backend.instructions.md` e le tabelle delle fonti della wiki (17 pagine, 35 citazioni) | Z (scheduler), B (backup), percorsi stabili per tutti | niente (né il commit del coordinatore su `main.py` né npm) |
+| CP2 | **Taglio di `main.py`**: lifecycle, database_bootstrap, middleware, static_site. Configurazione unica (pacchetto `config/`, D2) con le letture spostate e la guardia su `os.environ`. Patch dei test su `lifecycle` con `raising=True` | A, Z, B, X (agganci senza toccare `main.py`, sezioni di config) | il commit del coordinatore su `main.py` + aggiornamento di base |
+| CP3 | **Segreti (F03)**: sorgente `_FILE`, `JWT_SECRET_FILE` (e `dev.py`), `instance_key`, `config_audit` nei log, `.env.example` completo e a sezioni con la guardia «ogni variabile è in `.env.example`», doc admin (configuration, filesystem) | B, X (chiave), E | CP2 |
+| CP4 | **Config pubblica e avvisi**: due endpoint, `features/instance/`, layout, interceptor, i18n, Vitest, `api sync` | A (login, link), Z, X | CP3; `npm ci` approvato |
+| CP5 | **Prontezza e versione (F08)**, C-84, R2, `/system/info` dietro login (D14); `/metrics` se D9 | pannello di controllo | CP2 |
+| CP6 | **Profilo e sola lettura**: `PROFILE_DEFAULTS`, middleware, allow-list e guardia, avviso e toast, pagina admin «profilo gestito per gli hoster» | A e X (default del profilo) | CP4 |
+| CP7a | **Lotto Docker**: P-4, M-25, C-37, N-8, 32-3, istruzioni per C-26. Poi i file Docker passano a B | B (Litestream) | Docker acceso; anticipabile subito dopo CP3 |
+| CP7b | **Lotto HTTP**: cache di `/_app` (F28), default di 60 s nel profilo gestito (F27), header con CSP in sola segnalazione (F15) | — | CP6 |
+| TS1 | Decisione sui test speculari, con i numeri (§13) | — | riordino del backend finito |
+
+**Primo treno (M3)**: H CP1 → X CP1 → A A1, integrati in quest'ordine, con gli aggiornamenti di base in mezzo. CP2
+segue appena il commit del coordinatore su `main.py` è in `dev_release2`. Insieme danno
+percorsi stabili e agganci ad A, Z, B e X. Ogni CP riparte solo dopo il commit del coordinatore, verificato lo SHA.
+
+Passi interni di ogni CP: prima i test rossi (se cambia il comportamento), poi la cura, i verdi mirati, la suite intera,
+gli statici, la doc, il piano aggiornato e infine FROZEN.
+
+## 5. Superfici esatte
+
+- **CP1, app**:
+  - `main.py` (2 import);
+  - `api/v1/{system,uploads,backup}.py`, file miei;
+  - `api/v1/settings.py`, di A (2 righe);
+  - `api/v1/brokers.py`, di W (1 riga);
+  - `api/v1/portfolio_api.py`, di J (2 import pigri);
+  - `ai_export/components/drawdown_context.py`, di J;
+  - con D1 sì, anche 17 file di J (11 plugin di rischio, `risk/service.py`, `risk/eligibility.py`,
+    `financial_math/portfolio/daily_state.py`, `portfolio_service.py` ×2, `series_preparation.py`,
+    `portfolio_allocation_source.py`) e `asset_sources/crud.py` di X.
+- **CP1, test**:
+  - 9 file dello scheduler;
+  - 8 delle soglie, compresa la guardia `test_layer_boundaries.py:168` di J;
+  - `test_static_uploads`, `populate_mock_data.py:80`, `test_file_preview`, `test_date_sentinel`,
+    `test_container_registry`, `test_asset_prices_export`, `test_backup_export_extras`;
+  - un commento in `updateCheck.test.ts:326`, di A.
+- **CP1, doc**:
+  - `developer/frontend/components/core-ui/file-upload.md`, `developer/frontend/data-quality-banner.md`,
+    `developer/backend/fx/configuration.md`, `developer/backend/scheduler.md`, `developer/backend/risk/architecture.md`
+    (×3), `developer/architecture/database/index.md` (×3), `developer/architecture/overview.md`,
+    `developer/architecture/security.md`;
+  - `.github/instructions/backend.instructions.md`.
+- **CP2**:
+  - `main.py`, `config.py` (`git mv` in `config/__init__.py`) e i moduli nuovi di `platform/`;
+  - le patch sul lifespan: `test_post_migration.py`, `test_market_calendar.py`, `test_signal_runtime.py`,
+    `test_risk_scenario_catalog.py`; l'import in `test_db_config.py:124`;
+  - `auth_service.py`, `donation_popup_service.py`, `web_link_finder.py`;
+  - la doc che descrive il lifespan: `overview.md`, `database/index.md`, `settings.md`, `registry_pattern.md`,
+    `tool_plugins.en.md`, `api/overview.md`, `scheduler.md`, `provider_justetf.md`, `risk/architecture.md`,
+    `brim/architecture.md`, `assets/architecture.md`;
+  - `.github/instructions/backend-db.instructions.md:126`.
+- **CP3**: `config.py`, `instance_key.py`, `config_audit.py`, `dev.py` (`_ensure_shared_jwt_secret`), `.env.example`;
+  doc `admin/configuration.en.md`, `admin/filesystem.en.md`, `developer/architecture/security.md`.
+- **CP4**: `system.py`, `schemas/` (instance), `frontend/src/lib/features/instance/**`, `routes/(app)/+layout.svelte`
+  e i suoi due test, `lib/api/zodios-client.ts` (aggancio), `lib/i18n/instance/**`.
+- **CP5**: `system.py`, `database_bootstrap.py`, `utils/runtime/version.py`, `test_version.py`, `pyproject.toml`,
+  `frontend/package.json` e `package-lock.json` (radice).
+- **CP6**: `read_only.py`, `middleware.py`, `config.py`, `features/instance/**`; doc admin (pagina nuova) e sviluppatori.
+- **CP7a e CP7b**: `Dockerfile`, `docker-compose*.yml`, `entrypoint.sh` (se serve), `dev.py` (docker build ed exec),
+  `scripts/cli_base.py` (solo se serve per N-8), `static_site.py`, `security_headers.py`; test
+  `utils dev-cli-image`, `release-image-contract`; doc `admin/docker_advanced.en.md`,
+  `developer/dev_workflow.en.md`.
+- **Condivisi da chiedere al coordinatore**: `dev.py` (CP3, CP7a), `scripts/test_runner/_backend_*.py` (voci mie, in
+  aggiunta), `backend.instructions.md`, `backend-db.instructions.md`, `zodios-client.ts`. Propongo il testo per
+  `CHANGELOG` e per la navigazione di MkDocs.
+
+## 6. Conflitti previsti
+
+| Con | Dove | Gestione |
+|---|---|---|
+| J | `data_quality_thresholds` (17 file), `date_sentinel` (3), 2 test che fanno patch sul lifespan, la guardia del layer | CP1 integrato prima che J cominci il codice; altrimenti D1 = lo sposta J |
+| X | `asset_sources/crud.py` (1 import), `web_link_finder.py` (CP2), `test_market_calendar.py` (patch sul lifespan); `provider_registry` (lo decide X); la chiave d'istanza | X sposta `web_link_finder` in `assets/`: rinomina e modifica si uniscono, oppure applico la modifica sul nuovo percorso all'aggiornamento di base |
+| A | `auth_service.py:104`, `donation_popup_service.py:39`, `api/v1/settings.py` (import), `updateCheck.test.ts` (commento), il layout (flag degli aggiornamenti), la pagina di login che usa `instanceConfig` | A sposta i servizi in `accounts/`: stessa gestione. D2 per chi definisce le variabili F05 |
+| W | `api/v1/brokers.py:89` (1 import) | banale |
+| Z | `scheduler/` (dopo CP1 è di Z), passi e middleware, sezione di config | Z non tocca lo scheduler prima di CP1 |
+| B | `backup_service`, un passo prima del DB, `secrets/` dentro i backup, i file Docker dopo CP7a | sequenza CP1 → CP3 → CP7a → B |
+| Coordinatore | un commit su `main.py` | CP2 dopo il suo ingresso; i gestori statici passano com'erano in `static_site.py` |
+| A (dal treno) | `main.py:58` (import), `services/scheduler/settings.py:11`, `api/v1/uploads.py:39` | previsti dal coordinatore; A integra dopo H e X |
+| Colori | `app.html` e i file del lotto A: non li tocco. `app.css` congelato. L'area avvisi usa classi esistenti; poi le funzioni di stato di R. Galleria: l'area avvisi non deve comparire negli scatti; il run di test non genera avvisi (dev.py passa `JWT_SECRET`) | da verificare con G |
+
+## 7. Decisioni aperte (proposta in grassetto)
+
+> **Esito (coordinatore, 14/10 alle 22:55).**
+>
+> - **Approvate come decisioni di coordinamento**: D1, D3 (vince `NOME`, con un avviso), D7, D8, D10, D11, D12 e D13.
+> - **D2, nella forma più semplice**, da fare nel CP2: `config.py` passa a `config/__init__.py` con una rinomina pura, e
+>   le sezioni nuove vanno in `config/<proprietario>.py` (platform H, accounts A, plugins X, sleep_wake Z, backup B,
+>   email E).
+> - **Sempre nel CP2**, `api/v1/system.py` diventa un pacchetto (regola C2), con `system/wake.py` di Z.
+> - **Ancora aperte**, in lettura dal developer: le decisioni di prodotto D4, D5, D6, D9, D14 e TS1.
+>
+> **Decisioni del developer sui punti 12–17** (14/10, testo completo in `decisioni-analisi-20261014.md` a `5b0cea661`):
+>
+> - **D4, cambiata: niente sola lettura dentro l'app.** Quando l'abbonamento non è pagato, l'istanza si blocca.
+>   - Dopo il login, l'admin vede una pagina di blocco con «Gestisci abbonamento» e lo scarico del backup completo.
+>   - Gli altri utenti vedono una pagina che spiega la situazione e li invita a chiedere il backup all'admin. Non c'è
+>     un export per utente.
+>   - Restano permessi solo: accesso e uscita, la pagina di blocco, il backup per l'admin, la cancellazione del
+>     proprio account e il risveglio programmato.
+>   - La data di cancellazione arriva dal pannello, e l'istanza la mostra. Il nome della variabile lo sceglie H.
+> - **D5**: sì, come proposto. **D6**: sì.
+> - **D14, modificata**: niente `/system/version`. `/system/info` senza login risponde col minimo, cioè la versione;
+>   con il login risponde tutto, come oggi.
+> - **D9** (`/metrics`): rimandata, fuori dalla 1.3.
+> - **TS1**: respinta. I test restano a strati, al più con i file divisi meglio.
+> - L'avviso «registrazione aperta su un indirizzo pubblico» va nella nuova scheda «Sicurezza» di A, il registro
+>   aperto dei controlli per l'admin, e non nell'area avvisi di H.
+>
+> **Effetti sul piano**:
+>
+> - CP5 perde `/system/version` e `/metrics` e guadagna la risposta minima di `/system/info`.
+> - CP6 diventa il blocco dell'istanza: un elenco corto di permessi e una pagina al posto di avvisi e toast.
+> - §3.5, §3.6 e §4 si riscrivono all'avvio di quei CP.
+> - Il §13 è chiuso.
+
+1. **D1**: `data_quality_thresholds` va in `platform/` in CP1, come dice P2.2, oppure lo lascio a J. **In CP1, se J e X
+   non hanno ancora toccato quelle righe.**
+2. **D2**, chi scrive la configurazione:
+   - **pacchetto `config/`, un file per sezione scritto dal proprietario** (§3.2). H tiene la base, il profilo, la
+     sola lettura e `/system/instance`, che compone un sotto-oggetto tipato per proprietario (link e flag di A, elenchi
+     dei fornitori di X);
+   - in alternativa: `config.py` unico, scritto solo da H su richiesta delle altre sessioni.
+3. **D3**: con sia `NOME` sia `NOME_FILE`: **vince `NOME`, con un avviso** (come dice il piano), oppure errore, come fa
+   postgres.
+4. **D4**: sola lettura.
+   - **Permessi**: change-password, la pulizia delle cache, `prices/current`.
+   - **Bloccati**: i sync manuali dei prezzi, il profilo, la cancellazione dell'account.
+   - Risposta: **403 con `code`**.
+5. **D5**: header. **`nosniff` e `Referrer-Policy` sempre; frame e CSP-RO spenti in selfhosted** (iframe di Home
+   Assistant e dei pannelli homelab) **e accesi in managed**.
+6. **D6**: C-84. **`0.0.0` più commento**, oppure allineare le versioni a ogni rilascio.
+7. **D7**: R2 come §10 n. 12. **Confermata.**
+8. **D8**: 32-3. **gosu con gli id numerici**, oppure solo documentarlo.
+9. **D9**: `/metrics`. **Dentro CP5, spento di default**, oppure rimandato.
+10. **D10**: E2E dell'avviso di sola lettura. **Solo Vitest + pytest**: l'E2E richiederebbe un server dedicato o un
+    interruttore solo per i test.
+11. **D11**: P-4. **`tzdata-legacy` via apt**; `tzdata` PyPI facoltativo.
+12. **D12**: i nomi `/system/instance`, `/system/admin-notices`, `/system/ready`, `/system/version`, `/metrics`.
+13. **D13**: i nomi dei moduli spostati restano invariati, anche `backup_service.py`, che poi decide B.
+14. **D14**: `/system/info` è pubblico ed espone le versioni delle dipendenze e dell'OS. **Dietro login, in CP5**: lo
+    usano solo pagine con sessione; la versione resta pubblica su `/system/version`.
+
+## 8. Rischi
+
+- **Patch mute** nei test del lifespan (`raising=False`): diventano `raising=True` e una guardia controlla che i
+  bersagli esistano.
+- Import pigri dimenticati: grep dei vecchi percorsi a zero, `python -c "import backend.app.main"`, suite intera.
+- Le tuple dei passi catturerebbero le funzioni all'import: per questo si chiamano con lambda risolte al momento.
+- `.env.example` copiato nell'immagine: niente righe nuove non commentate.
+- Un default di profilo sbagliato cambierebbe il self-hosted: test «selfhosted = come oggi» per ogni campo.
+- Sola lettura: falsi blocchi su una POST che legge. Si previene con l'allow-list rivista, la guardia sulle rotte e la
+  revisione di sicurezza (agente `security-review`) in CP6.
+- Chiave d'istanza: corsa fra worker (si previene con `O_EXCL` e `link`); file vuoto dopo un crash, che va rifiutato,
+  non rigenerato.
+- Galleria e E2E: una richiesta in più all'avvio (`/system/instance`). Uno spec che conta tutte le richieste potrebbe
+  accorgersene.
+- **La doc admin è tradotta**: lascio debito di traduzione, perché traduco solo su richiesta esplicita.
+- **Sorgente delle variabili**: una variabile letta oggi solo dall'ambiente non deve cominciare a leggere `.env`
+  (§3.2). Un test per variabile lo verifica.
+- `PROJECT_ROOT` si calcola dalla posizione del file: con `config/__init__.py` cambia la profondità.
+- `nosniff`: un file servito con il tipo MIME sbagliato smetterebbe di caricarsi. Lo controllano la suite E2E e la
+  galleria.
+
+## 9. Test e selettori
+
+Il preambolo è sempre lo stesso:
+`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6181 --data-dir /tmp/librefolio-r13-h …`
+
+- **Base** prima di CP1: `all-backend` (conteggi), `lint`, `lint --dead-code`, l'hash di `api schema`, `mkdocs build`,
+  `check-links`, `check_source_paths.py` (oggi 10 percorsi, 16 occorrenze, su 3844).
+- **CP1**:
+  - `services scheduler-state|scheduler-settings|scheduler-due|scheduler-leader|scheduler-loop|scheduler-jobs|scheduler-joblog-misc|scheduler-joblog-builders|scheduler-settings-misc`;
+  - `services static-uploads|file-preview|date-sentinel|risk-all|financial-math`;
+  - `utils container-registry`;
+  - `api backup|backup-export-extras|asset-prices-export|uploads|uploads-serve-file|scheduler|system|risk`;
+  - `test db populate --force --clean` sulla corsia (`--data-dir /tmp/librefolio-r13-h`): serve perché CP1 cambia un
+    import di `populate_mock_data.py`;
+  - poi `all-backend`.
+- **CP2**: `db post-migration`, `services signal-runtime|risk-all|config-misc`, `api http-compression`, le guardie
+  nuove (`services platform-*`), poi `all-backend`.
+- **CP3**: `services config-misc` più i nuovi (`platform-config`, `platform-instance-key`, `platform-config-audit`),
+  `utils dev-port-check`.
+- **CP4**: `api system`, Vitest dei file toccati (`features/instance`, `routes/(app)/layout.*`), `front check`.
+- **CP5**: `utils version`, `api system`, i nuovi `api system-ready`.
+- **CP6**: i nuovi `services platform-read-only` (guardia delle rotte) e `api read-only`, Vitest.
+- **CP7a e CP7b**: `utils dev-cli-image|release-image-contract|check-frontend-build`, `api http-compression`; prova Docker
+  (build, avvio, healthcheck, `docker stop`) con il daemon acceso.
+- **Registrazioni**: le voci nuove vanno nel catalogo del runner, in aggiunta, nelle mie sezioni.
+
+## 10. Definizione di fatto
+
+- **Per ogni CP**:
+  - verdi mirati e `all-backend` con gli stessi conteggi della base (rinomina e taglio) o la base più i nuovi
+    (funzioni);
+  - `ruff` e `black` puliti; `--dead-code` senza reperti nuovi;
+  - `api schema` invariato per i lotti di riordino; `api sync` pulito per i lotti con API;
+  - `mkdocs build` stretto e `check-links` se cambia la doc; `check_source_paths.py` ≤ 10/16;
+  - grep dei vecchi percorsi a zero in `backend/`, `scripts/`, `.github/`, `mkdocs_src/docs/developer/`;
+  - rinomine con somiglianza ≥ 95 % in `git diff -M`;
+  - piano aggiornato a ogni passo; porta 6181 libera; handoff FROZEN.
+- **Di tutto il workstream**:
+  - `main.py` di circa 40 righe;
+  - zero `os.environ` fuori da `config.py`, salvo le eccezioni;
+  - `.env.example` completo;
+  - `*_FILE` per ogni segreto;
+  - chiave d'istanza 0600;
+  - prontezza e versione;
+  - profilo e sola lettura con avviso;
+  - lotto operativo chiuso;
+  - righe del backlog (sezione H) per i residui.
+
+## 11. Specialisti, dipendenze, runtime
+
+- `test-author`: le patch del lifespan e la guardia, i test di config, `_FILE`, chiave, audit, sola lettura, header,
+  ready/version, i Vitest e i mock del layout, `dev.py` docker.
+- `docs-writer`: pagina nuova `developer/backend/platform.md` e aggiornamenti delle pagine per sviluppatori (EN);
+  pagine admin EN (configuration, filesystem, docker_advanced, service_exposure, una nuova sul profilo gestito). Le
+  traduzioni solo su richiesta.
+- `security-review` alla fine di CP3 e CP6.
+- **Skill** da caricare all'avvio del codice: `lint-format`, `testing-backend`, `testing-frontend`,
+  `lint-format-frontend`, `devpy-i18n`, `devpy-docker`; `test-triage` quando un rosso non è ovvio.
+- **Python**: nessuna dipendenza obbligatoria. Facoltativa: `tzdata` (PyPI).
+- **`npm ci`**: serve prima della base completa e per CP4. Senza `node_modules` non ci sono build del frontend, Vitest
+  e `api sync`, e `api http-compression` fallisce. Lo chiederò dopo l'errore confermato.
+- **Docker**: daemon acceso per la prova di P-4 e di CP7a, oppure la esegue il developer.
+
+## 12. C-49: diagnosi per Z (lettura del codice; la cura è di Z)
+
+1. `scheduler_loop` (`scheduler.py:96-134`):
+   - all'avvio dorme 5 s senza ascoltare lo shutdown;
+   - poi controlla `shutdown_event` ogni 5 s (`sleep(5)` ×12).
+   - Dopo `set()`, `await scheduler_task` (`main.py:315-316`) aspetta quindi fino a 5 s: tutta la tolleranza del
+     runner. Basta questo a spiegare il sintomo.
+   - Cura: `asyncio.wait_for(shutdown_event.wait(), timeout)`.
+2. Un job dello scheduler in corso (refresh dei prezzi o storico) si aspetta senza limite.
+3. Uvicorn non ha `--timeout-graceful-shutdown`. Lo stream SSE di ricerca e le richieste lente trattengono lo
+   spegnimento, e `docker stop` manda SIGKILL dopo 10 s.
+4. `shutdown_brim_parse_pool(wait=True)` e i pool quantistici aspettano il lavoro che è in corso.
+
+H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cioè come oggi.
+
+## 13. TS1: numeri per la decisione
+
+- 266 file di test in 6 cartelle per livello: api 58, services 141, utilities 34, schemas 11, db 10, external 7, e2e 2.
+- Il runner codifica 236 percorsi di test; l'app ha 348 moduli `.py` di servizio.
+- Lo specchio sposterebbe circa 266 file e riscriverebbe 236 voci del runner, più la doc dei test, senza nessun guadagno
+  di comportamento.
+- Proposta: decidere dopo CP2 e dopo i riordini di A, X, W, J. Il default che propongo è **no**, con solo le cartelle
+  `test_services/platform/` e `files/` per i test nuovi, se il developer vuole la vicinanza.
+
+## 14. Avanzamento
+
+### Analisi ✅ (2026-10-14)
+
+> **Note implementazione**:
+>
+> - L'analisi è stata consegnata al coordinatore, con la sintesi e il piano completo (§0–§13) e le decisioni D1–D14.
+> - Ci sono state due riletture. La seconda ha corretto i percorsi completi nell'allow-list (`/assets/...`,
+>   `/brokers/import/...`) e il numero dei file di J (17). Ha anche diviso CP7 in 7a e 7b e aggiunto D14.
+>
+> **Fuori pista**:
+>
+> - All'avvio della sessione l'app ha rinominato il ramo da `e-alfy-sturdy-memory` a `e-alfy-h-piattaforma`.
+> - Il developer ha chiesto uno STOP (FROZEN). Dopo la ripresa, l'app si è riavviata e ha interrotto il turno: la
+>   bozza dell'analisi, salvata nella cartella di sessione, non si è persa.
+
+### Via libera parziale: solo CP1 (coordinatore, 2026-10-14 alle 22:55)
+
+> Parole del developer, alla lettera, mentre leggeva il documento delle decisioni: «chat, sto leggendo
+> LibreFolio_developer_journal/Release_2/Phase_1/decisioni-analisi-20261014.md — ho appena finito le prime 11 domande e
+> sto iniziando piattaforma, ma ho già messo varie note dev, leggi intanto quelle, vedi se con quelle risposte devi
+> aggiornare quello che viene dopo e poi vedi tu se aspettare che leggo tutto, o intanto grazie a queste riesci ad
+> avviare qualche lavoro».
+>
+> **Decisione del coordinatore** su questa delega:
+>
+> - parte solo CP1, che è riordino puro e non dipende da decisioni di prodotto ancora aperte;
+> - il resto aspetta la lettura completa del developer.
+>
+> **Base**: `c9bb8f257643c0b770788033789425b41ba16715`. È un fast-forward da `459131eb8` che porta solo il journal,
+> `scripts/visual_review/gallery_snapshot.sh` e `TODO_FUTURI.md`. Base verificata, worktree pulito.
+
+### CP1 passo 0 — prerequisiti della corsia ✅ (2026-10-14)
+
+> **Note implementazione**: `npm ci --no-audit --no-fund` in `frontend/`, dal lock (regola C5), rc 0.
+>
+> - npm 11 non ha eseguito gli script d'installazione di `esbuild` e `fsevents`, che chiede di approvare.
+> - Nessun file tracciato è cambiato.
+>
+> **Fuori pista**: la prima prova
+> (`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6181 --data-dir /tmp/librefolio-r13-h api system`)
+> si è fermata prima della raccolta dei test: «Shared backend exited during startup (code 1)».
+>
+> - **Causa**: senza `node_modules`, `dev.py server --test` ricostruisce il frontend. `api sync` lancia
+>   `npm run generate-api`, e quello chiama `npx openapi-zod-client`.
+> - **Cosa ha toccato**:
+>   - nessun file tracciato, nessun DB, nessuna porta;
+>   - solo artefatti ignorati: il client generato in `frontend/src/lib/api/`, `frontend/static/fonts/`,
+>     `mkdocs_src/docs/javascripts/vendor/`, `scripts/test_runner/.campaign.json`.
+> - **La cache di npx dell'utente**: la voce esisteva dall'8/09 con la versione del lock; è cambiata solo la data della
+>   cartella (verificato dal coordinatore, che ha detto di lasciarla).
+> - **Regola aggiornata**: il coordinatore ha aggiunto il caso «`npm ci` anche prima dei test del solo backend col
+>   server condiviso» alle istruzioni e al §6 del piano generale (`793395913`).
+>
+> **Fuori pista 2 (seconda trappola della base, trovata da J e riportata dal coordinatore)**: anche con `node_modules`,
+> il primo `all-backend` di un worktree nuovo può cadere con «Shared backend did not answer within 300s». Il server
+> condiviso costruisce prima il frontend in debug e il sito MkDocs, e lo fa dentro il limite di 300 s
+> (`scripts/test_runner/_server.py:48`).
+>
+> - La mia prima base era ancora nei `services`, e il server condiviso non era partito: l'ho fermata io.
+> - Ho fatto le due build:
+>   - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py front build --debug`, rc 0: svelte-check
+>     0 errori e 0 avvisi, vite 2 min 19 s e 3 min 4 s;
+>   - `pipenv run python dev.py mkdocs build`, già fatta per la base statica.
+> - Poi ho rilanciato la base da capo, con `--fresh-run`.
+
+### Base di CP1 (2026-10-14, notte) — in corso
+
+> **Statici**, sulla base `c9bb8f257`. Log in `/tmp/librefolio-r13-h-base/`.
+>
+> - `dev.py lint` (ruff): «All checks passed!».
+> - `black --check backend scripts dev.py`: 29 file da riformattare, già alla base. Non li tocco: black si applica solo
+>   ai file che CP1 modifica e che erano già puliti.
+> - `lint --dead-code --scope backend`: 10 non referenziati, 26 referenziati solo dai test.
+> - `dev.py api schema`, senza `info.version`:
+>   - `openapi.json`: 113 percorsi, sha256 `1da07e609d1ffad8…`;
+>   - `tool-contracts.openapi.json`: sha256 `238c1e4b84afdbdc…`.
+> - `mkdocs build`: rc 0, con 3012 URL relativi risolti. `mkdocs check-links`: 95 link validi.
+> - `check_source_paths.py`: 7 percorsi inesistenti (10 occorrenze) su 3844 citati, in 6 pagine.
+> - **`all-backend`**: con `--workers 2`, sulla corsia 6181.
+> - **`all-backend` ✅**:
+>   - comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test -q --fresh-run --workers 2 --test-port 6181 --data-dir /tmp/librefolio-r13-h all-backend`;
+>   - esito: 7/7 categorie verdi in 23 min 22 s. Dai log per unità, **11 351 passed, 3 skipped, 0 failed**; il DB ha
+>     13/13 azioni del runner;
+>   - porta 6181 libera alla fine.
+
+### CP1 passo 1 — rinomina e riferimenti ✅ (2026-10-14, notte)
+
+> **Note implementazione**:
+>
+> - **Spostamenti**, sette `git mv`: `scheduler/`, `container_registry.py`, `date_sentinel.py`,
+>   `data_quality_thresholds.py` e `backup_service.py` in `services/platform/`; `static_uploads.py` e `file_preview.py`
+>   in `services/files/`.
+>   - I due `__init__.py` nuovi hanno solo la docstring.
+>   - Nomi invariati (C1). Niente shim e niente barili nuovi.
+> - **Riferimenti**: 82 file e 137 righe, con una sostituzione esatta sui percorsi puntati e su quelli con la barra.
+>   - Codice, test, patch dei test, stringhe del runner, `coverage_analysis.py`, doc per sviluppatori e un commento
+>     in `updateCheck.test.ts`.
+>   - Nella devWiki, solo le righe delle tabelle «Source files» (C6, come B4 di T-1). La prosa resta: 9 menzioni in
+>     8 pagine, voce nel backlog.
+> - **`.github/instructions/backend.instructions.md`**: `platform/` e `files/` nella mappa e nella tabella «Where to
+>   Find Things».
+> - **Lint**:
+>   - ruff ha trovato 10 import fuori ordine (I001), corretti con `--select I --fix`: solo righe d'import spostate;
+>   - black sui 66 file `.py` toccati, nessuna modifica. `scripts/coverage_analysis.py` resta fuori da black: era già
+>     sporco alla base;
+>   - ruff pulito.
+> - **Grep dei vecchi percorsi**: zero in `backend/`, `scripts/`, `.github/`, `mkdocs_src/docs/`, `frontend/`,
+>   `dev.py`, `pyproject.toml`, `README.md`, `CHANGELOG.md`, `TODO_FUTURI.md`.
+>   - Restano la prosa della wiki (voluta) e la cache di graphify tracciata in `LibreFolio_devWiki/graphify-out/`,
+>     che è generata e si rigenera.
+> - **`git diff -M`**: tutte le rinomine sono al 97–100 %, salvo due.
+>   - `scheduler/scheduler.py` è al 91 %: 4 import interni, righe lunghe in 134.
+>   - `scheduler/__init__.py` git lo vede come cancellato e ricreato: 2 delle sue 6 righe sono gli import.
+>   - È inevitabile, perché qualunque forma dell'import cambia quelle righe.
+> - **Import di prova**: `import backend.app.main` passa.
+>
+> **Mirati** (corsia 6181), tutti PASSED: `services scheduler-loop`, `scheduler-leader`, `scheduler-jobs`,
+> `static-uploads`, `file-preview`, `date-sentinel`, `financial-math` (la guardia dello strato); `utils container-registry`.
+> Il popolamento del DB della corsia lo copre l'azione `db populate` dentro `all-backend`.
+>
+> **Fuori pista 3**: il commento corretto in `updateCheck.test.ts` rende il frontend «da ricostruire», perché
+> `check_frontend_needs_build` confronta le date di tutti i file di `frontend/src`, anche quelle dei test.
+>
+> - Il server condiviso lo avrebbe ricostruito dentro i suoi 300 s d'avvio.
+> - Ho fermato la run appena partita, rifatto `dev.py front build --debug` (rc 0, svelte-check 0 errori) e rilanciato.
+>
+> **Fuori pista 4**: la prima `all-backend` dopo CP1 ha chiuso 6/7, con 2 rossi in `test_data_quality_thresholds.py`.
+>
+> - **Causa**: il test costruiva il percorso del modulo a pezzi, `APP_ROOT / "services" / "data_quality_thresholds.py"`
+>   (r. 38), e la sostituzione dei percorsi non lo vede.
+> - **Cura**: `"services" / "platform" / ...`.
+> - Ho cercato i nomi dei moduli spostati come stringhe in `backend/`, `scripts/`, `dev.py` e `frontend/`: nessun
+>   altro caso.
+> - `services risk-all`: 896 passed.
+
+### CP1 passo 2 — i verdi, confrontati con la base ✅ (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - **`all-backend`**, con gli stessi flag della base: 7/7 verdi in 13 min 19 s. **11 351 passed, 3 skipped, 0
+>   failed**, gli stessi conteggi della base; DB 13/13.
+> - **Statici**:
+>   - ruff pulito;
+>   - black invariato (i file toccati e già puliti restano puliti);
+>   - dead code identico alla base (10 + 26), con i percorsi nuovi;
+>   - `dev.py api schema` scritto in `/tmp`: `openapi.json` e `tool-contracts.openapi.json` identici alla base, senza
+>     `info.version`.
+> - **Doc**: `mkdocs build` rc 0 (3012 URL relativi risolti, lo stesso avviso di Material della base); `check-links`
+>   95 link validi.
+> - **devWiki**: `check_source_paths.py` dà 5 percorsi inesistenti (8 occorrenze). Sono quelli della base meno
+>   `frontend/build/` e `mkdocs_src/site/`, che ora esistono perché li ho costruiti: nessun buco nuovo.
+> - `git diff --check` pulito; porta 6181 libera.
+
+### Checkpoint CP1 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+
+> Handoff inviato al coordinatore: 13 rinomine, 80 file modificati, 3 nuovi. Commit proposto:
+> `refactor(services): move platform and file modules`. Nella sezione H del backlog: H-1 e H-2.

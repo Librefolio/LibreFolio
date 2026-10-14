@@ -36,7 +36,7 @@ import pytest
 from backend.app.config import get_settings
 from backend.app.schemas.assets import FAAssetCreateItem, FABulkAssetCreateResponse
 from backend.app.schemas.prices import FAPricePoint, FAUpsert
-from backend.app.services.backup_service import PRICE_COLUMNS
+from backend.app.services.platform.backup_service import PRICE_COLUMNS
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success, unique_id
 

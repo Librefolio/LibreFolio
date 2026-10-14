@@ -14,12 +14,12 @@ from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.refresh import FARefreshItem, SyncStatus
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.fx import sync_pairs_bulk
-from backend.app.services.scheduler.joblog import (
+from backend.app.services.platform.scheduler.joblog import (
     append_entry,
     build_current_price_entry,
     build_history_sync_entry,
 )
-from backend.app.services.scheduler.state import JobState, SchedulerState
+from backend.app.services.platform.scheduler.state import JobState, SchedulerState
 
 logger = structlog.get_logger(__name__)
 

@@ -56,7 +56,8 @@ from backend.app.db.base import SQLModel  # imports every model: SQLModel.metada
 from backend.app.db.models import Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import BRDeleteItem
-from backend.app.services import brim_provider, user_service
+from backend.app.services import brim_provider
+from backend.app.services.accounts import user_service
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.test_scripts.test_api.test_broker_access_api import (
     API_BASE,

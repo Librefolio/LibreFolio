@@ -37,8 +37,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.session import get_async_engine
-from backend.app.services import user_service
-from backend.app.services.settings_service import initialize_global_settings
+from backend.app.services.accounts import user_service
+from backend.app.services.accounts.settings_service import initialize_global_settings
 
 
 def validate_password(password: str) -> tuple[bool, list[str]]:

@@ -41,7 +41,7 @@ from backend.app.schemas.common import (
     OldNew,
 )
 from backend.app.services.asset_sources.core import AssetSourceError, AssetSourceProvider
-from backend.app.services.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
+from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.asset.identifier import merge_other_identifiers
 
 logger = structlog.get_logger(__name__)

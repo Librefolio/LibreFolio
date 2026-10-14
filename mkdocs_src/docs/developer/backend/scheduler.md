@@ -39,7 +39,7 @@ graph LR
 
 ## 🔄 Async Loop Daemon (`scheduler.py`)
 
-The main entry point is `scheduler_loop()` located in `backend/app/services/scheduler/scheduler.py`.
+The main entry point is `scheduler_loop()` located in `backend/app/services/platform/scheduler/scheduler.py`.
 
 * **Lifespan Task:** It is spawned during FastAPI startup in `backend/app/main.py` using `asyncio.create_task()`.
 * **Shutdown Event:** The loop listens to `shutdown_event: asyncio.Event`. When the event is set, it gracefully breaks the loop and completes.
@@ -59,7 +59,7 @@ To prevent multiple processes from running duplicate sync jobs when uvicorn runs
 
 ## 💼 Job Definitions (`jobs.py`)
 
-The scheduler runs two types of background synchronization jobs defined in `backend/app/services/scheduler/jobs.py`:
+The scheduler runs two types of background synchronization jobs defined in `backend/app/services/platform/scheduler/jobs.py`:
 
 ### ⏱️ 1. Current Price Refresh
 
