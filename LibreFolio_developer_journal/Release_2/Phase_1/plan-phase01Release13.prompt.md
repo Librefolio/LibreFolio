@@ -711,3 +711,15 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > - `LIBREFOLIO_PUBLIC_URL`.
 >
 > Le note restano nel file delle decisioni, non committate, finché il developer legge.
+>
+> **Fuori pista**: il testo che accompagnava l'approvazione dei piani (parole del developer, perimetro, base, risposte di
+> coordinamento) non è arrivato alle sessioni. L'app consegna solo «piano approvato».
+> - W è rimasto FROZEN, come vuole il protocollo, e ha chiesto il testo.
+> - H, A, X e J sono partiti, credendo a un'approvazione diretta del developer. Il loro perimetro coincideva comunque
+>   con il primo checkpoint, perché lo dicevano già i loro piani.
+> - Il testo è stato rimandato a tutte e cinque come messaggio alle 23:01.
+> - **Regola da qui in poi**: a ogni approvazione di un piano, il testo va mandato anche come messaggio.
+>
+> Programma colori: finestra della galleria domani, 15/10, dalle 09:00, per circa 2 ore. Nella finestra, niente suite
+> complete né build pesanti nelle corsie della 1.3; inizio e fine li conferma il coordinatore colori. G-8 (catalogo dei
+> Tool oltre i 2 s sotto carico, `schemas/tools.py:83`) va a J, dopo il suo primo checkpoint.
