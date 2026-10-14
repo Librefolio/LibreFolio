@@ -477,6 +477,8 @@ passa dalla suite completa con gli stessi conteggi di prima.
   le versioni.
 - **Colori**: il coordinatore colori ha dato gli elenchi esatti dei suoi lotti. Le cartelle di asset, cambi e
   transazioni si spostano dopo il suo lotto A, quelle dei grafici dopo il lotto B. Tutto il resto è libero subito.
+  Con la tua decisione di non rilasciare a metà la conversione dei colori, gli spostamenti di asset, cambi e
+  transazioni diventano necessari per il rilascio: la conversione di quelle pagine (ondata W4 di T) viene dopo.
 
 ## 4. Cose che servono da te più avanti
 
