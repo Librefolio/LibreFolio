@@ -82,6 +82,9 @@ mkdocs_src/docs/javascripts/vendor/
 # Video renders (heavy binaries, never versioned)
 *.mp4
 
+# graphify run from the repository root instead of LibreFolio_devWiki/
+/graphify-out/
+
 # Cached fonts (auto-downloaded by scripts/update_js_cache.py)
 frontend/static/fonts/
 

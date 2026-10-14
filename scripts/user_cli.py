@@ -7,11 +7,11 @@ Command-line tool for managing users from the server terminal.
 Use this when you need to reset passwords or manage users without the web UI.
 
 Usage:
-    ./dev.sh user:create <username> <email> <password>
-    ./dev.sh user:reset <username> <new_password>
-    ./dev.sh user:list
-    ./dev.sh user:activate <username>
-    ./dev.sh user:deactivate <username>
+    ./dev.py user create <username> <email> <password>
+    ./dev.py user reset <username> <new_password>
+    ./dev.py user list
+    ./dev.py user activate <username>
+    ./dev.py user deactivate <username>
 
 Or directly:
     pipenv run python user_cli.py create-superuser <username> <email> <password>
