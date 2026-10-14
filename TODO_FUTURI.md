@@ -438,6 +438,10 @@ resta fuori scope in modo permanente.
 
 ## 📈 Gestione Stock Splits nel Calcolo FIFO
 
+> **✅ Superata (14/10/2026, verifica di J per la 1.3)**: il motore FIFO applica gli split come eventi dell'asset
+> collegati alle rettifiche (`backend/app/services/financial_math/fifo/engine.py`, `_apply_split`), senza un tipo di
+> transazione SPLIT. La voce resta come storia della scelta.
+
 **Data aggiunta**: 10 Giugno 2026
 **Priority**: Bassa (P4)
 **Scope**: Backend (Servizi Matematici)
