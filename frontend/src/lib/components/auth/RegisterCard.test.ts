@@ -25,15 +25,24 @@
  * `createEventDispatcher` is Svelte 4 API kept alive by Svelte 5's legacy layer:
  * `$on()` is gone, and the listener arrives through the `$$events` prop instead.
  *
- * The last block pins markup no user looks at and Chrome's password manager
- * reads (developer note, 30/09: Chrome offered saved credentials on the login
- * password field only, never on the username; `LoginCard.test.ts` tells the
- * story in full). Decision D2 aligns all three credential forms on one contract:
- * every field with an `id`, a `name`, the right `autocomplete` token and a
- * visually hidden `<label for>` reading its placeholder's key; the username safe
- * from autocapitalisation and spell-check; no empty `id` anywhere. On a sign-up
- * form it is what lets Chrome offer a generated password on both password
- * fields and save the new account under the username just typed.
+ * The block before the last pins markup no user looks at and Chrome's password
+ * manager reads (developer note, 30/09: Chrome offered saved credentials on the
+ * login password field only, never on the username; `LoginCard.test.ts` tells
+ * the story in full). Decision D2 aligns all three credential forms on one
+ * contract: every field with an `id`, a `name`, the right `autocomplete` token
+ * and a visually hidden `<label for>` reading its placeholder's key; the
+ * username safe from autocapitalisation and spell-check; no empty `id`
+ * anywhere. On a sign-up form it is what lets Chrome offer a generated password
+ * on both password fields and save the new account under the username just
+ * typed.
+ *
+ * The last block pins the designer's round 1 (workstream T, step T-2). The
+ * header lost its subtitle, `auth.registerTitle` — the Register button already
+ * says it — and the key left the four catalogues; with the identity translator a
+ * rendered key is its own text, so the key appearing nowhere in the card is the
+ * check, behind a barrier proving that this card does print keys. And each field
+ * draws its icon inside it — User, Mail, and a Lock on both passwords — as
+ * decoration, `aria-hidden`, the `<label for>` staying its only name.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable} from 'svelte/store';
@@ -563,5 +572,32 @@ describe("RegisterCard — the markup Chrome's password manager reads", () => {
         const form = screen.getByTestId('register-form');
 
         for (const {testId} of FIELDS) expect(input(testId).form, testId).toBe(form);
+    });
+});
+
+describe('RegisterCard — the header without a subtitle, and the field icons', () => {
+    it('renders the key auth.registerTitle nowhere: the subtitle is gone', () => {
+        const root = render(RegisterCard).container;
+
+        // The barrier: this card prints its keys as text — the Register button
+        // reads its own — so a key that appears nowhere was not rendered.
+        expect(screen.getByTestId('register-submit').textContent?.trim()).toBe('auth.register');
+        // Text and attributes alike: a title or an aria-label would count too.
+        expect(root.innerHTML).not.toContain('auth.registerTitle');
+    });
+
+    it.each([
+        {icon: 'register-username-icon', input: 'register-username'},
+        {icon: 'register-email-icon', input: 'register-email'},
+        {icon: 'register-password-icon', input: 'register-password'},
+        {icon: 'register-confirm-password-icon', input: 'register-confirm-password'},
+    ])('draws $icon inside $input, hidden from assistive technology', ({icon, input}) => {
+        render(RegisterCard);
+        const svg = screen.getByTestId(icon);
+
+        expect(svg.tagName.toLowerCase()).toBe('svg');
+        expect(svg).toHaveAttribute('aria-hidden', 'true');
+        // Inside the field: the positioned wrapper its input sits in.
+        expect(svg.parentElement).toBe(screen.getByTestId(input).parentElement);
     });
 });
