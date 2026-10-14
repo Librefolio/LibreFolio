@@ -21,6 +21,7 @@
     import type {UploadedFile} from '$lib/types';
     import {getPreviewTypeForUploadedFile} from '$lib/utils/files/filePreview';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
+    import '$lib/theme/components/files.css';
 
     interface Props {
         /** Files to display */
@@ -225,19 +226,19 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.5rem 0.75rem;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--lf-cmp-file-grid-border);
         border-radius: 0.5rem;
-        background: white;
+        background: var(--lf-cmp-file-grid-surface-bg);
         margin-bottom: 0.75rem;
     }
 
     :global(.dark) .grid-search {
-        background: #1f2937;
-        border-color: #374151;
+        background: var(--lf-cmp-file-grid-surface-bg-dark);
+        border-color: var(--lf-cmp-file-grid-border-dark);
     }
 
     :global(.grid-search-icon) {
-        color: #9ca3af;
+        color: var(--lf-cmp-file-grid-faint-text);
         flex-shrink: 0;
     }
 
@@ -247,11 +248,11 @@
         outline: none;
         background: transparent;
         font-size: 0.875rem;
-        color: #374151;
+        color: var(--lf-cmp-file-grid-search-input-text);
     }
 
     :global(.dark) .grid-search-input {
-        color: #f3f4f6;
+        color: var(--lf-cmp-file-grid-search-input-text-dark);
     }
 
     .grid-search-clear {
@@ -261,15 +262,15 @@
         width: 20px;
         height: 20px;
         border: none;
-        background: #e5e7eb;
+        background: var(--lf-cmp-file-grid-search-clear-bg);
         border-radius: 50%;
-        color: #6b7280;
+        color: var(--lf-cmp-file-grid-muted-text);
         cursor: pointer;
     }
 
     :global(.dark) .grid-search-clear {
-        background: #374151;
-        color: #9ca3af;
+        background: var(--lf-cmp-file-grid-search-clear-bg-dark);
+        color: var(--lf-cmp-file-grid-muted-text-dark);
     }
 
     /* Empty state */
@@ -279,7 +280,7 @@
         align-items: center;
         justify-content: center;
         padding: 2rem;
-        color: #9ca3af;
+        color: var(--lf-cmp-file-grid-faint-text);
         text-align: center;
     }
 
@@ -301,24 +302,24 @@
 
     /* Card */
     .file-card {
-        background: white;
-        border: 1px solid #e5e7eb;
+        background: var(--lf-cmp-file-grid-surface-bg);
+        border: 1px solid var(--lf-cmp-file-grid-border);
         border-radius: 0.5rem;
         overflow: hidden;
         transition: all 0.2s ease;
     }
 
     :global(.dark) .file-card {
-        background: #1f2937;
-        border-color: #374151;
+        background: var(--lf-cmp-file-grid-surface-bg-dark);
+        border-color: var(--lf-cmp-file-grid-border-dark);
     }
 
     .file-card:hover {
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        box-shadow: 0 4px 6px -1px var(--lf-cmp-file-grid-file-card-hover-shadow);
     }
 
     :global(.dark) .file-card:hover {
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
+        box-shadow: 0 4px 6px -1px var(--lf-cmp-file-grid-file-card-hover-shadow-dark);
     }
 
     /* Selectable mode */
@@ -329,27 +330,27 @@
     }
 
     .file-card.selectable:hover {
-        border-color: #d1d5db;
+        border-color: var(--lf-cmp-file-grid-file-card-selectable-hover-border);
     }
 
     :global(.dark) .file-card.selectable:hover {
-        border-color: #4b5563;
+        border-color: var(--lf-cmp-file-grid-file-card-selectable-hover-border-dark);
     }
 
     .file-card.selected {
-        border-color: #1a4031;
-        background: #f0fdf4;
+        border-color: var(--lf-cmp-file-grid-file-card-selected-border);
+        background: var(--lf-cmp-file-grid-file-card-selected-bg);
     }
 
     :global(.dark) .file-card.selected {
-        border-color: #10b981;
-        background: rgba(16, 185, 129, 0.1);
+        border-color: var(--lf-cmp-file-grid-file-card-selected-border-dark);
+        background: var(--lf-cmp-file-grid-file-card-selected-bg-dark);
     }
 
     /* Preview */
     .file-preview {
         height: 120px;
-        background: #f3f4f6;
+        background: var(--lf-cmp-file-grid-file-preview-bg);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -362,11 +363,11 @@
     }
 
     :global(.dark) .file-preview {
-        background: #374151;
+        background: var(--lf-cmp-file-grid-file-preview-bg-dark);
     }
 
     .file-icon-wrapper {
-        color: #9ca3af;
+        color: var(--lf-cmp-file-grid-faint-text);
     }
 
     /* Selected badge */
@@ -377,15 +378,15 @@
         width: 20px;
         height: 20px;
         border-radius: 50%;
-        background: #1a4031;
-        color: white;
+        background: var(--lf-cmp-file-grid-selected-badge-bg);
+        color: var(--lf-cmp-file-grid-selected-badge-text);
         display: flex;
         align-items: center;
         justify-content: center;
     }
 
     :global(.dark) .selected-badge {
-        background: #10b981;
+        background: var(--lf-cmp-file-grid-selected-badge-bg-dark);
     }
 
     /* Card title */
@@ -393,7 +394,7 @@
         padding: 0.5rem 0.75rem 0;
         font-size: 0.8125rem;
         font-weight: 500;
-        color: #1f2937;
+        color: var(--lf-cmp-file-grid-strong-text);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -405,14 +406,14 @@
     }
 
     :global(.dark) .card-title {
-        color: #f3f4f6;
+        color: var(--lf-cmp-file-grid-strong-text-dark);
     }
 
     /* Card meta */
     .card-meta {
         padding: 0.125rem 0.75rem 0.5rem;
         font-size: 0.6875rem;
-        color: #6b7280;
+        color: var(--lf-cmp-file-grid-muted-text);
     }
 
     .card-meta.compact {
@@ -421,7 +422,7 @@
     }
 
     :global(.dark) .card-meta {
-        color: #9ca3af;
+        color: var(--lf-cmp-file-grid-muted-text-dark);
     }
 
     /* Card actions */
@@ -430,11 +431,11 @@
         justify-content: flex-end;
         gap: 0.25rem;
         padding: 0.375rem 0.5rem;
-        border-top: 1px solid #f3f4f6;
+        border-top: 1px solid var(--lf-cmp-file-grid-card-actions-border);
     }
 
     :global(.dark) .card-actions {
-        border-top-color: #374151;
+        border-top-color: var(--lf-cmp-file-grid-card-actions-border-dark);
     }
 
     .action-btn {
@@ -443,50 +444,50 @@
         justify-content: center;
         width: 28px;
         height: 28px;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--lf-cmp-file-grid-action-btn-border);
         border-radius: 0.375rem;
-        background: white;
-        color: #6b7280;
+        background: var(--lf-cmp-file-grid-action-btn-bg);
+        color: var(--lf-cmp-file-grid-muted-text);
         cursor: pointer;
         transition: all 0.2s ease;
         text-decoration: none;
     }
 
     :global(.dark) .action-btn {
-        background: #374151;
-        border-color: #4b5563;
-        color: #9ca3af;
+        background: var(--lf-cmp-file-grid-action-btn-bg-dark);
+        border-color: var(--lf-cmp-file-grid-action-btn-border-dark);
+        color: var(--lf-cmp-file-grid-muted-text-dark);
     }
 
     .action-btn:hover {
-        background: #f3f4f6;
-        color: #1f2937;
+        background: var(--lf-cmp-file-grid-action-btn-hover-bg);
+        color: var(--lf-cmp-file-grid-strong-text);
     }
 
     :global(.dark) .action-btn:hover {
-        background: #4b5563;
-        color: #f3f4f6;
+        background: var(--lf-cmp-file-grid-action-btn-hover-bg-dark);
+        color: var(--lf-cmp-file-grid-strong-text-dark);
     }
 
     .action-btn.danger {
-        color: #dc2626;
-        border-color: #fecaca;
+        color: var(--lf-cmp-file-grid-action-btn-danger-text);
+        border-color: var(--lf-cmp-file-grid-action-btn-danger-border);
     }
 
     :global(.dark) .action-btn.danger {
-        color: #fca5a5;
-        border-color: rgba(220, 38, 38, 0.3);
+        color: var(--lf-cmp-file-grid-action-btn-danger-text-dark);
+        border-color: var(--lf-cmp-file-grid-action-btn-danger-border-dark);
     }
 
     .action-btn.danger:hover {
-        background: #fef2f2;
-        color: #dc2626;
-        border-color: #fecaca;
+        background: var(--lf-cmp-file-grid-action-btn-danger-hover-bg);
+        color: var(--lf-cmp-file-grid-action-btn-danger-text);
+        border-color: var(--lf-cmp-file-grid-action-btn-danger-hover-border);
     }
 
     :global(.dark) .action-btn.danger:hover {
-        background: rgba(220, 38, 38, 0.2);
-        color: #fca5a5;
-        border-color: rgba(220, 38, 38, 0.4);
+        background: var(--lf-cmp-file-grid-action-btn-danger-hover-bg-dark);
+        color: var(--lf-cmp-file-grid-action-btn-danger-text-dark);
+        border-color: var(--lf-cmp-file-grid-action-btn-danger-hover-border-dark);
     }
 </style>

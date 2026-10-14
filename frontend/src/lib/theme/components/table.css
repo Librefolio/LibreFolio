@@ -1,0 +1,267 @@
+/*
+ * Data tables and the domain tables that reuse their look.
+ *
+ * Component colour tokens (plan 55, workstream R, R-3): the colours that the components' <style> blocks used
+ * to write by hand, one name per role. `-dark` twins feed the components' `.dark` rules, which stay where
+ * they are. Same look as before by construction:
+ * - every value is the exact text the production build emitted for the original literal (esbuild turns
+ *   `white` into `#fff` and `rgb(0 0 0 / 0.1)` into `#0000001a`, but leaves custom properties untouched);
+ * - the original spelling follows in a comment when it differs.
+ * Divergences between similar components are kept on purpose: the designer decides (phase B, `--lf-*` roles).
+ */
+:root {
+    /* DataTable.svelte */
+    --lf-cmp-datatable-border: #e2e8f0;
+    --lf-cmp-datatable-border-dark: #334155;
+    --lf-cmp-datatable-surface-bg: #fff; /* white */
+    --lf-cmp-datatable-surface-bg-dark: #0f172a;
+    --lf-cmp-datatable-header-bg: #f8fafc;
+    --lf-cmp-datatable-header-bg-dark: #1e293b;
+    --lf-cmp-datatable-row-hover-bg: #f8fafc;
+    --lf-cmp-datatable-row-hover-bg-dark: #1e293b;
+    --lf-cmp-datatable-footer-bg: #f8fafc;
+    --lf-cmp-datatable-footer-bg-dark: #1e293b;
+    --lf-cmp-datatable-header-text: #64748b;
+    --lf-cmp-datatable-header-text-dark: #94a3b8;
+    --lf-cmp-datatable-row-action-text: #64748b;
+    --lf-cmp-datatable-row-action-text-dark: #94a3b8;
+    --lf-cmp-datatable-sortable-hover-bg: #f1f5f9;
+    --lf-cmp-datatable-sortable-hover-bg-dark: #334155;
+    --lf-cmp-datatable-badge-default-bg: #f1f5f9;
+    --lf-cmp-datatable-badge-default-bg-dark: #334155;
+    --lf-cmp-datatable-cell-image-bg: #f1f5f9;
+    --lf-cmp-datatable-cell-image-bg-dark: #334155;
+    --lf-cmp-datatable-faint-text: #94a3b8;
+    --lf-cmp-datatable-icon-text: #94a3b8;
+    --lf-cmp-datatable-icon-text-dark: #64748b;
+    --lf-cmp-datatable-accent-text: #1a4031;
+    --lf-cmp-datatable-accent-text-dark: #4ade80;
+    --lf-cmp-datatable-filter-btn-hover-bg: #e2e8f0;
+    --lf-cmp-datatable-filter-btn-hover-bg-dark: #475569;
+    --lf-cmp-datatable-filter-btn-hover-text: #475569;
+    --lf-cmp-datatable-filter-btn-hover-text-dark: #f1f5f9;
+    --lf-cmp-datatable-accent-bg: #1a4031;
+    --lf-cmp-datatable-accent-bg-dark: #4ade80;
+    --lf-cmp-datatable-on-accent-text: #fff; /* white */
+    --lf-cmp-datatable-on-accent-text-dark: #0f172a;
+    --lf-cmp-datatable-resize-handle-bg: #cbd5e1;
+    --lf-cmp-datatable-resize-handle-bg-dark: #475569;
+    --lf-cmp-datatable-footer-text: #334155;
+    --lf-cmp-datatable-footer-text-dark: #e2e8f0;
+    --lf-cmp-datatable-row-selected-bg: #eff6ff;
+    --lf-cmp-datatable-row-selected-bg-dark: #1e3a5f;
+    --lf-cmp-datatable-row-clickable-hover-bg: #f0fdf4;
+    --lf-cmp-datatable-row-clickable-hover-bg-dark: #1a2e35;
+    --lf-cmp-datatable-row-clickable-selected-bg: #dcfce7;
+    --lf-cmp-datatable-row-clickable-selected-bg-dark: #14532d;
+    --lf-cmp-datatable-badge-success-bg: #dcfce7;
+    --lf-cmp-datatable-badge-success-bg-dark: #14532d;
+    --lf-cmp-datatable-highlight-base: #f3e8ff;
+    --lf-cmp-datatable-highlight-base-dark: rgba(147, 51, 234, 0.25);
+    --lf-cmp-datatable-highlight-peak: #e9d5ff;
+    --lf-cmp-datatable-highlight-peak-dark: rgba(147, 51, 234, 0.4);
+    --lf-cmp-datatable-row-highlighted-bg: #f3e8ff;
+    --lf-cmp-datatable-row-highlighted-bg-dark: #9333ea40; /* rgba(147, 51, 234, 0.25) */
+    --lf-cmp-datatable-row-highlighted-border: #e9d5ff;
+    --lf-cmp-datatable-row-highlighted-border-dark: #7e22ce;
+    --lf-cmp-datatable-row-analyzed-bg: #ecfdf5;
+    --lf-cmp-datatable-row-analyzed-bg-dark: #10b98126; /* rgba(16, 185, 129, 0.15) */
+    --lf-cmp-datatable-row-analyzed-hover-bg: #d1fae5;
+    --lf-cmp-datatable-row-analyzed-hover-bg-dark: #10b98140; /* rgba(16, 185, 129, 0.25) */
+    --lf-cmp-datatable-cell-text: #475569;
+    --lf-cmp-datatable-cell-text-dark: #e2e8f0;
+    --lf-cmp-datatable-badge-default-text: #475569;
+    --lf-cmp-datatable-badge-default-text-dark: #e2e8f0;
+    --lf-cmp-datatable-cell-border: #f1f5f9;
+    --lf-cmp-datatable-cell-border-dark: #1e293b;
+    --lf-cmp-datatable-spinner-border: #e2e8f0;
+    --lf-cmp-datatable-spinner-arc-border: #1a4031;
+    --lf-cmp-datatable-disabled-select-icon-text: #ef4444;
+    --lf-cmp-datatable-disabled-select-icon-text-dark: #f87171;
+    --lf-cmp-datatable-checkbox-border: #cbd5e1;
+    --lf-cmp-datatable-checkbox-border-dark: #475569;
+    --lf-cmp-datatable-check-icon-text: #1a4031;
+    --lf-cmp-datatable-badge-success-text: #166534;
+    --lf-cmp-datatable-badge-success-text-dark: #86efac;
+    --lf-cmp-datatable-badge-warning-bg: #fef3c7;
+    --lf-cmp-datatable-badge-warning-bg-dark: #78350f;
+    --lf-cmp-datatable-badge-warning-text: #92400e;
+    --lf-cmp-datatable-badge-warning-text-dark: #fde68a;
+    --lf-cmp-datatable-badge-error-bg: #fee2e2;
+    --lf-cmp-datatable-badge-error-bg-dark: #7f1d1d;
+    --lf-cmp-datatable-badge-error-text: #991b1b;
+    --lf-cmp-datatable-badge-error-text-dark: #fecaca;
+    --lf-cmp-datatable-badge-info-bg: #dbeafe;
+    --lf-cmp-datatable-badge-info-bg-dark: #1e3a8a;
+    --lf-cmp-datatable-badge-info-text: #1e40af;
+    --lf-cmp-datatable-badge-info-text-dark: #bfdbfe;
+    --lf-cmp-datatable-row-action-hover-bg: #e2e8f0;
+    --lf-cmp-datatable-row-action-hover-bg-dark: #334155;
+    --lf-cmp-datatable-editable-border: #e2e8f0;
+    --lf-cmp-datatable-editable-border-dark: #475569;
+    --lf-cmp-datatable-editable-text: #1e293b;
+    --lf-cmp-datatable-editable-text-dark: #e2e8f0;
+    --lf-cmp-datatable-editable-focus-border: #1a4031;
+    --lf-cmp-datatable-editable-focus-border-dark: #4ade80;
+    --lf-cmp-datatable-editable-focus-shadow: #1a403140;
+    --lf-cmp-datatable-editable-focus-shadow-dark: #4ade8040;
+    --lf-cmp-datatable-row-deleted-bg: #ef44440f; /* rgba(239, 68, 68, 0.06) */
+    --lf-cmp-datatable-row-deleted-bg-dark: #ef444433; /* rgba(239, 68, 68, 0.2) */
+    --lf-cmp-datatable-row-edited-bg: #3b82f60f; /* rgba(59, 130, 246, 0.06) */
+    --lf-cmp-datatable-row-edited-bg-dark: #3b82f633; /* rgba(59, 130, 246, 0.2) */
+    --lf-cmp-datatable-row-appended-bg: #10b9810f; /* rgba(16, 185, 129, 0.06) */
+    --lf-cmp-datatable-row-appended-bg-dark: #10b98133; /* rgba(16, 185, 129, 0.2) */
+    --lf-cmp-datatable-row-todo-blocker-bg: #ef444414; /* rgba(239, 68, 68, 0.08) */
+    --lf-cmp-datatable-row-todo-blocker-bg-dark: #ef444438; /* rgba(239, 68, 68, 0.22) */
+    --lf-cmp-datatable-row-stale-rgb: 245, 158, 11;
+    --lf-cmp-datatable-row-stale-rgb-dark: 245, 158, 11;
+    --lf-cmp-datatable-row-paired-bg: #6366f10f; /* rgba(99, 102, 241, 0.06) */
+    --lf-cmp-datatable-row-paired-bg-dark: #6366f126; /* rgba(99, 102, 241, 0.15) */
+
+    /* DataTableColumnFilter.svelte */
+    --lf-cmp-datatable-filter-surface-bg: #fff; /* white */
+    --lf-cmp-datatable-filter-surface-bg-dark: #1e293b;
+    --lf-cmp-datatable-filter-border: #e2e8f0;
+    --lf-cmp-datatable-filter-border-dark: #334155;
+    --lf-cmp-datatable-filter-field-border: #e2e8f0;
+    --lf-cmp-datatable-filter-field-border-dark: #334155;
+    --lf-cmp-datatable-filter-shadow: #0000001a; /* rgba(0, 0, 0, 0.1) */
+    --lf-cmp-datatable-filter-muted-text: #64748b;
+    --lf-cmp-datatable-filter-muted-text-dark: #94a3b8;
+    --lf-cmp-datatable-filter-btn-text: #64748b;
+    --lf-cmp-datatable-filter-hover-bg: #f1f5f9;
+    --lf-cmp-datatable-filter-hover-bg-dark: #334155;
+    --lf-cmp-datatable-filter-enum-count-bg: #f1f5f9;
+    --lf-cmp-datatable-filter-enum-count-bg-dark: #334155;
+    --lf-cmp-datatable-filter-strong-text: #0f172a;
+    --lf-cmp-datatable-filter-strong-text-dark: #f1f5f9;
+    --lf-cmp-datatable-filter-faint-text: #94a3b8;
+    --lf-cmp-datatable-filter-field-bg: #fff; /* white */
+    --lf-cmp-datatable-filter-field-bg-dark: #0f172a;
+    --lf-cmp-datatable-filter-accent-border: #1a4031;
+    --lf-cmp-datatable-filter-accent-border-dark: #4ade80;
+    --lf-cmp-datatable-filter-clear-btn-bg: #e2e8f0;
+    --lf-cmp-datatable-filter-clear-btn-bg-dark: #475569;
+    --lf-cmp-datatable-filter-slider-track-bg: #e2e8f0;
+    --lf-cmp-datatable-filter-slider-track-bg-dark: #475569;
+    --lf-cmp-datatable-filter-clear-btn-hover-bg: #cbd5e1;
+    --lf-cmp-datatable-filter-clear-btn-hover-bg-dark: #64748b;
+    --lf-cmp-datatable-filter-size-unit-select-bg: #f8fafc;
+    --lf-cmp-datatable-filter-size-unit-select-bg-dark: #1e293b;
+    --lf-cmp-datatable-filter-accent-bg: #1a4031;
+    --lf-cmp-datatable-filter-accent-bg-dark: #4ade80;
+    --lf-cmp-datatable-filter-slider-tick-bg: #94a3b8;
+    --lf-cmp-datatable-filter-slider-tick-bg-dark: #64748b;
+    --lf-cmp-datatable-filter-slider-thumb-border: white;
+    --lf-cmp-datatable-filter-slider-thumb-border-dark: #0f172a;
+    --lf-cmp-datatable-filter-slider-thumb-shadow: #0003; /* rgba(0, 0, 0, 0.2) */
+    --lf-cmp-datatable-filter-enum-action-btn-bg: #f8fafc;
+    --lf-cmp-datatable-filter-enum-action-btn-bg-dark: #0f172a;
+    --lf-cmp-datatable-filter-currency-stack-row-bg: #f8fafc;
+    --lf-cmp-datatable-filter-currency-stack-row-bg-dark: #0f172a;
+    --lf-cmp-datatable-filter-enum-action-btn-hover-bg: #f1f5f9;
+    --lf-cmp-datatable-filter-enum-action-btn-hover-bg-dark: #1e293b;
+    --lf-cmp-datatable-filter-enum-option-text: #475569;
+    --lf-cmp-datatable-filter-enum-option-text-dark: #e2e8f0;
+    --lf-cmp-datatable-filter-enum-option-hover-bg: #f8fafc;
+    --lf-cmp-datatable-filter-enum-option-hover-bg-dark: #334155;
+    --lf-cmp-datatable-filter-enum-checkbox-border: #cbd5e1;
+    --lf-cmp-datatable-filter-enum-checkbox-border-dark: #475569;
+    --lf-cmp-datatable-filter-on-accent-text: #fff; /* white */
+    --lf-cmp-datatable-filter-on-accent-text-dark: #0f172a;
+    --lf-cmp-datatable-filter-enum-option-dot-shadow: #0000000f; /* rgb(0 0 0 / 0.06) */
+    --lf-cmp-datatable-filter-enum-option-dot-shadow-dark: #ffffff14; /* rgb(255 255 255 / 0.08) */
+    --lf-cmp-datatable-filter-enum-count-text: #94a3b8;
+    --lf-cmp-datatable-filter-enum-count-text-dark: #64748b;
+    --lf-cmp-datatable-filter-currency-stack-code-text: #1a4031;
+    --lf-cmp-datatable-filter-currency-stack-code-text-dark: #4ade80;
+    --lf-cmp-datatable-filter-currency-stack-range-text: #475569;
+    --lf-cmp-datatable-filter-currency-stack-range-text-dark: #cbd5e1;
+    --lf-cmp-datatable-filter-currency-stack-btn-hover-bg: #e2e8f0;
+    --lf-cmp-datatable-filter-currency-stack-btn-hover-bg-dark: #334155;
+    --lf-cmp-datatable-filter-currency-stack-btn-danger-hover-bg: #fee2e2;
+    --lf-cmp-datatable-filter-currency-stack-btn-danger-hover-bg-dark: #7f1d1d;
+    --lf-cmp-datatable-filter-currency-stack-btn-danger-hover-text: #b91c1c;
+    --lf-cmp-datatable-filter-currency-stack-btn-danger-hover-text-dark: #fecaca;
+
+    /* DataTablePagination.svelte */
+    --lf-cmp-datatable-pagination-surface-bg: #fff; /* white */
+    --lf-cmp-datatable-pagination-surface-bg-dark: #1e293b;
+    --lf-cmp-datatable-pagination-border: #e2e8f0;
+    --lf-cmp-datatable-pagination-border-dark: #334155;
+    --lf-cmp-datatable-pagination-balloon-shadow: #0000001a; /* rgba(0, 0, 0, 0.1) */
+    --lf-cmp-datatable-pagination-page-size-btn-bg: #fff; /* white */
+    --lf-cmp-datatable-pagination-page-size-btn-bg-dark: #0f172a;
+    --lf-cmp-datatable-pagination-text: #475569;
+    --lf-cmp-datatable-pagination-text-dark: #e2e8f0;
+    --lf-cmp-datatable-pagination-page-size-btn-hover-border: #cbd5e1;
+    --lf-cmp-datatable-pagination-page-size-btn-hover-border-dark: #475569;
+    --lf-cmp-datatable-pagination-page-size-btn-hover-bg: #f8fafc;
+    --lf-cmp-datatable-pagination-page-size-btn-hover-bg-dark: #1e293b;
+    --lf-cmp-datatable-pagination-dropdown-shadow: #00000026; /* rgba(0, 0, 0, 0.15) */
+    --lf-cmp-datatable-pagination-hover-bg: #f1f5f9;
+    --lf-cmp-datatable-pagination-hover-bg-dark: #334155;
+    --lf-cmp-datatable-pagination-option-selected-bg: #f0fdf4;
+    --lf-cmp-datatable-pagination-option-selected-bg-dark: #1a4031;
+    --lf-cmp-datatable-pagination-accent-text: #1a4031;
+    --lf-cmp-datatable-pagination-accent-text-dark: #4ade80;
+    --lf-cmp-datatable-pagination-faint-text: #94a3b8;
+    --lf-cmp-datatable-pagination-divider-bg: #e2e8f0;
+    --lf-cmp-datatable-pagination-divider-bg-dark: #334155;
+    --lf-cmp-datatable-pagination-btn-text: #64748b;
+    --lf-cmp-datatable-pagination-btn-text-dark: #94a3b8;
+    --lf-cmp-datatable-pagination-btn-hover-text: #0f172a;
+    --lf-cmp-datatable-pagination-btn-hover-text-dark: #f1f5f9;
+    --lf-cmp-datatable-pagination-page-input-border: #1a4031;
+    --lf-cmp-datatable-pagination-page-input-border-dark: #4ade80;
+    --lf-cmp-datatable-pagination-page-input-bg: #f0fdf4;
+    --lf-cmp-datatable-pagination-page-input-bg-dark: #1e293b;
+    --lf-cmp-datatable-pagination-page-input-focus-shadow: #1a403133; /* rgba(26, 64, 49, 0.2) */
+    --lf-cmp-datatable-pagination-page-input-focus-shadow-dark: #4ade8033; /* rgba(74, 222, 128, 0.2) */
+
+    /* DataTableToolbar.svelte */
+    --lf-cmp-datatable-toolbar-selected-count-btn-bg: #1a40311a; /* rgba(26, 64, 49, 0.1) */
+    --lf-cmp-datatable-toolbar-selected-count-btn-bg-dark: #4ade801a; /* rgba(74, 222, 128, 0.1) */
+    --lf-cmp-datatable-toolbar-selected-count-btn-text: #1a4031;
+    --lf-cmp-datatable-toolbar-selected-count-btn-text-dark: #4ade80;
+    --lf-cmp-datatable-toolbar-selected-count-btn-hover-bg: #1a403126; /* rgba(26, 64, 49, 0.15) */
+    --lf-cmp-datatable-toolbar-selected-count-btn-hover-bg-dark: #4ade8026; /* rgba(74, 222, 128, 0.15) */
+    --lf-cmp-datatable-toolbar-selected-count-btn-hover-border: #1a403133; /* rgba(26, 64, 49, 0.2) */
+    --lf-cmp-datatable-toolbar-selected-count-btn-hover-border-dark: #4ade8033; /* rgba(74, 222, 128, 0.2) */
+    --lf-cmp-datatable-toolbar-bulk-btn-bg: #f1f5f9;
+    --lf-cmp-datatable-toolbar-bulk-btn-bg-dark: #334155;
+    --lf-cmp-datatable-toolbar-bulk-btn-text: #64748b;
+    --lf-cmp-datatable-toolbar-bulk-btn-text-dark: #94a3b8;
+    --lf-cmp-datatable-toolbar-bulk-btn-hover-bg: #e2e8f0;
+    --lf-cmp-datatable-toolbar-bulk-btn-hover-bg-dark: #475569;
+    --lf-cmp-datatable-toolbar-bulk-btn-hover-text: #0f172a;
+    --lf-cmp-datatable-toolbar-bulk-btn-hover-text-dark: #f1f5f9;
+    --lf-cmp-datatable-toolbar-bulk-btn-danger-text: #dc2626;
+    --lf-cmp-datatable-toolbar-bulk-btn-danger-text-dark: #f87171;
+    --lf-cmp-datatable-toolbar-bulk-btn-danger-hover-bg: #fef2f2;
+    --lf-cmp-datatable-toolbar-bulk-btn-danger-hover-bg-dark: #7f1d1d;
+    --lf-cmp-datatable-toolbar-bulk-btn-danger-hover-text: #b91c1c;
+    --lf-cmp-datatable-toolbar-bulk-btn-danger-hover-text-dark: #fecaca;
+
+    /* UnifiedLotsTable.svelte */
+    --lf-cmp-lots-table-row-tinted-bg: white;
+    --lf-cmp-lots-table-row-tinted-bg-dark: #0f0f18;
+    --lf-cmp-lots-table-lot-highlight-base: #f3e8ff;
+    --lf-cmp-lots-table-lot-highlight-base-dark: rgba(147, 51, 234, 0.25);
+    --lf-cmp-lots-table-lot-highlight-peak: #e9d5ff;
+    --lf-cmp-lots-table-lot-highlight-peak-dark: rgba(147, 51, 234, 0.4);
+
+    /* OtherPeriodEffectsTable.svelte */
+    --lf-cmp-period-effects-header-bg: #ffffff80; /* rgb(255 255 255 / 0.5) */
+    --lf-cmp-period-effects-header-bg-dark: #1e293b66; /* rgb(30 41 59 / 0.4) */
+    --lf-cmp-period-effects-cell-border: #e5e7ebb3; /* rgb(229 231 235 / 0.7) */
+    --lf-cmp-period-effects-cell-border-dark: #1e293b; /* rgb(30 41 59) */
+
+    /* RiskReturnLevel.svelte */
+    --lf-cmp-risk-return-row-portfolio-bg: #0284c71a; /* rgb(2 132 199 / 0.1) */
+    --lf-cmp-risk-return-row-portfolio-bg-dark: #38bdf824; /* rgb(56 189 248 / 0.14) */
+    --lf-cmp-risk-return-row-benchmark-bg: #d977061a; /* rgb(217 119 6 / 0.1) */
+    --lf-cmp-risk-return-row-benchmark-bg-dark: #fbbf2424; /* rgb(251 191 36 / 0.14) */
+    --lf-cmp-risk-return-row-selected-bg: #22c55e1f; /* rgb(34 197 94 / 0.12) */
+    --lf-cmp-risk-return-row-selected-bg-dark: #4ade8024; /* rgb(74 222 128 / 0.14) */
+}

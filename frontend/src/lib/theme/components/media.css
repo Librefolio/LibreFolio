@@ -1,0 +1,261 @@
+/*
+ * Media components: image editor, cropper, asset picker, uploader, file editor.
+ *
+ * Component colour tokens (plan 55, workstream R, R-3): the colours that the components' <style> blocks used
+ * to write by hand, one name per role. `-dark` twins feed the components' `.dark` rules, which stay where
+ * they are. Same look as before by construction:
+ * - every value is the exact text the production build emitted for the original literal (esbuild turns
+ *   `white` into `#fff` and `rgb(0 0 0 / 0.1)` into `#0000001a`, but leaves custom properties untouched);
+ * - the original spelling follows in a comment when it differs.
+ * Divergences between similar components are kept on purpose: the designer decides (phase B, `--lf-*` roles).
+ */
+:root {
+    /* ImageEditModal.svelte */
+    --lf-cmp-image-edit-divider-border: #e5e7eb;
+    --lf-cmp-image-edit-divider-border-dark: #374151;
+    --lf-cmp-image-edit-title-text: #111827;
+    --lf-cmp-image-edit-title-text-dark: #f3f4f6;
+    --lf-cmp-image-edit-header-btn-text: #6b7280;
+    --lf-cmp-image-edit-btn-hover-bg: #f3f4f6;
+    --lf-cmp-image-edit-btn-hover-bg-dark: #374151;
+    --lf-cmp-image-edit-btn-text: #374151;
+    --lf-cmp-image-edit-btn-text-dark: #d1d5db;
+    --lf-cmp-image-edit-header-btn-reset-bg: #f59e0b1a; /* rgba(245, 158, 11, 0.1) */
+    --lf-cmp-image-edit-header-btn-reset-text: #f59e0b;
+    --lf-cmp-image-edit-header-btn-reset-hover-bg: #f59e0b33; /* rgba(245, 158, 11, 0.2) */
+    --lf-cmp-image-edit-header-btn-reset-hover-text: #d97706;
+    --lf-cmp-image-edit-field-border: #d1d5db;
+    --lf-cmp-image-edit-field-border-dark: #4b5563;
+    --lf-cmp-image-edit-field-bg: #fff; /* white */
+    --lf-cmp-image-edit-field-bg-dark: #374151;
+    --lf-cmp-image-edit-field-text: #374151;
+    --lf-cmp-image-edit-field-text-dark: #f3f4f6;
+    --lf-cmp-image-edit-accent-border: #1a4031;
+    --lf-cmp-image-edit-accent-border-dark: #10b981;
+    --lf-cmp-image-edit-format-select-bg: #f3f4f6;
+    --lf-cmp-image-edit-format-select-bg-dark: #4b5563;
+    --lf-cmp-image-edit-spin-btn-hover-bg: #e5e7eb;
+    --lf-cmp-image-edit-spin-btn-hover-bg-dark: #4b5563;
+    --lf-cmp-image-edit-quality-value-text: #374151;
+    --lf-cmp-image-edit-quality-value-text-dark: #e5e7eb;
+    --lf-cmp-image-edit-cropper-guard-bg: #ffffff8c; /* rgb(255 255 255 / 0.55) */
+    --lf-cmp-image-edit-cropper-guard-bg-dark: #0f172a8c; /* rgb(15 23 42 / 0.55) */
+    --lf-cmp-image-edit-cropper-guard-text: #16a34a;
+    --lf-cmp-image-edit-ellipse-toggle-bg: #00000080; /* rgba(0, 0, 0, 0.5) */
+    --lf-cmp-image-edit-ellipse-toggle-text: #ffffffb3; /* rgba(255, 255, 255, 0.7) */
+    --lf-cmp-image-edit-ellipse-toggle-hover-bg: #000000b3; /* rgba(0, 0, 0, 0.7) */
+    --lf-cmp-image-edit-on-fill-text: #fff; /* white */
+    --lf-cmp-image-edit-ellipse-toggle-active-bg: #10b981cc; /* rgba(16, 185, 129, 0.8) */
+    --lf-cmp-image-edit-bottom-panel-bg: #f3f4f6;
+    --lf-cmp-image-edit-bottom-panel-bg-dark: #1a2332;
+    --lf-cmp-image-edit-muted-text: #6b7280;
+    --lf-cmp-image-edit-muted-text-dark: #9ca3af;
+    --lf-cmp-image-edit-preset-btn-hover-text: #1a4031;
+    --lf-cmp-image-edit-preset-btn-hover-text-dark: #10b981;
+    --lf-cmp-image-edit-accent-bg: #1a4031;
+    --lf-cmp-image-edit-accent-bg-dark: #10b981;
+    --lf-cmp-image-edit-preset-btn-active-text: #fff; /* white */
+    --lf-cmp-image-edit-preset-btn-active-text-dark: #fff; /* white */
+    --lf-cmp-image-edit-faint-text: #9ca3af;
+    --lf-cmp-image-edit-scale-input-focus-border: #1a4031;
+    --lf-cmp-image-edit-info-value-text: #4b5563;
+    --lf-cmp-image-edit-info-value-text-dark: #9ca3af;
+    --lf-cmp-image-edit-error-message-bg: #fef2f2;
+    --lf-cmp-image-edit-error-message-bg-dark: #dc26261a; /* rgba(220, 38, 38, 0.1) */
+    --lf-cmp-image-edit-error-message-border: #fecaca;
+    --lf-cmp-image-edit-error-message-border-dark: #dc26264d; /* rgba(220, 38, 38, 0.3) */
+    --lf-cmp-image-edit-error-message-text: #dc2626;
+    --lf-cmp-image-edit-footer-bg: #f9fafb;
+    --lf-cmp-image-edit-footer-bg-dark: #111827;
+    --lf-cmp-image-edit-btn-primary-hover-bg: #143326;
+    --lf-cmp-image-edit-btn-primary-hover-bg-dark: #059669;
+    --lf-cmp-image-edit-btn-secondary-bg: #e5e7eb;
+    --lf-cmp-image-edit-btn-secondary-bg-dark: #374151;
+    --lf-cmp-image-edit-btn-secondary-hover-bg: #d1d5db;
+    --lf-cmp-image-edit-btn-secondary-hover-bg-dark: #4b5563;
+    --lf-cmp-image-edit-confirm-dialog-bg: #fff; /* white */
+    --lf-cmp-image-edit-confirm-dialog-bg-dark: #1f2937;
+    --lf-cmp-image-edit-confirm-dialog-border-dark: #374151;
+    --lf-cmp-image-edit-confirm-title-text: #d97706;
+    --lf-cmp-image-edit-confirm-title-text-dark: #fbbf24;
+    --lf-cmp-image-edit-btn-warning-bg: #f59e0b;
+    --lf-cmp-image-edit-btn-warning-hover-bg: #d97706;
+
+    /* AssetPickerModal.svelte */
+    --lf-cmp-asset-picker-border: #e5e7eb;
+    --lf-cmp-asset-picker-border-dark: #374151;
+    --lf-cmp-asset-picker-strong-text: #1f2937;
+    --lf-cmp-asset-picker-strong-text-dark: #f3f4f6;
+    --lf-cmp-asset-picker-close-btn-text: #6b7280;
+    --lf-cmp-asset-picker-close-btn-hover-bg: #f3f4f6;
+    --lf-cmp-asset-picker-close-btn-hover-bg-dark: #374151;
+    --lf-cmp-asset-picker-muted-text: #6b7280;
+    --lf-cmp-asset-picker-muted-text-dark: #9ca3af;
+    --lf-cmp-asset-picker-tab-btn-active-text: #1a4031;
+    --lf-cmp-asset-picker-tab-btn-active-text-dark: #10b981;
+    --lf-cmp-asset-picker-accent-border: #1a4031;
+    --lf-cmp-asset-picker-accent-border-dark: #10b981;
+    --lf-cmp-asset-picker-url-input-border: #d1d5db;
+    --lf-cmp-asset-picker-url-input-border-dark: #4b5563;
+    --lf-cmp-asset-picker-field-bg: #fff; /* white */
+    --lf-cmp-asset-picker-field-bg-dark: #374151;
+    --lf-cmp-asset-picker-url-preview-bg: #f9fafb;
+    --lf-cmp-asset-picker-url-preview-bg-dark: #1a2332;
+    --lf-cmp-asset-picker-circle-overlay-shadow: #00000080; /* rgba(0, 0, 0, 0.5) */
+    --lf-cmp-asset-picker-circle-overlay-border: rgba(255, 255, 255, 0.6);
+    --lf-cmp-asset-picker-url-hint-text: #9ca3af;
+    --lf-cmp-asset-picker-url-hint-text-dark: #6b7280;
+    --lf-cmp-asset-picker-field-border: #e5e7eb;
+    --lf-cmp-asset-picker-field-border-dark: #4b5563;
+    --lf-cmp-asset-picker-faint-text: #9ca3af;
+    --lf-cmp-asset-picker-search-input-text: #374151;
+    --lf-cmp-asset-picker-search-input-text-dark: #f3f4f6;
+    --lf-cmp-asset-picker-search-clear-bg: #e5e7eb;
+    --lf-cmp-asset-picker-search-clear-bg-dark: #4b5563;
+    --lf-cmp-asset-picker-toggle-btn-hover-bg: #f3f4f6;
+    --lf-cmp-asset-picker-accent-bg: #1a4031;
+    --lf-cmp-asset-picker-accent-bg-dark: #10b981;
+    --lf-cmp-asset-picker-toggle-btn-active-text: #fff; /* white */
+    --lf-cmp-asset-picker-toggle-btn-active-text-dark: #fff; /* white */
+    --lf-cmp-asset-picker-btn-primary-text: #fff; /* white */
+    --lf-cmp-asset-picker-btn-primary-hover-bg: #143326;
+    --lf-cmp-asset-picker-btn-primary-hover-bg-dark: #059669;
+    --lf-cmp-asset-picker-btn-secondary-bg: #e5e7eb;
+    --lf-cmp-asset-picker-btn-secondary-bg-dark: #374151;
+    --lf-cmp-asset-picker-btn-secondary-text: #374151;
+    --lf-cmp-asset-picker-btn-secondary-text-dark: #d1d5db;
+    --lf-cmp-asset-picker-btn-secondary-hover-bg: #d1d5db;
+    --lf-cmp-asset-picker-btn-secondary-hover-bg-dark: #4b5563;
+    --lf-cmp-asset-picker-url-clear-btn-text: #dc2626; /* inline style, same in both themes */
+
+    /* FileUploader.svelte */
+    --lf-cmp-file-uploader-drop-zone-border: #cbd5e1;
+    --lf-cmp-file-uploader-drop-zone-border-dark: #475569;
+    --lf-cmp-file-uploader-drop-zone-bg: #f8fafc;
+    --lf-cmp-file-uploader-drop-zone-bg-dark: #1e293b;
+    --lf-cmp-file-uploader-drop-zone-hover-border: #1a4031;
+    --lf-cmp-file-uploader-drop-zone-hover-border-dark: #4ade80;
+    --lf-cmp-file-uploader-drop-zone-hover-bg: #f1f5f9;
+    --lf-cmp-file-uploader-drop-zone-hover-bg-dark: #0f172a;
+    --lf-cmp-file-uploader-drop-zone-dragging-bg: #1a40310d; /* rgba(26, 64, 49, 0.05) */
+    --lf-cmp-file-uploader-faint-text: #94a3b8;
+    --lf-cmp-file-uploader-text: #475569;
+    --lf-cmp-file-uploader-text-dark: #e2e8f0;
+    --lf-cmp-file-uploader-file-item-bg: #fff; /* white */
+    --lf-cmp-file-uploader-file-item-bg-dark: #0f172a;
+    --lf-cmp-file-uploader-file-item-border: #e2e8f0;
+    --lf-cmp-file-uploader-file-item-border-dark: #334155;
+    --lf-cmp-file-uploader-file-icon-text: #64748b;
+    --lf-cmp-file-uploader-image-icon-text: #3b82f6;
+    --lf-cmp-file-uploader-image-icon-text-dark: #60a5fa;
+    --lf-cmp-file-uploader-file-name-text: #0f172a;
+    --lf-cmp-file-uploader-file-name-text-dark: #f1f5f9;
+    --lf-cmp-file-uploader-file-item-edited-border: #3b82f6;
+    --lf-cmp-file-uploader-file-item-edited-border-dark: #60a5fa;
+    --lf-cmp-file-uploader-file-item-edited-bg: #eff6ff;
+    --lf-cmp-file-uploader-file-item-edited-bg-dark: #1e3a5f;
+    --lf-cmp-file-uploader-restore-btn-text: #d97706;
+    --lf-cmp-file-uploader-restore-btn-text-dark: #fbbf24;
+    --lf-cmp-file-uploader-edit-btn-hover-bg: #dbeafe;
+    --lf-cmp-file-uploader-edit-btn-hover-bg-dark: #1e3a5f;
+    --lf-cmp-file-uploader-edit-btn-hover-text: #2563eb;
+    --lf-cmp-file-uploader-edit-btn-hover-text-dark: #60a5fa;
+    --lf-cmp-file-uploader-remove-btn-hover-bg: #fee2e2;
+    --lf-cmp-file-uploader-remove-btn-hover-bg-dark: #7f1d1d;
+    --lf-cmp-file-uploader-remove-btn-hover-text: #dc2626;
+    --lf-cmp-file-uploader-remove-btn-hover-text-dark: #fecaca;
+    --lf-cmp-file-uploader-restore-btn-hover-bg: #fef3c7;
+    --lf-cmp-file-uploader-restore-btn-hover-bg-dark: #451a03;
+    --lf-cmp-file-uploader-errors-bg: #fef2f2;
+    --lf-cmp-file-uploader-errors-bg-dark: #450a0a;
+    --lf-cmp-file-uploader-errors-border: #fecaca;
+    --lf-cmp-file-uploader-errors-border-dark: #7f1d1d;
+    --lf-cmp-file-uploader-errors-text: #b91c1c;
+    --lf-cmp-file-uploader-errors-text-dark: #fecaca;
+    --lf-cmp-file-uploader-btn-secondary-bg: #f1f5f9;
+    --lf-cmp-file-uploader-btn-secondary-bg-dark: #334155;
+    --lf-cmp-file-uploader-btn-secondary-hover-bg: #e2e8f0;
+    --lf-cmp-file-uploader-btn-secondary-hover-bg-dark: #475569;
+    --lf-cmp-file-uploader-btn-secondary-hover-text: #0f172a;
+    --lf-cmp-file-uploader-btn-primary-bg: #1a4031;
+    --lf-cmp-file-uploader-btn-primary-bg-dark: #4ade80;
+    --lf-cmp-file-uploader-btn-primary-text: #fff; /* white */
+    --lf-cmp-file-uploader-btn-primary-text-dark: #0f172a;
+    --lf-cmp-file-uploader-btn-primary-hover-bg: #143426;
+    --lf-cmp-file-uploader-btn-primary-hover-bg-dark: #22c55e;
+
+    /* FileEditModal.svelte */
+    --lf-cmp-file-edit-divider-border: #e5e7eb;
+    --lf-cmp-file-edit-divider-border-dark: #374151;
+    --lf-cmp-file-edit-restore-btn-bg: #f59e0b1a; /* rgba(245, 158, 11, 0.1) */
+    --lf-cmp-file-edit-restore-btn-text: #f59e0b;
+    --lf-cmp-file-edit-restore-btn-hover-bg: #f59e0b33; /* rgba(245, 158, 11, 0.2) */
+    --lf-cmp-file-edit-restore-btn-hover-text: #d97706;
+    --lf-cmp-file-edit-title-text: #111827;
+    --lf-cmp-file-edit-title-text-dark: #f3f4f6;
+    --lf-cmp-file-edit-close-btn-text: #6b7280;
+    --lf-cmp-file-edit-close-btn-hover-bg: #f3f4f6;
+    --lf-cmp-file-edit-close-btn-hover-bg-dark: #374151;
+    --lf-cmp-file-edit-text: #374151;
+    --lf-cmp-file-edit-text-dark: #d1d5db;
+    --lf-cmp-file-edit-muted-text: #6b7280;
+    --lf-cmp-file-edit-muted-text-dark: #9ca3af;
+    --lf-cmp-file-edit-info-value-text: #374151;
+    --lf-cmp-file-edit-info-value-text-dark: #e5e7eb;
+    --lf-cmp-file-edit-field-border: #d1d5db;
+    --lf-cmp-file-edit-field-border-dark: #4b5563;
+    --lf-cmp-file-edit-field-bg: #fff; /* white */
+    --lf-cmp-file-edit-field-bg-dark: #374151;
+    --lf-cmp-file-edit-field-text: #374151;
+    --lf-cmp-file-edit-field-text-dark: #f3f4f6;
+    --lf-cmp-file-edit-field-focus-border: #1a4031;
+    --lf-cmp-file-edit-field-focus-border-dark: #10b981;
+    --lf-cmp-file-edit-file-extension-bg: #f3f4f6;
+    --lf-cmp-file-edit-file-extension-bg-dark: #4b5563;
+    --lf-cmp-file-edit-error-message-bg: #fef2f2;
+    --lf-cmp-file-edit-error-message-bg-dark: #dc26261a; /* rgba(220, 38, 38, 0.1) */
+    --lf-cmp-file-edit-error-message-border: #fecaca;
+    --lf-cmp-file-edit-error-message-border-dark: #dc26264d; /* rgba(220, 38, 38, 0.3) */
+    --lf-cmp-file-edit-error-message-text: #dc2626;
+    --lf-cmp-file-edit-footer-bg: #f9fafb;
+    --lf-cmp-file-edit-footer-bg-dark: #111827;
+    --lf-cmp-file-edit-btn-primary-bg: #1a4031;
+    --lf-cmp-file-edit-btn-primary-bg-dark: #10b981;
+    --lf-cmp-file-edit-on-fill-text: #fff; /* white */
+    --lf-cmp-file-edit-btn-primary-hover-bg: #143326;
+    --lf-cmp-file-edit-btn-primary-hover-bg-dark: #059669;
+    --lf-cmp-file-edit-btn-secondary-bg: #e5e7eb;
+    --lf-cmp-file-edit-btn-secondary-bg-dark: #374151;
+    --lf-cmp-file-edit-btn-secondary-hover-bg: #d1d5db;
+    --lf-cmp-file-edit-btn-secondary-hover-bg-dark: #4b5563;
+    --lf-cmp-file-edit-confirm-title-text: #d97706;
+    --lf-cmp-file-edit-confirm-title-text-dark: #fbbf24;
+    --lf-cmp-file-edit-btn-warning-bg: #f59e0b;
+    --lf-cmp-file-edit-btn-warning-hover-bg: #d97706;
+
+    /* ImageCropper.svelte */
+    --lf-cmp-image-cropper-controls-overlay-bg: #00000080; /* rgba(0, 0, 0, 0.5) */
+    --lf-cmp-image-cropper-overlay-btn-bg: #ffffffe6; /* rgba(255, 255, 255, 0.9) */
+    --lf-cmp-image-cropper-overlay-btn-text: #374151;
+    --lf-cmp-image-cropper-overlay-btn-hover-bg: #fff; /* white */
+    --lf-cmp-image-cropper-overlay-btn-hover-text: #1a4031;
+    --lf-cmp-image-cropper-overlay-btn-active-bg: #10b981e6; /* rgba(16, 185, 129, 0.9) */
+    --lf-cmp-image-cropper-overlay-btn-active-text: #fff; /* white */
+    --lf-cmp-image-cropper-overlay-btn-active-hover-bg: #059669;
+    --lf-cmp-image-cropper-overlay-separator-bg: #ffffff4d; /* rgba(255, 255, 255, 0.3) */
+    --lf-cmp-image-cropper-ellipse-overlay-shadow: #00000073; /* rgba(0, 0, 0, 0.45) */
+    --lf-cmp-image-cropper-ellipse-overlay-border: rgba(255, 255, 255, 0.5);
+    --lf-cmp-image-cropper-container-bg: #1a1a1a;
+    --lf-cmp-image-cropper-theme-color: rgba(0, 0, 0, 0.5);
+    --lf-cmp-image-cropper-theme-color-dark: rgba(0, 0, 0, 0.7);
+    --lf-cmp-image-cropper-cropper-backdrop-color: rgba(0, 0, 0, 0.3);
+    --lf-cmp-image-cropper-cropper-backdrop-color-dark: rgba(0, 0, 0, 0.8);
+    --lf-cmp-image-cropper-cropper-selection-outline-color: rgba(255, 255, 255, 0.9);
+    --lf-cmp-image-cropper-cropper-selection-outline-color-dark: rgba(255, 255, 255, 0.9);
+    --lf-cmp-image-cropper-selection-outline: rgba(255, 255, 255, 0.9);
+    --lf-cmp-image-cropper-selection-outline-dark: #ffffffe6; /* rgba(255, 255, 255, 0.9) */
+    --lf-cmp-image-cropper-handle-corner-border: white;
+    --lf-cmp-image-cropper-handle-side-bg: #fff; /* white */
+    --lf-cmp-image-cropper-handle-side-bg-dark: #fff; /* white */
+    --lf-cmp-image-cropper-handle-border-dark: #fff; /* white */
+}

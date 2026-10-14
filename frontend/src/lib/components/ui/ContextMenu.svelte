@@ -10,6 +10,7 @@
     import {onMount} from 'svelte';
     import type {Component} from 'svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import '$lib/theme/components/dialogs.css';
 
     export interface ContextMenuItem {
         type?: 'action' | 'separator';
@@ -199,21 +200,21 @@
         z-index: 9999;
         min-width: 180px;
         max-width: 280px;
-        background: white;
-        border: 1px solid #e2e8f0;
+        background: var(--lf-cmp-context-menu-surface-bg);
+        border: 1px solid var(--lf-cmp-context-menu-border);
         border-radius: 0.5rem;
         box-shadow:
-            0 10px 25px -5px rgb(0 0 0 / 0.1),
-            0 4px 6px -2px rgb(0 0 0 / 0.05);
+            0 10px 25px -5px var(--lf-cmp-context-menu-shadow-1),
+            0 4px 6px -2px var(--lf-cmp-context-menu-shadow-2);
         padding: 0.25rem 0;
         overflow: hidden;
     }
     :global(.dark) .context-menu {
-        background: #1e293b;
-        border-color: #334155;
+        background: var(--lf-cmp-context-menu-surface-bg-dark);
+        border-color: var(--lf-cmp-context-menu-border-dark);
         box-shadow:
-            0 10px 25px -5px rgb(0 0 0 / 0.4),
-            0 4px 6px -2px rgb(0 0 0 / 0.2);
+            0 10px 25px -5px var(--lf-cmp-context-menu-shadow-1-dark),
+            0 4px 6px -2px var(--lf-cmp-context-menu-shadow-2-dark);
     }
     .context-item {
         display: flex;
@@ -224,42 +225,42 @@
         border: none;
         background: none;
         font-size: 0.8125rem;
-        color: #334155;
+        color: var(--lf-cmp-context-menu-item-text);
         cursor: pointer;
         text-align: left;
         transition: background-color 0.1s;
     }
     :global(.dark) .context-item {
-        color: #e2e8f0;
+        color: var(--lf-cmp-context-menu-item-text-dark);
     }
     .context-item:hover:not(:disabled) {
-        background: #f1f5f9;
+        background: var(--lf-cmp-context-menu-item-hover-bg);
     }
     :global(.dark) .context-item:hover:not(:disabled) {
-        background: #334155;
+        background: var(--lf-cmp-context-menu-item-hover-bg-dark);
     }
     .context-item:disabled {
         opacity: 0.4;
         cursor: default;
     }
     .context-item.danger {
-        color: #dc2626;
+        color: var(--lf-cmp-context-menu-item-danger-text);
     }
     :global(.dark) .context-item.danger {
-        color: #f87171;
+        color: var(--lf-cmp-context-menu-item-danger-text-dark);
     }
     .context-item.danger:hover:not(:disabled) {
-        background: #fef2f2;
+        background: var(--lf-cmp-context-menu-item-danger-hover-bg);
     }
     :global(.dark) .context-item.danger:hover:not(:disabled) {
-        background: #450a0a;
+        background: var(--lf-cmp-context-menu-item-danger-hover-bg-dark);
     }
     .context-separator {
         margin: 0.25rem 0;
         border: none;
-        border-top: 1px solid #e2e8f0;
+        border-top: 1px solid var(--lf-cmp-context-menu-border);
     }
     :global(.dark) .context-separator {
-        border-top-color: #334155;
+        border-top-color: var(--lf-cmp-context-menu-border-dark);
     }
 </style>
