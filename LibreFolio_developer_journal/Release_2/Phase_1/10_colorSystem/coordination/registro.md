@@ -455,7 +455,7 @@
   2. G: merge di `d80b986bf` → `60b3f27aa`, albero = simulazione; avanzamento veloce di `dev_release2` a `60b3f27aa`.
   3. Controllo d'integrazione nella corsia 6150: `core-unit` 130 file, 4.245 test verdi; `--check` pulito.
 - **1.3:** ha sospeso i suoi commit fino alla conferma dello SHA. Da dirle:
-  - T-B4 è nella sezione «T (colori)»;
+  - TC-4 (allora T-B4) è nella sezione «T (colori)»;
   - la riga di changelog di G-4;
   - FE5 (la pagina dell'asset) ora è libera.
 - **Domani alle 09:00:** misura finale sul `dev_release2` con G (comandi di G, `live_price_check` con pipenv).
@@ -468,7 +468,7 @@
   - Nei file condivisi con la 1.3 cambiano solo le classi: le righe si pareggiano.
   - E2E `theme-roles` 14/14, compreso il controllo negativo sulla card legacy in scuro; baseline stretta (m1 11.185,
     m2 1.781).
-  - Nuove voci di backlog di T: T-B2 (stati del controllo di sicurezza sulla barra verde) e T-B5 (il tema scelto
+  - Nuove voci di backlog di T: TC-2 (stati del controllo di sicurezza sulla barra verde) e TC-5 (il tema scelto
     dall'header si perde al login; l'accessibilità della shell).
 - **Merge di base con `833507302`** (G, T-2, documenti) → `dad0f6292`, albero = simulazione.
 - **Integrazione:** dopo la gallery candidata di domani e la revisione del developer, perché cambiano tutte le
@@ -483,3 +483,74 @@
 
   R, L e T entrano solo dopo le loro candidate, così il target resta quello di r1. La 1.3 ferma le suite complete
   nella finestra (09:00–12:00 circa), con conferma alle 08:45.
+
+## 00:35 (15/10) — A1 integrato, collisione di ID, A2
+
+- **A1** (riordino dei servizi account, solo backend) entrato dalla 1.3: `dev_release2` = `769cc31cb`, poi 4 commit
+  di diario della 1.3 (HEAD `b444b0d8f` alle 00:30).
+- **Collisione di ID:** T-B4 e T-B5 della sezione «T (colori)» collidono con la sezione T del piano 43. Tutta la
+  sezione «T (colori)» passa al prefisso `TC-` (T-B1 → TC-1 …); la voce delle regole della password diventa
+  **TC-4**. La rinomina la fa T nel checkpoint di T-5 e entra con T-3; A aggiorna poi il richiamo in A-6 e nel
+  piano 02.
+- **A2 della 1.3** (auth, settings, support e update-check in `lib/features/`, rinomine pure): OK perché A cambi,
+  nello stesso commit, solo i percorsi in `theme-roles.mjs:75,83`, `themeRoles.gate.test.ts:444,445,478`, il
+  commento di `gallery.spec.ts` (~2380) e `navigation_map.it.md:43`.
+  - Verifica: R, L, T e G non toccano né le cartelle spostate né quei file; nessun import dalle cartelle spostate
+    nei file cambiati dai rami.
+  - Baseline del cricchetto intatta: niente `--update` né `--split`. R4 (`pairMoves`) accoppia per nome, e tra i
+    file spostati non ci sono nomi doppi; T riscrive i 22 percorsi alla sua prossima `--update`.
+  - Finestra: A2 entra prima della conferma delle 08:45, e allora fa parte di X, oppure dopo la finestra della
+    gallery.
+  - **Da dire a R al merge di base:** Svelte 5.48 calcola l'hash del CSS con ambito dal nome del file
+    (`cssHash` di default). Con A2 cambiano le classi `svelte-*` dei componenti spostati: i pixel sono gli stessi,
+    ma la baseline CSS va ricatturata sul target che contiene A2.
+  - Percorsi abbreviati nella mappa di navigazione (righe 108–120 e 149–150): da riallineare io se cambia la
+    struttura interna.
+
+## 00:50 (15/10) — H CP1 integrato
+
+- **H CP1** (riordino di `services/platform/` e `services/files/`) entrato dalla 1.3: `dev_release2` =
+  `6a605904c`. 97 file: backend, MkDocs per sviluppatori, devWiki; del frontend solo un commento in
+  `updateCheck.test.ts`.
+  - Nessun file del programma colori. L'unico file in comune con i rami è `BACKLOG_POST_1.2.md`, in sezioni
+    diverse.
+- **Simulazione dei merge di base di domani su `6a605904c`:**
+  - L e T: puliti.
+  - R: un solo conflitto, `themeRoles.baseline.tsv`, in coda al file. Nasce da T-2, non da H: `routes/+error.svelte`
+    scende a 0, `routes/+page.svelte` passa da 5 a 1, e la riga `~accept` del D3 di R le segue.
+  - Soluzione: R esegue `theme-roles.mjs --resolve` (vince il lato più stretto, la `~accept` resta), poi `--check`.
+    Il merge resta aperto, R mette in stage solo la baseline e io chiudo il merge.
+
+## 01:15 (15/10) — T-5 committato, A2 integrato, mappe riallineate
+
+- **T-5** (sfondo del login): `f43aa7200`, figlio di `dad0f6292`, 9 file.
+  - Nuovi ruoli `--lf-art-hill-1/2/3` e `--lf-art-line`, solo variabili, senza utility: l'intensità di ogni
+    strato è l'alfa del suo colore.
+  - In chiaro resta il disegno di prima. In scuro ci sono i valori della designer, come prima proposta (TC-2).
+  - `AnimatedBackground` non ha più regole `html.dark`. m2 scende da 1.781 a 1.773.
+  - Il gate C2 ora risolve ogni ruolo; E2E `theme-roles` 18/18.
+  - T ha rinominato i suoi ID in TC-1…TC-5 e ha aggiunto **TC-6**, che non è di colore e va instradato alla 1.3:
+    alla prima visita con il browser in `it-IT`, il selettore della lingua mostra l'inglese.
+  - I 16 scatti sono in `review/T5-login/`, con il foglio di contatto per il developer.
+- **A2**, cioè auth, settings, support e update-check in `lib/features/`, è stato integrato dalla 1.3.
+  - Avanzamento veloce a `76e61889b`, poi `c1df8f4cb` di diario.
+  - Nei nostri file ha cambiato solo le 7 righe autorizzate. `--check` è pulito, con 22 spostamenti R4
+    riconosciuti.
+  - Simulazione dei merge di base su `76e61889b`: L e T sono puliti; R ha solo il conflitto già noto della
+    baseline.
+- **Mappe della revisione riallineate**, su richiesta della 1.3:
+  - in `navigation_map.it.md`, 12 percorsi abbreviati diventano `lib/features/…`;
+  - la modale della password è `PasswordChangeModal.svelte`, aperta da `ProfileTab.svelte`: la voce
+    «non verificato» è chiusa;
+  - in `review_content.py` ho aggiornato le righe del logo, che ora usa il ruolo `bg-lf-logo`, bianco nei due
+    temi.
+  - Prima del giro 2 della designer vanno riscritti i suggerimenti `LOOK["auth"]`: descrivono ancora campi,
+    barra della password e pulsante della 1.2, che T-2 ha cambiato.
+- **Registro:** nelle righe di ieri «T-B4», «T-B2» e «T-B5» diventano TC-4, TC-2 e TC-5.
+- **T stanotte:** solo l'analisi dello spacchettamento di W1 e W2, scritta nel suo piano:
+  - lotti di al massimo 15 file;
+  - i rami attivi che toccano ogni file;
+  - i ruoli mancanti, come domande per il giro 2;
+  - i test per ogni lotto.
+
+  Handoff con FROZEN entro le 08:30; lo committo prima del merge di base.
