@@ -441,7 +441,9 @@ insieme solo se:
 Altrimenti servono due checkpoint in fila.
 
 **`npm ci` prima della prima run di test**: anche i test del solo backend avviano il server condiviso, che costruisce il
-frontend se manca. Senza `node_modules`, la build chiama `npx` (vietato). Regola C5.
+frontend se manca. Senza `node_modules`, la build chiama `npx` (vietato). Regola C5. Poi, una volta, `dev.py front
+build --debug` e `dev.py mkdocs build` (trovato da J): il limite d'avvio del server condiviso (300 s,
+`scripts/test_runner/_server.py:48`) comprende anche la build di debug e il sito, che in un worktree nuovo non ci stanno.
 
 **Taglio dichiarato** (dal programma colori, 14/10). Dopo l'ingresso di T-1, il cricchetto dei colori vuole i file
 nuovi senza classi di palette e tollera solo le rinomine. Un taglio crea file nuovi con le classi del file di
