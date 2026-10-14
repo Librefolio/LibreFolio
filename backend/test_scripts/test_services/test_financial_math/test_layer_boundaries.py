@@ -56,7 +56,6 @@ FORBIDDEN_PREFIXES = (
     "backend.app.services.ai_export",
     "backend.app.services.risk",
     "backend.app.services.pac_allocator",
-    "backend.app.services.portfolio_allocation_source",
     "backend.app.services.signal",
 )
 
@@ -150,7 +149,7 @@ _FORBIDDEN_SHAPES = (
     ("from backend.app.services.risk.service import RiskService", 1, "backend.app.services.risk.service"),
     ("from backend.app.services import fx, risk_plugins", 1, "backend.app.services.risk_plugins"),
     ("from backend.app.services.pac_allocator.planner import plan", 1, "backend.app.services.pac_allocator.planner"),
-    ("from backend.app.services.portfolio_allocation_source import build_snapshot", 1, "backend.app.services.portfolio_allocation_source"),
+    ("from backend.app.services.pac_allocator.source.portfolio_allocation_source import build_snapshot", 1, "backend.app.services.pac_allocator.source.portfolio_allocation_source"),
     ("from backend.app.services.signal_service import SignalService", 1, "backend.app.services.signal_service"),
     ("from backend.app.services.signal_plugins import base", 1, "backend.app.services.signal_plugins"),
     ("import backend.app.services.signal_runtime", 1, "backend.app.services.signal_runtime"),

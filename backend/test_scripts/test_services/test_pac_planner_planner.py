@@ -110,7 +110,7 @@ from typing import get_args
 
 import pytest
 
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.pac_allocator import (
     PAC_PLAN_INPUT_ADAPTER,
     PAC_PLAN_OUTPUT_ADAPTER,
     InfeasibilityProvenProof,
@@ -124,9 +124,9 @@ from backend.app.schemas.pac_allocator import (
     PlannerResultSnapshot,
     ReportedFloatingSolverEvidence,
 )
-from backend.app.services.pac_allocator import evaluator as EV
 from backend.app.services.pac_allocator import planner
-from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate, exact_decision_id
+from backend.app.services.pac_allocator.evaluation import evaluator as EV
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate, exact_decision_id
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request

@@ -1,7 +1,7 @@
 """Contract tests for the PAC planner wire projection (Step 3, Stage 5a).
 
 ``planner_report.py`` re-expresses an already-exact evaluation as the frozen
-wire contract in ``schemas/pac_allocator.py``. It computes no economics; its
+wire contract in ``schemas/pac_allocator/pac_allocator.py``. It computes no economics; its
 one piece of arithmetic is the exposure projection, and even there it only
 aggregates quantities the solve already decided. These tests lock the
 non-obvious properties of that projection — the ones a reader of the code
@@ -58,7 +58,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.pac_allocator import (
     DeploymentUnavailable,
     FiniteDecimal,
     OptimalProvenProof,
@@ -69,13 +69,13 @@ from backend.app.schemas.pac_allocator import (
     _exact_fraction,
     _validate_weight_availability,
 )
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.pac_allocator import (
     ExactRatio as WireExactRatio,
 )
 from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
-from backend.app.services.pac_allocator.evaluator import _fx_debit_key, build_exact_policy_view, evaluate_exact_candidate, exact_decision_id
+from backend.app.services.pac_allocator.evaluation.evaluator import _fx_debit_key, build_exact_policy_view, evaluate_exact_candidate, exact_decision_id
 from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactExposure
 from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import solve_policy_program

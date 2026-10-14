@@ -37,7 +37,7 @@ from backend.app.services.pac_allocator.constraints import (
     planning_fx_rate,
     valuation_rate,
 )
-from backend.app.services.pac_allocator.evaluator import exact_decision_id
+from backend.app.services.pac_allocator.evaluation.evaluator import exact_decision_id
 from backend.app.services.pac_allocator.models import ExactOrderRoute, ExactPlannerScenario, ExactPolicyView
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a hard pyscipopt import for readers

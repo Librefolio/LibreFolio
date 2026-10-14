@@ -19,8 +19,8 @@ from typing import Any, get_args
 import pytest
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from backend.app.schemas import pac_allocator as pac_schemas
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator import pac_allocator as pac_schemas
+from backend.app.schemas.pac_allocator.pac_allocator import (
     PAC_PLAN_INPUT_ADAPTER,
     PAC_PLAN_OUTPUT_ADAPTER,
     REBALANCER_PLAN_INPUT_ADAPTER,

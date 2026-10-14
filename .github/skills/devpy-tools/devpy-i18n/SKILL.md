@@ -195,7 +195,7 @@ What counts as evidence:
 - **Backend f-string families** (`f"aiExport.additionalData.reason.{reason}"`) and suffixes
   (`` `${displayNameKey}Full` ``).
 - A backend family whose namespace exists but holds no key is listed under 👻 (today:
-  `tools.allocation.constraints.` ← `pac_allocator/evaluator.py:968`, a field nobody reads).
+  `tools.allocation.constraints.` ← `pac_allocator/evaluation/evaluator.py:968`, a field nobody reads).
 - A key that only **unreferenced sources** keep alive is listed under 📦, with the verdict it would get
   without them. A source is unreferenced when no SvelteKit entry (route files, hooks, service worker)
   reaches it through static or dynamic imports. Informational: decide whether the source is dead, then

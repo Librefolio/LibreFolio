@@ -306,7 +306,7 @@ GREETING = f"Hello {name}"
 JOINED = f"{a}.{b}"
 """
 
-# pac_allocator/evaluator.py:968, in single quotes: a family the catalogue no longer
+# pac_allocator/evaluation/evaluator.py:968, in single quotes: a family the catalogue no longer
 # has a single key for (§2.4).
 EVALUATOR_PY = """
 def _constraint_ref(code: str) -> ConstraintRef:
@@ -701,7 +701,7 @@ export function resolveProviderError(op: Operation): string {
             tmp_path / "backend",
             {
                 "services/ai_export/analyses/catalog.py": CATALOG_PY,
-                "services/pac_allocator/evaluator.py": EVALUATOR_PY,
+                "services/pac_allocator/evaluation/evaluator.py": EVALUATOR_PY,
             },
         )
         # Equality: `f"Hello {name}"` and `f"{a}.{b}"` sit in the same file without a
@@ -950,7 +950,7 @@ export const SIGNALS = [
 class TestPhantomFamilies:
     """R7 — a family no catalogue key answers is reported, not silently kept.
 
-    ``pac_allocator/evaluator.py:968`` still writes
+    ``pac_allocator/evaluation/evaluator.py:968`` still writes
     ``explanation_key=f"tools.allocation.constraints.{code.lower()}"``, while the
     catalogue has had no ``tools.allocation.*`` key since D's row 13 (§2.4). Nothing
     reads it today, which is exactly why nobody noticed: a family that can only ever

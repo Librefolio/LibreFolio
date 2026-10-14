@@ -23,10 +23,10 @@ from typing import Any
 
 import pytest
 
-from backend.app.schemas.pac_allocator import PacPlannerRequest
-from backend.app.services.pac_allocator import evaluator as EV
+from backend.app.schemas.pac_allocator.pac_allocator import PacPlannerRequest
 from backend.app.services.pac_allocator import models as pac_models
-from backend.app.services.pac_allocator.evaluator import (
+from backend.app.services.pac_allocator.evaluation import evaluator as EV
+from backend.app.services.pac_allocator.evaluation.evaluator import (
     ExactEvaluatorError,
     ExactPolicyContractError,
     ExactScenarioContractError,
