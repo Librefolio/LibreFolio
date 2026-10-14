@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
  * AllocationPieChart.test.ts — what the "by type" pie hands ECharts, read off the real component:
- * the family every asset type is drawn in, and the icon that titles each arc's tooltip.
+ * the family every asset type is drawn in, the icon that titles each arc's tooltip, and the palette
+ * its arcs are drawn from.
  *
  * ## Why the component, and not the pure modules
  *
@@ -36,12 +37,20 @@
  * really there, so "one icon" cannot hold because every subtype has fallen back to its family's
  * picture.
  *
+ * ## The palette is the one its colour tests measure
+ *
+ * `colors.test.ts`, `allocationHierarchy.test.ts` and `allocationRings.test.ts` measure the pie's
+ * colours on `ALLOCATION_PIE_PALETTE`, imported from `$lib/theme/chartPalettes`. Their measures are
+ * about this chart only while it draws that palette — a copy back in the component, or the other
+ * theme's list, would leave all three green — so one block here mounts the pie in each theme and
+ * compares what it hands ECharts with the palette of that theme.
+ *
  * ## What is not asserted
  *
  * No translated word: labels and the generic caption are resolved from the shipped catalogue,
- * through the same `$_` and the same keys the component calls. Colours are the subject of
- * `allocationRings.test.ts` and `allocationHierarchy.test.ts`. Every value and amount is
- * synthetic.
+ * through the same `$_` and the same keys the component calls. Colours beyond the palette binding
+ * are the subject of `allocationRings.test.ts` and `allocationHierarchy.test.ts`. Every value and
+ * amount is synthetic.
  *
  * ## Why the imports are dynamic
  *
@@ -116,6 +125,7 @@ import {locale, waitLocale} from 'svelte-i18n';
 import {render, setupI18n, waitFor} from '$test/component';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
+import {ALLOCATION_PIE_PALETTE} from '$lib/theme/chartPalettes';
 
 // =============================================================================
 // Fixtures
@@ -163,6 +173,8 @@ interface DrawnArc {
     ringRole?: 'base' | 'member' | 'filler';
     /** Set on the outer fillers, which ECharts never shows a tooltip for. */
     tooltip?: {show?: boolean};
+    /** The arc's own fill. */
+    itemStyle?: {color?: string};
 }
 
 interface Drawing {
@@ -172,6 +184,8 @@ interface Drawing {
     inner: DrawnArc[];
     /** The outer ring; empty when there is only one. */
     outer: DrawnArc[];
+    /** The option's `color`: the list ECharts paints an arc that carries no fill of its own with. */
+    color: unknown;
     /** The HTML the tooltip shows when `arc` is hovered. */
     tooltipOf: (arc: DrawnArc) => string;
 }
@@ -235,13 +249,14 @@ function drawing(): Drawing {
     const series = build.option.series as Array<{id?: string; data: DrawnArc[]}>;
     const formatter = (build.option.tooltip as {formatter: (params: unknown) => string}).formatter;
     const tooltipOf = (arc: DrawnArc) => formatter({componentType: 'series', seriesType: 'pie', name: arc.name, value: arc.value, data: arc});
+    const color = build.option.color;
 
     if (series.some((entry) => entry.id === 'alloc-base')) {
         expect(series.map((entry) => entry.id)).toEqual(['alloc-base', 'alloc-outer']);
-        return {rings: true, inner: series[0].data, outer: series[1].data, tooltipOf};
+        return {rings: true, inner: series[0].data, outer: series[1].data, color, tooltipOf};
     }
     expect(series, 'a pie without rings draws exactly one series').toHaveLength(1);
-    return {rings: false, inner: series[0].data, outer: [], tooltipOf};
+    return {rings: false, inner: series[0].data, outer: [], color, tooltipOf};
 }
 
 function describeArc(arc: DrawnArc): string {
@@ -395,6 +410,46 @@ describe("AllocationPieChart — the tooltip titles each arc with the type's own
             return shared.length === 0 ? [] : [`${type}: its tooltip shows ${JSON.stringify(shared)}, the icon of its family ${K.assetTypeFamily(type)}`];
         });
         expect(problems, "subtypes whose tooltip picture is their family's or the fallback: the composite that carries what they hold is missing").toEqual([]);
+    });
+});
+
+// =============================================================================
+// The palette — the one the colour tests measure
+// =============================================================================
+
+/**
+ * Why: the header, "The palette is the one its colour tests measure".
+ *
+ * Mounted on families without a subtype: one ring, every family a group of one, so each arc wears the palette entry
+ * of its rank verbatim (the hierarchy's legacy pin). Read: each arc's fill, and the option's `color` — the list
+ * ECharts paints an arc without a fill of its own with, every arc of the sector pie — whole.
+ */
+describe('AllocationPieChart — draws ALLOCATION_PIE_PALETTE, the palette its colour tests measure', () => {
+    /** Four families with no subtype, heaviest first: the order their arcs take. */
+    const SINGLETONS: Slice[] = [slice('STOCK', 40), slice('BOND', 30), slice('CRYPTO', 20), slice('COMMODITY', 10)];
+
+    it.each([
+        ['light', ALLOCATION_PIE_PALETTE.light],
+        ['dark', ALLOCATION_PIE_PALETTE.dark],
+    ] as const)('%s theme: each arc in the entry of its rank in that theme’s list, and the whole list handed to ECharts', async (theme, palette) => {
+        // Control: the two lists differ on the slots drawn, so a pie deaf to the theme fails one of the two rows.
+        expect(ALLOCATION_PIE_PALETTE.dark.slice(0, SINGLETONS.length)).not.toEqual(ALLOCATION_PIE_PALETTE.light.slice(0, SINGLETONS.length));
+
+        // The pie reads the theme off the `dark` class of <html> when it draws.
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+        try {
+            const drawn = await drawPie(SINGLETONS);
+            expect(drawn.rings, 'families without a subtype are drawn on one ring').toBe(false);
+            expect(drawn.inner.map((arc) => arc.rawName)).toEqual(SINGLETONS.map(({name}) => name));
+
+            expect(
+                drawn.inner.map((arc) => arc.itemStyle?.color),
+                'the fill of each arc, by rank',
+            ).toEqual(palette.slice(0, SINGLETONS.length));
+            expect(drawn.color, 'the list ECharts paints an arc without a fill of its own with').toEqual(palette);
+        } finally {
+            document.documentElement.classList.remove('dark');
+        }
     });
 });
 

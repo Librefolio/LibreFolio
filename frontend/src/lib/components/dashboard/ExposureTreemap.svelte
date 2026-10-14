@@ -27,6 +27,9 @@
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {themed} from '$lib/theme/themePair';
+    import {CHART_GAIN_LOSS, TREEMAP_COLORS} from '$lib/theme/chartTheme';
+    import {treemapPnlColor} from '$lib/theme/chartColorScales';
 
     interface Holding {
         asset_id: number;
@@ -486,14 +489,7 @@
     }
 
     function pnlColor(pct: number | null): string {
-        if (pct == null) return '#6b7280';
-        const isDark = document.documentElement.classList.contains('dark');
-        if (pct >= 0) {
-            const intensity = Math.min(pct * 100, 50) / 50;
-            return isDark ? `rgb(${34 + intensity * 40}, ${197 + intensity * 40}, ${94 + intensity * 40})` : `rgb(${22 - intensity * 10}, ${163 - intensity * 30}, ${74 + intensity * 20})`;
-        }
-        const intensity = Math.min(Math.abs(pct * 100), 50) / 50;
-        return isDark ? `rgb(${248}, ${113 - intensity * 40}, ${113 - intensity * 40})` : `rgb(${220 + intensity * 20}, ${38 + intensity * 20}, ${38 + intensity * 20})`;
+        return treemapPnlColor(pct, document.documentElement.classList.contains('dark'));
     }
 
     function handleTreemapContextMenu(params: any) {
@@ -592,7 +588,7 @@
                         if (meta.weight != null) html += buildTooltipRow($_('dashboard.navWeight'), formatPercent(meta.weight, {digits: 1, signed: false}));
                         html += buildTooltipDivider(theme.border);
                         if (meta.gl != null) {
-                            const glColor = meta.gl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626';
+                            const glColor = meta.gl >= 0 ? themed(CHART_GAIN_LOSS.portfolio.gain, isDark) : themed(CHART_GAIN_LOSS.portfolio.loss, isDark);
                             html += buildTooltipRow($_('dashboard.unrealizedPnl'), `<span style="color:${glColor}">${escapeHtml(formatCurrencyAmountPlain(meta.gl, displayCurrency, {showSign: true}))}</span>`);
                         }
                         if (meta.glPct != null) {
@@ -661,19 +657,19 @@
                             height: 20,
                             formatter: formatUpperLabel,
                             rich: upperLabelRich,
-                            color: isDark ? '#e2e8f0' : '#334155',
+                            color: themed(TREEMAP_COLORS.groupLabel, isDark),
                             fontSize: 10,
-                            backgroundColor: isDark ? 'rgba(30,41,59,0.8)' : 'rgba(248,250,252,0.8)',
+                            backgroundColor: themed(TREEMAP_COLORS.groupLabelBackground, isDark),
                         },
                         label: {
                             show: true,
                             formatter: '{b}',
                             fontSize: 10,
-                            color: '#fff',
-                            textShadowColor: 'rgba(0,0,0,0.5)',
+                            color: TREEMAP_COLORS.tileLabel,
+                            textShadowColor: TREEMAP_COLORS.tileLabelShadow,
                             textShadowBlur: 2,
                         },
-                        levels: [{itemStyle: {borderWidth: 2, borderColor: isDark ? '#334155' : '#e2e8f0', gapWidth: 2}}, {itemStyle: {borderWidth: 1, borderColor: isDark ? '#475569' : '#cbd5e1', gapWidth: 1}}, {itemStyle: {borderWidth: 0, gapWidth: 1}}],
+                        levels: [{itemStyle: {borderWidth: 2, borderColor: themed(TREEMAP_COLORS.groupBorder, isDark), gapWidth: 2}}, {itemStyle: {borderWidth: 1, borderColor: themed(TREEMAP_COLORS.tileBorder, isDark), gapWidth: 1}}, {itemStyle: {borderWidth: 0, gapWidth: 1}}],
                     },
                 ],
             },
