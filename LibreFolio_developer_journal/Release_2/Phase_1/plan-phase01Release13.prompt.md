@@ -25,11 +25,17 @@
   riordino del piano 43 (parte 2), backend e frontend, compresi i file più grandi, così
   che le molte sessioni parallele lavorino su cartelle chiare e separate.
 - **Si rilascia quando le ondate 1 e 2 sono complete e verdi** (decisione del developer).
-- **E quando la conversione dei colori non è a metà** (decisione del developer del 14/10, riportata dal coordinatore
-  colori): prima del tag devono essere entrate le ondate W1–W4 del workstream T (primitivi, aree libere, stati e mappe,
-  poi cambi, asset e transazioni). W4 viene dopo gli spostamenti di cartelle di X (cambi FE4, asset FE5) e di W
-  (transazioni FE8), che quindi sono necessari per il rilascio. Grafici, stili propri e colori per categoria (W5, W6,
-  B4 di T) non bloccano, salvo diversa richiesta della designer.
+- **E quando la conversione dei neutri e degli stati è completa** (decisione del developer del 14/10, riportata dal
+  coordinatore colori e da lui precisata alle 22:05). Prima del tag devono essere entrati, del workstream T:
+  - le ondate W1–W6 per neutri e stati: primitivi, aree libere, stati e mappe, cambi/asset/transazioni, portafoglio e
+    grafici, stili propri (tabelle, file, media, dialoghi);
+  - B2 (gli stati diventano ruoli), B4 per i soli neutri e guadagno/perdita dei grafici, B5 (le variabili `--lf-cmp-*`
+    degli stili propri passano ai ruoli);
+  - quindi anche tutti i lotti A–D della fattorizzazione dei colori (R), che quelle ondate aspettano.
+
+  Non bloccano solo le palette per categoria e dei dati, che aspettano un giro della designer. I tagli di file della
+  1.3 su quelle aree (FE5 di X, FE8a di W, FE6 e `DataTable` di Y) vanno prima della conversione quando possibile, ma
+  non bloccano il tag (regola «chi parte prima», §7).
   Nessuna data: le stime del business plan sono prudenti e non vincolano.
 - **Perimetro del backlog** (decisione del developer): errori che toccano numeri,
   sicurezza o dati, e chiarezza per utenti non esperti. I riordini interni sono dentro
@@ -89,7 +95,9 @@ taglio, in due commit; niente shim né barili nuovi; URL, `operationId`, chiavi 
   - dopo il lotto C (tabelle, media, file, dialoghi): file (FE3), `DataTable`;
   - dopo il lotto D: la pagina dei file, `ImportBrokerMismatchModal`,
     `BrokerImportFilesModal`, `CompactCashCell`;
-  - per ultimi: utility e store generici (FE9, FE10), suffissi (FE11).
+  - per ultimi: utility e store generici (FE9, FE10), suffissi (FE11);
+  - i tagli di file (FE5, FE8a, FE6, `DataTable`) hanno la precedenza nel loro lotto: la conversione dei colori di
+    quelle aree, necessaria al rilascio, li aspetta se sono già partiti (§7).
 - **Test speculari al codice (TS1)**: si decide a riordino del backend finito (costo alto).
 
 ### Ondata 1 — Fondamenta per il cloud (bloccano il pannello di controllo)
@@ -206,7 +214,9 @@ Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
    `services/assets/` raggruppato; `price_store` in tre moduli; router di asset e cambi
    per risorsa e router dei segnali (PL7, dopo PL1 di J); frontend cambi (FE4) e asset
    con i tagli di `AssetModal` e della pagina dell'asset (FE5): entrambi **dopo il lotto
-   A dei colori** e dopo la pausa degli aggiornamenti di Z su quelle pagine.
+   A dei colori** e dopo la pausa degli aggiornamenti di Z su quelle pagine. Appena entra il lotto A, il taglio FE5 ha
+   la precedenza: la conversione dei colori di asset e cambi (W4 di T, necessaria al rilascio) viene dopo; FE4,
+   spostamento puro, si fonde con la conversione in qualunque ordine (§7).
 2. Elenchi dei fornitori permessi (F05, parte X): asset e cambi, scraper spenti di
    default nel profilo gestito.
 3. **Impostazioni dei plugin** (idea «⚙️» di `TODO_FUTURI`, decisione del developer):
@@ -243,7 +253,9 @@ Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
    stadi del batch, contesto) → `services/transactions/`; broker → `services/brokers/`;
    router dei broker per risorsa; schemi delle transazioni; frontend transazioni (FE8),
    **dopo il lotto A dei colori**: wizard di import diviso per passo, modali Bulk e Form
-   divise per sezione; i 4 file del lotto D dei colori solo dopo quel lotto.
+   divise per sezione (FE8a, con la precedenza appena entra il lotto A: la conversione dei colori delle transazioni,
+   W4 di T, necessaria al rilascio, viene dopo, §7); i 4 file del lotto D dei colori solo dopo quel lotto (FE8b, non
+   serve alla W4: i colori delle due modali passano dal B5 di T).
 2. Integrità e sicurezza: cancellazione di eventi per id fuori dall'asset (I-12), errore
    500 su un tipo di evento non valido (I-09), «+ Nuovo evento» che modifica un evento
    esistente (V-22), bulk editor e broker in sola lettura (V-23), file letti sull'event
@@ -309,10 +321,14 @@ presentazione (U8) con i campi del backend di J; indicatore di attesa del server
 bandiere nei grafici (K-13); tooltip sanificati (K-15, C-34, C-15); voci dei grafici
 (I-01, I-03, 47-1, 54-1, B10, 48-1, O-16). Dopo il lotto C dei colori: file (FE3),
 `DataTable` tagliata, intestazione Azioni su mobile (C-38 e difetti 2 e 5 del PAC),
-ridimensionamento delle colonne (C-62). Per ultimi FE9, FE10, FE11. **Il riordino di queste
-cartelle (grafici, dashboard, rischio, broker, file) non blocca il rilascio**: se i lotti B e C dei colori arrivano
-tardi, quella parte passa dopo la 1.3. Diverso è il caso di cambi, asset e transazioni (FE4, FE5, FE8 di X e W): da
-lì passa la conversione dei colori che il rilascio richiede (§1).
+ridimensionamento delle colonne (C-62). Per ultimi FE9, FE10, FE11.
+
+**Il riordino di queste cartelle (grafici, dashboard, rischio, broker, file) non blocca il rilascio; la loro
+conversione dei colori sì** (W5 e W6 di T, §1):
+- i tagli di `GrowthChart` (FE6) e di `DataTable` sono i primi lotti di Y, appena entrano rispettivamente i lotti B e
+  C dei colori, così arrivano prima della conversione; se tardano, vale la regola «chi parte prima» (§7);
+- gli spostamenti puri (FE2, FE3, FE7) si fondono con la conversione in qualunque ordine;
+- se al tag il riordino di Y non è finito, il resto passa dopo la 1.3.
 
 ## 5. Schede delle funzioni per il cloud
 
@@ -432,6 +448,14 @@ fermati all'handoff, porta verificata libera.
 - Se un conflitto nasce comunque (il developer: «aiutalo a risolvere o rimappare»), lo
   risolve la sessione figlia che possiede il file, nel suo worktree, all'aggiornamento di
   base.
+- **Regola «chi parte prima»** (proposta del coordinatore 1.3 il 14/10 alle 22:15, in attesa di conferma del
+  coordinatore colori). Serve perché nessun riordino della 1.3 blocchi il tag.
+  - Vale per ogni taglio di file della 1.3 su un'area che T converte: FE5 di X, FE8a di W, FE6 e `DataTable` di Y.
+  - Se il taglio non è iniziato quando T arriva a quel file, T converte il file di oggi; il taglio si fa dopo, sul file
+    convertito, partendo da una base aggiornata.
+  - Se il taglio è iniziato, T lascia quel file per ultimo nella sua ondata.
+  - Mai i due sullo stesso file nello stesso momento. Gli spostamenti puri (`git mv` più import) si fondono con le
+    modifiche di T in qualunque ordine.
 
 ## 8. Traguardi, in ordine di dipendenza
 
@@ -443,12 +467,13 @@ fermati all'handoff, porta verificata libera.
 | M3 | Primo treno del riordino: registri per famiglia (X), punti d'aggancio e configurazione (H), servizi account (A) | B, la sospensione nel backend (Z), le funzioni di A |
 | M4 | Riordino del backend completato (famiglie, servizi per dominio, file grandi) e cartelle frontend fuori dai colori | impostazioni dei plugin, ricerca, decisione sui test speculari |
 | M5 | Ondata 1 integrata | proposta al developer: passaggio su `dev`, così l'immagine `nightly` serve al pannello di controllo |
-| M5b | Spostamenti delle cartelle di cambi e asset (X, FE4 e FE5) e delle transazioni (W, FE8) integrati, dopo il cancello A dei colori | l'ondata W4 della conversione dei colori (T) |
-| M6 | Ondata 2 integrata e ondate W1–W4 della conversione dei colori entrate | cancelli di rilascio |
+| M5b | Dopo il lotto A dei colori: tagli di asset (X, FE5) e transazioni (W, FE8a) integrati; FE4 in qualunque ordine | l'ondata W4 della conversione dei colori (T), regola «chi parte prima» se tardano |
+| M5c | Lotti B, C e D della fattorizzazione dei colori (R) integrati; tagli di `GrowthChart` (FE6) e `DataTable` di Y, se partiti | le ondate W5 e W6 e i passi B4 e B5 della conversione (T) |
+| M6 | Ondata 2 integrata e conversione dei neutri e degli stati completa (W1–W6, B2, B4 per neutri e guadagno/perdita, B5) | cancelli di rilascio |
 | M7 | Cancelli verdi → 1.3.0 (tag e push del developer) | — |
 
 Indipendenti dai traguardi: il lavoro di J, W e Y, che entra a ogni treno quando è
-pronto, e i lotti frontend legati ai lotti B e C dei colori.
+pronto, e il riordino frontend legato ai lotti B e C dei colori (la loro conversione dei colori, invece, è in M6).
 
 ## 9. Cancelli
 
@@ -457,7 +482,8 @@ pronto, e i lotti frontend legati ai lotti B e C dei colori.
 - **Prima dell'integrazione in `dev_release2`**: aggiornamento di base, validazione della
   revisione combinata, nessun file condiviso scritto da due sessioni.
 - **Rilascio**:
-  - conversione dei colori: ondate W1–W4 di T entrate in `dev_release2` (decisione del developer, §1);
+  - conversione dei neutri e degli stati completa in `dev_release2`: ondate W1–W6 di T, B2, B4 (neutri e
+    guadagno/perdita dei grafici), B5; fuori solo le palette per categoria e dei dati (decisione del developer, §1);
   - run completa con coverage anche sotto carico (4 worker con un'altra corsia attiva,
     C-82);
   - galleria completa (con G, mai insieme a un'altra);
@@ -575,3 +601,14 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >   - «📈 Gestione Stock Splits» di `TODO_FUTURI`: il FIFO applica già gli split, marcata superata;
 >   - la voce 5 dell'indice di luglio: la chiude X;
 >   - B12: la verifica J con il lotto dei contributi.
+
+### Cancello dei colori sul rilascio (2026-10-14)
+
+> **Note implementazione**: il developer ha deciso che la 1.3 non esce con la conversione dei neutri e degli stati a
+> metà. Il coordinatore colori l'ha prima tradotta in «ondate W1–W4 di T» (`e41e0e2b1`), poi l'ha precisata: servono
+> W1–W6, B2, B4 per neutri e guadagno/perdita, B5, e quindi tutti i lotti A–D di R. Per la W4 basta FE8a: le due
+> modali di FE8b passano dal B5. Aggiornati §1, §3, §4 (X, W, Y), §7, §8, §9.
+>
+> **Fuori pista**: la conversione dei colori diventa un secondo percorso critico, parallelo alle ondate 1 e 2 (stima
+> di T: ~11.500 classi in 276 file, 30–40 lotti di sotto-agenti). Per non legarle anche il riordino, il coordinatore
+> 1.3 ha proposto la regola «chi parte prima» (§7). Segnalato al developer in `decisioni-analisi-20261014.md` §3.
