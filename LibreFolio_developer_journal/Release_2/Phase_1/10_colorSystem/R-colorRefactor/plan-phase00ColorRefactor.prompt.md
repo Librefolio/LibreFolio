@@ -5,7 +5,7 @@
 > Base: `dev_release2` @ `b631308d5ef5482a8ffdc2878a4459fcf6909827`. Corsia: porta **6154**, dati **`/tmp/librefolio-r2-r`**.
 > Piano generale: [`../plan-phase00ColorSystemThemeLab.prompt.md`](../plan-phase00ColorSystemThemeLab.prompt.md), riga R del §5.
 > Fonti: [`../analysis/`](../analysis/00_SINTESI.md) (report 01–04). Backlog: sezione «R» di
-> [`../../BACKLOG_POST_1.2.md`](../../BACKLOG_POST_1.2.md).
+> [`../../../Phase_0/BACKLOG_POST_1.2.md`](../../../Phase_0/BACKLOG_POST_1.2.md).
 
 ## ⏸️ Pausa del 14/10 (richiesta del developer, inoltrata dal coordinatore) — ▶️ ripresa alle 19:15
 
@@ -546,6 +546,86 @@ si può rilanciare.
 >   - Il punto 6 è già la regola di T: i cali passano senza toccare la sua baseline, che T stringe ai checkpoint.
 >   - W10 resta come descritto sopra.
 >   - I gate `themeColorMeta` e `themeComponentTokens` restano; quello della meta passa a T con T-4.
+
+#### Lotto D — base `74e94dee6` (lotto C committato in `0b660632f`, piano spostato in `Phase_1/10_colorSystem`)
+
+#### W8 — un solo punto per leggere il tema (D4) ✅ (14/10/2026)
+
+> **Note implementazione**: `w8_apply.py`; il dry-run sulla nuova base dava gli stessi conteggi.
+> - Nuovo `lib/theme/themeMode.ts`: `isDarkTheme()` e `onThemeClassChange(onChange)`, che restituisce il
+>   `MutationObserver` già attivo.
+> - 19 file:
+>   - 16 osservatori del tema, diventati `X = onThemeClassChange(callback)`;
+>   - 23 letture di `classList.contains('dark')` in codice, diventate `isDarkTheme()`;
+>   - 1 commento (`scatterChartHelpers.ts`) allineato.
+> - Restano invariati:
+>   - i nomi delle variabili e i `disconnect()`;
+>   - il ridisegno a ogni cambio di classe di `<html>`;
+>   - la consegna in microtask.
+> - 8 osservatori non di tema lasciati stare. Nessuno, oltre a `themeMode.ts`, osserva più `<html>`.
+>   `AllocationHistoryChart` osserva gli antenati del grafico per la visibilità; `app.html` e `themeStore` scrivono la
+>   classe e non la leggono.
+>
+> Evidenze:
+> - controllo di annullamento byte per byte OK;
+> - `conserve.py` OK sui 19 file (colori invariati);
+> - Prettier pulito; `svelte-check` 0/0;
+> - Vitest correlati: 25 file e 766 test verdi;
+> - CSS compilato: i 17 file che W9 non tocca sono identici byte per byte alla build del lotto C, quindi W8 non
+>   cambia il CSS.
+>
+> **Test (`test-author`) ✅**:
+> - `lib/theme/themeMode.test.ts`, 19 test in jsdom: qualunque classe di `<html>` scatena; nient'altro; nessun
+>   argomento; più modifiche nello stesso turno arrivano in una sola chiamata; dopo `disconnect()`, più niente.
+>   L'attesa è in microtask, senza orologio. 9 versioni guaste degli helper fanno diventare rossi i test giusti.
+> - Gate D4 `src/themeModeReads.gate.test.ts`, 24 test, anticipato da W10. Fuori da `themeMode.ts`:
+>   - (a) nessuna lettura della classe `dark`;
+>   - (b) nessun osservatore che possa vedere la classe di `<html>`;
+>   - (c) ogni `onThemeClassChange` assegnato e poi `disconnect()`;
+>   - (d) controlli positivi.
+>
+>   Esenti i test e il Lab (D7). Un test fissa i punti ciechi dichiarati: un alias di `<html>`,
+>   `querySelector('html')`, `matches('.dark')`.
+> - Registrati entrambi in `core-unit`.
+>
+> **Evidenze finali del lotto D**:
+> - Vitest completo: **367 file e 11.274 test verdi**;
+> - `core-unit` nella corsia 6154: 134 file e 4.285 test verdi;
+> - `check-orphans`: 367 file unitari raggiungibili;
+> - knip invariato (38 righe); `git diff --check` pulito.
+>
+> **⚠️ Fuori pista** (osservazioni del `test-author`, verificate; tutte precedenti a W8, nessuna toccata):
+> - `SemiDonutChart` e l'anteprima a tabella di `FilePreviewModal` leggono il tema al disegno ma non hanno
+>   osservatore. A un cambio di tema restano con i colori vecchi fino al ridisegno successivo o alla riapertura.
+>   Correggerlo cambia il comportamento, quindi non è di R: voce **R-7** del backlog, per T (B4) e per il Lab, che
+>   riapplica dal vivo.
+> - Il ciclo di visibilità di `AllocationHistoryChart` sale fino a `<html>`, quindi vede anche la classe del tema.
+>   Non è un osservatore di tema: `syncVisibilityState()` esce subito se la visibilità non cambia. Innocuo.
+> - `LotGanttChart` crea l'osservatore in un `$effect` senza dipendenze reattive. Oggi gira una volta sola; se un
+>   giorno acquistasse una dipendenza, la sua pulizia staccherebbe anche i watcher del resize. Fragilità latente,
+>   nessun difetto oggi.
+
+#### W9 — i quattro file P8 fuori elenco (D5) ✅ (14/10/2026)
+
+> **Note implementazione**: `r3.py`, con i nomi curati offline nella finestra di quiete.
+> - 4 componenti, 172 letterali → 76 ruoli, 124 definizioni:
+>   - `routes/(app)/files/+page.svelte` → `files.css`, 28 ruoli;
+>   - `brokers/BrokerImportFilesModal.svelte` → `files.css`, 11;
+>   - `transactions/modals/ImportBrokerMismatchModal.svelte` → `dialogs.css`, 27;
+>   - `ui/display/CompactCashCell.svelte` → `table.css`, 10.
+> - I file d'area sono solo cresciuti: le sezioni del lotto C sono intatte, cambia la riga d'intestazione e si
+>   aggiungono le sezioni nuove in coda.
+> - In tutto 728 token, in 4 file d'area.
+>
+> Evidenze:
+> - `r3.py verify` sui 4: 172 dichiarazioni identiche a HEAD dopo la sostituzione e la minificazione; nessuna
+>   definizione inutilizzata;
+> - build e `r3_css_compare.py` contro la baseline **`b631308`** (prova cumulativa dei lotti C e D): **OK**, 11 file
+>   identici regola per regola e 12 byte per byte;
+> - `r3_reach.py`: le 36 entry caricano le definizioni che usano;
+> - i 6 CSS cambiati rispetto al lotto C contengono tutti token di W9;
+> - Prettier pulito; `svelte-check` 0/0;
+> - Vitest correlati: 1.388 test verdi; gate `themeComponentTokens` e `themeColorMeta`: 28 test verdi.
 
 ## 5. Test da adattare (`test-author`)
 

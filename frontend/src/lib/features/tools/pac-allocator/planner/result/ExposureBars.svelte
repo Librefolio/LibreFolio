@@ -16,6 +16,7 @@
     import {chartPercent, type WeightRow} from './model';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {PAC_EXPOSURE_BAR_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface Props {
         rows: readonly WeightRow[];
@@ -40,11 +41,10 @@
 
     onMount(() => {
         const readTheme = () => {
-            dark = document.documentElement.classList.contains('dark');
+            dark = isDarkTheme();
         };
         readTheme();
-        const observer = new MutationObserver(readTheme);
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const observer = onThemeClassChange(readTheme);
         return () => {
             renderGeneration += 1;
             observer.disconnect();

@@ -1818,6 +1818,12 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     lotti; ogni divergenza ha un nome (`CHART_GAIN_LOSS.price` `#ef4444` / `.portfolio` `#dc2626`, box del tooltip
     comune e della candela, interesse di Growth e dei lotti…). Il dividendo di Growth e dei lotti è ora una voce sola. Si
     chiude con il commit e il cancello B.
+  - Stato (R, 14/10), lotto D (W8, D4): il tema si legge da un solo punto, `lib/theme/themeMode.ts`
+    (`isDarkTheme()`, `onThemeClassChange()`).
+    - Interessa 16 osservatori e 23 letture di `classList.contains('dark')` in 19 file.
+    - Il ridisegno a ogni cambio di classe di `<html>` resta.
+    - Gate `themeModeReads`: niente letture o osservatori della classe fuori da `themeMode.ts`.
+    - Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W8».
 - **R-2 · Funzioni condivise per segno, stati e badge** — medio; coordinatore, 14/10.
   - Oggi: ternario guadagno/perdita in almeno 20 punti e 7 mappe di stato indipendenti.
   - Output identici.
@@ -1838,6 +1844,12 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - Prove: CSS compilato identico regola per regola; definizioni presenti con ogni pagina che le usa; gate
       `themeComponentTokens` in `core-unit` (definizione unica, import, nessun token orfano).
     - Si chiude con il commit e il cancello C.
+  - Stato (R, 14/10), lotto D (W9, D5): i quattro file P8 fuori elenco (pagina dei file, `BrokerImportFilesModal`,
+    `ImportBrokerMismatchModal`, `CompactCashCell`).
+    - 172 letterali diventano 124 token: 728 in tutto.
+    - Letterali fuori da `lib/theme/**` e da `app.css`, dalla base al lotto D: hex da 1.554 a 88, funzioni colore da
+      198 a 50.
+    - Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W9».
 - **R-4 · Funzioni fragili e refusi senza effetto visibile** — basso; coordinatore, 14/10.
   - `hexToRgba` e la concatenazione `+ '88'` accettano solo `#rrggbb`.
   - La meta `theme-color` scura è `#156534` invece di `#166534`.
@@ -1855,9 +1867,19 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - `color: '#a855f7'` scritto a mano in `assets/AssetDataEditorSection.svelte:248` e in
     `fx/FxDataEditorSection.svelte:129`.
   - Fuori dal perimetro di R: sono cartelle della 1.3. Passa alla fase B.
-  - Fino ad allora è un'eccezione del cricchetto (W10).
+  - Fino ad allora è un'eccezione del cricchetto dei colori letterali, che dal 14/10 è il gate M2 di T: R gli ha
+    consegnato l'elenco delle eccezioni.
 
   Dettagli: piano R, «W7», nota sulle eccezioni del cricchetto.
+- **R-7 · Due viste non seguono il cambio di tema dal vivo** — basso; R, 14/10 (osservazione del `test-author` in W8).
+  - `charts/SemiDonutChart.svelte` e l'anteprima a tabella di `files/FilePreviewModal.svelte` (cheetah-grid)
+    leggono il tema quando disegnano, ma non hanno osservatore. Dopo un cambio di tema mostrano i colori vecchi fino
+    al ridisegno successivo o alla riapertura.
+  - Precede R. Correggerlo cambia il comportamento, quindi non è di R.
+  - Riguarda T (B4) e il Designer Lab, che riapplica i colori dal vivo. La correzione è un `onThemeClassChange()`
+    con ridisegno.
+
+  Dettagli: [piano R](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W8», «Fuori pista».
 
 ## G · Gallery deterministica (56)
 
