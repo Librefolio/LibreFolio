@@ -1865,6 +1865,31 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
 Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
 
+- **A-1 · Un utente loggato vede più di «nomi broker e nomi utenti»** — medio, decisione (privacy; multi-utente e
+  cloud); A (14/10).
+  - Le email degli admin con `GET /users/search?admins=true`.
+  - Nome e icona di tutti i broker con `GET /brokers?include_inaccessible=true`.
+  - Elenco, anteprima e download di tutti i file caricati: `GET /uploads` e `/uploads/file/{id}`; solo la cancellazione
+    controlla il proprietario.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), sezione «A1.8».
+- **A-2 · `GET /settings/global` si legge senza login** — basso; A (14/10). Espone tutte le impostazioni globali:
+  scheduler, durata della sessione, registrazione. Dettagli: idem, §2 «Da sapere».
+- **A-3 · `reset_password` calcola bcrypt sul loop degli eventi** — basso; A (14/10).
+  `services/accounts/user_service.py:205` chiama `hash_password` senza `asyncio.to_thread` (regola Async I/O). Si
+  chiude con A4, che tocca il reset per la versione della sessione. Dettagli: idem, §1 «Reset della password».
+- **A-4 · devWiki: prosa con i vecchi percorsi dei servizi account, e due pagine di dominio non allineate** — minimo;
+  A (14/10), per lo storico.
+  - 15 menzioni in prosa, in 14 file. Le tabelle «Source files» sono già aggiornate (C6).
+  - `domains/auth.md` descrive una gestione utenti dalla UI che non esiste (F-002 l'ha già corretta).
+  - `domains/layout-settings.md` descrive un footer con il ticker che non esiste.
+  - Dettagli: idem, §2 «Deriva della devWiki» e «A1.4».
+- **A-5 · Formato preesistente in file toccati da A1** — minimo; A (14/10).
+  - black riformatterebbe 4 file, già così alla base: `scripts/user_cli.py`, `scripts/coverage_analysis.py`,
+    `test_portfolio_api.py`, `test_portfolio_wac.py`.
+  - ruff segnala W293 a `user_cli.py:208` e PLC0415 a `:271`.
+  - `user_cli.py` si sistema con A5, che ne tocca i comandi.
+  - Dettagli: idem, «A1.6».
+
 ## X · Plugin, asset e ricerca (fase 01)
 
 Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).
