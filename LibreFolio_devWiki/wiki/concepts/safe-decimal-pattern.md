@@ -70,5 +70,5 @@ When adding new Decimal fields to response schemas, use `SafeDecimal` from the s
 | Type definition | `backend/app/schemas/common.py` (L50–66) |
 | Broker schema adoption | `backend/app/schemas/brokers.py` |
 | Transaction schema adoption | `backend/app/schemas/transactions.py` |
-| Bandaid removal | `backend/app/services/brokers/broker_service.py` |
+| Bandaid removal | `backend/app/services/brokers/summary.py` |
 
