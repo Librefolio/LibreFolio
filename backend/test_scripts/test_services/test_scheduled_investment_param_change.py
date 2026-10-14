@@ -65,7 +65,7 @@ from backend.app.db.models import (  # noqa: E402
 from backend.app.db.session import get_async_engine  # noqa: E402
 from backend.app.schemas.provider import FAProviderAssignmentItem  # noqa: E402
 from backend.app.services.asset_source import AssetSourceManager  # noqa: E402
-from backend.app.services.provider_registry import AssetProviderRegistry  # noqa: E402
+from backend.app.services.assets.registry import AssetProviderRegistry  # noqa: E402
 
 # ============================================================================
 # Fixtures & helpers

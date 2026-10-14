@@ -59,7 +59,6 @@ from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS, 
 from backend.app.services.financial_math.portfolio.data_quality import normalize_fx_pair_slug
 from backend.app.services.market_calendar import ensure_market_holidays
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskAssetClassification,
@@ -83,6 +82,7 @@ from backend.app.services.risk.metrics import (
     current_buy_and_hold_returns,
     period_returns_from_cumulative,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.risk.scenario_catalog import (
     get_loaded_risk_scenario_catalog,
 )

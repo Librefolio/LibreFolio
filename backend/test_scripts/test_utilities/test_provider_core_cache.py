@@ -66,7 +66,7 @@ from backend.app.services.asset_sources.core import (
 from backend.app.services.asset_sources.crud import AssetCRUDService as CanonicalAssetCRUDService
 from backend.app.services.asset_sources.manager import AssetSourceManager as CanonicalAssetSourceManager
 from backend.app.services.asset_sources.search import AssetSearchService as CanonicalAssetSearchService
-from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import print_section, print_success
 
 # ============================================================================
@@ -176,7 +176,7 @@ def test_normal_and_cold_discovery_keep_provider_base_identity():
     assert all(isinstance(provider, CanonicalAssetSourceProvider) for provider in normal_instances)
 
     cold_probe = textwrap.dedent("""
-        from backend.app.services.provider_registry import AssetProviderRegistry
+        from backend.app.services.assets.registry import AssetProviderRegistry
 
         AssetProviderRegistry.auto_discover()
 

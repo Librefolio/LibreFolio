@@ -13,7 +13,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.refresh import FARefreshItem, SyncStatus
 from backend.app.services.asset_source import AssetSourceManager
-from backend.app.services.fx import sync_pairs_bulk
+from backend.app.services.fx.fx import sync_pairs_bulk
 from backend.app.services.scheduler.joblog import (
     append_entry,
     build_current_price_entry,

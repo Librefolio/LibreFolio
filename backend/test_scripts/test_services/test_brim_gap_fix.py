@@ -72,8 +72,8 @@ from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMAbsorbed, BRIMCheck
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services import brim_report_sets
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_provider import BRIMProvider
-from backend.app.services.provider_registry import BRIMProviderRegistry
 from backend.app.services.transaction_service import TransactionService
 
 A3 = "A3"

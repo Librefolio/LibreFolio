@@ -44,7 +44,8 @@ All provider calls go through `_run_provider_in_thread()` in `asset_source.py` �
 1. Create the folder `backend/app/services/asset_source_providers/my_provider/` with `__init__.py` (the provider's
    docstring only, no re-export) and `plugin.py` (the code); helpers private to it go beside as `_*.py`
 2. Extend `AssetSourceProvider`
-3. Decorate with `@register_provider(AssetProviderRegistry)`
+3. Decorate with `@register_provider(AssetProviderRegistry)` (`AssetProviderRegistry` from `services/assets/registry.py`, the
+   decorator from `services/provider_registry.py`)
 4. Implement required abstract methods
 5. Set `params_schema` property if provider needs extra config. Its UI texts (`assets.providerParams.my_provider.*`) live
    in the provider's own `i18n/` fragment: `./dev.py i18n add <key> --en … --it … --fr … --es …
