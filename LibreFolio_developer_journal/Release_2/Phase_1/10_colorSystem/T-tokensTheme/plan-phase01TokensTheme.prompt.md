@@ -171,6 +171,280 @@ Per ogni ondata: lotti di ≤ 15 file; gate eseguiti in serie da T; gallery e re
 - **Chi taglia** dichiara il taglio nel cricchetto, nello stesso commit:
   `node frontend/scripts/theme/theme-roles.mjs --split VECCHIO:NUOVO1,NUOVO2`.
 
+#### Spacchettamento di W1 e W2 (analisi del 15/10, notte; sola lettura)
+
+> Chiesto dal coordinatore il 15/10 all'01:08: lotti di W1 e W2, file liberi prima, quelli toccati da un ramo attivo
+> in fondo, ruoli mancanti come domande per la designer, test, gallery e bozza del prompt per ogni lotto. Niente
+> codice, server, test né sotto-agenti che scrivono.
+
+**Riferimento e metodo**
+
+- `dev_release2` = `9a12e623d`. Il frontend è identico a `c1df8f4cb` (A2 integrato), perché i due commit successivi
+  toccano solo il journal e `scripts/visual_review`. Il mio HEAD resta `f43aa7200`.
+- I conteggi vengono dallo scanner di T, eseguito su una copia del target fatta con `git archive` e confrontati con la
+  baseline del target: coincidono per ogni file.
+- **I 22 file spostati da A2** hanno ancora la riga col percorso vecchio (`components/{auth,settings,support}/…`): la
+  regola R4 li abbina per nome. Il primo `--update` dopo il merge di base li riscrive coi nomi nuovi.
+- **Rami attivi** (`git diff --name-status -M dev_release2...<ramo>`):
+  - nessuno tocca un file di W1 o W2 con un commit. R tocca `ui/ContextMenu` (lotto C), L il layout radice, J un file
+    del PAC (W3).
+  - A, H e Z non hanno commit oltre il target: il loro lavoro in corso non si vede. Le sovrapposizioni qui sotto
+    vengono quindi dai piani committati: A, H e W nel target; X, J e R sui loro rami; il piano generale della 1.3.
+    Il piano di Z non è committato.
+- **Totali:** W1 35 file, m1 1.085, m2 12, in 7 lotti; W2 34 file, m1 1.501, m2 16, in 9 lotti. La stima
+  dell'analisi (§4.5: ~700 e ~1.300) era bassa: soprattutto `ui/select` e le schede delle impostazioni.
+
+**Fuori dai lotti**
+
+- **Già convertiti da T, in attesa d'ingresso:** gli 8 file di T-3 e `AnimatedBackground` (T-5).
+- **Di R:** `ui/modals/ConfirmModal` e `ui/ContextMenu` (lotto C, poi W6 con B5); `ui/modals/SyncResultRow` (lotto A,
+  poi W3).
+- **Residui:**
+  - `features/auth/ForgotPasswordCard`, 4 classi: il blocco del terminale aspetta Q6 e A9, che ne cambia il contenuto;
+  - `routes/+page.svelte`, 1 classe: il «Loading...» di `auth-loading`, file di A;
+  - `layout/ConnectionSecurityIndicator`, 7 classi: gli stati sulla barra verde, TC-2.
+
+**Regole di esecuzione** (in aggiunta all'analisi §4.1)
+
+- **Quando:** W1 parte dopo l'ingresso del lotto A di R e dopo T-4 (coordinatore, 15/10). La base comprende allora il
+  lotto A, quindi nessun file di W1 o W2 si sovrappone a R.
+- **Lotti «da chiedere»** (in fondo a ogni ondata): prima di avviarne uno, T chiede al coordinatore se la sessione
+  indicata ha annunciato quei file.
+  - Se non li ha annunciati, T converte il file di oggi e la sessione lavora dopo, sul file convertito.
+  - Se li ha annunciati, il file resta per ultimo.
+- **Ogni lotto:**
+  - un sotto-agente `general-purpose` con la skill `theme-roles` modifica solo i file del lotto;
+  - `test-author` aggiorna prima i test che leggono classi legacy;
+  - T rilegge il diff ed esegue in serie, nella corsia 6155: `--check`, i due gate, `front check`, Prettier sui file
+    del lotto, i Vitest e gli E2E del lotto;
+  - al checkpoint, `--update`.
+- **Elementi che restano legacy di proposito:**
+  - i categoriali (viola, indaco, ciano, verde acqua…) fino a B4;
+  - gli elementi che aspettano una domanda qui sotto.
+
+  Un elemento resta legacy per intero (G3), e il sotto-agente lo elenca nel suo resoconto.
+
+**Lotti**
+
+| Lotto | Contenuto | File | m1 | m2 | Chi altro | Ordine |
+|---|---|---:|---:|---:|---|---|
+| W1-a | `ui/select`, selettori generici | 11 | 245 | 0 | W: una riga d'import in `ImportPluginSelect` (spostamento puro) | 1 |
+| W1-b | `ui/select`, selettori di dominio | 3 | 283 | 1 | — | 2 |
+| W1-c | `ui/date`, `ui/tabs`, `ui/toolbar`, piccoli di `ui/` | 10 | 225 | 0 | — | 3 |
+| W1-d | `ui/input` | 4 | 59 | 6 | — | 4 |
+| W1-e | `ui/modals/ModalBase` da solo: cambia il contenitore di ogni modale | 1 | 0 | 5 | — | 5 |
+| W1-f1 | modali di sync | 2 | 68 | 0 | **X, C-66 aperta**: da chiedere | 6 |
+| W1-f2 | `ui/data-editor` | 4 | 205 | 0 | **W**, I1/K1 (P-15, I-10, I-11); Y: da chiedere | 7 |
+| W2-a | onboarding e rotta `welcome` | 8 | 240 | 2 | A9 aggiunge il disclaimer in `WelcomePage`; H copia il banner | 1 |
+| W2-b | resto di `layout`: `ChangelogModal`, `ServerUnreachable` | 2 | 100 | 8 | **H** (proprietario di `ChangelogModal`), forse Z: da chiedere | 2 |
+| W2-d | `features/ai-export` | 2 | 86 | 0 | **J** (D-J5): da chiedere | 3 |
+| W2-c | `features/support`, `features/update-check` | 6 | 162 | 5 | **A** (cartelle sue; `DonationPopupModal` solo con il suo OK) | 4 |
+| W2-e2 | modali dello scheduler | 2 | 226 | 0 | Z, F07 più tardi; cartella di A | 5 |
+| W2-e1 | controlli delle impostazioni, `CachePanel`, `PasswordChangeModal` | 9 | 176 | 0 | **A**, A4/A5 («bloccato da variabile») e F13 | 6 |
+| W2-f1 | `AboutTab`, `ProfileTab` | 2 | 337 | 1 | **A**, A8 e A9; W, una riga d'import | 7 |
+| W2-f2 | `GlobalSettingsTab` | 1 | 110 | 0 | **A**, A4/A5 | 8 |
+| W2-f3 | `SettingsLayout` e rotta `settings` | 2 | 64 | 0 | **A3, il prossimo passo di A**: per ultimo, di norma dopo A3 | 9 |
+
+- **W1:** prima i liberi, a–e, poi f1 ed f2.
+- **W2:**
+  - **W2-a va per primo:** è libero, e H, nel CP4, costruisce il suo `InstanceNotices` sulle classi del banner.
+  - Seguono b e d (H, Z e J toccano poco quei file), poi le cartelle di A, a partire da quelle che A tocca più tardi.
+  - I lotti di A si possono anche anticipare tutti, prima di A3, se il coordinatore preferisce convertire prima che
+    A riprenda le impostazioni: vale la regola «chi parte prima».
+
+**File per file** (m1 e m2 = baseline del target)
+
+| Lotto | File | m1 | m2 | Rami, sessioni, voci |
+|---|---|---:|---:|---|
+| W1-a | `ui/select/SearchSelect.svelte` | 63 | 0 | — |
+| W1-a | `ui/select/SimpleSelect.svelte` | 40 | 0 | — |
+| W1-a | `ui/select/SelectPopover.svelte` | 8 | 0 | — |
+| W1-a | `ui/select/TreeSelect.svelte` | 47 | 0 | — |
+| W1-a | `ui/select/CheckMenu.svelte` | 36 | 0 | — |
+| W1-a | `ui/select/CountrySearchSelect.svelte` | 10 | 0 | — |
+| W1-a | `ui/select/CurrencySearchSelect.svelte` | 13 | 0 | — |
+| W1-a | `ui/select/SectorSearchSelect.svelte` | 6 | 0 | — |
+| W1-a | `ui/select/UserSearchSelect.svelte` | 10 | 0 | — |
+| W1-a | `ui/select/AssetTypeSelect.svelte` | 8 | 0 | — |
+| W1-a | `ui/select/ImportPluginSelect.svelte` | 4 | 0 | W, FE8b: solo una riga d'import (spostamento puro) |
+| W1-b | `ui/select/AssetPickerPanel.svelte` | 107 | 0 | — |
+| W1-b | `ui/select/AssetSelect.svelte` | 28 | 0 | — |
+| W1-b | `ui/select/FxProviderSelect.svelte` | 148 | 1 | — |
+| W1-c | `ui/date/CalendarMonth.svelte` | 40 | 0 | — |
+| W1-c | `ui/date/DateRangePicker.svelte` | 73 | 0 | — |
+| W1-c | `ui/date/SingleDatePicker.svelte` | 24 | 0 | — |
+| W1-c | `ui/date/CompactDurationBadge.svelte` | 13 | 0 | — |
+| W1-c | `ui/tabs/TabBar.svelte` | 20 | 0 | — |
+| W1-c | `ui/toolbar/PageToolbar.svelte` | 4 | 0 | — |
+| W1-c | `ui/ViewModeToggle.svelte` | 18 | 0 | — |
+| W1-c | `ui/DocsLink.svelte` | 4 | 0 | — |
+| W1-c | `ui/TweenedValue.svelte` | 2 | 0 | — |
+| W1-c | `ui/OrderableList.svelte` | 27 | 0 | — |
+| W1-d | `ui/input/DistributionEditor.svelte` | 30 | 0 | — |
+| W1-d | `ui/input/ExactDecimalInput.svelte` | 10 | 0 | — |
+| W1-d | `ui/input/ExactQuantityInput.svelte` | 0 | 2 | — |
+| W1-d | `ui/input/TagInput.svelte` | 19 | 4 | — |
+| W1-e | `ui/modals/ModalBase.svelte` | 0 | 5 | — |
+| W1-f1 | `ui/modals/SyncModalBase.svelte` | 66 | 0 | **X, C-66 aperta** (avviso nel dialogo di sync) |
+| W1-f1 | `ui/modals/PageSyncModal.svelte` | 2 | 0 | **X, C-66 aperta** |
+| W1-f2 | `ui/data-editor/DataEditor.svelte` | 67 | 0 | **W**, P-15 (`:652`, `:661-668`) e I-10 S3 (`:525-534`); Y, «Reset layout» e «max» |
+| W1-f2 | `ui/data-editor/CsvEditor.svelte` | 72 | 0 | **W**, I-11 (`:416-436`) |
+| W1-f2 | `ui/data-editor/DataImportModal.svelte` | 52 | 0 | **W**, P-15 (`:211`, `:220`) |
+| W1-f2 | `ui/data-editor/ErasableNumberCell.svelte` | 14 | 0 | stessa cartella di W (Q3 di W: `ui/data-editor/**`) |
+| W2-a | `features/onboarding/components/OnboardingBootstrapBanner.svelte` | 10 | 0 | H, CP4: `InstanceNotices` ne copia le classi |
+| W2-a | `features/onboarding/components/OnboardingBootstrapBlock.svelte` | 16 | 0 | — |
+| W2-a | `features/onboarding/components/OnboardingCoachmark.svelte` | 45 | 2 | — |
+| W2-a | `features/onboarding/components/OnboardingIntroScene.svelte` | 32 | 0 | — |
+| W2-a | `features/onboarding/components/OnboardingReplaySection.svelte` | 66 | 0 | — |
+| W2-a | `features/onboarding/components/WelcomeForm.svelte` | 39 | 0 | A2: righe d'import, già entrate |
+| W2-a | `features/onboarding/components/WelcomePage.svelte` | 28 | 0 | A9, F09: il disclaimer |
+| W2-a | `routes/(app)/welcome/+page.svelte` | 4 | 0 | — |
+| W2-b | `layout/ChangelogModal.svelte` | 89 | 8 | **di H** (piano di A, §4.12 e D-A13); nessuna modifica nel piano di H. A11 di A (C-54, «novità») non lo tocca |
+| W2-b | `layout/ServerUnreachable.svelte` | 11 | 0 | forse Z (F07, stato del risveglio): piano di Z non committato |
+| W2-c | `features/support/SocialShareModal.svelte` | 57 | 0 | cartella di A (A2) |
+| W2-c | `features/support/SupportActions.svelte` | 11 | 0 | A9, F05: «Buy me a coffee» e link di supporto |
+| W2-c | `features/support/supportLinks.ts` | 14 | 0 | A9, F05 (D-A8); colori dei marchi in eccezione |
+| W2-c | `features/support/DonationPopupModal.svelte` | 28 | 1 | **di A**: serve il suo OK esplicito |
+| W2-c | `features/update-check/AskAdminModal.svelte` | 27 | 0 | cartella di A (D-A13); A9 ferma il controllo in `checkForNewerRelease`, non le modali |
+| W2-c | `features/update-check/UpdateAvailableModal.svelte` | 25 | 4 | cartella di A (D-A13) |
+| W2-d | `features/ai-export/AiExportMenu.svelte` | 12 | 0 | **J** (D-J5: `features/ai-export/**`) |
+| W2-d | `features/ai-export/AiExportOptionsPanel.svelte` | 74 | 0 | **J** (D-J5) |
+| W2-e1 | `features/settings/SettingActions.svelte` | 15 | 0 | cartella di A (`features/settings`) |
+| W2-e1 | `features/settings/SettingBulkActions.svelte` | 15 | 0 | cartella di A (`features/settings`) |
+| W2-e1 | `features/settings/SettingCurrency.svelte` | 8 | 0 | cartella di A (`features/settings`) |
+| W2-e1 | `features/settings/SettingNumber.svelte` | 28 | 0 | cartella di A (`features/settings`) |
+| W2-e1 | `features/settings/SettingSelect.svelte` | 8 | 0 | A4/A5: stato «bloccato da variabile» |
+| W2-e1 | `features/settings/SettingTheme.svelte` | 19 | 0 | cartella di A (`features/settings`) |
+| W2-e1 | `features/settings/SettingToggle.svelte` | 18 | 0 | A4/A5: stato «bloccato da variabile» (schema condiviso con X) |
+| W2-e1 | `features/settings/CachePanel.svelte` | 34 | 0 | cartella di A (`features/settings`) |
+| W2-e1 | `features/settings/PasswordChangeModal.svelte` | 31 | 0 | A, F13: regole della password unificate |
+| W2-e2 | `features/settings/SchedulerConfigModal.svelte` | 112 | 0 | Z, F07 (più tardi) |
+| W2-e2 | `features/settings/SchedulerLogModal.svelte` | 114 | 0 | Z, F07 (più tardi) |
+| W2-f1 | `features/settings/tabs/AboutTab.svelte` | 157 | 1 | A9, F09: card «Note legali»; W, FE8b: una riga d'import |
+| W2-f1 | `features/settings/tabs/ProfileTab.svelte` | 180 | 0 | A8: scheda «Sicurezza»; A6: cancellazione |
+| W2-f2 | `features/settings/tabs/GlobalSettingsTab.svelte` | 110 | 0 | A4/A5: `registration_mode` bloccabile |
+| W2-f3 | `features/settings/SettingsLayout.svelte` | 61 | 0 | **A3, il prossimo passo di A**: registro delle schede |
+| W2-f3 | `routes/(app)/settings/+page.svelte` | 3 | 0 | **A3**: la pagina diventa un runtime del registro |
+
+**Ruoli che mancano: domande per il giro 2 della designer (TC-2)**
+
+Ogni domanda ha una proposta provvisoria, costruita solo dai suoi valori come vuole l'analisi §3.3. Le proposte non
+sono applicate. Prima di ogni lotto, il coordinatore sceglie per le domande che lo toccano fra tre strade:
+- la risposta della designer;
+- l'OK alla proposta, col valore della designer in commento, come per D-T6;
+- lasciare legacy l'elemento, per intero.
+
+| # | Dove | Domanda | Proposta provvisoria |
+|---|---|---|---|
+| Q1 | checkbox, radio, interruttore acceso, giorno o preset selezionato, segmento attivo (`CheckMenu`, `AssetPickerPanel`, `CalendarMonth`, `DateRangePicker`, `ViewModeToggle`, `SettingToggle`) | Che colore ha un controllo selezionato? Su `action` il riempimento è a 2,10:1 sulla card scura, sotto i 3:1 di WCAG 1.4.11; e `focus` col testo chiaro sopra è a 2,63:1 | due ruoli derivati: `--lf-checked` = focus e `--lf-on-checked` = card (6,03:1 in chiaro, 5,13:1 in scuro, in entrambe le coppie). **Blocca W1-a, W1-b, W1-c e W2-e1**: serve la risposta, o l'OK alla proposta, prima di W1 |
+| Q2 | interruttore spento | Traccia e pomello | traccia `bg-lf-input` (3,43:1 e 3,37:1; `neutral` è a 1,37:1 e 1,25:1), pomello `bg-lf-on-action` (sulla traccia accesa scura è a 2,63:1: lo stato lo dicono traccia e posizione) |
+| Q3 | pulsanti pieni distruttivi e d'avviso (`ProfileTab`, `SupportActions`) | L'hover di `danger`, `warning` e `donate` pieni | `hover:bg-lf-danger/90` e simili; oppure `--lf-danger-hover`, come `action-hover` |
+| Q4 | stato «modificato» delle impostazioni, oggi arancio (`SettingActions`, `SettingBulkActions`, `SettingNumber`) | È un avviso o uno stato a sé? | i ruoli `warning` |
+| Q5 | pallino di stato neutro o inattivo, `gray-400` (`SchedulerLogModal`) | Colore | `bg-lf-muted` (5,20:1 e 5,01:1) |
+| Q6 | codice: in linea (`ChangelogModal`, `UpdateAvailableModal`) e blocco del terminale (`ForgotPasswordCard`) | Il fondo del codice; il terminale resta scuro nei due temi? | in linea: `color-mix(in oklab, var(--lf-text-primary) 7%, transparent)`, una formula sola per i due temi; il terminale aspetta lei |
+| Q7 | evidenziazione `mark`, oggi `#fef08a` e giallo al 35% (`ChangelogModal`) | Colore | nessuna proposta: la tinta d'avviso in chiaro è bruna. Resta legacy |
+| Q8 | ombra di elevazione delle modali (`ModalBase`: nero al 25% in chiaro, al 50% in scuro) | Ombre per tema | `--lf-shadow` = `#0F1412` al 25% e al 50%. Fino ad allora W1-e lascia l'ombra letterale (m2 non sale) |
+| Q9 | alone del coachmark (smeraldo, `border-emerald-400`) e fondale dello spotlight (nero al 45%) | Colore dell'evidenziazione | alone su `--lf-focus` al 40%, fondale `bg-lf-overlay/75`, cioè il 45%. Si toglie l'eccezione `ARBITRARY_ALLOWED` del coachmark |
+| Q10 | avviso dentro il tooltip (`FxProviderSelect`, `#fbbf24`) | L'avviso su superficie inversa | = l'avviso dell'altro tema: `#F5A623` sul tooltip scuro del tema chiaro, `#895000` su quello chiaro del tema scuro |
+| Q11 | accento viola dell'AI Export (`AiExportOptionsPanel`) | È un categoriale o un accento? | con i categoriali di B4; fino ad allora legacy |
+| Q12 | icone decorative di «Informazioni» (arancio, cielo, ambra, rosa, viola, ciano, verde acqua, indaco) | Palette decorativa | con i categoriali di B4 |
+| Q13 | fondale delle modali, oggi nero al 50% | `--lf-surface-overlay` (`#0F1412` al 60%) scurisce tutte le modali: va bene? | sì; si vede in W1-e |
+
+Già decisi, nessuna domanda:
+- `bg-libre-beige` nelle modali (`DonationPopupModal`, `UpdateAvailableModal`) diventa `bg-lf-card`;
+- `routes/(app)/welcome` e `ServerUnreachable` si disegnano senza la shell (rami del layout `(app)`), quindi `bg-lf-page`;
+- il `style="background:#fff"` della piastrella del logo (`DonationPopupModal`, `AboutTab`) diventa `bg-lf-logo`, come nella barra laterale in T-3;
+- i chip con `var(--badge-bg, #e2e8f0)` (`TagInput`, `UpdateAvailableModal`) diventano `var(--badge-bg, var(--lf-surface-neutral))`.
+
+**Test e gallery per lotto**
+
+Sempre:
+- `--check` e i due gate (`node_modules/.bin/vitest run src/themeRoles.gate.test.ts src/themeTokens.gate.test.ts`);
+- `front check`;
+- Prettier sui file del lotto.
+
+Le categorie si scelgono con i file Vitest del lotto, tutti registrati (verificato): `component-unit`, salvo
+`onboarding-component-unit` e due in `core-unit`.
+
+| Lotto | Prima, `test-author` | Vitest | E2E (azioni del runner) | Gallery |
+|---|---|---|---|---|
+| W1-a | `SimpleSelect.test.ts:74-76` legge le classi (`bg-white`, `ring-libre-green`…) | `SearchSelect`, `SearchSelect.reopen`, `SimpleSelect`, `TreeSelect`, `CurrencySearchSelect`, `AssetTypeSelect` | `select`, `asset-modal`, `asset-classification`, `transactions-modals`, `broker-sharing`, `tx-import-upload` | Assets (creazione, tipo, albero dei segnali, distribuzioni), Settings (preferenze), Transactions (modale), Brokers (condivisione) |
+| W1-b | — | `AssetPickerPanel`, `FxProviderSelect` | `risk-lab`, `fx-add-pair`, `fx-detail`, `transactions-modals` | Risk lab (selettori), FX (provider, aggiunta di una coppia) |
+| W1-c | `DateRangePicker.test.ts:949-954` (classi); `fx/fx-list.spec.ts:155` (`bg-libre-green` sul preset 1Y); `assets/asset-data-editor.spec.ts:115,126` (classe della scheda attiva: `TabBar`) | `CalendarMonth`, `DateRangePicker`, `SingleDatePicker`, `TabBar` | `fx-list`, `asset-data-editor`, `dashboard`, `toolbar-width-sweep`, `asset-list` | quasi tutte le pagine: barre degli strumenti, schede, intervallo di date della dashboard, vista a card o tabella |
+| W1-d | — | `ExactDecimalInput`, `ExactQuantityInput`, `TagInput` | `asset-modal`, `transactions-modals`, `files` | Assets (distribuzioni), Transactions (modale), Files |
+| W1-e | — | `ModalBase`, `ModalBase.escapeLayers` | `transactions-modals`, `settings`, `asset-modal`, `files`, `support-copy-and-go` | **tutte le modali** |
+| W1-f1 | — | `SyncModalBase`, `PageSyncModal` | `fx-sync`, `fx-sync-mock` | FX (Sync All) |
+| W1-f2 | `asset-data-editor.spec.ts:287` e `fx/fx-csv-import.spec.ts:53,56` cercano `.text-red-500` (la ✗ di `CsvEditor`) | `DataEditor` | `asset-data-editor`, `fx-editor`, `fx-csv-import` | FX e Assets (editor dei dati, importazione CSV) |
+| W2-a | — | `onboarding-component-unit` (5 file) | `onboarding-tour`, `onboarding-guides`, `settings` | Onboarding (welcome, tour, guida), Settings (ripasso dell'onboarding) |
+| W2-b | — | `ChangelogModal` | `changelog-locale`, `app-start-auth` | Settings (changelog); `ServerUnreachable` non è nella gallery |
+| W2-d | — | `front-ai-export unit` | `front-ai-export panel`, `catalog` | nessuna: l'AI Export non è nella gallery, servono scatti miei o una scena di G |
+| W2-c | — | `SocialShareModal`, `SupportActions`, `shareNavigation`, `DonationPopupModal`, `UpdateAvailableModal`; `supportLinks` e `updateCheck` in `core-unit` | `support-copy-and-go`, `auth` | Support (donazione, condivisione), Auth Pages (aggiornamento disponibile) |
+| W2-e2 | — | `SchedulerConfigModal`, `SchedulerLogModal` | `scheduler` | Settings (modali dello scheduler) |
+| W2-e1 | — | `SettingControls`, `PasswordChangeModal` | `settings` | Settings (preferenze, globali, password, cache) |
+| W2-f1 | — | `AboutTab`, `ProfileTab` | `settings`, `account-deletion` | Settings (informazioni, diagnostica dei plugin e degli strumenti, profilo) |
+| W2-f2 | `GlobalSettingsTab.test.ts:885` cerca `closest('div.bg-gray-50')` | `GlobalSettingsTab` | `settings` | Settings (globali, menu delle categorie su mobile) |
+| W2-f3 | — | `SettingsLayout`, `PreferencesTab` | `settings`, `document-title` | Settings (tutte le schede) |
+
+**Bozza del prompt per il sotto-agente** (comune; T aggiunge il blocco del lotto)
+
+```text
+You convert ONE lot of LibreFolio frontend files to the colour roles. Workstream T, wave <W>, lot <ID>.
+
+Worktree only: <worktree path>. Never read another checkout. Edit ONLY these files:
+<files of the lot>
+
+Read first: .github/skills/design-tools/theme-roles/SKILL.md (roles → utilities, conversion table, rules),
+frontend/src/lib/theme/tokens.css (the roles), .github/instructions/frontend.instructions.md («Design System»).
+
+Rules:
+- Convert by meaning and step, not by colour family. Every pair `light dark:…` becomes ONE role, without `dark:`.
+- An element migrates whole (G3): never a role utility next to a palette class in the same class string or tag.
+  If an element cannot migrate (a categorical colour: violet, purple, indigo, pink, teal, cyan, fuchsia, lime;
+  or a case listed below as «leave legacy»), leave that element entirely as it is and list it in your report.
+- Every `border` names its role. The component's root sets its text role (`text-lf-primary`).
+- No hand-written colours: no hex, rgb(), hsl(), oklch() or colour names in markup, scripts or <style>; in <style>
+  read a role with var(--lf-…). No arbitrary colour values, except ones built only on var(--lf-…)
+  (bg-[var(--lf-surface-card)]). Delete `:global(html.dark)` overrides that a role now covers.
+- Class names stay whole literals; never build them from pieces. Do not touch classes that come from the tables of
+  src/lib/theme/ (toneClasses, themePair…): they migrate centrally.
+- Classes assembled at run time from several literals (a state function such as getDayClasses, a ternary) belong
+  to ONE element: convert all of its literals or none.
+- Do not reorder markup, rename props, change behaviour or i18n. Do not edit tests: list in your report any test
+  that reads a class you changed.
+- Allowed commands: `node frontend/scripts/theme/theme-roles.mjs --check` and `--report` (read-only).
+  Never --update, never git add/commit, never tests, builds, servers, npm/pipenv commands.
+
+Report: per file, the m1/m2 before and after (from --report), the elements left legacy and why, the tests that read
+classes, any doubt about a role. Do not stop at the first doubt: leave the element legacy and go on.
+```
+
+Blocchi per lotto:
+
+| Lotto | Casi particolari da scrivere nel prompt |
+|---|---|
+| W1-a | Opzione evidenziata nella lista: `bg-lf-selected`. Bordo del campo `border-lf-input`, aperto `ring-lf-focus border-lf-focus`. Spunte e caselle selezionate (`CheckMenu`): `bg-lf-checked text-lf-on-checked` se Q1 è decisa, altrimenti l'elemento resta legacy per intero |
+| W1-b | `FxProviderSelect`: il `#fbbf24` dentro l'HTML del tooltip resta (Q10). Gli stati delle righe dei provider (`emerald`, `blue`, `amber`) vanno sui ruoli di stato. Le caselle di `AssetPickerPanel` come in W1-a (Q1) |
+| W1-c | Il giorno di `CalendarMonth` è un elemento solo, assemblato da `getDayClasses`: con Q1 decisa, selezionato e capi dell'intervallo `bg-lf-checked !text-lf-on-checked`, intervallo `bg-lf-selected`, in sospeso `bg-lf-checked/50`, oggi `ring-lf-focus`, giorni fuori mese e futuri `text-lf-muted`; senza Q1 il giorno resta legacy per intero. Lo stesso per il preset attivo di `DateRangePicker` e il segmento attivo di `ViewModeToggle` |
+| W1-d | `ExactQuantityInput`: i due `oklch(… / 0.7)` diventano `color-mix(in oklab, var(--lf-danger) 70%, transparent)` e lo stesso con `--lf-success`. `TagInput`: le variabili `--badge-*` ricadono sui ruoli |
+| W1-e | Pannello `var(--lf-surface-card)`, fondale `var(--lf-surface-overlay)`; via la regola scura. L'ombra resta letterale fino a Q8 |
+| W1-f1 | Gli stati della sync vanno sui ruoli di stato; le classi che arrivano da `syncHelpers` e dalle tabelle di R non si toccano |
+| W1-f2 | La ✗ e la ✓ di convalida: `text-lf-danger` e `text-lf-success`; le celle d'errore `bg-lf-danger-soft` |
+| W2-a | Il banner va sui ruoli `warning` (soft, line, on-soft): è il modello per `InstanceNotices` di H. Il coachmark resta legacy finché Q9 non è decisa; dopo, si toglie la sua eccezione dallo scanner (file di T) |
+| W2-b | Gli stili del changelog: i link su `var(--lf-link)`, il testo attenuato su `var(--lf-text-muted)`, il bordo su `var(--lf-border-subtle)`; `mark` (Q7) e codice (Q6) restano |
+| W2-d | Il viola resta (Q11); neutri e stati sì |
+| W2-c | `supportLinks.ts`: restano solo i colori dei marchi (eccezione); i neutri si convertono. Il `#ffffff` della donazione diventa `bg-lf-logo` |
+| W2-e2 | I pallini di stato vanno sui ruoli di stato, il grigio resta (Q5) |
+| W2-e1 | L'interruttore: traccia accesa `bg-lf-checked`, spenta `bg-lf-input`, pomello `bg-lf-on-action` (Q1, Q2); senza risposta resta legacy per intero. Il badge `setting-badge` (ambra, per esempio «Coming soon») va su `warning-soft` e `warning-on-soft`, come oggi; l'arancio di «modificato» resta (Q4) |
+| W2-f1 | Le icone decorative restano (Q12). Il pulsante distruttivo: `bg-lf-danger text-lf-on-status`, e l'hover provvisorio `hover:bg-lf-danger/90` (Q3), sennò resta legacy per intero. Il logo: `bg-lf-logo` al posto dello `style` |
+| W2-f2 | I pallini di stato vanno su `bg-lf-success`, `bg-lf-warning`, `bg-lf-danger` |
+| W2-f3 | Nessun caso particolare |
+
+**Stima**
+
+- 16 lotti di sotto-agenti e 2 gallery.
+- Ogni lotto passa per T con 3 o 4 esecuzioni in serie nella corsia: gate, `component-unit` mirato, 1–5 azioni E2E.
+- Da coordinare: 10 lotti su 16 chiedono il via a una sessione (X, W, H, Z, J, A); Q1 va chiusa prima di W1.
+
 ### B6 · Pulizia
 
 - Via P1, le `--theme-*`, i valori scuri dei `--color-libre-*`, i token morti.
@@ -479,3 +753,29 @@ Per ogni ondata: lotti di ≤ 15 file; gate eseguiti in serie da T; gallery e re
 >   prima visita con browser `it-IT`. È un difetto di prima, non di colore: va instradato.
 > - **I pallini sulle linee** del render della designer restano fuori, come detto nell'analisi: non sono nelle sue
 >   note.
+
+### W1–W2 · Spacchettamento — ✅ 15/10/2026 (analisi, sola lettura)
+
+> **Avvio:** il coordinatore ha committato T-5 (`f43aa7200`, worktree pulito) e ha chiesto lo spacchettamento di W1 e
+> W2 entro le 08:30: niente codice, server, test né sotto-agenti che scrivono.
+>
+> **Note implementazione:** il risultato è nella sezione «W1–W6», paragrafo «Spacchettamento di W1 e W2». In sintesi:
+> - 16 lotti: W1 7 (35 file, m1 1.085), W2 9 (34 file, m1 1.501);
+> - le sovrapposizioni vengono dai piani, non dai commit: nessun ramo attivo ha commit su un file di W1 o W2;
+> - 13 domande per la designer (Q1–Q13); Q1 blocca W1;
+> - quattro test da far aggiornare a `test-author` prima dei loro lotti: due Vitest e due E2E;
+> - un prompt comune per i sotto-agenti, più un blocco per ogni lotto.
+>
+> Comandi, tutti in sola lettura fuori dal worktree:
+> - `git archive dev_release2 frontend/src frontend/scripts/theme frontend/e2e` in `/tmp/libreFolio_W12/`;
+> - lo scanner di quella copia (`measureSource`, `readBaseline`);
+> - `git diff --name-status -M dev_release2...<ramo>` sugli 8 rami;
+> - `git show <ramo>:<piano>` per i piani.
+>
+> **Fuori pista:**
+> - **`InstanceNotices` di H** (CP4, piano di H §3.4): il piano dice «le classi ambra di `OnboardingBootstrapBanner`».
+>   È un file nuovo, quindi R3 lo respingerebbe con classi legacy: deve nascere sui ruoli `warning`. Per questo W2-a
+>   va per primo e converte il banner. Segnalato al coordinatore.
+> - **Copertura della gallery:** l'AI Export e `ServerUnreachable` non hanno scene. Per W2-b e W2-d servono scatti
+>   miei o una scena di G.
+> - **Stima dell'analisi bassa:** §4.5 diceva ~700 e ~1.300 classi; sono 1.085 e 1.501.

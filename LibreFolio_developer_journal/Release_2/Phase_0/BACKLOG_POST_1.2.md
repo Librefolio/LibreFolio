@@ -1937,6 +1937,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - le opacità delle colline del login in scuro;
     - palette categoriale e colori dei grafici.
   - Le otto correzioni minime di contrasto (D-T6) vanno confermate.
+  - **Domande di W1 e W2** (15/10, notte): Q1–Q13 nel piano di T, sezione W1–W6, «Ruoli che mancano». Q1 (colore di
+    un controllo selezionato: su `action` è a 2,10:1 sulla card scura) blocca W1: serve la risposta, o l'OK alla
+    proposta provvisoria, prima del primo lotto.
 
   Dettagli: piano di T, «Autorizzazione e decisioni»; `frontend/src/lib/theme/tokens.css`.
 - **TC-3 · Uno scanner dei colori solo, con L** — basso; T, 14/10.
