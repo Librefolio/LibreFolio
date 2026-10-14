@@ -35,7 +35,7 @@ The `LoginCard` handles user authentication via username/email and password.
 
 ```svelte
 <script>
-  import LoginCard from '$lib/components/auth/LoginCard.svelte';
+  import LoginCard from '$lib/features/auth/LoginCard.svelte';
 </script>
 
 <LoginCard
@@ -68,7 +68,7 @@ The `RegisterCard` handles new user registration with client-side validation.
 
 ```svelte
 <script>
-  import RegisterCard from '$lib/components/auth/RegisterCard.svelte';
+  import RegisterCard from '$lib/features/auth/RegisterCard.svelte';
 </script>
 
 <RegisterCard

@@ -57,9 +57,9 @@ knows about secure contexts. A test over plain HTTP from a non-localhost origin 
 | Role | Path |
 |------|------|
 | Shared helper with the fallback | `frontend/src/lib/utils/clipboard.ts` |
-| A direct call until train 72 (system info) | `frontend/src/lib/components/settings/tabs/AboutTab.svelte` |
+| A direct call until train 72 (system info) | `frontend/src/lib/features/settings/tabs/AboutTab.svelte` |
 | A direct call until train 72 (lot id) | `frontend/src/lib/components/brokers/lots/UnifiedLotsTable.svelte` |
-| A direct call until train 72 (administrator e-mail) | `frontend/src/lib/components/auth/AskAdminModal.svelte` |
+| A direct call until train 72 (administrator e-mail) | `frontend/src/lib/features/update-check/AskAdminModal.svelte` |
 | A direct call until train 72 (previewed text) | `frontend/src/lib/components/files/FilePreviewModal.svelte` |
 | A direct call until train 72 (provider error detail) | `frontend/src/lib/components/assets/ProviderAssignmentSection.svelte` |
 | The guide's warning | `mkdocs_src/docs/user/connection-security.en.md` |

@@ -31,11 +31,9 @@ frontend/
 │   └── lib/
 │       ├── api/          # API client (Zodios, generated from OpenAPI)
 │       ├── components/   # Reusable components
-│       │   ├── auth/     # LoginCard, RegisterCard, ForgotPasswordCard
 │       │   ├── brokers/  # Broker cards, forms, icon, import
 │       │   ├── files/    # FilesTable with DataTable
 │       │   ├── layout/   # Sidebar, Header, LanguageSelector
-│       │   ├── settings/ # Settings tabs (Profile, Preferences, Global, About)
 │       │   ├── table/    # DataTable suite (DataTable, toolbar, pagination, column filter, SelectionBar)
 │       │   └── ui/       # Generic UI atoms
 │       │       ├── input/    # PasswordInput, PasswordStrength
@@ -44,6 +42,9 @@ frontend/
 │       │       ├── select/   # SimpleSelect, SearchSelect + specialized selects
 │       │       ├── tabs/     # TabBar (used standalone and by PageToolbar)
 │       │       └── toolbar/  # PageToolbar — shared responsive shell (see Toolbar & Responsive Layout)
+│       ├── features/     # One folder per domain: its components, state and logic
+│       │   ├── auth/     # LoginCard, RegisterCard, ForgotPasswordCard
+│       │   └── settings/ # Settings tabs (Profile, Preferences, Global, About)
 │       ├── i18n/         # Internationalization (EN, IT, FR, ES)
 │       ├── stores/       # Store Client System (State Management)
 │       │   ├── app/          # auth, clientSession, settings, globalSettings, themeStore, language, privacyStore, toastStore, …

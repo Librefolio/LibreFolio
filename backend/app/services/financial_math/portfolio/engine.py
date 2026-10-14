@@ -15,6 +15,7 @@ from sqlalchemy import and_, func, or_, select
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency as CurrencySchema
+from backend.app.services.accounts.settings_service import get_effective_base_currency
 from backend.app.services.financial_math.average_cost import (
     compute_average_costs,
 )
@@ -25,7 +26,6 @@ from backend.app.services.financial_math.portfolio.derived_views import build_co
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, PortfolioCalculationResult, SplitHistory, SplitRecord
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
 from backend.app.services.fx.fx import convert_bulk
-from backend.app.services.settings_service import get_effective_base_currency
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 logger = structlog.get_logger(__name__)

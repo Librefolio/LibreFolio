@@ -2,7 +2,7 @@
  * tx-bulk-promote-cost-basis.spec.ts — the bulk editor's side of a promote that leaves the
  * receiving side of an asset TRANSFER without a cost basis (d7c148564).
  *
- * `validate_cost_basis` (`backend/app/services/transaction_batch_stages.py`) checks promoted
+ * `validate_cost_basis` (`backend/app/services/transactions/transaction_batch_stages.py`) checks promoted
  * pairs: once two ADJUSTMENTs are promoted into a TRANSFER, the receiving side (quantity > 0)
  * needs a cost basis like any other receiver, unless it is in Auto mode, and without one the
  * whole batch is refused. A promoted NEW row is checked as the create it is — `{operation:

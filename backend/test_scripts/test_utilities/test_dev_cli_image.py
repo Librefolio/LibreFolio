@@ -103,7 +103,7 @@ from types import ModuleType
 import pytest
 import yaml
 
-from backend.app.services.auth_service import verify_password
+from backend.app.services.accounts.auth_service import verify_password
 from backend.test_scripts.test_utils import print_info, print_section, print_success
 from scripts.user_cli import validate_password
 

@@ -12,7 +12,7 @@ session state, neither in memory nor in the database.
 1. **Login**: The user sends their `username` (or e-mail) and `password` to the `/api/v1/auth/login` endpoint.
 2. **Token Creation**:
     - The server verifies the credentials (using `bcrypt` hashing).
-    - If valid, it signs a JWT with `JWT_SECRET` (HS256) carrying the user ID (`sub`), the issue time (`iat`) and the expiry (`exp`): `create_jwt_token()` in `backend/app/services/auth_service.py`.
+    - If valid, it signs a JWT with `JWT_SECRET` (HS256) carrying the user ID (`sub`), the issue time (`iat`) and the expiry (`exp`): `create_jwt_token()` in `backend/app/services/accounts/auth_service.py`.
 3. **Cookie Issuance**: The server responds with a `Set-Cookie` header for the `session` cookie, which holds the JWT; its `max_age` matches the token's lifetime.
     - **`HttpOnly`**: The cookie cannot be accessed by JavaScript (prevents XSS token theft).
     - **`SameSite=Lax`**: Provides protection against CSRF attacks.

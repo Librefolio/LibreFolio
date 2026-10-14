@@ -41,7 +41,7 @@ from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_provider import BRIMProvider
 from backend.app.services.brim_report_sets import GAP_FIX_TAG, BRIMSetPluginNotFound
-from backend.app.services.transaction_service import TransactionService
+from backend.app.services.transactions.transaction_service import TransactionService
 
 # Differences at or below one cent are rounding, not a gap.
 CASH_TOLERANCE = Decimal("0.01")
