@@ -36,7 +36,10 @@ Workstream R ran the whole suite with coverage on train 68 (`a5653f9ef`), at two
   the next category), C-69 (the PAC planner's JS coverage).
 - Also closed on the same day, in I's lot 50: C-58 — [[problems/broker-detail-tests-over-budget-under-load]].
 
-The release page cites this run among the checks of 1.2.0, next to the final run still to come: [[sources/release-1.2.0]].
+The release page cites this run among the checks of 1.2.0, next to the final run: [[sources/release-1.2.0]]. *Update
+(2026-10-14)*: R's final run, on `10e646f79`, had **0 reds** — pytest 12 936, vitest 11 515, Playwright 1 221 — at a
+much lower load (8.9 on average against 37.9), so the load cures are proven at normal load only (C-82); its report
+is `report-R-final-run-coverage-20261013.md` in the same folder.
 
 ## Source files
 

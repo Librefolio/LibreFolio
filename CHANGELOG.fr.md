@@ -7,9 +7,21 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.2.0] - 2026-10-19
+## [1.2.0] - 2026-10-14
 
-**Préparation de la v1.2.0.** Ces fonctionnalités et correctifs sont en cours de préparation ; cette version n'a pas été publiée.
+Ce que la 1.2 ajoute à la 1.1 :
+
+- 🧰 **Outils** : une nouvelle section, avec son premier outil, l'**Allocateur PAC**, qui calcule les achats qui rapprochent votre allocation de ses poids cibles.
+- 📉 **Risque** : l'onglet Risque du Tableau de bord et des pages Courtiers répond à quatre questions, et l'analyse des risques quitte la bêta, sauf la simulation.
+- 💰 **Coût d'achat et P&L** : grâce au signalement [#32](https://github.com/Librefolio/LibreFolio/issues/32), nous avons trouvé un problème dans le calcul du coût de chaque achat en présence de taux de change, si bien que les indicateurs des cartes KPI, comme le P&L, étaient faux. L'algorithme est désormais corrigé : chaque achat est converti au taux de sa propre date, et les totaux sont justes.
+- 💱 **Liquidités dans d'autres devises** : les liquidités détenues dans une autre devise sont désormais valorisées au taux de chaque jour, et la vue Période montre combien le taux de change leur a fait gagner ou perdre.
+- 📊 **Tableau de bord** : le mode confidentialité, la vue P&L du graphique Croissance, le Rendement sur coût et les indices de référence font leur apparition, et le diagramme en anneau montre les neuf nouveaux types d'actifs regroupés dans leurs familles.
+- 📥 **Imports** : Scalable Capital, Danske Bank (alpha) et les relevés DEGIRO dans n'importe quelle langue ; et si vous téléversez un fichier vers le mauvais courtier, l'application vous le signale désormais tout de suite.
+- 🌍 **Langues** : les nombres, les dates et le journal des modifications suivent la langue de l'interface.
+- 👋 **Première connexion** : les nouveaux utilisateurs ont désormais une visite rapide et des guides qui leur montrent l'interface la première fois qu'ils se connectent.
+- ⚡ **Performances** : les pages téléchargent moins de données, et les rapports ne se bloquent plus sur de très longs historiques de taux de change.
+- 🔒 **Sécurité** : une faille de cross-site scripting (XSS) est fermée, certains points de terminaison de l'API exigent désormais une connexion, et la barre latérale vous indique si votre connexion est sécurisée.
+- 🐛 **Corrections** : de nombreux défauts sont corrigés, dont certains présents depuis la v0.9.0.
 
 ### ✨ Ajouté
 
@@ -159,7 +171,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 - Sur les graphiques Croissance et Performance, les axes des montants n'affichent plus la même étiquette en double (`5.5k` affichée comme `6k` à côté d'un véritable `6k`, `1.25M` comme `1.3M`), et un bord d'axe placé automatiquement au-delà des données n'est plus étiqueté comme s'il s'agissait d'un pas régulier. Le total P&L de l'infobulle Croissance affiche désormais `EUR -12.00` comme les autres montants, au lieu de `−EUR 12.00`.
 - Le graphique de comparaison des lots ne laisse plus de bande vide à gauche de ses montants, ce qui se voit surtout sur téléphone.
-- En résolution hebdomadaire ou mensuelle, la semaine ou le mois pas encore terminé se lit correctement sur les graphiques des actifs et des taux de change : ses événements ne disparaissent plus, leurs marqueurs se placent sur son point comme les autres, et son infobulle date la valeur de son dernier jour avec un prix, et non plus du dimanche ou du dernier jour du mois encore à venir. Présent depuis la v1.0.0.
+- En résolution hebdomadaire ou mensuelle, la semaine ou le mois pas encore terminé se lit correctement sur les graphiques des actifs et des taux de change, le graphique Croissance, l'historique de l'allocation et le graphique de comparaison des lots : son infobulle date la valeur de son dernier jour avec des données, et non plus du dimanche ou du dernier jour du mois encore à venir. Sur les graphiques des actifs et des taux de change, ses événements ne disparaissent plus et leurs marqueurs se placent sur son point comme les autres ; sur le graphique Croissance, son point se place sur ce jour, de sorte que la ligne n'atteint plus une date encore à venir. Présent depuis la v1.0.0.
 
 #### 📉 Analyse des risques
 

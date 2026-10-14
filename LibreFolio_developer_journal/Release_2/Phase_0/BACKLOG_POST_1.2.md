@@ -52,6 +52,14 @@
 | [Piano della 45](45_pluginModules/plan-phase00PluginModules.prompt.md) | Plugin in cartelle e traduzioni modulari, passi U-0…U-5 | aperto: U-1 (una cartella per plugin) nel treno 61; le voci aperte nella sezione U |
 | [Piano della 46](46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md) | Le voci 21–23 della checklist del server: E2E su dati reali e righe legacy, il pannello lotti dopo il sync | chiuso nel treno 56; le voci aperte nella sezione V |
 | [Piano della 47](47_chartAxisDayLabels/plan-phase00ChartAxisDayLabels.prompt.md) | Gli assi x dei grafici: il giorno nelle etichette, le linee dei broker del P&L che restavano | chiuso nel treno 59; 47-1 nella sezione I |
+| [Piano della 48](48_uiPolish/plan-phase00UiPolish.prompt.md) | La rifinitura UI: BrokerIcon, la modale del broker sbagliato, il pannello della sicurezza, M-20, V-19 | chiuso nella 1.2 |
+| [Piano della 49](49_requestCountRace/plan-phase00RequestCountRace.prompt.md) | La corsa dei contatori di richieste in `asset-detail.spec.ts` | chiuso nella 1.2 |
+| [Piano della 50](50_brokerDetailBudget/plan-phase00BrokerDetailBudget.prompt.md) | Il dettaglio broker sotto carico (C-58) | chiuso nella 1.2 |
+| [Piano della 51](51_narrowFitFixes/plan-phase00NarrowFitFixes.prompt.md) | Quello che non entra sui telefoni (R-1, R-2, R-4) e i marcatori persi nel periodo in corso (R-5) | chiuso nel treno 91 |
+| [Piano della 52](52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md) | L'ultima etichetta degli assi del tempo sui telefoni, le date dei tooltip, il periodo in corso di Growth, Alloc e lotti | chiuso nel treno 97 |
+| [Piano della 53](53_pacTests/plan-phase00PacTests.prompt.md) | I test del PAC (T-PAC): mappa, coperture, test che mentono, difetti D1–D4, lotti A–C | aperto: tutto dopo la 1.2 (C-69, C-73…C-78) |
+| [Piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md) | La fixture della galleria: quote, YoC e variazione di un giorno non più scalate (I-M30) | chiuso nel treno 99; la privacy resta una domanda del developer |
+| [Rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md) | La run completa con coverage sull'albero candidato al tag (`10e646f79`): 0 rossi | C-79 |
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
 | [`TODO_FUTURI.md`](../../../TODO_FUTURI.md) | Il futuro deliberato, non backlog | 52 temi |
 
@@ -280,6 +288,54 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
     `modeText.test.ts:11-16`, `pluralCountSites.test.ts:13-19` e `pac-allocator-real.spec.ts:19`.
 
   Dettagli: piano della 53, §4 e §5.
+- **C-79 · Cancellare un broker lascia il suo lock e la sua cartella vuota in `broker_reports`** — minimo; R, 14/10, run
+  finale. Alla cancellazione di un broker restano `.locks/broker_N.lock` e la cartella vuota `uploaded/broker_N/`: nella
+  run finale, 89 lock e circa 107 cartelle dei broker temporanei delle spec di import. Nessun file di report resta
+  orfano. Cura: la pulizia del file system nella cancellazione del broker (BRIM/import), dopo la 1.2. Dettagli:
+  [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md), §3.
+- **C-80 · Backend: i moduli sotto l'80 %** — basso; R, run finale del 13/10 (§4.1). In 1.2 la copertura
+  complessiva è 91,55 %, ma alcuni moduli restano indietro:
+  - `services/scheduler/scheduler.py` 60,18 %;
+  - `brim_providers/broker_cryptocom` 69,86 % e `broker_cointracking` 74,45 %;
+  - `api/v1/assets.py` 75,00 %, fermo dal 03/09 (73,9 % nel report 17);
+  - `fx_providers/fed` 75,18 %, che dipende dalla rete;
+  - `services/tools/resources.py` 75,50 % (run del 12/10).
+
+  Per pacchetto, `brim_providers` ha la quota più grossa di righe mancanti (906, rami al 79,7 %); `fx_providers` ha i
+  rami al 75,4 %. Cura: test mirati, a partire dallo scheduler e da `api/v1/assets.py`. Dettagli: [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md).
+- **C-81 · Frontend: i file mai eseguiti e i grandi scoperti** — basso; R, run del 12/10 e finale (§4.2). Da
+  rimisurare **dopo I1** (C-69): finché la fixture `jsCoverage` perde i contatori, le cifre E2E sono limiti inferiori.
+  - Allo 0 %, fuori dal planner del PAC: `features/tools/ToolDiagnosticsPanel.svelte`,
+    `features/tools/components/ToolExecutionMetrics.svelte`, `routes/+error.svelte`,
+    `components/risk/levels/SimulationProvenance.svelte`, `components/files/FileSetBadges.svelte`,
+    `components/assets/assetEditData.ts`, `hooks.server.ts`.
+  - I più scoperti: `ImportWizardModal.svelte` (1 374 statement, 50,1 %, sceso dal 54,9 %: non attribuibile finché c'è
+    I1), la pagina dell'asset (553), `TransactionBulkModal.svelte` (423), `TransactionFormModal.svelte` (338), la
+    lista degli asset (300), `RiskAnalysisPanel.svelte` (279, rami al 40,1 %), `LotComparisonChart.svelte` (46,8 % il
+    12/10).
+
+  Dettagli: [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md).
+- **C-82 · Le cure da carico sono provate solo a carico normale** — medio-basso; R, run finale. La run finale ha avuto
+  un carico medio di 8,9, contro 37,9 il 12/10: dimostra che le cure di V-27, V-28, V-33 e V-36 reggono a carico
+  normale, non a carico alto. Cura: una run a 4 worker con un'altra corsia attiva, o con un carico sintetico, prima
+  del prossimo rilascio. Dettagli: [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md), §1.2.
+- **C-83 · Le pagine scrivono la barra del giorno in `price_history`** — minimo; R, run finale (§3). Quando una pagina
+  chiede il prezzo corrente, il backend lo salva come barra del giorno (nella run finale +7 righe, poi +3 dopo
+  mezzanotte). Uno spec che contasse le barre di un asset vedrebbe +1 secondo il giorno e l'ordine dei test: un
+  conteggio va scritto relativo, mai assoluto. Dettagli: [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md).
+- **C-84 · Le versioni scritte a mano nei file del progetto** — minimo; coordinatore, 14/10. `pyproject.toml` e
+  `frontend/package.json` dicono ancora 1.1.0, fissate il 05/08; nessuno le legge, perché la versione dell'app viene da
+  `git describe`. Da allineare a ogni rilascio, o da togliere.
+- **C-85 · Mostrare che si sta aspettando il server, nelle richieste importanti** — medio; developer, 14/10, dalla
+  verifica sul server della build `v1.1.0-1674-g797a7e432` (voce 7). Le sue parole: «quando un pacchetto è in volo non si
+  ha chiaro che si sta attendendo la risposta, dobbiamo aggiungere nel backlog un task che si occupa di rendere palese
+  in qualche modo che si sta aspettando una risposta dal server per le domande importanti».
+  - Il caso visto: nel grafico P&L della Dashboard, cambiando i broker del filtro, le linee si aggiornano solo quando
+    arriva la risposta, e nel frattempo niente dice che il calcolo è in corso.
+  - Da fare: l'elenco delle richieste lente o importanti (il report della Dashboard e dei broker, il Rischio, i lotti,
+    l'AI Export, il PAC, i sync), e per ciascuna un segnale uniforme di attesa sul contenuto che cambierà: uno stato
+    «in aggiornamento» sul grafico o sul pannello, e i dati vecchi attenuati invece che lasciati come se fossero
+    attuali. Da progettare insieme, con un componente comune, e dopo la 1.2.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6).
 
 ## Risk · Rischio (02)
@@ -407,6 +463,16 @@ debito di traduzione di F-5 (di M).
   (`dev.py:1841`, `:1848`). Nel runner intero sono 149 errori ruff in 17 file, e black riformatterebbe 15 file su 30:
   se pulirlo in una volta sola lo decide il coordinatore. Dettagli:
   [piano della 49](49_requestCountRace/plan-phase00RequestCountRace.prompt.md), §6.
+- **54-1 · Con la liquidità negativa la storia dell'allocazione sfora il 100 % e il grafico la taglia** — basso,
+  preesistente; I, 13/10 (piano 54, passo 8). La liquidità entra in Tipo e Settore col suo segno, non in Geografia
+  (`daily_state.py:715-717`, `cumulative_cash + it_cash`), e ogni lista divide per il totale con segno
+  (`derived_views.py:231-243`): un saldo negativo porta le quote positive sopra 100. ECharts impila i negativi sotto lo
+  zero (`stackStrategy` di default `samesign`, `echarts/lib/processor/dataStack.js:103`, `:132`) e `max: 100` taglia
+  la cima (`AllocationHistoryChart.svelte:703`, `:802`). Tooltip e famiglie scartano le voci fino a 0,01 (`:623`,
+  `:626`, `:775`), la torta quelle fino a 0 (`AllocationPanel.svelte:60-67`): la liquidità negativa non compare da
+  nessuna parte. Nessun caso nella corsia né nella fixture. Da decidere se mostrare la leva o togliere la liquidità
+  negativa dal totale. Dettagli: [piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md),
+  passo 8.
 
 ## P · Transazioni e Bulk (42)
 
@@ -861,6 +927,30 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
     sovrascrivibile (`frontend/playwright.config.ts:54`): con 3 worker del browser sono 2, non 1.
 
   Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «27.3».
+- ✅ **M-30 · Lo storico dell'allocazione non arriva al 100 %** — chiusa nella 1.2 da I (I-M30, piano 54:
+  `a26051686`, `a08e208b4`, treno 99), verificata da M (lotto 45, 14/10). La causa era la fixture della galleria
+  (`frontend/e2e/dashboard-report.json`): la normalizzazione di privacy scalava anche le quote dell'allocazione e lo
+  YoC. Ora lo stack arriva al 100 % in tipo, settore e geografia, e la torta stampa le quote corrette. Dettagli: [piano
+  della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md); la verifica: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «36». Era:
+  da verificare; M (lotto 42), 13/10: lo stack non arrivava al 100 % nelle tre viste, in ogni lingua e tema.
+- ✅ **M-31 · Lo scatto `brokers/detail` mostra un broker vuoto** — chiusa nella 1.2, M (lotto 43, 13/10): il test
+  apre Interactive Brokers per nome (`openBrokerCardByName`, come gli altri scatti della pagina del broker), che ha
+  liquidità e titoli in tutta la finestra di 3 mesi; 16 scatti con Crescita e Allocazione piene. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md),
+  sezione «34». Era: basso; M (lotto 42), 13/10: il test prendeva la prima card della lista
+  (`frontend/e2e/gallery.spec.ts:3104`), Charles Schwab, tutto a 0,00 sul periodo predefinito 3M, con «Nessun dato
+  disponibile» in Crescita e Allocazione.
+- ✅ **M-32 · L'alt dello scatto del dettaglio nella pagina dei broker** — chiusa nella 1.2, M (lotto 44, 13/10): lo
+  scatto è passato dal passo 3 di «Create a broker» all'inizio di «🗂️ Inside a broker», con l'alt «Broker Detail»
+  (Dettaglio broker, Détail du courtier, Detalle del bróker) e una frase che lo introduce e fa da didascalia; nelle
+  quattro lingue, con lo stamp. Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «35». Era: minimo; M (lotto 43), 13/10:
+  `mkdocs_src/docs/user/brokers/index.{en,it,fr,es}.md:29` mostrava lo scatto `brokers/detail` sotto «Click
+  **Create**», con l'alt del modulo di modifica copiato dall'immagine sopra («Broker Edit Form», …).
+- **M-33 · Nessuno scatto mostra la colonna YOC** — basso; M (lotto 45), 14/10: nella tabella delle posizioni lo YoC è
+  la settima colonna (`frontend/src/lib/components/dashboard/ExposureTable.svelte:5`). Lo scatto desktop finisce a
+  P&L %, con Annualizzato tagliato; quello mobile alla prima colonna; la vista Periodo non la ha. Le pagine che la
+  descrivono (`user/dashboard/positions.*.md:40` e `:59`, `user/brokers/index.*.md:102`) non hanno un'immagine che la
+  mostri. Una via: nello scatto della tabella, scorrere fino alla colonna, o nasconderne qualcuna col selettore (👁).
+  Dettagli: [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezione «36.1».
 
 ## Q · Documentazione e onboarding (21, 32)
 

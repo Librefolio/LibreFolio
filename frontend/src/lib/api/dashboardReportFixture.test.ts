@@ -1,5 +1,6 @@
 /**
- * Guard: the gallery's dashboard fixture still matches the API schema (workstream M, round R12).
+ * Guard: the gallery's dashboard fixture still matches the API schema (workstream M, round R12), and
+ * its anonymization scaled money only (workstream I, lot I-M30).
  *
  * ## What this protects
  *
@@ -10,6 +11,11 @@
  * goes on capturing it. That is what happened from 09-11: `summary.holdings[*].yield_on_cost` became
  * required, the fixture lacked it, and several shots were taken of an empty dashboard. The gallery
  * needs about 1.2 h to get there; this file says it in seconds.
+ *
+ * The snapshot is anonymized by `scripts/normalize_dashboard_fixture.py`, which scales every field
+ * whose name looks like money until the net worth is 50 000. A share, a yield on cost and a price
+ * change carry such a name without being money: scaled, they still parse, and the dashboard draws
+ * allocations that do not add up to 100 % and yields and daily moves multiplied by the factor.
  *
  * ## What it checks
  *
@@ -23,7 +29,16 @@
  *   a section the schema no longer knows is stripped, and the shots built on it go empty;
  * - two negative controls on an in-memory deep copy: without `yield_on_cost` on one holding, or
  *   without `summary.net_worth`, the verdict turns red. Without them, "it parses" would also be what
- *   a guard that checks nothing reports.
+ *   a guard that checks nothing reports;
+ * - that the figures that are not money keep, in the raw file, the relation the backend writes them
+ *   with (lot I-M30, plan 54): every allocation list — `summary.allocation_by_*`, each day of
+ *   `allocation_history.*` — that is neither empty nor worth zero sums to 100 within 0.005 per item;
+ *   every available `yield_on_cost.value` is `gross_income_per_unit.amount / wac_per_unit` within a
+ *   millionth; every `price_change_1d` at market price is, times 100, `gain_loss_change_1d_percent`
+ *   in magnitude within 0.0101. A failure names the family and counts, never a figure;
+ * - one negative control per relation, on a deep copy first rewritten to hold it, so that each check
+ *   is also proven green on the real shapes: one summary list scaled by 0.9, one yield on cost
+ *   doubled, one price change a point off its percent, and the verdict turns red.
  *
  * ## What it does not
  *
@@ -33,9 +48,15 @@
  *
  * ## When it goes red
  *
- * Rule 12 — a captured fixture that fails the schema is a STOP, not an edit. Ask the developer for a
- * fresh capture, normalize it with `./dev.py mkdocs normalize-dashboard-fixture`, and never edit the
- * fixture by hand. The failure message says the same.
+ * - The schema test: Rule 12 — a captured fixture that fails the schema is a STOP, not an edit. Ask
+ *   the developer for a fresh capture, normalize it with `./dev.py mkdocs normalize-dashboard-fixture`,
+ *   and never edit the fixture by hand.
+ * - A relation test: the normalizer scaled a field that is not money. Fix the path exceptions in
+ *   `scripts/normalize_dashboard_fixture.py`, then normalize a fresh capture with it; never edit the
+ *   fixture by hand (plan 54, on approval, recomputed only these derived figures from the fixture's
+ *   own amounts with the backend's formulas).
+ *
+ * Each failure message says the same.
  */
 
 import {readFileSync} from 'node:fs';
@@ -114,6 +135,117 @@ function check(report: unknown) {
     return {parsed, problems: parsed.success ? [] : describeIssues(parsed.error.issues)};
 }
 
+/** The dimensions the dashboard allocates by: `summary.allocation_by_<dim>` and `allocation_history.<dim>`. */
+const DIMENSIONS = ['type', 'sector', 'geography'] as const;
+
+const NOT_MONEY_SCALED = [
+    'The normalizer scaled a figure that is not money (lot I-M30, plan 54): scripts/normalize_dashboard_fixture.py multiplies every field whose name looks like money, and the allocation shares, yield_on_cost.value and price_change_1d all carry such a name.',
+    '  1. fix the path exceptions in scripts/normalize_dashboard_fixture.py, so that these figures are never scaled and its invariants refuse a fixture that breaks them;',
+    "  2. ask the developer for a fresh capture and normalize it with the fixed script: ./dev.py mkdocs normalize-dashboard-fixture (--dry-run first). Plan 54, on approval, instead recomputed only these derived figures from the fixture's own amounts with the backend's formulas;",
+    '  3. never edit e2e/dashboard-report.json by hand: a patched snapshot shows a portfolio that never existed, and the shots built on it stay green.',
+];
+
+/** A figure as a number: a number as it is, a decimal string parsed, anything else NaN, which fails every comparison below. */
+function toNumber(value: unknown): number {
+    if (typeof value === 'number') return value;
+    return typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN;
+}
+
+/** The sum of `key` over a list; NaN as soon as one item has no figure there. */
+function sumOf(items: readonly unknown[], key: string): number {
+    return items.reduce<number>((total, item) => total + toNumber(nodeAt(item, [key])), 0);
+}
+
+/**
+ * One allocation list. The backend writes each share as `amount / total * 100`, quantized to 2 decimals, and emits every
+ * item, so the shares sum to 100 within 0.005 per item. An empty list, or one worth zero (to a millionth, the float sum
+ * of amounts that cancel), has no share to sum.
+ */
+function shareVerdict(items: unknown): 'ok' | 'skip' | 'off' {
+    if (!Array.isArray(items)) return 'off';
+    if (items.length === 0) return 'skip';
+    const shares = sumOf(items, 'value');
+    const amounts = sumOf(items, 'amount');
+    if (!Number.isFinite(shares) || !Number.isFinite(amounts)) return 'off';
+    if (Math.abs(amounts) < 1e-6) return 'skip';
+    return Math.abs(shares - 100) <= 0.005 * items.length + 1e-9 ? 'ok' : 'off';
+}
+
+/** Every allocation list: the three of the summary, then each day of the three histories. */
+function allocationLists(report: unknown): unknown[] {
+    const lists: unknown[] = DIMENSIONS.map((dim) => nodeAt(report, ['summary', `allocation_by_${dim}`]));
+    for (const dim of DIMENSIONS) {
+        const days = nodeAt(report, ['allocation_history', dim]);
+        if (Array.isArray(days)) for (const day of days) lists.push(nodeAt(day, ['components']));
+    }
+    return lists;
+}
+
+/** Allocation lists whose shares do not sum to 100: one line per family, with counts, never a figure. */
+function shareProblems(report: unknown): string[] {
+    const problems: string[] = [];
+    for (const dim of DIMENSIONS) {
+        const list = nodeAt(report, ['summary', `allocation_by_${dim}`]);
+        if (!Array.isArray(list)) problems.push(`summary.allocation_by_${dim}: missing`);
+        else if (shareVerdict(list) === 'off') problems.push(`summary.allocation_by_${dim}: does not sum to 100`);
+    }
+    for (const dim of DIMENSIONS) {
+        const days = nodeAt(report, ['allocation_history', dim]);
+        if (!Array.isArray(days)) {
+            problems.push(`allocation_history.${dim}: missing`);
+            continue;
+        }
+        const off = days.filter((day) => shareVerdict(nodeAt(day, ['components'])) === 'off').length;
+        if (off > 0) problems.push(`allocation_history.${dim}: ${off} of ${days.length} days do not sum to 100`);
+    }
+    return problems;
+}
+
+/** The holdings of the summary, or `undefined` when it has no list of them. */
+function holdingsOf(report: unknown): Record<string, unknown>[] | undefined {
+    const holdings = nodeAt(report, ['summary', 'holdings']);
+    return Array.isArray(holdings) ? holdings.filter(isRecord) : undefined;
+}
+
+const isAvailableYieldOnCost = (holding: Record<string, unknown>): boolean => nodeAt(holding, ['yield_on_cost', 'status']) === 'available';
+
+/** What an available yield on cost is: `gross_income_per_unit.amount / wac_per_unit`, unquantized; NaN when a term is missing. */
+function expectedYieldOnCost(holding: Record<string, unknown>): number {
+    return toNumber(nodeAt(holding, ['yield_on_cost', 'provenance', 'gross_income_per_unit', 'amount'])) / toNumber(holding.wac_per_unit);
+}
+
+/** Available yields on cost farther than a millionth from gross income per unit over WAC: one line, with counts, never a figure. */
+function yieldOnCostProblems(report: unknown): string[] {
+    const holdings = holdingsOf(report);
+    if (!holdings) return ['summary.holdings: missing'];
+    const available = holdings.filter(isAvailableYieldOnCost);
+    const off = available.filter((holding) => {
+        const expected = expectedYieldOnCost(holding);
+        return !(Number.isFinite(expected) && Math.abs(toNumber(nodeAt(holding, ['yield_on_cost', 'value'])) - expected) <= 1e-6 * Math.abs(expected));
+    }).length;
+    return off > 0 ? [`summary.holdings[*].yield_on_cost: ${off} of ${available.length} available values differ from gross_income_per_unit / wac_per_unit`] : [];
+}
+
+/** A holding whose price change can be compared with its percent: valued at market price, with both figures. */
+const isComparedPriceChange = (holding: Record<string, unknown>): boolean => holding.valuation_source === 'MARKET_PRICE' && holding.price_change_1d != null && holding.gain_loss_change_1d_percent != null;
+
+/**
+ * Market-price changes that are not a hundredth of `gain_loss_change_1d_percent`, compared in magnitude (a short
+ * position gains when the price falls) within two roundings of 0.005: one line, with counts, never a figure.
+ */
+function priceChange1dProblems(report: unknown): string[] {
+    const holdings = holdingsOf(report);
+    if (!holdings) return ['summary.holdings: missing'];
+    const compared = holdings.filter(isComparedPriceChange);
+    const off = compared.filter((holding) => !(Math.abs(Math.abs(toNumber(holding.price_change_1d) * 100) - Math.abs(toNumber(holding.gain_loss_change_1d_percent))) <= 0.0101)).length;
+    return off > 0 ? [`summary.holdings[*].price_change_1d: ${off} of ${compared.length} market-price changes differ from gain_loss_change_1d_percent / 100`] : [];
+}
+
+/** The failure message of a relation test: the problems, as family and counts, then what to do. */
+function relationMessage(what: string, problems: readonly string[]): string {
+    return ['', `e2e/dashboard-report.json: ${what}. As family and count (values left out on purpose: the fixture is a real user snapshot):`, ...problems.map((line) => `    ${line}`), '', ...NOT_MONEY_SCALED, ''].join('\n');
+}
+
 describe('e2e/dashboard-report.json — the gallery dashboard fixture against the API schema', () => {
     const fixture: unknown = JSON.parse(readFileSync(FIXTURE, 'utf8'));
     const committed = check(fixture);
@@ -165,5 +297,83 @@ describe('e2e/dashboard-report.json — the gallery dashboard fixture against th
         delete summary.net_worth;
 
         expect(check(copy).problems).toEqual(['invalid_union at summary', '  invalid_type at summary.net_worth']);
+    });
+});
+
+describe('e2e/dashboard-report.json — anonymized by scaling its money, and nothing else (lot I-M30)', () => {
+    const fixture: unknown = JSON.parse(readFileSync(FIXTURE, 'utf8'));
+
+    it('keeps every allocation list summing to 100: a share is not money', () => {
+        const problems = shareProblems(fixture);
+
+        expect(problems, relationMessage('allocation shares that no longer sum to 100', problems)).toEqual([]);
+    });
+
+    it('keeps every available yield on cost equal to gross income per unit over WAC: a yield is not money', () => {
+        const problems = yieldOnCostProblems(fixture);
+
+        expect(problems, relationMessage('available yields on cost that are no longer gross_income_per_unit / wac_per_unit', problems)).toEqual([]);
+    });
+
+    it('keeps every market-price change a hundredth of its daily percent: a price change is not money', () => {
+        const problems = priceChange1dProblems(fixture);
+
+        expect(problems, relationMessage('market-price changes that no longer match gain_loss_change_1d_percent', problems)).toEqual([]);
+    });
+
+    it('accepts every allocation list rewritten from its amounts, and refuses one summary list scaled by 0.9', () => {
+        const copy = structuredClone(fixture);
+        for (const list of allocationLists(copy)) {
+            if (!Array.isArray(list) || shareVerdict(list) === 'skip') continue;
+            const total = sumOf(list, 'amount');
+            for (const item of list) if (isRecord(item)) item.value = ((toNumber(item.amount) / total) * 100).toFixed(2);
+        }
+        expect(shareProblems(copy), 'every list rewritten as the backend writes it must pass: the check is wrong on the real shapes').toEqual([]);
+
+        const dim = DIMENSIONS.find((candidate) => shareVerdict(nodeAt(copy, ['summary', `allocation_by_${candidate}`])) === 'ok');
+        const list = dim === undefined ? undefined : nodeAt(copy, ['summary', `allocation_by_${dim}`]);
+        // A control that mutates nothing proves nothing.
+        if (dim === undefined || !Array.isArray(list)) throw new Error('negative control: no summary allocation list is both non-empty and worth more than zero, so there is nothing to mutate');
+        for (const item of list) if (isRecord(item)) item.value = String(toNumber(item.value) * 0.9);
+        const problems = shareProblems(copy);
+
+        expect(problems).toEqual([`summary.allocation_by_${dim}: does not sum to 100`]);
+        expect(problems.filter((line) => /\d\.\d/.test(line))).toEqual([]);
+    });
+
+    it('accepts every available yield on cost rewritten as gross over WAC, and refuses one doubled', () => {
+        const copy = structuredClone(fixture);
+        const available = (holdingsOf(copy) ?? []).filter(isAvailableYieldOnCost);
+        for (const holding of available) {
+            const yieldOnCost = holding.yield_on_cost;
+            if (isRecord(yieldOnCost)) yieldOnCost.value = String(expectedYieldOnCost(holding));
+        }
+        expect(yieldOnCostProblems(copy), 'every available value rewritten as the backend computes it must pass: the check is wrong on the real shapes').toEqual([]);
+
+        const target = available.find((holding) => Number.isFinite(expectedYieldOnCost(holding)) && expectedYieldOnCost(holding) !== 0);
+        const yieldOnCost = target?.yield_on_cost;
+        // A control that mutates nothing proves nothing.
+        if (target === undefined || !isRecord(yieldOnCost)) throw new Error('negative control: no available yield on cost has a finite, nonzero gross income over WAC, so there is nothing to double');
+        yieldOnCost.value = String(2 * expectedYieldOnCost(target));
+        const problems = yieldOnCostProblems(copy);
+
+        expect(problems).toEqual([`summary.holdings[*].yield_on_cost: 1 of ${available.length} available values differ from gross_income_per_unit / wac_per_unit`]);
+        expect(problems.filter((line) => /\d\.\d/.test(line))).toEqual([]);
+    });
+
+    it('accepts every market-price change rewritten as a hundredth of its percent, and refuses one a point off', () => {
+        const copy = structuredClone(fixture);
+        const compared = (holdingsOf(copy) ?? []).filter(isComparedPriceChange);
+        for (const holding of compared) holding.price_change_1d = String(toNumber(holding.gain_loss_change_1d_percent) / 100);
+        expect(priceChange1dProblems(copy), 'every compared change rewritten as a hundredth of its percent must pass: the check is wrong on the real shapes').toEqual([]);
+
+        const target = compared[0];
+        // A control that mutates nothing proves nothing.
+        if (target === undefined) throw new Error('negative control: no holding at market price carries both price_change_1d and gain_loss_change_1d_percent, so there is nothing to mutate');
+        target.price_change_1d = String(Math.abs(toNumber(target.gain_loss_change_1d_percent)) / 100 + 0.01);
+        const problems = priceChange1dProblems(copy);
+
+        expect(problems).toEqual([`summary.holdings[*].price_change_1d: 1 of ${compared.length} market-price changes differ from gain_loss_change_1d_percent / 100`]);
+        expect(problems.filter((line) => /\d\.\d/.test(line))).toEqual([]);
     });
 });

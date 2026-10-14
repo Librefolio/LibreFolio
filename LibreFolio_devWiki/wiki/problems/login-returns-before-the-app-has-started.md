@@ -35,6 +35,9 @@ early return itself (`4ebbaab20`, train 87):
 
 Verified at one worker: six rounds, 102 of 102 green, the database back at the seed after each.
 
+*Note (2026-10-14, R's final run on `10e646f79`)*: 0 reds, but at an average load of 8.9 against 37.9 on 12/10 —
+the cure is proven at normal load only; a run under high load is backlog C-82.
+
 ## Prevention
 
 A helper that signs in must return in the state its callers expect, the app on screen, not halfway there; otherwise

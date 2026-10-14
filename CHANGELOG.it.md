@@ -7,9 +7,21 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ---
 
-## [1.2.0] - 2026-10-19
+## [1.2.0] - 2026-10-14
 
-**In preparazione: v1.2.0.** Queste funzionalità e correzioni sono in fase di preparazione; questa versione non è ancora stata rilasciata.
+Cosa aggiunge la 1.2 rispetto alla 1.1:
+
+- 🧰 **Strumenti**: una nuova sezione, con il primo strumento, l'**Allocatore PAC**, che calcola gli acquisti per avvicinare l'allocazione ai pesi obiettivo.
+- 📉 **Rischio**: la scheda Rischio della Dashboard e dei broker risponde a quattro domande, e l'analisi del rischio esce dalla beta, tranne la simulazione.
+- 💰 **Costo d'acquisto e P&L**: grazie alla segnalazione [#32](https://github.com/Librefolio/LibreFolio/issues/32) abbiamo evidenziato un problema nel calcolo del costo di ogni acquisto quando ci sono dei cambi di valuta, e di conseguenza le metriche nelle KPI card come il P&L risultavano scorrette. Adesso l'algoritmo è stato corretto e ogni acquisto viene convertito al cambio del suo giorno, garantendo totali corretti.
+- 💱 **Liquidità in altre valute**: adesso la liquidità tenuta in un'altra valuta viene valutata al cambio di ogni giorno, e la vista Periodo mostra quanto il cambio l'ha fatta guadagnare o perdere.
+- 📊 **Dashboard**: sono stati aggiunti la modalità privacy, la vista P&L nel grafico Crescita, il rendimento sul costo, i benchmark e una visualizzazione nel grafico a torta per i nove nuovi tipi di asset.
+- 📥 **Import**: Scalable Capital, Danske Bank (alpha) e gli estratti DEGIRO in ogni lingua; e adesso, se carichi un file sul broker sbagliato, l'app te lo dice subito.
+- 🌍 **Lingue**: numeri, date e il changelog seguono la lingua dell'interfaccia.
+- 👋 **Primo accesso**: adesso i nuovi utenti hanno un tour iniziale e delle guide che gli mostrano l'interfaccia durante il primo accesso.
+- ⚡ **Prestazioni**: le pagine scaricano meno dati, e i report non si bloccano più sulle storie di cambi molto lunghe.
+- 🔒 **Sicurezza**: chiusa una falla di tipo XSS, alcune API adesso richiedono l'accesso, e la barra laterale dice se la connessione è sicura.
+- 🐛 **Correzioni**: corretti molti difetti, alcuni presenti dalla v0.9.0.
 
 ### ✨ Aggiunto
 
@@ -159,7 +171,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 - Gli assi degli importi dei grafici Crescita e Performance non mostrano più due volte la stessa etichetta (`5.5k` visualizzata come `6k` accanto a un `6k` reale, `1.25M` visualizzata come `1.3M`), e un'estremità dell'asse posizionata automaticamente oltre i dati non viene più etichettata come se fosse un passo regolare. Il P&L totale del tooltip del grafico Crescita ora riporta `EUR -12.00` come gli altri importi, invece di `−EUR 12.00`.
 - Il grafico di confronto dei lotti non lascia più una striscia vuota a sinistra dei suoi importi, in modo particolarmente evidente sugli smartphone.
-- Con la risoluzione settimanale o mensile, la settimana o il mese non ancora concluso si legge correttamente sui grafici degli asset e dei tassi di cambio: i suoi eventi non scompaiono più, i loro marcatori stanno sul suo punto come gli altri, e il suo tooltip mostra il valore alla data del suo ultimo giorno con un prezzo, non più alla domenica o all'ultimo giorno del mese che deve ancora arrivare. Presente dalla v1.0.0.
+- Con la risoluzione settimanale o mensile, la settimana o il mese non ancora concluso si legge correttamente sui grafici degli asset e dei tassi di cambio, sul grafico Crescita, sullo storico dell'allocazione e sul grafico di confronto dei lotti: il suo tooltip mostra il valore alla data del suo ultimo giorno con dati, non più alla domenica o all'ultimo giorno del mese che deve ancora arrivare. Sui grafici degli asset e dei tassi di cambio i suoi eventi non scompaiono più e i loro marcatori stanno sul suo punto come gli altri; sul grafico Crescita il suo punto sta su quel giorno, così la linea non arriva più a una data che deve ancora venire. Presente dalla v1.0.0.
 
 #### 📉 Analisi del rischio
 
