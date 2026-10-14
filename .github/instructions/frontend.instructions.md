@@ -50,9 +50,14 @@ The frontend computes no financial quantity — cost, P&L, capital, NAV, returns
 
 ## Design System
 
-- **Tailwind CSS 4**: config via `@theme {}` in `app.css` (no TS config file)
-- **Brand colors**: `#1a4031` (libre-green), `#f5f4ef` (libre-beige)
-- **Full dark mode**: CSS variables in `html.dark`
+- **Tailwind CSS 4**: config via `@theme {}` in `app.css` (no TS config file); the colour roles live in `lib/theme/tokens.css`, which `app.css` imports
+- **Colours are roles** (colour programme, workstream T): new and migrated code writes only the role utilities, never a palette class (`bg-white`, `text-gray-500`, `dark:bg-slate-800`) or a hand-written colour (`#1a4031`, `rgba(…)`, `white`)
+  - surfaces `bg-lf-app` (behind the shell), `bg-lf-page` (standalone pages), `bg-lf-card`, `bg-lf-panel`, `bg-lf-field`, `hover:bg-lf-hover`, `bg-lf-neutral`, `bg-lf-inverse`, `bg-lf-overlay`, `bg-lf-logo`
+  - text `text-lf-primary`, `text-lf-secondary`, `text-lf-muted`, `placeholder:text-lf-placeholder`, `text-lf-link`; borders `border-lf-subtle`, `border-lf-input`; focus `ring-lf-focus`
+  - brand `bg-lf-brand` + `text-lf-on-brand` (headers, sidebar), primary button `bg-lf-action hover:bg-lf-action-hover text-lf-on-action`, `bg-lf-selected`
+  - states `success`, `warning`, `danger`, `info`: `text-lf-<state>`, `bg-lf-<state>-soft`, `border-lf-<state>-line`, `text-lf-<state>-on-soft`, `bg-lf-<state> text-lf-on-status`; `text-lf-gain`, `text-lf-loss`, `text-lf-donate`
+- **Dark theme**: a role changes value under `html.dark` — never write `dark:` on a role utility. A component not migrated yet keeps its look from the frozen legacy remap of `app.css` (P1); migrate an element whole, never mixing roles and palette classes on it
+- **Gates**: `src/themeRoles.gate.test.ts` (a ratchet: legacy classes and colour literals per file only go down; role grammar) and `src/themeTokens.gate.test.ts` (both themes, contrast pairs). A file split is declared in the same commit: `node frontend/scripts/theme/theme-roles.mjs --split OLD:NEW1,NEW2`. How to migrate, the class → role table and the merge rule of the baseline: skill `theme-roles` (`.github/skills/design-tools/theme-roles/SKILL.md`)
 - **Font**: `'LF Flags', Inter, system-ui, sans-serif` (`html`, `@theme --font-sans`; `--font-mono` also starts with `'LF Flags'`)
 - **Flags**: `'LF Flags'` (`static/lf-flags.css`, linked by `app.html` and `offline.html`) draws only the flags (`unicode-range: U+1F1E6-1F1FF`) — Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere. Never name an emoji font in a `font-family`: emoji fonts also draw digits, `#` and `*`. A component with its own stack starts it with `'LF Flags'` or wraps the flag in `.emoji-flag`. Gate: `src/flagFont.gate.test.ts`; ECharts text is not covered yet
 - **Icons**: lucide-svelte
