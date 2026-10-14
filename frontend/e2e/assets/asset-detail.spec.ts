@@ -8421,3 +8421,118 @@ test.describe('All-range event markers on a price-cache hit', () => {
         await expect.poll(readNotes, {message: 'the second All must bring the old dividend back', timeout: 10_000}).toEqual([oldNotes, recentNotes(firstPriceDate)].sort());
     });
 });
+
+// ============================================================================
+// G-4 — Provider chip names the provider once its catalogue arrives
+// ============================================================================
+// The header chip renders `getAssetProviderName(assetInfo.provider_code)`, a
+// lookup in a plain Map filled from GET /api/v1/assets/provider. It reacts to
+// `assetInfo` alone, and the page fetches asset and catalogue in parallel: when
+// the asset wins, the chip is drawn with the raw code (`yfinance`) and never
+// redrawn, though the icon beside it does arrive. Gallery noise: one run shot
+// «Yahoo Finance», the next «yfinance».
+//
+// Left to the network the order is a coin toss. Holding every catalogue request
+// until the header shows the asset makes the losing order — asset first,
+// catalogue second — the only one possible; a fresh document guarantees the
+// module-level catalogue cache is empty, so there is a request to hold.
+//
+// Red before the fix: the chip stays on the code, and the last assertion times
+// out on `Received: "yfinance"`. Green once the name also reads
+// `$assetProvidersVersion`, which the catalogue bumps when it lands.
+// ============================================================================
+test.describe('Provider chip names the provider once its catalogue arrives', () => {
+    // The offline-fallback service worker is blocked so that every request of this block meets
+    // `page.route`, as in default-currency.spec.ts: a gate that could be stepped around would
+    // prove nothing. Local to this block; the shared config is untouched.
+    test.use({serviceWorkers: 'block'});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('the header chip trades the raw provider code for the catalogue name when the catalogue lands after the asset', async ({page}) => {
+        // A sign-in that may take most of the 30 s default on a loaded lane, then a fresh page load
+        // and a held request: at the default, a slow sign-in would turn the verdict into a test
+        // timeout instead of the chip assertion below. A ceiling, never a delay.
+        test.setTimeout(60_000);
+        const assetName = 'Apple Inc.';
+
+        // The asset, by its unique name, from the endpoint the page itself reads it from.
+        const lookup = await page.request.get(`/api/v1/assets/query?search=${encodeURIComponent(assetName)}`);
+        expect(lookup.ok(), `asset lookup failed (HTTP ${lookup.status()})`).toBe(true);
+        const matches = ((await lookup.json()) as Array<{id: number; display_name: string; provider_code?: string | null}>).filter((candidate) => candidate.display_name === assetName);
+        expect(matches, `exactly one seeded «${assetName}» — check populate_mock_data.py (populate_assets)`).toHaveLength(1);
+        const asset = matches[0];
+        const providerCode = asset.provider_code;
+        if (!providerCode) throw new Error(`«${assetName}» has no provider_code, so its header shows the Manual chip — check populate_mock_data.py (populate_asset_provider_assignments).`);
+
+        // The name the chip owes the user, from the real catalogue, parsed with the schema the app's
+        // zodios client applies: a catalogue the app rejects leaves every chip on its code for a
+        // reason that is not this defect.
+        const catalogueResponse = await page.request.get('/api/v1/assets/provider');
+        expect(catalogueResponse.ok(), `provider catalogue failed (HTTP ${catalogueResponse.status()})`).toBe(true);
+        const provider = schemas.FAProviderInfo.array()
+            .parse(await catalogueResponse.json())
+            .find((entry) => entry.code === providerCode);
+        if (!provider) throw new Error(`provider «${providerCode}» of «${assetName}» is missing from GET /api/v1/assets/provider — check the asset provider registry (backend/app/services/asset_source_providers/).`);
+        // Without a name that differs from the code, a stale chip and a resolved one read the same.
+        if (provider.name.trim() === '' || provider.name === providerCode) {
+            throw new Error(`provider «${providerCode}» is named «${provider.name}» in the catalogue, which is what a stale chip shows: this test would prove nothing — check provider_name in the asset provider registry (backend/app/services/asset_source_providers/).`);
+        }
+        // The chip is found by this icon, and the icon's arrival is the "catalogue applied" barrier.
+        const iconUrl = provider.icon_url;
+        if (!iconUrl) throw new Error(`provider «${providerCode}» has no icon_url, by which this test finds the chip — check get_icon in the asset provider registry (backend/app/services/asset_source_providers/).`);
+
+        // The gate. The exact path, not `**/assets/provider**`: that glob would also hold
+        // /assets/provider/assignments and /assets/provider/search, and `held` would stop being
+        // about the catalogue.
+        let held = 0;
+        let release = () => {};
+        const released = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        const isCatalogue = (url: URL) => url.pathname === '/api/v1/assets/provider';
+        const holdCatalogue: Parameters<Page['route']>[1] = async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            held += 1;
+            await released;
+            await route.continue();
+        };
+        // Answered here: the real poll asks the provider and upserts today's row on the shared asset.
+        const livePrice = '**/api/v1/assets/prices/current';
+        const answerLivePrice: Parameters<Page['route']>[1] = (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}});
+        await page.route(isCatalogue, holdCatalogue);
+        await page.route(livePrice, answerLivePrice);
+
+        try {
+            // A fresh document, since the catalogue cache lives as long as one. Not
+            // goToAssetDetailPage(): its data-busy="false" cannot come while the catalogue is held.
+            await page.goto(`/assets/${asset.id}`, {waitUntil: 'domcontentloaded', timeout: 20_000});
+
+            // Barrier: the asset is drawn — chip included — while the catalogue is still held.
+            const info = page.getByTestId('asset-detail-header').getByTestId('asset-detail-info');
+            await expect(info, 'the header shows the asset while the provider catalogue is held').toBeVisible({timeout: 20_000});
+            await expect(info).toContainText(asset.display_name);
+            await expect.poll(() => held, {message: 'the page asked for the provider catalogue and the gate holds it; otherwise the order under test never happened', timeout: 5_000}).toBeGreaterThan(0);
+
+            release();
+            await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+            // The catalogue has been applied: the page takes the chip's icon from it once the load is over.
+            const iconSelector = `img[src=${JSON.stringify(iconUrl)}]`;
+            await expect(info.locator(iconSelector), 'the catalogue icon reaches the provider chip').toBeAttached({timeout: 5_000});
+
+            // The chip is the span holding the catalogue's own icon: no test id, class or position.
+            // An exact text rather than a header-wide toContainText, so it also says the label is not
+            // the raw code (name ≠ code, checked above). Provider names come from the backend
+            // registry, not from i18n: this is not an assertion on translated text.
+            const chip = info.locator('span', {has: page.locator(iconSelector)});
+            await expect(chip, `the provider chip names «${providerCode}» as the catalogue does, not by its raw code`).toHaveText(provider.name, {timeout: 5_000});
+        } finally {
+            // The routes stay until the page closes with the test, so the live-price answer outlives the asset page, whose
+            // poll would reach the provider and rewrite today's row of the shared asset. Leaving the page here instead would
+            // make the failure screenshot, taken after the test function, show about:blank.
+            release();
+        }
+    });
+});

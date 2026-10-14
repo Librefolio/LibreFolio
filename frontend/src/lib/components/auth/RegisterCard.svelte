@@ -3,6 +3,7 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
+    import {Lock, Mail, User} from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
@@ -145,16 +146,15 @@
     }
 </script>
 
-<div class="w-full max-w-lg bg-libre-beige rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans" data-testid="register-modal">
-    <!-- Header Section (Dark Green) -->
-    <div class="bg-libre-green p-8 flex flex-col items-center justify-center space-y-2">
-        <div class="flex items-center space-x-3 text-white">
-            <div class="w-10 h-10 rounded-lg flex items-center justify-center p-1" style="background:#fff">
+<div class="w-full max-w-lg bg-lf-card text-lf-primary border border-lf-subtle rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans" data-testid="register-modal">
+    <!-- Header Section (brand green); no subtitle: the Register button says it (designer, round 1) -->
+    <div class="bg-lf-brand p-8 flex flex-col items-center justify-center space-y-2">
+        <div class="flex items-center space-x-3 text-lf-on-brand">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center p-1 bg-lf-logo">
                 <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png" />
             </div>
             <span class="text-2xl font-bold tracking-wide">LibreFolio</span>
         </div>
-        <span class="text-white/80 text-sm">{$_('auth.registerTitle')}</span>
     </div>
 
     <!-- Body Section -->
@@ -166,64 +166,70 @@
             <!-- Username Input -->
             <div>
                 <label class="sr-only" for="register-username">{$_('auth.username')}</label>
-                <input
-                    autocapitalize="none"
-                    autocomplete="username"
-                    bind:value={username}
-                    class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
-                    class:border-gray-400={!usernameError}
-                    class:border-red-400={usernameError}
-                    class:focus:border-libre-green={!usernameError}
-                    class:focus:border-red-400={usernameError}
-                    class:focus:ring-libre-green={!usernameError}
-                    class:focus:ring-red-400={usernameError}
-                    data-testid="register-username"
-                    disabled={loading}
-                    id="register-username"
-                    name="username"
-                    on:blur={validateUsername}
-                    placeholder={$_('auth.username')}
-                    spellcheck="false"
-                    type="text"
-                />
+                <div class="relative group">
+                    <User aria-hidden="true" class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lf-muted group-focus-within:text-lf-primary transition-colors" data-testid="register-username-icon" size={20} />
+                    <input
+                        autocapitalize="none"
+                        autocomplete="username"
+                        bind:value={username}
+                        class="w-full pl-12 pr-4 py-3 rounded-lg border bg-lf-field text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
+                        class:border-lf-input={!usernameError}
+                        class:border-lf-danger={usernameError}
+                        class:focus:border-lf-focus={!usernameError}
+                        class:focus:border-lf-danger={usernameError}
+                        class:focus:ring-lf-focus={!usernameError}
+                        class:focus:ring-lf-danger={usernameError}
+                        data-testid="register-username"
+                        disabled={loading}
+                        id="register-username"
+                        name="username"
+                        on:blur={validateUsername}
+                        placeholder={$_('auth.username')}
+                        spellcheck="false"
+                        type="text"
+                    />
+                </div>
                 {#if usernameError}
-                    <p class="text-red-600 text-xs mt-1">{usernameError}</p>
+                    <p class="text-lf-danger text-xs mt-1">{usernameError}</p>
                 {/if}
             </div>
 
             <!-- Email Input -->
             <div>
                 <label class="sr-only" for="register-email">{$_('auth.email')}</label>
-                <input
-                    autocomplete="email"
-                    bind:value={email}
-                    class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
-                    class:border-gray-400={!emailError}
-                    class:border-red-400={emailError}
-                    class:focus:border-libre-green={!emailError}
-                    class:focus:border-red-400={emailError}
-                    class:focus:ring-libre-green={!emailError}
-                    class:focus:ring-red-400={emailError}
-                    data-testid="register-email"
-                    disabled={loading}
-                    id="register-email"
-                    name="email"
-                    on:blur={validateEmail}
-                    placeholder={$_('auth.email')}
-                    type="email"
-                />
+                <div class="relative group">
+                    <Mail aria-hidden="true" class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lf-muted group-focus-within:text-lf-primary transition-colors" data-testid="register-email-icon" size={20} />
+                    <input
+                        autocomplete="email"
+                        bind:value={email}
+                        class="w-full pl-12 pr-4 py-3 rounded-lg border bg-lf-field text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
+                        class:border-lf-input={!emailError}
+                        class:border-lf-danger={emailError}
+                        class:focus:border-lf-focus={!emailError}
+                        class:focus:border-lf-danger={emailError}
+                        class:focus:ring-lf-focus={!emailError}
+                        class:focus:ring-lf-danger={emailError}
+                        data-testid="register-email"
+                        disabled={loading}
+                        id="register-email"
+                        name="email"
+                        on:blur={validateEmail}
+                        placeholder={$_('auth.email')}
+                        type="email"
+                    />
+                </div>
                 {#if emailError}
-                    <p class="text-red-600 text-xs mt-1">{emailError}</p>
+                    <p class="text-lf-danger text-xs mt-1">{emailError}</p>
                 {/if}
             </div>
 
             <!-- Password Input -->
             <div>
                 <label class="sr-only" for="register-password">{$_('auth.password')}</label>
-                <PasswordInput autocomplete="new-password" bind:value={password} disabled={loading} hasError={!!passwordError} id="register-password" name="new-password" on:blur={validatePassword} placeholder={$_('auth.password')} testId="register-password" />
+                <PasswordInput autocomplete="new-password" bind:value={password} disabled={loading} hasError={!!passwordError} icon={Lock} id="register-password" name="new-password" on:blur={validatePassword} placeholder={$_('auth.password')} testId="register-password" />
                 <PasswordStrength {password} />
                 {#if passwordError}
-                    <p class="text-red-600 text-xs mt-1">{passwordError}</p>
+                    <p class="text-lf-danger text-xs mt-1">{passwordError}</p>
                 {/if}
             </div>
 
@@ -235,6 +241,7 @@
                     bind:value={confirmPassword}
                     disabled={loading}
                     hasError={!!confirmPasswordError}
+                    icon={Lock}
                     id="register-confirm-password"
                     name="confirm-password"
                     on:blur={validateConfirmPassword}
@@ -242,12 +249,12 @@
                     testId="register-confirm-password"
                 />
                 {#if confirmPasswordError}
-                    <p class="text-red-600 text-xs mt-1">{confirmPasswordError}</p>
+                    <p class="text-lf-danger text-xs mt-1">{confirmPasswordError}</p>
                 {/if}
             </div>
 
             <!-- Register Button -->
-            <button class="w-full bg-libre-green text-white font-bold py-3 rounded-lg shadow-md hover:bg-opacity-90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mt-2" data-testid="register-submit" disabled={loading} type="submit">
+            <button class="w-full bg-lf-action text-lf-on-action font-bold py-3 rounded-lg shadow-md hover:bg-lf-action-hover transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mt-2" data-testid="register-submit" disabled={loading} type="submit">
                 {#if loading}
                     {$_('common.loading')}
                 {:else}
@@ -256,9 +263,9 @@
             </button>
 
             <!-- Login Link -->
-            <div class="text-center pt-2 text-xs text-gray-600">
+            <div class="text-center pt-2 text-xs text-lf-secondary">
                 <span>{$_('auth.hasAccount')} </span>
-                <button class="font-bold text-libre-dark hover:underline" data-testid="goto-login" on:click={() => dispatch('gotoLogin', {})} type="button">
+                <button class="font-bold text-lf-link hover:underline" data-testid="goto-login" on:click={() => dispatch('gotoLogin', {})} type="button">
                     {$_('auth.loginHere')}
                 </button>
             </div>
