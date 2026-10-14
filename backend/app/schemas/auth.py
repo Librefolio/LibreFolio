@@ -70,7 +70,7 @@ class AuthLoginResponse(BaseModel):
     user_settings: Optional[UserSettingsRead] = None
     message: str = "Login successful"
     # Ephemeral signal: tells the frontend to show the "support LibreFolio" popup for
-    # this login only. See backend/app/services/donation_popup_service.py for the rules.
+    # this login only. See backend/app/services/accounts/donation_popup_service.py for the rules.
     show_donation_popup: bool = False
 
 

@@ -78,7 +78,7 @@ is due, what a replay does once it runs, where its position is kept — are expl
 
 **What it lists.** The section reads `onboarding.progress?.flows`, the per-user progress that the
 app bootstrap loads from `GET /api/v1/settings/onboarding`: one `OnboardingProgressItem` for each
-of the **15** flows of `ONBOARDING_FLOW_VERSIONS` (`backend/app/services/onboarding_service.py`;
+of the **15** flows of `ONBOARDING_FLOW_VERSIONS` (`backend/app/services/accounts/onboarding_service.py`;
 enum `OnboardingFlow` in `backend/app/db/models.py`). The section sorts them into collapsible
 groups; *Setup* and *Core tour* start open:
 
