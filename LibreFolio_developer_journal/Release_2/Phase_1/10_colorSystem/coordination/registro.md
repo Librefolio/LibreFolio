@@ -189,3 +189,19 @@
   - analisi in `analisi.md`: leve centrali, 5 correzioni di contrasto, piano T a fasi B1–B6, decisioni D-T1…D-T3.
 - **Sito MkDocs:** aggiornarlo solo alla fine, a colori definiti (decisione del developer). Registrato nel README del
   programma e nelle fasi del piano generale.
+
+## 21:20 — Misura finale di G; decisioni sulla barra laterale e sullo sfondo dell'app
+
+- **G:** via a 2 gallery complete a 10 worker, finestra riservata **21:25–22:45**. Load average alle 21:14: 6,7; Spotlight
+  fermo. L e R non lanciano build, test, server né `npm ci` nella finestra.
+  - Esito delle run filtrate (`g-verify1`): delle 27 instabili, 10 sono ora `stable` e 10 `low`.
+  - Instabili per contenuto accettato: asset-picker, cache-panel, static-grid, import-nway-compare, global-settings.
+- **Da mostrare alla designer** (non è colore): il filtro di colonna «Caricato da» sta a 8 px dal bottone, perché
+  `DataTableColumnFilter` somma un `top +4` inline e un `margin-top` di 4 px. Lo ha segnalato G.
+- **Toolkit:** `gallery_snapshot.sh` scriveva `meta.json` senza escape JSON; un filtro con `\(` lo rendeva illeggibile.
+  Ora lo scrive Python con `json.dump`, schema invariato.
+- **Barra laterale e sfondo dell'app** (il developer ha sentito la designer, 14/10 sera): nella riga «Menu laterale»
+  della sua tabella aveva sbagliato a scrivere.
+  - La barra laterale prende lo stesso verde della testata della card di login, in tutti e due i temi.
+  - `#F1EDE3` (chiaro) e `#131A17` (scuro) sono lo sfondo dell'app.
+  - «Sfondo pagina» `#F7F4ED`/`#0F1412` resta lo sfondo della pagina di login.
