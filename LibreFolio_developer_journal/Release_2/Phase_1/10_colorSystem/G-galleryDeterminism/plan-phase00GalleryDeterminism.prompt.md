@@ -3,8 +3,10 @@
 > Aperto il 14/10/2026 da G (sessione `G - Gallery deterministica`, worktree `e-alfy-laughing-spoon`, branch
 > `e-alfy-g-gallery-deterministica`). Coordinatore: sessione `aec04834-1532-4d86-9e3f-f942e82aca89`.
 > Problema e misura di partenza: [README della 56](README.md), [stabilità del 14/10](evidence/stability-2026-10-14.md).
-> Programma: [piano 55](../55_colorSystem/plan-phase00ColorSystemThemeLab.prompt.md). Backlog: sezione «G · Gallery
-> deterministica (56)» di [BACKLOG_POST_1.2.md](../BACKLOG_POST_1.2.md).
+> Programma: [piano dei colori](../plan-phase00ColorSystemThemeLab.prompt.md). Backlog: sezione «G · Gallery
+> deterministica (56)» di [BACKLOG_POST_1.2.md](../../../Phase_0/BACKLOG_POST_1.2.md).
+> Dal merge di `dev_release2` del 14/10 (`424adb31c`) la cartella 56 è `Phase_1/10_colorSystem/G-galleryDeterminism/` e
+> il programma 55 è `Phase_1/10_colorSystem/`: «la 56» resta il nome del workstream.
 
 ## 0. Baseline e corsia
 
@@ -481,9 +483,9 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
   W=$LF_VISUAL_REVIEW_DIR
   pipenv run python dev.py front build          # una volta: r1 e r2 sulla stessa build
   uptime; scripts/visual_review/gallery_snapshot.sh g-final2-r1 --port 6150 --data-dir /tmp/librefolio-r2-main; uptime
-  python3 scripts/visual_review/live_price_check.py $W/snapshots/g-final2-r1    # deve uscire con 0
+  pipenv run python -m scripts.visual_review.live_price_check $W/snapshots/g-final2-r1    # deve uscire con 0
   uptime; scripts/visual_review/gallery_snapshot.sh g-final2-r2 --port 6150 --data-dir /tmp/librefolio-r2-main; uptime
-  python3 scripts/visual_review/live_price_check.py $W/snapshots/g-final2-r2    # deve uscire con 0
+  pipenv run python -m scripts.visual_review.live_price_check $W/snapshots/g-final2-r2    # deve uscire con 0
   pipenv run python -m scripts.visual_review.gallery_tool diff $W/snapshots/g-final2-r1 $W/snapshots/g-final2-r2 \
       --out $W/diffs/g-final2__r1__vs__r2 --emit-masks
   pipenv run python -m scripts.visual_review.gallery_tool stability $W/diffs/g-final2__r1__vs__r2
@@ -571,3 +573,19 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
   - Commit proposti in `files/commit_g4.txt` e `files/commit_gallery.txt` della sessione.
   - Prossimo: misura finale del coordinatore il 15/10 dalle 09:00, su `dev_release2` con G (passo 6). Poi il checkpoint
     2 di G: analisi, maschere, evidenze, README della 56 e chiusura di G-1, G-2, G-3.
+- **14/10, 23:55 — Merge di base di `dev_release2` (`424adb31c`) risolto, non chiuso: lo chiude il coordinatore.**
+  - HEAD `0076f4269`: il checkpoint 1, committato dal coordinatore in `e23bf842c` + `0076f4269`.
+  - Tre conflitti, risolti e messi in stage solo loro:
+    - *backlog*: la sezione G intera, poi la sezione «T (colori)» intatta; i link di G puntano a
+      `../Phase_1/10_colorSystem/G-galleryDeterminism/…`, dove il target ha spostato la cartella 56;
+    - *questo piano*: spostato dal rename della cartella. Link relativi corretti; `live_price_check` lanciato con
+      `pipenv run python -m scripts.visual_review.live_price_check`;
+    - *README del toolkit*: la riga `W=` del target più le mie righe, con pipenv.
+  - Gate sulla revisione combinata, corsia 6153 (`validate_merge.sh`, log in `g-workstream/2026-10-14/logs/merge-424adb31c/`):
+    - `theme-roles.mjs --check` pulito;
+    - `front-utility core-unit`: 130 file e 4245 test verdi;
+    - `front check` 0/0;
+    - G-4 da solo: 1 passato, 0 righe di prezzo live, sulla build ricostruita dopo `app.css`;
+    - `live_price_check` come modulo pipenv: 0 su `g-alone5-b` e su `g-verify2`.
+  - Residuo per il checkpoint 2: la docstring di `live_price_check.py` mostra ancora `python3 …`. È una riga, in un file
+    non in conflitto, quindi non toccato ora.

@@ -35,6 +35,10 @@
 > sono cancellati, tutti già contenuti in `dev_release2`. Il CHANGELOG ha un capitolo `[Unreleased]` con la sola
 > sezione «🧹 Repository cleanup»: le voci della 1.3.0 vanno lì. Due decisioni aperte del developer: **C-92** qui
 > sotto e il grafo della devWiki («Devwiki e grafo», sezione C).
+>
+> **La 1.3.0 è partita il 14/10** (coordinatore della 1.3): piano e stato vivo in
+> [`Release_2/Phase_1/`](../Phase_1/README.md). Ogni sessione della 1.3 ha la sua sezione in fondo a questo file
+> (H, A, X, W, J, Z, B, E, Y); le voci di queste sezioni chiuse dalla 1.3 le marca ✅ il coordinatore a ogni treno.
 
 1. Questo file, per sapere cosa resta e dove sono i dettagli.
 2. Le regole del progetto: [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md). La
@@ -71,12 +75,13 @@
 | [Piano della 52](52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md) | L'ultima etichetta degli assi del tempo sui telefoni, le date dei tooltip, il periodo in corso di Growth, Alloc e lotti | chiuso nel treno 97 |
 | [Piano della 53](53_pacTests/plan-phase00PacTests.prompt.md) | I test del PAC (T-PAC): mappa, coperture, test che mentono, difetti D1–D4, lotti A–C | aperto: tutto dopo la 1.2 (C-69, C-73…C-78) |
 | [Piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md) | La fixture della galleria: quote, YoC e variazione di un giorno non più scalate (I-M30) | chiuso nel treno 99; la privacy resta una domanda del developer |
-| [Programma colori 55](55_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L e R | aperto il 14/10: L e R in avvio, prima l'analisi |
-| [README della 56](56_galleryDeterminism/README.md) | Gallery deterministica: 27 schermate instabili su 177, fallimenti sotto carico; workstream G | aperto il 14/10: G in avvio, prima l'analisi |
+| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R e G, materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto |
+| [Gallery deterministica](../Phase_1/10_colorSystem/G-galleryDeterminism/README.md) | Gallery deterministica: 27 schermate instabili su 177, fallimenti sotto carico; workstream G | aperto il 14/10; ora in `10_colorSystem/G-galleryDeterminism` (era la 56) |
 | [Rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md) | La run completa con coverage sull'albero candidato al tag (`10e646f79`): 0 rossi | C-79 |
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
 | [`TODO_FUTURI.md`](../../../TODO_FUTURI.md) | Il futuro deliberato, non backlog | 53 temi |
 | [Indice di luglio](38_postReleaseBacklog/TODO_ProssimeAttivita.md) | `TODO_ProssimeAttivita.md`, già nella radice: l'indice di priorità del 18/07, superato da questo file e dalla 09 | archiviato il 14/10 |
+| [Fase 01, la 1.3.0](../Phase_1/README.md) e il suo [piano generale](../Phase_1/plan-phase01Release13.prompt.md) | Le funzioni per il cloud a ondate, il riordino del piano 43, le sessioni H, A, X, W, J, Z, B, E, Y | aperta il 14/10: sezioni H…Y in fondo |
 
 ---
 
@@ -838,6 +843,9 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   sonde della classe C, che oggi falliscono in modo visibile ma sotto carico possono diventare instabili; e lo stesso
   difetto fuori dalla galleria, in `transactions/tx-picker-pagination.spec.ts:161` (`isEnabled({timeout})`). Dettagli:
   [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezioni «10.0» e «10.1».
+  - Stato (coordinatore, 14/10): la parte della galleria passa al workstream G (56), per decisione del developer (D4
+    di G); se ne segue lo stato nella sezione «G · Gallery deterministica». Qui resta solo
+    `transactions/tx-picker-pagination.spec.ts:161`.
 - ✅ **M-16 · Il pulsante di avanzamento del wizard di import prima che arrivino i broker** — chiusa nella 1.2 da I,
   treno 48 (`3cd25af4f`): Avanti disabilitato finché la lista dei broker non arriva. Origine: test-author di M,
   12/10, fuori dal perimetro di M. Al passo 1 «Avanti: Seleziona File» resta abilitato mentre la lista dei broker si
@@ -1825,11 +1833,11 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Scorrimento di pochi pixel nel pannello lotti.
   - Altre instabili da analizzare.
 
-  Dettagli: [README della 56](56_galleryDeterminism/README.md) e [stabilità](56_galleryDeterminism/evidence/stability-2026-10-14.md).
+  Dettagli: [README della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/README.md) e [stabilità](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/stability-2026-10-14.md).
   - *Stato al 14/10 (G):* assestamento comune dello scatto e correzioni dei percorsi nel checkpoint di G. Nelle run
     filtrate dello stesso giorno 10 delle 27 instabili sono diventate stabili e 10 «rumore minimo». La prima misura
     completa è stata invalidata dalla fuga del prezzo live (G-6). Misura finale il 15/10 su `dev_release2` con G dentro.
-    Dettagli: [piano della 56](56_galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passi 3 e 6.
+    Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passi 3 e 6.
 - **G-2 · 4–5 test desktop falliti in ogni esecuzione completa a 10 worker, ogni volta diversi** — medio; coordinatore,
   14/10.
   - Login fermo su «auth-loading» nel primo blocco; modali delle transazioni.
@@ -1862,7 +1870,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   `getAssetProviderName(code)`, che legge una `Map` non reattiva; se `assetInfo` arriva prima del catalogo dei provider
   (le due letture sono in parallelo), il chip resta su «yfinance» invece di «Yahoo Finance». Effetto: su mobile
   l'intestazione va a capo in modo diverso e lo scatto si sposta; un utente con rete lenta vede il codice. Dettagli:
-  [piano della 56](56_galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), §2.1.
+  [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), §2.1.
   ✅ 14/10: due `$derived` che leggono `$assetProvidersVersion` in `assets/[id]/+page.svelte`, test rosso→verde in
   `asset-detail.spec.ts`; nel checkpoint di G.
 - **G-5 · Parte gallery di M-15 assorbita da G** — basso; developer, 14/10 (D4): le sonde `appears()` della gallery
@@ -1904,3 +1912,78 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     checkpoint di J. La voce nella sezione di J la scrive J.
 
   Dettagli: piano della 56, passo 6.
+
+## T (colori) · Token e tema (Phase_1/10_colorSystem)
+
+> Workstream T del programma colori, aperto il 14/10 (D-T1). Da non confondere con la sezione «T · Matematica
+> finanziaria e riordino (43)». Piano: [T-tokensTheme](../Phase_1/10_colorSystem/T-tokensTheme/plan-phase01TokensTheme.prompt.md).
+
+- **T-B1 · I requisiti della password detti anche a chi usa un lettore di schermo** — basso; T, 14/10.
+  - Oggi ✓ e ✗ distinguono un requisito soddisfatto senza affidarsi al colore, ma non hanno testo per i lettori di
+    schermo.
+  - Servono due chiavi i18n («soddisfatto», «non soddisfatto») in testo nascosto: lo fa A, che possiede la card di
+    registrazione dopo il giro di T.
+
+  Dettagli: piano di T, passo T-2.
+- **T-B2 · Ruoli in attesa del giro 2 della designer** — medio; T, 14/10.
+  - Sono derivati provvisori, calcolati solo dai suoi valori: hover e premuto in chiaro, fondale delle modali, inverso
+    dei tooltip, tinte di avviso, errore e informazione.
+  - Da decidere con lei:
+    - guadagno e perdita distinti da successo ed errore;
+    - l'info `#155EEF`, molto saturo;
+    - le opacità delle colline del login in scuro;
+    - palette categoriale e colori dei grafici.
+  - Le otto correzioni minime di contrasto (D-T6) vanno confermate.
+
+  Dettagli: piano di T, «Autorizzazione e decisioni»; `frontend/src/lib/theme/tokens.css`.
+- **T-B3 · Uno scanner dei colori solo, con L** — basso; T, 14/10.
+  - Il cricchetto (`frontend/scripts/theme/theme-roles.mjs`) copia la regex delle classi di palette dallo scanner del
+    Designer Lab (`scan-colors.mjs`).
+  - Quando L entra in `dev_release2`, un modulo comune evita che i due conteggi divergano.
+
+  Dettagli: piano di T, passo T-1.
+
+---
+
+## Sessioni della 1.3.0 (fase 01)
+
+> Aperte il 14/10 dal coordinatore della 1.3. Piano: [fase 01](../Phase_1/README.md). Ogni sessione scrive solo la
+> propria sezione, qui sotto, nello stesso checkpoint in cui la voce nasce; le voci di altre sezioni chiuse da una
+> sessione della 1.3 le marca ✅ il coordinatore.
+
+## H · Piattaforma (fase 01)
+
+Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
+
+## A · Account e accessi (fase 01)
+
+Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
+
+## X · Plugin, asset e ricerca (fase 01)
+
+Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).
+
+## W · Import e transazioni (fase 01)
+
+Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md).
+
+## J · Numeri e analisi (fase 01)
+
+Piano: [`05_numbersAnalysis`](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md).
+
+## Z · Sospensione e risveglio (fase 01)
+
+Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md).
+
+## B · Backup e Docker (fase 01)
+
+Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione non ancora avviata.
+
+## E · Email (fase 01)
+
+Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione non ancora avviata.
+
+## Y · Cruscotto e grafici (fase 01)
+
+Piano: [`09_dashboardCharts`](../Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md). Sessione non ancora
+avviata.

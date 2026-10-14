@@ -33,6 +33,18 @@
 | ECharts è importato direttamente in 28 file | `import … from 'echarts'`, nessun modulo centrale | Niente avvolgimento centrale di `init`: si interviene sul prototipo delle istanze (§5.3) |
 | Distribuzione dei 1.821 colori scritti a mano (produzione) | Inventario per zona: 1.084 in `<style>` dei `.svelte`, 69 in file `.css`, 533 negli script dei `.svelte` (477 nei grafici), 118 in `.ts` (94 nei grafici), 17 nel markup | ~95 % diventa modificabile dal vivo con le tecniche del §5 |
 
+> **Errata (14/10, dalle analisi di implementazione di L e R).** Due righe della tabella sono sbagliate. Valgono i piani
+> dei due workstream.
+>
+> - **Ridisegno dei grafici.** Gli osservatori del tema sono 16, non 17, e solo 12 ridisegnano il grafico a qualunque
+>   cambio di classe su `<html>`. `ScatterChart`, `CorrelationHeatmap`, `ExposureBars` ed `ExposureMaps` aggiornano
+>   solo uno `$state` `dark`, quindi aggiungere e togliere una classe non li ridisegna. `SemiDonutChart` non ha
+>   osservatore. `OtherPeriodEffectsTable` osserva `data-row-id`, non il tema. Come il Lab ridisegna questi grafici lo
+>   decide lo spike di L (N1); R conserva il ridisegno a qualunque cambio di classe anche quando riunisce gli osservatori
+>   (W8).
+> - **Ripartizione per zona.** I totali (hex 1.610 + funzioni 211 = 1.821) sono confermati, la ripartizione no:
+>   `color_inventory.py` non classifica le zone. La misura per zona la dà lo scanner del Lab (passo 1 di L).
+
 ## 2. Architettura
 
 ```mermaid
@@ -136,6 +148,12 @@ Ogni modifica ha un **ambito**: `light`, `dark` o `both`. Il Lab mostra e modifi
   - per occorrenza (file:riga): selettore e proprietà del catalogo si confrontano con la regola caricata, ignorando la
     classe di scope `.svelte-xxxx`. Se il confronto non riesce, si ricade sul valore.
 
+> **Decisione del developer (14/10, sera): nessuna ricaduta sul valore.** Sostituisce l'ultima frase qui sopra. Una
+> modifica per occorrenza appare solo quando il suo punto è sullo schermo: «se si modifica qualcosa che non c'è è corretto
+> non si veda». Ricadere sul valore cambierebbe punti che la designer non ha scelto (`#64748b` sta in 33 regole) e
+> l'anteprima mostrerebbe più di quanto l'export registra. Per partire da un punto e vedere l'effetto sul resto c'è il
+> selettore di elementi (§5.6).
+
 ### 5.3 L3 — Colori dei grafici (opzioni ECharts costruite in JS): 571 occorrenze
 - **Patch del prototipo.** Quando arriva la prima modifica a un colore di grafico, il client crea un'istanza ECharts di
   servizio fuori dal documento e avvolge `setOption` sul prototipo comune: tutte le istanze, anche quelle future, lo
@@ -164,6 +182,28 @@ Il Lab li elenca e accetta **proposte** di nuovo valore, che finiscono nell'expo
 - **Pulsanti generali:**
   - «Sospendi», per vedere l'originale al volo;
   - «Ripristina tutto».
+
+> **Come è stato costruito (L, 14/10):** la sincronizzazione usa l'evento `storage` di `localStorage`, non
+> `BroadcastChannel`, così il client resta minimo quando il Lab non è in uso. È il **flusso di riferimento** confermato dal
+> developer il 14/10: il Lab in una scheda o in una finestra a parte, anche su un altro schermo, e l'app nell'altra; ogni
+> modifica arriva subito all'app. Condizione: stesso browser e stesso indirizzo nelle due schede.
+
+### 5.6 Selettore di elementi (richiesta del developer, 14/10 sera)
+
+Richiesta testuale: «servirebbe al contrario avere qualcosa che mi permette, puntando un elemento, di avere un filtro per
+quelle proprietà, così lo modifico e posso farmi un giro nell'app per vedere che effetto ha sul resto. mi immagino che se
+un colore va specializzato a quel punto l'app deve creare un css path o qualcosa di simile a indicare il componente così
+che l'ia poi sappia a quale componente legare la nuova varabile. se servisse».
+
+Cosa chiede:
+- **Puntare un elemento** nella scheda dell'app, e il Lab mostra solo le sorgenti dei colori di quell'elemento: classi
+  della palette, variabili dell'app, regole dei fogli di stile con file e riga, colori ereditati.
+- **Modificarle e girare l'app** per vedere l'effetto sul resto: si modifica la sorgente condivisa, non il solo punto.
+- **Specializzare in quel punto**, se serve: l'export registra un'ancora (componente, percorso dell'elemento) che dica
+  all'agente a quale componente legare la nuova variabile.
+
+Progetto, costo e test: analisi di L, che lo inserisce nel suo piano prima del passo 6, così test e documentazione lo
+coprono.
 
 ## 6. La pagina
 
