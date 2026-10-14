@@ -91,22 +91,34 @@ if [[ $RC -ne 0 && -d "$CHECKOUT/frontend/test-results" ]]; then cp -R "$CHECKOU
 STALE=$(wc -l < "$DEST/stale_not_regenerated.txt" | tr -d ' ')
 sed 's/\x1b\[[0-9;]*m//g' "$DEST/gallery.log" | grep -E '^\s+\[(desktop|mobile)\] ›|^\s+[0-9]+ (failed|passed|skipped)' > "$DEST/failures.txt" || true
 
-cat > "$DEST/meta.json" <<EOF
-{
-  "label": "$LABEL",
-  "checkout": "$CHECKOUT",
-  "commit": "$SHA",
-  "dirty_files": $DIRTY,
-  "started": "$START_ISO",
-  "duration_s": $((END_S - START_S)),
-  "exit_code": $RC,
-  "port": $PORT,
-  "data_dir": "$DATA_DIR",
-  "extra_args": "${EXTRA[*]:-}",
-  "png_captured": $NEW,
-  "png_stale_not_regenerated": $STALE
+# Written by Python so that every value is JSON-escaped (a filter such as `-g 'a\(b'` used to break the file).
+(
+    cd "$CHECKOUT" &&
+    LF_META_PATH="$DEST/meta.json" LF_META_LABEL="$LABEL" LF_META_CHECKOUT="$CHECKOUT" LF_META_COMMIT="$SHA" \
+    LF_META_DIRTY="$DIRTY" LF_META_STARTED="$START_ISO" LF_META_DURATION="$((END_S - START_S))" LF_META_RC="$RC" \
+    LF_META_PORT="$PORT" LF_META_DATA_DIR="$DATA_DIR" LF_META_EXTRA="${EXTRA[*]:-}" LF_META_NEW="$NEW" \
+    LF_META_STALE="$STALE" pipenv run python -c '
+import json, os
+e = os.environ
+meta = {
+    "label": e["LF_META_LABEL"],
+    "checkout": e["LF_META_CHECKOUT"],
+    "commit": e["LF_META_COMMIT"],
+    "dirty_files": int(e["LF_META_DIRTY"]),
+    "started": e["LF_META_STARTED"],
+    "duration_s": int(e["LF_META_DURATION"]),
+    "exit_code": int(e["LF_META_RC"]),
+    "port": int(e["LF_META_PORT"]),
+    "data_dir": e["LF_META_DATA_DIR"],
+    "extra_args": e["LF_META_EXTRA"],
+    "png_captured": int(e["LF_META_NEW"]),
+    "png_stale_not_regenerated": int(e["LF_META_STALE"]),
 }
-EOF
+with open(e["LF_META_PATH"], "w", encoding="utf-8") as f:
+    json.dump(meta, f, indent=2)
+    f.write("\n")
+'
+)
 rm -f "$STAMP"
 echo "---"
 cat "$DEST/meta.json"
