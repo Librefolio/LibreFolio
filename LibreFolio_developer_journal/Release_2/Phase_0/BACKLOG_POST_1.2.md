@@ -1826,6 +1826,10 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Altre instabili da analizzare.
 
   Dettagli: [README della 56](56_galleryDeterminism/README.md) e [stabilità](56_galleryDeterminism/evidence/stability-2026-10-14.md).
+  - *Stato al 14/10 (G):* assestamento comune dello scatto e correzioni dei percorsi nel checkpoint di G. Nelle run
+    filtrate dello stesso giorno 10 delle 27 instabili sono diventate stabili e 10 «rumore minimo». La prima misura
+    completa è stata invalidata dalla fuga del prezzo live (G-6). Misura finale il 15/10 su `dev_release2` con G dentro.
+    Dettagli: [piano della 56](56_galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passi 3 e 6.
 - **G-2 · 4–5 test desktop falliti in ogni esecuzione completa a 10 worker, ogni volta diversi** — medio; coordinatore,
   14/10.
   - Login fermo su «auth-loading» nel primo blocco; modali delle transazioni.
@@ -1833,6 +1837,16 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Da analizzare con `test-triage`: non sono classificati.
 
   Dettagli: README della 56.
+  - *Stato al 14/10 (G):* nelle 2 gallery complete a 10 worker del 14/10 (carico 17–35) nessun rosso di auth-loading né
+    dei modali delle transazioni. Rossi rimasti: promote-merge (assunzione del test, corretta da G) e un solo rosso che
+    compare solo sotto carico, G-8. Da riconfermare con la misura finale del 15/10.
+  - *Residuo (G, 14/10):* con carico esterno estremo (87–94 su 10 core, 5 corsie 1.3 con le suite backend) due attese
+    di inquadratura sono scadute perché la pagina non rispondeva («waiting on the predicate»):
+    - `frameTarget` (10 s) in `Asset detail classification`;
+    - `headerOutOfShot` (scadenza predefinita di `expect`, 3 s) in `risk lab historical replay (injected)`.
+
+    Da soli passano 2/2. Proposta non fatta: dare a `headerOutOfShot` la stessa scadenza di `frameTarget`. Dettagli:
+    piano della 56, verifica del checkpoint.
 - **G-3 · `Dashboard Risk › what-if crisis replay` su desktop** — medio-basso; coordinatore, 14/10.
   - Fallisce in 2 esecuzioni su 3.
   - Il menu contiene «Global Financial Crisis», ma `chooseReplayPreset`
@@ -1840,3 +1854,53 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Il messaggio d'errore non descrive ciò che succede.
 
   Dettagli: README della 56.
+  - *Stato al 14/10 (G):* `chooseReplayPreset` riscritto (puntatore parcheggiato, cammino nei due versi, messaggio con
+    gli ultimi stati), nel checkpoint di G. Verde in 4 run desktop sotto carico su 5: smoke a 6 worker, 2 complete a 10
+    e `g-verify2` a 5 con carico fino a 94. La quinta arriva con la misura finale del 15/10.
+- **G-4 · Difetto del prodotto trovato col rumore: il chip del provider resta sul codice** — basso; G, 14/10,
+  correzione autorizzata dal coordinatore. Causa: nell'intestazione del dettaglio asset il nome è
+  `getAssetProviderName(code)`, che legge una `Map` non reattiva; se `assetInfo` arriva prima del catalogo dei provider
+  (le due letture sono in parallelo), il chip resta su «yfinance» invece di «Yahoo Finance». Effetto: su mobile
+  l'intestazione va a capo in modo diverso e lo scatto si sposta; un utente con rete lenta vede il codice. Dettagli:
+  [piano della 56](56_galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), §2.1.
+  ✅ 14/10: due `$derived` che leggono `$assetProvidersVersion` in `assets/[id]/+page.svelte`, test rosso→verde in
+  `asset-detail.spec.ts`; nel checkpoint di G.
+- **G-5 · Parte gallery di M-15 assorbita da G** — basso; developer, 14/10 (D4): le sonde `appears()` della gallery
+  dove il componente rende sempre l'elemento diventano `expect`, insieme alle 7 sonde di classe C e all'attesa a tempo
+  del passo 2 del wizard. Resta fuori `transactions/tx-picker-pagination.spec.ts:161`. Dettagli: piano della 56, §3,
+  passo 3.
+  ✅ 14/10: compito B del passo 3; nel checkpoint di G.
+- **G-6 · La gallery perde la guardia offline a fine test e un poll del prezzo live scrive nel DB condiviso** — medio;
+  G, 14/10, trovato nella prima misura finale.
+  - Causa: l'`afterEach` della gallery toglie le rotte (`unrouteAll`) con la pagina ancora viva, poi la interroga.
+    `cleanupGalleryAccount` fa lo stesso prima di `about:blank`.
+  - Il dettaglio asset interroga `POST /assets/prices/current` ogni 30 s e ogni 60 s. Un tick nel varco arriva a Yahoo e
+    riscrive la candela di oggi.
+  - Effetto: il 14/10 alle 22:02:33 ha cambiato Apple a metà run e reso non valida la misura del rumore.
+  - Correzione nel checkpoint di G: lasciare la pagina, poi togliere le rotte. Verifica:
+    `scripts/visual_review/live_price_check.py` sugli snapshot, che dà 0 righe di prezzo live nel log della corsia
+    (`g-alone4`, `g-verify2`, `g-alone5` del 14/10).
+
+  Dettagli: piano della 56, passo 6.
+- **G-7 · Lo stesso varco di G-6 negli E2E fuori dalla gallery** — basso; G, 14/10, su richiesta del coordinatore.
+  Senza correzione, decisione del coordinatore.
+  - Rotte tolte, poi `about:blank`: `assets/asset-browse.spec.ts:149`, `assets/asset-mobile-layout.spec.ts:113`,
+    `layout/toolbar-width-sweep.spec.ts:320`.
+  - Rotte tolte nell'`afterEach` e nessun `about:blank`: `layout/app-start-auth.spec.ts:193`.
+  - Rotte tolte nel `finally`, sulla dashboard dopo un asset: `portfolio/dashboard-cache.spec.ts:334–563`.
+  - Tutte proteggono `POST /assets/prices/current`. Correzione: lasciare la pagina prima di togliere le rotte.
+
+  Dettagli: piano della 56, passo 6.
+- **G-8 · Il catalogo dei Tools risponde 503 sotto carico** — medio-basso; G, 14/10, rosso della gallery
+  `about plugin diagnostics`.
+  - Causa: `ToolRoute` (`backend/app/api/v1/tools.py:92`) limita ogni richiesta `/tools` a
+    `ingress_timeout_ms = 2000` (`backend/app/schemas/tools.py:83`). `GET /api/v1/tools/catalog` ha impiegato 2.649 ms
+    con carico 35 su 10 core.
+  - Effetto: il pannello di diagnostica in Impostazioni › About va in errore. Da solo il test passa 2/2, con scatti
+    identici.
+  - Per la regola [«un rosso solo sotto carico è un difetto del prodotto»](../../../LibreFolio_devWiki/wiki/concepts/load-only-red-is-a-product-defect.md)
+    è un candidato difetto del prodotto: un host lento vedrebbe lo stesso errore.
+  - **Instradata a J (1.3, «Numeri e analisi»)** dal coordinatore, il 14/10, a priorità bassa, dopo il primo
+    checkpoint di J. La voce nella sezione di J la scrive J.
+
+  Dettagli: piano della 56, passo 6.
