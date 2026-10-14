@@ -63,17 +63,44 @@
     stesso cambio;
   - A aspetta il loro ingresso prima delle modifiche funzionali.
 - **Della designer, ancora aperte:** cinque correzioni di contrasto e i ruoli mancanti.
+- **14/10, 22:00 — approvata l'analisi di T.** Testuale: «Sì, approva T con tutte le raccomandazioni e le tue
+  integrazioni».
+  - Analisi in [`coordination/workstream-analyses/T-analisi-implementazione-20261014.md`](coordination/workstream-analyses/T-analisi-implementazione-20261014.md).
+  - **Nomi:** ruoli `--lf-<gruppo>-<nome>` in `lib/theme/tokens.css`, utility `*-lf-<nome>` da `@theme inline`
+    (tabella del §3.2 dell'analisi). Mai `dark:` sui ruoli; un elemento si migra tutto o niente.
+  - **Spazio colore:** hex sRGB per i valori della designer, `color-mix(in oklab)` per i derivati, ponte sRGB per
+    ECharts.
+  - **Contrasto:** le 8 correzioni minime si applicano subito, commentate; la designer le conferma nel giro 2.
+  - **P1:** eccezione `:where(:not([class*='-lf-']))` sulle quattro regole strutturali. La specificità non cambia e i
+    componenti non migrati restano identici.
+  - **Gate:** cricchetto R1–R5 (classi legacy M1; colori letterali M2 al posto della parte equivalente di W10/D7 di R,
+    se R è d'accordo), grammatica G1–G4, contratto C1–C4.
+  - **Piloti:** accesso (con `ForgotPasswordCard`, la barra in alto di `routes/+page.svelte`, `HelpMenu`: OK di A,
+    solo classi); shell; `routes/+error.svelte` a T.
+  - **Istruzioni per gli agenti:** T aggiorna la sezione «Design System» di `frontend.instructions.md`, la riga «Dark
+    mode» di `copilot-instructions.md` e una skill in `.github/skills/design-tools/theme-roles/`.
+  - **Rilasci:** nessun rilascio della 1.3 con la conversione dei neutri e degli stati a metà. Letta per intero
+    (precisazione del coordinatore delle 22:05, comunicata alla 1.3), per un tag servono:
+    - le ondate W1–W6 per neutri e stati;
+    - B2;
+    - B4, per i soli neutri e guadagno/perdita dei grafici;
+    - B5, quindi anche i lotti C e D di R.
+
+    Non bloccano solo le palette categoriali e dei dati. W4 dipende da FE8a e non da FE8b: le due modali di FE8b
+    passano dal B5.
+  - **Ordine:** T-1 fondamenta (nessun pixel); T-2 accesso (ingresso subito, A aspetta); T-3 shell; T-4 PWA dopo il
+    lotto A di R; T-5 sfondo del login dopo G; ondate W1–W6; B6.
 
 ## 🛤️ Workstream e corsie
 
 | Lettera | Sessione | Cartella del piano | Corsia (porta + dati) | Stato |
 |---|---|---|---|---|
 | — | coordinatore | questo file | 6150 + `/tmp/librefolio-r2-main` | — |
-| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | piano approvato il 14/10; branch `e-alfy-designer-lab`; passi 0–5 `6e967202e`, base allineata (`150f2716a`); passo 5b (selettore di elementi, §5.6 del progetto), poi passo 6 |
+| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | piano approvato il 14/10; branch `e-alfy-designer-lab`; passi 0–5 `6e967202e`, passi 5b–6 `87ceceede`; base allineata (`93bf8c98a`, piano spostato in `L-designerLab/`); manca la gallery A/B, domani dopo G |
 | G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | piano approvato il 14/10; branch `e-alfy-g-gallery-deterministica`; G-4 corretto, G-3 pronto, t* = 3600 ms (D1, developer); compito B in corso |
-| R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154 + `/tmp/librefolio-r2-r` | piano approvato il 14/10; branch `e-alfy-r-fattorizzazione-colori`; lotto A (W0–W2) `d80b9e0cd`, lotto B (W3–W5) `75c45d923`, base allineata a `dev_release2` (`f53d979ef`); prosegue con il lotto C; i cancelli A e B aspettano G |
+| R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154 + `/tmp/librefolio-r2-r` | piano approvato il 14/10; branch `e-alfy-r-fattorizzazione-colori`; lotto A (W0–W2) `d80b9e0cd`, lotto B (W3–W5) `75c45d923`, lotto C (W6–W7) `0b660632f`; base allineata (`74e94dee6`, piano spostato in `R-colorRefactor/`); prosegue con il lotto D; i cancelli A+B+C dopo l'ingresso di G |
 | — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | su richiesta |
-| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | aperto il 14/10 sera (D-T1): prima l'analisi d'implementazione, nessun codice |
+| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | analisi approvata dal developer il 14/10 alle 22:00; branch `e-alfy-t-tokens-theme`; T-0 e T-1 in corso |
 
 Superfici condivise e relativi proprietari:
 
