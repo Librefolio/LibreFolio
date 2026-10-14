@@ -55,7 +55,7 @@ SOURCE_LANG = "en"
 FALLBACK_TARGETS = ["it", "fr", "es"]
 
 # EN-only nav sections (not translated)
-EN_ONLY_SECTIONS = {"💻 Developer Manual", "POC UX"}
+EN_ONLY_SECTIONS = {"💻 Developer Manual"}
 
 # Aphra model configuration (overridable per-role via .env)
 DEFAULT_APHRA_MODEL = "google/gemini-2.5-flash"

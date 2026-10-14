@@ -130,7 +130,7 @@ The stamp updates only `.translate-hashes.json` (tracked in git) — it never re
 ### Translation Architecture
 - Strategy: `mkdocs-static-i18n` with suffix (`index.en.md`, `index.it.md`)
 - LLM: Aphra workflow (Analyze → Translate → Critique → Refine)
-- EN-only sections: `Developer Manual`, `POC UX`
+- EN-only section: `Developer Manual`
 - Cache: `.translate-hashes.json` (MD5-based skip)
 
 ## Documentation Style Rules
