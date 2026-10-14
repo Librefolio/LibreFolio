@@ -27,7 +27,7 @@ Ramo di integrazione: `dev_release2` (condiviso con il programma colori). Corsie
 | Lettera | Sessione | Corsia | Data-dir | Ramo | HEAD | Stato |
 |---|---|---|---|---|---|---|
 | — | Coordinatore 1.3 (in place) | 6180 | `/tmp/librefolio-r13-main` | `dev_release2` | — | attivo |
-| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-h-piattaforma` | `7366c0355` | CP1 committato; aggiornamento di base con A1 aperto (6 conflitti d'import, li risolve H), poi validazione e integrazione; CP2 da dividere (sessione `8490facf`) |
+| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-h-piattaforma` | `6a605904c` | ✅ CP1 integrato in `dev_release2` (`6a605904c`, 15/10 00:55); CP2 diviso: in corso CP2a (config), poi CP3, CP4; CP2b dopo il commit del coordinatore su `main.py` (sessione `8490facf`) |
 | A | A - Account e accessi | 6182 | `/tmp/librefolio-r13-a` | `e-alfy-a-account-e-accessi` | `769cc31cb` | ✅ A1 integrato in `dev_release2` (`769cc31cb`, 15/10 00:40); in corso A2–A6 e A8; A7 e A9 dopo H (sessione `119ed166`) |
 | X | X - Plugin asset e ricerca | 6183 | `/tmp/librefolio-r13-x` | `e-alfy-x-plugin-asset-e-ricerca` | `9d895a9c4` | CP1 committato (`9426c1bae`, `9d895a9c4`); in corso CP2a; entra dopo H con CP1 e CP2a insieme (sessione `ad5f37c8`) |
 | W | W - Import e transazioni | 6184 | `/tmp/librefolio-r13-w` | `e-alfy-w-import-e-transazioni` | `2c89a7b24` | CP1 committato (`9a44bdcec`, `64e3d0a7d`), base a `4471d39b4`; in corso W2, poi I1 e K1; entra dopo A1 (sessione `e71e0e34`) |
