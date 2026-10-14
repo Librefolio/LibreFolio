@@ -27,7 +27,7 @@ Ramo di integrazione: `dev_release2` (condiviso con il programma colori). Corsie
 | Lettera | Sessione | Corsia | Data-dir | Ramo | HEAD | Stato |
 |---|---|---|---|---|---|---|
 | — | Coordinatore 1.3 (in place) | 6180 | `/tmp/librefolio-r13-main` | `dev_release2` | — | attivo |
-| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-h-piattaforma` | `c9bb8f257` | via parziale 14/10 22:55: solo CP1, rinomina `platform/` e `files/` (sessione `8490facf`) |
+| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-h-piattaforma` | `7366c0355` | CP1 committato (`a52018fd7`, `7366c0355`); entra dopo A1, con aggiornamento di base e validazione; CP2 da dividere (sessione `8490facf`) |
 | A | A - Account e accessi | 6182 | `/tmp/librefolio-r13-a` | `e-alfy-a-account-e-accessi` | `419dab09c` | A1 committato (`b53dfd705`, `fc66f19c8`) e base aggiornata a `265ae5c6e`; valida la revisione combinata, poi entra in `dev_release2`; decisioni 1–12 tutte prese (sessione `119ed166`) |
 | X | X - Plugin asset e ricerca | 6183 | `/tmp/librefolio-r13-x` | `e-alfy-x-plugin-asset-e-ricerca` | `c9bb8f257` | via parziale 14/10 22:55: solo X0 e CP1, registri per famiglia (sessione `ad5f37c8`) |
 | W | W - Import e transazioni | 6184 | `/tmp/librefolio-r13-w` | `e-alfy-w-import-e-transazioni` | `2c89a7b24` | CP1 committato (`9a44bdcec`, `64e3d0a7d`), base a `4471d39b4`; in corso W2, poi I1 e K1; entra dopo A1 (sessione `e71e0e34`) |
