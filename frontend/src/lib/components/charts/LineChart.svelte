@@ -22,7 +22,8 @@
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
+    import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {toRgba} from '$lib/theme/colorAlpha';
     import {assignOverlaySignalAxes, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
@@ -498,7 +499,7 @@
                     ...(sType === 'area'
                         ? {
                               areaStyle: {
-                                  color: hexToRgba(signal.color, signal.fillOpacity ?? 0.2),
+                                  color: toRgba(signal.color, signal.fillOpacity ?? 0.2),
                                   origin: 0,
                               },
                           }

@@ -9,7 +9,8 @@
 import type {RenderedSignal} from '$lib/charts/signals';
 import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
 import type {ECharts} from 'echarts';
-import {buildBandSeries, buildBarSeries, buildSignalReferencePrimitives, COLORS, hexToRgba} from './lineChartHelpers';
+import {buildBandSeries, buildBarSeries, buildSignalReferencePrimitives, COLORS} from './lineChartHelpers';
+import {toRgba} from '$lib/theme/colorAlpha';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 
@@ -340,7 +341,7 @@ export function buildOverlaySignalSeries(overlaySignals: RenderedSignal[], dates
             ...(sType === 'area'
                 ? {
                       areaStyle: {
-                          color: hexToRgba(signal.color, signal.fillOpacity ?? 0.2),
+                          color: toRgba(signal.color, signal.fillOpacity ?? 0.2),
                           origin: 0,
                       },
                   }

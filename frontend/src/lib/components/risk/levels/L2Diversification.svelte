@@ -12,6 +12,7 @@
     import {buildLookup, NEAR_IDENTICAL, topPairs} from '../correlationHelpers';
     import {buildConcentration, buildDivergenceRows, uncoveredWeight} from './levelHelpers';
     import {formatShare} from './shareFormat';
+    import {POLARITY_TONES} from '$lib/theme/toneClasses';
 
     /**
      * L2 — "am I diversified like I think I am?"
@@ -307,9 +308,9 @@
                                 value={points(row.divergence)}
                                 valueTestId="risk-l2-divergence-{row.assetId}"
                                 signedPct={barPercent(row.divergence)}
-                                positiveColor="bg-red-500 dark:bg-red-400"
-                                negativeColor="bg-emerald-500 dark:bg-emerald-400"
-                                valueColor={row.divergence > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}
+                                positiveColor={POLARITY_TONES.divergenceBar.positive}
+                                negativeColor={POLARITY_TONES.divergenceBar.negative}
+                                valueColor={row.divergence > 0 ? POLARITY_TONES.divergenceText.positive : POLARITY_TONES.divergenceText.negative}
                                 valueClass="tabular-nums font-semibold"
                                 testId="risk-l2-divergence-bar-{row.assetId}"
                             />

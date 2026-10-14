@@ -22,7 +22,8 @@
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
-    import {resolveBrokerName, withAlpha} from './lotChartShared';
+    import {resolveBrokerName} from './lotChartShared';
+    import {withAlpha} from '$lib/theme/colorAlpha';
     import {
         aggregateReturnPoints as aggregateReturnPointsOf,
         aggregateValuePoints,
