@@ -4,9 +4,9 @@ Transaction batch execution is split across three source modules:
 
 | File | Responsibility |
 |------|----------------|
-| `backend/app/services/transaction_service.py` | Public service methods, shared validation helpers, WAC dispatch, and the `execute_batch()` orchestrator |
-| `backend/app/services/transaction_batch_context.py` | `TransactionBatchContext` and the balance-replay exception shared across stages |
-| `backend/app/services/transaction_batch_stages.py` | Ordered parse, preload/access, mutation, linking, WAC, cost-basis, balance, and response stages |
+| `backend/app/services/transactions/transaction_service.py` | Public service methods, shared validation helpers, WAC dispatch, and the `execute_batch()` orchestrator |
+| `backend/app/services/transactions/transaction_batch_context.py` | `TransactionBatchContext` and the balance-replay exception shared across stages |
+| `backend/app/services/transactions/transaction_batch_stages.py` | Ordered parse, preload/access, mutation, linking, WAC, cost-basis, balance, and response stages |
 
 The former 637-line `execute_batch()` C901 hotspot has been decomposed. The public
 orchestrator is now approximately 50 source lines and makes the execution order
