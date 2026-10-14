@@ -10113,11 +10113,11 @@
     }
   },
   "CHANGELOG.md#1.2.0/intro": {
-    "md5": "6d52c709551b3e6bb4e6b8b606130dbd",
+    "md5": "09e26fb1c50dd3f16058aa6b09101012",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-10-12T14:34:27.049409+00:00",
     "analysis": "[{\"name\": \"Preparing v1.2.0\", \"keywords\": [\"release notes preparing version heading translation software\"]}, {\"name\": \"v1.2.0\", \"keywords\": [\"semantic versioning semver version number release identifier untranslated\"]}, {\"name\": \"features\", \"keywords\": [\"software release notes features functionality translation fonctionnalités\"]}, {\"name\": \"fixes\", \"keywords\": [\"software release notes bug fixes corrections translation\"]}, {\"name\": \"features and fixes\", \"keywords\": [\"release notes features fixes translation software changelog\"]}, {\"name\": \"in preparation\", \"keywords\": [\"release status in preparation work in progress translation under development\"]}, {\"name\": \"version\", \"keywords\": [\"software version release translation version number\"]}, {\"name\": \"released\", \"keywords\": [\"software release published made available translation released version status\"]}, {\"name\": \"has not been released\", \"keywords\": [\"release status not released unpublished translation software\"]}]",
@@ -10133,7 +10133,9 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 59.1,
-        "index": 0
+        "index": 0,
+        "stamped_at": "2026-10-14T08:35:22.131776+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-12T14:34:27.049409+00:00",
@@ -10145,7 +10147,9 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 53.5,
-        "index": 0
+        "index": 0,
+        "stamped_at": "2026-10-14T08:35:22.131776+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-12T14:34:27.049409+00:00",
@@ -10157,7 +10161,9 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 53.2,
-        "index": 0
+        "index": 0,
+        "stamped_at": "2026-10-14T08:35:22.131776+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
