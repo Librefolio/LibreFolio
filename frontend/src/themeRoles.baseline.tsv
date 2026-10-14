@@ -98,12 +98,8 @@ lib/components/fx/FxPriceSummary.svelte	8
 lib/components/fx/FxSyncModal.svelte	2
 lib/components/fx/FxTable.svelte	15
 lib/components/layout/ChangelogModal.svelte	89	#1a4031	#4ade80	#6b7280	#d1d5db	#fef08a	rgba(0,0,0,0.05)	rgba(234,179,8,0.35)	rgba(255,255,255,0.08)
-lib/components/layout/ConnectionSecurityIndicator.svelte	11
-lib/components/layout/Header.svelte	13
-lib/components/layout/HelpMenu.svelte	48
-lib/components/layout/LanguageSelector.svelte	14
+lib/components/layout/ConnectionSecurityIndicator.svelte	7
 lib/components/layout/ServerUnreachable.svelte	11
-lib/components/layout/Sidebar.svelte	33	#ffffff
 lib/components/risk/AssetChip.svelte	16
 lib/components/risk/AssetRiskScenariosView.svelte	13
 lib/components/risk/AssetSetCorrelationSection.svelte	20
@@ -186,8 +182,6 @@ lib/components/ui/AnimatedBackground.svelte	0	#00ff9a	#11151c	#1a4031×3	#4ade80
 lib/components/ui/ContextMenu.svelte	0	#1e293b	#334155×4	#450a0a	#dc2626	#e2e8f0×3	#f1f5f9	#f87171	#fef2f2	rgb(0 0 0/0.05)	rgb(0 0 0/0.1)	rgb(0 0 0/0.2)	rgb(0 0 0/0.4)	white
 lib/components/ui/DocsLink.svelte	4
 lib/components/ui/OrderableList.svelte	27
-lib/components/ui/PrivacyToggle.svelte	4
-lib/components/ui/ThemeToggle.svelte	4
 lib/components/ui/TweenedValue.svelte	2
 lib/components/ui/ViewModeToggle.svelte	18
 lib/components/ui/data-editor/CsvEditor.svelte	72
@@ -300,7 +294,6 @@ lib/utils/currency/fxConversionHelper.ts	6
 lib/utils/providerHelpers.ts	20
 lib/utils/sync/syncHelpers.ts	4
 lib/utils/transactions/pairCellHtml.ts	6
-routes/(app)/+layout.svelte	20
 routes/(app)/assets/+page.svelte	234
 routes/(app)/assets/[id]/+page.svelte	312
 routes/(app)/brokers/+page.svelte	38

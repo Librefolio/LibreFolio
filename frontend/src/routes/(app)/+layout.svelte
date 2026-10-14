@@ -225,25 +225,25 @@
 
 {#if !i18nBooted}
     <!-- Loading screen while the first translations load -->
-    <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">
-        <div class="text-libre-green dark:text-green-400 text-xl">Loading...</div>
+    <div class="min-h-screen flex items-center justify-center bg-lf-app">
+        <div class="text-lf-link text-xl">Loading...</div>
     </div>
 {:else if $isAuthenticated && appBootstrap.state === 'blocked'}
     <OnboardingBootstrapBlock error={appBootstrap.error} onretry={retryBootstrap} onlogout={logout} />
 {:else if $isAuthenticated && !appBootstrap.ready}
-    <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900" data-testid="app-bootstrap-loading">
-        <div class="text-libre-green dark:text-green-400 text-xl">{$_('common.loading')}</div>
+    <div class="min-h-screen flex items-center justify-center bg-lf-app" data-testid="app-bootstrap-loading">
+        <div class="text-lf-link text-xl">{$_('common.loading')}</div>
     </div>
 {:else if $isAuthenticated && !onboardingRouteReady}
-    <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900" data-testid="onboarding-redirecting">
-        <div class="text-libre-green dark:text-green-400 text-xl">{$_('common.loading')}</div>
+    <div class="min-h-screen flex items-center justify-center bg-lf-app" data-testid="onboarding-redirecting">
+        <div class="text-lf-link text-xl">{$_('common.loading')}</div>
     </div>
 {:else if $isAuthenticated && isWelcomeRoute}
-    <div class="min-h-screen bg-libre-beige dark:bg-slate-900" data-testid="welcome-shell">
+    <div class="min-h-screen bg-lf-app" data-testid="welcome-shell">
         <slot />
     </div>
 {:else if $isAuthenticated}
-    <div class="min-h-screen bg-libre-beige dark:bg-slate-900" inert={onboardingGuide.active?.flow === 'intro_tour'} data-guide-inert={onboardingGuide.active?.flow === 'intro_tour' ? 'true' : 'false'} data-testid="app-shell">
+    <div class="min-h-screen bg-lf-app" inert={onboardingGuide.active?.flow === 'intro_tour'} data-guide-inert={onboardingGuide.active?.flow === 'intro_tour' ? 'true' : 'false'} data-testid="app-shell">
         <!-- Sidebar -->
         <Sidebar bind:isOpen={sidebarOpen} bind:collapsed={sidebarCollapsed} />
 
@@ -268,7 +268,7 @@
     <ServerUnreachable busy={authCheckBusy} onretry={() => void checkAuthAndStart()} />
 {:else}
     <!-- Loading while checking auth -->
-    <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900" data-testid="app-auth-checking">
-        <div class="text-libre-green dark:text-green-400 text-xl">Checking authentication...</div>
+    <div class="min-h-screen flex items-center justify-center bg-lf-app" data-testid="app-auth-checking">
+        <div class="text-lf-link text-xl">Checking authentication...</div>
     </div>
 {/if}
