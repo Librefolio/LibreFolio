@@ -754,3 +754,23 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > Programma colori: finestra della galleria domani, 15/10, dalle 09:00, per circa 2 ore. Nella finestra, niente suite
 > complete né build pesanti nelle corsie della 1.3; inizio e fine li conferma il coordinatore colori. G-8 (catalogo dei
 > Tool oltre i 2 s sotto carico, `schemas/tools.py:83`) va a J, dopo il suo primo checkpoint.
+
+### Primo treno: A1 integrato ✅ (2026-10-15, 00:40)
+
+> **Note implementazione**:
+> - checkpoint committati sui rami dei figli:
+>   - J-0 (`faa8ce01b`);
+>   - A1 (`b53dfd705`, `fc66f19c8`, validazione `29ee87484`);
+>   - W CP1 (`9a44bdcec`, `64e3d0a7d`);
+>   - H CP1 (`a52018fd7`, `7366c0355`).
+> - Ogni base misurata con `all-backend`: 12 965 passati, 28 saltati.
+> - Entra per primo A1, il primo validato sulla revisione combinata con `dev_release2` (T-1, T-2, G). Merge
+>   `769cc31cb`, albero uguale alla simulazione, codice identico alla revisione validata.
+> - H segue: l'aggiornamento di base è aperto con 6 conflitti d'import, che H risolve nel suo worktree.
+>
+> **Fuori pista**:
+> - Due trappole del primo avvio dei test in un worktree nuovo, trovate da H e da J: `npm ci` mancante e build oltre i
+>   300 s del server condiviso. Scritte in `.github/copilot-instructions.md` e nel §6.
+> - Nel piano di H una tabella nominava l'hotfix: resa neutra prima del commit.
+> - Dalla verifica di A1 è nata la decisione 36, cosa vede un utente dei dati degli altri.
+> - L'ID T-B4 compare due volte nel backlog: il coordinatore colori rinomina la sua voce.
